@@ -18,13 +18,13 @@ name. description, keywords array, repository.url, version
 
 All module contents goes under src directly by convention. If you plan to house more than one module in the repo though, you can use sub folders (src/module1, src/module2). if not all content goes right under src.
 
-The src folder 
+The src folder
 
-###  src/module.yaml (or src/[module-name]/module.yaml)
+### src/module.yaml (or src/[module-name]/module.yaml)
 
 This is the same standard convention followed by any BMad module.
 
-If you are creating this from scratch, note that the module.yaml aside from making your module installable via the BMad installer, and buildable to other targets and tools, it also serves as the  primary mechanism to define what install questions get asked along with what the default values are.
+If you are creating this from scratch, note that the module.yaml aside from making your module installable via the BMad installer, and buildable to other targets and tools, it also serves as the primary mechanism to define what install questions get asked along with what the default values are.
 
 ### All other module conventions still apply:
 
@@ -32,5 +32,5 @@ If you are creating this from scratch, note that the module.yaml aside from maki
 - workflows - All workflows an agent might use or people can call directly go here
 - tools - really similar to workflows, the main distinction being more conceptual - tools are small and do 1 thing well and are contained within a single prompt file.
   - Consider a tool for when you might have multiple workflows use it. Not required,
-- * - you can have any other folders as needed also within the repo, along with other tools
+- - - you can have any other folders as needed also within the repo, along with other tools
 - ensure all content in workflows and agents are using relative paths to each other. This will help with future compatibility to conversion to other formats like Claude skills and similar.

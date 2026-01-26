@@ -1,54 +1,86 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "bmad-module-name",
+  "name": "bmad-method-test-architecture-enterprise",
   "version": "0.1.0",
-  "description": "A BMad Core expansion module that [does what?]",
+  "description": "Master Test Architect for quality strategy, test automation, and release gates",
   "keywords": [
     "bmad",
-    "creative"
+    "test-architect",
+    "testing",
+    "quality",
+    "automation",
+    "playwright",
+    "test-engineering"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https:[github url of project]"
+    "url": "git+https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise.git"
   },
   "license": "MIT",
-  "author": "Brian (BMad) Madison",
+  "author": "Murat K Ozcan (TEA Creator) & Brian (BMad) Madison",
   "main": "",
   "bin": {},
   "scripts": {
-    "format:check": "prettier --check \"**/*.{js,cjs,mjs,json,yaml}\"",
-    "format:fix": "prettier --write \"**/*.{js,cjs,mjs,json,yaml}\"",
-    "lint": "eslint . --ext .js,.cjs,.mjs,.yaml --max-warnings=0",
-    "lint:fix": "eslint . --ext .js,.cjs,.mjs,.yaml --fix",
-    "lint:md": "markdownlint-cli2 \"**/*.md\"",
+    "docs:build": "node tools/build-docs.js",
+    "docs:dev": "npm --prefix website run dev",
+    "docs:preview": "npm --prefix website run preview",
+    "docs:validate-links": "node tools/validate-doc-links.js",
+    "format:check": "prettier --check .",
+    "format:fix": "prettier --write .",
+    "format:fix:staged": "prettier --write",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "lint:md": "markdownlint-cli2 '**/*.md'",
     "prepare": "husky",
-    "release:major": "gh workflow run \"Manual Release\" -f version_bump=major",
-    "release:minor": "gh workflow run \"Manual Release\" -f version_bump=minor",
-    "release:patch": "gh workflow run \"Manual Release\" -f version_bump=patch",
-    "release:watch": "gh run watch",
-    "test": "npm run test:schemas && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
+    "release:major": "gh workflow run manual-release.yaml -f version_bump=major",
+    "release:minor": "gh workflow run manual-release.yaml -f version_bump=minor",
+    "release:patch": "gh workflow run manual-release.yaml -f version_bump=patch",
+    "test": "npm run test:schemas && npm run test:install && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
+    "test:coverage": "c8 npm test",
+    "test:install": "node test/test-installation-components.js",
     "test:schemas": "node test/test-agent-schema.js",
-    "validate:schemas": "node test/validate-agent-schema.js"
+    "validate:schemas": "node tools/validate-agent-schema.js"
   },
   "lint-staged": {
     "*.{js,cjs,mjs}": [
       "npm run lint:fix",
-      "npm run format:fix"
+      "npm run format:fix:staged"
     ],
     "*.yaml": [
       "eslint --fix",
-      "npm run format:fix"
+      "npm run format:fix:staged"
     ],
     "*.json": [
-      "npm run format:fix"
+      "npm run format:fix:staged"
     ],
     "*.md": [
       "markdownlint-cli2"
     ]
   },
+  "c8": {
+    "all": true,
+    "reporter": [
+      "text",
+      "html"
+    ],
+    "reports-dir": "coverage"
+  },
   "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "boxen": "^5.1.2",
     "chalk": "^4.1.2",
-    "fs-extra": "^11.3.0"
+    "cli-table3": "^0.6.5",
+    "commander": "^14.0.0",
+    "csv-parse": "^6.1.0",
+    "fs-extra": "^11.3.0",
+    "glob": "^11.0.3",
+    "ignore": "^7.0.5",
+    "js-yaml": "^4.1.0",
+    "ora": "^5.4.1",
+    "semver": "^7.6.3",
+    "wrap-ansi": "^7.0.0",
+    "xml2js": "^0.6.2",
+    "yaml": "^2.7.0"
   },
   "devDependencies": {
     "@astrojs/sitemap": "^3.6.0",
@@ -57,33 +89,23 @@
     "archiver": "^7.0.1",
     "astro": "^5.16.0",
     "c8": "^10.1.3",
-    "csv-parse": "^6.1.0",
     "eslint": "^9.33.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-n": "^17.21.3",
     "eslint-plugin-unicorn": "^60.0.0",
     "eslint-plugin-yml": "^1.18.0",
-    "figlet": "^1.8.0",
-    "glob": "^11.0.3",
     "husky": "^9.1.7",
-    "ignore": "^7.0.5",
     "jest": "^30.0.4",
-    "js-yaml": "^4.1.0",
     "lint-staged": "^16.1.1",
     "markdownlint-cli2": "^0.19.1",
-    "ora": "^5.4.1",
     "prettier": "^3.7.4",
     "prettier-plugin-packagejson": "^2.5.19",
-    "semver": "^7.6.3",
     "sharp": "^0.33.5",
-    "wrap-ansi": "^7.0.0",
-    "xml2js": "^0.6.2",
-    "yaml": "^2.7.0",
     "yaml-eslint-parser": "^1.2.3",
     "yaml-lint": "^1.7.0"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=20.0.0"
   },
   "publishConfig": {
     "access": "public"

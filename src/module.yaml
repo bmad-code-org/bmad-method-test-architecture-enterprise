@@ -1,31 +1,89 @@
-code: code
-name: "CODE: Display in installer"
-header: "Header"
-subheader: "Subheader"
-description: "Longer description of why someone would use or install this, along with if it needs other modules to also be installed"
+code: tea
+name: "Test Architect"
+description: "Master Test Architect for quality strategy, test automation, and release gates"
 default_selected: false
 
-# module custom questions and variable configuration
-
-# Optional to add in this section
-# -- Example, this will ask the prompt to the user during install and save the result in the module.config file that gets created upon install ---
-
-# project_name:
-#   prompt: "What is your game dev experience level?"
-#   default: "intermediate"
-#   result: "{value}"
-  # single-select:
-  #   - value: "beginner"
-  #     label: "Beginner - New to game development, explain concepts clearly"
-  #   - value: "intermediate"
-  #     label: "Intermediate - Familiar with game dev concepts, balance explanation with efficiency"
-  #   - value: "expert"
-  #     label: "Expert - Experienced game developer, be direct and technical"
-
-# -- End Example --
-
-# Variables from Core Config inserted:
+# Variables from Core Config inserted automatically by installer:
 ## user_name
 ## communication_language
 ## document_output_language
 ## output_folder
+## project_root
+
+# TEA-specific configuration variables
+# IMPORTANT: Only tea_use_playwright_utils and tea_use_mcp_enhancements are ACTIVELY USED in workflows
+# Other variables are FUTURE placeholders for Phase 10 enhancements
+
+test_artifacts:
+  prompt: "Where should test artifacts be stored? (test plans, coverage reports, quality audits)"
+  default: "{output_folder}/test-artifacts"
+  result: "{project-root}/{value}"
+
+# ✅ ACTIVELY USED - Playwright Utils integration (referenced in 6 workflows: automate, atdd, framework, test-design, test-review, ci)
+# CRITICAL: Must be boolean (true/false) not string - workflows check "if config.tea_use_playwright_utils: true"
+tea_use_playwright_utils:
+  prompt: "Enable Playwright Utils integration?"
+  default: true
+  result: "{value}"
+  single-select:
+    - value: true
+      label: "Yes - Use production utilities (Recommended)"
+    - value: false
+      label: "No - Generate from scratch"
+
+# ✅ ACTIVELY USED - Playwright MCP enhancements (workflows with recording mode)
+# CRITICAL: Must be boolean (true/false) not string
+tea_use_mcp_enhancements:
+  prompt: "Enable Playwright MCP enhancements?"
+  default: false
+  result: "{value}"
+  single-select:
+    - value: true
+      label: "Yes - Enable live browser verification"
+    - value: false
+      label: "No - Standard mode only"
+
+# ⏭️ FUTURE - Test framework selection (not currently wired into workflows, marked for Phase 10)
+test_framework:
+  prompt: "Which test framework are you using?"
+  default: "playwright"
+  result: "{value}"
+  single-select:
+    - value: "playwright"
+      label: "Playwright (Recommended)"
+    - value: "cypress"
+      label: "Cypress"
+    - value: "other"
+      label: "Other/Custom"
+
+# ⏭️ FUTURE - Risk threshold (not currently used in test-design workflow, marked for Phase 10)
+risk_threshold:
+  prompt: "What risk level requires mandatory testing?"
+  default: "p1"
+  result: "{value}"
+  single-select:
+    - value: "p0"
+      label: "P0 only (Critical systems)"
+    - value: "p1"
+      label: "P1+ (High & Critical)"
+    - value: "p2"
+      label: "P2+ (Medium, High & Critical)"
+    - value: "p3"
+      label: "All (P0-P3)"
+
+# ⏭️ FUTURE - Test output folders (not currently wired into workflows, marked for Phase 10)
+# IMPORTANT: test_artifacts already resolves to {project-root}/..., so don't re-prepend {project-root}
+test_design_output:
+  prompt: "Where should test design documents be stored?"
+  default: "test-design"
+  result: "{test_artifacts}/{value}"
+
+test_review_output:
+  prompt: "Where should test review reports be stored?"
+  default: "test-reviews"
+  result: "{test_artifacts}/{value}"
+
+trace_output:
+  prompt: "Where should traceability reports be stored?"
+  default: "traceability"
+  result: "{test_artifacts}/{value}"
