@@ -71,8 +71,12 @@ jobs:
       - name: Generate release notes
         id: release_notes
         run: |
-          # Get commits since last tag
-          COMMITS=$(git log ${{ steps.version.outputs.previous_tag }}..HEAD --pretty=format:"- %s" --reverse)
+          # Get commits since last tag (or all commits if no tags exist)
+          if [ "${{ steps.version.outputs.previous_tag }}" = "v0.0.0" ]; then
+            COMMITS=$(git log --pretty=format:"- %s" --reverse)
+          else
+            COMMITS=$(git log ${{ steps.version.outputs.previous_tag }}..HEAD --pretty=format:"- %s" --reverse)
+          fi
 
           # Categorize commits
           FEATURES=$(echo "$COMMITS" | grep -E "^- (feat|Feature)" || true)
@@ -118,9 +122,13 @@ jobs:
           npx bmad-method install
           # Select "Test Architect" from module menu
           ```
-
-          **Full Changelog**: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/compare/${{ steps.version.outputs.previous_tag }}...v${{ steps.version.outputs.new_version }}
           EOF
+
+          # Add changelog link only if there was a previous tag
+          if [ "${{ steps.version.outputs.previous_tag }}" != "v0.0.0" ]; then
+            echo "" >> release_notes.md
+            echo "**Full Changelog**: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/compare/${{ steps.version.outputs.previous_tag }}...v${{ steps.version.outputs.new_version }}" >> release_notes.md
+          fi
 
           # Output for GitHub Actions
           echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
