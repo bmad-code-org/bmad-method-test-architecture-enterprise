@@ -92,6 +92,7 @@ export default defineConfig({
       // Sidebar configuration (Diataxis structure)
       sidebar: [
         { label: 'Welcome', slug: 'index' },
+        { label: 'TEA Overview', slug: 'explanation/tea-overview' },
         {
           label: 'Tutorials',
           collapsed: false,
@@ -103,7 +104,16 @@ export default defineConfig({
           items: [
             {
               label: 'Workflows',
-              autogenerate: { directory: 'how-to/workflows' },
+              items: [
+                { label: 'NFR Assessment', slug: 'how-to/workflows/run-nfr-assess' },
+                { label: 'Test Design', slug: 'how-to/workflows/run-test-design' },
+                { label: 'Set Up Test Framework', slug: 'how-to/workflows/setup-test-framework' },
+                { label: 'Set Up CI Pipeline', slug: 'how-to/workflows/setup-ci' },
+                { label: 'ATDD', slug: 'how-to/workflows/run-atdd' },
+                { label: 'Automate', slug: 'how-to/workflows/run-automate' },
+                { label: 'Test Review', slug: 'how-to/workflows/run-test-review' },
+                { label: 'Trace', slug: 'how-to/workflows/run-trace' },
+              ],
             },
             {
               label: 'Customization',
@@ -118,7 +128,18 @@ export default defineConfig({
         {
           label: 'Explanation',
           collapsed: true,
-          autogenerate: { directory: 'explanation' },
+          items: [
+            { label: 'Testing as Engineering', slug: 'explanation/testing-as-engineering' },
+            { label: 'Engagement Models', slug: 'explanation/engagement-models' },
+            { label: 'Risk-Based Testing', slug: 'explanation/risk-based-testing' },
+            { label: 'Test Quality Standards', slug: 'explanation/test-quality-standards' },
+            { label: 'Knowledge Base System', slug: 'explanation/knowledge-base-system' },
+            { label: 'Network-First Patterns', slug: 'explanation/network-first-patterns' },
+            { label: 'Fixture Architecture', slug: 'explanation/fixture-architecture' },
+            { label: 'Step-File Architecture', slug: 'explanation/step-file-architecture' },
+            { label: 'Subprocess Architecture', slug: 'explanation/subprocess-architecture' },
+            { label: 'Subprocess Implementation Status', slug: 'explanation/subprocess-implementation-status' },
+          ],
         },
         {
           label: 'Reference',

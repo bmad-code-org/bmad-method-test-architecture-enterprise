@@ -169,6 +169,8 @@ flowchart TD
 
 ## Fragment Structure
 
+For a deeper look at the actual fragments, see [Fragment Categories](/reference/knowledge-base/#fragment-categories).
+
 ### Anatomy of a Fragment
 
 Each fragment follows this structure:

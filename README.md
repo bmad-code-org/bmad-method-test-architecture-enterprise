@@ -2,6 +2,8 @@
 
 TEA (Test Architect) is a standalone BMAD module that delivers risk-based test strategy, test automation guidance, and release gate decisions. It provides a single expert agent (Murat, Master Test Architect and Quality Advisor) and eight workflows spanning framework setup, test design, ATDD, automation, traceability, NFR assessment, CI guidance, and test review.
 
+Docs: <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/>
+
 ## Why TEA
 
 - Risk-based testing with measurable quality gates

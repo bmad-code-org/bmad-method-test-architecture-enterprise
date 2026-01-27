@@ -7,7 +7,7 @@ hero:
   tagline: Risk-based test strategy, automation guidance, and release gate decisions for quality-driven development
   actions:
     - text: Quick Start
-      link: /tutorials/tea-lite-quickstart/
+      link: https://bmad-code-org.github.io/tutorials/tea-lite-quickstart/
       icon: right-arrow
       variant: primary
     - text: View on GitHub
@@ -45,7 +45,7 @@ TEA (Test Architect) is a standalone BMAD module that delivers expert test archi
 Choose your engagement model:
 
 - **TEA Lite**: Start with [Test Automation](/how-to/workflows/run-automate) only (30 minutes)
-- **Full TEA**: Complete [Quick Start Tutorial](/tutorials/tea-lite-quickstart) (1-2 hours)
+- **Full TEA**: Complete [Quick Start Tutorial](https://bmad-code-org.github.io/tutorials/tea-lite-quickstart/) (1-2 hours)
 - **Enterprise**: Integrate all 8 workflows into your development process
 
 ## Quick Install
@@ -65,7 +65,7 @@ test-design      # Run Test Design workflow
 ## Learn More
 
 <div class="sl-flex">
-  <a href="/tutorials/tea-lite-quickstart/" class="action primary">
+  <a href="https://bmad-code-org.github.io/tutorials/tea-lite-quickstart/" class="action primary">
     Quick Start Tutorial →
   </a>
   <a href="/explanation/tea-overview/" class="action secondary">
@@ -105,7 +105,7 @@ Requirements traceability with automated gap analysis provides clear Go/No-Go re
 
 ## Documentation Structure
 
-- **[Tutorials](/tutorials/tea-lite-quickstart)**: Learn TEA step-by-step
+- **[Tutorials](https://bmad-code-org.github.io/tutorials/tea-lite-quickstart/)**: Learn TEA step-by-step
 - **[How-To Guides](/how-to/workflows/run-test-design)**: Task-focused instructions
 - **[Explanation](/explanation/tea-overview)**: Understand concepts and architecture
 - **[Reference](/reference/commands)**: Commands, configuration, knowledge base
@@ -119,4 +119,4 @@ Requirements traceability with automated gap analysis provides clear Go/No-Go re
 
 ---
 
-Ready to improve your test architecture? Start with the [Quick Start Tutorial](/tutorials/tea-lite-quickstart).
+Ready to improve your test architecture? Start with the [Quick Start Tutorial](https://bmad-code-org.github.io/tutorials/tea-lite-quickstart/).
