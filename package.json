@@ -23,6 +23,7 @@
   "scripts": {
     "docs:build": "node tools/build-docs.js",
     "docs:dev": "npm --prefix website run dev",
+    "docs:fix-links": "node tools/fix-doc-links.js --write",
     "docs:preview": "npm --prefix website run preview",
     "docs:validate-links": "node tools/validate-doc-links.js",
     "format:check": "prettier --check .",
@@ -32,6 +33,8 @@
     "lint:fix": "eslint . --fix",
     "lint:md": "markdownlint-cli2 '**/*.md'",
     "prepare": "husky",
+    "release:alpha": "gh workflow run manual-release.yaml -f version_bump=alpha",
+    "release:beta": "gh workflow run manual-release.yaml -f version_bump=beta",
     "release:major": "gh workflow run manual-release.yaml -f version_bump=major",
     "release:minor": "gh workflow run manual-release.yaml -f version_bump=minor",
     "release:patch": "gh workflow run manual-release.yaml -f version_bump=patch",
