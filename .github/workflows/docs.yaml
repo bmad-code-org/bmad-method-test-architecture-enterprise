@@ -43,10 +43,10 @@ jobs:
 
       - name: Build documentation
         env:
-          # Override site URL for custom domain
-          # Default: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise
-          # Custom: https://test-architect.bmad-method.org
-          SITE_URL: ${{ vars.SITE_URL || 'https://test-architect.bmad-method.org' }}
+          # Let astro.config.mjs compute the correct URL from GITHUB_REPOSITORY
+          # This will automatically use: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise
+          # To use custom domain, set SITE_URL repository variable to: https://test-architect.bmad-method.org
+          SITE_URL: ${{ vars.SITE_URL }}
         run: npm run docs:build
 
       - name: Upload artifact
