@@ -48,6 +48,8 @@ npx bmad-method install
 # Select: Test Architect (TEA)
 ```
 
+**Note:** TEA is automatically added to party mode after installation. Use `/party` to collaborate with TEA alongside other BMad agents.
+
 ## Quickstart
 
 1. Install TEA (above)
@@ -55,6 +57,7 @@ npx bmad-method install
    - `TD` / `/bmad:tea:test-design` — test design and risk assessment
    - `AT` / `/bmad:tea:atdd` — failing acceptance tests first (TDD red phase)
    - `TA` / `/bmad:tea:automate` — expand automation coverage
+3. Or use in party mode: `/party` to include TEA with other agents
 
 ## Engagement Models
 
