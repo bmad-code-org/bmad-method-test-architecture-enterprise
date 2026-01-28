@@ -173,11 +173,11 @@ session-06-quality-trace:
       question: "What are the 5 dimensions in Test Review workflow?"
       options:
         A: "Speed, cost, coverage, bugs, time"
-        B: "Determinism, isolation, maintainability, coverage, performance"
+        B: "Determinism, Isolation, Assertions, Structure, Performance"
         C: "Unit, integration, E2E, manual, exploratory"
         D: "P0, P1, P2, P3, P4"
       correct: B
-      explanation: "Test Review evaluates 5 dimensions: Determinism (no flakiness), Isolation (parallel safe), Maintainability (readable), Coverage (P0/P1), Performance (speed)."
+      explanation: "Test Review evaluates 5 dimensions: Determinism (no flakiness), Isolation (parallel-safe), Assertions (correct checks), Structure (readable/maintainable organization), Performance (speed)."
 
     - id: q2-release-gate
       question: "When should the Trace workflow gate decision be RED (block release)?"

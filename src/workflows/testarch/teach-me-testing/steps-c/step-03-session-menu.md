@@ -142,7 +142,7 @@ Display:
 
 **Before displaying menu options, check:**
 
-If all 7 sessions have status 'completed' AND user has not yet generated certificate:
+If all 7 sessions have status 'completed' AND certificate_generated != true:
 
 - Display: "🎉 **Congratulations!** You've completed all 7 sessions!"
 - Skip session menu options

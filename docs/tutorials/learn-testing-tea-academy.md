@@ -147,13 +147,13 @@ Complete all 7 sessions to receive your TEA Academy completion certificate!
 
 **Categories:**
 
-- Testing Patterns (8 fragments)
-- Playwright Utils (9 fragments)
-- Configuration & Governance (5 fragments)
-- Quality Frameworks (4 fragments)
+- Testing Patterns (9 fragments)
+- Playwright Utils (11 fragments)
+- Configuration & Governance (6 fragments)
+- Quality Frameworks (5 fragments)
 - Authentication & Security (3 fragments)
 
-**Perfect for:** Experienced engineers wanting deep expertise
+**Perfect for:** Everyone; it adapts to your experience level
 
 ## Progress Tracking
 

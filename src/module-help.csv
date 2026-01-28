@@ -1,4 +1,5 @@
 module,phase,name,code,sequence,workflow-file,command,required,agent,options,description,output-location,outputs,
+tea,0-learning,Teach Me Testing,TMT,10,_bmad/tea/workflows/testarch/teach-me-testing/workflow.md,bmad_tea_teach-me-testing,false,tea,Create Mode,"Teach testing fundamentals through 7 sessions (TEA Academy)",test_artifacts,"progress file|session notes|certificate",
 tea,3-solutioning,Test Framework,TF,10,_bmad/tea/workflows/testarch/framework/workflow.yaml,bmad_tea_framework,false,tea,Create Mode,"Initialize production-ready test framework",test_artifacts,"framework scaffold",
 tea,3-solutioning,CI Setup,CI,20,_bmad/tea/workflows/testarch/ci/workflow.yaml,bmad_tea_ci,false,tea,Create Mode,"Configure CI/CD quality pipeline",test_artifacts,"ci config",
 tea,3-solutioning,Test Design,TD,30,_bmad/tea/workflows/testarch/test-design/workflow.yaml,bmad_tea_test-design,false,tea,Create Mode,"Risk-based test planning",test_artifacts,"test design document",

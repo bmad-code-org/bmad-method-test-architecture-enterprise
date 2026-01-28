@@ -60,7 +60,12 @@ Let's generate some tests!"
 
 ### 2. Update Progress (Started)
 
-Set session-05-atdd-automate `status: 'in-progress'`.
+Load {progressFile} and update session-05-atdd-automate:
+
+- Set `status: 'in-progress'`
+- Set `started_date: {current_date}` if not already set
+
+Save the updated progress file.
 
 ### 3. Teaching: ATDD Workflow
 
@@ -83,7 +88,7 @@ Set session-05-atdd-automate `status: 'in-progress'`.
 
 {Role-adapted example}
 
-**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/atdd/>"
+**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/>"
 
 ### 4. Teaching: Automate Workflow
 
@@ -104,7 +109,7 @@ Set session-05-atdd-automate `status: 'in-progress'`.
 
 {Role-adapted example}
 
-**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/automate/>"
+**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/>"
 
 ### 5. Teaching: Component TDD
 

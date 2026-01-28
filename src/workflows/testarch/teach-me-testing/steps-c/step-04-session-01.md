@@ -20,7 +20,7 @@ To provide immediate value through a 30-minute introduction to TEA Lite, run the
 
 ### Universal Rules:
 
-- 🛑 NEVER generate content without user input
+- 🛑 NEVER generate _unsolicited_ content without user input (session flow content is allowed once session begins)
 - 📖 CRITICAL: Read the complete step file before taking any action
 - 🔄 CRITICAL: When loading next step with 'C', ensure entire file is read
 - 📋 YOU ARE A FACILITATOR, not a content generator
@@ -152,7 +152,7 @@ The **Automate workflow** generates tests for your application automatically.
 3. **Test generation:** Creates API and/or E2E tests
 4. **Output:** Test files in your test suite with proper fixtures
 
-**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/automate/>
+**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/>
 
 **Note:** We won't actually run the workflow now (you can do that on your project later), but you understand the concept."
 
@@ -321,8 +321,8 @@ duration: '30 min'
 ### Documentation
 
 - TEA Overview: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/
-- TEA Lite Quickstart: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/getting-started/
-- Automate Workflow: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/automate/
+- TEA Lite Quickstart: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/
+- Automate Workflow: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/
 
 ### Knowledge Fragments
 
@@ -385,7 +385,7 @@ Load {progressFile} and update session-01-quickstart:
 
 Update progress metrics:
 
-- Increment `sessions_completed` by 1
+- If previous status for `session-01-quickstart` is not `completed`, increment `sessions_completed` by 1 (otherwise leave unchanged)
 - Calculate `completion_percentage: (sessions_completed / 7) * 100`
 - Set `next_recommended: 'session-02-concepts'`
 

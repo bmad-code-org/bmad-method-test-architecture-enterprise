@@ -156,8 +156,8 @@ Create an ongoing learning companion that teaches testing progressively through 
 
 **Core BMAD Tools:**
 
-- **Party Mode:** Excluded - Not needed for focused teaching workflow with single instructor (TEA agent)
-- **Advanced Elicitation:** Excluded from execution - Available through BMB when editing/improving workflow later
+- **Party Mode:** Included (optional via A/P menu) - Use for collaborative exploration when the learner wants a lighter format
+- **Advanced Elicitation:** Included (optional via A/P menu) - Use for deeper discovery or clarification during sessions
 - **Brainstorming:** Excluded - Not needed for structured curriculum delivery
 
 **LLM Features:**
@@ -789,7 +789,7 @@ teach-me-testing/
 **Files:** `steps-c/step-04-session-07.md` ✓
 **Session:** Advanced Patterns (ongoing)
 **Format:** Menu-driven exploration of 34 knowledge fragments
-**Categories:** Testing Patterns (8), Playwright Utils (9), Config/Governance (5), Quality Frameworks (4), Auth/Security (3)
+**Categories:** Testing Patterns (9), Playwright Utils (11), Config/Governance (6), Quality Frameworks (5), Auth/Security (3)
 **No Quiz:** Exploratory session, score: 100 on completion
 **Special:** Repeatable, user can explore multiple fragments, returns to hub
 

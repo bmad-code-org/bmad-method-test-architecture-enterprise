@@ -20,7 +20,7 @@ To teach test quality auditing and requirements traceability using Test Review a
 
 ### Universal Rules:
 
-- 🛑 NEVER generate content without user input
+- 🛑 NEVER generate _unsolicited_ content without user input (session flow content is allowed once session begins)
 - 📖 CRITICAL: Read complete step file before action
 - ✅ SPEAK OUTPUT In {communication_language}
 
@@ -82,17 +82,17 @@ Set session-06-quality-trace `status: 'in-progress'`.
 - No shared state
 - Parallelizable
 
-**3. Maintainability (0-100)**
+**3. Assertions (0-100)**
+
+- Correct checks for expected behavior
+- Meaningful assertions (not just presence)
+- Fails for the right reasons
+
+**4. Structure (0-100)**
 
 - Readable test code
-- Good selectors
+- Clear organization and naming
 - Minimal duplication
-
-**4. Coverage (0-100)**
-
-- P0/P1 scenarios covered
-- Edge cases tested
-- Gaps identified
 
 **5. Performance (0-100)**
 
@@ -104,7 +104,7 @@ Set session-06-quality-trace `status: 'in-progress'`.
 
 {Role-adapted example}
 
-**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/test-review/>"
+**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/>"
 
 ### 4. Teaching: Trace Workflow
 
@@ -128,7 +128,7 @@ Set session-06-quality-trace `status: 'in-progress'`.
 
 {Role-adapted example}
 
-**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/trace/>"
+**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/>"
 
 ### 5. Teaching: Quality Metrics
 
@@ -155,7 +155,7 @@ Set session-06-quality-trace `status: 'in-progress'`.
 
 **Q1:** "What are the 5 dimensions in Test Review workflow?
 A) Speed, cost, coverage, bugs, time
-B) Determinism, isolation, maintainability, coverage, performance
+B) Determinism, Isolation, Assertions, Structure, Performance
 C) Unit, integration, E2E, manual, exploratory
 D) P0, P1, P2, P3, P4"
 

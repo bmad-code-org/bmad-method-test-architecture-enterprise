@@ -69,9 +69,10 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 
 "### 📚 Knowledge Fragment Categories
 
-**1. Testing Patterns (8 fragments)**
+**1. Testing Patterns (9 fragments)**
 
 - fixture-architecture.md - Composable fixture patterns
+- fixtures-composition.md - mergeTests composition patterns
 - network-first.md - Network interception safeguards
 - data-factories.md - Data seeding & setup
 - component-tdd.md - TDD red-green loop
@@ -80,8 +81,9 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - selector-resilience.md - Robust selectors
 - timing-debugging.md - Race condition fixes
 
-**2. Playwright Utils (9 fragments)**
+**2. Playwright Utils (11 fragments)**
 
+- overview.md - Playwright Utils overview
 - api-request.md - Typed HTTP client
 - network-recorder.md - HAR record/playback
 - intercept-network-call.md - Network spy/stub
@@ -91,20 +93,23 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - burn-in.md - Smart test selection
 - network-error-monitor.md - HTTP error detection
 - contract-testing.md - Pact integration
+- visual-debugging.md - Trace viewer workflows
 
-**3. Configuration & Governance (5 fragments)**
+**3. Configuration & Governance (6 fragments)**
 
 - playwright-config.md - Environment & timeout guardrails
 - ci-burn-in.md - CI orchestration
 - selective-testing.md - Tag/grep filters
 - feature-flags.md - Governance & cleanup
 - risk-governance.md - Scoring matrix & gates
+- adr-quality-readiness-checklist.md - Quality readiness checklist
 
-**4. Quality Frameworks (4 fragments)**
+**4. Quality Frameworks (5 fragments)**
 
 - test-quality.md - DoD execution limits
 - test-levels-framework.md - Unit/Integration/E2E
 - test-priorities-matrix.md - P0-P3 coverage targets
+- probability-impact.md - Probability × impact scoring
 - nfr-criteria.md - NFR assessment definitions
 
 **5. Authentication & Security (3 fragments)**

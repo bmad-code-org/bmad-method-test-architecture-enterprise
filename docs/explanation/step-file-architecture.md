@@ -442,7 +442,7 @@ Subprocess complete. Main workflow will read output and proceed.
 
 ### BMad Builder Validation
 
-All TEA workflows score **100%** on BMad Builder validation:
+All core execution workflows score **100%** on BMad Builder validation:
 
 ```bash
 # Validation reports (timestamp: 20260127-102401)
@@ -466,7 +466,7 @@ src/workflows/testarch/trace/validation-report-20260127-102401.md
 
 ### Real-Project Testing
 
-All workflows tested with real projects:
+All execution workflows tested with real projects:
 
 - ✅ test-design: Tested with real story/epic
 - ✅ automate: Tested extensively with real codebases
@@ -604,6 +604,6 @@ When running workflows, users see:
 ---
 
 **Status**: Production-ready, 100% LLM compliance achieved
-**Validation**: All 9 workflows score 100% on BMad Builder validation
-**Testing**: All workflows tested with real projects, zero improvisation issues
+**Validation**: All execution workflows score 100% on BMad Builder validation
+**Testing**: All execution workflows tested with real projects, zero improvisation issues
 **Next Steps**: Implement subprocess patterns (see subprocess-architecture.md)

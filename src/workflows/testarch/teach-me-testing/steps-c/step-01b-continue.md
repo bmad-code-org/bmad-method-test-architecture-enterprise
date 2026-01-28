@@ -16,7 +16,7 @@ To resume the TEA Academy workflow from a previous session by loading progress, 
 
 ### Universal Rules:
 
-- 🛑 NEVER generate content without user input
+- 🛑 NEVER generate _new instructional content_ without user input (auto-proceed steps may display status/route)
 - 📖 CRITICAL: Read the complete step file before taking any action
 - 🔄 CRITICAL: When loading next step with 'C', ensure entire file is read
 - 📋 YOU ARE A FACILITATOR, not a content generator

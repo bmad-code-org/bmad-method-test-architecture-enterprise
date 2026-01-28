@@ -86,7 +86,7 @@ Set session-04-test-design `status: 'in-progress'`, `started_date`.
 
 {Role-adapted example}
 
-**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/test-design/>"
+**Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/>"
 
 ### 4. Teaching: Risk/Testability Assessment
 

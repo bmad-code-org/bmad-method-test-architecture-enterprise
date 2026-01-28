@@ -400,7 +400,7 @@ See [How to Run ATDD](/docs/how-to/workflows/run-atdd.md) for the test-drive dev
 
 **Reference** (quick lookup):
 
-- [TEA Command Reference](/docs/reference/commands.md) - All 8 TEA workflows
+- [TEA Command Reference](/docs/reference/commands.md) - All 9 TEA workflows
 - [TEA Configuration](/docs/reference/configuration.md) - Config options
 - [Glossary](/docs/glossary/index.md) - TEA terminology
 

@@ -10,15 +10,15 @@ base_paths:
 sessions:
   session-01-quickstart:
     docs:
-      - path: "/docs/tea-lite-quickstart.md"
+      - path: "/docs/tutorials/tea-lite-quickstart.md"
         title: "TEA Lite Quickstart"
-        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/getting-started/"
-      - path: "/docs/tea-overview.md"
+        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/"
+      - path: "/docs/explanation/tea-overview.md"
         title: "TEA Overview"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/"
-      - path: "/docs/run-automate.md"
+      - path: "/docs/how-to/workflows/run-automate.md"
         title: "Run Automate Workflow"
-        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/automate/"
+        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/"
     knowledge_fragments: []
     online_references:
       - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/"
@@ -32,13 +32,13 @@ sessions:
 
   session-02-concepts:
     docs:
-      - path: "/docs/testing-as-engineering.md"
+      - path: "/docs/explanation/testing-as-engineering.md"
         title: "Testing as Engineering"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/testing-as-engineering/"
-      - path: "/docs/risk-based-testing.md"
+      - path: "/docs/explanation/risk-based-testing.md"
         title: "Risk-Based Testing"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/risk-based-testing/"
-      - path: "/docs/test-quality-standards.md"
+      - path: "/docs/explanation/test-quality-standards.md"
         title: "Test Quality Standards"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/test-quality-standards/"
     knowledge_fragments:
@@ -58,13 +58,13 @@ sessions:
 
   session-03-architecture:
     docs:
-      - path: "/docs/fixture-architecture.md"
+      - path: "/docs/explanation/fixture-architecture.md"
         title: "Fixture Architecture"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/fixture-architecture/"
-      - path: "/docs/network-first-patterns.md"
+      - path: "/docs/explanation/network-first-patterns.md"
         title: "Network-First Patterns"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/network-first-patterns/"
-      - path: "/docs/step-file-architecture.md"
+      - path: "/docs/explanation/step-file-architecture.md"
         title: "Step-File Architecture"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/step-file-architecture/"
     knowledge_fragments:
@@ -86,16 +86,16 @@ sessions:
 
   session-04-test-design:
     docs:
-      - path: "/docs/run-test-design.md"
+      - path: "/docs/how-to/workflows/run-test-design.md"
         title: "Run Test Design Workflow"
-        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/test-design/"
+        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/"
     knowledge_fragments:
       - path: "/src/testarch/knowledge/test-levels-framework.md"
         title: "Test Levels Framework"
       - path: "/src/testarch/knowledge/test-priorities-matrix.md"
         title: "Test Priorities Matrix"
     online_references:
-      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/test-design/"
+      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/"
     workflows_referenced:
       - test-design
     key_concepts:
@@ -106,12 +106,12 @@ sessions:
 
   session-05-atdd-automate:
     docs:
-      - path: "/docs/run-atdd.md"
+      - path: "/docs/how-to/workflows/run-atdd.md"
         title: "Run ATDD Workflow"
-        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/atdd/"
-      - path: "/docs/run-automate.md"
+        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/"
+      - path: "/docs/how-to/workflows/run-automate.md"
         title: "Run Automate Workflow"
-        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/automate/"
+        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/"
     knowledge_fragments:
       - path: "/src/testarch/knowledge/component-tdd.md"
         title: "Component TDD Red-Green Loop"
@@ -120,8 +120,8 @@ sessions:
       - path: "/src/testarch/knowledge/api-request.md"
         title: "API Request Utility"
     online_references:
-      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/atdd/"
-      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/automate/"
+      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/"
+      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/"
     workflows_referenced:
       - atdd
       - automate
@@ -133,16 +133,16 @@ sessions:
 
   session-06-quality-trace:
     docs:
-      - path: "/docs/run-test-review.md"
+      - path: "/docs/how-to/workflows/run-test-review.md"
         title: "Run Test Review Workflow"
-        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/test-review/"
-      - path: "/docs/run-trace.md"
+        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/"
+      - path: "/docs/how-to/workflows/run-trace.md"
         title: "Run Trace Workflow"
-        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/trace/"
+        url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/"
     knowledge_fragments: []
     online_references:
-      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/test-review/"
-      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/trace/"
+      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-review/"
+      - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-trace/"
     workflows_referenced:
       - test-review
       - trace
