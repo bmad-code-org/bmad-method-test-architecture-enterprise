@@ -7,7 +7,7 @@ hero:
   tagline: Risk-based testing workflows, automation guidance, and release gates for BMad Method
   actions:
     - text: Tutorial
-      link: https://bmad-code-org.github.io/tutorials/tea-lite-quickstart/
+      link: /tutorials/tea-lite-quickstart/
       icon: right-arrow
       variant: primary
     - text: View on GitHub
@@ -61,9 +61,9 @@ Pick a path:
 
 ## Documentation Structure
 
-- **[Tutorial](https://bmad-code-org.github.io/tutorials/tea-lite-quickstart/)**: Learn TEA step-by-step
+- **[Tutorial](/tutorials/tea-lite-quickstart/)**: Learn TEA step-by-step
 - **[How-To Guides](/how-to/workflows/run-test-design)**: Task-focused instructions
-- **[Explanation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/testing-as-engineering/)**: Understand concepts and architecture
+- **[Explanation](/explanation/testing-as-engineering/)**: Understand concepts and architecture
 - **[Reference](/reference/commands)**: Commands, configuration, knowledge base
 - **[Glossary](/glossary)**: Terminology and definitions
 
