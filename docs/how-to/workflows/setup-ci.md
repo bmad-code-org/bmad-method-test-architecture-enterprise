@@ -758,4 +758,4 @@ npm run test:burn-in tests/flaky.spec.ts
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

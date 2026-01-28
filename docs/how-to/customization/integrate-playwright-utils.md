@@ -843,4 +843,4 @@ expect(status).toBe(200);
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

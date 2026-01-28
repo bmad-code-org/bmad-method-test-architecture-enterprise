@@ -764,4 +764,4 @@ Each model uses different TEA workflows. See:
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

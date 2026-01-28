@@ -5,7 +5,7 @@ description: Quick reference for all 8 TEA workflows - inputs, outputs, and link
 
 # TEA Command Reference
 
-Quick reference for all 8 TEA (Test Architect) workflows. For detailed step-by-step guides, see the how-to documentation.
+Quick reference for all 8 TEA (Test Engineering Architect) workflows. For detailed step-by-step guides, see the how-to documentation.
 
 ## Quick Index
 
@@ -297,4 +297,4 @@ Quick reference for all 8 TEA (Test Architect) workflows. For detailed step-by-s
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

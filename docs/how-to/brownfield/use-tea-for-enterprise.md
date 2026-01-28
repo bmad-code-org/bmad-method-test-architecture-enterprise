@@ -568,4 +568,4 @@ testWithAuth('admin can access admin endpoint', async ({ apiRequest, authToken, 
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

@@ -881,4 +881,4 @@ For detailed network-first patterns, see the knowledge base:
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

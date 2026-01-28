@@ -3,7 +3,7 @@ title: 'AI-Generated Testing: Why Most Approaches Fail'
 description: How Playwright-Utils, TEA workflows, and Playwright MCPs solve AI test quality problems
 ---
 
-AI-generated tests frequently fail in production because they lack systematic quality standards. This document explains the problem and presents a solution combining three components: Playwright-Utils, TEA (Test Architect), and Playwright MCPs.
+AI-generated tests frequently fail in production because they lack systematic quality standards. This document explains the problem and presents a solution combining three components: Playwright-Utils, TEA (Test Engineering Architect), and Playwright MCPs.
 
 :::note[Source]
 This article is adapted from [The Testing Meta Most Teams Have Not Caught Up To Yet](https://dev.to/muratkeremozcan/the-testing-meta-most-teams-have-not-caught-up-to-yet-5765) by Murat K Ozcan.

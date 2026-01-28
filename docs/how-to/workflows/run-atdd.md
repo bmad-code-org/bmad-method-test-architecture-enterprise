@@ -457,4 +457,4 @@ Don't modify these patterns - they prevent flakiness!
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

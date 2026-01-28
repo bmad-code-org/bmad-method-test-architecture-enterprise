@@ -687,4 +687,4 @@ Setup: Answer "Yes" to MCPs in BMad installer + configure MCP servers in your ID
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

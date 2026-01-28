@@ -5,7 +5,7 @@ description: Complete reference for TEA configuration options and file locations
 
 # TEA Configuration Reference
 
-Complete reference for all TEA (Test Architect) configuration options.
+Complete reference for all TEA (Test Engineering Architect) configuration options.
 
 ## Configuration File Locations
 
@@ -726,4 +726,4 @@ document_output_language: english
 
 ---
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Architect)
+Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

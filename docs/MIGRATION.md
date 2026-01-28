@@ -9,7 +9,7 @@ This guide helps you migrate from the BMM-embedded version of TEA to the standal
 
 ## Overview
 
-TEA (Test Architect) has been extracted from the BMAD Method (BMM) core repository into a standalone, independently installable module. This allows:
+TEA (Test Engineering Architect) has been extracted from the BMAD Method (BMM) core repository into a standalone, independently installable module. This allows:
 
 - **Independent versioning** and release cycles
 - **Optional installation** - use TEA only when needed

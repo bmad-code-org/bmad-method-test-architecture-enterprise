@@ -105,14 +105,14 @@ export default defineConfig({
             {
               label: 'Workflows',
               items: [
-                { label: 'NFR Assessment', slug: 'how-to/workflows/run-nfr-assess' },
-                { label: 'Test Design', slug: 'how-to/workflows/run-test-design' },
                 { label: 'Set Up Test Framework', slug: 'how-to/workflows/setup-test-framework' },
                 { label: 'Set Up CI Pipeline', slug: 'how-to/workflows/setup-ci' },
+                { label: 'Test Design', slug: 'how-to/workflows/run-test-design' },
                 { label: 'ATDD', slug: 'how-to/workflows/run-atdd' },
                 { label: 'Automate', slug: 'how-to/workflows/run-automate' },
                 { label: 'Test Review', slug: 'how-to/workflows/run-test-review' },
                 { label: 'Trace', slug: 'how-to/workflows/run-trace' },
+                { label: 'NFR Assessment', slug: 'how-to/workflows/run-nfr-assess' },
               ],
             },
             {

@@ -5,7 +5,7 @@ description: Diagnose and resolve common issues when using TEA
 
 # Troubleshooting Guide
 
-This guide helps you diagnose and resolve common issues when using TEA (Test Architect).
+This guide helps you diagnose and resolve common issues when using TEA (Test Engineering Architect).
 
 ## Table of Contents
 

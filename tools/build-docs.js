@@ -1,5 +1,5 @@
 /**
- * TEA (Test Architect) Documentation Build Pipeline
+ * TEA (Test Engineering Architect) Documentation Build Pipeline
  *
  * Consolidates docs from multiple sources, generates LLM-friendly files,
  * creates downloadable bundles, and builds the Astro+Starlight site.

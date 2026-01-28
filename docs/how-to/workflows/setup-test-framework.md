@@ -23,7 +23,7 @@ Use TEA's `framework` workflow to scaffold a production-ready test framework for
 
 ### 1. Load the TEA Agent
 
-Start a fresh chat and load the TEA (Test Architect) agent.
+Start a fresh chat and load the TEA (Test Engineering Architect) agent.
 
 ### 2. Run the Framework Workflow
 

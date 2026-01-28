@@ -31,7 +31,7 @@ Use TEA's `test-design` workflow to create comprehensive test plans with risk as
 
 ### 1. Load the TEA Agent
 
-Start a fresh chat and load the TEA (Test Architect) agent.
+Start a fresh chat and load the TEA (Test Engineering Architect) agent.
 
 ### 2. Run the Test Design Workflow
 
