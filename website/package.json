@@ -9,6 +9,7 @@
     "build": "astro check && astro build",
     "check": "astro check",
     "dev": "astro dev",
+    "docs:dev": "rm -rf .astro && astro dev --host 127.0.0.1 --port 4321",
     "preview": "astro preview"
   },
   "dependencies": {
