@@ -35,8 +35,8 @@ BMad does not mandate TEA. There are five valid ways to use it (or skip it). Pic
 
 **TEA Academy (Learning Path):**
 
-- **NEW!** Interactive learning companion that teaches testing progressively through 7 structured sessions.
-- Perfect for: New QAs (onboarding), developers learning testing, anyone wanting comprehensive testing knowledge.
+- Interactive learning companion that teaches testing progressively through 7 structured sessions.
+- Perfect for: QAs, developers learning testing, anyone wanting comprehensive testing knowledge.
 - **Time:** 1-2 weeks self-paced (30-90 min per session).
 - **Features:** State persistence (pause/resume), role-adapted examples (QA/Dev/Lead/VP), quiz validation, completion certificate.
 - **Command:** `teach-me-testing` or `TMT` in TEA agent.
@@ -64,17 +64,16 @@ If you are unsure, default to the integrated path for your track and adjust late
 
 ## TEA Command Catalog
 
-| Command            | Primary Outputs                                                                               | Notes                                                | With Playwright MCP Enhancements                                                                                                     |
-| ------------------ | --------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `teach-me-testing` | Progress tracking, session notes, completion certificate                                      | Learn testing - 7 sessions, 1-2 weeks                | -                                                                                                                                    |
-| `framework`        | Playwright/Cypress scaffold, `.env.example`, `.nvmrc`, sample specs                           | Use when no production-ready harness exists          | -                                                                                                                                    |
-| `ci`               | CI workflow, selective test scripts, secrets checklist                                        | Platform-aware (GitHub Actions default)              | -                                                                                                                                    |
-| `test-design`      | Combined risk assessment, mitigation plan, and coverage strategy                              | Risk scoring + optional exploratory mode             | **+ Exploratory**: Interactive UI discovery with browser automation (uncover actual functionality)                                   |
-| `atdd`             | Failing acceptance tests + implementation checklist                                           | TDD red phase + optional recording mode              | **+ Recording**: UI selectors verified with live browser; API tests benefit from trace analysis                                      |
-| `automate`         | Prioritized specs, fixtures, README/script updates, DoD summary                               | Optional healing/recording, avoid duplicate coverage | **+ Healing**: Visual debugging + trace analysis for test fixes; **+ Recording**: Verified selectors (UI) + network inspection (API) |
-| `test-review`      | Test quality review report with 0-100 score, violations, fixes                                | Reviews tests against knowledge base patterns        | -                                                                                                                                    |
-| `nfr-assess`       | NFR assessment report with actions                                                            | Focus on security/performance/reliability            | -                                                                                                                                    |
-| `trace`            | Phase 1: Coverage matrix, recommendations. Phase 2: Gate decision (PASS/CONCERNS/FAIL/WAIVED) | Two-phase workflow: traceability + gate decision     | -                                                                                                                                    |
+| Command       | Primary Outputs                                                                               | Notes                                                | With Playwright MCP Enhancements                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `framework`   | Playwright/Cypress scaffold, `.env.example`, `.nvmrc`, sample specs                           | Use when no production-ready harness exists          | -                                                                                                                                    |
+| `ci`          | CI workflow, selective test scripts, secrets checklist                                        | Platform-aware (GitHub Actions default)              | -                                                                                                                                    |
+| `test-design` | Combined risk assessment, mitigation plan, and coverage strategy                              | Risk scoring + optional exploratory mode             | **+ Exploratory**: Interactive UI discovery with browser automation (uncover actual functionality)                                   |
+| `atdd`        | Failing acceptance tests + implementation checklist                                           | TDD red phase + optional recording mode              | **+ Recording**: UI selectors verified with live browser; API tests benefit from trace analysis                                      |
+| `automate`    | Prioritized specs, fixtures, README/script updates, DoD summary                               | Optional healing/recording, avoid duplicate coverage | **+ Healing**: Visual debugging + trace analysis for test fixes; **+ Recording**: Verified selectors (UI) + network inspection (API) |
+| `test-review` | Test quality review report with 0-100 score, violations, fixes                                | Reviews tests against knowledge base patterns        | -                                                                                                                                    |
+| `nfr-assess`  | NFR assessment report with actions                                                            | Focus on security/performance/reliability            | -                                                                                                                                    |
+| `trace`       | Phase 1: Coverage matrix, recommendations. Phase 2: Gate decision (PASS/CONCERNS/FAIL/WAIVED) | Two-phase workflow: traceability + gate decision     | -                                                                                                                                    |
 
 ## TEA Workflow Lifecycle
 
@@ -181,15 +180,14 @@ When an ADR or architecture draft is produced, run `test-design` in **system-lev
 
 TEA spans multiple phases (Phase 3, Phase 4, and the release gate). Most BMM agents operate in a single phase. That multi-phase role is paired with a dedicated testing knowledge base so standards stay consistent across projects.
 
-### TEA's 9 Workflows Across Phases
+### TEA's 8 Workflows Across Phases
 
-| Phase          | TEA Workflows                                             | Frequency        | Purpose                                                 |
-| -------------- | --------------------------------------------------------- | ---------------- | ------------------------------------------------------- |
-| **Onboarding** | `teach-me-testing`                                        | Once per learner | TEA Academy training and onboarding                     |
-| **Phase 2**    | (none)                                                    | -                | Planning phase - PM defines requirements                |
-| **Phase 3**    | `test-design` (system-level), `framework`, `ci`           | Once per project | System testability review and test infrastructure setup |
-| **Phase 4**    | `test-design`, `atdd`, `automate`, `test-review`, `trace` | Per epic/story   | Test planning per epic, then per-story testing          |
-| **Release**    | `nfr-assess`, `trace` (Phase 2: gate)                     | Per epic/release | Go/no-go decision                                       |
+| Phase       | TEA Workflows                                             | Frequency        | Purpose                                                 |
+| ----------- | --------------------------------------------------------- | ---------------- | ------------------------------------------------------- |
+| **Phase 2** | (none)                                                    | -                | Planning phase - PM defines requirements                |
+| **Phase 3** | `test-design` (system-level), `framework`, `ci`           | Once per project | System testability review and test infrastructure setup |
+| **Phase 4** | `test-design`, `atdd`, `automate`, `test-review`, `trace` | Per epic/story   | Test planning per epic, then per-story testing          |
+| **Release** | `nfr-assess`, `trace` (Phase 2: gate)                     | Per epic/release | Go/no-go decision                                       |
 
 **Note**: `trace` is a two-phase workflow: Phase 1 (traceability) + Phase 2 (gate decision). This reduces cognitive load while maintaining natural workflow.
 
