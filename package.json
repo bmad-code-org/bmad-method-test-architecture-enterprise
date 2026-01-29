@@ -32,7 +32,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "lint:md": "markdownlint-cli2 '**/*.md'",
-    "prepare": "husky",
+    "prepare": "command -v husky >/dev/null 2>&1 && husky || exit 0",
     "release:alpha": "gh workflow run manual-release.yaml -f version_bump=alpha",
     "release:beta": "gh workflow run manual-release.yaml -f version_bump=beta",
     "release:major": "gh workflow run manual-release.yaml -f version_bump=major",
