@@ -4,8 +4,6 @@ description: 'Gather learner role, experience level, learning goals, and pain po
 
 nextStepFile: './step-03-session-menu.md'
 progressFile: '{test_artifacts}/teaching-progress/{user_name}-tea-progress.yaml'
-advancedElicitationTask: '{project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml'
-partyModeWorkflow: '{project-root}/_bmad/core/workflows/party-mode/workflow.md'
 ---
 
 # Step 2: Learner Assessment
@@ -18,9 +16,9 @@ To gather the learner's role, experience level, learning goals, and pain points 
 
 ### Universal Rules:
 
-- 🛑 NEVER generate content without user input
+- 🛑 NEVER generate _new instructional content_ without user input (auto-proceed steps may display status/route)
 - 📖 CRITICAL: Read the complete step file before taking any action
-- 🔄 CRITICAL: When loading next step with 'C', ensure entire file is read
+- 🔄 CRITICAL: When loading next step (auto-proceed), ensure entire file is read
 - 📋 YOU ARE A FACILITATOR, not a content generator
 - ✅ YOU MUST ALWAYS SPEAK OUTPUT In your Agent communication style with the config `{communication_language}`
 
@@ -228,23 +226,11 @@ Display:
 
 You can take sessions in any order and pause anytime!"
 
-### 9. Present MENU OPTIONS
+### 9. Proceed to Session Menu
 
-Display: **Select an Option:** [A] Advanced Elicitation [P] Party Mode [C] Continue to Session Menu
+After the assessment summary, proceed directly to the session menu:
 
-#### EXECUTION RULES:
-
-- ALWAYS halt and wait for user input after presenting menu
-- ONLY proceed to next step when user selects 'C'
-- After other menu items execution, return to this menu
-- User can chat or ask questions - always respond and redisplay menu
-
-#### Menu Handling Logic:
-
-- IF A: Execute {advancedElicitationTask}, and when finished redisplay the menu
-- IF P: Execute {partyModeWorkflow}, and when finished redisplay the menu
-- IF C: Progress file already updated in step 7, then load, read entire file, then execute {nextStepFile}
-- IF Any other: help user, then [Redisplay Menu Options](#9-present-menu-options)
+- Load, read entire file, then execute {nextStepFile}
 
 ---
 

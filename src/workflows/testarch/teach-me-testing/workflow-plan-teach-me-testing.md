@@ -221,9 +221,9 @@ Create an ongoing learning companion that teaches testing progressively through 
 
 3. **step-02-assess.md** (Middle Step - Standard)
    - Goal: Gather role (QA/Dev/Lead/VP), experience level, learning goals, optional pain points
-   - Type: Middle (Standard) with A/P/C menu
-   - Menu: Standard A/P/C (Pattern 1) - collaborative assessment
-   - On C: Saves assessment to progress file → loads step-03-session-menu
+   - Type: Middle (Standard) auto-proceed
+   - Menu: Auto-proceed (Pattern 3) - no user menu
+   - On completion: Saves assessment to progress file → loads step-03-session-menu
 
 4. **step-03-session-menu.md** (Branch Step - Hub)
    - Goal: Present 7 sessions with descriptions + completion status, allow non-linear selection
@@ -269,8 +269,8 @@ Create an ongoing learning companion that teaches testing progressively through 
 
 ### Interaction Patterns
 
-- **Auto-proceed steps:** step-01-init, step-01b-continue
-- **Standard A/P/C:** step-02-assess, step-04-session-[01-07]
+- **Auto-proceed steps:** step-01-init, step-01b-continue, step-02-assess
+- **Standard A/P/C:** step-04-session-[01-07]
 - **Custom branching:** step-03-session-menu (hub)
 - **No menu:** step-05-completion (final)
 
@@ -616,9 +616,9 @@ teach-me-testing/
 
 **Step Configuration:**
 
-- **Type:** Middle Step (Standard) with A/P/C menu
+- **Type:** Middle Step (Standard) auto-proceed
 - **Next Step:** step-03-session-menu
-- **Menu Pattern:** Standard A/P/C (Pattern 1) - collaborative assessment
+- **Menu Pattern:** Auto-proceed (Pattern 3) - no user menu
 
 **step-02-assess.md:**
 
