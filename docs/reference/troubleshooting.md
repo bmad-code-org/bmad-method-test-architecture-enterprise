@@ -55,6 +55,48 @@ This guide helps you diagnose and resolve common issues when using TEA (Test Eng
    npx bmad-method install --verbose
    ```
 
+### Installing TEA Behind a Corporate Firewall (Local Repo)
+
+If the BMAD installer can run but cannot fetch the Test Architect module from GitHub, point it to a local clone or internal mirror.
+
+**Goal:** Make the installer clone TEA from a local path instead of the public repo.
+
+1. **Clone TEA locally (or use your internal Git mirror):**
+
+   ```bash
+   git clone /path/to/your/internal/mirror/bmad-method-test-architecture-enterprise \
+     /path/to/local/bmad-method-test-architecture-enterprise
+   ```
+
+2. **Edit the BMAD installer module list** in the BMAD repo you are running the installer from:
+
+   `BMAD-METHOD/tools/cli/external-official-modules.yaml`
+
+   Update the TEA entry to point to your local path:
+
+   ```yaml
+   bmad-method-test-architecture-enterprise:
+     url: /path/to/local/bmad-method-test-architecture-enterprise
+     module-definition: src/module.yaml
+     code: tea
+     name: 'Test Architect'
+     description: 'Master Test Architect for quality strategy, test automation, and release gates'
+     defaultSelected: false
+     type: bmad-org
+     npmPackage: bmad-method-test-architecture-enterprise
+   ```
+
+3. **Run the installer:**
+
+   ```bash
+   npx bmad-method install
+   ```
+
+**Notes:**
+
+- `url:` can be a local filesystem path or an internal Git mirror URL.
+- If your environment blocks npm, use an internal npm proxy or allow npm only for the local module cache.
+
 ### Module Installation Hangs
 
 **Symptom**: Installation process hangs or times out.
