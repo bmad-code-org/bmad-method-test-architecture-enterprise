@@ -48,7 +48,7 @@
 - [ ] Priority levels assigned (P0/P1/P2/P3)
 - [ ] P0 scenarios meet strict criteria (blocks core + high risk + no workaround)
 - [ ] Data prerequisites identified
-- [ ] Tooling requirements documented
+- [ ] Tooling/access requirements documented when applicable
 - [ ] Execution order defined (smoke → P0 → P1 → P2/P3)
 
 ### Step 4: Deliverables Generation
@@ -198,17 +198,17 @@
 - [ ] Bug severity gate defined (e.g., no open P0/P1 bugs)
 - [ ] Coverage sufficiency criteria specified
 
-### Project Team
+### Project Team (Optional)
 
-- [ ] Key roles identified (QA Lead, Dev Lead, PM, Architect minimum)
-- [ ] Testing responsibilities mapped to roles
-- [ ] Names populated where available (placeholders acceptable for draft)
+- [ ] If included, key roles identified (QA Lead, Dev Lead, PM, Architect minimum)
+- [ ] If included, testing responsibilities mapped to roles
+- [ ] If included, names populated where available (placeholders acceptable for draft)
 
-### Tooling & Access (System-Level Only)
+### Tooling & Access (System-Level Only, If Applicable)
 
-- [ ] All required test tools listed
-- [ ] Access requirements identified for each tool
-- [ ] Status tracked (Ready/Pending)
+- [ ] If non-standard tools or access requests exist, list them
+- [ ] Access requirements identified for each tool/service
+- [ ] Status tracked (Ready/Pending) when applicable
 
 ### Interworking & Regression
 
@@ -272,7 +272,7 @@
 
 - [ ] **Purpose statement** at top (test execution recipe)
 - [ ] **Executive Summary** with risk summary and coverage summary
-- [ ] **Dependencies & Test Blockers** section in POSITION 2 (right after Executive Summary)
+- [ ] **Dependencies & Test Blockers** section appears near the top (immediately after Executive Summary, or after Not in Scope)
   - [ ] Backend/Architecture dependencies listed (what QA needs from other teams)
   - [ ] QA infrastructure setup listed (factories, fixtures, environments)
   - [ ] Code example with playwright-utils if config.tea_use_playwright_utils is true

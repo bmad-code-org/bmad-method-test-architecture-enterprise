@@ -69,20 +69,22 @@ When populating templates in step 5, apply the following guidance for these sect
 - **Exit criteria**: Derive from Quality Gate Criteria -- what constitutes "done" for the testing phase
 - Include project-specific criteria based on context (e.g., "feature flag enabled in staging", "seed data loaded", "Sprint 0 blockers resolved")
 
-### Project Team
+### Project Team (Optional)
 
+- Include only if roles/names are known or responsibility mapping is needed
 - Extract names and roles from PRD, ADR, or project context if available
-- If names are unknown, use role placeholders (QA Lead, Dev Lead, PM, Architect)
-- Map testing responsibilities to each role (e.g., who owns E2E tests, who owns unit tests, who signs off)
+- If names are unknown, either omit or use role placeholders for drafts
+- Map testing responsibilities to each role (e.g., who owns E2E tests, who signs off)
 
 ### Tooling and Access (System-Level QA Document Only)
 
-- List test frameworks, data generation tools, CI tools, and performance tooling
-- Flag access requirements (cloud accounts, API keys, environment credentials)
+- Include only if non-standard tools or access requests are required
+- List notable tools/services needed for test execution and any access approvals
+- Avoid assuming specific vendors unless the project context names them
 - Mark each item's status as Ready or Pending based on available information
 - This section applies only to `test-design-qa-template.md` output
 
-### Interworking and Regression
+### Interworking & Regression
 
 - Identify services and components that interact with or are affected by the feature under test
 - For each, define what existing regression tests must pass before release

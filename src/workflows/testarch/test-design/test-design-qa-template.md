@@ -136,7 +136,9 @@ test('example test @p0', async ({ apiRequest }) => {
 
 ---
 
-## Project Team
+## Project Team (Optional)
+
+**Include only if roles/names are known or responsibility mapping is needed; otherwise omit.**
 
 | Name   | Role      | Testing Responsibilities                                      |
 | ------ | --------- | ------------------------------------------------------------- |
@@ -270,19 +272,16 @@ test('example test @p0', async ({ apiRequest }) => {
 
 ## Tooling & Access
 
-**Required tools and access for test execution:**
+**Include only if non-standard tools or access requests are required.**
 
-| Tool                               | Purpose              | Access Required  | Status            |
-| ---------------------------------- | -------------------- | ---------------- | ----------------- |
-| Playwright                         | E2E and API tests    | npm install      | {Ready / Pending} |
-| @seontechnologies/playwright-utils | SEON test fixtures   | npm install      | {Ready / Pending} |
-| k6                                 | Performance tests    | k6 Cloud account | {Ready / Pending} |
-| faker-js                           | Test data generation | npm install      | {Ready / Pending} |
-| {Tool}                             | {Purpose}            | {Access needed}  | {Ready / Pending} |
+| Tool or Service   | Purpose   | Access Required | Status            |
+| ----------------- | --------- | --------------- | ----------------- |
+| {Tool or Service} | {Purpose} | {Access needed} | {Ready / Pending} |
+| {Tool or Service} | {Purpose} | {Access needed} | {Ready / Pending} |
 
-**Access requests needed:**
+**Access requests needed (if any):**
 
-- [ ] {Environment/tool access that must be requested}
+- [ ] {Access to request}
 
 ---
 

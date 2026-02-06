@@ -83,7 +83,9 @@
 - [ ] Test coverage agreed as sufficient
 - [ ] {Epic-specific exit criteria}
 
-## Project Team
+## Project Team (Optional)
+
+**Include only if roles/names are known or responsibility mapping is needed; otherwise omit.**
 
 | Name   | Role     | Testing Responsibilities |
 | ------ | -------- | ------------------------ |
