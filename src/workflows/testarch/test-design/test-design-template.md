@@ -25,6 +25,14 @@
 
 ---
 
+## Not in Scope
+
+| Item       | Reasoning      | Mitigation            |
+| ---------- | -------------- | --------------------- |
+| **{Item}** | {Why excluded} | {How risk is handled} |
+
+---
+
 ## Risk Assessment
 
 ### High-Priority Risks (Score ≥6)
@@ -56,6 +64,32 @@
 - **DATA**: Data Integrity (loss, corruption, inconsistency)
 - **BUS**: Business Impact (UX harm, logic errors, revenue)
 - **OPS**: Operations (deployment, config, monitoring)
+
+---
+
+## Entry Criteria
+
+- [ ] Requirements and assumptions agreed upon by QA, Dev, PM
+- [ ] Test environment provisioned and accessible
+- [ ] Test data available or factories ready
+- [ ] Feature deployed to test environment
+- [ ] {Epic-specific entry criteria}
+
+## Exit Criteria
+
+- [ ] All P0 tests passing
+- [ ] All P1 tests passing (or failures triaged)
+- [ ] No open high-priority / high-severity bugs
+- [ ] Test coverage agreed as sufficient
+- [ ] {Epic-specific exit criteria}
+
+## Project Team
+
+| Name   | Role     | Testing Responsibilities |
+| ------ | -------- | ------------------------ |
+| {Name} | QA Lead  | {Responsibilities}       |
+| {Name} | Dev Lead | {Responsibilities}       |
+| {Name} | PM       | {Responsibilities}       |
 
 ---
 
@@ -268,6 +302,14 @@
 ---
 
 ---
+
+---
+
+## Interworking & Regression
+
+| Service/Component | Impact         | Regression Scope                |
+| ----------------- | -------------- | ------------------------------- |
+| **{Service}**     | {How affected} | {Existing tests that must pass} |
 
 ---
 

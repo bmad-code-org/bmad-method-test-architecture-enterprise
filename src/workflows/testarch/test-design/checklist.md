@@ -177,6 +177,45 @@
 - [ ] Risk assessment informs `gate` workflow criteria
 - [ ] Integrates with `ci` workflow execution order
 
+## Accountability & Logistics
+
+### Not in Scope
+
+- [ ] Out-of-scope items explicitly listed with reasoning
+- [ ] Mitigation noted for each excluded item
+- [ ] Exclusions reviewed and accepted by stakeholders
+
+### Entry Criteria
+
+- [ ] Prerequisites for testing start are clearly defined
+- [ ] Environment readiness included
+- [ ] Test data readiness included
+- [ ] Sprint 0 blocker resolution referenced
+
+### Exit Criteria
+
+- [ ] Pass/fail thresholds defined for each priority level
+- [ ] Bug severity gate defined (e.g., no open P0/P1 bugs)
+- [ ] Coverage sufficiency criteria specified
+
+### Project Team
+
+- [ ] Key roles identified (QA Lead, Dev Lead, PM, Architect minimum)
+- [ ] Testing responsibilities mapped to roles
+- [ ] Names populated where available (placeholders acceptable for draft)
+
+### Tooling & Access (System-Level Only)
+
+- [ ] All required test tools listed
+- [ ] Access requirements identified for each tool
+- [ ] Status tracked (Ready/Pending)
+
+### Interworking & Regression
+
+- [ ] Impacted services/components identified
+- [ ] Regression scope defined per impacted service
+- [ ] Cross-team coordination noted where needed
+
 ## System-Level Mode: Two-Document Validation
 
 **When in system-level mode (PRD + ADR input), validate BOTH documents:**
