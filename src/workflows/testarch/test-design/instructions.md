@@ -44,7 +44,7 @@ This workflow uses **step-file architecture** for disciplined execution:
 
 From `workflow.yaml`, resolve:
 
-- `config_source`, `output_folder`, `user_name`, `communication_language`, `document_output_language`, `date`
+- `config_source`, `test_artifacts`, `user_name`, `communication_language`, `document_output_language`, `date`
 
 ### 2. First Step
 
@@ -83,6 +83,13 @@ When populating templates in step 5, apply the following guidance for these sect
 - Avoid assuming specific vendors unless the project context names them
 - Mark each item's status as Ready or Pending based on available information
 - This section applies only to `test-design-qa-template.md` output
+
+### Sprint Planning Handoff (Optional)
+
+- Include only if test design produces implementation tasks that must be scheduled
+- Derive items from Dependencies & Test Blockers, tooling/access needs, and QA infra setup
+- If no dedicated QA, assign ownership to Dev/Platform as appropriate
+- Keep the list short; avoid per-sprint breakdown tables
 
 ### Interworking & Regression
 

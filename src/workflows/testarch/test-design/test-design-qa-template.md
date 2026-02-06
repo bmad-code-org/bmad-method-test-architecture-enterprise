@@ -270,6 +270,19 @@ test('example test @p0', async ({ apiRequest }) => {
 
 ---
 
+## Sprint Planning Handoff (Optional)
+
+**Include only if this test design produces implementation tasks that must be scheduled.**
+
+**Use this to inform sprint planning; if no dedicated QA, assign to Dev owners.**
+
+| Work Item   | Owner        | Target Sprint (Optional) | Dependencies/Notes |
+| ----------- | ------------ | ------------------------ | ------------------ |
+| {Work item} | {QA/Dev/etc} | {Sprint or date}         | {Notes}            |
+| {Work item} | {QA/Dev/etc} | {Sprint or date}         | {Notes}            |
+
+---
+
 ## Tooling & Access
 
 **Include only if non-standard tools or access requests are required.**

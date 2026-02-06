@@ -1,7 +1,7 @@
 ---
 name: 'step-05-generate-output'
 description: 'Generate output documents and validate against checklist'
-outputFile: '{output_folder}/test-design-epic-{epic_num}.md'
+outputFile: '{test_artifacts}/test-design-epic-{epic_num}.md'
 ---
 
 # Step 5: Generate Outputs & Validate
@@ -41,8 +41,8 @@ Write the final test-design document(s) using the correct template(s), then vali
 
 Generate **two** documents:
 
-- `{output_folder}/test-design-architecture.md` using `test-design-architecture-template.md`
-- `{output_folder}/test-design-qa.md` using `test-design-qa-template.md`
+- `{test_artifacts}/test-design-architecture.md` using `test-design-architecture-template.md`
+- `{test_artifacts}/test-design-qa.md` using `test-design-qa-template.md`
 
 ### Epic-Level Mode (Phase 4)
 

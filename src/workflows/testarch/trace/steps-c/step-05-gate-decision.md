@@ -1,7 +1,7 @@
 ---
 name: 'step-05-gate-decision'
 description: 'Phase 2: Apply gate decision logic and generate outputs'
-outputFile: '{output_folder}/traceability-report.md'
+outputFile: '{test_artifacts}/traceability-report.md'
 ---
 
 # Step 5: Phase 2 - Gate Decision

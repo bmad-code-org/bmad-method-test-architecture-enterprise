@@ -1,7 +1,7 @@
 ---
 name: 'step-04-validate-and-summarize'
 description: 'Validate outputs and produce automation summary'
-outputFile: '{output_folder}/automation-summary.md'
+outputFile: '{test_artifacts}/automation-summary.md'
 ---
 
 # Step 4: Validate & Summarize

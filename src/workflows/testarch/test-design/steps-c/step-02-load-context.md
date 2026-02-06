@@ -41,7 +41,7 @@ Load the required documents, config flags, and knowledge fragments needed to pro
 From `{config_source}`:
 
 - Read `tea_use_playwright_utils`
-- Note `output_folder`
+- Note `test_artifacts`
 
 ---
 

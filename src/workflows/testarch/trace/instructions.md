@@ -27,7 +27,7 @@ This workflow uses **step-file architecture**:
 
 From `workflow.yaml`, resolve:
 
-- `config_source`, `output_folder`, `user_name`, `communication_language`, `document_output_language`, `date`
+- `config_source`, `test_artifacts`, `user_name`, `communication_language`, `document_output_language`, `date`
 - `test_dir`, `source_dir`, `coverage_levels`, `gate_type`, `decision_mode`
 
 ### 2. First Step

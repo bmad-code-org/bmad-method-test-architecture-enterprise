@@ -295,7 +295,11 @@
 - [ ] **QA Effort Estimate** section (QA effort ONLY)
   - [ ] Interval-based estimates (e.g., "~1-2 weeks" NOT "36 hours")
   - [ ] NO DevOps, Backend, Data Eng, Finance effort
-  - [ ] NO Sprint breakdowns (too prescriptive)
+  - [ ] No per-sprint effort breakdowns in this section
+- [ ] **Sprint Planning Handoff** section (optional)
+  - [ ] Only include if implementation tasks must be scheduled
+  - [ ] Owners assigned (QA/Dev/Platform/etc)
+  - [ ] Target sprint may be noted, but avoid detailed per-sprint breakdowns
 - [ ] **Appendix A: Code Examples & Tagging**
 - [ ] **Appendix B: Knowledge Base References**
 
@@ -311,8 +315,8 @@
 - [ ] ❌ NO Follow-on Workflows section (BMAD commands self-explanatory)
 - [ ] ❌ NO Approval section
 - [ ] ❌ NO Infrastructure/DevOps/Finance effort tables (out of scope)
-- [ ] ❌ NO Sprint 0/1/2/3 breakdown tables
-- [ ] ❌ NO Next Steps section
+- [ ] ❌ NO detailed sprint-by-sprint breakdown tables (use Sprint Planning Handoff if needed)
+- [ ] ❌ NO generic Next Steps section (use Sprint Planning Handoff if needed)
 
 ### Cross-Document Consistency
 

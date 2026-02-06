@@ -28,6 +28,7 @@ Complete reference for all TEA (Test Engineering Architect) configuration option
 project_name: my-awesome-app
 user_skill_level: intermediate
 output_folder: _bmad-output
+test_artifacts: _bmad-output/test-artifacts
 tea_use_playwright_utils: true
 tea_use_mcp_enhancements: false
 ```
@@ -49,6 +50,26 @@ tea_use_mcp_enhancements: false
 ---
 
 ## TEA Configuration Options
+
+### test_artifacts
+
+Base output folder for TEA-generated artifacts (test designs, reports, traceability, etc).
+
+**Schema Location:** `src/module.yaml` (TEA module config)
+
+**User Config:** `_bmad/tea/config.yaml`
+
+**Type:** `string`
+
+**Default:** `{output_folder}/test-artifacts`
+
+**Purpose:** Allows TEA outputs to live outside the core BMM output folder.
+
+**Example:**
+
+```yaml
+test_artifacts: docs/testing-artifacts
+```
 
 ### tea_use_playwright_utils
 
@@ -204,7 +225,7 @@ TEA also uses core BMM configuration options from `_bmad/tea/config.yaml`:
 
 **Default:** `_bmad-output`
 
-**Purpose:** Where TEA writes output files (test designs, reports, traceability matrices)
+**Purpose:** Base output folder for core BMM artifacts. TEA writes test artifacts under `test_artifacts` (defaults to `{output_folder}/test-artifacts`).
 
 **Example:**
 
@@ -212,7 +233,7 @@ TEA also uses core BMM configuration options from `_bmad/tea/config.yaml`:
 output_folder: _bmad-output
 ```
 
-**TEA Output Files:**
+**TEA Output Files (under `{test_artifacts}`):**
 
 - `test-design-architecture.md` + `test-design-qa.md` (from `test-design` system-level - TWO documents)
 - `test-design-epic-N.md` (from `test-design` epic-level)
