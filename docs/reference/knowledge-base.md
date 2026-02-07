@@ -172,6 +172,18 @@ Feature flag testing, contract testing, and API testing patterns.
 
 ---
 
+### Browser Automation
+
+CLI and MCP integration for AI-driven browser automation during test generation.
+
+| Fragment                                                                                                                                       | Description                                                                                     | Key Topics                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| [playwright-cli](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/playwright-cli.md) | Token-efficient CLI for AI coding agents: element refs, sessions, snapshots, browser automation | CLI, browser, agent, automation, snapshot |
+
+**Used in:** `atdd`, `automate`, `test-design`, `test-review`, `nfr-assess` (when `tea_browser_automation` is `cli` or `auto`)
+
+---
+
 ### Playwright-Utils Integration
 
 Patterns for using `@seontechnologies/playwright-utils` package (9 utilities).

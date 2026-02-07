@@ -53,6 +53,8 @@ Use recording when UI interactions need live browser verification.
 
 If `auto`:
 
+> **Note:** `${timestamp}` is a placeholder the agent should replace with a unique value (e.g., epoch seconds) for session isolation.
+
 - **Simple recording** (snapshot selectors, capture structure): Use CLI
   - `playwright-cli -s=tea-atdd-${timestamp} open <url>` → `playwright-cli -s=tea-atdd-${timestamp} snapshot` → extract refs
 - **Complex recording** (drag/drop, wizards, multi-step state): Use MCP

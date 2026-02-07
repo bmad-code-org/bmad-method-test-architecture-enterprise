@@ -177,6 +177,9 @@ sessions:
           - network-error-monitor.md
           - contract-testing.md
 
+        browser_automation:
+          - playwright-cli.md
+
         configuration_governance:
           - playwright-config.md
           - ci-burn-in.md
