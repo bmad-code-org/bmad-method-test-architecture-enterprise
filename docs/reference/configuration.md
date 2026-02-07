@@ -30,12 +30,12 @@ user_skill_level: intermediate
 output_folder: _bmad-output
 test_artifacts: _bmad-output/test-artifacts
 tea_use_playwright_utils: true
-tea_use_mcp_enhancements: false
+tea_browser_automation: 'auto'
 ```
 
 ### Canonical Schema (Source of Truth)
 
-**Location:** `src/bmm/module.yaml`
+**Location:** `src/module.yaml`
 
 **Purpose:** Defines available configuration keys, defaults, and installer prompts
 
@@ -130,88 +130,82 @@ npm install -D @seontechnologies/playwright-utils
 
 ---
 
-### tea_use_mcp_enhancements
+### tea_browser_automation
 
-Enable Playwright MCP servers for live browser verification during test generation.
+Browser automation strategy for TEA workflows. Controls how TEA interacts with live browsers during test generation.
 
-**Schema Location:** `src/bmm/module.yaml:47-50`
+**Schema Location:** `src/module.yaml` (TEA module config)
 
 **User Config:** `_bmad/tea/config.yaml`
 
-**Type:** `boolean`
+**Type:** `string`
 
-**Default:** `false`
+**Default:** `"auto"`
+
+**Options:** `"auto"` | `"cli"` | `"mcp"` | `"none"`
 
 **Installer Prompt:**
 
 ```
-Test Architect Playwright MCP capabilities (healing, exploratory, verification) are optionally available.
-You will have to setup your MCPs yourself; refer to https://docs.bmad-method.org/explanation/features/tea-overview for configuration examples.
-Would you like to enable MCP enhancements in Test Architect?
+How should TEA interact with browsers during test generation?
 ```
 
-**Purpose:** Enables TEA to use Model Context Protocol servers for:
+**Purpose:** Controls which browser automation tool TEA uses:
 
-- Live browser automation during test design
-- Selector verification with actual DOM
-- Interactive UI discovery
-- Visual debugging and healing
+| Mode   | Behavior                                                                                                    |
+| ------ | ----------------------------------------------------------------------------------------------------------- |
+| `auto` | Smart selection — CLI for stateless tasks, MCP for stateful flows. Falls back gracefully. **(Recommended)** |
+| `cli`  | CLI only (`@playwright/cli`). MCP ignored.                                                                  |
+| `mcp`  | MCP only. CLI ignored. Same as old `tea_use_mcp_enhancements: true`.                                        |
+| `none` | No browser interaction. Pure AI generation from docs/code.                                                  |
 
 **Affects Workflows:**
 
-- `test-design` - Enables exploratory mode (browser-based UI discovery)
-- `atdd` - Enables recording mode (verify selectors with live browser)
-- `automate` - Enables healing mode (fix tests with visual debugging)
+- `test-design` - Exploratory mode (CLI snapshots for page discovery)
+- `atdd` - Recording mode (CLI for selector verification, MCP for complex interactions)
+- `automate` - Healing mode (MCP for debugging) + recording mode (CLI for snapshots)
+- `test-review` - Evidence collection (CLI for traces, screenshots)
 
-**MCP Servers Required:**
+**Prerequisites:**
 
-**Two Playwright MCP servers** (actively maintained, continuously updated):
+- **CLI:** `npm install -g @playwright/cli@latest` then `playwright-cli install --skills`
+- **MCP:** Configure MCP servers in IDE (see [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md))
 
-- `playwright` - Browser automation (`npx @playwright/mcp@latest`)
-- `playwright-test` - Test runner with failure analysis (`npx playwright run-test-mcp-server`)
-
-**Configuration example**:
-
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
-    },
-    "playwright-test": {
-      "command": "npx",
-      "args": ["playwright", "run-test-mcp-server"]
-    }
-  }
-}
-```
-
-**Configuration:** Refer to your AI agent's documentation for MCP server setup instructions.
-
-**Example (Enable):**
+**Example (Auto — Recommended):**
 
 ```yaml
-tea_use_mcp_enhancements: true
+tea_browser_automation: 'auto'
+```
+
+**Example (CLI only):**
+
+```yaml
+tea_browser_automation: 'cli'
+```
+
+**Example (MCP only — same as old behavior):**
+
+```yaml
+tea_browser_automation: 'mcp'
 ```
 
 **Example (Disable):**
 
 ```yaml
-tea_use_mcp_enhancements: false
+tea_browser_automation: 'none'
 ```
 
-**Prerequisites:**
+**Migration from old flag:**
 
-1. MCP servers installed in IDE configuration
-2. `@playwright/mcp` package available globally or locally
-3. Browser binaries installed (`npx playwright install`)
+| Old Setting                       | New Equivalent                   |
+| --------------------------------- | -------------------------------- |
+| `tea_use_mcp_enhancements: true`  | `tea_browser_automation: "auto"` |
+| `tea_use_mcp_enhancements: false` | `tea_browser_automation: "none"` |
 
 **Related:**
 
-- [Enable MCP Enhancements Guide](/docs/how-to/customization/enable-tea-mcp-enhancements.md)
-- [TEA Overview - MCP Section](/docs/explanation/tea-overview.md#playwright-mcp-enhancements)
-- [Playwright MCP on npm](https://www.npmjs.com/package/@playwright/mcp)
+- [Configure Browser Automation Guide](/docs/how-to/customization/configure-browser-automation.md)
+- [TEA Overview - Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli-mcp)
 
 ---
 
@@ -398,7 +392,7 @@ API_BASE_URL=https://api.example.com
 project_name: team-project
 output_folder: _bmad-output
 tea_use_playwright_utils: true
-tea_use_mcp_enhancements: false
+tea_browser_automation: 'none'
 ```
 
 **Individual config (typically gitignored):**
@@ -407,7 +401,7 @@ tea_use_mcp_enhancements: false
 # _bmad/tea/config.yaml (user adds to .gitignore)
 user_name: John Doe
 user_skill_level: expert
-tea_use_mcp_enhancements: true # Individual preference
+tea_browser_automation: 'auto' # Individual preference
 ```
 
 ### Monorepo Configuration
@@ -471,7 +465,7 @@ _bmad/tea/config.yaml            # User-specific values
 3. Edit config with your values:
    - Set user_name
    - Enable tea_use_playwright_utils if using playwright-utils
-   - Enable tea_use_mcp_enhancements if MCPs configured
+   - Set tea_browser_automation mode (auto, cli, mcp, or none)
 ```
 
 ### 3. Validate Configuration
@@ -503,7 +497,7 @@ planning_artifacts: custom/planning
 implementation_artifacts: custom/implementation
 project_knowledge: custom/docs
 tea_use_playwright_utils: true
-tea_use_mcp_enhancements: true
+tea_browser_automation: "auto"
 communication_language: english
 document_output_language: english
 # Overriding 11 config options when most can use defaults
@@ -567,26 +561,29 @@ grep tea_use_playwright_utils _bmad/tea/config.yaml
 # (TEA loads config at workflow start)
 ```
 
-### MCP Enhancements Not Working
+### Browser Automation Not Working
 
-**Problem:** `tea_use_mcp_enhancements: true` but no browser opens.
+**Problem:** `tea_browser_automation` set to `"auto"` or `"cli"` or `"mcp"` but no browser opens.
 
 **Causes:**
 
-1. MCP servers not configured in IDE
-2. MCP package not installed
+1. CLI not installed globally (for `cli` or `auto` mode)
+2. MCP servers not configured in IDE (for `mcp` or `auto` mode)
 3. Browser binaries missing
 
 **Solution:**
 
 ```bash
-# Check MCP package available
+# For CLI mode: verify CLI is installed
+playwright-cli --version
+
+# For MCP mode: check MCP package available
 npx @playwright/mcp@latest --version
 
 # Install browsers
 npx playwright install
 
-# Verify IDE MCP config
+# Verify IDE MCP config (for MCP mode)
 # Check ~/.cursor/config.json or VS Code settings
 ```
 
@@ -617,20 +614,21 @@ project_name: my-project
 user_skill_level: beginner # or intermediate/expert
 output_folder: _bmad-output
 tea_use_playwright_utils: true # Recommended
-tea_use_mcp_enhancements: true # Recommended
+tea_browser_automation: 'auto' # Recommended
 ```
 
 **Why recommended:**
 
 - Playwright Utils: Production-ready fixtures and utilities
-- MCP enhancements: Live browser verification, visual debugging
+- Browser automation (auto): Smart CLI/MCP selection with fallback
 - Together: The three-part stack (see [Testing as Engineering](/docs/explanation/testing-as-engineering.md))
 
 **Prerequisites:**
 
 ```bash
 npm install -D @seontechnologies/playwright-utils
-# Configure MCP servers in IDE (see Enable MCP Enhancements guide)
+npm install -g @playwright/cli@latest  # For CLI mode
+# Configure MCP servers in IDE (see Configure Browser Automation guide)
 ```
 
 **Best for:** Everyone (beginners learn good patterns from day one)
@@ -644,7 +642,7 @@ npm install -D @seontechnologies/playwright-utils
 project_name: my-project
 output_folder: _bmad-output
 tea_use_playwright_utils: false
-tea_use_mcp_enhancements: false
+tea_browser_automation: 'none'
 ```
 
 **Best for:**
@@ -701,7 +699,7 @@ project_knowledge: docs
 
 # TEA Configuration (Recommended: Enable both for full stack)
 tea_use_playwright_utils: true # Recommended - production-ready utilities
-tea_use_mcp_enhancements: true # Recommended - live browser verification
+tea_browser_automation: 'auto' # Recommended - smart CLI/MCP selection
 
 # Languages
 communication_language: english
@@ -732,7 +730,7 @@ document_output_language: english
 
 - [Set Up Test Framework](/docs/how-to/workflows/setup-test-framework.md)
 - [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md)
-- [Enable MCP Enhancements](/docs/how-to/customization/enable-tea-mcp-enhancements.md)
+- [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md)
 
 ### Reference
 

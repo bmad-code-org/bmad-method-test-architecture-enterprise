@@ -38,9 +38,10 @@
     "release:major": "gh workflow run manual-release.yaml -f version_bump=major",
     "release:minor": "gh workflow run manual-release.yaml -f version_bump=minor",
     "release:patch": "gh workflow run manual-release.yaml -f version_bump=patch",
-    "test": "npm run test:schemas && npm run test:install && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
+    "test": "npm run test:schemas && npm run test:install && npm run test:knowledge && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
     "test:coverage": "c8 npm test",
     "test:install": "node test/test-installation-components.js",
+    "test:knowledge": "node test/test-knowledge-base.js",
     "test:schemas": "node test/test-agent-schema.js",
     "validate:schemas": "node tools/validate-agent-schema.js"
   },

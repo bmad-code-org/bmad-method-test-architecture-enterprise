@@ -571,14 +571,17 @@ Don't duplicate that coverage
 
 TEA will analyze existing tests and only generate new scenarios.
 
-### MCP Enhancements (Optional)
+### Browser Automation (Optional)
 
-If you have MCP servers configured (`tea_use_mcp_enhancements: true`), TEA can use them during `automate` for:
+If browser automation is configured (`tea_browser_automation: "auto"` or `"cli"` or `"mcp"`), TEA can use browser tools during `automate` for:
 
-- **Healing mode:** Fix broken selectors, update assertions, enhance with trace analysis
-- **Recording mode:** Verify selectors with live browser, capture network requests
+- **Healing mode:** Fix broken selectors using CLI snapshots or MCP DOM analysis
+- **Recording mode:** Verify selectors with CLI snapshots or MCP browser, capture network requests
+- **Evidence capture:** CLI traces and screenshots for test validation
 
-No prompts - TEA uses MCPs automatically when available. See [Enable MCP Enhancements](/docs/how-to/customization/enable-tea-mcp-enhancements.md) for setup.
+No prompts — TEA uses browser tools automatically when available and appropriate.
+
+See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) for setup.
 
 ### Generate Tests Incrementally
 
@@ -661,11 +664,11 @@ We already have these tests:
 Generate tests for scenarios NOT covered by those files
 ```
 
-### MCP Enhancements for Better Selectors
+### Browser Automation for Better Selectors
 
-If you have MCP servers configured, TEA verifies selectors against live browser. Otherwise, TEA generates accessible selectors (`getByRole`, `getByLabel`) by default.
+If browser automation is configured (`tea_browser_automation: "auto"`, `"cli"`, or `"mcp"`), TEA verifies selectors against live browser using CLI snapshots or MCP. Otherwise, TEA generates accessible selectors (`getByRole`, `getByLabel`) by default.
 
-Setup: Answer "Yes" to MCPs in BMad installer + configure MCP servers in your IDE. See [Enable MCP Enhancements](/docs/how-to/customization/enable-tea-mcp-enhancements.md).
+Setup: Set `tea_browser_automation: "auto"` in config + install CLI and/or configure MCP servers. See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md).
 
 ## Related Guides
 

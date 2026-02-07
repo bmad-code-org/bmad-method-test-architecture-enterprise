@@ -289,14 +289,14 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
 
    ```bash
    cat _bmad/tea/testarch/tea-index.csv | wc -l
-   # Should show 35 lines (header + 34 fragments)
+   # Should show 36 lines (header + 35 fragments)
    ```
 
 2. Check knowledge fragment files:
 
    ```bash
    ls -la _bmad/tea/testarch/knowledge/ | wc -l
-   # Should show 34+ files
+   # Should show 35+ files
    ```
 
 3. Validate CSV format:
@@ -510,39 +510,46 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
    import { expect, test } from '@muratkeremozcan/playwright-utils';
    ```
 
-### MCP Enhancements Not Applying
+### Browser Automation Not Working
 
-**Symptom**: `tea_use_mcp_enhancements` enabled but no MCP features in outputs.
+**Symptom**: `tea_browser_automation` set to `"auto"` or `"cli"` or `"mcp"` but no browser features in outputs.
 
 **Causes**:
 
-- MCP server not configured in Claude Desktop
+- CLI not installed globally (for `cli` or `auto` mode)
+- MCP server not configured in IDE (for `mcp` or `auto` mode)
 - Variable not read correctly
-- Workflow doesn't support MCP enhancements
+- Workflow doesn't support browser automation
 
 **Solutions**:
 
-1. Verify MCP configuration in Claude Desktop:
+1. For CLI mode, verify CLI is installed:
+
+   ```bash
+   playwright-cli --version
+   # If missing: npm install -g @playwright/cli@latest
+   ```
+
+2. For MCP mode, verify MCP configuration in IDE:
 
    ```json
-   // Check claude_desktop_config.json
    {
      "mcpServers": {
        "playwright": {
          "command": "npx",
-         "args": ["@modelcontextprotocol/server-playwright"]
+         "args": ["@playwright/mcp@latest"]
        }
      }
    }
    ```
 
-2. Check variable setting:
+3. Check variable setting:
 
    ```bash
-   cat _bmad/tea/module.yaml | grep tea_use_mcp_enhancements
+   cat _bmad/tea/config.yaml | grep tea_browser_automation
    ```
 
-3. Restart Claude Desktop after configuration changes.
+4. Restart IDE after configuration changes.
 
 ---
 
@@ -584,7 +591,7 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
 
 **Causes**:
 
-- All 34 fragments loading at once
+- All 35 fragments loading at once
 - Large fragment file sizes
 - Disk I/O bottleneck
 
@@ -662,7 +669,7 @@ Check these first:
 - [ ] TEA is installed: `ls -la _bmad/tea/`
 - [ ] Using correct command namespace: `/bmad:tea:*` not `/bmad:bmm:tea:*`
 - [ ] Module.yaml exists and is valid
-- [ ] Knowledge base files present (34 fragments)
+- [ ] Knowledge base files present (35 fragments)
 - [ ] Output directory exists and is writable
 - [ ] No disk space issues: `df -h`
 - [ ] Node version >=20.0.0: `node --version`
@@ -726,11 +733,11 @@ done
 
 # Check knowledge base
 fragment_count=$(ls _bmad/tea/testarch/knowledge/*.md 2>/dev/null | wc -l)
-echo "Knowledge fragments: $fragment_count (expected: 34)"
+echo "Knowledge fragments: $fragment_count (expected: 35)"
 
 # Check tea-index.csv
 csv_lines=$(wc -l < _bmad/tea/testarch/tea-index.csv 2>/dev/null || echo "0")
-echo "TEA index lines: $csv_lines (expected: 35)"
+echo "TEA index lines: $csv_lines (expected: 36)"
 
 echo "Validation complete!"
 ```

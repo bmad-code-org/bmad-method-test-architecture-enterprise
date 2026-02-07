@@ -825,7 +825,7 @@ expect(status).toBe(200);
 
 **Other Customization:**
 
-- [Enable MCP Enhancements](/docs/how-to/customization/enable-tea-mcp-enhancements.md) - Live browser verification
+- [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) - Playwright CLI + MCP setup, auto mode
 
 ## Understanding the Concepts
 

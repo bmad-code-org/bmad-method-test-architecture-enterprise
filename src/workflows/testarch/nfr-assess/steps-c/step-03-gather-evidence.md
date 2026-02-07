@@ -46,7 +46,26 @@ Collect evidence for:
 
 ---
 
-## 2. Evidence Gaps
+## 2. Browser-Based Evidence Collection (if `tea_browser_automation` is `cli` or `auto`)
+
+> **Fallback:** If CLI is not installed, fall back to MCP (if available) or skip browser-based evidence collection.
+
+For performance and security categories, CLI can gather live evidence:
+
+**Performance evidence (page load, response times):**
+
+1. `playwright-cli -s=tea-nfr open <target_url>`
+2. `playwright-cli -s=tea-nfr network` → capture response times and payload sizes
+3. `playwright-cli -s=tea-nfr screenshot --filename={test_artifacts}/nfr/perf-<page>.png`
+4. `playwright-cli -s=tea-nfr close`
+
+> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-nfr close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
+
+Store artifacts under `{test_artifacts}/nfr/`
+
+---
+
+## 3. Evidence Gaps
 
 If evidence is missing for a category, mark that category as **CONCERNS**.
 

@@ -64,7 +64,7 @@ If any are missing: **HALT** and notify the user.
 From `{config_source}`:
 
 - `tea_use_playwright_utils`
-- `tea_use_mcp_enhancements`
+- `tea_browser_automation`
 
 ---
 
@@ -84,6 +84,14 @@ Use `{knowledgeIndex}` to load:
 **Playwright Utils (if enabled):**
 
 - `overview.md`, `api-request.md`, `network-recorder.md`, `auth-session.md`, `intercept-network-call.md`, `recurse.md`, `log.md`, `file-utils.md`, `network-error-monitor.md`, `fixtures-composition.md`
+
+**Playwright CLI (if tea_browser_automation is "cli" or "auto"):**
+
+- `playwright-cli.md`
+
+**MCP Patterns (if tea_browser_automation is "mcp" or "auto"):**
+
+- (existing MCP-related fragments, if any are added in future)
 
 **Traditional Patterns (if utils disabled):**
 

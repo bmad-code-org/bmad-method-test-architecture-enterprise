@@ -41,6 +41,7 @@ Load the required documents, config flags, and knowledge fragments needed to pro
 From `{config_source}`:
 
 - Read `tea_use_playwright_utils`
+- Read `tea_browser_automation`
 - Note `test_artifacts`
 
 ---
@@ -87,6 +88,23 @@ If epic-level:
 - Identify coverage gaps and flaky areas
 - Note existing fixture and test patterns
 
+### Browser Exploration (if `tea_browser_automation` is `cli` or `auto`)
+
+> **Fallback:** If CLI is not installed, fall back to MCP (if available) or skip browser exploration and rely on code/doc analysis.
+
+**CLI Exploration Steps:**
+All commands use the same named session to target the correct browser:
+
+1. `playwright-cli -s=tea-explore open <target_url>`
+2. `playwright-cli -s=tea-explore snapshot` → capture page structure and element refs
+3. `playwright-cli -s=tea-explore screenshot --filename={test_artifacts}/exploration/explore-<page>.png`
+4. Analyze snapshot output to identify testable elements and flows
+5. `playwright-cli -s=tea-explore close`
+
+Store artifacts under `{test_artifacts}/exploration/`
+
+> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-explore close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
+
 ---
 
 ## 4. Load Knowledge Base Fragments
@@ -106,6 +124,14 @@ Use `{knowledgeIndex}` to select and load only relevant fragments.
 - `probability-impact.md`
 - `test-levels-framework.md`
 - `test-priorities-matrix.md`
+
+**Playwright CLI (if `tea_browser_automation` is "cli" or "auto"):**
+
+- `playwright-cli.md`
+
+**MCP Patterns (if `tea_browser_automation` is "mcp" or "auto"):**
+
+- (existing MCP-related fragments, if any are added in future)
 
 ---
 

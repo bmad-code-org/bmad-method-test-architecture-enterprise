@@ -64,7 +64,7 @@ If you are unsure, default to the integrated path for your track and adjust late
 
 ## TEA Command Catalog
 
-| Command       | Primary Outputs                                                                               | Notes                                                | With Playwright MCP Enhancements                                                                                                     |
+| Command       | Primary Outputs                                                                               | Notes                                                | With Browser Automation (CLI/MCP)                                                                                                    |
 | ------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `framework`   | Playwright/Cypress scaffold, `.env.example`, `.nvmrc`, sample specs                           | Use when no production-ready harness exists          | -                                                                                                                                    |
 | `ci`          | CI workflow, selective test scripts, secrets checklist                                        | Platform-aware (GitHub Actions default)              | -                                                                                                                                    |
@@ -197,7 +197,7 @@ TEA uniquely requires:
 
 - **Extensive domain knowledge**: Test patterns, CI/CD, fixtures, and quality practices
 - **Cross-cutting concerns**: Standards that apply across all BMad projects (not just PRDs or stories)
-- **Optional integrations**: Playwright-utils and MCP enhancements
+- **Optional integrations**: Playwright-utils, Playwright CLI, and MCP enhancements
 
 This architecture lets TEA maintain consistent, production-ready testing patterns while operating across multiple phases.
 
@@ -338,37 +338,37 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 - Impacts: `framework`, `atdd`, `automate`, `test-review`, `ci`
 - Utilities include: api-request, auth-session, network-recorder, intercept-network-call, recurse, log, file-utils, burn-in, network-error-monitor, fixtures-composition
 
-### Playwright MCP Enhancements
+### Browser Automation (Playwright CLI + MCP)
 
-Live browser verification for test design and automation.
+**CLI and MCP are complementary tools, not competitors.** Auto mode uses each where it shines — CLI for token-efficient stateless snapshots, MCP for rich stateful automation — while giving users full control to override when they know better.
 
-**Two Playwright MCP servers** (actively maintained, continuously updated):
+**Playwright CLI** (`@playwright/cli`) — lightweight, token-efficient shell commands. The agent opens a page, takes a snapshot, and gets back concise element references instead of full DOM trees. ~93% fewer tokens than MCP. Best for quick, stateless tasks: page discovery, selector verification, screenshot capture.
 
-- `playwright` - Browser automation (`npx @playwright/mcp@latest`)
-- `playwright-test` - Test runner with failure analysis (`npx playwright run-test-mcp-server`)
+**Playwright MCP** — rich, stateful browser automation via MCP servers. The agent gets full accessibility trees and can maintain complex multi-step flows. Best for stateful tasks: multi-step wizards, self-healing mode, deep DOM introspection.
 
-**Configuration example**:
+**Configuration** (`_bmad/tea/config.yaml`):
 
-```json
-{
-  "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"]
-    },
-    "playwright-test": {
-      "command": "npx",
-      "args": ["playwright", "run-test-mcp-server"]
-    }
-  }
-}
-```
+    tea_browser_automation: "auto"  # auto | cli | mcp | none
 
-- Helps `test-design` validate actual UI behavior.
-- Helps `atdd` and `automate` verify selectors against the live DOM.
-- Enhances healing with `browser_snapshot`, console, network, and locator tools.
+| Mode   | What happens                                                                                                                                               |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto` | TEA picks the right tool per action — CLI for quick lookups, MCP for complex flows. Falls back gracefully if only one tool is installed. **(Recommended)** |
+| `cli`  | CLI only. MCP ignored even if configured.                                                                                                                  |
+| `mcp`  | MCP only. CLI ignored even if installed. Same as the old `tea_use_mcp_enhancements: true`.                                                                 |
+| `none` | No browser interaction. TEA generates from docs and code analysis only.                                                                                    |
 
-**To disable**: set `tea_use_mcp_enhancements: false` in `_bmad/tea/config.yaml` or remove MCPs from IDE config.
+**Setup:**
+
+- CLI: `npm install -g @playwright/cli@latest` then `playwright-cli install --skills`
+- MCP: Configure MCP servers in your IDE (see [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md))
+
+**Which workflows benefit:**
+
+- `test-design` — Exploratory mode: snapshot pages to discover actual UI elements
+- `atdd` / `automate` — Verify selectors against live DOM before generating tests
+- `test-review` — Capture traces, screenshots, and network logs as evidence
+
+**To disable**: set `tea_browser_automation: "none"` in config or skip both CLI and MCP installation.
 
 ---
 
@@ -399,7 +399,7 @@ Live browser verification for test design and automation.
 **Optional enhancements to TEA workflows:**
 
 - [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) - Production-ready fixtures and 9 utilities
-- [Enable TEA MCP Enhancements](/docs/how-to/customization/enable-tea-mcp-enhancements.md) - Live browser verification, visual debugging
+- [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) - Playwright CLI + MCP setup, auto mode
 
 ### Use-Case Guides
 
@@ -416,7 +416,7 @@ Live browser verification for test design and automation.
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md) - Definition of Done, determinism, isolation, explicit assertions
 - [Fixture Architecture](/docs/explanation/fixture-architecture.md) - Pure function → fixture → composition pattern
 - [Network-First Patterns](/docs/explanation/network-first-patterns.md) - Intercept-before-navigate, eliminating flakiness
-- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - Context engineering with tea-index.csv, 33 fragments
+- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - Context engineering with tea-index.csv, 35 fragments
 - [Engagement Models](/docs/explanation/engagement-models.md) - TEA Lite, TEA Solo, TEA Integrated (5 models explained)
 
 ### Philosophy & Design
@@ -431,5 +431,5 @@ Live browser verification for test design and automation.
 
 - [TEA Command Reference](/docs/reference/commands.md) - All 9 workflows: inputs, outputs, phases, frequency
 - [TEA Configuration Reference](/docs/reference/configuration.md) - Config options, file locations, setup examples
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - 33 fragments categorized and explained
+- [Knowledge Base Index](/docs/reference/knowledge-base.md) - 35 fragments categorized and explained
 - [Glossary - TEA Section](/docs/glossary/index.md#test-architect-tea-concepts) - 20 TEA-specific terms defined

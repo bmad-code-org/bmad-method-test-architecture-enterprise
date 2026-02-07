@@ -55,6 +55,25 @@ Collect:
 - Imports, fixtures, factories, network interception
 - Waits/timeouts and control flow (if/try/catch)
 
+---
+
+## 3. Evidence Collection (if `tea_browser_automation` is `cli` or `auto`)
+
+> **Fallback:** If CLI is not installed, fall back to MCP (if available) or skip evidence collection.
+
+**CLI Evidence Collection:**
+All commands use the same named session to target the correct browser:
+
+1. `playwright-cli -s=tea-review open <target_url>`
+2. `playwright-cli -s=tea-review tracing-start`
+3. Execute the flow under review (using `-s=tea-review` on each command)
+4. `playwright-cli -s=tea-review tracing-stop` → saves trace.zip
+5. `playwright-cli -s=tea-review screenshot --filename={test_artifacts}/review-evidence.png`
+6. `playwright-cli -s=tea-review network` → capture network request log
+7. `playwright-cli -s=tea-review close`
+
+> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-review close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
+
 Load next step: `{nextStepFile}`
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS:

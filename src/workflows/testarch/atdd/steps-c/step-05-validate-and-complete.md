@@ -42,6 +42,8 @@ Use `checklist.md` to validate:
 - Test files created correctly
 - Checklist matches acceptance criteria
 - Tests are designed to fail before implementation
+- [ ] CLI sessions cleaned up (no orphaned browsers)
+- [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
 
 Fix any gaps before completion.
 

@@ -5,6 +5,32 @@ All notable changes to the Test Architect (TEA) module will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Playwright CLI Integration**: New `playwright-cli.md` knowledge fragment (35 total)
+- **Browser Automation Config**: New `tea_browser_automation` config with 4 modes: `auto`, `cli`, `mcp`, `none`
+- **Auto Mode Heuristic**: Smart CLI/MCP selection per workflow action with fallback
+- **How-To Guide**: `docs/how-to/customization/configure-browser-automation.md`
+- **Knowledge Test Script**: `test:knowledge` npm script added to test chain
+
+### Changed
+
+- **Breaking**: `tea_use_mcp_enhancements` (boolean) replaced by `tea_browser_automation` (string)
+  - `true` -> `"auto"` (recommended), `false` -> `"none"`
+- All workflow preflight steps updated to read `tea_browser_automation`
+- All browser-touching workflow steps updated with CLI/MCP/auto branching
+- Subprocess context passes `browser_automation` instead of `use_mcp_enhancements`
+- Module subheader updated to reference Playwright CLI
+
+### Deprecated
+
+- `tea_use_mcp_enhancements` flag — use `tea_browser_automation` instead
+- `enable-tea-mcp-enhancements.md` guide — redirects to `configure-browser-automation.md`
+
+---
+
 ## [1.0.0] - 2026-01-XX (Upcoming)
 
 ### 🎉 TEA Module Independence Release
@@ -93,7 +119,7 @@ All workflows implement the **trivariate step pattern** (Create/Edit/Validate):
 
 #### Knowledge Base System
 
-- **34 Knowledge Fragments** organized by category:
+- **35 Knowledge Fragments** organized by category:
   - Architecture & Fixtures (5 fragments)
   - Data & Setup (3 fragments)
   - Network & Reliability (5 fragments)
@@ -195,12 +221,6 @@ For users migrating from BMM-embedded TEA, see [`docs/MIGRATION.md`](docs/MIGRAT
 - **Test Coverage**: 85 automated tests (100% passing)
 - **Supported Frameworks**: Playwright, Cypress
 - **Node Version**: >=20.0.0
-
----
-
-## [Unreleased]
-
-_Future releases will be documented here._
 
 ---
 

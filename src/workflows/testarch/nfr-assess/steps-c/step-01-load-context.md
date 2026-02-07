@@ -45,7 +45,15 @@ If missing: **HALT** and request the missing inputs.
 
 ---
 
-## 2. Load Knowledge Base Fragments
+## 2. Load Configuration
+
+From `{config_source}`:
+
+- Read `tea_browser_automation`
+
+---
+
+## 3. Load Knowledge Base Fragments
 
 From `{knowledgeIndex}` load:
 
@@ -55,9 +63,17 @@ From `{knowledgeIndex}` load:
 - `playwright-config.md`
 - `error-handling.md`
 
+**Playwright CLI (if `tea_browser_automation` is "cli" or "auto"):**
+
+- `playwright-cli.md`
+
+**MCP Patterns (if `tea_browser_automation` is "mcp" or "auto"):**
+
+- (existing MCP-related fragments, if any are added in future)
+
 ---
 
-## 3. Load Artifacts
+## 4. Load Artifacts
 
 If available, read:
 
@@ -67,7 +83,7 @@ If available, read:
 
 ---
 
-## 4. Confirm Inputs
+## 5. Confirm Inputs
 
 Summarize loaded NFR sources and evidence availability.
 

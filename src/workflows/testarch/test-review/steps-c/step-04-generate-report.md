@@ -49,6 +49,9 @@ Use `test-review-template.md` to produce `{outputFile}` including:
 
 Validate against `checklist.md` and fix any gaps.
 
+- [ ] CLI sessions cleaned up (no orphaned browsers)
+- [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
+
 ---
 
 ## 3. Completion Summary

@@ -50,7 +50,7 @@ Quick reference for all 9 TEA (Test Engineering Architect) workflows. For detail
 4. Test Design (60 min) - Risk assessment, coverage planning
 5. ATDD & Automate (60 min) - TDD red-green, test generation
 6. Quality & Trace (45 min) - Test review, traceability, metrics
-7. Advanced Patterns (ongoing) - 34 knowledge fragments exploration
+7. Advanced Patterns (ongoing) - 35 knowledge fragments exploration
 
 **Features:**
 
@@ -161,7 +161,7 @@ Quick reference for all 9 TEA (Test Engineering Architect) workflows. For detail
 - No redundancy (cross-references instead)
 - Clear separation (what to deliver vs how to test)
 
-**MCP Enhancement:** Exploratory mode (live browser UI discovery)
+**Browser Automation (CLI/MCP):** Exploratory mode (live browser UI discovery)
 
 **How-To Guide:** [Run Test Design](/docs/how-to/workflows/run-test-design.md)
 
@@ -185,7 +185,7 @@ Quick reference for all 9 TEA (Test Engineering Architect) workflows. For detail
 - Implementation checklist
 - All tests fail initially (red phase)
 
-**MCP Enhancement:** Recording mode (for skeleton UI only - rare)
+**Browser Automation (CLI/MCP):** Recording mode (for skeleton UI only - rare)
 
 **How-To Guide:** [Run ATDD](/docs/how-to/workflows/run-atdd.md)
 
@@ -209,7 +209,7 @@ Quick reference for all 9 TEA (Test Engineering Architect) workflows. For detail
 - Updated fixtures, README
 - Definition of Done summary
 
-**MCP Enhancement:** Healing + Recording modes (fix tests, verify selectors)
+**Browser Automation (CLI/MCP):** Healing + Recording modes (fix tests, verify selectors)
 
 **How-To Guide:** [Run Automate](/docs/how-to/workflows/run-automate.md)
 

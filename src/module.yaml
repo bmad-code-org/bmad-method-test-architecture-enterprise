@@ -1,7 +1,7 @@
 code: tea
 name: "Test Architect"
 header: "Test Architect: quality strategy, automation, and release gates"
-subheader: "Risk-based testing workflows for BMad Method/Enterprise with optional Playwright/MCP enhancements"
+subheader: "Risk-based testing workflows for BMad Method/Enterprise with optional Playwright CLI/MCP enhancements"
 description: "Master Test Architect for quality strategy, test automation, and release gates"
 default_selected: false
 
@@ -13,7 +13,7 @@ default_selected: false
 ## project_root
 
 # TEA-specific configuration variables
-# IMPORTANT: Only tea_use_playwright_utils and tea_use_mcp_enhancements are ACTIVELY USED in workflows
+# IMPORTANT: Only tea_use_playwright_utils and tea_browser_automation are ACTIVELY USED in workflows
 # Other variables are FUTURE placeholders for Phase 10 enhancements
 
 test_artifacts:
@@ -33,17 +33,22 @@ tea_use_playwright_utils:
     - value: false
       label: "No - Generate from scratch"
 
-# ✅ ACTIVELY USED - Playwright MCP enhancements (workflows with recording mode)
-# CRITICAL: Must be boolean (true/false) not string
-tea_use_mcp_enhancements:
-  prompt: "Enable Playwright MCP enhancements?"
-  default: true
+# ✅ ACTIVELY USED - Browser automation strategy for TEA workflows
+# Controls how TEA interacts with live browsers during test generation
+# CRITICAL: Must be a string value: "auto" | "cli" | "mcp" | "none"
+tea_browser_automation:
+  prompt: "How should TEA interact with browsers during test generation?"
+  default: "auto"
   result: "{value}"
   single-select:
-    - value: true
-      label: "Yes - Enable live browser verification"
-    - value: false
-      label: "No - Standard mode only"
+    - value: "auto"
+      label: "Auto - Smart selection (Recommended)"
+    - value: "cli"
+      label: "CLI only - Playwright CLI (@playwright/cli)"
+    - value: "mcp"
+      label: "MCP only - Playwright MCP servers"
+    - value: "none"
+      label: "None - No live browser interaction"
 
 # ⏭️ FUTURE - Test framework selection (not currently wired into workflows, marked for Phase 10)
 test_framework:

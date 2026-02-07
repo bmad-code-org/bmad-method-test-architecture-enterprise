@@ -71,6 +71,8 @@ Ensure the outputs include:
 Validate the output(s) against:
 
 - `checklist.md` in this workflow folder
+- [ ] CLI sessions cleaned up (no orphaned browsers)
+- [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
 
 If any checklist criteria are missing, fix before completion.
 

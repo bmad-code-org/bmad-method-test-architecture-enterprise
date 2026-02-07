@@ -32,7 +32,7 @@ Use TEA's `teach-me-testing` workflow (TEA Academy) to learn testing progressive
 4. **Test Design (60 min)** - Risk assessment and coverage planning workflow
 5. **ATDD & Automate (60 min)** - TDD red-green approach, test generation
 6. **Quality & Trace (45 min)** - Test review (5 dimensions), requirements traceability
-7. **Advanced Patterns (ongoing)** - Explore 34 knowledge fragments on-demand
+7. **Advanced Patterns (ongoing)** - Explore 35 knowledge fragments on-demand
 
 ### What You'll Gain
 
@@ -140,7 +140,7 @@ Skip fundamentals, focus on:
 
 - Session 3: TEA architecture patterns
 - Session 4: Test Design workflow
-- Session 7: Advanced patterns (34 knowledge fragments)
+- Session 7: Advanced patterns (35 knowledge fragments)
 
 **Time commitment:** 3-4 hours (highly targeted)
 
@@ -220,12 +220,12 @@ Skip fundamentals, focus on:
 
 **Topics:**
 
-- Menu-driven exploration of 34 knowledge fragments
+- Menu-driven exploration of 35 knowledge fragments
 - 5 categories: Testing Patterns, Playwright Utils, Configuration & Governance, Quality Frameworks, Auth & Security
 - Deep-dive into specific patterns as needed
 - GitHub links for browsing source
 
-**Resources:** All 34 knowledge fragments
+**Resources:** All 35 knowledge fragments
 **GitHub:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/testarch/knowledge)
 
 ## Completion Certificate
@@ -243,7 +243,7 @@ Complete all 7 sessions to receive your TEA Academy completion certificate with:
 1. **Set aside dedicated time** - Each session requires focus (30-90 min)
 2. **Take your own notes** - Session notes are generated, but add personal insights
 3. **Apply immediately** - Practice concepts on your current project
-4. **Explore fragments** - Session 7 has 34 fragments for deep-dive topics
+4. **Explore fragments** - Session 7 has 35 fragments for deep-dive topics
 5. **Share with team** - Help others learn by sharing your experience
 6. **Don't rush** - Learning takes time, pause and resume as needed
 

@@ -396,13 +396,17 @@ test-design   # Risk assessment and priorities
 atdd          # Generate tests based on design
 ```
 
-### MCP Enhancements (Optional)
+### Browser Automation (Optional)
 
-If you have MCP servers configured (`tea_use_mcp_enhancements: true`), TEA can use them during `atdd`.
+If browser automation is configured (`tea_browser_automation: "auto"` or `"cli"` or `"mcp"`), TEA can verify selectors against live browsers during `atdd`.
 
-**Note:** ATDD is for features that don't exist yet, so recording mode (verify selectors with live UI) only applies if you have skeleton/mockup UI already implemented. For typical ATDD (no UI yet), TEA infers selectors from best practices.
+- **CLI mode:** Takes snapshots to verify element names and roles before generating selectors
+- **MCP mode:** Full browser automation for complex UI interactions
+- **Auto mode:** Uses CLI for simple verification, MCP for complex flows
 
-See [Enable MCP Enhancements](/docs/how-to/customization/enable-tea-mcp-enhancements.md) for setup.
+**Note:** ATDD is for features that don't exist yet, so browser verification only applies if you have skeleton/mockup UI already implemented. For typical ATDD (no UI yet), TEA infers selectors from best practices.
+
+See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) for setup.
 
 ### Focus on P0/P1 Scenarios
 

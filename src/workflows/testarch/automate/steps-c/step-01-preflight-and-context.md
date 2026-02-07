@@ -76,6 +76,7 @@ If missing: **HALT** with message "Run `framework` workflow first."
 ### Read TEA Config Flags
 
 - From `{config_source}` read `tea_use_playwright_utils`
+- From `{config_source}` read `tea_browser_automation`
 
 ---
 
@@ -106,6 +107,14 @@ Use `{knowledgeIndex}` and load only what is required.
 - `test-healing-patterns.md`
 - `selector-resilience.md`
 - `timing-debugging.md`
+
+**Playwright CLI (if tea_browser_automation is "cli" or "auto"):**
+
+- `playwright-cli.md`
+
+**MCP Patterns (if tea_browser_automation is "mcp" or "auto"):**
+
+- (existing MCP-related fragments, if any are added in future)
 
 ---
 

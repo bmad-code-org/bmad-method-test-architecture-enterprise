@@ -49,6 +49,8 @@ Use `nfr-report-template.md` to produce `{outputFile}` containing:
 
 Validate against `checklist.md` and fix gaps.
 
+- [ ] CLI sessions cleaned up (no orphaned browsers)
+
 ---
 
 ## 3. Completion Summary

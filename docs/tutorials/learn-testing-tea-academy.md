@@ -141,7 +141,7 @@ Complete all 7 sessions to receive your TEA Academy completion certificate!
 
 **What you'll learn:**
 
-- Menu-driven exploration of 34 knowledge fragments
+- Menu-driven exploration of 35 knowledge fragments
 - Deep-dive into specific patterns as needed
 - GitHub repository browsing
 
@@ -251,7 +251,7 @@ Once you've completed TEA Academy, you're ready to:
    - Choose the right workflow for your task
 
 3. **Explore knowledge fragments:**
-   - 34 fragments for just-in-time learning
+   - 35 fragments for just-in-time learning
    - Revisit Session 7 anytime
 
 4. **Share knowledge:**
@@ -262,5 +262,5 @@ Once you've completed TEA Academy, you're ready to:
 
 - [TEA Overview](/explanation/tea-overview/) - Understand TEA architecture
 - [Getting Started](/tutorials/tea-lite-quickstart/) - Quick 30-minute intro
-- [Knowledge Base](/reference/knowledge-base/) - All 34 knowledge fragments
+- [Knowledge Base](/reference/knowledge-base/) - All 35 knowledge fragments
 - [Commands](/reference/commands/) - TEA agent command reference

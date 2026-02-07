@@ -51,7 +51,7 @@ If unclear, ask the user.
 
 From `{knowledgeIndex}` load:
 
-Read `{config_source}` and check `tea_use_playwright_utils` to select the correct fragment set.
+Read `{config_source}` and check `tea_use_playwright_utils` and `tea_browser_automation` to select the correct fragment set.
 
 **Core:**
 
@@ -74,6 +74,14 @@ Read `{config_source}` and check `tea_use_playwright_utils` to select the correc
 - `playwright-config.md`
 - `component-tdd.md`
 - `ci-burn-in.md`
+
+**Playwright CLI (if `tea_browser_automation` is "cli" or "auto"):**
+
+- `playwright-cli.md`
+
+**MCP Patterns (if `tea_browser_automation` is "mcp" or "auto"):**
+
+- (existing MCP-related fragments, if any are added in future)
 
 ---
 

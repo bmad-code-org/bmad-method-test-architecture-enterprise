@@ -108,9 +108,9 @@ variables:
     default: false
     prompt: true
 
-  tea_use_mcp_enhancements:
-    description: Enable Playwright MCP enhancements
-    default: false
+  tea_browser_automation:
+    description: Browser automation strategy (auto/cli/mcp/none)
+    default: 'auto'
     prompt: true
 
   test_design_output:
@@ -156,7 +156,7 @@ Follow the installation prompts to configure TEA variables:
 
 1. **test_artifacts**: Base folder for test outputs (default: `test-results`)
 2. **tea_use_playwright_utils**: Enable Playwright Utils integration (yes/no)
-3. **tea_use_mcp_enhancements**: Enable MCP enhancements (yes/no)
+3. **tea_browser_automation**: Browser automation strategy (auto/cli/mcp/none)
 
 ### Step 3: Update Command References
 
@@ -228,7 +228,7 @@ _bmad/tea/
 │   └── testarch/       # 9 workflows
 └── testarch/
     ├── tea-index.csv   # Knowledge base index
-    └── knowledge/      # 34 fragments
+    └── knowledge/      # 35 fragments
 ```
 
 ## What Stays the Same
@@ -239,13 +239,13 @@ Despite the migration, these aspects remain **unchanged**:
 
 ✅ **Workflow Behavior**: All 9 workflows function identically
 
-✅ **Knowledge Base**: Same 34 knowledge fragments with identical content
+✅ **Knowledge Base**: Same 35 knowledge fragments with identical content
 
 ✅ **Output Formats**: Test designs, reports, and checklists maintain the same structure
 
 ✅ **Playwright Utils Integration**: Same integration patterns and utilities
 
-✅ **MCP Enhancements**: Same enhancements available with identical configuration
+✅ **Browser Automation**: CLI and MCP enhancements available via `tea_browser_automation` config
 
 ✅ **Quality Standards**: Same testing best practices and quality gates
 
@@ -278,9 +278,9 @@ variables:
     default: false
     prompt: true
 
-  tea_use_mcp_enhancements:
-    description: Enable Playwright MCP enhancements
-    default: false
+  tea_browser_automation:
+    description: Browser automation strategy (auto/cli/mcp/none)
+    default: 'auto'
     prompt: true
 
   test_design_output:
@@ -298,6 +298,36 @@ variables:
     default: trace
     prompt: false
 ```
+
+### 5. Browser Automation Config Migration
+
+The `tea_use_mcp_enhancements` boolean flag has been replaced by `tea_browser_automation` string config:
+
+| Old Setting                       | New Setting                      | Notes                              |
+| --------------------------------- | -------------------------------- | ---------------------------------- |
+| `tea_use_mcp_enhancements: true`  | `tea_browser_automation: "auto"` | Auto-selects CLI or MCP per action |
+| `tea_use_mcp_enhancements: false` | `tea_browser_automation: "none"` | No browser interaction             |
+
+**New modes available:**
+
+- `"auto"` — Smart CLI/MCP selection with fallback (recommended)
+- `"cli"` — Playwright CLI only
+- `"mcp"` — Playwright MCP only (equivalent to old `true`)
+- `"none"` — No browser interaction (equivalent to old `false`)
+
+**Action Required:** Update `_bmad/tea/config.yaml`:
+
+```yaml
+# Old
+tea_use_mcp_enhancements: true
+
+# New
+tea_browser_automation: 'auto'
+```
+
+The BMAD installer will auto-migrate existing configs during the next installation.
+
+See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) for full details.
 
 ## Troubleshooting
 
@@ -350,7 +380,7 @@ variables:
 2. Verify knowledge fragments:
    ```bash
    ls -la _bmad/tea/testarch/knowledge/
-   # Should show 34 .md files
+   # Should show 35 .md files
    ```
 
 ### Issue: Workflows Producing Different Outputs

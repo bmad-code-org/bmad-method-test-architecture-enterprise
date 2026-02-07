@@ -117,7 +117,7 @@ async function runTests() {
       const csvContent = await fs.readFile(teaIndexPath, 'utf8');
       const lines = csvContent.trim().split('\n');
 
-      assert(lines.length === 35, 'tea-index.csv has 35 lines (header + 34 fragments)', `Found ${lines.length} lines`);
+      assert(lines.length === 36, 'tea-index.csv has 36 lines (header + 35 fragments)', `Found ${lines.length} lines`);
       assert(lines[0].includes('id,name,description,tags,fragment_file'), 'tea-index.csv has correct header format');
 
       // Verify no BMM references in CSV

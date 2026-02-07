@@ -9,7 +9,7 @@ Docs: <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/
 - Risk-based testing with measurable quality gates
 - Consistent, knowledge-base driven outputs
 - Clear prioritization (P0-P3) and traceability
-- Optional Playwright Utils and MCP enhancements
+- Optional Playwright Utils, CLI, and MCP browser automation
 
 ## How BMad Works
 
@@ -86,7 +86,7 @@ TEA variables are defined in `src/module.yaml` and prompted during install:
 
 - `test_artifacts` — base output folder for test artifacts
 - `tea_use_playwright_utils` — enable Playwright Utils integration (boolean)
-- `tea_use_mcp_enhancements` — enable Playwright MCP enhancements (boolean)
+- `tea_browser_automation` — browser automation mode: auto, cli, mcp, none (string)
 - `test_framework` — default framework preference (future)
 - `risk_threshold` — risk cutoff for mandatory testing (future)
 - `test_design_output`, `test_review_output`, `trace_output` — subfolders under `test_artifacts`

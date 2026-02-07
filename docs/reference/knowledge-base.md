@@ -1,11 +1,11 @@
 ---
 title: 'TEA Knowledge Base Index'
-description: Complete index of TEA's 33 knowledge fragments for context engineering
+description: Complete index of TEA's 35 knowledge fragments for context engineering
 ---
 
 # TEA Knowledge Base Index
 
-TEA uses 33 specialized knowledge fragments for context engineering. These fragments are loaded dynamically based on workflow needs via the `tea-index.csv` manifest.
+TEA uses 35 specialized knowledge fragments for context engineering. These fragments are loaded dynamically based on workflow needs via the `tea-index.csv` manifest.
 
 ## What is Context Engineering?
 
@@ -38,12 +38,12 @@ User runs a TEA workflow (e.g., `test-design`)
 
 ### 2. Manifest Lookup
 
-TEA reads `src/bmm/testarch/tea-index.csv`:
+TEA reads `src/testarch/tea-index.csv`:
 
 ```csv
 id,name,description,tags,fragment_file
-test-quality,Test Quality,Execution limits and isolation rules,quality;standards,knowledge/test-quality.md
-risk-governance,Risk Governance,Risk scoring and gate decisions,risk;governance,knowledge/risk-governance.md
+test-quality,Test Quality,Execution limits and isolation rules,"quality,standards",knowledge/test-quality.md
+risk-governance,Risk Governance,Risk scoring and gate decisions,"risk,governance",knowledge/risk-governance.md
 ```
 
 ### 3. Dynamic Loading
@@ -172,6 +172,18 @@ Feature flag testing, contract testing, and API testing patterns.
 
 ---
 
+### Browser Automation
+
+CLI and MCP integration for AI-driven browser automation during test generation.
+
+| Fragment                                                                                                                                       | Description                                                                                     | Key Topics                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| [playwright-cli](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/playwright-cli.md) | Token-efficient CLI for AI coding agents: element refs, sessions, snapshots, browser automation | CLI, browser, agent, automation, snapshot |
+
+**Used in:** `atdd`, `automate`, `test-design`, `test-review`, `nfr-assess` (when `tea_browser_automation` is `cli` or `auto`)
+
+---
+
 ### Playwright-Utils Integration
 
 Patterns for using `@seontechnologies/playwright-utils` package (9 utilities).
@@ -198,7 +210,7 @@ Patterns for using `@seontechnologies/playwright-utils` package (9 utilities).
 
 ## Fragment Manifest (tea-index.csv)
 
-**Location:** `src/bmm/testarch/tea-index.csv`
+**Location:** `src/testarch/tea-index.csv`
 
 **Purpose:** Tracks all knowledge fragments and their usage in workflows
 
@@ -206,8 +218,8 @@ Patterns for using `@seontechnologies/playwright-utils` package (9 utilities).
 
 ```csv
 id,name,description,tags,fragment_file
-test-quality,Test Quality,Execution limits and isolation rules,quality;standards,knowledge/test-quality.md
-risk-governance,Risk Governance,Risk scoring and gate decisions,risk;governance,knowledge/risk-governance.md
+test-quality,Test Quality,Execution limits and isolation rules,"quality,standards",knowledge/test-quality.md
+risk-governance,Risk Governance,Risk scoring and gate decisions,"risk,governance",knowledge/risk-governance.md
 ```
 
 **Columns:**
@@ -215,12 +227,12 @@ risk-governance,Risk Governance,Risk scoring and gate decisions,risk;governance,
 - `id` - Unique fragment identifier (kebab-case)
 - `name` - Human-readable fragment name
 - `description` - What the fragment covers
-- `tags` - Searchable tags (semicolon-separated)
+- `tags` - Searchable tags (comma-separated)
 - `fragment_file` - Relative path to fragment markdown file
 
-**Fragment Location:** `src/bmm/testarch/knowledge/` (all 33 fragments in single directory)
+**Fragment Location:** `src/testarch/knowledge/` (all 35 fragments in single directory)
 
-**Manifest:** `src/bmm/testarch/tea-index.csv`
+**Manifest:** `src/testarch/tea-index.csv`
 
 ---
 
