@@ -95,6 +95,31 @@ trace_output:
   default: "traceability"
   result: "{test_artifacts}/{value}"
 
+post-install-notes:
+  tea_browser_automation:
+    cli: |
+      Playwright CLI Setup:
+        npm install -g @playwright/cli@latest
+        playwright-cli install --skills    # Run from project root
+        Node.js 18+ required.
+    mcp: |
+      Playwright MCP Setup (two servers):
+        1. playwright    — npx @playwright/mcp@latest
+        2. playwright-test — npx playwright run-test-mcp-server
+        Configure both MCP servers in your IDE settings.
+        See: https://github.com/microsoft/playwright-mcp
+    auto: |
+      Playwright CLI Setup:
+        npm install -g @playwright/cli@latest
+        playwright-cli install --skills    # Run from project root
+        Node.js 18+ required.
+
+      Playwright MCP Setup (two servers):
+        1. playwright    — npx @playwright/mcp@latest
+        2. playwright-test — npx playwright run-test-mcp-server
+        Configure both MCP servers in your IDE settings.
+        See: https://github.com/microsoft/playwright-mcp
+
 # Directories to create during installation (declarative, no code execution)
 directories:
   - "{test_artifacts}"
