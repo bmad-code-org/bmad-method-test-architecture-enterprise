@@ -359,7 +359,7 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 
 **Setup:**
 
-- CLI: `npm install -g @playwright/cli@latest` then `playwright-cli install --skills`
+- CLI: `npm install -g @playwright/cli@latest` (global, one-time) then `playwright-cli install --skills` (from project root)
 - MCP: Configure MCP servers in your IDE (see [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md))
 
 **Which workflows benefit:**

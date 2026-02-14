@@ -33,7 +33,7 @@ npm install -g @playwright/cli@latest    # Install globally (Node.js 18+)
 playwright-cli install --skills          # Register as an agent skill
 ```
 
-This is a one-time global setup. TEA documents it during installation but does not run it for you.
+The global npm install is one-time. The skills install (`playwright-cli install --skills`) should be run from your project root — it registers skills in your project's `.claude/skills/` directory (Claude Code, GitHub Copilot, and other coding agents that support the skills convention). Agents without skills support can still use the CLI directly via `playwright-cli --help`.
 
 ### For MCP (`mcp` or `auto` mode)
 
