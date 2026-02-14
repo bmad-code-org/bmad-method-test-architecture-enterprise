@@ -81,7 +81,7 @@ Summarize:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-01-preflight'` to `stepsCompleted` array
+  - Add `'step-01-preflight'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-01-preflight'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

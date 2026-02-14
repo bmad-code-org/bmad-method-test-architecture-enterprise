@@ -101,7 +101,7 @@ State the chosen mode and why. Then proceed.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-02-generation-mode'` to `stepsCompleted` array
+  - Add `'step-02-generation-mode'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-generation-mode'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section.

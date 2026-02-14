@@ -126,7 +126,7 @@ Create helpers for:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-03-scaffold-framework'` to `stepsCompleted` array
+  - Add `'step-03-scaffold-framework'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-scaffold-framework'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

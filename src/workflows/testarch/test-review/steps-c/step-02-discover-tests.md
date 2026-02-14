@@ -94,7 +94,7 @@ All commands use the same named session to target the correct browser:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-02-discover-tests'` to `stepsCompleted` array
+  - Add `'step-02-discover-tests'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-discover-tests'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

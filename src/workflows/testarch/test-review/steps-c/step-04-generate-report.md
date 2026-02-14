@@ -71,7 +71,7 @@ Validate against `checklist.md` and fix any gaps.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-04-generate-report'` to `stepsCompleted` array
+  - Add `'step-04-generate-report'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-generate-report'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

@@ -89,7 +89,7 @@ If evidence is missing for a category, mark that category as **CONCERNS**.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-03-gather-evidence'` to `stepsCompleted` array
+  - Add `'step-03-gather-evidence'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-gather-evidence'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

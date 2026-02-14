@@ -74,8 +74,11 @@ Based on `lastStep`, load the next incomplete step:
 - `'step-02-discover-tests'` → Load `./step-03-map-criteria.md`
 - `'step-03-map-criteria'` → Load `./step-04-analyze-gaps.md`
 - `'step-04-analyze-gaps'` → Load `./step-05-gate-decision.md`
+- `'step-05-gate-decision'` → **Workflow already complete.** Display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
 
-**Load the identified step file, read completely, and execute.**
+**If `lastStep` does not match any value above**, display: "⚠️ **Unknown progress state** (`lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.
+
+**Otherwise**, load the identified step file, read completely, and execute.
 
 The existing content in `{outputFile}` provides context from previously completed steps. Use it as reference for remaining steps.
 

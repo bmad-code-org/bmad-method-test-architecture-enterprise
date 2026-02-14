@@ -81,7 +81,7 @@ Configure:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-03-configure-quality-gates'` to `stepsCompleted` array
+  - Add `'step-03-configure-quality-gates'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-configure-quality-gates'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

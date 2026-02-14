@@ -212,7 +212,7 @@ fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(execu
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-04e-aggregate-nfr'` to `stepsCompleted` array
+  - Add `'step-04e-aggregate-nfr'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04e-aggregate-nfr'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

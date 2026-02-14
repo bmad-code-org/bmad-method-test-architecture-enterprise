@@ -78,7 +78,7 @@ Report:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-05-validate-and-complete'` to `stepsCompleted` array
+  - Add `'step-05-validate-and-complete'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-05-validate-and-complete'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section.

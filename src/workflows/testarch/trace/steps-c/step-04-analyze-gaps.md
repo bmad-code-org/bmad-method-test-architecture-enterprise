@@ -173,7 +173,7 @@ const coverageMatrix = {
 **Write to temp file for Phase 2:**
 
 ```javascript
-const outputPath = '/tmp/tea-trace-coverage-matrix-{{timestamp}}.json';
+const outputPath = '{tempOutputFile}';
 fs.writeFileSync(outputPath, JSON.stringify(coverageMatrix, null, 2), 'utf8');
 
 console.log(`✅ Phase 1 Complete: Coverage matrix saved to ${outputPath}`);
@@ -242,7 +242,7 @@ console.log(`✅ Phase 1 Complete: Coverage matrix saved to ${outputPath}`);
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-04-analyze-gaps'` to `stepsCompleted` array
+  - Add `'step-04-analyze-gaps'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-analyze-gaps'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

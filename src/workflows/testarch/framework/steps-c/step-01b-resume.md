@@ -86,8 +86,11 @@ Based on `lastStep`, load the next incomplete step:
 - `'step-02-select-framework'` → `./step-03-scaffold-framework.md`
 - `'step-03-scaffold-framework'` → `./step-04-docs-and-scripts.md`
 - `'step-04-docs-and-scripts'` → `./step-05-validate-and-summary.md`
+- `'step-05-validate-and-summary'` → **Workflow already complete.** Display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
 
-**Load the identified step file, read completely, and execute.**
+**If `lastStep` does not match any value above**, display: "⚠️ **Unknown progress state** (`lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.
+
+**Otherwise**, load the identified step file, read completely, and execute.
 
 The existing content in `{outputFile}` provides context from previously completed steps.
 

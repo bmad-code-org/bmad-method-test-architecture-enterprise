@@ -77,8 +77,13 @@ Based on `lastStep`, load the next incomplete step:
 | `step-02-define-thresholds` | `./step-03-gather-evidence.md`    |
 | `step-03-gather-evidence`   | `./step-04-evaluate-and-score.md` |
 | `step-04e-aggregate-nfr`    | `./step-05-generate-report.md`    |
+| `step-05-generate-report`   | **Workflow already complete.**    |
 
-**Load the identified step file, read completely, and execute.**
+**If `lastStep` is the final step** (`step-05-generate-report`), display: "All steps completed. Use **[C] Create** to start fresh, **[V] Validate** to review outputs, or **[E] Edit** to make revisions." Then halt.
+
+**If `lastStep` does not match any value above**, display: "Unknown progress state (`lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.
+
+**Otherwise**, load the identified step file, read completely, and execute.
 
 The existing content in `{outputFile}` provides context from previously completed steps.
 

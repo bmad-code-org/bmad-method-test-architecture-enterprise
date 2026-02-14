@@ -203,25 +203,15 @@ fs.writeFileSync('{outputFile}', reportContent, 'utf8');
 
 ### 6. Save Progress
 
-**Save this step's accumulated work to `{outputFile}`.**
+**Update the YAML frontmatter in `{outputFile}` to mark this final step complete.**
 
-- **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
+Since step 4 (Generate Traceability Report) already wrote the report content to `{outputFile}`, do NOT overwrite it. Instead, update only the frontmatter at the top of the existing file:
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-05-gate-decision']
-  lastStep: 'step-05-gate-decision'
-  lastSaved: '{date}'
-  ---
-  ```
+- Add `'step-05-gate-decision'` to `stepsCompleted` array (only if not already present)
+- Set `lastStep: 'step-05-gate-decision'`
+- Set `lastSaved: '{date}'`
 
-  Then write this step's output below the frontmatter.
-
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-05-gate-decision'` to `stepsCompleted` array
-  - Set `lastStep: 'step-05-gate-decision'`
-  - Set `lastSaved: '{date}'`
-  - Append this step's output to the appropriate section of the document.
+Then append the gate decision summary (from section 5 above) to the end of the existing report content.
 
 ---
 

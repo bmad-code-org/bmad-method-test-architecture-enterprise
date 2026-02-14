@@ -78,7 +78,7 @@ Write `{outputFile}` including:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-04-validate-and-summarize'` to `stepsCompleted` array
+  - Add `'step-04-validate-and-summarize'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-validate-and-summarize'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section.

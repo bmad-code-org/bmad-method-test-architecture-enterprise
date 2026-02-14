@@ -107,7 +107,7 @@ Summarize:
   Then write this step's output below the frontmatter.
 
 - **If `{progressFile}` already exists**, update:
-  - Add `'step-05-generate-output'` to `stepsCompleted` array
+  - Add `'step-05-generate-output'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-05-generate-output'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

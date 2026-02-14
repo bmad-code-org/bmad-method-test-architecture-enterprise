@@ -114,7 +114,7 @@ Produce a concise coverage plan:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-02-identify-targets'` to `stepsCompleted` array
+  - Add `'step-02-identify-targets'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-identify-targets'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section.

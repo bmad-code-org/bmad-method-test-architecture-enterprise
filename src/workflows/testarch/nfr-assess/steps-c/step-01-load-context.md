@@ -107,7 +107,7 @@ Summarize loaded NFR sources and evidence availability.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-01-load-context'` to `stepsCompleted` array
+  - Add `'step-01-load-context'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-01-load-context'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

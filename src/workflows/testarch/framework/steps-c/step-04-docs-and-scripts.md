@@ -74,7 +74,7 @@ Add at minimum:
   Then write this step's output below the frontmatter.
 
 - **If `{progressFile}` already exists**, update:
-  - Add `'step-04-docs-and-scripts'` to `stepsCompleted` array
+  - Add `'step-04-docs-and-scripts'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-docs-and-scripts'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

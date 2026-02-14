@@ -88,7 +88,7 @@ Write the selected pipeline configuration to `{pipelineOutputFile}` (or adjust t
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-02-generate-pipeline'` to `stepsCompleted` array
+  - Add `'step-02-generate-pipeline'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-generate-pipeline'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

@@ -67,8 +67,11 @@ Based on `lastStep`, load the next incomplete step:
 - `'step-01-preflight-and-context'` → load `./step-02-identify-targets.md`
 - `'step-02-identify-targets'` → load `./step-03-generate-tests.md`
 - `'step-03c-aggregate'` → load `./step-04-validate-and-summarize.md`
+- `'step-04-validate-and-summarize'` → **Workflow already complete.** Display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
 
-**Load the identified step file, read completely, and execute.**
+**If `lastStep` does not match any value above**, display: "⚠️ **Unknown progress state** (`lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.
+
+**Otherwise**, load the identified step file, read completely, and execute.
 
 The existing content in `{outputFile}` provides context from previously completed steps.
 

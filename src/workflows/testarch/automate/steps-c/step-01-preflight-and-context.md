@@ -142,7 +142,7 @@ Summarize loaded artifacts, framework, and knowledge fragments, then proceed.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-01-preflight-and-context'` to `stepsCompleted` array
+  - Add `'step-01-preflight-and-context'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-01-preflight-and-context'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section.

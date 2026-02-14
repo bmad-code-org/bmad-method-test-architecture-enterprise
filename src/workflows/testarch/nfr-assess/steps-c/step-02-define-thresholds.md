@@ -88,7 +88,7 @@ List each NFR category with its threshold or UNKNOWN status.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-02-define-thresholds'` to `stepsCompleted` array
+  - Add `'step-02-define-thresholds'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-define-thresholds'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.

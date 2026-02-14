@@ -159,7 +159,7 @@ Summarize what was loaded and confirm with the user if anything is missing.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
-  - Add `'step-02-load-context'` to `stepsCompleted` array
+  - Add `'step-02-load-context'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-load-context'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.
