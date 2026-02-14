@@ -11,8 +11,17 @@
  */
 
 const path = require('node:path');
-const fs = require('fs-extra');
+const fs = require('node:fs/promises');
 const yaml = require('js-yaml');
+
+async function pathExists(filePath) {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // ANSI colors
 const colors = {
@@ -80,7 +89,7 @@ async function runTests() {
   try {
     const teaAgentPath = path.join(projectRoot, 'src/agents/tea.agent.yaml');
 
-    if (await fs.pathExists(teaAgentPath)) {
+    if (await pathExists(teaAgentPath)) {
       const teaAgent = yaml.load(await fs.readFile(teaAgentPath, 'utf8'));
 
       assert(teaAgent.agent !== undefined, 'tea.agent.yaml has agent root key');
@@ -113,7 +122,7 @@ async function runTests() {
   try {
     const teaIndexPath = path.join(projectRoot, 'src/testarch/tea-index.csv');
 
-    if (await fs.pathExists(teaIndexPath)) {
+    if (await pathExists(teaIndexPath)) {
       const csvContent = await fs.readFile(teaIndexPath, 'utf8');
       const lines = csvContent.trim().split('\n');
 
@@ -138,7 +147,7 @@ async function runTests() {
 
   const teachMeWorkflowPath = path.join(projectRoot, 'src/workflows/testarch/teach-me-testing/workflow.md');
   try {
-    if (await fs.pathExists(teachMeWorkflowPath)) {
+    if (await pathExists(teachMeWorkflowPath)) {
       const teachMeContent = await fs.readFile(teachMeWorkflowPath, 'utf8');
       assert(teachMeContent.length > 0, 'teach-me-testing/workflow.md exists');
       assert(!teachMeContent.includes('_bmad/bmm/'), 'teach-me-testing has no _bmad/bmm/ references');
@@ -154,7 +163,7 @@ async function runTests() {
   for (const workflowName of workflowNames) {
     const workflowYamlPath = path.join(projectRoot, `src/workflows/testarch/${workflowName}/workflow.yaml`);
 
-    if (await fs.pathExists(workflowYamlPath)) {
+    if (await pathExists(workflowYamlPath)) {
       try {
         const workflowYaml = yaml.load(await fs.readFile(workflowYamlPath, 'utf8'));
         assert(workflowYaml !== undefined, `${workflowName}/workflow.yaml is valid YAML`);
