@@ -69,6 +69,25 @@ Summarize what was found.
 
 ---
 
+## 3a. Audit Standards Integration (Conditional)
+
+**Check:** Does `{project-root}/_bmad/audit/` exist, OR does the loaded PRD contain formal requirement IDs matching `FR-[A-Z]+-\d{3}` or `NFR-[A-Z]+-\d{3}`?
+
+**If YES:**
+- Load `audit-standards-integration.md` from `{knowledgeIndex}`
+- Extract all FR IDs from loaded PRD/requirements (pattern: `FR-[AREA]-###`, `SYS-FUNC-###`)
+- Build an FR ID registry: `{ id, description, priority, source_document }`
+- Note: These IDs will be used in step-03 to extend the traceability matrix
+
+**If NO:** Skip this section entirely. Standard TEA traceability applies without FR ID columns.
+
+Report audit integration status:
+- **Audit Module:** {installed | not installed}
+- **FR IDs Found:** {count or "none"}
+- **NFR IDs Found:** {count or "none"}
+
+---
+
 ### 4. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**

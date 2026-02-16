@@ -26,6 +26,18 @@ Note: This assessment summarizes existing evidence; it does not run tests or CI 
 
 ---
 
+## NFR ID Mapping (Conditional — only when audit NFR IDs are present)
+
+> This section is populated when the Audit Standards Enterprise (ASE) module is installed and formal NFR IDs are detected in project artifacts. Otherwise, omit this section.
+
+| NFR ID | Category | Description | Assessment Status | Evidence |
+|--------|----------|-------------|-------------------|----------|
+| {NFR_ID} | {PERF/SEC/AVAIL/...} | {NFR_DESCRIPTION} | {PASS/CONCERNS/FAIL} | {evidence_reference} |
+
+**NFR Coverage:** {NFR_COVERED}/{NFR_TOTAL} ({NFR_PCT}%) formal NFR IDs assessed
+
+---
+
 ## Performance Assessment
 
 ### Response Time (p95)
@@ -412,6 +424,12 @@ nfr_assessment:
     - '{RECOMMENDATION_1}'
     - '{RECOMMENDATION_2}'
     - '{RECOMMENDATION_3}'
+  audit_integration: # Only if audit NFR IDs detected
+    enabled: {true | false}
+    nfr_coverage: {NFR_PCT}%
+    nfr_total: {NFR_TOTAL}
+    nfr_assessed: {NFR_COVERED}
+    unassessed_nfr_ids: ["{NFR_ID_1}", "{NFR_ID_2}"]
 ```
 
 ---

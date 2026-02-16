@@ -101,6 +101,32 @@ if (manualWaiver) {
 
 ---
 
+### 2a. FR Completeness Check (Conditional — only if FR IDs present)
+
+If the coverage matrix includes FR ID data (from step-03 audit integration):
+
+```javascript
+// Only execute if audit FR IDs were extracted
+if (coverageMatrix.fr_coverage) {
+  const frCoverage = coverageMatrix.fr_coverage;
+  const frCoveragePct = frCoverage.covered / frCoverage.total * 100;
+
+  // FR completeness is informational — does not override gate decision
+  // but is reported alongside standard metrics
+  gateReport.fr_completeness = {
+    total_fr_ids: frCoverage.total,
+    covered_fr_ids: frCoverage.covered,
+    fr_coverage_percentage: frCoveragePct,
+    uncovered_fr_ids: frCoverage.uncovered_ids,
+    status: frCoveragePct >= 90 ? 'STRONG' : frCoveragePct >= 75 ? 'ADEQUATE' : 'GAPS'
+  };
+
+  rationale += ` FR Coverage: ${frCoveragePct}% (${frCoverage.covered}/${frCoverage.total} formal requirements covered).`;
+}
+```
+
+---
+
 ### 3. Generate Gate Report
 
 ```javascript
