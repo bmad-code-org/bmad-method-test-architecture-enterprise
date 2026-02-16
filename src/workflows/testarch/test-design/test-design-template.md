@@ -107,10 +107,12 @@ lastSaved: ''
 
 **Criteria**: Blocks core journey + High risk (≥6) + No workaround
 
-| Requirement   | Test Level | Risk Link | Test Count | Owner | Notes   |
-| ------------- | ---------- | --------- | ---------- | ----- | ------- |
-| {requirement} | E2E        | R-001     | 3          | QA    | {notes} |
-| {requirement} | API        | R-002     | 5          | QA    | {notes} |
+| Requirement   | FR ID | Test Level | Risk Link | Test Count | Owner | Notes   |
+| ------------- | ----- | ---------- | --------- | ---------- | ----- | ------- |
+| {requirement} | {FR_ID or "-"} | E2E | R-001 | 3 | QA | {notes} |
+| {requirement} | {FR_ID or "-"} | API | R-002 | 5 | QA | {notes} |
+
+> **Note:** The `FR ID` column is populated only when the Audit Standards Enterprise (ASE) module is installed and formal FR IDs are detected in the PRD. Otherwise, use "-" or omit the column.
 
 **Total P0**: {p0_count} tests, {p0_hours} hours
 

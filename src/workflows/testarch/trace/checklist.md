@@ -551,6 +551,32 @@ Knowledge fragments referenced:
 
 ---
 
+# AUDIT STANDARDS INTEGRATION (Conditional)
+
+**Note**: This section applies only when the Audit Standards Enterprise (ASE) module is installed (`{project-root}/_bmad/audit/` exists) or when formal FR/NFR IDs are detected in project artifacts.
+
+## FR ID Detection
+
+- [ ] Checked for audit module installation (`_bmad/audit/` directory)
+- [ ] Scanned PRD/requirements for formal FR ID patterns (`FR-[AREA]-###`, `SYS-FUNC-###`)
+- [ ] If detected: `audit-standards-integration.md` knowledge fragment loaded
+- [ ] FR ID registry built with id, description, priority, source
+
+## FR Traceability
+
+- [ ] FR ID column added to traceability matrix (if FR IDs present)
+- [ ] Each FR ID mapped to at least one acceptance criterion
+- [ ] FR Coverage metric calculated (covered FR IDs / total FR IDs)
+- [ ] Uncovered FR IDs listed with gap severity
+
+## FR Completeness in Gate Decision
+
+- [ ] FR completeness metric included in gate report (if FR IDs present)
+- [ ] FR coverage percentage reported alongside standard metrics
+- [ ] Uncovered FR IDs documented in recommendations
+
+---
+
 # FINAL VALIDATION (Both Phases)
 
 ## Non-Prescriptive Validation

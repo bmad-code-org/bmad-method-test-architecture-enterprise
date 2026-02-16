@@ -38,6 +38,7 @@ Note: This workflow does not generate tests. If gaps exist, run `*atdd` or `*aut
 
 #### {CRITERION_ID}: {CRITERION_DESCRIPTION} ({PRIORITY})
 
+- **FR ID:** {FR_ID or "N/A — no audit FR IDs detected"} *(only shown when audit integration is active)*
 - **Coverage:** {COVERAGE_STATUS} {STATUS_ICON}
 - **Tests:**
   - `{TEST_ID}` - {TEST_FILE}:{LINE}
@@ -572,6 +573,16 @@ Top blockers requiring immediate attention:
 
 ---
 
+### FR Coverage Summary (Conditional — only when audit FR IDs are present)
+
+| FR ID | Description | Mapped Criteria | Test Coverage | Status |
+|-------|-------------|-----------------|---------------|--------|
+| {FR_ID} | {FR_DESCRIPTION} | {CRITERION_IDS} | {COVERAGE_PCT}% | {FULL/PARTIAL/NONE} |
+
+**FR Coverage:** {FR_COVERED}/{FR_TOTAL} ({FR_PCT}%) formal requirements with test coverage
+
+---
+
 ## Integrated YAML Snippet (CI/CD)
 
 ```yaml
@@ -628,6 +639,12 @@ traceability_and_gate:
       nfr_assessment: "{nfr_file_path}"
       code_coverage: "{coverage_report_url}"
     next_steps: "{brief_summary_of_recommendations}"
+    audit_integration: # Only if audit FR IDs detected
+      enabled: {true | false}
+      fr_coverage: {FR_PCT}%
+      fr_total: {FR_TOTAL}
+      fr_covered: {FR_COVERED}
+      uncovered_fr_ids: ["{FR_ID_1}", "{FR_ID_2}"]
     waiver: # Only if WAIVED
       reason: "{business_justification}"
       approver: "{name}, {role}"

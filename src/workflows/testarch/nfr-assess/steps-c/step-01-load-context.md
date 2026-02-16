@@ -84,9 +84,26 @@ If available, read:
 
 ---
 
+## 4a. Audit Standards Integration (Conditional)
+
+**Check:** Does `{project-root}/_bmad/audit/` exist, OR do loaded documents contain formal NFR IDs matching `NFR-[A-Z]+-\d{3}` or `SYS-PERF-\d{3}` / `SYS-SEC-\d{3}` / `SYS-USAB-\d{3}`?
+
+**If YES:**
+- Load `audit-standards-integration.md` from `{knowledgeIndex}`
+- Extract all NFR IDs from loaded PRD/tech-spec
+- These IDs will be included in the NFR assessment report as an additional column
+
+**If NO:** Skip this section. Standard TEA NFR assessment applies.
+
+---
+
 ## 5. Confirm Inputs
 
 Summarize loaded NFR sources and evidence availability.
+
+If audit integration is active, include:
+- **Audit Module:** {installed | not installed}
+- **NFR IDs Extracted:** {count or "none"}
 
 ---
 

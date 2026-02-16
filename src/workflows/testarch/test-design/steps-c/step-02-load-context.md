@@ -136,9 +136,26 @@ Use `{knowledgeIndex}` to select and load only relevant fragments.
 
 ---
 
+## 4a. Audit Standards Integration (Conditional)
+
+**Check:** Does `{project-root}/_bmad/audit/` exist, OR does the loaded PRD contain formal requirement IDs matching `FR-[A-Z]+-\d{3}` or `NFR-[A-Z]+-\d{3}`?
+
+**If YES:**
+- Load `audit-standards-integration.md` from `{knowledgeIndex}`
+- Extract all FR IDs from loaded PRD (pattern: `FR-[AREA]-###`, `SYS-FUNC-###`)
+- These IDs will be included in the test coverage plan tables as an additional column
+
+**If NO:** Skip this section. Standard TEA test design applies.
+
+---
+
 ## 5. Confirm Loaded Inputs
 
 Summarize what was loaded and confirm with the user if anything is missing.
+
+If audit integration is active, include:
+- **Audit Module:** {installed | not installed}
+- **FR IDs Extracted:** {count or "none"}
 
 ---
 

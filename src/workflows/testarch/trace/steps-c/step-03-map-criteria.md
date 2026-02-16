@@ -42,6 +42,20 @@ For each acceptance criterion:
 - Map to matching tests
 - Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY
 - Record test level and priority
+- **If audit FR IDs were extracted in step-01:** Add `FR ID` column linking each criterion to its formal requirement ID (e.g., FR-AUTH-001). If a criterion maps to multiple FR IDs, list all.
+
+---
+
+## 1a. FR Coverage Summary (Conditional — only if FR IDs present)
+
+If FR IDs were extracted in step-01, build an additional summary:
+
+| FR ID | Description | Mapped Criteria | Test Coverage | Status |
+|-------|-------------|-----------------|---------------|--------|
+
+Calculate: `FR Coverage = FR IDs with at least one FULL-covered criterion / Total FR IDs`
+
+This metric feeds into the gate decision in step-05.
 
 ---
 
@@ -51,6 +65,7 @@ Ensure:
 
 - P0/P1 criteria have coverage
 - No duplicate coverage across levels without justification
+- **If audit FR IDs present:** Every FR ID has at least one mapped acceptance criterion with test coverage
 
 ---
 
