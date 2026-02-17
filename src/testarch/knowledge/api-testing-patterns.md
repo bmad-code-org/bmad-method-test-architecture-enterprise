@@ -197,6 +197,7 @@ test.describe('Orders API', () => {
 - `validateSchema` throws if response doesn't match
 - Built-in retry for transient failures
 - Type-safe `body` access
+- **Note**: If your project uses code-generated operations from an OpenAPI spec, see [Example 8](#example-8-operation-based-api-testing-openapi--code-generators) for the preferred `operation`-based overload (v3.14.0+)
 
 ### Example 3: Microservice-to-Microservice Testing
 
@@ -712,6 +713,69 @@ test.describe('Authenticated API Tests', () => {
 - Token reused across all tests in describe block
 - Test auth, expired tokens, and RBAC
 - Pure API testing without UI
+
+### Example 8: Operation-Based API Testing (OpenAPI / Code Generators)
+
+**Context**: When your project uses code-generated operation definitions from an OpenAPI spec, leverage the operation-based overload of `apiRequest` (v3.14.0+) instead of manual `method`/`path` extraction. This eliminates `typeof` assertions and provides full type inference for request body, response, and query parameters.
+
+**Implementation**:
+
+```typescript
+// tests/api/operations.spec.ts
+import { test, expect } from '@seontechnologies/playwright-utils/api-request/fixtures';
+
+test.describe('API Tests with Generated Operations', () => {
+  test('should create entity with full type safety', async ({ apiRequest }) => {
+    // Operation object from code generator — contains path, method, and type info
+    const { status, body } = await apiRequest({
+      operation: createEntityOp({ workspaceId }),
+      headers: getHeaders(workspaceId),
+      body: entityInput, // Compile-time typed from operation.request
+    });
+
+    expect(status).toBe(201);
+    expect(body.id).toBeDefined(); // body typed from operation.response
+  });
+
+  test('should list with typed query parameters', async ({ apiRequest }) => {
+    // query field replaces manual string concatenation
+    const { body } = await apiRequest({
+      operation: listEntitiesOp({ workspaceId }),
+      headers: getHeaders(workspaceId),
+      query: { page: 0, page_size: 10, status: 'active' },
+    });
+
+    expect(body.items).toHaveLength(10);
+    expect(body.total).toBeGreaterThan(10);
+  });
+
+  test('should poll async operation until complete', async ({ apiRequest, recurse }) => {
+    const { body: job } = await apiRequest({
+      operation: startJobOp({ workspaceId }),
+      headers: getHeaders(workspaceId),
+      body: { type: 'export' },
+    });
+
+    await recurse(
+      async () =>
+        apiRequest({
+          operation: getJobOp({ workspaceId, jobId: job.id }),
+          headers: getHeaders(workspaceId),
+        }),
+      (res) => res.body.status === 'completed',
+      { timeout: 60000, interval: 2000 },
+    );
+  });
+});
+```
+
+**Key Points**:
+
+- `operation` replaces `method` + `path` — mutually exclusive at compile time
+- Types for body, response, and query all inferred from the operation definition
+- Works with any code generator using structural typing (no imports from playwright-utils needed in generator)
+- Composable with `recurse`, `validateSchema`, and all existing `apiRequest` features
+- Preferred approach over `typeof operation.response` for generated operations
 
 ## API Test Configuration
 
