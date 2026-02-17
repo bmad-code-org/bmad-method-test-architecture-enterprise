@@ -371,6 +371,95 @@ test.describe('GraphQL API', () => {
 - Check `body.errors` for GraphQL errors (not status code)
 - Works for queries and mutations
 
+### Example 8: Operation-Based Overload (OpenAPI / Code Generators)
+
+**Context**: When using a code generator (orval, openapi-generator, custom scripts) that produces typed operation definitions from an OpenAPI spec, pass the operation object directly to `apiRequest`. This eliminates manual `method`/`path` extraction and `typeof` assertions while preserving full type inference for request body, response, and query parameters. Available since v3.14.0.
+
+**Implementation**:
+
+```typescript
+// Generated operation definition — structural typing, no import from playwright-utils needed
+// type OperationShape = { path: string; method: 'POST'|'GET'|'PUT'|'DELETE'|'PATCH'|'HEAD'; response: unknown; request: unknown; query?: unknown }
+
+import { test, expect } from '@seontechnologies/playwright-utils/api-request/fixtures';
+
+// --- Basic usage: operation replaces method + path ---
+test('should upsert person via operation overload', async ({ apiRequest }) => {
+  const { status, body } = await apiRequest({
+    operation: upsertPersonv2({ customerId }),
+    headers: getHeaders(customerId),
+    body: personInput, // compile-time typed as Schemas.PersonInput
+  });
+
+  expect(status).toBe(200);
+  expect(body.id).toBeDefined(); // body typed as Schemas.Person
+});
+
+// --- Typed query parameters (replaces string concatenation) ---
+test('should list people with typed query', async ({ apiRequest }) => {
+  const { body } = await apiRequest({
+    operation: getPeoplev2({ customerId }),
+    headers: getHeaders(customerId),
+    query: { page: 0, page_size: 5 }, // typed from operation's query definition
+  });
+
+  expect(body.items).toHaveLength(5);
+});
+
+// --- Params escape hatch (pre-formatted query strings) ---
+test('should fetch billing history with raw params', async ({ apiRequest }) => {
+  const { body } = await apiRequest({
+    operation: getBillingHistoryv2({ customerId }),
+    headers: getHeaders(customerId),
+    params: {
+      'filters[start_date]': getThisMonthTimestamp(),
+      'filters[date_type]': 'MONTH',
+    },
+  });
+
+  expect(body.entries.length).toBeGreaterThan(0);
+});
+
+// --- Works with recurse (polling) ---
+test('should poll until person is reviewed', async ({ apiRequest, recurse }) => {
+  await recurse(
+    async () =>
+      apiRequest({
+        operation: getPersonv2({ customerId, hash }),
+        headers: getHeaders(customerId),
+      }),
+    (res) => {
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('REVIEWED');
+    },
+    { timeout: 30000, interval: 1000 },
+  );
+});
+
+// --- Schema validation chains work identically ---
+test('should create movie with schema validation', async ({ apiRequest }) => {
+  const { body } = await apiRequest({
+    operation: createMovieOp,
+    headers: commonHeaders(authToken),
+    body: movie,
+  }).validateSchema(CreateMovieResponseSchema, {
+    shape: { status: 200, data: { name: movie.name } },
+  });
+
+  expect(body.data.id).toBeDefined();
+});
+```
+
+**Key Points**:
+
+- Pass `operation` instead of `method` + `path` — mutually exclusive at compile time
+- Response body, request body, and query types inferred from operation definition
+- Uses structural typing (duck typing) — works with any code generator producing `{ path, method, response, request, query? }`
+- `query` field auto-serializes to bracket notation (`filters[type]=pep`, `ids[0]=10`)
+- `params` escape hatch for pre-formatted strings — wins over `query` on conflict
+- Fully composable with `recurse`, `validateSchema`, and all existing features
+- `response`/`request`/`query` on the operation are type-level only — runtime never reads their values
+
 ## Comparison with Vanilla Playwright
 
 | Vanilla Playwright                             | playwright-utils apiRequest                                                        |
@@ -393,6 +482,7 @@ test.describe('GraphQL API', () => {
 - ✅ Tests requiring retry logic
 - ✅ Background API calls in UI tests
 - ✅ Contract testing support
+- ✅ Type-safe API testing with OpenAPI-generated operations (v3.14.0+)
 
 **Stick with vanilla Playwright for:**
 
@@ -439,4 +529,35 @@ const response: any = await apiRequest({ method: 'GET', path: '/users' });
 ```typescript
 const { body } = await apiRequest<User[]>({ method: 'GET', path: '/users' });
 // body is typed as User[]
+```
+
+**❌ Mixing operation overload with explicit generics:**
+
+```typescript
+// Don't pass a generic when using operation — types are inferred from the operation
+const { body } = await apiRequest<MyType>({
+  operation: getPersonv2({ customerId }),
+  headers: getHeaders(customerId),
+});
+```
+
+**✅ Let the operation infer the types:**
+
+```typescript
+const { body } = await apiRequest({
+  operation: getPersonv2({ customerId }),
+  headers: getHeaders(customerId),
+});
+// body type inferred from operation.response
+```
+
+**❌ Mixing operation with method/path:**
+
+```typescript
+// Compile error — operation and method/path are mutually exclusive
+await apiRequest({
+  operation: getPersonv2({ customerId }),
+  method: 'GET', // Error: method?: never
+  path: '/api/person', // Error: path?: never
+});
 ```

@@ -21,7 +21,7 @@ test-healing-patterns,Test Healing Patterns,"Common failure patterns and automat
 selector-resilience,Selector Resilience,"Robust selector strategies and debugging techniques","selectors,locators,debugging,ui",knowledge/selector-resilience.md
 timing-debugging,Timing Debugging,"Race condition identification and deterministic wait fixes","timing,async,debugging",knowledge/timing-debugging.md
 overview,Playwright Utils Overview,"Installation, design principles, fixture patterns for API and UI testing","playwright-utils,fixtures,api,backend,ui",knowledge/overview.md
-api-request,API Request,"Typed HTTP client, schema validation, retry logic for API and service testing","api,backend,service-testing,api-testing,playwright-utils",knowledge/api-request.md
+api-request,API Request,"Typed HTTP client, schema validation, retry logic, operation-based overload for API and service testing","api,backend,service-testing,api-testing,playwright-utils,openapi,codegen,operation",knowledge/api-request.md
 network-recorder,Network Recorder,"HAR record/playback, CRUD detection for offline UI testing","network,playwright-utils,ui,har",knowledge/network-recorder.md
 auth-session,Auth Session,"Token persistence, multi-user, API and browser authentication","auth,playwright-utils,api,backend,jwt,token",knowledge/auth-session.md
 intercept-network-call,Intercept Network Call,"Network spy/stub, JSON parsing for UI tests","network,playwright-utils,ui",knowledge/intercept-network-call.md
