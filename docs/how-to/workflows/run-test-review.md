@@ -7,12 +7,12 @@ description: Audit test quality using TEA's comprehensive knowledge base and get
 
 Use TEA's `test-review` workflow to audit test quality with objective scoring and actionable feedback. TEA reviews tests against its knowledge base of best practices.
 
-Coverage scoring is intentionally excluded from `test-review`. Use `trace` for requirements coverage analysis and release gate decisions.
+Coverage scoring is intentionally excluded from `test-review`. Use `trace` for requirements coverage analysis and coverage gate decisions.
 
 ## When to Use This
 
 - Want to validate test quality objectively
-- Need quality metrics for release gates
+- Need quality metrics for test quality gates
 - Preparing for production deployment
 - Reviewing team-written tests
 - Auditing AI-generated tests
@@ -451,9 +451,9 @@ TEA reviewed against these patterns:
 Make test review part of release checklist:
 
 ```markdown
-## Release Checklist
+## Quality Checklist (Test-Review)
 - [ ] All tests passing
-- [ ] Test review score > 80
+- [ ] Test-review quality score > 80
 - [ ] Critical issues resolved
 - [ ] Performance within budget
 ````
@@ -477,13 +477,15 @@ Use scores as quality gates:
 # .github/workflows/test.yml
 - name: Review test quality
   run: |
-    # Run test review
-    # Parse score from report
+    # Run test-review quality gate
+    # Parse quality score from report
     if [ $SCORE -lt 80 ]; then
-      echo "Test quality below threshold"
+      echo "Test-review quality gate below threshold"
       exit 1
     fi
 ```
+
+Coverage gate checks are handled by `trace`, not `test-review`.
 
 ### Review Regularly
 
@@ -491,7 +493,7 @@ Schedule periodic reviews:
 
 - **Per story:** Optional (spot check new tests)
 - **Per epic:** Recommended (ensure consistency)
-- **Per release:** Recommended for quality gates (required if using formal gate process)
+- **Per release:** Recommended for test quality gates (coverage gates remain in `trace`)
 - **Quarterly:** Audit entire suite
 
 ### Focus Reviews

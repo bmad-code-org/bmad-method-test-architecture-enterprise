@@ -131,6 +131,8 @@ outputs.forEach((output) => {
 
 ### 6. Proceed to Aggregation
 
+Pass the same `timestamp` value to Step 3F (do not regenerate it). Step 3F must read the exact temp files written in this step.
+
 Load next step: `{nextStepFile}`
 
 The aggregation step (3F) will:

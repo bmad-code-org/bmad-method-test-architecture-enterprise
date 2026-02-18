@@ -10,7 +10,7 @@ tempOutputFile: '/tmp/tea-trace-coverage-matrix-{{timestamp}}.json'
 
 ## STEP GOAL
 
-**Phase 1 Final Step:** Analyze coverage gaps, generate recommendations, and output complete coverage matrix to temp file for Phase 2 (gate decision).
+**Phase 1 Final Step:** Analyze coverage gaps (including endpoint/auth/error-path blind spots), generate recommendations, and output complete coverage matrix to temp file for Phase 2 (gate decision).
 
 ---
 
@@ -60,7 +60,27 @@ const lowGaps = uncoveredRequirements.filter((req) => req.priority === 'P3');
 
 ---
 
-### 2. Generate Recommendations
+### 2. Coverage Heuristics Checks
+
+Use the heuristics inventory from Step 2 and mapped criteria from Step 3 to flag common coverage blind spots:
+
+```javascript
+const endpointCoverageGaps = coverageHeuristics?.endpoints_without_tests || [];
+const authCoverageGaps = coverageHeuristics?.auth_missing_negative_paths || [];
+const errorPathGaps = coverageHeuristics?.criteria_happy_path_only || [];
+
+const heuristicGapCounts = {
+  endpoints_without_tests: endpointCoverageGaps.length,
+  auth_missing_negative_paths: authCoverageGaps.length,
+  happy_path_only_criteria: errorPathGaps.length,
+};
+```
+
+Heuristics are advisory but must influence gap severity and recommendations, especially for P0/P1 criteria.
+
+---
+
+### 3. Generate Recommendations
 
 **Based on gap analysis:**
 
@@ -94,6 +114,30 @@ if (partialCoverage.length > 0) {
   });
 }
 
+if (endpointCoverageGaps.length > 0) {
+  recommendations.push({
+    priority: 'HIGH',
+    action: `Add API tests for ${endpointCoverageGaps.length} uncovered endpoint(s)`,
+    requirements: endpointCoverageGaps.map((r) => r.id || r.endpoint || 'unknown'),
+  });
+}
+
+if (authCoverageGaps.length > 0) {
+  recommendations.push({
+    priority: 'HIGH',
+    action: `Add negative-path auth/authz tests for ${authCoverageGaps.length} requirement(s)`,
+    requirements: authCoverageGaps.map((r) => r.id || 'unknown'),
+  });
+}
+
+if (errorPathGaps.length > 0) {
+  recommendations.push({
+    priority: 'MEDIUM',
+    action: `Add error/edge scenario tests for ${errorPathGaps.length} happy-path-only criterion/criteria`,
+    requirements: errorPathGaps.map((r) => r.id || 'unknown'),
+  });
+}
+
 // Quality issues
 recommendations.push({
   priority: 'LOW',
@@ -104,24 +148,35 @@ recommendations.push({
 
 ---
 
-### 3. Calculate Coverage Statistics
+### 4. Calculate Coverage Statistics
 
 ```javascript
 const totalRequirements = traceabilityMatrix.length;
 const coveredRequirements = traceabilityMatrix.filter((r) => r.coverage === 'FULL' || r.coverage === 'PARTIAL').length;
 const fullyCovered = traceabilityMatrix.filter((r) => r.coverage === 'FULL').length;
 
-const coveragePercentage = Math.round((fullyCovered / totalRequirements) * 100);
+const safePct = (covered, total) => (total > 0 ? Math.round((covered / total) * 100) : 100);
+const coveragePercentage = safePct(fullyCovered, totalRequirements);
 
 // Priority-specific coverage
 const p0Total = traceabilityMatrix.filter((r) => r.priority === 'P0').length;
 const p0Covered = traceabilityMatrix.filter((r) => r.priority === 'P0' && r.coverage === 'FULL').length;
-const p0CoveragePercentage = Math.round((p0Covered / p0Total) * 100);
+const p1Total = traceabilityMatrix.filter((r) => r.priority === 'P1').length;
+const p1Covered = traceabilityMatrix.filter((r) => r.priority === 'P1' && r.coverage === 'FULL').length;
+const p2Total = traceabilityMatrix.filter((r) => r.priority === 'P2').length;
+const p2Covered = traceabilityMatrix.filter((r) => r.priority === 'P2' && r.coverage === 'FULL').length;
+const p3Total = traceabilityMatrix.filter((r) => r.priority === 'P3').length;
+const p3Covered = traceabilityMatrix.filter((r) => r.priority === 'P3' && r.coverage === 'FULL').length;
+
+const p0CoveragePercentage = safePct(p0Covered, p0Total);
+const p1CoveragePercentage = safePct(p1Covered, p1Total);
+const p2CoveragePercentage = safePct(p2Covered, p2Total);
+const p3CoveragePercentage = safePct(p3Covered, p3Total);
 ```
 
 ---
 
-### 4. Generate Complete Coverage Matrix
+### 5. Generate Complete Coverage Matrix
 
 **Compile all Phase 1 outputs:**
 
@@ -141,15 +196,9 @@ const coverageMatrix = {
 
     priority_breakdown: {
       P0: { total: p0Total, covered: p0Covered, percentage: p0CoveragePercentage },
-      P1: {
-        /* calculate */
-      },
-      P2: {
-        /* calculate */
-      },
-      P3: {
-        /* calculate */
-      },
+      P1: { total: p1Total, covered: p1Covered, percentage: p1CoveragePercentage },
+      P2: { total: p2Total, covered: p2Covered, percentage: p2CoveragePercentage },
+      P3: { total: p3Total, covered: p3Covered, percentage: p3CoveragePercentage },
     },
   },
 
@@ -162,13 +211,20 @@ const coverageMatrix = {
     unit_only_items: unitOnlyCoverage,
   },
 
+  coverage_heuristics: {
+    endpoint_gaps: endpointCoverageGaps,
+    auth_negative_path_gaps: authCoverageGaps,
+    happy_path_only_gaps: errorPathGaps,
+    counts: heuristicGapCounts,
+  },
+
   recommendations: recommendations,
 };
 ```
 
 ---
 
-### 5. Output Coverage Matrix to Temp File
+### 6. Output Coverage Matrix to Temp File
 
 **Write to temp file for Phase 2:**
 
@@ -181,7 +237,7 @@ console.log(`✅ Phase 1 Complete: Coverage matrix saved to ${outputPath}`);
 
 ---
 
-### 6. Display Phase 1 Summary
+### 7. Display Phase 1 Summary
 
 ```
 ✅ Phase 1 Complete: Coverage Matrix Generated
@@ -194,15 +250,20 @@ console.log(`✅ Phase 1 Complete: Coverage matrix saved to ${outputPath}`);
 
 🎯 Priority Coverage:
 - P0: {p0Covered}/{p0Total} ({p0CoveragePercentage}%)
-- P1: {p1Coverage}%
-- P2: {p2Coverage}%
-- P3: {p3Coverage}%
+- P1: {p1Covered}/{p1Total} ({p1CoveragePercentage}%)
+- P2: {p2Covered}/{p2Total} ({p2CoveragePercentage}%)
+- P3: {p3Covered}/{p3Total} ({p3CoveragePercentage}%)
 
 ⚠️ Gaps Identified:
 - Critical (P0): {criticalGaps.length}
 - High (P1): {highGaps.length}
 - Medium (P2): {mediumGaps.length}
 - Low (P3): {lowGaps.length}
+
+🔍 Coverage Heuristics:
+- Endpoints without tests: {endpointCoverageGaps.length}
+- Auth negative-path gaps: {authCoverageGaps.length}
+- Happy-path-only criteria: {errorPathGaps.length}
 
 📝 Recommendations: {recommendations.length}
 
@@ -225,7 +286,7 @@ console.log(`✅ Phase 1 Complete: Coverage matrix saved to ${outputPath}`);
 
 ---
 
-### 7. Save Progress
+### 8. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
 

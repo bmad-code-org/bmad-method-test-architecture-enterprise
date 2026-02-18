@@ -9,7 +9,7 @@
 
 Review test quality using TEA knowledge base and produce a 0–100 quality score with actionable findings.
 
-Coverage assessment is intentionally out of scope for this workflow. Use `trace` for requirements coverage and release gate decisions.
+Coverage assessment is intentionally out of scope for this workflow. Use `trace` for requirements coverage and coverage gate decisions.
 
 ---
 

@@ -64,6 +64,9 @@ if (coverageMatrix.phase !== 'PHASE_1_COMPLETE') {
 ```javascript
 const stats = coverageMatrix.coverage_statistics;
 const p0Coverage = stats.priority_breakdown.P0.percentage;
+const p1Coverage = stats.priority_breakdown.P1.percentage;
+const hasP1Requirements = (stats.priority_breakdown.P1.total || 0) > 0;
+const effectiveP1Coverage = hasP1Requirements ? p1Coverage : 100;
 const overallCoverage = stats.overall_coverage_percentage;
 const criticalGaps = coverageMatrix.gap_analysis.critical_gaps.length;
 
@@ -75,23 +78,34 @@ if (p0Coverage < 100) {
   gateDecision = 'FAIL';
   rationale = `P0 coverage is ${p0Coverage}% (required: 100%). ${criticalGaps} critical requirements uncovered.`;
 }
-// Rule 2: Overall coverage >= 90% with P0 at 100% → PASS
-else if (overallCoverage >= 90) {
-  gateDecision = 'PASS';
-  rationale = `P0 coverage is 100% and overall coverage is ${overallCoverage}% (target: 90%).`;
-}
-// Rule 3: Overall coverage >= 75% with P0 at 100% → CONCERNS
-else if (overallCoverage >= 75) {
-  gateDecision = 'CONCERNS';
-  rationale = `P0 coverage is 100% but overall coverage is ${overallCoverage}% (target: 90%). Consider expanding coverage.`;
-}
-// Rule 4: P0 at 100% but overall < 75% → FAIL
-else {
+// Rule 2: Overall coverage must be >= 80%
+else if (overallCoverage < 80) {
   gateDecision = 'FAIL';
-  rationale = `Overall coverage is ${overallCoverage}% (minimum: 75%). Significant gaps exist.`;
+  rationale = `Overall coverage is ${overallCoverage}% (minimum: 80%). Significant gaps exist.`;
+}
+// Rule 3: P1 coverage < 80% → FAIL
+else if (effectiveP1Coverage < 80) {
+  gateDecision = 'FAIL';
+  rationale = hasP1Requirements
+    ? `P1 coverage is ${effectiveP1Coverage}% (minimum: 80%). High-priority gaps must be addressed.`
+    : `P1 requirements are not present; continuing with remaining gate criteria.`;
+}
+// Rule 4: P1 coverage >= 90% and overall >= 80% with P0 at 100% → PASS
+else if (effectiveP1Coverage >= 90) {
+  gateDecision = 'PASS';
+  rationale = hasP1Requirements
+    ? `P0 coverage is 100%, P1 coverage is ${effectiveP1Coverage}% (target: 90%), and overall coverage is ${overallCoverage}% (minimum: 80%).`
+    : `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%). No P1 requirements detected.`;
+}
+// Rule 5: P1 coverage 80-89% with P0 at 100% and overall >= 80% → CONCERNS
+else if (effectiveP1Coverage >= 80) {
+  gateDecision = 'CONCERNS';
+  rationale = hasP1Requirements
+    ? `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%), but P1 coverage is ${effectiveP1Coverage}% (target: 90%).`
+    : `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%), but additional non-P1 gaps need mitigation.`;
 }
 
-// Rule 5: Manual waiver option
+// Rule 6: Manual waiver option
 const manualWaiver = false; // Can be set via config or user input
 if (manualWaiver) {
   gateDecision = 'WAIVED';
@@ -116,9 +130,14 @@ const gateReport = {
     p0_coverage_actual: `${p0Coverage}%`,
     p0_status: p0Coverage === 100 ? 'MET' : 'NOT MET',
 
-    overall_coverage_target: '90%',
+    p1_coverage_target_pass: '90%',
+    p1_coverage_minimum: '80%',
+    p1_coverage_actual: `${effectiveP1Coverage}%`,
+    p1_status: effectiveP1Coverage >= 90 ? 'MET' : effectiveP1Coverage >= 80 ? 'PARTIAL' : 'NOT MET',
+
+    overall_coverage_minimum: '80%',
     overall_coverage_actual: `${overallCoverage}%`,
-    overall_status: overallCoverage >= 90 ? 'MET' : overallCoverage >= 75 ? 'PARTIAL' : 'NOT MET',
+    overall_status: overallCoverage >= 80 ? 'MET' : 'NOT MET',
   },
 
   uncovered_requirements: coverageMatrix.gap_analysis.critical_gaps.concat(coverageMatrix.gap_analysis.high_gaps),
@@ -174,7 +193,8 @@ fs.writeFileSync('{outputFile}', reportContent, 'utf8');
 
 📊 Coverage Analysis:
 - P0 Coverage: {p0Coverage}% (Required: 100%) → {p0_status}
-- Overall Coverage: {overallCoverage}% (Target: 90%) → {overall_status}
+- P1 Coverage: {effectiveP1Coverage}% (PASS target: 90%, minimum: 80%) → {p1_status}
+- Overall Coverage: {overallCoverage}% (Minimum: 80%) → {overall_status}
 
 ✅ Decision Rationale:
 {rationale}
@@ -243,4 +263,4 @@ Then append the gate decision summary (from section 5 above) to the end of the e
 - Gate decision logic incorrect
 - Report missing or incomplete
 
-**Master Rule:** Gate decision MUST be deterministic based on clear criteria (P0 100%, overall 90/75%).
+**Master Rule:** Gate decision MUST be deterministic based on clear criteria (P0 100%, P1 90/80, overall >=80).

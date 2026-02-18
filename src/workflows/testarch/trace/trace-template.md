@@ -136,6 +136,31 @@ Note: This workflow does not generate tests. If gaps exist, run `*atdd` or `*aut
 
 ---
 
+### Coverage Heuristics Findings
+
+#### Endpoint Coverage Gaps
+
+- Endpoints without direct API tests: {endpoint_gap_count}
+- Examples:
+  - {endpoint_gap_1}
+  - {endpoint_gap_2}
+
+#### Auth/Authz Negative-Path Gaps
+
+- Criteria missing denied/invalid-path tests: {auth_negative_gap_count}
+- Examples:
+  - {auth_gap_1}
+  - {auth_gap_2}
+
+#### Happy-Path-Only Criteria
+
+- Criteria missing error/edge scenarios: {happy_path_only_gap_count}
+- Examples:
+  - {happy_path_gap_1}
+  - {happy_path_gap_2}
+
+---
+
 ### Quality Assessment
 
 #### Tests with Issues

@@ -489,7 +489,7 @@ TEA makes evidence-based gate decision and writes to separate file.
 
 | Metric             | Threshold | Actual | Status |
 | ------------------ | --------- | ------ | ------ |
-| P0/P1 Coverage     | >95%      | 100%   | ✅      |
+| P0/P1 Coverage     | P0=100%, P1>=90% | 100% / 100% | ✅      |
 | Test Quality Score | >80       | 84     | ✅      |
 | NFR Status         | PASS      | PASS   | ✅      |
 
@@ -609,7 +609,7 @@ TEA uses deterministic rules when decision_mode = "deterministic":
 
 **Evidence:**
 
-- P0 coverage: 60% (below 95% threshold)
+- P0 coverage: 60% (below required 100%)
 - Critical security vulnerability (CVE-2024-12345)
 - Test quality: 55/100
 
@@ -787,8 +787,16 @@ Use traceability in CI:
   run: |
     # Run trace Phase 1
     # Parse coverage percentages
-    if [ $P0_COVERAGE -lt 95 ]; then
-      echo "P0 coverage below 95%"
+    if [ $P0_COVERAGE -lt 100 ]; then
+      echo "P0 coverage below required 100%"
+      exit 1
+    fi
+    if [ $P1_COVERAGE -lt 80 ]; then
+      echo "P1 coverage below minimum 80%"
+      exit 1
+    fi
+    if [ $OVERALL_COVERAGE -lt 80 ]; then
+      echo "Overall coverage below minimum 80%"
       exit 1
     fi
 ```
@@ -916,7 +924,7 @@ Result: PARTIAL coverage (3/4 criteria)
 
 **Use CONCERNS** ⚠️ if:
 
-- P1 coverage 85-90% (close to threshold)
+- P1 coverage 80-89% (below PASS target, above minimum)
 - Minor quality issues (score 70-79)
 - NFRs have mitigation plans
 - Team agrees risk is acceptable
@@ -924,7 +932,7 @@ Result: PARTIAL coverage (3/4 criteria)
 **Use FAIL** ❌ if:
 
 - P0 coverage <100% (critical path gaps)
-- P1 coverage <85%
+- P1 coverage <80%
 - Critical security/performance issues
 - No mitigation possible
 

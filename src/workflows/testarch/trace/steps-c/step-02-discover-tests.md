@@ -58,7 +58,25 @@ Record test IDs, describe blocks, and priority markers if present.
 
 ---
 
-### 3. Save Progress
+## 3. Build Coverage Heuristics Inventory
+
+Capture explicit coverage signals so Phase 1 can detect common blind spots:
+
+- API endpoint coverage
+  - Inventory endpoints referenced by requirements/specs and endpoints exercised by API tests
+  - Mark endpoints with no direct tests
+- Authentication/authorization coverage
+  - Detect tests for login/session/token flows and permission-denied paths
+  - Mark auth/authz requirements with missing negative-path tests
+- Error-path coverage
+  - Detect validation, timeout, network-failure, and server-error scenarios
+  - Mark criteria with happy-path-only tests
+
+Record these findings in step output as `coverage_heuristics` for Step 3/4.
+
+---
+
+### 4. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
 
