@@ -9,7 +9,7 @@ outputFile: '{test_artifacts}/test-review.md'
 
 ## STEP GOAL
 
-Read outputs from 5 parallel quality subprocesses, calculate weighted overall score (0-100), and aggregate violations for report generation.
+Read outputs from 4 quality subprocesses, calculate weighted overall score (0-100), and aggregate violations for report generation.
 
 ---
 
@@ -17,7 +17,7 @@ Read outputs from 5 parallel quality subprocesses, calculate weighted overall sc
 
 - 📖 Read the entire step file before acting
 - ✅ Speak in `{communication_language}`
-- ✅ Read all 5 subprocess outputs
+- ✅ Read all 4 subprocess outputs
 - ✅ Calculate weighted overall score
 - ✅ Aggregate violations by severity
 - ❌ Do NOT re-evaluate quality (use subprocess outputs)
@@ -37,7 +37,7 @@ Read outputs from 5 parallel quality subprocesses, calculate weighted overall sc
 ### 1. Read All Subprocess Outputs
 
 ```javascript
-const dimensions = ['determinism', 'isolation', 'maintainability', 'coverage', 'performance'];
+const dimensions = ['determinism', 'isolation', 'maintainability', 'performance'];
 const results = {};
 
 dimensions.forEach((dim) => {
@@ -63,11 +63,10 @@ if (!allSucceeded) {
 
 ```javascript
 const weights = {
-  determinism: 0.25, // 25% - Most critical for reliability
-  isolation: 0.25, // 25% - Critical for parallel execution
-  maintainability: 0.2, // 20% - Important for long-term health
-  coverage: 0.15, // 15% - Important but can be improved iteratively
-  performance: 0.15, // 15% - Important but less critical than correctness
+  determinism: 0.3, // 30% - Reliability and flake prevention
+  isolation: 0.3, // 30% - Parallel safety and independence
+  maintainability: 0.25, // 25% - Readability and long-term health
+  performance: 0.15, // 15% - Speed and execution efficiency
 };
 ```
 
@@ -157,7 +156,6 @@ const reviewSummary = {
     determinism: results.determinism.score,
     isolation: results.isolation.score,
     maintainability: results.maintainability.score,
-    coverage: results.coverage.score,
     performance: results.performance.score,
   },
 
@@ -165,7 +163,6 @@ const reviewSummary = {
     determinism: results.determinism.grade,
     isolation: results.isolation.grade,
     maintainability: results.maintainability.grade,
-    coverage: results.coverage.grade,
     performance: results.performance.grade,
   },
 
@@ -177,7 +174,7 @@ const reviewSummary = {
 
   top_10_recommendations: prioritizedRecommendations,
 
-  subprocess_execution: 'PARALLEL (5 quality dimensions)',
+  subprocess_execution: 'PARALLEL (4 quality dimensions)',
   performance_gain: '~60% faster than sequential',
 };
 
@@ -198,8 +195,9 @@ fs.writeFileSync('/tmp/tea-test-review-summary-{{timestamp}}.json', JSON.stringi
 - Determinism:      {determinism_score}/100 ({determinism_grade})
 - Isolation:        {isolation_score}/100 ({isolation_grade})
 - Maintainability:  {maintainability_score}/100 ({maintainability_grade})
-- Coverage:         {coverage_score}/100 ({coverage_grade})
 - Performance:      {performance_score}/100 ({performance_grade})
+
+ℹ️ Coverage is excluded from `test-review` scoring. Use `trace` for coverage analysis and gates.
 
 ⚠️ Violations Found:
 - HIGH:   {high_count} violations
@@ -260,7 +258,7 @@ Load next step: `{nextStepFile}`
 
 ### ✅ SUCCESS:
 
-- All 5 subprocess outputs read and parsed
+- All 4 subprocess outputs read and parsed
 - Overall score calculated with proper weights
 - Violations aggregated correctly
 - Summary complete and saved
@@ -271,4 +269,4 @@ Load next step: `{nextStepFile}`
 - Score calculation incorrect
 - Summary missing or incomplete
 
-**Master Rule:** All 5 quality dimensions MUST be aggregated for accurate overall score.
+**Master Rule:** Aggregate determinism, isolation, maintainability, and performance only.

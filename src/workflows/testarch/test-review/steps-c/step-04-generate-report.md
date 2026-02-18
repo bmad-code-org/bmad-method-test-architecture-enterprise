@@ -42,6 +42,7 @@ Use `test-review-template.md` to produce `{outputFile}` including:
 - Critical findings with fixes
 - Warnings and recommendations
 - Context references (story/test-design if available)
+- Coverage boundary note: `test-review` does not score coverage. Direct coverage findings to `trace`.
 
 ---
 

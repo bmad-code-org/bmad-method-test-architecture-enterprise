@@ -14,6 +14,7 @@ lastSaved: ''
 ---
 
 Note: This review audits existing tests; it does not generate tests.
+Coverage mapping and coverage gates are out of scope here. Use `trace` for coverage decisions.
 
 ## Executive Summary
 
@@ -216,7 +217,7 @@ Grade:                   {grade}
 - **Fixtures Used**: {fixture_count} ({fixture_names})
 - **Data Factories Used**: {factory_count} ({factory_names})
 
-### Test Coverage Scope
+### Test Scope
 
 - **Test IDs**: {test_id_list}
 - **Priority Distribution**:
@@ -241,25 +242,12 @@ Grade:                   {grade}
 {If story file found:}
 
 - **Story File**: [{story_filename}]({story_path})
-- **Acceptance Criteria Mapped**: {ac_mapped}/{ac_total} ({ac_coverage}%)
 
 {If test-design found:}
 
 - **Test Design**: [{test_design_filename}]({test_design_path})
 - **Risk Assessment**: {risk_level}
 - **Priority Framework**: P0-P3 applied
-
-### Acceptance Criteria Validation
-
-{If story file available, map tests to ACs:}
-
-| Acceptance Criterion | Test ID   | Status                     | Notes   |
-| -------------------- | --------- | -------------------------- | ------- |
-| {AC_1}               | {test_id} | {✅ Covered \| ❌ Missing} | {notes} |
-| {AC_2}               | {test_id} | {✅ Covered \| ❌ Missing} | {notes} |
-| {AC_3}               | {test_id} | {✅ Covered \| ❌ Missing} | {notes} |
-
-**Coverage**: {covered_count}/{total_count} criteria covered ({coverage_percentage}%)
 
 ---
 
@@ -276,7 +264,8 @@ This review consulted the following knowledge base fragments:
 - **[selective-testing.md](../../../testarch/knowledge/selective-testing.md)** - Duplicate coverage detection
 - **[ci-burn-in.md](../../../testarch/knowledge/ci-burn-in.md)** - Flakiness detection patterns (10-iteration loop)
 - **[test-priorities.md](../../../testarch/knowledge/test-priorities.md)** - P0/P1/P2/P3 classification framework
-- **[traceability.md](../../../testarch/knowledge/traceability.md)** - Requirements-to-tests mapping
+
+For coverage mapping, consult `trace` workflow outputs.
 
 See [tea-index.csv](../../../testarch/tea-index.csv) for complete knowledge base.
 

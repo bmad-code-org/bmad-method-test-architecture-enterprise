@@ -1,6 +1,6 @@
 ---
 name: 'step-03-quality-evaluation'
-description: 'Orchestrate parallel quality dimension checks (5 subprocesses)'
+description: 'Orchestrate parallel quality dimension checks (4 subprocesses)'
 nextStepFile: './step-03f-aggregate-scores.md'
 ---
 
@@ -8,14 +8,21 @@ nextStepFile: './step-03f-aggregate-scores.md'
 
 ## STEP GOAL
 
-Launch 5 parallel subprocesses to evaluate independent quality dimensions simultaneously for maximum performance.
+Launch 4 parallel subprocesses to evaluate test quality dimensions:
+
+- Determinism
+- Isolation
+- Maintainability
+- Performance
+
+Coverage is intentionally excluded from this workflow and handled by `trace`.
 
 ## MANDATORY EXECUTION RULES
 
 - 📖 Read the entire step file before acting
 - ✅ Speak in `{communication_language}`
-- ✅ Launch FIVE subprocesses in PARALLEL
-- ✅ Wait for ALL subprocesses to complete
+- ✅ Launch four subprocesses in PARALLEL
+- ✅ Wait for all subprocesses to complete
 - ❌ Do NOT evaluate quality sequentially (use subprocesses)
 - ❌ Do NOT proceed until all subprocesses finish
 
@@ -57,33 +64,27 @@ const subprocessContext = {
 
 ---
 
-### 2. Launch 5 Parallel Quality Subprocesses
+### 2. Launch 4 Parallel Quality Subprocesses
 
-**Subprocess A: Determinism Check**
+**Subprocess A: Determinism**
 
 - File: `./step-03a-subprocess-determinism.md`
 - Output: `/tmp/tea-test-review-determinism-${timestamp}.json`
 - Status: Running in parallel... ⟳
 
-**Subprocess B: Isolation Check**
+**Subprocess B: Isolation**
 
 - File: `./step-03b-subprocess-isolation.md`
 - Output: `/tmp/tea-test-review-isolation-${timestamp}.json`
 - Status: Running in parallel... ⟳
 
-**Subprocess C: Maintainability Check**
+**Subprocess C: Maintainability**
 
 - File: `./step-03c-subprocess-maintainability.md`
 - Output: `/tmp/tea-test-review-maintainability-${timestamp}.json`
 - Status: Running in parallel... ⟳
 
-**Subprocess D: Coverage Check**
-
-- File: `./step-03d-subprocess-coverage.md`
-- Output: `/tmp/tea-test-review-coverage-${timestamp}.json`
-- Status: Running in parallel... ⟳
-
-**Subprocess E: Performance Check**
+**Subprocess D: Performance**
 
 - File: `./step-03e-subprocess-performance.md`
 - Output: `/tmp/tea-test-review-performance-${timestamp}.json`
@@ -94,22 +95,8 @@ const subprocessContext = {
 ### 3. Wait for All Subprocesses
 
 ```
-⏳ Waiting for 5 quality subprocesses to complete...
-  ├── Subprocess A (Determinism): Running... ⟳
-  ├── Subprocess B (Isolation): Running... ⟳
-  ├── Subprocess C (Maintainability): Running... ⟳
-  ├── Subprocess D (Coverage): Running... ⟳
-  └── Subprocess E (Performance): Running... ⟳
-
-[... time passes ...]
-
-  ├── Subprocess A (Determinism): Complete ✅
-  ├── Subprocess B (Isolation): Complete ✅
-  ├── Subprocess C (Maintainability): Complete ✅
-  ├── Subprocess D (Coverage): Complete ✅
-  └── Subprocess E (Performance): Complete ✅
-
-✅ All 5 quality subprocesses completed successfully!
+⏳ Waiting for 4 quality subprocesses to complete...
+✅ All 4 quality subprocesses completed successfully!
 ```
 
 ---
@@ -117,7 +104,7 @@ const subprocessContext = {
 ### 4. Verify All Outputs Exist
 
 ```javascript
-const outputs = ['determinism', 'isolation', 'maintainability', 'coverage', 'performance'].map(
+const outputs = ['determinism', 'isolation', 'maintainability', 'performance'].map(
   (dim) => `/tmp/tea-test-review-${dim}-${timestamp}.json`,
 );
 
@@ -134,7 +121,7 @@ outputs.forEach((output) => {
 
 ```
 🚀 Performance Report:
-- Execution Mode: PARALLEL (5 subprocesses)
+- Execution Mode: PARALLEL (4 subprocesses)
 - Total Elapsed: ~max(all subprocesses) minutes
 - Sequential Would Take: ~sum(all subprocesses) minutes
 - Performance Gain: ~60-70% faster!
@@ -148,7 +135,7 @@ Load next step: `{nextStepFile}`
 
 The aggregation step (3F) will:
 
-- Read all 5 subprocess outputs
+- Read all 4 subprocess outputs
 - Calculate weighted overall score (0-100)
 - Aggregate violations by severity
 - Generate review report with top suggestions
@@ -159,7 +146,7 @@ The aggregation step (3F) will:
 
 Proceed to Step 3F when:
 
-- ✅ All 5 subprocesses completed successfully
+- ✅ All 4 subprocesses completed successfully
 - ✅ All output files exist and are valid JSON
 - ✅ Performance metrics displayed
 
@@ -171,7 +158,7 @@ Proceed to Step 3F when:
 
 ### ✅ SUCCESS:
 
-- All 5 subprocesses launched and completed
+- All 4 subprocesses launched and completed
 - Output files generated and valid
 - Parallel execution achieved ~60% performance gain
 

@@ -232,15 +232,15 @@ Quick reference for all 9 TEA (Test Engineering Architect) workflows. For detail
 - `test-review.md` with quality score (0-100)
 - Critical issues with fixes
 - Recommendations
-- Category scores (Determinism, Isolation, Assertions, Structure, Performance)
+- Category scores (Determinism, Isolation, Maintainability, Performance)
+- Coverage guidance is informational only; coverage scoring and gates are handled by `trace`
 
 **Scoring Categories:**
 
-- Determinism: 35 points
-- Isolation: 25 points
-- Assertions: 20 points
-- Structure: 10 points
-- Performance: 10 points
+- Determinism: 30%
+- Isolation: 30%
+- Maintainability: 25%
+- Performance: 15%
 
 **How-To Guide:** [Run Test Review](/docs/how-to/workflows/run-test-review.md)
 

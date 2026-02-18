@@ -7,6 +7,7 @@ Use this checklist to validate that the test quality review workflow completed s
 ## Prerequisites
 
 Note: `test-review` is optional and only audits existing tests; it does not generate tests.
+Coverage analysis is out of scope for this workflow. Use `trace` for coverage metrics and release gate decisions.
 
 ### Test File Discovery
 
@@ -71,6 +72,8 @@ Note: `test-review` is optional and only audits existing tests; it does not gene
 - [ ] Shared state or globals detected
 
 ### Step 3: Quality Criteria Validation
+
+Coverage criteria are intentionally excluded from this checklist.
 
 **For Each Enabled Criterion:**
 

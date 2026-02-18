@@ -96,6 +96,8 @@ If available:
 
 Summarize what was found.
 
+Coverage mapping and coverage gates are out of scope in `test-review`. Route those concerns to `trace`.
+
 ---
 
 ## 4. Save Progress

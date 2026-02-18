@@ -7,6 +7,8 @@ description: Audit test quality using TEA's comprehensive knowledge base and get
 
 Use TEA's `test-review` workflow to audit test quality with objective scoring and actionable feedback. TEA reviews tests against its knowledge base of best practices.
 
+Coverage scoring is intentionally excluded from `test-review`. Use `trace` for requirements coverage analysis and release gate decisions.
+
 ## When to Use This
 
 - Want to validate test quality objectively
@@ -15,6 +17,7 @@ Use TEA's `test-review` workflow to audit test quality with objective scoring an
 - Reviewing team-written tests
 - Auditing AI-generated tests
 - Onboarding new team members (show good patterns)
+- Validating migration quality before coverage expansion
 
 ## Prerequisites
 
@@ -311,42 +314,34 @@ test('should show validation error for expired card', async ({ page }) => {});
 
 ## Quality Scores by Category
 
-| Category        | Score | Target | Status               |
-| --------------- | ----- | ------ | -------------------- |
-| **Determinism** | 26/35 | 30/35  | ⚠️ Needs Improvement |
-| **Isolation**   | 22/25 | 20/25  | ✅ Good              |
-| **Assertions**  | 18/20 | 16/20  | ✅ Good              |
-| **Structure**   | 7/10  | 8/10   | ⚠️ Minor Issues      |
-| **Performance** | 3/10  | 8/10   | ❌ Critical          |
+| Category            | Score | Target | Status               |
+| ------------------- | ----- | ------ | -------------------- |
+| **Determinism**     | 72    | 80     | ⚠️ Needs Improvement |
+| **Isolation**       | 88    | 80     | ✅ Good              |
+| **Maintainability** | 70    | 80     | ⚠️ Needs Improvement |
+| **Performance**     | 60    | 80     | ❌ Critical          |
 
 ### Scoring Breakdown
 
-**Determinism (35 points max):**
+**Determinism (30% weight):**
 
-- No hard waits: 0/10 ❌ (found 3 instances)
-- No conditionals: 8/10 ⚠️ (found 2 instances)
-- No try-catch flow control: 10/10 ✅
-- Network-first patterns: 8/15 ⚠️ (some tests missing)
+- Hard waits and race conditions penalized
+- Unstable control flow patterns penalized
 
-**Isolation (25 points max):**
+**Isolation (30% weight):**
 
-- Self-cleaning: 20/20 ✅
-- No global state: 5/5 ✅
-- Parallel-safe: 0/0 ✅ (not tested)
+- Shared state and order dependency penalized
+- Cleanup and parallel-safety rewarded
 
-**Assertions (20 points max):**
+**Maintainability (25% weight):**
 
-- Explicit in test body: 15/15 ✅
-- Specific and meaningful: 3/5 ⚠️ (some weak assertions)
+- Overly large files and copy-paste patterns penalized
+- Naming clarity and structure rewarded
 
-**Structure (10 points max):**
+**Performance (15% weight):**
 
-- Test size < 300 lines: 5/5 ✅
-- Clear names: 2/5 ⚠️ (some vague names)
-
-**Performance (10 points max):**
-
-- Execution time < 1.5 min: 3/10 ❌ (3 tests exceed limit)
+- Serial bottlenecks and inefficient setup penalized
+- Parallel-friendly structure rewarded
 
 ## Files Reviewed
 
@@ -402,30 +397,29 @@ TEA reviewed against these patterns:
 
 ### Scoring Criteria
 
-**Determinism (35 points):**
+**Determinism (30%):**
 - Tests produce same result every run
 - No random failures (flakiness)
 - No environment-dependent behavior
 
-**Isolation (25 points):**
+**Isolation (30%):**
 - Tests don't depend on each other
 - Can run in any order
 - Clean up after themselves
 
-**Assertions (20 points):**
-- Verify actual behavior
-- Specific and meaningful
-- Not abstracted away in helpers
-
-**Structure (10 points):**
+**Maintainability (25%):**
 - Readable and maintainable
 - Appropriate size
 - Clear naming
 
-**Performance (10 points):**
+**Performance (15%):**
 - Fast execution
 - Efficient selectors
 - No unnecessary waits
+
+**Coverage:**
+- Not scored in `test-review`
+- Use `trace` for coverage percentage, requirement mapping, and gate decisions
 
 ## What You Get
 
@@ -619,8 +613,8 @@ Don't try to fix everything at once.
 ## Related Guides
 
 - [How to Run ATDD](/docs/how-to/workflows/run-atdd.md) - Generate tests to review
-- [How to Run Automate](/docs/how-to/workflows/run-automate.md) - Expand coverage to review
-- [How to Run Trace](/docs/how-to/workflows/run-trace.md) - Coverage complements quality
+- [How to Run Automate](/docs/how-to/workflows/run-automate.md) - Expand and improve tests before review
+- [How to Run Trace](/docs/how-to/workflows/run-trace.md) - Coverage analysis and gate decisions
 
 ## Understanding the Concepts
 
