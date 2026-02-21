@@ -38,7 +38,12 @@ TEA will ask about:
 - Your tech stack (React, Node, etc.)
 - Preferred test framework:
   - **Frontend/Fullstack**: Playwright, Cypress
-  - **Backend**: Jest, Vitest
+  - **Backend (Node.js)**: Jest, Vitest, or Playwright (API testing via playwright-utils)
+  - **Backend (Python)**: pytest, or Playwright for Python
+  - **Backend (Java/Kotlin)**: JUnit, or Playwright for Java
+  - **Backend (Go)**: Go test
+  - **Backend (C#/.NET)**: dotnet test / xUnit, or Playwright for .NET
+  - **Backend (Ruby)**: RSpec
 - Testing scope (E2E, integration, unit, API)
 - CI/CD platform (GitHub Actions, GitLab CI, Jenkins, Azure DevOps, Harness, etc.)
 
@@ -46,13 +51,15 @@ TEA will ask about:
 
 TEA generates:
 
-- **Test scaffold** — Directory structure and config files
-- **Sample specs** — Example tests following best practices
+- **Test scaffold** — Directory structure and config files (language-idiomatic)
+- **Sample specs** — Example tests following best practices for your framework
 - **`.env.example`** — Environment variable template
-- **`.nvmrc`** — Node version specification
+- **Version file** — `.nvmrc` (Node.js), `.python-version` (Python), `global.json` (.NET), etc.
 - **README updates** — Testing documentation
 
 ## What You Get
+
+**Frontend/Fullstack (Node.js):**
 
 ```
 tests/
@@ -64,6 +71,20 @@ tests/
 ├── playwright.config.ts  # or cypress.config.ts
 └── README.md
 ```
+
+**Backend (Python example):**
+
+```
+tests/
+├── unit/
+│   └── test_example.py
+├── integration/
+├── api/
+├── conftest.py
+└── README.md
+```
+
+> **Note:** Playwright has official bindings for Python, Java, and .NET — making it viable for API testing across languages, not just Node.js.
 
 ## Optional: Playwright Utils Integration
 

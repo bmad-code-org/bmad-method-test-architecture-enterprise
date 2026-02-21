@@ -225,12 +225,12 @@ Detected or configured project stack type. Controls CI pipeline generation and f
 
 **Purpose:** Determines stack-specific behavior:
 
-| Stack Type  | Behavior                                                                         |
-| ----------- | -------------------------------------------------------------------------------- |
-| `auto`      | Auto-detect from project manifests (playwright.config, jest.config, etc.)        |
-| `frontend`  | Browser-based tests (Playwright/Cypress), browser install in CI, burn-in enabled |
-| `backend`   | API/unit tests (Jest/Vitest), no browser install, burn-in skipped by default     |
-| `fullstack` | Both frontend and backend tests, full CI pipeline                                |
+| Stack Type  | Behavior                                                                                                   |
+| ----------- | ---------------------------------------------------------------------------------------------------------- |
+| `auto`      | Auto-detect from project manifests (playwright.config, jest.config, etc.)                                  |
+| `frontend`  | Browser-based tests (Playwright/Cypress), browser install in CI, burn-in enabled                           |
+| `backend`   | API/unit tests (pytest, JUnit, Go test, Jest/Vitest, etc.), no browser install, burn-in skipped by default |
+| `fullstack` | Both frontend and backend tests, full CI pipeline                                                          |
 
 **Affects Workflows:**
 
@@ -257,7 +257,7 @@ CI/CD platform for pipeline generation.
 
 **Default:** `"auto"`
 
-**Options:** `"auto"` | `"github-actions"` | `"gitlab-ci"` | `"jenkins"` | `"azure-devops"` | `"harness"` | `"circle-ci"`
+**Options:** `"auto"` | `"github-actions"` | `"gitlab-ci"` | `"jenkins"` | `"azure-devops"` | `"harness"` | `"circle-ci"` | `"other"`
 
 **Purpose:** Controls which CI template is used for pipeline generation.
 

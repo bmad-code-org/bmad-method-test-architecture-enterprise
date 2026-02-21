@@ -87,7 +87,7 @@ TEA variables are defined in `src/module.yaml` and prompted during install:
 - `test_artifacts` — base output folder for test artifacts
 - `tea_use_playwright_utils` — enable Playwright Utils integration (boolean)
 - `tea_browser_automation` — browser automation mode: auto, cli, mcp, none (string)
-- `test_framework` — detected or configured test framework (Playwright, Cypress, Jest, Vitest)
+- `test_framework` — detected or configured test framework (Playwright, Cypress, Jest, Vitest, pytest, JUnit, Go test, dotnet test, RSpec)
 - `test_stack_type` — detected or configured stack type (frontend, backend, fullstack)
 - `ci_platform` — CI platform (auto, github-actions, gitlab-ci, jenkins, azure-devops, harness, circle-ci)
 - `risk_threshold` — risk cutoff for mandatory testing (future)

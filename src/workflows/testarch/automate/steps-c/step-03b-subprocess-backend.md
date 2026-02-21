@@ -185,8 +185,6 @@ Write JSON to temp file: `/tmp/tea-automate-backend-tests-{{timestamp}}.json`
   "status": "complete",
   "success": true,
   "subprocess": "backend-tests",
-  "test_count": 15,
-  "fixture_needs": ["databaseFixture", "userFactory", "mockHttpClient"],
   "knowledge_fragments_used": ["test-levels-framework", "test-priorities-matrix", "data-factories"],
   "summary": "Generated 15 backend test cases (10 unit, 4 integration, 1 contract)"
 }
