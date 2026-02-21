@@ -225,7 +225,7 @@ export const waitForApiResponse = async (page: Page, urlPattern: string) => {
 
 ```javascript
 const e2eCount = e2eTestsOutput ? e2eTestsOutput.test_count : 0;
-const backendCount = backendTestsOutput ? backendTestsOutput.coverageSummary.totalTests : 0;
+const backendCount = backendTestsOutput ? (backendTestsOutput.coverageSummary?.totalTests ?? 0) : 0;
 
 const summary = {
   detected_stack: '{detected_stack}',
@@ -238,18 +238,30 @@ const summary = {
   e2e_test_files: e2eTestsOutput ? e2eTestsOutput.tests.length : 0,
   backend_test_files: backendTestsOutput ? backendTestsOutput.testsGenerated.length : 0,
   priority_coverage: {
-    P0: /* sum P0 tests from all subprocesses */,
-    P1: /* sum P1 tests from all subprocesses */,
-    P2: /* sum P2 tests from all subprocesses */,
-    P3: /* sum P3 tests from all subprocesses */
+    P0:
+      (apiTestsOutput.priority_coverage?.P0 ?? 0) +
+      (e2eTestsOutput?.priority_coverage?.P0 ?? 0) +
+      (backendTestsOutput?.testsGenerated?.reduce((sum, t) => sum + (t.priority_coverage?.P0 ?? 0), 0) ?? 0),
+    P1:
+      (apiTestsOutput.priority_coverage?.P1 ?? 0) +
+      (e2eTestsOutput?.priority_coverage?.P1 ?? 0) +
+      (backendTestsOutput?.testsGenerated?.reduce((sum, t) => sum + (t.priority_coverage?.P1 ?? 0), 0) ?? 0),
+    P2:
+      (apiTestsOutput.priority_coverage?.P2 ?? 0) +
+      (e2eTestsOutput?.priority_coverage?.P2 ?? 0) +
+      (backendTestsOutput?.testsGenerated?.reduce((sum, t) => sum + (t.priority_coverage?.P2 ?? 0), 0) ?? 0),
+    P3:
+      (apiTestsOutput.priority_coverage?.P3 ?? 0) +
+      (e2eTestsOutput?.priority_coverage?.P3 ?? 0) +
+      (backendTestsOutput?.testsGenerated?.reduce((sum, t) => sum + (t.priority_coverage?.P3 ?? 0), 0) ?? 0),
   },
   knowledge_fragments_used: [
     ...apiTestsOutput.knowledge_fragments_used,
     ...(e2eTestsOutput ? e2eTestsOutput.knowledge_fragments_used : []),
-    ...(backendTestsOutput ? (backendTestsOutput.knowledge_fragments_used || []) : [])
+    ...(backendTestsOutput ? backendTestsOutput.knowledge_fragments_used || [] : []),
   ],
   subprocess_execution: `PARALLEL (based on ${detected_stack})`,
-  performance_gain: '~40-70% faster than sequential'
+  performance_gain: '~40-70% faster than sequential',
 };
 ```
 

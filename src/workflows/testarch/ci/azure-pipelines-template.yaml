@@ -25,6 +25,8 @@ pr:
 variables:
   DEFAULT_NODE_VERSION: "24"
   npm_config_cache: $(Pipeline.Workspace)/.npm
+  # Set TEST_STACK_TYPE to 'backend' to skip Playwright browser installs
+  TEST_STACK_TYPE: "" # Values: frontend, backend, fullstack (leave empty for auto)
 
 stages:
   # Lint stage - Code quality checks
@@ -91,8 +93,9 @@ stages:
           - script: npm ci
             displayName: "Install dependencies" # Replace with INSTALL_CMD
 
-          # Frontend/Fullstack only — remove this step for backend-only stacks
+          # Frontend/Fullstack only — skipped for backend-only stacks
           - script: npx playwright install --with-deps chromium
+            condition: ne(variables['TEST_STACK_TYPE'], 'backend')
             displayName: "Install Playwright browsers" # Replace with BROWSER_INSTALL
 
           - script: npm run test:e2e -- --shard=$(SHARD_INDEX)/4
@@ -132,8 +135,9 @@ stages:
           - script: npm ci
             displayName: "Install dependencies" # Replace with INSTALL_CMD
 
-          # Frontend/Fullstack only — remove this step for backend-only stacks
+          # Frontend/Fullstack only — skipped for backend-only stacks
           - script: npx playwright install --with-deps chromium
+            condition: ne(variables['TEST_STACK_TYPE'], 'backend')
             displayName: "Install Playwright browsers" # Replace with BROWSER_INSTALL
 
           - script: |

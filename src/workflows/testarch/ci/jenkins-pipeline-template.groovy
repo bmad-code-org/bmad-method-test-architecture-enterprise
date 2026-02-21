@@ -8,13 +8,17 @@
 //   TEST_CMD          - main test command (e.g., npm run test:e2e, npm test, npx vitest)
 //   LINT_CMD          - lint command (e.g., npm run lint)
 //   BROWSER_INSTALL   - browser install command (frontend/fullstack only; omit for backend)
-//   NODE_VERSION      - Node.js version (read from .nvmrc or default to 24)
+//
+// Node.js version management — choose one:
+//   Option A (recommended): Configure NodeJS Plugin in Jenkins Global Tool Configuration,
+//     then add to pipeline:  tools { nodejs 'NodeJS-24' }
+//   Option B: Use nvm (pre-installed on agent) — this template uses nvm as the default
+//   Option C: Use a Docker agent — agent { docker { image 'node:24' } }
 
 pipeline {
     agent any
 
     environment {
-        NODE_VERSION = sh(script: 'cat .nvmrc 2>/dev/null || echo "24"', returnStdout: true).trim()
         CI = 'true'
     }
 
@@ -24,10 +28,27 @@ pipeline {
     }
 
     stages {
-        // Lint stage - Code quality checks
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
         stage('Install') {
             steps {
-                sh 'npm ci' // Replace with INSTALL_CMD
+                // Detect and apply Node.js version from .nvmrc (falls back to v24)
+                // If using NodeJS Plugin instead, remove this block and add: tools { nodejs 'NodeJS-24' }
+                sh '''
+                    export NVM_DIR="$HOME/.nvm"
+                    [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+                    NODE_VERSION=$(cat .nvmrc 2>/dev/null || echo "24")
+                    nvm install "$NODE_VERSION" 2>/dev/null || true
+                    nvm use "$NODE_VERSION" 2>/dev/null || true
+                    node --version
+                    npm ci
+                ''' // Replace npm ci with INSTALL_CMD
+                // Stash installed dependencies so parallel shards can restore them
+                stash includes: 'node_modules/**', name: 'deps'
             }
         }
 
@@ -38,10 +59,12 @@ pipeline {
         }
 
         // Test stage - Parallel execution with sharding
+        // Each shard restores dependencies via unstash for workspace safety
         stage('Test') {
             parallel {
                 stage('Shard 1') {
                     steps {
+                        unstash 'deps'
                         // Frontend/Fullstack only — remove browser install for backend-only stacks
                         sh 'npx playwright install --with-deps chromium' // Replace with BROWSER_INSTALL
                         sh 'npm run test:e2e -- --shard=1/4' // Replace with TEST_CMD + shard args
@@ -49,18 +72,21 @@ pipeline {
                 }
                 stage('Shard 2') {
                     steps {
+                        unstash 'deps'
                         sh 'npx playwright install --with-deps chromium' // Replace with BROWSER_INSTALL
                         sh 'npm run test:e2e -- --shard=2/4' // Replace with TEST_CMD + shard args
                     }
                 }
                 stage('Shard 3') {
                     steps {
+                        unstash 'deps'
                         sh 'npx playwright install --with-deps chromium' // Replace with BROWSER_INSTALL
                         sh 'npm run test:e2e -- --shard=3/4' // Replace with TEST_CMD + shard args
                     }
                 }
                 stage('Shard 4') {
                     steps {
+                        unstash 'deps'
                         sh 'npx playwright install --with-deps chromium' // Replace with BROWSER_INSTALL
                         sh 'npm run test:e2e -- --shard=4/4' // Replace with TEST_CMD + shard args
                     }
