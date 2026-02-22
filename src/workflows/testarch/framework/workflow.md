@@ -1,6 +1,6 @@
 ---
 name: testarch-framework
-description: 'Initialize production-ready test framework architecture (Playwright or Cypress) with fixtures, helpers, and configuration'
+description: Initialize test framework with Playwright or Cypress. Use when user says 'lets setup test framework' or 'I want to initialize testing framework'
 web_bundle: true
 ---
 

@@ -1,7 +1,6 @@
 # Test Architect workflow: test-design
 name: testarch-test-design
-description: "Dual-mode workflow: (1) System-level testability review in Solutioning phase, or (2) Epic-level test planning in Implementation phase. Auto-detects mode based on project phase."
-author: "BMad"
+description: "Create system-level or epic-level test plans. Use when the user says 'lets design test plan' or 'I want to create test strategy'"
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -76,4 +75,3 @@ execution_hints:
   autonomous: true # Proceed without user input unless blocked
   iterative: true
 
-web_bundle: false

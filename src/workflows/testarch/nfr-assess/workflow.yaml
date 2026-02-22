@@ -1,7 +1,6 @@
 # Test Architect workflow: nfr-assess
 name: testarch-nfr
-description: "Assess non-functional requirements (performance, security, reliability, maintainability) before release with evidence-based validation"
-author: "BMad"
+description: "Assess NFRs like performance security and reliability. Use when the user says 'lets assess NFRs' or 'I want to evaluate non-functional requirements'"
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -47,4 +46,3 @@ execution_hints:
   autonomous: true # Proceed without user input unless blocked
   iterative: true
 
-web_bundle: false

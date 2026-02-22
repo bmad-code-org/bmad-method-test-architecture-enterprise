@@ -1,6 +1,6 @@
 ---
 name: testarch-atdd
-description: 'Generate failing acceptance tests before implementation using TDD red-green-refactor cycle'
+description: Generate failing acceptance tests using TDD cycle. Use when user says 'lets write acceptance tests' or 'I want to do ATDD'
 web_bundle: true
 ---
 

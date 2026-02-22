@@ -1,6 +1,6 @@
 ---
 name: testarch-test-design
-description: 'Epic-level test plan (Phase 4)'
+description: Create system-level or epic-level test plans. Use when user says 'lets design test plan' or 'I want to create test strategy'
 web_bundle: true
 ---
 

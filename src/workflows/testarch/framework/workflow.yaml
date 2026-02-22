@@ -1,7 +1,6 @@
 # Test Architect workflow: framework
 name: testarch-framework
-description: "Initialize production-ready test framework architecture (Playwright or Cypress) with fixtures, helpers, and configuration"
-author: "BMad"
+description: "Initialize test framework with Playwright or Cypress. Use when the user says 'lets setup test framework' or 'I want to initialize testing framework'"
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -47,4 +46,3 @@ execution_hints:
   autonomous: true # Proceed without user input unless blocked
   iterative: true
 
-web_bundle: false

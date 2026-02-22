@@ -1,7 +1,6 @@
 # Test Architect workflow: ci
 name: testarch-ci
-description: "Scaffold CI/CD quality pipeline with test execution, burn-in loops, and artifact collection"
-author: "BMad"
+description: "Scaffold CI/CD quality pipeline with test execution. Use when the user says 'lets setup CI pipeline' or 'I want to create quality gates'"
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -47,4 +46,3 @@ execution_hints:
   autonomous: true # Proceed without user input unless blocked
   iterative: true
 
-web_bundle: false

@@ -1,7 +1,6 @@
 # Test Architect workflow: test-review
 name: testarch-test-review
-description: "Review test quality using comprehensive knowledge base and best practices validation"
-author: "BMad"
+description: "Review test quality using best practices validation. Use when the user says 'lets review tests' or 'I want to evaluate test quality'"
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -47,4 +46,3 @@ execution_hints:
   autonomous: true # Proceed without user input unless blocked
   iterative: true # Can review multiple files
 
-web_bundle: false

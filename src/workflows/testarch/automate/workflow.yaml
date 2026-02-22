@@ -1,7 +1,6 @@
 # Test Architect workflow: automate
 name: testarch-automate
-description: "Expand test automation coverage after implementation or analyze existing codebase to generate comprehensive test suite"
-author: "BMad"
+description: "Expand test automation coverage for codebase. Use when the user says 'lets expand test coverage' or 'I want to automate tests'"
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -52,4 +51,3 @@ execution_hints:
   autonomous: true # Proceed without user input unless blocked
   iterative: true
 
-web_bundle: false

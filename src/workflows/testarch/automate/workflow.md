@@ -1,6 +1,6 @@
 ---
 name: testarch-automate
-description: 'Expand test automation coverage after implementation or analyze existing codebase to generate comprehensive test suite'
+description: Expand test automation coverage for codebase. Use when user says 'lets expand test coverage' or 'I want to automate tests'
 web_bundle: true
 ---
 
