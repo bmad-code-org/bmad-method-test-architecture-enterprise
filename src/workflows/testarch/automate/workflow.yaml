@@ -1,6 +1,7 @@
 # Test Architect workflow: automate
 name: testarch-automate
-description: "Expand test automation coverage for codebase. Use when the user says 'lets expand test coverage' or 'I want to automate tests'"
+# prettier-ignore
+description: 'Expand test automation coverage for codebase. Use when the user says "lets expand test coverage" or "I want to automate tests"'
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -50,4 +51,3 @@ execution_hints:
   interactive: false # Minimize prompts
   autonomous: true # Proceed without user input unless blocked
   iterative: true
-

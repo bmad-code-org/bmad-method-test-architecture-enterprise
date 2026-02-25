@@ -338,6 +338,16 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 - Impacts: `framework`, `atdd`, `automate`, `test-review`, `ci`
 - Utilities include: api-request, auth-session, network-recorder, intercept-network-call, recurse, log, file-utils, burn-in, network-error-monitor, fixtures-composition
 
+### Pact.js Utils (`@seontechnologies/pactjs-utils`)
+
+Production-ready contract testing utilities that reduce raw Pact.js boilerplate and standardize provider verification patterns.
+
+- Install: `npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact`
+- Config: `tea_use_pactjs_utils: true` (default is `true`)
+- Impacts: `framework`, `atdd`, `automate`, `test-design`, `test-review`, `ci`
+- Utilities include: createProviderState, toJsonMap, buildVerifierOptions, buildMessageVerifierOptions, createRequestFilter, noOpRequestFilter, handlePactBrokerUrlAndSelectors, getProviderVersionTags
+- Supports local monorepo flow (`pactUrls`) and remote broker flow (`PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`)
+
 ### Browser Automation (Playwright CLI + MCP)
 
 **CLI and MCP are complementary tools, not competitors.** Auto mode uses each where it shines — CLI for token-efficient stateless snapshots, MCP for rich stateful automation — while giving users full control to override when they know better.
@@ -370,6 +380,34 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 
 **To disable**: set `tea_browser_automation: "none"` in config or skip both CLI and MCP installation.
 
+### Pact MCP (SmartBear MCP for PactFlow/Pact Broker)
+
+Optional MCP integration for design-time broker interaction in contract testing workflows.
+
+**Configuration** (`_bmad/tea/config.yaml`):
+
+    tea_pact_mcp: "mcp"  # mcp | none
+
+| Mode   | What happens                                                                                                        |
+| ------ | ------------------------------------------------------------------------------------------------------------------- |
+| `mcp`  | TEA can use SmartBear MCP tools for provider-state discovery, test review support, can-i-deploy, and matrix checks. |
+| `none` | TEA uses CLI/script guidance only for broker interactions.                                                          |
+
+**Setup:**
+
+- Install: `npm install -g @smartbear/mcp` (or use `npx -y @smartbear/mcp@latest`)
+- Claude Code example: `claude mcp add --transport stdio smartbear -- npx -y @smartbear/mcp@latest`
+- Required broker env vars: `PACT_BROKER_BASE_URL` and token/basic-auth credentials
+
+**Which workflows benefit:**
+
+- `test-design` — Fetch provider states and broker landscape
+- `automate` — Assist pact test generation with broker context
+- `test-review` — Review pact tests against broker-informed best practices
+- `ci` — Reference can-i-deploy and matrix checks
+
+**Note:** Pact MCP complements `pactjs-utils`. MCP helps at planning/review time; `pactjs-utils` is used in runtime test code.
+
 ---
 
 ## Complete TEA Documentation Navigation
@@ -400,6 +438,7 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 
 - [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) - Production-ready fixtures and 9 utilities
 - [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) - Playwright CLI + MCP setup, auto mode
+- [TEA Configuration Reference (Pact.js Utils + Pact MCP)](/docs/reference/configuration.md#tea_use_pactjs_utils) - Contract-testing integrations and setup
 
 ### Use-Case Guides
 
@@ -416,7 +455,7 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md) - Definition of Done, determinism, isolation, explicit assertions
 - [Fixture Architecture](/docs/explanation/fixture-architecture.md) - Pure function → fixture → composition pattern
 - [Network-First Patterns](/docs/explanation/network-first-patterns.md) - Intercept-before-navigate, eliminating flakiness
-- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - Context engineering with tea-index.csv, 35 fragments
+- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - Context engineering with tea-index.csv, 40 fragments
 - [Engagement Models](/docs/explanation/engagement-models.md) - TEA Lite, TEA Solo, TEA Integrated (5 models explained)
 
 ### Philosophy & Design
@@ -431,5 +470,5 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 
 - [TEA Command Reference](/docs/reference/commands.md) - All 9 workflows: inputs, outputs, phases, frequency
 - [TEA Configuration Reference](/docs/reference/configuration.md) - Config options, file locations, setup examples
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - 35 fragments categorized and explained
+- [Knowledge Base Index](/docs/reference/knowledge-base.md) - 40 fragments categorized and explained
 - [Glossary - TEA Section](/docs/glossary/index.md#test-architect-tea-concepts) - 20 TEA-specific terms defined

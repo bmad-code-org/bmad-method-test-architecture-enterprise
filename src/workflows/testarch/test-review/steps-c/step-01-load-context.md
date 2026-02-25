@@ -79,11 +79,27 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile.
 
+### Pact.js Utils Loading
+
+**If `tea_use_pactjs_utils` is enabled** (and contract tests detected in review scope):
+
+Load: `pactjs-utils-overview.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md` (the 3 most relevant for reviewing provider verification tests)
+
+**If `tea_use_pactjs_utils` is disabled** but contract tests are in review scope:
+
+Load: `contract-testing.md`
+
+### Pact MCP Loading
+
+**If `tea_pact_mcp` is `"mcp"`:**
+
+Load: `pact-mcp.md` — enables agent to use SmartBear MCP "Review Pact Tests" tool for automated best-practice feedback during test review.
+
 ## 2. Load Knowledge Base
 
 From `{knowledgeIndex}` load:
 
-Read `{config_source}` and check `tea_use_playwright_utils` and `tea_browser_automation` to select the correct fragment set.
+Read `{config_source}` and check `tea_use_playwright_utils`, `tea_use_pactjs_utils`, `tea_pact_mcp`, and `tea_browser_automation` to select the correct fragment set.
 
 **Core:**
 
@@ -114,6 +130,18 @@ Read `{config_source}` and check `tea_use_playwright_utils` and `tea_browser_aut
 **MCP Patterns (if `tea_browser_automation` is "mcp" or "auto"):**
 
 - (existing MCP-related fragments, if any are added in future)
+
+**Pact.js Utils (if enabled and contract tests in review scope):**
+
+- `pactjs-utils-overview.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`
+
+**Contract Testing (if pactjs-utils disabled but contract tests in review scope):**
+
+- `contract-testing.md`
+
+**Pact MCP (if tea_pact_mcp is "mcp"):**
+
+- `pact-mcp.md`
 
 ---
 

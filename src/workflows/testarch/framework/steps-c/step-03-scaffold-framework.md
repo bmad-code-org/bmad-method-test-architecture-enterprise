@@ -59,6 +59,15 @@ Create the idiomatic test directory for the detected language:
 - **Ruby (RSpec)**: `spec/` with `spec/unit/`, `spec/integration/`, `spec/api/`, `spec/support/`
 - **Rust**: `tests/` for integration tests, inline `#[cfg(test)]` modules for unit tests
 
+**If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`):
+
+Create contract testing directory structure:
+
+- `pact/http/consumer/` — consumer contract tests
+- `pact/http/provider/` — provider verification tests and state handlers
+- `pact/http/helpers/` — shared helpers (request filter, state constants)
+- `pact/message/` — message/Kafka contract tests (if async patterns detected)
+
 ---
 
 ## 2. Generate Framework Config
@@ -122,6 +131,19 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `co
 
 - `fixture-architecture.md`, `data-factories.md`, `network-first.md`, `playwright-config.md`, `test-quality.md`
 
+**If Pact.js Utils enabled** (`config.tea_use_pactjs_utils`):
+
+- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `contract-testing.md`
+- Recommend installing `@seontechnologies/pactjs-utils` and `@pact-foundation/pact`
+
+**If Pact.js Utils disabled but contract testing relevant:**
+
+- `contract-testing.md`
+
+**If Pact MCP enabled** (`config.tea_pact_mcp` is `"mcp"`):
+
+- `pact-mcp.md`
+
 Implement:
 
 - Fixture index with `mergeTests`
@@ -157,6 +179,16 @@ Create helpers for:
 - Network utilities (frontend/fullstack only)
 - Auth helpers
 - Test data factories (language-idiomatic patterns)
+
+**If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`):
+
+Create contract test samples in `pact/` directory:
+
+- **Consumer test**: Example using `PactV3` + `createProviderState` for type-safe provider states
+- **Provider verification test**: Example using `buildVerifierOptions` + `createRequestFilter`
+- **Helpers**: Request filter setup (`pact/http/helpers/request-filter.ts`), shared state constants (`pact/http/helpers/states.ts`)
+- **Vitest configs** (if vitest detected): `vitest.consumer.config.mts` and `vitest.provider.config.mts` for separated test execution
+- **package.json scripts**: `test:contract:consumer`, `test:contract:provider`, `pact:publish`, `pact:can-deploy`
 
 ---
 

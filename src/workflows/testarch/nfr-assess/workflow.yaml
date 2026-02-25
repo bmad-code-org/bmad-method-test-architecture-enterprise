@@ -1,6 +1,7 @@
 # Test Architect workflow: nfr-assess
 name: testarch-nfr
-description: "Assess NFRs like performance security and reliability. Use when the user says 'lets assess NFRs' or 'I want to evaluate non-functional requirements'"
+# prettier-ignore
+description: 'Assess NFRs like performance security and reliability. Use when the user says "lets assess NFRs" or "I want to evaluate non-functional requirements"'
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -45,4 +46,3 @@ execution_hints:
   interactive: false # Minimize prompts
   autonomous: true # Proceed without user input unless blocked
   iterative: true
-

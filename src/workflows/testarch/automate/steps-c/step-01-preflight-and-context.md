@@ -96,6 +96,8 @@ If missing: **HALT** with message "Run `framework` workflow first."
 ### Read TEA Config Flags
 
 - From `{config_source}` read `tea_use_playwright_utils`
+- From `{config_source}` read `tea_use_pactjs_utils`
+- From `{config_source}` read `tea_pact_mcp`
 - From `{config_source}` read `tea_browser_automation`
 - From `{config_source}` read `test_stack_type`
 
@@ -123,6 +125,24 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile.
 
+### Pact.js Utils Loading
+
+**If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`, or microservices indicators detected):
+
+Load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md` (~800 lines)
+
+**If `tea_use_pactjs_utils` is disabled** but contract testing is relevant (microservices architecture detected, existing Pact config found):
+
+Load: `contract-testing.md` (~960 lines)
+
+**Detection**: Scan `{project-root}` for Pact indicators: `pact/` directory, `@pact-foundation/pact` in `package.json`, `pactUrls` in test files, `PACT_BROKER` in env files.
+
+### Pact MCP Loading
+
+**If `tea_pact_mcp` is `"mcp"`:**
+
+Load: `pact-mcp.md` (~150 lines) — enables agent to use SmartBear MCP tools for fetching provider states and generating pact tests during automation.
+
 ## 4. Load Knowledge Base Fragments
 
 Use `{knowledgeIndex}` and load only what is required.
@@ -144,6 +164,18 @@ Use `{knowledgeIndex}` and load only what is required.
 
 - `fixture-architecture.md`
 - `network-first.md`
+
+**Pact.js Utils (if enabled):**
+
+- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`
+
+**Contract Testing (if pactjs-utils disabled but relevant):**
+
+- `contract-testing.md`
+
+**Pact MCP (if tea_pact_mcp is "mcp"):**
+
+- `pact-mcp.md`
 
 **Healing (if auto-heal enabled):**
 

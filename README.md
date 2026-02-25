@@ -21,25 +21,78 @@ TEA plugs into BMad the same way a specialist plugs into a team. It uses the sam
 
 ## Architecture & Flow
 
-BMad is a small **agent + workflow engine**:
+BMad is a small **agent + workflow engine**. There is no external orchestrator — everything runs inside the LLM context window through structured instructions.
 
-- **Agent** = expert persona (e.g., Test Architect).
-- **Workflow** = a guided sequence of step files.
-- **Step file** = one focused instruction set; outputs are written only in the steps that produce them.
-- **Knowledge base** = reusable standards and patterns loaded only when needed.
-- **Modes** = `steps-c/` (Create), `steps-e/` (Edit), `steps-v/` (Validate).
-  - This keeps the create flow separate from editing and validation, and matches BMad Builder conventions.
+### Building Blocks
+
+Each workflow directory contains these files, and each has a specific job:
+
+| File              | What it does                                                                                                        | When it loads                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `tea.agent.yaml`  | Expert persona — identity, principles, critical actions, menu of triggers                                           | First — always in context                                                 |
+| `workflow.yaml`   | Machine-readable metadata — config variables, required tools, tags                                                  | Second — resolves `{project-root}`, `{config_source}`, `{test_artifacts}` |
+| `workflow.md`     | Human-readable entry point — goals, mode menu (Create/Edit/Validate), routes to first step                          | Second — presents mode choice                                             |
+| `instructions.md` | Workflow-specific rules and context (optional, supplements workflow.md)                                             | On demand                                                                 |
+| `steps-c/*.md`    | **Create** steps — primary execution, 5-9 sequential files                                                          | One at a time (just-in-time)                                              |
+| `steps-e/*.md`    | **Edit** steps — always 2 files: assess target, apply edit                                                          | One at a time                                                             |
+| `steps-v/*.md`    | **Validate** steps — always 1 file: evaluate against checklist                                                      | On demand                                                                 |
+| `checklist.md`    | Validation criteria — what "done" looks like for this workflow                                                      | Read by steps-v                                                           |
+| `*-template.md`   | Output skeleton with `{PLACEHOLDER}` vars — steps fill these in to produce the final artifact                       | Read by steps-c when generating output                                    |
+| `tea-index.csv`   | Knowledge fragment index — id, name, tags, tier (core/extended/specialized), file path                              | Read by step-01 to decide which fragments to load                         |
+| `knowledge/*.md`  | 40 reusable fragments — standards, patterns, API references (e.g., `data-factories.md`, `pactjs-utils-overview.md`) | Selectively read into context based on tier + config flags                |
 
 ```mermaid
 flowchart LR
   U[User] --> A[Agent Persona]
   A --> W[Workflow Entry: workflow.md]
   W --> S[Step Files: steps-c / steps-e / steps-v]
-  S --> K[Knowledge Fragments<br/>optional]
-  S --> T[Templates & Checklists<br/>optional]
+  S --> K[Knowledge Fragments<br/>tea-index.csv → knowledge/*.md]
+  S --> T[Templates & Checklists<br/>*-template.md, checklist.md]
   S --> O[Outputs: docs/tests/reports<br/>when a step writes output]
   O --> V[Validation: checklist + report]
 ```
+
+### How It Works at Runtime
+
+1. **Trigger** — User types `/bmad:tea:automate` (or shorthand `TA`). The agent menu in `tea.agent.yaml` maps the trigger to `automate/workflow.yaml`.
+2. **Agent loads** — `tea.agent.yaml` injects the persona (identity, principles, critical actions) into the context window.
+3. **Workflow loads** — `workflow.yaml` resolves config variables and `workflow.md` presents the mode menu (Create / Edit / Validate), then routes to the first step file.
+4. **Step-by-step execution** — Only the current step file is in context (just-in-time loading). Each step explicitly names the next one (`nextStepFile: './step-02-...'`). The LLM reads, executes, saves output, then loads the next step. No future steps are ever preloaded.
+5. **Knowledge injection** — Step-01 reads `tea-index.csv` and selectively loads fragments by **tier** (core = always, extended = on-demand, specialized = only when relevant) and **config flags** (e.g., `tea_use_pactjs_utils`). This is deliberate context engineering: a backend project loads ~1,800 lines of fragments; a fullstack project loads ~4,500 lines. Conditional loading cuts context usage by 40-50%.
+6. **Templates** — When a step produces output (e.g., a traceability matrix or test review report), it reads the `*-template.md` file and fills in the `{PLACEHOLDER}` values with computed results. The template provides consistent structure; the step provides the content.
+7. **Subprocess isolation** — Heavy workflows (e.g., `automate`) spawn parallel subprocesses that each run in an isolated context. Subprocesses write structured JSON to temp files. An aggregation step reads the JSON outputs — only the results enter the main context, not the full subprocess history.
+8. **Progress tracking** — Each step appends to an output file with YAML frontmatter (`stepsCompleted`, `lastStep`, `lastSaved`). Resume mode reads this frontmatter and routes to the next incomplete step.
+9. **Validation** — The `steps-v/` mode reads `checklist.md` and evaluates the workflow's output against its criteria, producing a pass/fail validation report.
+
+### Workflows vs Skills
+
+BMad workflows and Claude Code Skills solve different problems at different scales:
+
+| Capability        | Claude Code Skills          | BMad Workflows                                                               |
+| ----------------- | --------------------------- | ---------------------------------------------------------------------------- |
+| **Execution**     | Single prompt, one shot     | 5-9 sequential steps with explicit handoffs                                  |
+| **State**         | Stateless                   | YAML frontmatter tracking (`stepsCompleted`, `lastStep`) with resume         |
+| **Knowledge**     | Whatever fits in one prompt | Tiered index (40 fragments), conditional loading by config + stack detection |
+| **Context mgmt**  | Everything in one shot      | Just-in-time step loading, subprocess isolation (separate contexts)          |
+| **Output**        | Freeform                    | Templates with `{PLACEHOLDER}` vars filled by specific steps                 |
+| **Validation**    | None                        | Dedicated mode (`steps-v/`) evaluating against checklists                    |
+| **Configuration** | None                        | `module.yaml` with prompted config flags driving conditional behavior        |
+| **Modes**         | None                        | Create / Edit / Validate — three separate step chains per workflow           |
+
+The key insight is that there is **no external runtime engine** — the LLM _is_ the engine. BMad workflows are structured markdown that the LLM follows as instructions: "read this file, execute it completely, save your output, load the next file." Skills are a single tool in a toolbox; BMad workflows are a workshop with a process manual.
+
+**How workflows become commands.** When you run `npx bmad-method install`, the installer converts every workflow and agent into a Claude Code command in `.claude/commands/`. For example, `bmad-tea-testarch-automate.md` tells the LLM: "load the core workflow engine (`workflow.xml`), pass it this workflow config (`automate/workflow.yaml`), follow the instructions exactly." That single command file is the bridge — it triggers the workflow entry point; the multi-step engine takes over from there.
+
+```
+.claude/commands/                         # Generated by installer
+├── bmad-agent-tea-tea.md                 # /tea → loads agent persona + menu
+├── bmad-tea-testarch-automate.md         # /automate → loads workflow.xml + workflow.yaml
+├── bmad-tea-testarch-test-design.md      # /test-design → ...
+├── bmad-bmm-create-prd.md               # /create-prd → BMM workflow
+└── ... (61 commands total across all installed modules)
+```
+
+The BMAD-METHOD source repo also has standalone `.claude/skills/` (e.g., `bmad-os-release-module`, `bmad-os-gh-triage`) for its own maintenance workflows. External tools can register skills too (e.g., `playwright-cli install --skills`). The installer supports 10+ platforms: Claude Code, Cursor, GitHub Copilot, Codex, Gemini, Windsurf, Cline, and more.
 
 ## Install
 
@@ -86,6 +139,8 @@ TEA variables are defined in `src/module.yaml` and prompted during install:
 
 - `test_artifacts` — base output folder for test artifacts
 - `tea_use_playwright_utils` — enable Playwright Utils integration (boolean)
+- `tea_use_pactjs_utils` — enable Pact.js Utils integration for contract testing (boolean)
+- `tea_pact_mcp` — SmartBear MCP for PactFlow/Broker interaction: mcp, none (string)
 - `tea_browser_automation` — browser automation mode: auto, cli, mcp, none (string)
 - `test_framework` — detected or configured test framework (Playwright, Cypress, Jest, Vitest, pytest, JUnit, Go test, dotnet test, RSpec)
 - `test_stack_type` — detected or configured stack type (frontend, backend, fullstack)

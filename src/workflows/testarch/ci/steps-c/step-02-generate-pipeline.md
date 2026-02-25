@@ -58,6 +58,7 @@ Include stages:
 
 - lint
 - test (parallel shards)
+- contract-test (if `tea_use_pactjs_utils` enabled)
 - burn-in (flaky detection)
 - report (aggregate + publish)
 
@@ -79,6 +80,39 @@ Write the selected pipeline configuration to the resolved output path from step 
 - **Backend (Go)**: Use `go test ./...` with coverage (`-coverprofile`), cache Go modules
 - **Backend (C#/.NET)**: Use `dotnet test` with coverage, restore NuGet packages
 - **Backend (Ruby)**: Use `bundle exec rspec` with coverage, cache `vendor/bundle`
+
+### Contract Testing Pipeline (if `tea_use_pactjs_utils` enabled)
+
+When `tea_use_pactjs_utils` is enabled, add a `contract-test` stage after `test`:
+
+1. **Consumer test + publish**: Run consumer contract tests, then publish pacts to broker
+   - `npm run test:contract:consumer`
+   - `npx pact-broker publish ./pacts --consumer-app-version=$GIT_SHA --branch=$BRANCH`
+   - Only publish on PR and main branch pushes
+
+2. **Provider verification**: Run provider verification against published pacts
+   - `npm run test:contract:provider`
+   - `buildVerifierOptions` auto-reads `PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`
+   - Verification results published to broker when `CI=true`
+
+3. **Can-I-Deploy gate**: Block deployment if contracts are incompatible
+   - `npx pact-broker can-i-deploy --pacticipant=$PROVIDER --version=$GIT_SHA --to-environment=production`
+   - Add `--retry-while-unknown 6 --retry-interval 10` for async verification
+
+4. **Webhook job**: Add `repository_dispatch` trigger for `pact_changed` event
+   - Provider verification runs when consumers publish new pacts
+   - Ensures compatibility is checked on both consumer and provider changes
+
+5. **Breaking change handling**: When `PACT_BREAKING_CHANGE=true` env var is set:
+   - Provider test passes `includeMainAndDeployed: false` to `buildVerifierOptions` — verifies only matching branch
+   - Coordinate with consumer team before removing the flag
+
+6. **Record deployment**: After successful deployment, record version in broker
+   - `npx pact-broker record-deployment --pacticipant=$PROVIDER --version=$GIT_SHA --environment=production`
+
+Required CI secrets: `PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`
+
+**If `tea_pact_mcp` is `"mcp"`:** Reference the SmartBear MCP `Can I Deploy` and `Matrix` tools for pipeline guidance in `pact-mcp.md`.
 
 ---
 

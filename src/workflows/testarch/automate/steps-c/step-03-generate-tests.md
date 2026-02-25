@@ -57,6 +57,8 @@ const subprocessContext = {
   config: {
     test_framework: config.test_framework,
     use_playwright_utils: config.tea_use_playwright_utils,
+    use_pactjs_utils: config.tea_use_pactjs_utils,
+    pact_mcp: config.tea_pact_mcp,  // "mcp" | "none"
     browser_automation: config.tea_browser_automation,  // "auto" | "cli" | "mcp" | "none"
     detected_stack: '{detected_stack}'  // "frontend" | "backend" | "fullstack"
   },
@@ -75,6 +77,19 @@ const subprocessContext = {
 | `frontend`         | Launch             | Launch             | Skip                 |
 | `backend`          | Launch             | Skip               | Launch               |
 | `fullstack`        | Launch             | Launch             | Launch               |
+
+---
+
+### Contract Test Generation Note
+
+When `use_pactjs_utils` is enabled, the API test generation subprocess (step-03a) also generates:
+
+- **Consumer contract tests**: Using `createProviderState` for type-safe provider states
+- **Provider verification tests**: Using `buildVerifierOptions` for one-call verifier setup
+- **Message contract tests**: Using `buildMessageVerifierOptions` if async/Kafka patterns detected
+- **Helper files**: Request filter setup with `createRequestFilter`, shared state constants
+
+When `pact_mcp` is `"mcp"`, the subprocess can use SmartBear MCP tools to fetch existing provider states and generate tests informed by broker data.
 
 ---
 

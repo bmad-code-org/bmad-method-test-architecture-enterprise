@@ -1,11 +1,11 @@
 ---
 title: 'TEA Knowledge Base Index'
-description: Complete index of TEA's 35 knowledge fragments for context engineering
+description: Complete index of TEA's 40 knowledge fragments for context engineering
 ---
 
 # TEA Knowledge Base Index
 
-TEA uses 35 specialized knowledge fragments for context engineering. These fragments are loaded dynamically based on workflow needs via the `tea-index.csv` manifest.
+TEA uses 40 specialized knowledge fragments for context engineering. These fragments are loaded dynamically based on workflow needs via the `tea-index.csv` manifest.
 
 ## What is Context Engineering?
 
@@ -158,17 +158,33 @@ Selector resilience, race condition debugging, and visual debugging.
 
 ---
 
-### Feature Flags & Testing Patterns
+### Feature Flags & API Patterns
 
-Feature flag testing, contract testing, and API testing patterns.
+Feature flag testing and pure API testing patterns.
 
 | Fragment                                                                                                                                                   | Description                                             | Key Topics                   |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------- |
 | [feature-flags](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/feature-flags.md)               | Enum management, targeting helpers, cleanup, checklists | Feature flags, toggles       |
-| [contract-testing](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/contract-testing.md)         | Pact publishing, provider verification, resilience      | Contract testing, Pact       |
 | [api-testing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/api-testing-patterns.md) | Pure API patterns without browser                       | API testing, backend testing |
 
 **Used in:** `test-design`, `atdd`, `automate`
+
+---
+
+### Pact & Contract Testing Integration
+
+Contract testing fundamentals plus Pact.js Utils and Pact MCP integrations.
+
+| Fragment                                                                                                                                                                       | Description                                                                      | Key Topics                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- | ---------------------------------------------- |
+| [contract-testing](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/contract-testing.md)                             | Raw Pact patterns, publishing, verification, resilience                          | Contract testing, Pact fundamentals            |
+| [pactjs-utils-overview](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pactjs-utils-overview.md)                   | Installation, flow decision tree, utility map                                    | pactjs-utils, CDCT/BDCT, integration strategy  |
+| [pactjs-utils-consumer-helpers](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pactjs-utils-consumer-helpers.md)   | `createProviderState`, `toJsonMap` for consumer-side provider states             | pactjs-utils, consumer testing, provider state |
+| [pactjs-utils-provider-verifier](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pactjs-utils-provider-verifier.md) | `buildVerifierOptions`, `buildMessageVerifierOptions`, broker selectors, tagging | pactjs-utils, provider verification, CI        |
+| [pactjs-utils-request-filter](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pactjs-utils-request-filter.md)       | `createRequestFilter`, `noOpRequestFilter` auth/header patterns                  | pactjs-utils, request filter, auth injection   |
+| [pact-mcp](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pact-mcp.md)                                             | SmartBear MCP tools for provider states, review, can-i-deploy, matrix            | pact-mcp, broker interaction, pactflow         |
+
+**Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`, `ci` (conditioned by `tea_use_pactjs_utils` and `tea_pact_mcp`)
 
 ---
 
@@ -239,7 +255,7 @@ Fragments are loaded based on workflow needs and tier priority:
 - **Extended tier**: Loaded when the workflow context requires them (e.g., `auth-session.md` when tests involve authentication)
 - **Specialized tier**: Only loaded when the specific use case matches (e.g., contract-testing for microservices, email-auth for email flows)
 
-**Fragment Location:** `src/testarch/knowledge/` (all 35 fragments in single directory)
+**Fragment Location:** `src/testarch/knowledge/` (all 40 fragments in a single directory)
 
 **Manifest:** `src/testarch/tea-index.csv`
 

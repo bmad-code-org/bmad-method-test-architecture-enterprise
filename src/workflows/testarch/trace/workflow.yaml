@@ -1,6 +1,7 @@
 # Test Architect workflow: trace (enhanced with gate decision)
 name: testarch-trace
-description: "Generate traceability matrix and quality gate decision. Use when the user says 'lets create traceability matrix' or 'I want to analyze test coverage'"
+# prettier-ignore
+description: 'Generate traceability matrix and quality gate decision. Use when the user says "lets create traceability matrix" or "I want to analyze test coverage"'
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -53,4 +54,3 @@ execution_hints:
   interactive: false # Minimize prompts
   autonomous: true # Proceed without user input unless blocked
   iterative: true
-

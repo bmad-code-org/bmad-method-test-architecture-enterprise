@@ -13,7 +13,7 @@ default_selected: false
 ## project_root
 
 # TEA-specific configuration variables
-# IMPORTANT: tea_use_playwright_utils, tea_browser_automation, test_stack_type, ci_platform, and test_framework are ACTIVELY USED in workflows
+# IMPORTANT: tea_use_playwright_utils, tea_use_pactjs_utils, tea_pact_mcp, tea_browser_automation, test_stack_type, ci_platform, and test_framework are ACTIVELY USED in workflows
 # Other variables are FUTURE placeholders for Phase 10 enhancements
 
 test_artifacts:
@@ -32,6 +32,31 @@ tea_use_playwright_utils:
       label: "Yes - Use production utilities (Recommended)"
     - value: false
       label: "No - Generate from scratch"
+
+# ✅ ACTIVELY USED - Pact.js Utils integration for contract testing (referenced in workflows: automate, atdd, framework, test-design, test-review, ci)
+# CRITICAL: Must be boolean (true/false) not string - workflows check "if config.tea_use_pactjs_utils: true"
+tea_use_pactjs_utils:
+  prompt: "Enable Pact.js Utils integration for contract testing?"
+  default: true
+  result: "{value}"
+  single-select:
+    - value: true
+      label: "Yes - Use production contract testing utilities"
+    - value: false
+      label: "No - Use raw @pact-foundation/pact patterns"
+
+# ✅ ACTIVELY USED - Pact MCP integration for broker interaction during contract testing
+# Controls how TEA interacts with PactFlow/Pact Broker during test generation and review
+# CRITICAL: Must be a string value: "mcp" | "none"
+tea_pact_mcp:
+  prompt: "Enable SmartBear MCP for PactFlow/Pact Broker interaction?"
+  default: "mcp"
+  result: "{value}"
+  single-select:
+    - value: "mcp"
+      label: "Yes - Use SmartBear MCP for broker queries"
+    - value: "none"
+      label: "No - Use CLI scripts only"
 
 # ✅ ACTIVELY USED - Browser automation strategy for TEA workflows
 # Controls how TEA interacts with live browsers during test generation
@@ -192,6 +217,29 @@ post-install-notes:
         2. playwright-test — npx playwright run-test-mcp-server
         Configure both MCP servers in your IDE settings.
         See: https://github.com/microsoft/playwright-mcp
+
+  tea_use_pactjs_utils:
+    true: |
+      Pact.js Utils Setup:
+        npm install -D @seontechnologies/pactjs-utils
+        Peer dependency: @pact-foundation/pact >= 16.2.0
+          npm install -D @pact-foundation/pact
+        For remote flow (with Pact Broker):
+          Set PACT_BROKER_BASE_URL and PACT_BROKER_TOKEN as env vars or CI secrets.
+          Also set GITHUB_SHA and GITHUB_BRANCH in CI (auto-set by GitHub Actions).
+        For local flow (monorepo):
+          No broker needed - consumer generates pacts, provider verifies locally.
+        Docs: https://seontechnologies.github.io/pactjs-utils/
+  tea_pact_mcp:
+    mcp: |
+      SmartBear MCP Setup (PactFlow integration):
+        Install: npm install -g @smartbear/mcp
+        Claude Code: claude mcp add --transport stdio smartbear -- npx -y @smartbear/mcp@latest
+        Required env vars:
+          PACT_BROKER_BASE_URL=https://{tenant}.pactflow.io
+          PACT_BROKER_TOKEN=<your-api-token>
+        Requires: Node.js 20+
+        Docs: https://developer.smartbear.com/smartbear-mcp/docs/getting-started
 
 # Directories to create during installation (declarative, no code execution)
 directories:

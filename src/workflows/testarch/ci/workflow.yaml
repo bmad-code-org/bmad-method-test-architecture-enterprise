@@ -1,6 +1,7 @@
 # Test Architect workflow: ci
 name: testarch-ci
-description: "Scaffold CI/CD quality pipeline with test execution. Use when the user says 'lets setup CI pipeline' or 'I want to create quality gates'"
+# prettier-ignore
+description: 'Scaffold CI/CD quality pipeline with test execution. Use when the user says "lets setup CI pipeline" or "I want to create quality gates"'
 
 # Critical variables from config
 config_source: "{project-root}/_bmad/tea/config.yaml"
@@ -45,4 +46,3 @@ execution_hints:
   interactive: false # Minimize prompts, auto-detect when possible
   autonomous: true # Proceed without user input unless blocked
   iterative: true
-

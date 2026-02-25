@@ -37,7 +37,7 @@ The global npm install is one-time. The skills install (`playwright-cli install 
 
 ### For MCP (`mcp` or `auto` mode)
 
-Configure MCP servers in your IDE:
+Add these MCP server entries to your tool's configuration file:
 
 ```json
 {
@@ -49,12 +49,77 @@ Configure MCP servers in your IDE:
     "playwright-test": {
       "command": "npx",
       "args": ["playwright", "run-test-mcp-server"]
+    },
+    "smartbear": {
+      "command": "npx",
+      "args": ["-y", "@smartbear/mcp@latest"],
+      "env": {
+        "PACT_BROKER_BASE_URL": "https://{tenant}.pactflow.io",
+        "PACT_BROKER_TOKEN": "<your-api-token>"
+      }
     }
   }
 }
 ```
 
-See your IDE documentation for MCP server configuration.
+The `smartbear` server is optional — only needed if you use the [Pact MCP integration](/docs/how-to/customization/configure-browser-automation.md#related) for contract testing workflows. See the [pact-mcp knowledge fragment](../../src/testarch/knowledge/pact-mcp.md) for details.
+
+#### Where to put the config
+
+| Tool        | Config File                           | Format                 |
+| ----------- | ------------------------------------- | ---------------------- |
+| Claude Code | `~/.claude.json`                      | JSON (`mcpServers`)    |
+| Codex       | `~/.codex/config.toml`                | TOML (`[mcp_servers]`) |
+| Gemini CLI  | `~/.gemini/settings.json`             | JSON (`mcpServers`)    |
+| Cursor      | `~/.cursor/mcp.json`                  | JSON (`mcpServers`)    |
+| Windsurf    | `~/.codeium/windsurf/mcp_config.json` | JSON (`mcpServers`)    |
+
+#### CLI shortcuts
+
+Claude Code and Codex support adding MCP servers from the command line:
+
+```bash
+# Claude Code — Playwright
+claude mcp add playwright -- npx @playwright/mcp@latest
+claude mcp add playwright-test -- npx playwright run-test-mcp-server
+
+# Claude Code — SmartBear (Pact)
+claude mcp add smartbear --scope user \
+  -e PACT_BROKER_BASE_URL=https://{tenant}.pactflow.io \
+  -e PACT_BROKER_TOKEN=<your-token> \
+  -- npx -y @smartbear/mcp@latest
+
+# Codex — Playwright
+codex mcp add playwright -- npx @playwright/mcp@latest
+codex mcp add playwright-test -- npx playwright run-test-mcp-server
+
+# Codex — SmartBear (Pact)
+codex mcp add smartbear -- npx -y @smartbear/mcp@latest
+```
+
+#### Codex TOML format
+
+Codex uses TOML instead of JSON. If editing the config file manually:
+
+```toml
+[mcp_servers.playwright]
+command = "npx"
+args = ["@playwright/mcp@latest"]
+
+[mcp_servers.playwright-test]
+command = "npx"
+args = ["playwright", "run-test-mcp-server"]
+
+[mcp_servers.smartbear]
+command = "npx"
+args = ["-y", "@smartbear/mcp@latest"]
+
+[mcp_servers.smartbear.env]
+PACT_BROKER_BASE_URL = "https://{tenant}.pactflow.io"
+PACT_BROKER_TOKEN = "<your-api-token>"
+```
+
+Note the key is `mcp_servers` (underscored), not `mcpServers`.
 
 ## How Auto Mode Works
 

@@ -58,6 +58,13 @@ Define:
 - Fail CI on critical test failures
 - Optional: require traceability or nfr-assess output before release
 
+**Contract testing gate** (if `tea_use_pactjs_utils` is enabled):
+
+- **can-i-deploy must pass** before any deployment to staging or production
+- Block the deployment pipeline if contract verification fails
+- Treat consumer pact publishing failures as CI failures (contracts must stay up-to-date)
+- Provider verification must pass for all consumer pacts before merge
+
 ---
 
 ## 3. Notifications

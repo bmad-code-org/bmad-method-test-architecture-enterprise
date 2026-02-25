@@ -92,7 +92,7 @@ function extractAnchors(content) {
   while ((match = HEADING_PATTERN.exec(content)) !== null) {
     const headingText = match[1]
       .trim()
-      .replaceAll(/`[^`]+`/g, '')
+      .replaceAll(/`([^`]+)`/g, '$1')
       .replaceAll(/\*\*([^*]+)\*\*/g, '$1')
       .replaceAll(/\*([^*]+)\*/g, '$1')
       .replaceAll(/\[([^\]]+)\]\([^)]+\)/g, '$1')

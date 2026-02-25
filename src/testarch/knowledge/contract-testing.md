@@ -4,9 +4,13 @@
 
 Contract testing validates API contracts between consumer and provider services without requiring integrated end-to-end tests. Store consumer contracts alongside integration specs, version contracts semantically, and publish on every CI run. Provider verification before merge surfaces breaking changes immediately, while explicit fallback behavior (timeouts, retries, error payloads) captures resilience guarantees in contracts.
 
+> **Pact.js Utils Note**: When `tea_use_pactjs_utils` is enabled, prefer the patterns in the `pactjs-utils-*.md` fragments over the raw Pact.js patterns shown below. The pactjs-utils library eliminates boilerplate for provider states, verifier configuration, and request filters. See `pactjs-utils-overview.md` for the decision tree.
+
 ## Rationale
 
 Traditional integration testing requires running both consumer and provider simultaneously, creating slow, flaky tests with complex setup. Contract testing decouples services: consumers define expectations (pact files), providers verify against those expectations independently. This enables parallel development, catches breaking changes early, and documents API behavior as executable specifications. Pair contract tests with API smoke tests to validate data mapping and UI rendering in tandem.
+
+> **Recommended**: When `tea_use_pactjs_utils` is enabled, use `@seontechnologies/pactjs-utils` utilities instead of the manual patterns below. The library handles JsonMap conversion, verifier configuration, and request filter assembly automatically. See the `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, and `pactjs-utils-request-filter.md` fragments for the simplified approach.
 
 ## Pattern Examples
 
@@ -954,4 +958,22 @@ Before implementing contract testing, verify:
 - Related fragments: `test-levels-framework.md`, `ci-burn-in.md`
 - Tools: Pact.js, Pact Broker (Pactflow or self-hosted), Pact CLI
 
-_Source: Pact consumer/provider sample repos, Murat contract testing blog, Pact official documentation_
+---
+
+## Pact.js Utils Accelerator
+
+When `tea_use_pactjs_utils` is enabled, the following utilities replace manual boilerplate:
+
+| Manual Pattern (raw Pact.js)                     | Pact.js Utils Equivalent                                                          | Benefit                                                |
+| ------------------------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Manual `JsonMap` casting for `.given()` params   | `createProviderState({ name, params })`                                           | Type-safe, auto-conversion of Date/null/nested objects |
+| 30+ lines of `VerifierOptions` assembly          | `buildVerifierOptions({ provider, port, includeMainAndDeployed, stateHandlers })` | One-call setup, env-aware, flow auto-detection         |
+| Manual broker URL + selector logic from env vars | `handlePactBrokerUrlAndSelectors({ ..., options })`                               | Mutates options in-place with broker URL and selectors |
+| DIY Express middleware for auth injection        | `createRequestFilter({ tokenGenerator })`                                         | Bearer prefix contract prevents double-prefix bugs     |
+| Manual CI branch/tag extraction                  | `getProviderVersionTags()`                                                        | CI-aware (GitHub Actions, GitLab CI, etc.)             |
+| Message verifier config assembly                 | `buildMessageVerifierOptions({ provider, messageProviders })`                     | Same one-call pattern for Kafka/async contracts        |
+| Inline no-op filter `(req, res, next) => next()` | `noOpRequestFilter`                                                               | Pre-built pass-through for no-auth providers           |
+
+See the `pactjs-utils-*.md` knowledge fragments for complete examples and anti-patterns.
+
+_Source: Pact consumer/provider sample repos, Murat contract testing blog, Pact official documentation, @seontechnologies/pactjs-utils library_

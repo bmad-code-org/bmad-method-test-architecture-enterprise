@@ -1,6 +1,6 @@
 ---
 name: teach-me-testing
-description: Teach testing progressively through structured sessions. Use when user says 'lets learn testing' or 'I want to study test practices'
+description: 'Teach testing progressively through structured sessions. Use when user says "lets learn testing" or "I want to study test practices"'
 web_bundle: true
 ---
 

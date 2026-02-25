@@ -42,6 +42,8 @@ Load the required documents, config flags, and knowledge fragments needed to pro
 From `{config_source}`:
 
 - Read `tea_use_playwright_utils`
+- Read `tea_use_pactjs_utils`
+- Read `tea_pact_mcp`
 - Read `tea_browser_automation`
 - Read `test_stack_type` (if not set, default to `"auto"`)
 - Note `test_artifacts`
@@ -140,6 +142,22 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile.
 
+### Pact.js Utils Loading
+
+**If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`, or microservices indicators detected):
+
+Load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`
+
+**If `tea_use_pactjs_utils` is disabled** but contract testing is relevant:
+
+Load: `contract-testing.md`
+
+### Pact MCP Loading
+
+**If `tea_pact_mcp` is `"mcp"`:**
+
+Load: `pact-mcp.md` — enables agent to use SmartBear MCP "Fetch Provider States" and "Matrix" tools to understand existing contract landscape during test design.
+
 ## 4. Load Knowledge Base Fragments
 
 Use `{knowledgeIndex}` to select and load only relevant fragments.
@@ -165,6 +183,18 @@ Use `{knowledgeIndex}` to select and load only relevant fragments.
 **MCP Patterns (if `tea_browser_automation` is "mcp" or "auto"):**
 
 - (existing MCP-related fragments, if any are added in future)
+
+**Pact.js Utils (if enabled — both System-Level and Epic-Level):**
+
+- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`
+
+**Contract Testing (if pactjs-utils disabled but relevant):**
+
+- `contract-testing.md`
+
+**Pact MCP (if tea_pact_mcp is "mcp"):**
+
+- `pact-mcp.md`
 
 ---
 

@@ -84,6 +84,8 @@ If any are missing: **HALT** and notify the user.
 From `{config_source}`:
 
 - `tea_use_playwright_utils`
+- `tea_use_pactjs_utils`
+- `tea_pact_mcp`
 - `tea_browser_automation`
 - `test_stack_type`
 
@@ -110,6 +112,22 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
   Load: all Playwright Utils core fragments (~4,500 lines)
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile.
+
+### Pact.js Utils Loading
+
+**If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`, or microservices indicators detected):
+
+Load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`
+
+**If `tea_use_pactjs_utils` is disabled** but contract testing is relevant:
+
+Load: `contract-testing.md`
+
+### Pact MCP Loading
+
+**If `tea_pact_mcp` is `"mcp"`:**
+
+Load: `pact-mcp.md`
 
 ## 5. Load Knowledge Base Fragments
 
@@ -149,6 +167,18 @@ Use `{knowledgeIndex}` to load:
 - `test-levels-framework.md`
 - `test-priorities-matrix.md`
 - `ci-burn-in.md`
+
+**Pact.js Utils (if enabled):**
+
+- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`
+
+**Contract Testing (if pactjs-utils disabled but relevant):**
+
+- `contract-testing.md`
+
+**Pact MCP (if tea_pact_mcp is "mcp"):**
+
+- `pact-mcp.md`
 
 ---
 

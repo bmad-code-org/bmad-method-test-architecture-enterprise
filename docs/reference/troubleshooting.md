@@ -289,14 +289,14 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
 
    ```bash
    cat _bmad/tea/testarch/tea-index.csv | wc -l
-   # Should show 36 lines (header + 35 fragments)
+   # Should show 41 lines (header + 40 fragments)
    ```
 
 2. Check knowledge fragment files:
 
    ```bash
    ls -la _bmad/tea/testarch/knowledge/ | wc -l
-   # Should show 35+ files
+   # Should show 40+ files
    ```
 
 3. Validate CSV format:
@@ -543,6 +543,8 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
    }
    ```
 
+   See [Configure Browser Automation — MCP Setup](/docs/how-to/customization/configure-browser-automation.md#for-mcp-mcp-or-auto-mode) for the exact config file path for your tool (Claude Code, Codex, Gemini CLI, Cursor, Windsurf).
+
 3. Check variable setting:
 
    ```bash
@@ -591,7 +593,7 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
 
 **Causes**:
 
-- All 35 fragments loading at once
+- All 40 fragments loading at once
 - Large fragment file sizes
 - Disk I/O bottleneck
 
@@ -669,7 +671,7 @@ Check these first:
 - [ ] TEA is installed: `ls -la _bmad/tea/`
 - [ ] Using correct command namespace: `/bmad:tea:*` not `/bmad:bmm:tea:*`
 - [ ] Module.yaml exists and is valid
-- [ ] Knowledge base files present (35 fragments)
+- [ ] Knowledge base files present (40 fragments)
 - [ ] Output directory exists and is writable
 - [ ] No disk space issues: `df -h`
 - [ ] Node version >=20.0.0: `node --version`
@@ -733,11 +735,11 @@ done
 
 # Check knowledge base
 fragment_count=$(ls _bmad/tea/testarch/knowledge/*.md 2>/dev/null | wc -l)
-echo "Knowledge fragments: $fragment_count (expected: 35)"
+echo "Knowledge fragments: $fragment_count (expected: 40)"
 
 # Check tea-index.csv
 csv_lines=$(wc -l < _bmad/tea/testarch/tea-index.csv 2>/dev/null || echo "0")
-echo "TEA index lines: $csv_lines (expected: 36)"
+echo "TEA index lines: $csv_lines (expected: 41)"
 
 echo "Validation complete!"
 ```
