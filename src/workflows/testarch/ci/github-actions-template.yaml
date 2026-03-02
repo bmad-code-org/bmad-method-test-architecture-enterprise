@@ -208,3 +208,111 @@ jobs:
           if [ "${{ needs.burn-in.result }}" == "failure" ]; then
             echo "⚠️ **Flaky tests detected** - Review burn-in artifacts" >> $GITHUB_STEP_SUMMARY
           fi
+
+# ============================================================================
+# EXTENSION PATTERNS — Script Injection Prevention
+# ============================================================================
+# When extending this template into reusable workflows, manual dispatch
+# workflows, or composite actions, NEVER use ${{ inputs.* }} directly in
+# run: blocks. Always pass through env: intermediaries.
+#
+# --- Reusable Workflow (workflow_call) ---
+#
+# on:
+#   workflow_call:
+#     inputs:
+#       test-grep:
+#         description: 'Test grep filter'
+#         type: string
+#         required: false
+#         default: ''
+#       base-ref:
+#         description: 'Base branch for diff'
+#         type: string
+#         required: false
+#         default: 'main'
+#       install-command:
+#         description: 'Dependency install command'
+#         type: string
+#         required: false
+#         default: 'npm ci'
+#
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       # ✅ SAFE — inputs passed through env:, referenced as "$ENV_VAR"
+#       - name: Install dependencies
+#         env:
+#           INSTALL_CMD: ${{ inputs.install-command }}
+#         run: $INSTALL_CMD
+#       - name: Run tests
+#         env:
+#           TEST_GREP: ${{ inputs.test-grep }}
+#           BASE_REF: ${{ inputs.base-ref }}
+#         run: |
+#           if [ -n "$TEST_GREP" ]; then
+#             npx playwright test --grep "$TEST_GREP"
+#           else
+#             npx playwright test
+#           fi
+#
+# --- Manual Dispatch (workflow_dispatch) ---
+#
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       test-ids:
+#         description: 'Specific test IDs to run'
+#         type: string
+#         required: false
+#       environment:
+#         description: 'Target environment'
+#         type: choice
+#         options: [staging, production]
+#
+# jobs:
+#   run-tests:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       # ✅ SAFE — inputs passed through env:
+#       - name: Run selected tests
+#         env:
+#           TEST_IDS: ${{ inputs.test-ids }}
+#           TARGET_ENV: ${{ inputs.environment }}
+#         run: |
+#           npx playwright test --grep "$TEST_IDS"
+#
+# --- Composite Action (action.yml) ---
+#
+# inputs:
+#   test-command:
+#     description: 'Test command to execute'
+#     required: false
+#     default: 'npm test'
+#   burn-in-count:
+#     description: 'Number of burn-in iterations'
+#     required: false
+#     default: '10'
+#
+# runs:
+#   using: composite
+#   steps:
+#     # ✅ SAFE — inputs passed through env:
+#     - name: Run burn-in
+#       shell: bash
+#       env:
+#         TEST_CMD: ${{ inputs.test-command }}
+#         BURN_IN_COUNT: ${{ inputs.burn-in-count }}
+#       run: |
+#         for i in $(seq 1 "$BURN_IN_COUNT"); do
+#           echo "Burn-in iteration $i/$BURN_IN_COUNT"
+#           $TEST_CMD || exit 1
+#         done
+#
+# ❌ NEVER DO THIS — direct ${{ inputs.* }} in run: blocks:
+#   - name: Run tests
+#     run: npx playwright test --grep "${{ inputs.test-ids }}"
+# ============================================================================

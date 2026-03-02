@@ -119,6 +119,34 @@ Use templates from `{installed_path}` when available. Adapt the template to the 
 
 ---
 
+## Security: Script Injection Prevention
+
+> **CRITICAL:** When generating `run:` blocks that reference `inputs.*`, `github.event.pull_request.title`, `github.event.issue.body`, `github.event.comment.body`, or `github.head_ref`, ALWAYS use `env:` intermediaries. NEVER interpolate these directly in `run:` blocks.
+
+When the generated pipeline is extended into reusable workflows (`on: workflow_call`), manual dispatch (`on: workflow_dispatch`), or composite actions, `${{ inputs.* }}` values become user-controllable and can inject arbitrary shell commands.
+
+**Generated `run:` blocks MUST follow this pattern:**
+
+```yaml
+# ✅ SAFE — pass through env:, reference as "$ENV_VAR"
+- name: Run tests
+  env:
+    TEST_GREP: ${{ inputs.test-grep }}
+  run: |
+    npx playwright test --grep "$TEST_GREP"
+
+# ❌ NEVER generate this — direct injection vulnerability
+- name: Run tests
+  run: |
+    npx playwright test --grep "${{ inputs.test-grep }}"
+```
+
+Include a `# Security: inputs passed through env: to prevent script injection` comment in generated YAML wherever this pattern is applied.
+
+Safe contexts that do NOT need `env:` intermediaries: `${{ steps.*.outputs.* }}`, `${{ matrix.* }}`, `${{ runner.os }}`, `${{ github.sha }}`, `${{ github.ref }}`, `${{ secrets.* }}`, `${{ env.* }}`.
+
+---
+
 ## 2. Pipeline Stages
 
 Include stages:

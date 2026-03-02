@@ -48,6 +48,27 @@ Use `{knowledgeIndex}` to load `ci-burn-in.md` guidance:
 - **Frontend or Fullstack** (`test_stack_type` is `frontend` or `fullstack`): Enable burn-in by default. Burn-in targets UI flakiness (race conditions, selector instability, timing issues).
 - **Backend only** (`test_stack_type` is `backend`): Skip burn-in by default. Backend tests (unit, integration, API) are deterministic and rarely exhibit UI-related flakiness. If the user explicitly requests burn-in for backend, honor that override.
 
+**Security: Script injection prevention for reusable burn-in workflows:**
+
+When burn-in is extracted into a reusable workflow (`on: workflow_call`) with inputs like `base-ref`, `install-command`, `test-command`, or `burn-in-count`, all `${{ inputs.* }}` values MUST be passed through `env:` intermediaries in `run:` blocks. Never interpolate them directly.
+
+```yaml
+# ✅ SAFE — reusable burn-in workflow
+- name: Run burn-in loop
+  env:
+    TEST_CMD: ${{ inputs.test-command }}
+    BURN_IN_COUNT: ${{ inputs.burn-in-count }}
+    INSTALL_CMD: ${{ inputs.install-command }}
+    BASE_REF: ${{ inputs.base-ref }}
+  run: |
+    # Security: inputs passed through env: to prevent script injection
+    $INSTALL_CMD
+    for i in $(seq 1 "$BURN_IN_COUNT"); do
+      echo "Burn-in iteration $i/$BURN_IN_COUNT"
+      $TEST_CMD || exit 1
+    done
+```
+
 ---
 
 ## 2. Quality Gates

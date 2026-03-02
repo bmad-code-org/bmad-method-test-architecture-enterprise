@@ -50,6 +50,14 @@ Read `{validationChecklist}` and list all criteria.
 
 Evaluate outputs against each checklist item.
 
+### 2a. Script Injection Scan
+
+Scan all generated YAML workflow files for the vulnerable pattern: `${{ inputs.*` or other user-controlled GitHub context expressions (`${{ github.event.pull_request.title`, `${{ github.event.issue.body`, `${{ github.event.comment.body`, `${{ github.head_ref`) appearing directly inside `run:` blocks.
+
+**Detection method:** For each `run:` block in generated YAML, check if any `${{ inputs.*` or unsafe context expression appears in the run script body. If found, flag as **FAIL** with the specific line and recommend converting to the safe `env:` intermediary pattern.
+
+**Safe patterns to ignore:** `${{ steps.*.outputs.* }}`, `${{ matrix.* }}`, `${{ runner.os }}`, `${{ github.sha }}`, `${{ github.ref }}`, `${{ secrets.* }}`, `${{ env.* }}` — these are system-controlled and safe to use directly in `run:` blocks.
+
 ### 3. Write Report
 
 Write a validation report to `{outputFile}` with PASS/WARN/FAIL per section.
