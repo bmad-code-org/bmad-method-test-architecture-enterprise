@@ -48,6 +48,29 @@ Use `{knowledgeIndex}` to load `ci-burn-in.md` guidance:
 - **Frontend or Fullstack** (`test_stack_type` is `frontend` or `fullstack`): Enable burn-in by default. Burn-in targets UI flakiness (race conditions, selector instability, timing issues).
 - **Backend only** (`test_stack_type` is `backend`): Skip burn-in by default. Backend tests (unit, integration, API) are deterministic and rarely exhibit UI-related flakiness. If the user explicitly requests burn-in for backend, honor that override.
 
+**Security: Script injection prevention for reusable burn-in workflows:**
+
+When burn-in is extracted into a reusable workflow (`on: workflow_call`), all `${{ inputs.* }}` values MUST be passed through `env:` intermediaries and referenced as quoted `"$ENV_VAR"`. Never interpolate them directly.
+
+**Inputs must be DATA, not COMMANDS.** Do not accept command-shaped inputs (e.g., `inputs.install-command`, `inputs.test-command`) that get executed as shell code — even through `env:`, running `$CMD` is still command injection. Use fixed commands (e.g., `npm ci`, `npx playwright test`) and pass inputs only as data arguments.
+
+```yaml
+# ✅ SAFE — fixed commands with data-only inputs
+- name: Install dependencies
+  run: npm ci
+- name: Run burn-in loop
+  env:
+    TEST_GREP: ${{ inputs.test-grep }}
+    BURN_IN_COUNT: ${{ inputs.burn-in-count }}
+    BASE_REF: ${{ inputs.base-ref }}
+  run: |
+    # Security: inputs passed through env: to prevent script injection
+    for i in $(seq 1 "$BURN_IN_COUNT"); do
+      echo "Burn-in iteration $i/$BURN_IN_COUNT"
+      npx playwright test --grep "$TEST_GREP" || exit 1
+    done
+```
+
 ---
 
 ## 2. Quality Gates

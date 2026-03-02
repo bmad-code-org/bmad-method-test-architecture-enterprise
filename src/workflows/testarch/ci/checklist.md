@@ -161,6 +161,7 @@ Note: CI setup is typically a one-time task per repo and can be run any time aft
 - [ ] Environment variables for sensitive data
 - [ ] Artifact retention appropriate (not too long)
 - [ ] No debug output exposing secrets
+- [ ] **MUST**: No `${{ inputs.* }}` or user-controlled GitHub context (`github.event.pull_request.title`, `github.event.issue.body`, `github.event.comment.body`, `github.head_ref`) directly in `run:` blocks — all passed through `env:` intermediaries and referenced as `"$ENV_VAR"`
 
 ## Integration Points
 

@@ -119,6 +119,44 @@ Use templates from `{installed_path}` when available. Adapt the template to the 
 
 ---
 
+## Security: Script Injection Prevention
+
+> **CRITICAL:** Treat `${{ inputs.* }}` and the entire `${{ github.event.* }}` namespace as unsafe by default. ALWAYS route them through `env:` intermediaries and reference as double-quoted `"$ENV_VAR"` in `run:` blocks. NEVER interpolate them directly.
+
+When the generated pipeline is extended into reusable workflows (`on: workflow_call`), manual dispatch (`on: workflow_dispatch`), or composite actions, these values become user-controllable and can inject arbitrary shell commands.
+
+**Two rules for generated `run:` blocks:**
+
+1. **No direct interpolation** — pass unsafe contexts through `env:`, reference as `"$ENV_VAR"`
+2. **Inputs must be DATA, not COMMANDS** — never accept command-shaped inputs (e.g., `inputs.install-command`) that get executed as shell code. Even through `env:`, running `$CMD` where CMD comes from an input is still command injection. Use fixed commands and pass inputs only as arguments.
+
+```yaml
+# ✅ SAFE — input is DATA interpolated into a fixed command
+- name: Run tests
+  env:
+    TEST_GREP: ${{ inputs.test-grep }}
+  run: |
+    # Security: inputs passed through env: to prevent script injection
+    npx playwright test --grep "$TEST_GREP"
+
+# ❌ NEVER — direct GitHub expression injection
+- name: Run tests
+  run: |
+    npx playwright test --grep "${{ inputs.test-grep }}"
+
+# ❌ NEVER — executing input-derived env var as a command
+- name: Install
+  env:
+    CMD: ${{ inputs.install-command }}
+  run: $CMD
+```
+
+Include a `# Security: inputs passed through env: to prevent script injection` comment in generated YAML wherever this pattern is applied.
+
+**Safe contexts** (do NOT need `env:` intermediaries): `${{ steps.*.outputs.* }}`, `${{ matrix.* }}`, `${{ runner.os }}`, `${{ github.sha }}`, `${{ github.ref }}`, `${{ secrets.* }}`, `${{ env.* }}`.
+
+---
+
 ## 2. Pipeline Stages
 
 Include stages:
