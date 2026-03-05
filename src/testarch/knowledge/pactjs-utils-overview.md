@@ -2,13 +2,14 @@
 
 ## Principle
 
-Use production-ready utilities from `@seontechnologies/pactjs-utils` to eliminate boilerplate in consumer-driven contract testing. The library wraps `@pact-foundation/pact` with type-safe helpers for provider state creation, verifier configuration, and request filter injection — working equally well for HTTP and message (async/Kafka) contracts.
+Use production-ready utilities from `@seontechnologies/pactjs-utils` to eliminate boilerplate in consumer-driven contract testing. The library wraps `@pact-foundation/pact` with type-safe helpers for provider state creation, PactV4 JSON interaction builders, verifier configuration, and request filter injection — working equally well for HTTP and message (async/Kafka) contracts.
 
 ## Rationale
 
 ### Problems with raw @pact-foundation/pact
 
 - **JsonMap casting**: Provider state parameters require `JsonMap` type — manually casting every value is error-prone and verbose
+- **Repeated builder lambdas**: PactV4 interactions often repeat inline callbacks with `builder.query(...)`, `builder.headers(...)`, and `builder.jsonBody(...)`
 - **Verifier configuration sprawl**: `VerifierOptions` requires 30+ lines of scattered configuration (broker URL, selectors, state handlers, request filters, version tags)
 - **Environment variable juggling**: Different env vars for local vs remote flows, breaking change coordination, payload URL matching
 - **Express middleware types**: Request filter requires Express types that aren't re-exported from Pact
@@ -19,6 +20,8 @@ Use production-ready utilities from `@seontechnologies/pactjs-utils` to eliminat
 
 - **`createProviderState`**: One-call tuple builder for `.given()` — handles all JsonMap conversion automatically
 - **`toJsonMap`**: Explicit type coercion (null→"null", Date→ISO string, nested objects flattened)
+- **`setJsonContent`**: Curried callback helper for PactV4 `.withRequest(...)` / `.willRespondWith(...)` builders (query/headers/body)
+- **`setJsonBody`**: Body-only shorthand alias of `setJsonContent({ body })`
 - **`buildVerifierOptions`**: Single function assembles complete VerifierOptions from minimal inputs — handles local/remote/BDCT flows
 - **`buildMessageVerifierOptions`**: Same as above but for message/Kafka provider verification
 - **`handlePactBrokerUrlAndSelectors`**: Resolves broker URL and consumer version selectors from env vars with breaking change awareness
@@ -43,6 +46,8 @@ npm install -D @pact-foundation/pact
 | ----------------- | --------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------- |
 | Consumer Helpers  | `createProviderState`             | Builds `[stateName, JsonMap]` tuple from typed input | Consumer tests: `.given(...createProviderState(input))`          |
 | Consumer Helpers  | `toJsonMap`                       | Converts any object to Pact-compatible `JsonMap`     | Explicit type coercion for provider state params                 |
+| Consumer Helpers  | `setJsonContent`                  | Curried request/response JSON callback helper        | PactV4 `.withRequest(...)` and `.willRespondWith(...)` builders  |
+| Consumer Helpers  | `setJsonBody`                     | Body-only alias of `setJsonContent`                  | Body-only `.willRespondWith(...)` responses                      |
 | Provider Verifier | `buildVerifierOptions`            | Assembles complete HTTP `VerifierOptions`            | Provider verification: `new Verifier(buildVerifierOptions(...))` |
 | Provider Verifier | `buildMessageVerifierOptions`     | Assembles message `VerifierOptions`                  | Kafka/async provider verification                                |
 | Provider Verifier | `handlePactBrokerUrlAndSelectors` | Resolves broker URL + selectors from env vars        | Env-aware broker configuration                                   |
@@ -140,11 +145,12 @@ await new Verifier(opts).verifyProvider();
 - **Local flow**: No broker needed — set `pactUrls` in verifier options pointing to local pact files
 - **Remote flow**: Set `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN` env vars
 - **Breaking changes**: Set `includeMainAndDeployed: false` when coordinating breaking changes (verifies only matchingBranch)
-- **Type exports**: Library exports `StateHandlers`, `RequestFilter`, `JsonMap`, `ConsumerVersionSelector` types
+- **Builder helpers**: Use `setJsonContent` when you need query/headers/body together; use `setJsonBody` for body-only callbacks
+- **Type exports**: Library exports `StateHandlers`, `RequestFilter`, `JsonMap`, `JsonContentInput`, `ConsumerVersionSelector` types
 
 ## Related Fragments
 
-- `pactjs-utils-consumer-helpers.md` — detailed createProviderState and toJsonMap usage
+- `pactjs-utils-consumer-helpers.md` — detailed createProviderState, toJsonMap, setJsonContent, and setJsonBody usage
 - `pactjs-utils-provider-verifier.md` — detailed buildVerifierOptions and broker configuration
 - `pactjs-utils-request-filter.md` — detailed createRequestFilter and auth patterns
 - `contract-testing.md` — foundational contract testing patterns (raw Pact.js approach)

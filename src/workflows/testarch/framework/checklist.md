@@ -188,6 +188,30 @@ Before starting the workflow:
 - [ ] Config follows `playwright-config.md` or `test-config.md`
 - [ ] Test quality matches `test-quality.md`
 
+### Pact Consumer CDC Alignment (when `tea_use_pactjs_utils` enabled)
+
+- [ ] `vitest.config.pact.ts` is minimal (no pool/coverage/setup copied from unit config)
+- [ ] Script names match pactjs-utils (`test:pact:consumer`, `publish:pact`, `can:i:deploy:consumer`, `record:consumer:deployment`)
+- [ ] Scripts source `env-setup.sh` inline in package.json
+- [ ] Shell scripts use `pact-broker` not `npx pact-broker`
+- [ ] Shell scripts use `PACTICIPANT` env var pattern (not hardcoded service names)
+- [ ] `can-i-deploy.sh` has `--retry-while-unknown=10 --retry-interval=30`
+- [ ] `record-deployment.sh` has branch guard (only records on main/master)
+- [ ] `env-setup.sh` uses `set -eu`; broker scripts use `set -euo pipefail` — each with explanatory comment
+- [ ] CI workflow named `contract-test-consumer.yml`
+- [ ] CI has workflow-level env block (not per-step)
+- [ ] CI has `detect-breaking-change` step before install
+- [ ] CI step numbering skips (3) — webhook-triggered provider verification
+- [ ] CI can-i-deploy has `PACT_BREAKING_CHANGE != 'true'` condition
+- [ ] CI has NO upload-artifact step (broker is source of truth)
+- [ ] `.github/actions/detect-breaking-change/action.yml` exists
+- [ ] Consumer tests use `.pacttest.ts` extension
+- [ ] Consumer tests use PactV4 `addInteraction()` builder (not PactV3 fluent API)
+- [ ] Consumer tests call REAL consumer code (actual API client functions), NOT raw `fetch()`
+- [ ] Consumer code exposes URL injection mechanism (`setApiUrl()`, env var, or constructor param)
+- [ ] Local consumer-helpers shim present if `@seontechnologies/pactjs-utils` not installed
+- [ ] `.gitignore` includes `/pacts/` and `pact-logs/`
+
 ### Security Checks
 
 - [ ] No credentials in configuration files

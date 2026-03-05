@@ -41,7 +41,7 @@ The solution combines three components that work together to enforce quality:
 
 **Playwright-Utils examples:** `api-request`, `auth-session`, `intercept-network-call`, `recurse`, `log`, `network-recorder`, `burn-in`, `network-error-monitor`, `file-utils`.
 
-**pactjs-utils examples:** `createProviderState`, `toJsonMap`, `createRequestFilter`, `noOpRequestFilter`, `buildVerifierOptions`, `buildMessageVerifierOptions`.
+**pactjs-utils examples:** `createProviderState`, `toJsonMap`, `setJsonBody`, `setJsonContent`, `createRequestFilter`, `noOpRequestFilter`, `buildVerifierOptions`, `buildMessageVerifierOptions`.
 
 Together, these utility libraries eliminate the need to reinvent core testing primitives across UI, API, web, non-web, and contract testing.
 

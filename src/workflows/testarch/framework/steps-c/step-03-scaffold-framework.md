@@ -138,12 +138,13 @@ Create the idiomatic test directory for the detected language:
 
 **If `config.tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`):
 
-Create contract testing directory structure:
+Create contract testing directory structure per `pact-consumer-framework-setup.md`:
 
-- `pact/http/consumer/` — consumer contract tests
-- `pact/http/provider/` — provider verification tests and state handlers
-- `pact/http/helpers/` — shared helpers (request filter, state constants)
-- `pact/message/` — message/Kafka contract tests (if async patterns detected)
+- `tests/contract/consumer/` — consumer contract test files (`.pacttest.ts` extension)
+- `tests/contract/support/` — pact config, provider state factories, consumer helpers shim
+- `scripts/` — shell scripts (`env-setup.sh`, `publish-pact.sh`, `can-i-deploy.sh`, `record-deployment.sh`)
+- `.github/actions/detect-breaking-change/` — PR checkbox-driven breaking change detection
+- `.github/workflows/contract-test-consumer.yml` — consumer CDC CI workflow
 
 ---
 
@@ -210,6 +211,7 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `co
 
 **If Pact.js Utils enabled** (`config.tea_use_pactjs_utils`):
 
+- `pact-consumer-framework-setup.md` (CRITICAL: load this for directory structure, scripts, CI workflow, and PactV4 patterns)
 - `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `contract-testing.md`
 - Recommend installing `@seontechnologies/pactjs-utils` and `@pact-foundation/pact`
 
@@ -259,13 +261,15 @@ Create helpers for:
 
 **If `config.tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`):
 
-Create contract test samples in `pact/` directory:
+Create contract test samples per `pact-consumer-framework-setup.md`:
 
-- **Consumer test**: Example using `PactV3` + `createProviderState` for type-safe provider states
-- **Provider verification test**: Example using `buildVerifierOptions` + `createRequestFilter`
-- **Helpers**: Request filter setup (`pact/http/helpers/request-filter.ts`), shared state constants (`pact/http/helpers/states.ts`)
-- **Vitest configs** (if vitest detected): `vitest.consumer.config.mts` and `vitest.provider.config.mts` for separated test execution
-- **package.json scripts**: `test:contract:consumer`, `test:contract:provider`, `pact:publish`, `pact:can-deploy`
+- **Consumer test**: Example using PactV4 `addInteraction()` builder + `createProviderState` + real consumer code with URL injection (`.pacttest.ts` extension)
+- **Support files**: Pact config factory (`pact-config.ts`), provider state factories (`provider-states.ts`), local consumer-helpers shim (`consumer-helpers.ts`)
+- **Vitest config**: Minimal `vitest.config.pact.ts` (do NOT copy settings from unit config)
+- **Shell scripts**: `env-setup.sh`, `publish-pact.sh`, `can-i-deploy.sh`, `record-deployment.sh` in `scripts/`
+- **CI workflow**: `contract-test-consumer.yml` with detect-breaking-change action
+- **package.json scripts**: `test:pact:consumer`, `publish:pact`, `can:i:deploy:consumer`, `record:consumer:deployment`
+- **.gitignore**: Add `/pacts/` and `pact-logs/`
 
 ---
 

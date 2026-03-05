@@ -345,7 +345,7 @@ Production-ready contract testing utilities that reduce raw Pact.js boilerplate 
 - Install: `npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact`
 - Config: `tea_use_pactjs_utils: true` (default is `true`)
 - Impacts: `framework`, `atdd`, `automate`, `test-design`, `test-review`, `ci`
-- Utilities include: createProviderState, toJsonMap, buildVerifierOptions, buildMessageVerifierOptions, createRequestFilter, noOpRequestFilter, handlePactBrokerUrlAndSelectors, getProviderVersionTags
+- Utilities include: createProviderState, toJsonMap, setJsonBody, setJsonContent, buildVerifierOptions, buildMessageVerifierOptions, createRequestFilter, noOpRequestFilter, handlePactBrokerUrlAndSelectors, getProviderVersionTags
 - Supports local monorepo flow (`pactUrls`) and remote broker flow (`PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`)
 
 ### Browser Automation (Playwright CLI + MCP)
