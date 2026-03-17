@@ -82,34 +82,72 @@ async function runTests() {
   console.log('');
 
   // ============================================================
-  // Test 2: TEA Agent YAML Structure
+  // Test 2: TEA Agent Native Skill Structure
   // ============================================================
-  console.log(`${colors.yellow}Test Suite 2: TEA Agent Structure${colors.reset}\n`);
+  console.log(`${colors.yellow}Test Suite 2: TEA Agent Native Skill Structure${colors.reset}\n`);
 
   try {
-    const teaAgentPath = path.join(projectRoot, 'src/agents/tea.agent.yaml');
+    const skillDir = path.join(projectRoot, 'src/agents/tea-agent-testarch');
+    const skillMdPath = path.join(skillDir, 'SKILL.md');
+    const manifestPath = path.join(skillDir, 'bmad-skill-manifest.yaml');
 
-    if (await pathExists(teaAgentPath)) {
-      const teaAgent = yaml.load(await fs.readFile(teaAgentPath, 'utf8'));
+    // Validate SKILL.md exists and has required sections
+    if (await pathExists(skillMdPath)) {
+      const skillContent = await fs.readFile(skillMdPath, 'utf8');
 
-      assert(teaAgent.agent !== undefined, 'tea.agent.yaml has agent root key');
-      assert(teaAgent.agent.metadata !== undefined, 'TEA agent has metadata section');
-      assert(teaAgent.agent.metadata.module === 'tea', 'TEA agent metadata has module: tea');
-      assert(teaAgent.agent.metadata.id.includes('_bmad/tea/'), 'TEA agent id references _bmad/tea/ path');
-      assert(teaAgent.agent.persona !== undefined, 'TEA agent has persona section');
-      assert(teaAgent.agent.critical_actions !== undefined, 'TEA agent has critical_actions');
-      assert(teaAgent.agent.menu !== undefined, 'TEA agent has menu');
-      assert(Array.isArray(teaAgent.agent.menu) && teaAgent.agent.menu.length === 9, 'TEA agent menu has 9 workflows');
+      assert(skillContent.includes('name: tea-agent-testarch'), 'SKILL.md has correct skill name in frontmatter');
+      assert(skillContent.includes('## Identity'), 'SKILL.md has Identity section');
+      assert(skillContent.includes('## Principles'), 'SKILL.md has Principles section');
+      assert(skillContent.includes('## Critical Actions'), 'SKILL.md has Critical Actions section');
+      assert(skillContent.includes('## Capabilities'), 'SKILL.md has Capabilities section');
+      assert(skillContent.includes('## On Activation'), 'SKILL.md has On Activation section');
+
+      // Verify all 9 capability codes are present in the capabilities table
+      const capabilityCodes = ['TMT', 'TF', 'AT', 'TA', 'TD', 'TR', 'NR', 'CI', 'RV'];
+      for (const code of capabilityCodes) {
+        const codePattern = new RegExp(`\\|\\s*${code}\\s*\\|`);
+        assert(codePattern.test(skillContent), `SKILL.md has capability code ${code}`);
+      }
 
       // Verify no BMM references
-      const yamlContent = await fs.readFile(teaAgentPath, 'utf8');
-      assert(!yamlContent.includes('_bmad/bmm/'), 'TEA agent has no _bmad/bmm/ references');
-      assert(!yamlContent.includes('module: bmm'), 'TEA agent has no module: bmm references');
+      assert(!skillContent.includes('_bmad/bmm/'), 'SKILL.md has no _bmad/bmm/ references');
+      assert(!skillContent.includes('module: bmm'), 'SKILL.md has no module: bmm references');
     } else {
-      assert(false, 'TEA agent YAML exists', 'src/agents/tea.agent.yaml not found - run Phase 2 first');
+      assert(false, 'SKILL.md exists', 'src/agents/tea-agent-testarch/SKILL.md not found');
+    }
+
+    // Validate bmad-skill-manifest.yaml
+    if (await pathExists(manifestPath)) {
+      const manifest = yaml.load(await fs.readFile(manifestPath, 'utf8'));
+
+      assert(manifest.type === 'agent', 'Manifest has type: agent');
+      assert(manifest.name === 'tea-agent-testarch', 'Manifest has correct name');
+      assert(manifest.module === 'tea', 'Manifest has module: tea');
+      assert(manifest.canonicalId === 'tea-agent-testarch', 'Manifest has correct canonicalId');
+      assert(manifest.webskip === true, 'Manifest has webskip: true');
+      assert(manifest.hasSidecar === false, 'Manifest has hasSidecar: false');
+
+      // Verify all 9 capability skill IDs reference real workflow directories
+      const expectedSkillDirs = [
+        'bmad-teach-me-testing',
+        'bmad-testarch-framework',
+        'bmad-testarch-atdd',
+        'bmad-testarch-automate',
+        'bmad-testarch-test-design',
+        'bmad-testarch-trace',
+        'bmad-testarch-nfr',
+        'bmad-testarch-ci',
+        'bmad-testarch-test-review',
+      ];
+      for (const skillDir of expectedSkillDirs) {
+        const workflowDir = path.join(projectRoot, `src/workflows/testarch/${skillDir}`);
+        assert(await pathExists(workflowDir), `Capability skill ${skillDir} has matching workflow directory`);
+      }
+    } else {
+      assert(false, 'bmad-skill-manifest.yaml exists', 'src/agents/tea-agent-testarch/bmad-skill-manifest.yaml not found');
     }
   } catch (error) {
-    assert(false, 'TEA agent structure validates', error.message);
+    assert(false, 'TEA agent native skill structure validates', error.message);
   }
 
   console.log('');

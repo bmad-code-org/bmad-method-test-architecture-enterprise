@@ -149,16 +149,16 @@ If the BMAD installer can run but cannot fetch the Test Architect module from Gi
 
 **Solutions**:
 
-1. Verify TEA agent file exists:
+1. Verify TEA agent skill exists:
 
    ```bash
-   ls -la _bmad/tea/agents/tea.agent.yaml
+   ls -la _bmad/tea/agents/tea-agent-testarch/SKILL.md
    ```
 
-2. Validate agent YAML syntax:
+2. Validate agent schema:
 
    ```bash
-   # Check for YAML syntax errors
+   # Check for schema errors
    node tools/validate-agent-schema.js
    ```
 
@@ -737,11 +737,11 @@ Run this validation script:
 #!/bin/bash
 echo "Validating TEA Installation..."
 
-# Check agent file
-if [ -f "_bmad/tea/agents/tea.agent.yaml" ]; then
-  echo "✓ Agent file exists"
+# Check agent skill directory
+if [ -f "_bmad/tea/agents/tea-agent-testarch/SKILL.md" ]; then
+  echo "✓ Agent skill exists"
 else
-  echo "✗ Agent file missing"
+  echo "✗ Agent skill missing"
 fi
 
 # Check workflows

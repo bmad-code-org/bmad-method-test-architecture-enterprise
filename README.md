@@ -29,7 +29,7 @@ Each workflow directory contains these files, and each has a specific job:
 
 | File              | What it does                                                                                                        | When it loads                                                             |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `tea.agent.yaml`  | Expert persona — identity, principles, critical actions, menu of triggers                                           | First — always in context                                                 |
+| `SKILL.md`        | Expert persona — identity, principles, critical actions, capabilities table                                         | First — always in context                                                 |
 | `workflow.yaml`   | Machine-readable metadata — config variables, required tools, tags                                                  | Second — resolves `{project-root}`, `{config_source}`, `{test_artifacts}` |
 | `workflow.md`     | Human-readable entry point — goals, mode menu (Create/Edit/Validate), routes to first step                          | Second — presents mode choice                                             |
 | `instructions.md` | Workflow-specific rules and context (optional, supplements workflow.md)                                             | On demand                                                                 |
@@ -54,8 +54,8 @@ flowchart LR
 
 ### How It Works at Runtime
 
-1. **Trigger** — Direct commands are `/bmad:tea:automate` (Claude/Cursor/Windsurf) and `$bmad-tea-testarch-automate` (Codex). `TA` is an agent-menu trigger available only after TEA is activated; the menu in `tea.agent.yaml` maps `TA` to `automate/workflow.yaml`.
-2. **Agent loads** — `tea.agent.yaml` injects the persona (identity, principles, critical actions) into the context window.
+1. **Trigger** — Direct commands are `/bmad:tea:automate` (Claude/Cursor/Windsurf) and `$bmad-tea-testarch-automate` (Codex). `TA` is an agent-menu trigger available only after TEA is activated; the capabilities table in `SKILL.md` maps `TA` to the `bmad-testarch-automate` skill.
+2. **Agent loads** — `SKILL.md` injects the persona (identity, principles, critical actions) into the context window.
 3. **Workflow loads** — `workflow.yaml` resolves config variables and `workflow.md` presents the mode menu (Create / Edit / Validate), then routes to the first step file.
 4. **Step-by-step execution** — Only the current step file is in context (just-in-time loading). Each step explicitly names the next one (`nextStepFile: './step-02-...'`). The LLM reads, executes, saves output, then loads the next step. No future steps are ever preloaded.
 5. **Knowledge injection** — Step-01 reads `tea-index.csv` and selectively loads fragments by **tier** (core = always, extended = on-demand, specialized = only when relevant) and **config flags** (e.g., `tea_use_pactjs_utils`). This is deliberate context engineering: a backend project loads ~1,800 lines of fragments; a fullstack project loads ~4,500 lines. Conditional loading cuts context usage by 40-50%.
@@ -170,7 +170,7 @@ Workflows load only the fragments required for the current task to stay focused 
 src/
 ├── module.yaml
 ├── agents/
-│   └── tea.agent.yaml
+│   └── tea-agent-testarch/    # Native skill: SKILL.md + bmad-skill-manifest.yaml
 ├── workflows/
 │   └── testarch/
 │       ├── bmad-teach-me-testing/

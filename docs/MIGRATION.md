@@ -71,12 +71,12 @@ npx bmad-method install
 
 Internal file paths have changed to reflect TEA's standalone structure.
 
-| Old Path (BMM-embedded)         | New Path (Standalone)       |
-| ------------------------------- | --------------------------- |
-| `src/bmm/agents/tea.agent.yaml` | `src/agents/tea.agent.yaml` |
-| `src/bmm/testarch/knowledge/`   | `src/testarch/knowledge/`   |
-| `src/bmm/workflows/testarch/`   | `src/workflows/testarch/`   |
-| `_bmad/bmm/tea`                 | `_bmad/tea/`                |
+| Old Path (BMM-embedded)         | New Path (Standalone)                    |
+| ------------------------------- | ---------------------------------------- |
+| `src/bmm/agents/tea.agent.yaml` | `src/agents/tea-agent-testarch/SKILL.md` |
+| `src/bmm/testarch/knowledge/`   | `src/testarch/knowledge/`                |
+| `src/bmm/workflows/testarch/`   | `src/workflows/testarch/`                |
+| `_bmad/bmm/tea`                 | `_bmad/tea/`                             |
 
 **Action Required**: None for end users. This only affects contributors and maintainers.
 
@@ -231,7 +231,7 @@ Expected contents:
 _bmad/tea/
 ├── module.yaml         # TEA configuration
 ├── agents/
-│   └── tea.agent.yaml
+│   └── tea-agent-testarch/    # Native skill: SKILL.md + bmad-skill-manifest.yaml
 ├── workflows/
 │   └── testarch/       # 9 workflows
 └── testarch/
