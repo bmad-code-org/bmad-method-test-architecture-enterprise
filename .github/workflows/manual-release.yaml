@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: write
-  packages: write
 
 jobs:
   release:
@@ -34,7 +33,6 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: npm
-          registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
         run: npm ci
@@ -154,22 +152,6 @@ jobs:
             echo "📝 Version bump and tag were created successfully."
           fi
 
-      - name: Publish to NPM
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          VERSION="${{ steps.version.outputs.new_version }}"
-          if [[ "$VERSION" == *"alpha"* ]]; then
-            echo "Publishing alpha prerelease version with --tag alpha"
-            npm publish --tag alpha
-          elif [[ "$VERSION" == *"beta"* ]]; then
-            echo "Publishing beta prerelease version with --tag latest"
-            npm publish --tag latest
-          else
-            echo "Publishing stable version with --tag latest"
-            npm publish --tag latest
-          fi
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -185,11 +167,4 @@ jobs:
           echo "## 🎉 Successfully released v${{ steps.version.outputs.new_version }}!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Distribution" >> $GITHUB_STEP_SUMMARY
-          echo "- **NPM**: Published to npmjs.org" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Release**: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/releases/tag/v${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### ✅ Installation" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "npx bmad-method install" >> $GITHUB_STEP_SUMMARY
-          echo "# Select \"Test Architect\"" >> $GITHUB_STEP_SUMMARY
-          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
