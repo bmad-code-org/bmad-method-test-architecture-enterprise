@@ -1,0 +1,26 @@
+{
+  "name": "bmad-method-test-architecture-enterprise",
+  "owner": {
+    "name": "Murat K Ozcan (TEA Creator) & Brian (BMad) Madison"
+  },
+  "plugins": [
+    {
+      "name": "bmad-method-test-architecture-enterprise",
+      "source": "./",
+      "description": "Master Test Architect — quality strategy, test automation, CI/CD quality gates, framework setup, and structured testing education.",
+      "version": "1.7.2",
+      "skills": [
+        "./src/agents/bmad-tea",
+        "./src/workflows/testarch/bmad-testarch-atdd",
+        "./src/workflows/testarch/bmad-testarch-automate",
+        "./src/workflows/testarch/bmad-testarch-ci",
+        "./src/workflows/testarch/bmad-testarch-framework",
+        "./src/workflows/testarch/bmad-testarch-nfr",
+        "./src/workflows/testarch/bmad-testarch-test-design",
+        "./src/workflows/testarch/bmad-testarch-test-review",
+        "./src/workflows/testarch/bmad-testarch-trace",
+        "./src/workflows/testarch/bmad-teach-me-testing"
+      ]
+    }
+  ]
+}
