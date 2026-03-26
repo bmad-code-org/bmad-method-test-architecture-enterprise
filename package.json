@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "bmad-method-test-architecture-enterprise",
-  "private": true,
   "version": "1.7.2",
+  "private": true,
   "description": "Master Test Architect for quality strategy, test automation, and release gates",
   "keywords": [
     "bmad",
