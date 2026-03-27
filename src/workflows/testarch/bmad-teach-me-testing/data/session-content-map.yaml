@@ -3,9 +3,9 @@
 
 base_paths:
   tea_docs: "/docs"
-  tea_knowledge: "/src/testarch/knowledge"
+  tea_knowledge: "/src/agents/bmad-tea/resources/knowledge"
   online_base: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise"
-  github_knowledge: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/testarch/knowledge"
+  github_knowledge: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge"
 
 sessions:
   session-01-quickstart:
@@ -42,9 +42,9 @@ sessions:
         title: "Test Quality Standards"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/test-quality-standards/"
     knowledge_fragments:
-      - path: "/src/testarch/knowledge/test-quality.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/test-quality.md"
         title: "Test Quality (DoD Execution Limits)"
-      - path: "/src/testarch/knowledge/probability-impact.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/probability-impact.md"
         title: "Probability × Impact Scoring"
     online_references:
       - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/testing-as-engineering/"
@@ -68,11 +68,11 @@ sessions:
         title: "Step-File Architecture"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/step-file-architecture/"
     knowledge_fragments:
-      - path: "/src/testarch/knowledge/fixture-architecture.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/fixture-architecture.md"
         title: "Fixture Architecture Patterns"
-      - path: "/src/testarch/knowledge/network-first.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/network-first.md"
         title: "Network-First Implementation"
-      - path: "/src/testarch/knowledge/data-factories.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/data-factories.md"
         title: "Data Factories Pattern"
     online_references:
       - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/fixture-architecture/"
@@ -90,9 +90,9 @@ sessions:
         title: "Run Test Design Workflow"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/"
     knowledge_fragments:
-      - path: "/src/testarch/knowledge/test-levels-framework.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/test-levels-framework.md"
         title: "Test Levels Framework"
-      - path: "/src/testarch/knowledge/test-priorities-matrix.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/test-priorities-matrix.md"
         title: "Test Priorities Matrix"
     online_references:
       - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-test-design/"
@@ -113,11 +113,11 @@ sessions:
         title: "Run Automate Workflow"
         url: "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-automate/"
     knowledge_fragments:
-      - path: "/src/testarch/knowledge/component-tdd.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/component-tdd.md"
         title: "Component TDD Red-Green Loop"
-      - path: "/src/testarch/knowledge/api-testing-patterns.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/api-testing-patterns.md"
         title: "API Testing Patterns"
-      - path: "/src/testarch/knowledge/api-request.md"
+      - path: "/src/agents/bmad-tea/resources/knowledge/api-request.md"
         title: "API Request Utility"
     online_references:
       - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/workflows/run-atdd/"
@@ -158,6 +158,7 @@ sessions:
       categories:
         testing_patterns:
           - fixture-architecture.md
+          - fixtures-composition.md
           - network-first.md
           - data-factories.md
           - component-tdd.md
@@ -167,6 +168,7 @@ sessions:
           - timing-debugging.md
 
         playwright_utils:
+          - overview.md
           - api-request.md
           - network-recorder.md
           - intercept-network-call.md
@@ -176,6 +178,14 @@ sessions:
           - burn-in.md
           - network-error-monitor.md
           - contract-testing.md
+          - pactjs-utils-overview.md
+          - pactjs-utils-consumer-helpers.md
+          - pactjs-utils-provider-verifier.md
+          - pactjs-utils-request-filter.md
+          - pact-mcp.md
+          - pact-consumer-framework-setup.md
+          - pact-consumer-di.md
+          - visual-debugging.md
 
         browser_automation:
           - playwright-cli.md
@@ -186,11 +196,13 @@ sessions:
           - selective-testing.md
           - feature-flags.md
           - risk-governance.md
+          - adr-quality-readiness-checklist.md
 
         quality_frameworks:
           - test-quality.md
           - test-levels-framework.md
           - test-priorities-matrix.md
+          - probability-impact.md
           - nfr-criteria.md
 
         auth_security:
@@ -199,9 +211,9 @@ sessions:
           - error-handling.md
     online_references:
       - "https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/knowledge-base/"
-      - "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/testarch/knowledge"
+      - "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge"
     workflows_referenced: []
     key_concepts:
       - "Menu-driven fragment exploration"
       - "Just-in-time deep-dive learning"
-      - "35 knowledge fragments organized by category"
+      - "42 knowledge fragments organized by category"

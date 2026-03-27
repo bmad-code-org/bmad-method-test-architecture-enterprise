@@ -87,10 +87,10 @@ Without a knowledge base:
 
 **1. Manifest Defines Fragments**
 
-`src/testarch/tea-index.csv`:
+`src/agents/bmad-tea/resources/tea-index.csv`:
 
 ```csv
-id,name,description,tags,fragment_file
+id,name,description,tags,tier,fragment_file
 test-quality,Test Quality,Execution limits and isolation rules,"quality,standards",knowledge/test-quality.md
 network-first,Network-First Safeguards,Intercept-before-navigate workflow,"network,stability",knowledge/network-first.md
 fixture-architecture,Fixture Architecture,Composable fixture patterns,"fixtures,architecture",knowledge/fixture-architecture.md
@@ -109,7 +109,7 @@ Identifies fragments needed for ATDD:
 - fixture-architecture.md (reusable fixtures)
 - data-factories.md (test data)
 
-Loads only these 5 fragments (not all 35)
+Loads only these 5 fragments (not all 42)
 Generates tests following these patterns
 ```
 
@@ -294,7 +294,7 @@ await page.waitForTimeout(3000);
 
 ### Dynamic Fragment Selection
 
-TEA doesn't load all 35 fragments at once:
+TEA doesn't load all 42 fragments at once:
 
 ```
 
@@ -316,7 +316,7 @@ Skips:
 - feature-flags.md (not relevant)
 - file-utils.md (not relevant)
 
-Result: 5 relevant fragments loaded, 30 skipped
+Result: 5 relevant fragments loaded, 37 skipped
 
 ```
 

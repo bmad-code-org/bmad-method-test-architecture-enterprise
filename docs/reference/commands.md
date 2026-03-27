@@ -58,7 +58,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 4. Test Design (60 min) - Risk assessment, coverage planning
 5. ATDD & Automate (60 min) - TDD red-green, test generation
 6. Quality & Trace (45 min) - Test review, traceability, metrics
-7. Advanced Patterns (ongoing) - 35 knowledge fragments exploration
+7. Advanced Patterns (ongoing) - 42 knowledge fragments exploration
 
 **Features:**
 

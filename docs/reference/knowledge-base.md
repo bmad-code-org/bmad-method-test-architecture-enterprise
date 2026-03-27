@@ -1,11 +1,11 @@
 ---
 title: 'TEA Knowledge Base Index'
-description: Complete index of TEA's 40 knowledge fragments for context engineering
+description: Complete index of TEA's 42 knowledge fragments for context engineering
 ---
 
 # TEA Knowledge Base Index
 
-TEA uses 40 specialized knowledge fragments for context engineering. These fragments are loaded dynamically based on workflow needs via the `tea-index.csv` manifest.
+TEA uses 42 specialized knowledge fragments for context engineering. These fragments are loaded dynamically based on workflow needs via the `tea-index.csv` manifest.
 
 ## What is Context Engineering?
 
@@ -38,7 +38,7 @@ User runs a TEA workflow (e.g., `test-design`)
 
 ### 2. Manifest Lookup
 
-TEA reads `src/testarch/tea-index.csv`:
+TEA reads `src/agents/bmad-tea/resources/tea-index.csv`:
 
 ```csv
 id,name,description,tags,tier,fragment_file
@@ -60,12 +60,12 @@ AI operates with established patterns, producing consistent results
 
 Core patterns for test infrastructure and fixture composition.
 
-| Fragment                                                                                                                                                   | Description                                                          | Key Topics                             |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------- |
-| [fixture-architecture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/fixture-architecture.md) | Pure function → Fixture → mergeTests composition with auto-cleanup   | Testability, composition, reusability  |
-| [network-first](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/network-first.md)               | Intercept-before-navigate workflow, HAR capture, deterministic waits | Flakiness prevention, network patterns |
-| [playwright-config](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/playwright-config.md)       | Environment switching, timeout standards, artifact outputs           | Configuration, environments, CI        |
-| [fixtures-composition](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/fixtures-composition.md) | mergeTests composition patterns for combining utilities              | Fixture merging, utility composition   |
+| Fragment                                                                                                                                                                    | Description                                                          | Key Topics                             |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------- |
+| [fixture-architecture](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/fixture-architecture.md) | Pure function → Fixture → mergeTests composition with auto-cleanup   | Testability, composition, reusability  |
+| [network-first](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/network-first.md)               | Intercept-before-navigate workflow, HAR capture, deterministic waits | Flakiness prevention, network patterns |
+| [playwright-config](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/playwright-config.md)       | Environment switching, timeout standards, artifact outputs           | Configuration, environments, CI        |
+| [fixtures-composition](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/fixtures-composition.md) | mergeTests composition patterns for combining utilities              | Fixture merging, utility composition   |
 
 **Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`
 
@@ -75,11 +75,11 @@ Core patterns for test infrastructure and fixture composition.
 
 Patterns for test data generation, authentication, and setup.
 
-| Fragment                                                                                                                                       | Description                                                  | Key Topics                        |
-| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------- |
-| [data-factories](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/data-factories.md) | Factory patterns with faker, overrides, API seeding, cleanup | Test data, factories, cleanup     |
-| [email-auth](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/email-auth.md)         | Magic link extraction, state preservation, negative flows    | Authentication, email testing     |
-| [auth-session](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/auth-session.md)     | Token persistence, multi-user, API/browser authentication    | Auth patterns, session management |
+| Fragment                                                                                                                                                        | Description                                                  | Key Topics                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------- |
+| [data-factories](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/data-factories.md) | Factory patterns with faker, overrides, API seeding, cleanup | Test data, factories, cleanup     |
+| [email-auth](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/email-auth.md)         | Magic link extraction, state preservation, negative flows    | Authentication, email testing     |
+| [auth-session](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/auth-session.md)     | Token persistence, multi-user, API/browser authentication    | Auth patterns, session management |
 
 **Used in:** `framework`, `atdd`, `automate`, `test-review`
 
@@ -89,12 +89,12 @@ Patterns for test data generation, authentication, and setup.
 
 Network interception, error handling, and reliability patterns.
 
-| Fragment                                                                                                                                                       | Description                                                    | Key Topics                      |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------- |
-| [network-recorder](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/network-recorder.md)             | HAR record/playback, CRUD detection for offline testing        | Offline testing, network replay |
-| [intercept-network-call](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/intercept-network-call.md) | Network spy/stub, JSON parsing for UI tests                    | Mocking, interception, stubbing |
-| [error-handling](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/error-handling.md)                 | Scoped exception handling, retry validation, telemetry logging | Error patterns, resilience      |
-| [network-error-monitor](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/network-error-monitor.md)   | HTTP 4xx/5xx detection for UI tests                            | Error detection, monitoring     |
+| Fragment                                                                                                                                                                        | Description                                                    | Key Topics                      |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------- |
+| [network-recorder](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/network-recorder.md)             | HAR record/playback, CRUD detection for offline testing        | Offline testing, network replay |
+| [intercept-network-call](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/intercept-network-call.md) | Network spy/stub, JSON parsing for UI tests                    | Mocking, interception, stubbing |
+| [error-handling](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/error-handling.md)                 | Scoped exception handling, retry validation, telemetry logging | Error patterns, resilience      |
+| [network-error-monitor](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/network-error-monitor.md)   | HTTP 4xx/5xx detection for UI tests                            | Error detection, monitoring     |
 
 **Used in:** `atdd`, `automate`, `test-review`
 
@@ -104,11 +104,11 @@ Network interception, error handling, and reliability patterns.
 
 CI/CD patterns, burn-in testing, and selective test execution.
 
-| Fragment                                                                                                                                             | Description                                        | Key Topics                   |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------- |
-| [ci-burn-in](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/ci-burn-in.md)               | Staged jobs, shard orchestration, burn-in loops    | CI/CD, flakiness detection   |
-| [burn-in](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/burn-in.md)                     | Smart test selection, git diff for CI optimization | Test selection, performance  |
-| [selective-testing](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/selective-testing.md) | Tag/grep usage, spec filters, diff-based runs      | Test filtering, optimization |
+| Fragment                                                                                                                                                              | Description                                        | Key Topics                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------- |
+| [ci-burn-in](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/ci-burn-in.md)               | Staged jobs, shard orchestration, burn-in loops    | CI/CD, flakiness detection   |
+| [burn-in](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/burn-in.md)                     | Smart test selection, git diff for CI optimization | Test selection, performance  |
+| [selective-testing](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/selective-testing.md) | Tag/grep usage, spec filters, diff-based runs      | Test filtering, optimization |
 
 **Used in:** `ci`, `test-review`
 
@@ -118,13 +118,13 @@ CI/CD patterns, burn-in testing, and selective test execution.
 
 Test quality standards, test level selection, and TDD patterns.
 
-| Fragment                                                                                                                                                       | Description                                          | Key Topics                         |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------- |
-| [test-quality](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/test-quality.md)                     | Execution limits, isolation rules, green criteria    | DoD, best practices, anti-patterns |
-| [test-levels-framework](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/test-levels-framework.md)   | Guidelines for unit, integration, E2E selection      | Test pyramid, level selection      |
-| [test-priorities-matrix](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/test-priorities-matrix.md) | P0-P3 criteria, coverage targets, execution ordering | Prioritization, risk-based testing |
-| [test-healing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/test-healing-patterns.md)   | Common failure patterns and automated fixes          | Debugging, healing, fixes          |
-| [component-tdd](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/component-tdd.md)                   | Red→green→refactor workflow, provider isolation      | TDD, component testing             |
+| Fragment                                                                                                                                                                        | Description                                          | Key Topics                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ---------------------------------- |
+| [test-quality](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-quality.md)                     | Execution limits, isolation rules, green criteria    | DoD, best practices, anti-patterns |
+| [test-levels-framework](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-levels-framework.md)   | Guidelines for unit, integration, E2E selection      | Test pyramid, level selection      |
+| [test-priorities-matrix](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-priorities-matrix.md) | P0-P3 criteria, coverage targets, execution ordering | Prioritization, risk-based testing |
+| [test-healing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-healing-patterns.md)   | Common failure patterns and automated fixes          | Debugging, healing, fixes          |
+| [component-tdd](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/component-tdd.md)                   | Red→green→refactor workflow, provider isolation      | TDD, component testing             |
 
 **Used in:** `test-design`, `atdd`, `automate`, `test-review`, `trace`
 
@@ -134,11 +134,12 @@ Test quality standards, test level selection, and TDD patterns.
 
 Risk assessment, governance, and gate decision frameworks.
 
-| Fragment                                                                                                                                               | Description                                                | Key Topics                    |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- | ----------------------------- |
-| [risk-governance](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/risk-governance.md)       | Scoring matrix, category ownership, gate decision rules    | Risk assessment, governance   |
-| [probability-impact](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/probability-impact.md) | Probability × impact scale for scoring matrix              | Risk scoring, impact analysis |
-| [nfr-criteria](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/nfr-criteria.md)             | Security, performance, reliability, maintainability status | NFRs, compliance, enterprise  |
+| Fragment                                                                                                                                                                                          | Description                                                          | Key Topics                            |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------- |
+| [risk-governance](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/risk-governance.md)                                 | Scoring matrix, category ownership, gate decision rules              | Risk assessment, governance           |
+| [probability-impact](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/probability-impact.md)                           | Probability × impact scale for scoring matrix                        | Risk scoring, impact analysis         |
+| [nfr-criteria](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/nfr-criteria.md)                                       | Security, performance, reliability, maintainability status           | NFRs, compliance, enterprise          |
+| [adr-quality-readiness-checklist](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/adr-quality-readiness-checklist.md) | 8-category, 29-criteria framework for testability and NFR compliance | Quality readiness, ADR, NFR checklist |
 
 **Used in:** `test-design`, `nfr-assess`, `trace`
 
@@ -148,11 +149,11 @@ Risk assessment, governance, and gate decision frameworks.
 
 Selector resilience, race condition debugging, and visual debugging.
 
-| Fragment                                                                                                                                                 | Description                                           | Key Topics                         |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------- |
-| [selector-resilience](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/selector-resilience.md) | Robust selector strategies and debugging              | Selectors, locators, resilience    |
-| [timing-debugging](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/timing-debugging.md)       | Race condition identification and deterministic fixes | Race conditions, timing issues     |
-| [visual-debugging](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/visual-debugging.md)       | Trace viewer usage, artifact expectations             | Debugging, trace viewer, artifacts |
+| Fragment                                                                                                                                                                  | Description                                           | Key Topics                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- | ---------------------------------- |
+| [selector-resilience](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/selector-resilience.md) | Robust selector strategies and debugging              | Selectors, locators, resilience    |
+| [timing-debugging](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/timing-debugging.md)       | Race condition identification and deterministic fixes | Race conditions, timing issues     |
+| [visual-debugging](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/visual-debugging.md)       | Trace viewer usage, artifact expectations             | Debugging, trace viewer, artifacts |
 
 **Used in:** `atdd`, `automate`, `test-review`
 
@@ -162,10 +163,10 @@ Selector resilience, race condition debugging, and visual debugging.
 
 Feature flag testing and pure API testing patterns.
 
-| Fragment                                                                                                                                                   | Description                                             | Key Topics                   |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------- |
-| [feature-flags](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/feature-flags.md)               | Enum management, targeting helpers, cleanup, checklists | Feature flags, toggles       |
-| [api-testing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/api-testing-patterns.md) | Pure API patterns without browser                       | API testing, backend testing |
+| Fragment                                                                                                                                                                    | Description                                             | Key Topics                   |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------- |
+| [feature-flags](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/feature-flags.md)               | Enum management, targeting helpers, cleanup, checklists | Feature flags, toggles       |
+| [api-testing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/api-testing-patterns.md) | Pure API patterns without browser                       | API testing, backend testing |
 
 **Used in:** `test-design`, `atdd`, `automate`
 
@@ -175,16 +176,16 @@ Feature flag testing and pure API testing patterns.
 
 Contract testing fundamentals plus Pact.js Utils and Pact MCP integrations.
 
-| Fragment                                                                                                                                                                       | Description                                                                                                                    | Key Topics                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| [contract-testing](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/contract-testing.md)                             | Raw Pact patterns, publishing, verification, resilience                                                                        | Contract testing, Pact fundamentals            |
-| [pactjs-utils-overview](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pactjs-utils-overview.md)                   | Installation, flow decision tree, utility map                                                                                  | pactjs-utils, CDCT/BDCT, integration strategy  |
-| [pactjs-utils-consumer-helpers](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pactjs-utils-consumer-helpers.md)   | Provider-state helpers: `createProviderState`, `toJsonMap`; request/response callback helpers: `setJsonBody`, `setJsonContent` | pactjs-utils, consumer testing, provider state |
-| [pactjs-utils-provider-verifier](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pactjs-utils-provider-verifier.md) | `buildVerifierOptions`, `buildMessageVerifierOptions`, broker selectors, tagging                                               | pactjs-utils, provider verification, CI        |
-| [pactjs-utils-request-filter](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pactjs-utils-request-filter.md)       | `createRequestFilter`, `noOpRequestFilter` auth/header patterns                                                                | pactjs-utils, request filter, auth injection   |
-| [pact-mcp](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pact-mcp.md)                                             | SmartBear MCP tools for provider states, review, can-i-deploy, matrix                                                          | pact-mcp, broker interaction, pactflow         |
-| [pact-consumer-framework-setup](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pact-consumer-framework-setup.md)   | Consumer CDC framework scaffolding: directory layout, scripts, CI workflow, and PactV4 test patterns                           | pactjs-utils, consumer CDC, framework setup    |
-| [pact-consumer-di](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/pact-consumer-di.md)                             | Dependency-injection pattern for Pact consumer tests using real client code                                                    | pact, consumer, DI, contract accuracy          |
+| Fragment                                                                                                                                                                                        | Description                                                                                                                    | Key Topics                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| [contract-testing](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/contract-testing.md)                             | Raw Pact patterns, publishing, verification, resilience                                                                        | Contract testing, Pact fundamentals            |
+| [pactjs-utils-overview](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pactjs-utils-overview.md)                   | Installation, flow decision tree, utility map                                                                                  | pactjs-utils, CDCT/BDCT, integration strategy  |
+| [pactjs-utils-consumer-helpers](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pactjs-utils-consumer-helpers.md)   | Provider-state helpers: `createProviderState`, `toJsonMap`; request/response callback helpers: `setJsonBody`, `setJsonContent` | pactjs-utils, consumer testing, provider state |
+| [pactjs-utils-provider-verifier](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pactjs-utils-provider-verifier.md) | `buildVerifierOptions`, `buildMessageVerifierOptions`, broker selectors, tagging                                               | pactjs-utils, provider verification, CI        |
+| [pactjs-utils-request-filter](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pactjs-utils-request-filter.md)       | `createRequestFilter`, `noOpRequestFilter` auth/header patterns                                                                | pactjs-utils, request filter, auth injection   |
+| [pact-mcp](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pact-mcp.md)                                             | SmartBear MCP tools for provider states, review, can-i-deploy, matrix                                                          | pact-mcp, broker interaction, pactflow         |
+| [pact-consumer-framework-setup](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pact-consumer-framework-setup.md)   | Consumer CDC framework scaffolding: directory layout, scripts, CI workflow, and PactV4 test patterns                           | pactjs-utils, consumer CDC, framework setup    |
+| [pact-consumer-di](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pact-consumer-di.md)                             | Dependency-injection pattern for Pact consumer tests using real client code                                                    | pact, consumer, DI, contract accuracy          |
 
 **Used in:** `framework`, `test-design`, `atdd`, `automate`, `test-review`, `ci` (conditioned by `tea_use_pactjs_utils` and `tea_pact_mcp`)
 
@@ -194,9 +195,9 @@ Contract testing fundamentals plus Pact.js Utils and Pact MCP integrations.
 
 CLI and MCP integration for AI-driven browser automation during test generation.
 
-| Fragment                                                                                                                                       | Description                                                                                     | Key Topics                                |
-| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| [playwright-cli](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/playwright-cli.md) | Token-efficient CLI for AI coding agents: element refs, sessions, snapshots, browser automation | CLI, browser, agent, automation, snapshot |
+| Fragment                                                                                                                                                        | Description                                                                                     | Key Topics                                |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| [playwright-cli](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/playwright-cli.md) | Token-efficient CLI for AI coding agents: element refs, sessions, snapshots, browser automation | CLI, browser, agent, automation, snapshot |
 
 **Used in:** `atdd`, `automate`, `test-design`, `test-review`, `nfr-assess` (when `tea_browser_automation` is `cli` or `auto`)
 
@@ -206,17 +207,18 @@ CLI and MCP integration for AI-driven browser automation during test generation.
 
 Patterns for using `@seontechnologies/playwright-utils` package (9 utilities).
 
-| Fragment                                                                                                                                                       | Description                                               | Key Topics                         |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------- |
-| [api-request](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/api-request.md)                       | Typed HTTP client, schema validation, retry logic         | API calls, HTTP, validation        |
-| [auth-session](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/auth-session.md)                     | Token persistence, multi-user, API/browser authentication | Auth patterns, session management  |
-| [network-recorder](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/network-recorder.md)             | HAR record/playback, CRUD detection for offline testing   | Offline testing, network replay    |
-| [intercept-network-call](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/intercept-network-call.md) | Network spy/stub, JSON parsing for UI tests               | Mocking, interception, stubbing    |
-| [recurse](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/recurse.md)                               | Async polling for API responses, background jobs          | Polling, eventual consistency      |
-| [log](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/log.md)                                       | Structured logging for API and UI tests                   | Logging, debugging, reporting      |
-| [file-utils](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/file-utils.md)                         | CSV/XLSX/PDF/ZIP handling with download support           | File validation, exports           |
-| [burn-in](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/burn-in.md)                               | Smart test selection with git diff analysis               | CI optimization, selective testing |
-| [network-error-monitor](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/testarch/knowledge/network-error-monitor.md)   | Auto-detect HTTP 4xx/5xx errors during tests              | Error monitoring, silent failures  |
+| Fragment                                                                                                                                                                        | Description                                                 | Key Topics                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------- |
+| [api-request](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/api-request.md)                       | Typed HTTP client, schema validation, retry logic           | API calls, HTTP, validation        |
+| [auth-session](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/auth-session.md)                     | Token persistence, multi-user, API/browser authentication   | Auth patterns, session management  |
+| [network-recorder](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/network-recorder.md)             | HAR record/playback, CRUD detection for offline testing     | Offline testing, network replay    |
+| [intercept-network-call](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/intercept-network-call.md) | Network spy/stub, JSON parsing for UI tests                 | Mocking, interception, stubbing    |
+| [recurse](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/recurse.md)                               | Async polling for API responses, background jobs            | Polling, eventual consistency      |
+| [log](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/log.md)                                       | Structured logging for API and UI tests                     | Logging, debugging, reporting      |
+| [file-utils](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/file-utils.md)                         | CSV/XLSX/PDF/ZIP handling with download support             | File validation, exports           |
+| [burn-in](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/burn-in.md)                               | Smart test selection with git diff analysis                 | CI optimization, selective testing |
+| [network-error-monitor](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/network-error-monitor.md)   | Auto-detect HTTP 4xx/5xx errors during tests                | Error monitoring, silent failures  |
+| [overview](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/overview.md)                             | Playwright Utils overview, fixture-based utility principles | Overview, architecture, principles |
 
 **Note:** `fixtures-composition` is listed under Architecture & Fixtures (general Playwright `mergeTests` pattern, applies to all fixtures).
 
@@ -228,7 +230,7 @@ Patterns for using `@seontechnologies/playwright-utils` package (9 utilities).
 
 ## Fragment Manifest (tea-index.csv)
 
-**Location:** `src/testarch/tea-index.csv`
+**Location:** `src/agents/bmad-tea/resources/tea-index.csv`
 
 **Purpose:** Tracks all knowledge fragments and their usage in workflows
 
@@ -257,9 +259,9 @@ Fragments are loaded based on workflow needs and tier priority:
 - **Extended tier**: Loaded when the workflow context requires them (e.g., `auth-session.md` when tests involve authentication)
 - **Specialized tier**: Only loaded when the specific use case matches (e.g., contract-testing for microservices, email-auth for email flows)
 
-**Fragment Location:** `src/testarch/knowledge/` (all 42 fragments in a single directory)
+**Fragment Location:** `src/agents/bmad-tea/resources/knowledge/` (all 42 fragments in a single directory)
 
-**Manifest:** `src/testarch/tea-index.csv`
+**Manifest:** `src/agents/bmad-tea/resources/tea-index.csv`
 
 ---
 

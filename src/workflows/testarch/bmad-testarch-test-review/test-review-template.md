@@ -257,19 +257,19 @@ Grade:                   {grade}
 
 This review consulted the following knowledge base fragments:
 
-- **[test-quality.md](../../../testarch/knowledge/test-quality.md)** - Definition of Done for tests (no hard waits, <300 lines, <1.5 min, self-cleaning)
-- **[fixture-architecture.md](../../../testarch/knowledge/fixture-architecture.md)** - Pure function → Fixture → mergeTests pattern
-- **[network-first.md](../../../testarch/knowledge/network-first.md)** - Route intercept before navigate (race condition prevention)
-- **[data-factories.md](../../../testarch/knowledge/data-factories.md)** - Factory functions with overrides, API-first setup
-- **[test-levels-framework.md](../../../testarch/knowledge/test-levels-framework.md)** - E2E vs API vs Component vs Unit appropriateness
-- **[tdd-cycles.md](../../../testarch/knowledge/tdd-cycles.md)** - Red-Green-Refactor patterns
-- **[selective-testing.md](../../../testarch/knowledge/selective-testing.md)** - Duplicate coverage detection
-- **[ci-burn-in.md](../../../testarch/knowledge/ci-burn-in.md)** - Flakiness detection patterns (10-iteration loop)
-- **[test-priorities.md](../../../testarch/knowledge/test-priorities.md)** - P0/P1/P2/P3 classification framework
+- **[test-quality.md](../../../agents/bmad-tea/resources/knowledge/test-quality.md)** - Definition of Done for tests (no hard waits, <300 lines, <1.5 min, self-cleaning)
+- **[fixture-architecture.md](../../../agents/bmad-tea/resources/knowledge/fixture-architecture.md)** - Pure function → Fixture → mergeTests pattern
+- **[network-first.md](../../../agents/bmad-tea/resources/knowledge/network-first.md)** - Route intercept before navigate (race condition prevention)
+- **[data-factories.md](../../../agents/bmad-tea/resources/knowledge/data-factories.md)** - Factory functions with overrides, API-first setup
+- **[test-levels-framework.md](../../../agents/bmad-tea/resources/knowledge/test-levels-framework.md)** - E2E vs API vs Component vs Unit appropriateness
+- **[component-tdd.md](../../../agents/bmad-tea/resources/knowledge/component-tdd.md)** - Red-Green-Refactor patterns
+- **[selective-testing.md](../../../agents/bmad-tea/resources/knowledge/selective-testing.md)** - Duplicate coverage detection
+- **[ci-burn-in.md](../../../agents/bmad-tea/resources/knowledge/ci-burn-in.md)** - Flakiness detection patterns (10-iteration loop)
+- **[test-priorities-matrix.md](../../../agents/bmad-tea/resources/knowledge/test-priorities-matrix.md)** - P0/P1/P2/P3 classification framework
 
 For coverage mapping, consult `trace` workflow outputs.
 
-See [tea-index.csv](../../../testarch/tea-index.csv) for complete knowledge base.
+See [tea-index.csv](../../../agents/bmad-tea/resources/tea-index.csv) for complete knowledge base.
 
 ---
 
@@ -379,7 +379,7 @@ See [tea-index.csv](../../../testarch/tea-index.csv) for complete knowledge base
 
 If you have questions or feedback on this review:
 
-1. Review patterns in knowledge base: `testarch/knowledge/`
+1. Review patterns in knowledge base: `../../../agents/bmad-tea/resources/knowledge/`
 2. Consult tea-index.csv for detailed guidance
 3. Request clarification on specific violations
 4. Pair with QA engineer to apply patterns

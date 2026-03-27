@@ -82,7 +82,7 @@ Use this checklist to validate the teaching workflow meets quality standards.
 
 ### TEA Documentation Integration
 
-- [ ] Local file paths correct (`/docs/*.md`, `/src/testarch/knowledge/*.md`)
+- [ ] Local file paths correct (`/docs/*.md`, `/src/agents/bmad-tea/resources/knowledge/*.md`)
 - [ ] Online URLs correct (<https://bmad-code-org.github.io/...>)
 - [ ] GitHub fragment links correct
 - [ ] Triple reference system (local + online + GitHub) implemented

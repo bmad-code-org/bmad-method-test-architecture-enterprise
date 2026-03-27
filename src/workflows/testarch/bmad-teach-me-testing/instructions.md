@@ -94,7 +94,7 @@ Complete all 7 sessions to receive your TEA Academy completion certificate with:
 1. **Set aside dedicated time** - Each session requires focus (30-90 min)
 2. **Take notes** - Session notes are generated, but add your own insights
 3. **Apply immediately** - Practice concepts on your current project
-4. **Explore fragments** - Session 7 has 35 knowledge fragments to deep-dive
+4. **Explore fragments** - Session 7 has 42 knowledge fragments to deep-dive
 5. **Share with team** - Help others learn by sharing your experience
 
 ## Customization by Role
@@ -126,5 +126,5 @@ The workflow adapts examples based on your role:
 ## Support
 
 - **Documentation:** <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/>
-- **Knowledge Fragments:** <https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/testarch/knowledge>
+- **Knowledge Fragments:** <https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge>
 - **Issues:** Report via TEA module repository

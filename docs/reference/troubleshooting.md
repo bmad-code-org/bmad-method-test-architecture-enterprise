@@ -321,22 +321,22 @@ See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-c
 1. Verify tea-index.csv exists:
 
    ```bash
-   cat _bmad/tea/testarch/tea-index.csv | wc -l
+   cat _bmad/tea/agents/bmad-tea/resources/tea-index.csv | wc -l
    # Should show 43 lines (header + 42 fragments)
    ```
 
 2. Check knowledge fragment files:
 
    ```bash
-   ls -la _bmad/tea/testarch/knowledge/ | wc -l
+   ls -la _bmad/tea/agents/bmad-tea/resources/knowledge/ | wc -l
    # Should show 40+ files
    ```
 
 3. Validate CSV format:
 
    ```bash
-   head -5 _bmad/tea/testarch/tea-index.csv
-   # Should show: fragment_id,title,description,tags,file_path
+   head -5 _bmad/tea/agents/bmad-tea/resources/tea-index.csv
+   # Should show: id,name,description,tags,tier,fragment_file
    ```
 
 4. Check workflow manifest:
@@ -402,7 +402,7 @@ See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-c
 2. Check Playwright Utils fragments exist:
 
    ```bash
-   grep -i "playwright-utils" _bmad/tea/testarch/tea-index.csv
+   grep -i "playwright-utils" _bmad/tea/agents/bmad-tea/resources/tea-index.csv
    # Should show 6 fragments
    ```
 
@@ -477,7 +477,7 @@ See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-c
 3. Check knowledge fragments for errors:
    ```bash
    # Validate markdown syntax
-   markdownlint _bmad/tea/testarch/knowledge/*.md
+   markdownlint _bmad/tea/agents/bmad-tea/resources/knowledge/*.md
    ```
 
 ### File Permission Errors
@@ -720,7 +720,7 @@ Check these first:
 
 ### "Knowledge fragment 'test-quality' not found"
 
-**Fix**: Verify `_bmad/tea/testarch/tea-index.csv` exists and lists the fragment
+**Fix**: Verify `_bmad/tea/agents/bmad-tea/resources/tea-index.csv` exists and lists the fragment
 
 ### "Cannot write to test-results/"
 
@@ -767,12 +767,12 @@ for workflow in atdd automate ci framework nfr-assess test-design test-review tr
 done
 
 # Check knowledge base
-fragment_count=$(ls _bmad/tea/testarch/knowledge/*.md 2>/dev/null | wc -l)
+fragment_count=$(ls _bmad/tea/agents/bmad-tea/resources/knowledge/*.md 2>/dev/null | wc -l)
 echo "Knowledge fragments: $fragment_count (expected: 42)"
 
 # Check tea-index.csv
-csv_lines=$(wc -l < _bmad/tea/testarch/tea-index.csv 2>/dev/null || echo "0")
-echo "TEA index lines: $csv_lines (expected: 41)"
+csv_lines=$(wc -l < _bmad/tea/agents/bmad-tea/resources/tea-index.csv 2>/dev/null || echo "0")
+echo "TEA index lines: $csv_lines (expected: 43)"
 
 echo "Validation complete!"
 ```

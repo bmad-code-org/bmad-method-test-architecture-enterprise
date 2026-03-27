@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Playwright CLI Integration**: New `playwright-cli.md` knowledge fragment (35 total)
+- **Playwright CLI Integration**: New `playwright-cli.md` knowledge fragment (42 total)
 - **Browser Automation Config**: New `tea_browser_automation` config with 4 modes: `auto`, `cli`, `mcp`, `none`
 - **Auto Mode Heuristic**: Smart CLI/MCP selection per workflow action with fallback
 - **How-To Guide**: `docs/how-to/customization/configure-browser-automation.md`
@@ -146,7 +146,7 @@ All workflows implement the **trivariate step pattern** (Create/Edit/Validate):
   - Feature Flags & Testing Patterns (2 fragments)
   - Playwright-Utils Integration (6 fragments)
 - **Context Engineering**: Dynamic fragment loading per workflow
-- **CSV-Based Index**: `src/testarch/tea-index.csv` for fragment management
+- **CSV-Based Index**: `src/agents/bmad-tea/resources/tea-index.csv` for fragment management
 - **Consistency**: Ensures standardized outputs across workflows
 
 #### Documentation

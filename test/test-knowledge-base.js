@@ -75,7 +75,7 @@ function runTests() {
   console.log(`========================================${colors.reset}\n`);
 
   const projectRoot = path.join(__dirname, '..');
-  const kbRoot = path.join(projectRoot, 'src', 'testarch');
+  const kbRoot = path.join(projectRoot, 'src', 'agents', 'bmad-tea', 'resources');
   const indexPath = path.join(kbRoot, 'tea-index.csv');
 
   // ============================================================

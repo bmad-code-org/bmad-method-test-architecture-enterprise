@@ -168,7 +168,7 @@ async function runTests() {
   console.log(`${colors.yellow}Test Suite 3: Knowledge Base${colors.reset}\n`);
 
   try {
-    const teaIndexPath = path.join(projectRoot, 'src/testarch/tea-index.csv');
+    const teaIndexPath = path.join(projectRoot, 'src/agents/bmad-tea/resources/tea-index.csv');
 
     if (await pathExists(teaIndexPath)) {
       const csvContent = await fs.readFile(teaIndexPath, 'utf8');

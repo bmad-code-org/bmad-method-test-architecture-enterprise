@@ -160,8 +160,8 @@ TEA variables are defined in `src/module.yaml` and prompted during install:
 
 TEA relies on a curated testing knowledge base:
 
-- Index: `src/testarch/tea-index.csv`
-- Fragments: `src/testarch/knowledge/`
+- Index: `src/agents/bmad-tea/resources/tea-index.csv`
+- Fragments: `src/agents/bmad-tea/resources/knowledge/`
 
 Workflows load only the fragments required for the current task to stay focused and compliant.
 
@@ -183,9 +183,11 @@ src/
 │       ├── bmad-testarch-test-design/
 │       ├── bmad-testarch-test-review/
 │       └── bmad-testarch-trace/
-└── testarch/
-    ├── tea-index.csv
-    └── knowledge/
+└── agents/
+    └── bmad-tea/
+        └── resources/
+            ├── tea-index.csv
+            └── knowledge/
 ```
 
 ## Extending TEA

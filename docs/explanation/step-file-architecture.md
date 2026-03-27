@@ -269,13 +269,13 @@ Step files explicitly load knowledge fragments:
 ```markdown
 ## Step 2: Load Knowledge Fragments
 
-Consult `{project-root}/_bmad/tea/testarch/tea-index.csv` and load:
+Consult `{project-root}/_bmad/tea/agents/bmad-tea/resources/tea-index.csv` and load:
 
 1. **fixture-architecture** - For composable fixture patterns
 2. **api-request** - For API test patterns
 3. **network-first** - For network handling patterns
 
-Read each fragment from `{project-root}/_bmad/tea/testarch/knowledge/`.
+Read each fragment from `{project-root}/_bmad/tea/agents/bmad-tea/resources/knowledge/`.
 
 These fragments are your quality guidelines - use their patterns in generated tests.
 ```

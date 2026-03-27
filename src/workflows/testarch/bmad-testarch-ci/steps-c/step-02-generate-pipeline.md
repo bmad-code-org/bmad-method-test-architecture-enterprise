@@ -2,6 +2,7 @@
 name: 'step-02-generate-pipeline'
 description: 'Generate CI pipeline configuration with adaptive orchestration (agent-team, subagent, or sequential)'
 nextStepFile: './step-03-configure-quality-gates.md'
+knowledgeIndex: '{project-root}/_bmad/tea/agents/bmad-tea/resources/tea-index.csv'
 outputFile: '{test_artifacts}/ci-pipeline-progress.md'
 ---
 
@@ -187,6 +188,11 @@ Write the selected pipeline configuration to the resolved output path from step 
 - **Backend (Ruby)**: Use `bundle exec rspec` with coverage, cache `vendor/bundle`
 
 ### Contract Testing Pipeline (if `tea_use_pactjs_utils` enabled)
+
+**If `tea_use_pactjs_utils` is enabled**, use `{knowledgeIndex}` to load:
+
+- `pactjs-utils-provider-verifier.md` — `buildVerifierOptions`, broker config, and breaking change patterns for CI provider verification
+- `pactjs-utils-request-filter.md` — `createRequestFilter` auth injection patterns for CI pipeline auth setup
 
 When `tea_use_pactjs_utils` is enabled, add a `contract-test` stage after `test`:
 

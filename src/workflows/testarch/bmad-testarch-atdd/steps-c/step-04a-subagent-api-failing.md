@@ -19,6 +19,8 @@ This is an **isolated subagent** running in parallel with E2E failing test gener
 - Config: test framework, Playwright Utils enabled/disabled, Pact.js Utils enabled/disabled (`use_pactjs_utils`), Pact MCP mode (`pact_mcp`)
 - Provider Endpoint Map (if `use_pactjs_utils` enabled and provider source accessible)
 
+**If `use_pactjs_utils` is enabled:** Also generate consumer contract tests alongside API tests. Use the loaded pactjs-utils fragments (`pactjs-utils-overview`, `pactjs-utils-consumer-helpers`, `pactjs-utils-provider-verifier`, `pactjs-utils-request-filter`, `pact-consumer-di`) for patterns. If `pact_mcp` is `"mcp"`, use SmartBear MCP tools (Fetch Provider States, Generate Pact Tests) to inform test generation.
+
 **Your task:** Generate API tests that will FAIL because the feature is not implemented yet (TDD RED PHASE).
 
 ---
@@ -227,7 +229,13 @@ Write JSON to temp file: `/tmp/tea-atdd-api-tests-{{timestamp}}.json`
     }
   ],
   "fixture_needs": ["userDataFactory"],
-  "knowledge_fragments_used": ["api-request", "data-factories", "api-testing-patterns"],
+  "knowledge_fragments_used": [
+    "api-request",
+    "data-factories",
+    "api-testing-patterns",
+    "pactjs-utils-consumer-helpers",
+    "pact-consumer-di"
+  ],
   "test_count": 3,
   "tdd_phase": "RED",
   "provider_scrutiny": "completed",

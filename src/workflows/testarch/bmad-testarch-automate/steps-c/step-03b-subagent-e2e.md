@@ -14,7 +14,7 @@ This is an **isolated subagent** running in parallel with API test generation.
 **What you have from parent workflow:**
 
 - Target features/user journeys identified in Step 2
-- Knowledge fragments loaded: fixture-architecture, network-first, selector-resilience
+- Knowledge fragments loaded: fixture-architecture, network-first, selector-resilience, playwright-cli
 - Config: test framework, Playwright Utils enabled/disabled
 - Coverage plan: which user journeys need E2E testing
 
@@ -160,7 +160,7 @@ Write JSON to temp file: `/tmp/tea-automate-e2e-tests-{{timestamp}}.json`
     }
   ],
   "fixture_needs": ["authenticatedUserFixture", "paymentMockFixture", "checkoutDataFixture"],
-  "knowledge_fragments_used": ["fixture-architecture", "network-first", "selector-resilience"],
+  "knowledge_fragments_used": ["fixture-architecture", "network-first", "selector-resilience", "playwright-cli"],
   "test_count": 15,
   "summary": "Generated 15 E2E test cases covering 5 user journeys"
 }

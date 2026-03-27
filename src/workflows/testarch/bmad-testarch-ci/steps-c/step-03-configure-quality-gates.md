@@ -2,7 +2,7 @@
 name: 'step-03-configure-quality-gates'
 description: 'Configure burn-in, quality gates, and notifications'
 nextStepFile: './step-04-validate-and-summary.md'
-knowledgeIndex: '{project-root}/_bmad/tea/testarch/tea-index.csv'
+knowledgeIndex: '{project-root}/_bmad/tea/agents/bmad-tea/resources/tea-index.csv'
 outputFile: '{test_artifacts}/ci-pipeline-progress.md'
 ---
 
@@ -82,6 +82,11 @@ Define:
 - Optional: require traceability or nfr-assess output before release
 
 **Contract testing gate** (if `tea_use_pactjs_utils` is enabled):
+
+Use `{knowledgeIndex}` to load:
+
+- `pactjs-utils-provider-verifier.md` — `buildVerifierOptions`, broker config, and breaking change patterns for provider verification gates
+- `pactjs-utils-request-filter.md` — `createRequestFilter` auth injection patterns for CI pipeline auth setup
 
 - **can-i-deploy must pass** before any deployment to staging or production
 - Block the deployment pipeline if contract verification fails
