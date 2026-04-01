@@ -1,19 +1,9 @@
 ---
-title: Test Architect (TEA)
-description: Risk-based testing workflows, automation guidance, and release gates for BMad Method
-template: splash
-hero:
-  title: Test Architect (TEA)
-  tagline: Risk-based testing workflows, automation guidance, and release gates for BMad Method
-  actions:
-    - text: Tutorial
-      link: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/tutorials/tea-lite-quickstart/
-      icon: right-arrow
-      variant: primary
-    - text: View on GitHub
-      link: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise
-      icon: external
+title: Welcome
+description: Test Architect (TEA) - Risk-based testing workflows, automation guidance, and release gates for BMad Method
 ---
+
+# Test Architect (TEA)
 
 ## What is TEA?
 
