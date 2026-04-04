@@ -41,10 +41,6 @@ export default defineConfig({
       title: 'Test Architect (TEA)',
       tagline: 'Risk-based test strategy, automation guidance, and release gate decisions for quality-driven development.',
 
-      banner: {
-        content: 'Build your own BMad modules and share them with the community! <a href="https://bmad-builder-docs.bmad-method.org/tutorials/build-your-first-module/">Get started</a> or <a href="https://bmad-builder-docs.bmad-method.org/how-to/distribute-your-module/">submit to the marketplace</a>.',
-      },
-
       favicon: '/favicon.ico',
 
       // Social links
