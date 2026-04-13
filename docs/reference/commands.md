@@ -177,7 +177,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 ## atdd
 
-**Purpose:** Generate failing acceptance tests BEFORE implementation (TDD red phase)
+**Purpose:** Generate red-phase acceptance test scaffolds BEFORE implementation (TDD red phase)
 
 **Phase:** Phase 4 (Implementation)
 
@@ -189,9 +189,9 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 **Key Outputs:**
 
-- Failing tests (`tests/api/`, `tests/e2e/`)
-- Implementation checklist
-- All tests fail initially (red phase)
+- Red-phase test scaffolds (`tests/api/`, `tests/e2e/`) marked with `test.skip()`
+- Implementation checklist keyed to `story_key`
+- Story metadata / handoff paths for downstream `dev-story` consumption
 
 **Browser Automation (CLI/MCP):** Recording mode (for skeleton UI only - rare)
 

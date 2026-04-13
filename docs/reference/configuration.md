@@ -581,7 +581,7 @@ output_folder: _bmad-output
 - `gate-decision-{gate_type}-{story_id}.md` (from `trace` Phase 2)
 - `nfr-assessment.md` (from `nfr-assess`)
 - `automation-summary.md` (from `automate`)
-- `atdd-checklist-{story_id}.md` (from `atdd`)
+- `atdd-checklist-{story_key}.md` (from `atdd`)
 
 ---
 

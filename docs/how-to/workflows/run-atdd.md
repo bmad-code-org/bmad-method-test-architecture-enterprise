@@ -1,11 +1,11 @@
 ---
 title: 'How to Run ATDD with TEA'
-description: Generate failing acceptance tests before implementation using TEA's ATDD workflow
+description: Generate red-phase acceptance test scaffolds before implementation using TEA's ATDD workflow
 ---
 
 # How to Run ATDD with TEA
 
-Use TEA's `atdd` workflow to generate failing acceptance tests BEFORE implementation. This is the TDD (Test-Driven Development) red phase - tests fail first, guide development, then pass.
+Use TEA's `atdd` workflow to generate red-phase acceptance test scaffolds BEFORE implementation. TEA currently emits these scaffolds with `test.skip()` so they can be reviewed, linked into the story, and activated task-by-task during implementation.
 
 ## When to Use This
 
@@ -118,7 +118,7 @@ Generate:
 
 ### 5. Review Generated Tests
 
-TEA generates **failing tests** in appropriate directories:
+TEA generates **red-phase test scaffolds** in appropriate directories:
 
 #### API Tests (`tests/api/profile.spec.ts`):
 
@@ -128,7 +128,7 @@ TEA generates **failing tests** in appropriate directories:
 import { test, expect } from '@playwright/test';
 
 test.describe('Profile API', () => {
-  test('should fetch user profile', async ({ request }) => {
+  test.skip('should fetch user profile', async ({ request }) => {
     const response = await request.get('/api/profile');
 
     expect(response.status()).toBe(200);
@@ -138,7 +138,7 @@ test.describe('Profile API', () => {
     expect(profile).toHaveProperty('avatarUrl');
   });
 
-  test('should update user profile', async ({ request }) => {
+  test.skip('should update user profile', async ({ request }) => {
     const response = await request.patch('/api/profile', {
       data: {
         name: 'Updated Name',
@@ -152,7 +152,7 @@ test.describe('Profile API', () => {
     expect(updated.email).toBe('updated@example.com');
   });
 
-  test('should validate email format', async ({ request }) => {
+  test.skip('should validate email format', async ({ request }) => {
     const response = await request.patch('/api/profile', {
       data: {
         email: 'invalid-email',
@@ -180,7 +180,7 @@ const ProfileSchema = z.object({
 });
 
 test.describe('Profile API', () => {
-  test('should fetch user profile', async ({ apiRequest }) => {
+  test.skip('should fetch user profile', async ({ apiRequest }) => {
     const { status, body } = await apiRequest({
       method: 'GET',
       path: '/api/profile',
@@ -192,7 +192,7 @@ test.describe('Profile API', () => {
     expect(body.email).toContain('@');
   });
 
-  test('should update user profile', async ({ apiRequest }) => {
+  test.skip('should update user profile', async ({ apiRequest }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
       path: '/api/profile',
@@ -207,7 +207,7 @@ test.describe('Profile API', () => {
     expect(body.email).toBe('updated@example.com');
   });
 
-  test('should validate email format', async ({ apiRequest }) => {
+  test.skip('should validate email format', async ({ apiRequest }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
       path: '/api/profile',
@@ -233,7 +233,7 @@ test.describe('Profile API', () => {
 ```typescript
 import { test, expect } from '@playwright/test';
 
-test('should edit and save profile', async ({ page }) => {
+test.skip('should edit and save profile', async ({ page }) => {
   // Login first
   await page.goto('/login');
   await page.getByLabel('Email').fill('test@example.com');
@@ -280,14 +280,14 @@ TEA also provides an implementation checklist:
 
 ### Tests
 
-- [x] API tests generated (failing)
-- [x] E2E tests generated (failing)
-- [ ] Run tests after implementation (should pass)
+- [x] API test scaffolds generated (`test.skip()`)
+- [x] E2E test scaffolds generated (`test.skip()`)
+- [ ] Activate and run tests during implementation (should fail before code changes, then pass)
 ```
 
-### 6. Verify Tests Fail
+### 6. Verify Red-Phase Scaffolds
 
-This is the TDD red phase - tests MUST fail before implementation.
+This is the TDD red phase, but TEA keeps generated tests in `test.skip()` until you're ready to work on a task. Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
 
 **For Playwright:**
 
@@ -301,21 +301,19 @@ npx playwright test
 npx cypress run
 ```
 
-Expected output:
+Initial output with scaffolds still skipped:
 
 ```
 Running 6 tests using 1 worker
 
-  ✗ tests/api/profile.spec.ts:3:3 › should fetch user profile
-    Error: expect(received).toBe(expected)
-    Expected: 200
-    Received: 404
+  - tests/api/profile.spec.ts:3:3 › should fetch user profile
+  - tests/api/profile.spec.ts:15:3 › should update user profile
+  - tests/e2e/profile.spec.ts:10:3 › should edit and save profile
 
-  ✗ tests/e2e/profile.spec.ts:10:3 › should display current profile information
-    Error: page.goto: net::ERR_ABORTED
+  6 skipped
 ```
 
-**All tests should fail!** This confirms:
+After you remove `test.skip()` from the task you are implementing, that activated test should fail first. This confirms:
 
 - Feature doesn't exist yet
 - Tests will guide implementation
@@ -326,9 +324,9 @@ Running 6 tests using 1 worker
 Now implement the feature following the test guidance:
 
 1. Start with API tests (backend first)
-2. Make API tests pass
-3. Move to E2E tests (frontend)
-4. Make E2E tests pass
+2. Remove `test.skip()` from the first API test and confirm RED
+3. Implement until that test passes
+4. Move to the next API or E2E test and repeat
 5. Refactor with confidence (tests protect you)
 
 ### 8. Verify Tests Pass
@@ -362,16 +360,16 @@ Running 6 tests using 1 worker
   6 passed (9.8s)
 ```
 
-**Green!** You've completed the TDD cycle: red → green → refactor.
+**Green!** You've completed the active red → green → refactor cycle for the generated scaffolds.
 
 ## What You Get
 
-### Failing Tests
+### Red-Phase Test Scaffolds
 
 - API tests for backend endpoints
 - E2E tests for user workflows
 - Component tests (if requested)
-- All tests fail initially (red phase)
+- Generated with `test.skip()` until you activate them task-by-task
 
 ### Implementation Guidance
 
@@ -381,7 +379,7 @@ Running 6 tests using 1 worker
 
 ### TDD Workflow Support
 
-- Tests guide implementation
+- Activated tests guide implementation
 - Confidence to refactor
 - Living documentation of features
 
