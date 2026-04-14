@@ -65,4 +65,3 @@ first-class citizens, not just UI support."""
 # ──────────────────────────────────────────────────────────────────
 [inject]
 before = ""
-after = ""
