@@ -40,14 +40,20 @@ outputFile: '{test_artifacts}/traceability-matrix.md'
 
 ### 1. Read Phase 1 Coverage Matrix
 
-Read `{outputFile}` frontmatter for `tempCoverageMatrixPath`. Use it when present; fall back to the templated path only when absent:
+Read `{outputFile}` frontmatter for `tempCoverageMatrixPath`. Halt when missing — the fallback timestamp cannot be reconstructed reliably in a different execution context:
 
 ```javascript
 const progressDoc = fs.readFileSync('{outputFile}', 'utf8');
 const frontmatterMatch = progressDoc.match(/^---\n([\s\S]*?)\n---/);
 const frontmatter = frontmatterMatch ? yaml.parse(frontmatterMatch[1]) : {};
 
-const matrixPath = frontmatter.tempCoverageMatrixPath || '/tmp/tea-trace-coverage-matrix-{{timestamp}}.json';
+const matrixPath = frontmatter.tempCoverageMatrixPath;
+if (!matrixPath) {
+  throw new Error(
+    '❌ tempCoverageMatrixPath not found in progress frontmatter. ' +
+      'Step 4 must record the resolved temp file path before Step 5 can proceed.',
+  );
+}
 const coverageMatrix = JSON.parse(fs.readFileSync(matrixPath, 'utf8'));
 
 console.log('✅ Phase 1 coverage matrix loaded');
@@ -86,11 +92,13 @@ const normalizeBoolean = (value, defaultValue = true) => {
   return Boolean(value);
 };
 
-const collectionMode = String(coverageMatrix.collection_mode || '{collection_mode}' || 'contract_static')
+const isUnresolved = (v) => typeof v === 'string' && v.startsWith('{') && v.endsWith('}');
+const collectionMode = String(!isUnresolved(coverageMatrix.collection_mode) ? coverageMatrix.collection_mode : 'contract_static')
   .trim()
   .toLowerCase();
-const allowGate = normalizeBoolean(coverageMatrix.allow_gate ?? '{allow_gate}', true);
-const collectionStatus =
+const rawAllowGate = !isUnresolved(coverageMatrix.allow_gate) ? coverageMatrix.allow_gate : true;
+const allowGate = normalizeBoolean(rawAllowGate, true);
+const rawCollectionStatus =
   coverageMatrix.collection_status ||
   {
     waived: 'WAIVED',
@@ -99,9 +107,11 @@ const collectionStatus =
     deferred_shared: 'DEFERRED_SHARED',
   }[collectionMode] ||
   'COLLECTED';
+// Normalize to UPPER_CASE + trimmed so comparisons are whitespace/case-safe.
+const collectionStatus = String(rawCollectionStatus).trim().toUpperCase();
 const gateEligible = allowGate && collectionStatus === 'COLLECTED';
 
-let gateDecision;
+let gateDecision = 'NOT_EVALUATED'; // default; overwritten when gateEligible
 let rationale;
 
 if (!gateEligible) {
@@ -164,7 +174,7 @@ const gateReport = {
         p0_coverage_actual: `${p0Coverage}%`,
         p0_status: p0Coverage === 100 ? 'MET' : 'NOT_MET',
 
-        p1_coverage_target_pass: '90%',
+        p1_coverage_target: '90%',
         p1_coverage_minimum: '80%',
         p1_coverage_actual: `${effectiveP1Coverage}%`,
         p1_status: effectiveP1Coverage >= 90 ? 'MET' : effectiveP1Coverage >= 80 ? 'PARTIAL' : 'NOT_MET',
@@ -196,58 +206,57 @@ const buildFallbackInventory = () => {
     api: { tests: 0, criteria_covered: 0 },
     component: { tests: 0, criteria_covered: 0 },
     unit: { tests: 0, criteria_covered: 0 },
+    other: { tests: 0, criteria_covered: 0 }, // captures tests with unrecognized or empty level
   };
   const coverageEligibleStatuses = new Set(['FULL', 'PARTIAL', 'UNIT-ONLY', 'INTEGRATION-ONLY']);
   const uniqueTests = new Map();
 
   (coverageMatrix.requirements || []).forEach((req) => {
-    (req.tests || []).forEach((test, index) => {
+    (req.tests || []).forEach((test) => {
       const stableId =
         test.id ||
-        [test.file, test.title || test.name, test.line ?? index]
+        [test.file, test.title || test.name, test.line]
           .filter((value) => value !== undefined && value !== null && value !== '')
           .join(':') ||
-        `${req.id}:${index}`;
+        null; // unresolvable — skip rather than manufacture a key
 
-      if (!uniqueTests.has(stableId)) {
-        const explicitStatus = String(test.status || '')
+      if (stableId === null || uniqueTests.has(stableId)) return;
+      const explicitStatus = String(test.status || '')
+        .trim()
+        .toLowerCase();
+      const status = ['skipped', 'pending', 'fixme'].includes(explicitStatus)
+        ? explicitStatus
+        : test.fixme === true
+          ? 'fixme'
+          : test.pending === true
+            ? 'pending'
+            : test.skipped === true
+              ? 'skipped'
+              : 'active';
+
+      uniqueTests.set(stableId, {
+        id: stableId,
+        file: test.file || '',
+        title: test.title || test.name || stableId,
+        level: String(test.level || '')
           .trim()
-          .toLowerCase();
-        const status = ['skipped', 'pending', 'fixme'].includes(explicitStatus)
-          ? explicitStatus
-          : test.fixme === true
-            ? 'fixme'
-            : test.pending === true
-              ? 'pending'
-              : test.skipped === true
-                ? 'skipped'
-                : 'active';
-
-        uniqueTests.set(stableId, {
-          id: stableId,
-          file: test.file || '',
-          title: test.title || test.name || stableId,
-          level: String(test.level || '')
-            .trim()
-            .toLowerCase(),
-          skipped: status === 'skipped',
-          fixme: status === 'fixme',
-          pending: status === 'pending',
-          status: status,
-          blocker_reason: test.skip_reason || test.blocker_reason || test.fixme_reason || test.pending_reason || '',
-        });
-      }
+          .toLowerCase(),
+        skipped: status === 'skipped',
+        fixme: status === 'fixme',
+        pending: status === 'pending',
+        status: status,
+        blocker_reason: test.skip_reason || test.blocker_reason || test.fixme_reason || test.pending_reason || '',
+      });
     });
 
     if (!coverageEligibleStatuses.has(req.coverage)) return;
     const requirementLevels = new Set(
-      (req.tests || [])
-        .map((test) =>
-          String(test.level || '')
-            .trim()
-            .toLowerCase(),
-        )
-        .filter((level) => byLevel[level]),
+      (req.tests || []).map((test) => {
+        const level = String(test.level || '')
+          .trim()
+          .toLowerCase();
+        return byLevel[level] ? level : 'other';
+      }),
     );
     requirementLevels.forEach((level) => {
       byLevel[level].criteria_covered += 1;
@@ -256,7 +265,8 @@ const buildFallbackInventory = () => {
 
   const deduplicatedTests = [...uniqueTests.values()];
   deduplicatedTests.forEach((test) => {
-    if (byLevel[test.level]) byLevel[test.level].tests += 1;
+    const bucket = byLevel[test.level] ? test.level : 'other';
+    byLevel[bucket].tests += 1;
   });
 
   return {
@@ -345,10 +355,10 @@ const e2eTraceSummary = {
   },
 
   gap_analysis: {
-    critical_gaps: coverageMatrix.gap_analysis.critical_gaps.length,
-    high_gaps: coverageMatrix.gap_analysis.high_gaps.length,
-    medium_gaps: coverageMatrix.gap_analysis.medium_gaps.length,
-    low_gaps: coverageMatrix.gap_analysis.low_gaps.length,
+    critical_gaps: (coverageMatrix.gap_analysis?.critical_gaps || []).length,
+    high_gaps: (coverageMatrix.gap_analysis?.high_gaps || []).length,
+    medium_gaps: (coverageMatrix.gap_analysis?.medium_gaps || []).length,
+    low_gaps: (coverageMatrix.gap_analysis?.low_gaps || []).length,
   },
 
   heuristics: {

@@ -264,6 +264,7 @@ const byLevel = {
   api: { tests: 0, criteria_covered: 0 },
   component: { tests: 0, criteria_covered: 0 },
   unit: { tests: 0, criteria_covered: 0 },
+  other: { tests: 0, criteria_covered: 0 }, // captures tests with unrecognized or empty level
 };
 
 const normalizeTestStatus = (test) => {
@@ -280,47 +281,50 @@ const normalizeTestStatus = (test) => {
 const uniqueTests = new Map();
 (traceabilityMatrix || []).forEach((req) => {
   (req.tests || []).forEach((test, index) => {
+    // Do NOT use the per-requirement `index` as a fallback — the same test can appear
+    // at different indices across requirements, producing spurious duplicate entries.
+    // Use only stable, test-intrinsic fields; omit line when unavailable.
     const stableId =
       test.id ||
-      [test.file, test.title || test.name, test.line ?? index]
-        .filter((value) => value !== undefined && value !== null && value !== '')
-        .join(':') ||
-      `${req.id}:${index}`;
+      [test.file, test.title || test.name, test.line].filter((value) => value !== undefined && value !== null && value !== '').join(':') ||
+      null; // unresolvable — skip rather than manufacture a key
 
-    if (!uniqueTests.has(stableId)) {
-      const status = normalizeTestStatus(test);
-      uniqueTests.set(stableId, {
-        id: stableId,
-        file: test.file || '',
-        line: test.line ?? null,
-        title: test.title || test.name || stableId,
-        level: String(test.level || '')
-          .trim()
-          .toLowerCase(),
-        status: status,
-        skipped: status === 'skipped',
-        fixme: status === 'fixme',
-        pending: status === 'pending',
-        blocker_reason: test.skip_reason || test.blocker_reason || test.fixme_reason || test.pending_reason || '',
-      });
-    }
+    if (stableId === null || uniqueTests.has(stableId)) return;
+    const status = normalizeTestStatus(test);
+    uniqueTests.set(stableId, {
+      id: stableId,
+      file: test.file || '',
+      line: test.line ?? null,
+      title: test.title || test.name || stableId,
+      level: String(test.level || '')
+        .trim()
+        .toLowerCase(),
+      status: status,
+      skipped: status === 'skipped',
+      fixme: status === 'fixme',
+      pending: status === 'pending',
+      blocker_reason: test.skip_reason || test.blocker_reason || test.fixme_reason || test.pending_reason || '',
+    });
   });
 });
 
 [...uniqueTests.values()].forEach((test) => {
-  if (byLevel[test.level]) byLevel[test.level].tests += 1;
+  const bucket = byLevel[test.level] ? test.level : 'other';
+  if (bucket === 'other' && test.level) {
+    console.warn(`[trace] unknown test level "${test.level}" for test "${test.id}" — counted in "other"`);
+  }
+  byLevel[bucket].tests += 1;
 });
 
 (traceabilityMatrix || []).forEach((req) => {
   if (!coverageEligibleStatuses.has(req.coverage)) return;
   const requirementLevels = new Set(
-    (req.tests || [])
-      .map((test) =>
-        String(test.level || '')
-          .trim()
-          .toLowerCase(),
-      )
-      .filter((level) => byLevel[level]),
+    (req.tests || []).map((test) => {
+      const level = String(test.level || '')
+        .trim()
+        .toLowerCase();
+      return byLevel[level] ? level : 'other';
+    }),
   );
   requirementLevels.forEach((level) => {
     byLevel[level].criteria_covered += 1;
