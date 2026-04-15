@@ -1,16 +1,16 @@
 ---
 name: 'step-01-load-context'
-description: 'Load requirements, knowledge base, and related artifacts'
+description: 'Resolve coverage oracle, load knowledge base, and gather related artifacts'
 nextStepFile: './step-02-discover-tests.md'
 knowledgeIndex: './resources/tea-index.csv'
 outputFile: '{test_artifacts}/traceability-matrix.md'
 ---
 
-# Step 1: Load Context & Knowledge Base
+# Step 1: Resolve Coverage Oracle & Load Knowledge Base
 
 ## STEP GOAL
 
-Gather acceptance criteria, priorities, and supporting artifacts for traceability.
+Resolve the best available coverage oracle, capture confidence and provenance, and gather supporting artifacts for traceability.
 
 ## MANDATORY EXECUTION RULES
 
@@ -27,7 +27,7 @@ Gather acceptance criteria, priorities, and supporting artifacts for traceabilit
 
 ## CONTEXT BOUNDARIES:
 
-- Available context: config, loaded artifacts, and knowledge fragments
+- Available context: config, source tree, loaded artifacts, and knowledge fragments
 - Focus: this step's goal only
 - Limits: do not execute future steps
 - Dependencies: prior steps' outputs (if any)
@@ -36,12 +36,61 @@ Gather acceptance criteria, priorities, and supporting artifacts for traceabilit
 
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
-## 1. Prerequisites
+## 1. Resolve Coverage Oracle
 
-- Acceptance criteria available (story or provided inline)
-- Tests exist OR gaps explicitly acknowledged
+At least one of the following must be usable:
 
-If acceptance criteria are missing, **HALT** and request them.
+- Formal requirements (story/epic acceptance criteria, PRD, test design)
+- Contract/spec artifacts (OpenAPI, GraphQL schema, protobuf, etc.)
+- External pointers to a requirements source that can be resolved through installed adapters/MCPs
+- Analyzable source code that supports synthetic journey/requirement inference
+
+Tests exist OR gaps are explicitly acknowledged.
+
+Resolve the oracle in this order:
+
+1. **Formal requirements first**
+   - Story/epic acceptance criteria
+   - PRD / test design / tech spec
+   - Inline requirements provided by the user
+
+2. **Contract/spec artifacts second**
+   - OpenAPI / Swagger
+   - GraphQL schema or SDL
+   - Other machine-readable contract definitions
+
+3. **External pointers third**
+   - Placeholder files that point to external trackers or docs such as Jira, Linear, Confluence, shared docs, or other systems of record
+   - Follow the pointer automatically only when a compatible adapter/plugin/MCP is available in the active runtime
+   - Record whether the pointer was resolved, skipped, or unavailable
+
+4. **Synthetic oracle last**
+   - If no formal oracle exists and `allow_synthetic_oracle` is enabled, inspect `{source_dir}` to infer a provisional trace target
+   - For UI apps, infer journeys from:
+     - routes/pages/screens/layout entry points
+     - navigation flows and feature entry links
+     - forms, submit actions, create/update/delete paths
+     - auth/session/logout/role-gated flows
+     - loading, empty, validation, error, and permission-denied states
+     - feature flags and major conditional branches
+   - Deduplicate the inferred items into a compact, traceable list (prefer 5-12 items)
+   - Assign stable IDs such as `J-01`, `J-02`, etc.
+   - Assign provisional priorities using `test-priorities-matrix.md`
+     - `P0`: auth, checkout/payment, destructive data changes, revenue-critical, hard blockers to core use
+     - `P1`: primary user journeys and common CRUD paths
+     - `P2`: secondary workflows and edge scenarios
+     - `P3`: low-risk polish or optional flows
+
+Record the resolved oracle metadata in step output:
+
+- `coverage_basis`
+- `oracle_resolution_mode` (`formal_requirements` | `spec_artifact` | `external_pointer` | `synthetic_source`)
+- `oracle_confidence` (`high` | `medium` | `low`)
+- `oracle_sources`
+- `oracle_items`
+- `external_pointer_status`
+
+If none of the four oracle types can be resolved, **HALT** and request the smallest missing clarification needed to continue.
 
 ---
 
@@ -64,8 +113,11 @@ If available:
 - Story file and acceptance criteria
 - Test design doc (priorities)
 - Tech spec / PRD
+- OpenAPI or similar contract/spec files
+- Placeholder files that reference external requirements systems
+- Route maps, page/screen registries, and other source files used for synthetic journey inference
 
-Summarize what was found.
+Summarize what was found and explicitly state the resolved oracle, its confidence, and why that oracle was selected.
 
 ---
 
@@ -80,6 +132,11 @@ Summarize what was found.
   stepsCompleted: ['step-01-load-context']
   lastStep: 'step-01-load-context'
   lastSaved: '{date}'
+  coverageBasis: '{resolved coverage_basis}'
+  oracleConfidence: '{resolved oracle_confidence}'
+  oracleResolutionMode: '{resolved oracle_resolution_mode}'
+  oracleSources: ['{resolved oracle source 1}', '{resolved oracle source 2}']
+  externalPointerStatus: '{resolved external_pointer_status}'
   ---
   ```
 
@@ -89,6 +146,11 @@ Summarize what was found.
   - Add `'step-01-load-context'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-01-load-context'`
   - Set `lastSaved: '{date}'`
+  - Set `coverageBasis` to the resolved oracle basis
+  - Set `oracleConfidence` to the resolved oracle confidence
+  - Set `oracleResolutionMode` to the resolved oracle resolution mode
+  - Set `oracleSources` to the resolved oracle sources
+  - Set `externalPointerStatus` to the resolved external pointer status
   - Append this step's output to the appropriate section of the document.
 
 Load next step: `{nextStepFile}`

@@ -30,8 +30,10 @@ variables:
   decision_mode: "deterministic" # deterministic (rule-based) | manual (team decision)
   collection_mode: "contract_static" # contract_static | inventory_only | runtime_manifest | deferred_shared | waived | restricted | inaccessible
   allow_gate: true # Emit gate_status and gate-decision.json only when collection is gate-eligible
-  coverage_basis: "acceptance_criteria" # acceptance_criteria | synthetic_requirements | openapi_endpoints | user_journeys
-  summary_confidence: "high" # high | medium | low
+  coverage_basis: "auto" # auto | acceptance_criteria | synthetic_requirements | openapi_endpoints | user_journeys
+  summary_confidence: "auto" # auto | high | medium | low
+  allow_external_pointer_resolution: true # Follow local placeholder pointers (e.g., Jira/Confluence) when compatible adapters exist
+  allow_synthetic_oracle: true # Infer journeys/requirements from source when no formal oracle exists
 
 # Output configuration
 default_output_file: "{test_artifacts}/traceability-matrix.md"

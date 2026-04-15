@@ -1,17 +1,19 @@
 ---
 title: 'How to Run Trace with TEA'
-description: Map requirements to tests and make quality gate decisions using TEA's trace workflow
+description: Map requirements, specs, or inferred journeys to tests and make quality gate decisions using TEA's trace workflow
 ---
 
 # How to Run Trace with TEA
 
-Use TEA's `trace` workflow for requirements traceability and quality gate decisions. This is a two-phase workflow: Phase 1 analyzes coverage, Phase 2 makes the go/no-go decision.
+Use TEA's `trace` workflow for coverage traceability and quality gate decisions. This is a two-phase workflow: Phase 1 analyzes coverage, Phase 2 makes the go/no-go decision.
+
+The workflow resolves the best available coverage oracle automatically: formal requirements first, contract/spec artifacts second, resolvable external pointers third, and synthetic journeys inferred from source as the brownfield fallback.
 
 ## When to Use This
 
-### Phase 1: Requirements Traceability
+### Phase 1: Coverage Traceability
 
-- Map acceptance criteria to implemented tests
+- Map requirements or inferred journeys to implemented tests
 - Identify coverage gaps
 - Prioritize missing tests
 - Refresh coverage after each story/epic
@@ -27,7 +29,7 @@ Use TEA's `trace` workflow for requirements traceability and quality gate decisi
 
 - BMad Method installed
 - TEA agent available
-- Requirements defined (stories, acceptance criteria, test design)
+- Formal requirements, specs, or an analyzable source tree available
 - Tests implemented
 - For brownfield: Existing codebase with tests
 
@@ -43,7 +45,7 @@ trace
 
 TEA will ask which phase you're running.
 
-**Phase 1: Requirements Traceability**
+**Phase 1: Coverage Traceability**
 
 - Analyze coverage
 - Identify gaps
@@ -58,20 +60,23 @@ TEA will ask which phase you're running.
 
 ---
 
-## Phase 1: Requirements Traceability
+## Phase 1: Coverage Traceability
 
-### 3. Provide Requirements Source
+### 3. Provide Coverage Source
 
-TEA will ask where requirements are defined.
+TEA will first look for the best available coverage oracle.
 
 **Options:**
 
-| Source          | Example                       | Best For               |
-| --------------- | ----------------------------- | ---------------------- |
-| **Story file**  | `story-profile-management.md` | Single story coverage  |
-| **Test design** | `test-design-epic-1.md`       | Epic coverage          |
-| **PRD**         | `PRD.md`                      | System-level coverage  |
-| **Multiple**    | All of the above              | Comprehensive analysis |
+| Source          | Example                          | Best For                                                         |
+| --------------- | -------------------------------- | ---------------------------------------------------------------- |
+| **Story file**  | `story-profile-management.md`    | Single story coverage                                            |
+| **Test design** | `test-design-epic-1.md`          | Epic coverage                                                    |
+| **PRD**         | `PRD.md`                         | System-level coverage                                            |
+| **Spec**        | `openapi.yaml`                   | API/contract coverage                                            |
+| **Pointer**     | `requirements.md -> tracker/doc` | External system of record (for example Jira, Linear, Confluence) |
+| **Synthetic**   | inferred from `src/`             | Brownfield UI fallback                                           |
+| **Multiple**    | All of the above                 | Comprehensive analysis                                           |
 
 **Example Response:**
 
@@ -80,6 +85,8 @@ Requirements:
 - story-profile-management.md (acceptance criteria)
 - test-design-epic-1.md (test priorities)
 ```
+
+If none of those exist, TEA should infer provisional journeys from routes/pages/screens, major user actions, auth flows, and important UI states, then trace tests against those inferred journeys with an explicit confidence level.
 
 ### 4. Specify Test Location
 
@@ -754,17 +761,17 @@ Don't aim for 100% across all priorities:
 
 ### Use Classification Strategically
 
-**FULL** ✅: Requirement completely tested
+**FULL** ✅: Oracle item completely tested
 
 - E2E test covers full user workflow
 - API test validates backend behavior
-- All acceptance criteria covered
+- All expected behaviors for that item covered
 
 **PARTIAL** ⚠️: Some aspects tested
 
 - E2E test exists but missing scenarios
 - API test exists but incomplete
-- Some acceptance criteria not covered
+- Some expected behaviors not covered
 
 **NONE** ❌: No tests exist
 
@@ -885,7 +892,7 @@ test('[REQ-1] should display profile', async ({ page }) => {
 
 ### Unclear What "FULL" vs "PARTIAL" Means
 
-**FULL** ✅: All acceptance criteria tested
+**FULL** ✅: All expected behaviors for the item tested
 
 ```
 Requirement: User can edit profile

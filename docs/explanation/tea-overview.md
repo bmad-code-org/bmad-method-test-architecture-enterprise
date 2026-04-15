@@ -23,7 +23,7 @@ BMad does not mandate TEA. There are five valid ways to use it (or skip it). Pic
    - Skip all TEA workflows. Use your existing team testing approach.
 
 2. **TEA Solo (Standalone)**
-   - Use TEA on a non-BMad project. Bring your own requirements, acceptance criteria, and environments.
+   - Use TEA on a non-BMad project. Bring your own requirements, specs, system-of-record pointers, or analyzable source tree, plus environments.
    - Typical sequence: `test-design` (system or epic) -> `atdd` and/or `automate` -> optional `test-review` -> `trace` for coverage and gate decisions.
    - Run `framework` or `ci` only if you want TEA to scaffold the harness or pipeline; they work best after you decide the stack/architecture.
 

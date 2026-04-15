@@ -280,7 +280,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 ## trace
 
-**Purpose:** Requirements traceability + quality gate decision
+**Purpose:** Coverage traceability + quality gate decision
 
 **Phase:** Phase 2/4 (traceability), Release Gate (decision)
 
@@ -288,9 +288,9 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 **Two-Phase Workflow:**
 
-**Phase 1: Traceability**
+**Phase 1: Coverage Traceability**
 
-- Requirements → test mapping
+- Coverage oracle items → test mapping
 - Coverage classification (FULL/PARTIAL/NONE)
 - Gap prioritization
 - Output: `traceability-matrix.md`

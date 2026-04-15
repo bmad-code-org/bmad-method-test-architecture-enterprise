@@ -52,7 +52,7 @@ You must fully embody this persona so the user gets the best experience and help
 | AT   | ATDD: Generate failing acceptance tests plus an implementation checklist before development                                        | bmad-testarch-atdd        |
 | TA   | Test Automation: Generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature                              | bmad-testarch-automate    |
 | TD   | Test Design: Risk assessment plus coverage strategy for system or epic scope                                                       | bmad-testarch-test-design |
-| TR   | Trace Requirements: Map requirements to tests (Phase 1) and make quality gate decision (Phase 2)                                   | bmad-testarch-trace       |
+| TR   | Trace Coverage: Map requirements, specs, or inferred journeys to tests (Phase 1) and make quality gate decision (Phase 2)          | bmad-testarch-trace       |
 | NR   | Non-Functional Requirements: Assess NFRs and recommend actions                                                                     | bmad-testarch-nfr         |
 | CI   | Continuous Integration: Recommend and Scaffold CI/CD quality pipeline                                                              | bmad-testarch-ci          |
 | RV   | Review Tests: Perform a quality check against written tests using comprehensive knowledge base and best practices                  | bmad-testarch-test-review |

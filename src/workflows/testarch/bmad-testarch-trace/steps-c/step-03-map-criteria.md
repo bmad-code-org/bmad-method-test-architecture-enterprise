@@ -1,15 +1,15 @@
 ---
 name: 'step-03-map-criteria'
-description: 'Map acceptance criteria to tests and build traceability matrix'
+description: 'Map coverage oracle items to tests and build traceability matrix'
 nextStepFile: './step-04-analyze-gaps.md'
 outputFile: '{test_artifacts}/traceability-matrix.md'
 ---
 
-# Step 3: Map Criteria to Tests
+# Step 3: Map Coverage Oracle to Tests
 
 ## STEP GOAL
 
-Create the traceability matrix linking requirements to tests.
+Create the traceability matrix linking the resolved oracle items to tests.
 
 ## MANDATORY EXECUTION RULES
 
@@ -37,16 +37,18 @@ Create the traceability matrix linking requirements to tests.
 
 ## 1. Build Matrix
 
-For each acceptance criterion:
+For each resolved oracle item (formal requirement, endpoint/spec item, or synthetic journey):
 
 - Map to matching tests
 - Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY
 - Record test level and priority
 - Preserve each mapped test's stable identity fields (`id`, `title`, `file`, `line`, `level`, status flags) so Phase 1 can deduplicate unique tests before JSON export
 - Record heuristic signals:
-  - Endpoint coverage present/missing (for API-impacting criteria)
+  - Endpoint coverage present/missing (for API-impacting items)
   - Auth/authz coverage present/missing (positive and negative paths)
   - Error-path coverage present/missing (validation, timeout, network/server failures)
+  - UI journey E2E coverage present/missing (for source-derived journeys)
+  - UI state coverage present/missing (loading, empty, validation, error, permission-denied)
 
 ---
 
@@ -54,11 +56,12 @@ For each acceptance criterion:
 
 Ensure:
 
-- P0/P1 criteria have coverage
+- P0/P1 items have coverage
 - No duplicate coverage across levels without justification
-- Criteria are not happy-path-only when requirements imply error handling
-- API criteria are not marked FULL if endpoint-level checks are missing
-- Auth/authz criteria include at least one denied/invalid-path test where applicable
+- Items are not happy-path-only when the oracle implies error handling or alternate states
+- API items are not marked FULL if endpoint-level checks are missing
+- Auth/authz items include at least one denied/invalid-path test where applicable
+- Synthetic UI journeys are not marked FULL when no E2E or component test asserts the critical path and key failure states
 
 ---
 

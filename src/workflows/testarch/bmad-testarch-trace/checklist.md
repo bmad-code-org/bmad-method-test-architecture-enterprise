@@ -14,7 +14,7 @@ This checklist covers **two sequential phases**:
 
 ## Prerequisites Validation
 
-- [ ] Acceptance criteria are available (from story file OR inline)
+- [ ] A coverage oracle is available or inferred (formal requirements, spec, resolvable external pointer, or synthetic journeys)
 - [ ] Test suite exists (or gaps are acknowledged and documented)
 - [ ] If tests are missing, recommend `*atdd` (trace does not run it automatically)
 - [ ] Test directory path is correct (`test_dir` variable)
@@ -26,7 +26,7 @@ This checklist covers **two sequential phases**:
 ## Context Loading
 
 - [ ] Story file read successfully (if applicable)
-- [ ] Acceptance criteria extracted correctly
+- [ ] Oracle items extracted or inferred correctly
 - [ ] Story ID identified (e.g., 1.3)
 - [ ] `test-design.md` loaded (if available)
 - [ ] `tech-spec.md` loaded (if available)
@@ -51,7 +51,7 @@ This checklist covers **two sequential phases**:
 
 ## Criteria-to-Test Mapping
 
-- [ ] Each acceptance criterion mapped to tests (or marked as NONE)
+- [ ] Each oracle item mapped to tests (or marked as NONE)
 - [ ] Explicit references found (test IDs, describe blocks mentioning criterion)
 - [ ] Test level documented (E2E, API, Component, Unit)
 - [ ] Given-When-Then narrative verified for alignment
@@ -96,9 +96,11 @@ This checklist covers **two sequential phases**:
   - [ ] Criteria with UNIT-ONLY status
   - [ ] Criteria with INTEGRATION-ONLY status
 - [ ] Coverage heuristics gaps identified:
-  - [ ] Endpoints referenced in requirements but not covered by API tests
+  - [ ] Endpoints referenced in requirements/specs but not covered by API tests
   - [ ] Auth/authz criteria missing denied/invalid path tests
   - [ ] Criteria with happy-path-only coverage (missing error scenarios)
+  - [ ] Inferred UI journeys missing E2E/component coverage
+  - [ ] Inferred UI journeys missing loading/empty/error/permission state coverage
 - [ ] Gaps prioritized by risk level using test-priorities framework:
   - [ ] **CRITICAL** - P0 criteria without FULL coverage (BLOCKER)
   - [ ] **HIGH** - P1 criteria without FULL coverage (PR blocker)
@@ -170,12 +172,14 @@ Knowledge fragments referenced:
 - [ ] JSON is valid and parseable
 - [ ] `schema_version` field present
 - [ ] `repo`, `collection_mode`, `collection_status`, `coverage_basis`, and `source_sha` fields populated
+- [ ] Oracle metadata populated (`resolution_mode`, `confidence`, `sources`, `external_pointer_status`, `synthetic`)
 - [ ] `target.type` and `target.id` identify the evaluated story / epic / release / hotfix
 - [ ] `gate_status` populated only when `allow_gate: true` and `collection_status` is `COLLECTED`
 - [ ] `coverage_statistics` includes `priority_breakdown` (P0–P3) and `by_level` (e2e, api, component, unit)
 - [ ] `tests` counts are deduplicated from unique discovered tests (no per-requirement double counting)
 - [ ] `gap_analysis` counts match Phase 1 gap analysis
 - [ ] `heuristics` fields populated (`endpoint_gaps`, `auth_negative_path_status`, `error_path_status`)
+- [ ] UI heuristic fields populated when using a source-derived oracle (`ui_journey_status`, `ui_state_status`)
 - [ ] `gate_criteria` thresholds and actuals match gate decision
 - [ ] `blockers` array present (may be empty)
 - [ ] `recommendations` array present (may be empty)
@@ -196,7 +200,7 @@ Knowledge fragments referenced:
 
 ### Accuracy Checks
 
-- [ ] All acceptance criteria accounted for (none skipped)
+- [ ] All oracle items accounted for (none skipped)
 - [ ] Test IDs correctly formatted (e.g., 1.3-E2E-001)
 - [ ] File paths are correct and accessible
 - [ ] Coverage percentages calculated correctly
@@ -316,7 +320,7 @@ Knowledge fragments referenced:
 **P0 Criteria Evaluation:**
 
 - [ ] P0 test pass rate evaluated (must be 100%)
-- [ ] P0 acceptance criteria coverage evaluated (must be 100%)
+- [ ] P0 oracle-item coverage evaluated (must be 100%)
 - [ ] Security issues count evaluated (must be 0)
 - [ ] Critical NFR failures evaluated (must be 0)
 - [ ] Flaky tests evaluated (must be 0 if burn-in enabled)
@@ -325,9 +329,9 @@ Knowledge fragments referenced:
 **P1 Criteria Evaluation:**
 
 - [ ] P1 test pass rate evaluated (threshold: min_p1_pass_rate)
-- [ ] P1 acceptance criteria coverage evaluated (PASS >=90%, CONCERNS 80-89%, FAIL <80%)
+- [ ] P1 oracle-item coverage evaluated (PASS >=90%, CONCERNS 80-89%, FAIL <80%)
 - [ ] Overall test pass rate evaluated (threshold: min_overall_pass_rate)
-- [ ] Overall requirements coverage evaluated (threshold: >=80%)
+- [ ] Overall oracle coverage evaluated (threshold: >=80%)
 - [ ] Code coverage considered if available (informational unless explicitly required by policy)
 - [ ] P1 decision recorded: PASS or CONCERNS
 
@@ -600,7 +604,7 @@ Knowledge fragments referenced:
 **Phase 1 (Traceability):**
 
 - [ ] All prerequisites met
-- [ ] All acceptance criteria mapped or gaps documented
+- [ ] All oracle items mapped or gaps documented
 - [ ] P0 coverage is 100% OR documented as BLOCKER
 - [ ] Gap analysis is complete and prioritized
 - [ ] Test quality issues identified and flagged

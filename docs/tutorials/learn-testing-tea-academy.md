@@ -132,7 +132,7 @@ Complete all 7 sessions to receive your TEA Academy completion certificate!
 
 - Test Review workflow (5 dimensions)
 - Quality scoring (0-100)
-- Trace workflow (requirements traceability)
+- Trace workflow (coverage traceability)
 - Release gate decisions
 
 **Perfect for:** Quality-focused engineers and leads

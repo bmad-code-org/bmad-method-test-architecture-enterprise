@@ -1,4 +1,4 @@
-# Requirements Traceability & Quality Gate
+# Coverage Traceability & Quality Gate
 
 **Workflow:** `bmad-testarch-trace`
 **Version:** 5.0 (Step-File Architecture)
@@ -7,7 +7,9 @@
 
 ## Overview
 
-Create a requirements-to-tests traceability matrix, analyze coverage gaps, and optionally make a gate decision (PASS/CONCERNS/FAIL/WAIVED) based on evidence.
+Create a coverage-oracle-to-tests traceability matrix, analyze coverage gaps, and optionally make a gate decision (PASS/CONCERNS/FAIL/WAIVED) based on evidence.
+
+When formal requirements are unavailable, the workflow should resolve the best available coverage oracle automatically: specs/contracts first, external pointers second, and synthetic journeys/requirements inferred from source as the final brownfield fallback.
 
 ---
 

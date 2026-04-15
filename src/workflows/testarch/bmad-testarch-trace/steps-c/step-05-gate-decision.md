@@ -81,6 +81,13 @@ const hasP1Requirements = (stats.priority_breakdown.P1.total || 0) > 0;
 const effectiveP1Coverage = hasP1Requirements ? p1Coverage : 100;
 const overallCoverage = stats.overall_coverage_percentage;
 const criticalGaps = coverageMatrix.gap_analysis.critical_gaps.length;
+const coverageBasis = String(coverageMatrix.coverage_basis || '{coverage_basis}')
+  .trim()
+  .toLowerCase();
+const oracleConfidence = String(coverageMatrix.oracle?.confidence || coverageMatrix.summary_confidence || '{summary_confidence}')
+  .trim()
+  .toLowerCase();
+const syntheticOracle = ['synthetic_requirements', 'user_journeys'].includes(coverageBasis);
 
 const normalizeBoolean = (value, defaultValue = true) => {
   if (typeof value === 'string') {
@@ -151,6 +158,19 @@ if (!gateEligible) {
 
   // Rule 6: Manual waiver — set gateDecision = 'WAIVED' and update rationale here
   // if a stakeholder-approved waiver applies (wired through config or user input upstream).
+
+  // Oracle confidence overlay
+  if (syntheticOracle && gateDecision === 'PASS' && oracleConfidence !== 'high') {
+    gateDecision = 'CONCERNS';
+    rationale =
+      `Coverage traced against inferred ${coverageBasis.replace('_', ' ')} with ${oracleConfidence} confidence. ` +
+      `Base coverage meets PASS thresholds, but confidence is not high enough for an unconditional PASS.`;
+  } else if (syntheticOracle && oracleConfidence === 'low' && gateDecision === 'NOT_EVALUATED') {
+    gateDecision = 'CONCERNS';
+    rationale =
+      `Coverage traced against inferred ${coverageBasis.replace('_', ' ')} with low confidence. ` +
+      `Treat this result as advisory until the inferred journeys are confirmed or formalized.`;
+  }
 }
 ```
 
@@ -298,6 +318,8 @@ const heuristicCounts = coverageMatrix.coverage_heuristics?.counts || {};
 const endpointGapCount = heuristicCounts.endpoints_without_tests ?? 0;
 const authGapCount = heuristicCounts.auth_missing_negative_paths ?? 0;
 const errorPathGapCount = heuristicCounts.happy_path_only_criteria ?? 0;
+const uiJourneyGapCount = heuristicCounts.ui_journeys_without_e2e ?? 0;
+const uiStateGapCount = heuristicCounts.ui_states_missing_coverage ?? 0;
 const sourceSha = process.env.GITHUB_SHA || runtime.getSourceSha?.() || '';
 
 const e2eTraceSummary = {
@@ -314,6 +336,13 @@ const e2eTraceSummary = {
   decision_mode: '{decision_mode}',
   evaluator: '{user_name}',
   confidence: coverageMatrix.summary_confidence || '{summary_confidence}',
+  oracle: {
+    resolution_mode: coverageMatrix.oracle?.resolution_mode || 'formal_requirements',
+    confidence: coverageMatrix.oracle?.confidence || coverageMatrix.summary_confidence || '{summary_confidence}',
+    sources: coverageMatrix.oracle?.sources || [],
+    external_pointer_status: coverageMatrix.oracle?.external_pointer_status || 'not_used',
+    synthetic: coverageMatrix.oracle?.synthetic === true,
+  },
 
   coverage_statistics: {
     total_requirements: stats.total_requirements,
@@ -365,6 +394,8 @@ const e2eTraceSummary = {
     endpoint_gaps: endpointGapCount,
     auth_negative_path_status: authGapCount === 0 ? 'present' : authGapCount <= 2 ? 'partial' : 'none',
     error_path_status: errorPathGapCount === 0 ? 'present' : errorPathGapCount <= 2 ? 'partial' : 'none',
+    ui_journey_status: uiJourneyGapCount === 0 ? 'present' : uiJourneyGapCount <= 2 ? 'partial' : 'none',
+    ui_state_status: uiStateGapCount === 0 ? 'present' : uiStateGapCount <= 2 ? 'partial' : 'none',
   },
 
   blockers: blockers,

@@ -100,7 +100,7 @@ Decision: Skip TEA, keep what works
 
 **You Bring:**
 
-- Requirements (user stories, acceptance criteria)
+- Coverage oracle inputs (requirements, specs, external system-of-record pointers, or analyzable source)
 - Development environment
 - Project context
 

@@ -31,7 +31,7 @@ Use TEA's `teach-me-testing` workflow (TEA Academy) to learn testing progressive
 3. **Architecture & Patterns (60 min)** - Fixtures, network-first patterns, data factories
 4. **Test Design (60 min)** - Risk assessment and coverage planning workflow
 5. **ATDD & Automate (60 min)** - TDD red-green approach, test generation
-6. **Quality & Trace (45 min)** - Test review (5 dimensions), requirements traceability
+6. **Quality & Trace (45 min)** - Test review (5 dimensions), coverage traceability
 7. **Advanced Patterns (ongoing)** - Explore 42 knowledge fragments on-demand
 
 ### What You'll Gain
@@ -210,7 +210,7 @@ Skip fundamentals, focus on:
 **Topics:**
 
 - Test Review workflow (5 dimensions: determinism, isolation, maintainability, coverage, performance)
-- Trace workflow (requirements traceability)
+- Trace workflow (coverage traceability)
 - Quality metrics that matter (P0/P1 coverage vs vanity metrics)
 - Release gate decisions
 
