@@ -196,8 +196,11 @@ Summarize:
 
   ```yaml
   ---
+  workflowStatus: 'completed'
+  totalSteps: 5
   stepsCompleted: ['step-05-generate-output']
   lastStep: 'step-05-generate-output'
+  nextStep: ''
   lastSaved: '{date}'
   ---
   ```
@@ -205,8 +208,11 @@ Summarize:
   Then write this step's output below the frontmatter.
 
 - **If `{progressFile}` already exists**, update:
+  - Set `workflowStatus: 'completed'`
+  - Set `totalSteps: 5`
   - Add `'step-05-generate-output'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-05-generate-output'`
+  - Set `nextStep: ''`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.
 

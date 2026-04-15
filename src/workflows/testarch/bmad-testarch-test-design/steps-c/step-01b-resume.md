@@ -37,9 +37,20 @@ Resume an interrupted workflow by loading the existing output document, displayi
 
 Read `{outputFile}` and parse YAML frontmatter for:
 
+- `workflowStatus` — overall workflow state (`in-progress` or `completed`)
+- `totalSteps` — total number of create-mode workflow steps
 - `stepsCompleted` — array of completed step names
 - `lastStep` — last completed step name
+- `nextStep` — next step file to execute
 - `lastSaved` — timestamp of last save
+
+If `workflowStatus`, `totalSteps`, or `nextStep` are missing (legacy progress file), infer them from `lastStep` using this mapping:
+
+- `'step-01-detect-mode'` → `workflowStatus: 'in-progress'`, `totalSteps: 5`, `nextStep: './step-02-load-context.md'`
+- `'step-02-load-context'` → `workflowStatus: 'in-progress'`, `totalSteps: 5`, `nextStep: './step-03-risk-and-testability.md'`
+- `'step-03-risk-and-testability'` → `workflowStatus: 'in-progress'`, `totalSteps: 5`, `nextStep: './step-04-coverage-plan.md'`
+- `'step-04-coverage-plan'` → `workflowStatus: 'in-progress'`, `totalSteps: 5`, `nextStep: './step-05-generate-output.md'`
+- `'step-05-generate-output'` → `workflowStatus: 'completed'`, `totalSteps: 5`, `nextStep: ''`
 
 **If `{outputFile}` does not exist**, display:
 
@@ -55,30 +66,32 @@ Display:
 
 "📋 **Workflow Resume — Test Design and Risk Assessment**
 
+**Workflow status:** {workflowStatus}
 **Last saved:** {lastSaved}
-**Steps completed:** {stepsCompleted.length} of 5
-
-1. ✅/⬜ Detect Mode (step-01-detect-mode)
-2. ✅/⬜ Load Context (step-02-load-context)
-3. ✅/⬜ Risk & Testability (step-03-risk-and-testability)
-4. ✅/⬜ Coverage Plan (step-04-coverage-plan)
-5. ✅/⬜ Generate Output (step-05-generate-output)"
+**Last completed step:** {lastStep}
+**Next step:** {nextStep || 'None'}
+**Steps completed:** {stepsCompleted.length} of {totalSteps}"
 
 ---
 
 ### 3. Route to Next Step
 
-Based on `lastStep`, load the next incomplete step:
+If `workflowStatus` is `'completed'`, display:
+"✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions."
 
-- `'step-01-detect-mode'` → `./step-02-load-context.md`
-- `'step-02-load-context'` → `./step-03-risk-and-testability.md`
-- `'step-03-risk-and-testability'` → `./step-04-coverage-plan.md`
-- `'step-04-coverage-plan'` → `./step-05-generate-output.md`
-- `'step-05-generate-output'` → **Workflow already complete.** Display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
+**THEN:** Halt.
 
-**If `lastStep` does not match any value above**, display: "⚠️ **Unknown progress state** (`lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.
+If `nextStep` is one of the known create-mode step files below, load it, read completely, and execute:
 
-**Otherwise**, load the identified step file, read completely, and execute.
+- `./step-02-load-context.md`
+- `./step-03-risk-and-testability.md`
+- `./step-04-coverage-plan.md`
+- `./step-05-generate-output.md`
+
+**If `nextStep` is empty or does not match a known step file**, display:
+"⚠️ **Unknown progress state** (`workflowStatus`: {workflowStatus}, `lastStep`: {lastStep}, `nextStep`: {nextStep}). Please use **[C] Create** to start fresh."
+
+**THEN:** Halt.
 
 The existing content in `{outputFile}` provides context from previously completed steps.
 
@@ -89,6 +102,7 @@ The existing content in `{outputFile}` provides context from previously complete
 ### ✅ SUCCESS:
 
 - Output document loaded and parsed correctly
+- Explicit or legacy progress state resolved correctly
 - Progress dashboard displayed accurately
 - Routed to correct next step
 

@@ -39,3 +39,5 @@ This workflow uses **tri-modal step-file architecture**:
 - **If R:** Load `steps-c/step-01b-resume.md`
 - **If V:** Load `steps-v/step-01-validate.md`
 - **If E:** Load `steps-e/step-01-assess.md`
+
+Resume mode reads explicit progress metadata from the progress file (`workflowStatus`, `nextStep`, `totalSteps`) and falls back to legacy `lastStep` data when needed.

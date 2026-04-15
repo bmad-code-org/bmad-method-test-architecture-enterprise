@@ -106,8 +106,11 @@ State which mode you will use and why. Then proceed.
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
+  totalSteps: 5
   stepsCompleted: ['step-01-detect-mode']
   lastStep: 'step-01-detect-mode'
+  nextStep: '{nextStepFile}'
   lastSaved: '{date}'
   ---
   ```
@@ -115,8 +118,11 @@ State which mode you will use and why. Then proceed.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
+  - Set `totalSteps: 5`
   - Add `'step-01-detect-mode'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-01-detect-mode'`
+  - Set `nextStep: '{nextStepFile}'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.
 

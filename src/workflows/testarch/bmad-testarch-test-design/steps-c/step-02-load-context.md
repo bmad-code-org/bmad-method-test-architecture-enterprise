@@ -212,8 +212,11 @@ Summarize what was loaded and confirm with the user if anything is missing.
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
+  totalSteps: 5
   stepsCompleted: ['step-02-load-context']
   lastStep: 'step-02-load-context'
+  nextStep: '{nextStepFile}'
   lastSaved: '{date}'
   ---
   ```
@@ -221,8 +224,11 @@ Summarize what was loaded and confirm with the user if anything is missing.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
+  - Set `totalSteps: 5`
   - Add `'step-02-load-context'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-load-context'`
+  - Set `nextStep: '{nextStepFile}'`
   - Set `lastSaved: '{date}'`
   - Append this step's output to the appropriate section of the document.
 

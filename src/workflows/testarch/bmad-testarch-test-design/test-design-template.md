@@ -1,6 +1,9 @@
 ---
+workflowStatus: ''
+totalSteps: 5
 stepsCompleted: []
 lastStep: ''
+nextStep: ''
 lastSaved: ''
 ---
 
