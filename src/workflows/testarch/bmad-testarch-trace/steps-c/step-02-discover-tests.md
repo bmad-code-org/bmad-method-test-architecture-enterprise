@@ -2,7 +2,7 @@
 name: 'step-02-discover-tests'
 description: 'Discover and catalog tests by level'
 nextStepFile: './step-03-map-criteria.md'
-outputFile: '{test_artifacts}/traceability-report.md'
+outputFile: '{test_artifacts}/traceability-matrix.md'
 ---
 
 # Step 2: Discover & Catalog Tests
@@ -54,7 +54,11 @@ Classify as:
 - Component
 - Unit
 
-Record test IDs, describe blocks, and priority markers if present.
+Record test IDs, describe blocks, priority markers, and the per-test identity fields needed for machine-readable output:
+
+- Stable identity fields: `id`, `title`, `file`, `line`, `level`
+- Execution state flags: `skipped`, `pending`, `fixme`
+- Skip or blocker reason when it can be discovered from the test source or runtime metadata
 
 ---
 

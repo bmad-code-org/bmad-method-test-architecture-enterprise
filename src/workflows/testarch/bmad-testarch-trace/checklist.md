@@ -6,7 +6,7 @@
 This checklist covers **two sequential phases**:
 
 - **PHASE 1**: Requirements Traceability (always executed)
-- **PHASE 2**: Quality Gate Decision (executed if `enable_gate_decision: true`)
+- **PHASE 2**: Quality Gate Decision (decision fields emitted only when `allow_gate: true` and the collection is gate-eligible)
 
 ---
 
@@ -164,10 +164,25 @@ Knowledge fragments referenced:
 - [ ] Quality assessment section included
 - [ ] Recommendations section included
 
-### Coverage Badge/Metric (if enabled)
+### Machine-Readable JSON Output
 
-- [ ] Badge markdown generated
-- [ ] Metrics exported to JSON for CI/CD integration
+- [ ] `e2e-trace-summary.json` written to `{e2e_trace_summary_output}`
+- [ ] JSON is valid and parseable
+- [ ] `schema_version` field present
+- [ ] `repo`, `collection_mode`, `collection_status`, `coverage_basis`, and `source_sha` fields populated
+- [ ] `target.type` and `target.id` identify the evaluated story / epic / release / hotfix
+- [ ] `gate_status` populated only when `allow_gate: true` and `collection_status` is `COLLECTED`
+- [ ] `coverage_statistics` includes `priority_breakdown` (P0–P3) and `by_level` (e2e, api, component, unit)
+- [ ] `tests` counts are deduplicated from unique discovered tests (no per-requirement double counting)
+- [ ] `gap_analysis` counts match Phase 1 gap analysis
+- [ ] `heuristics` fields populated (`endpoint_gaps`, `auth_negative_path_status`, `error_path_status`)
+- [ ] `gate_criteria` thresholds and actuals match gate decision
+- [ ] `blockers` array present (may be empty)
+- [ ] `recommendations` array present (may be empty)
+- [ ] `links.trace_report_path` points to `traceability-matrix.md`
+- [ ] `links.trace_report_url` and `links.artifact_url` fields present (may be empty)
+- [ ] `gate-decision.json` written to `{gate_decision_output}` when gate-eligible
+- [ ] `gate-decision.json` contains `gate_status`, `rationale`, and per-criterion status fields
 
 ### Updated Story File (if enabled)
 
@@ -218,7 +233,7 @@ Knowledge fragments referenced:
 
 # PHASE 2: QUALITY GATE DECISION
 
-**Note**: Phase 2 executes only if `enable_gate_decision: true` in workflow.yaml
+**Note**: Phase 2 always emits `e2e-trace-summary.json`; gate decision fields are populated only when `allow_gate: true` and `collection_status` resolves to `COLLECTED`.
 
 ---
 
@@ -396,8 +411,9 @@ Knowledge fragments referenced:
 
 **Outputs Saved:**
 
-- [ ] Gate decision document saved to `{output_file}`
-- [ ] Gate YAML saved to `{test_artifacts}/gate-decision-{target}.yaml`
+- [ ] Gate decision document saved to `{outputFile}`
+- [ ] `e2e-trace-summary.json` saved to `{e2e_trace_summary_output}` (always)
+- [ ] `gate-decision.json` saved to `{gate_decision_output}` (when gate-eligible)
 - [ ] All outputs are valid and readable
 
 ---
@@ -595,7 +611,8 @@ Knowledge fragments referenced:
 - [ ] All quality evidence gathered
 - [ ] Decision criteria applied correctly
 - [ ] Decision rationale documented
-- [ ] Gate YAML ready for CI/CD integration
+- [ ] `e2e-trace-summary.json` written and valid JSON
+- [ ] `gate-decision.json` written when gate-eligible
 - [ ] Status file updated (if enabled)
 - [ ] Stakeholders notified (if enabled)
 

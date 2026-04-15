@@ -1,7 +1,7 @@
 ---
 name: 'step-01b-resume'
 description: 'Resume interrupted workflow from last completed step'
-outputFile: '{test_artifacts}/traceability-report.md'
+outputFile: '{test_artifacts}/traceability-matrix.md'
 ---
 
 # Step 1b: Resume Workflow

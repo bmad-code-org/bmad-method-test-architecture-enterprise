@@ -28,9 +28,31 @@ variables:
   coverage_levels: "e2e,api,component,unit" # Which test levels to trace
   gate_type: "story" # story | epic | release | hotfix - determines gate scope
   decision_mode: "deterministic" # deterministic (rule-based) | manual (team decision)
+  collection_mode: "contract_static" # contract_static | inventory_only | runtime_manifest | deferred_shared | waived | restricted | inaccessible
+  allow_gate: true # Emit gate_status and gate-decision.json only when collection is gate-eligible
+  coverage_basis: "acceptance_criteria" # acceptance_criteria | synthetic_requirements | openapi_endpoints | user_journeys
+  summary_confidence: "high" # high | medium | low
 
 # Output configuration
 default_output_file: "{test_artifacts}/traceability-matrix.md"
+e2e_trace_summary_output: "{test_artifacts}/e2e-trace-summary.json" # Machine-readable summary consumed by CI/CD and reporting pipelines
+gate_decision_output: "{test_artifacts}/gate-decision.json" # Optional downstream gate signal for CI/CD enforcement
+
+# e2e-trace-summary.json schema (emitted by step-05 at workflow completion)
+# schema_version: 1
+# generated_at: ISO timestamp
+# workflow: "bmad-testarch-trace"
+# repo / collection_mode / collection_status / coverage_basis / source_sha
+# target: { type, id, label }
+# gate_status: PASS | CONCERNS | FAIL | WAIVED   (only when allow_gate is true and collection_status is COLLECTED)
+# coverage_statistics: { total_requirements, fully_covered, partially_covered, uncovered, overall_coverage_pct, priority_breakdown{P0..P3}, by_level{e2e,api,component,unit} }
+# tests: { files, cases, skipped_cases, fixme_cases, pending_cases }
+# gap_analysis: { critical_gaps, high_gaps, medium_gaps, low_gaps }
+# heuristics: { endpoint_gaps, auth_negative_path_status, error_path_status }
+# gate_criteria: { p0_coverage_required/actual/status, p1_coverage_target/minimum/actual/status, overall_coverage_minimum/actual/status } (gate-eligible runs only)
+# blockers: [ { id, severity, reason, test_file?, test_title? } ]
+# recommendations: [ { priority, action, requirements[] } ]
+# links: { trace_report_path, trace_report_url, artifact_url }
 
 # Required tools
 required_tools:

@@ -2,7 +2,7 @@
 name: 'step-03-map-criteria'
 description: 'Map acceptance criteria to tests and build traceability matrix'
 nextStepFile: './step-04-analyze-gaps.md'
-outputFile: '{test_artifacts}/traceability-report.md'
+outputFile: '{test_artifacts}/traceability-matrix.md'
 ---
 
 # Step 3: Map Criteria to Tests
@@ -42,6 +42,7 @@ For each acceptance criterion:
 - Map to matching tests
 - Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY
 - Record test level and priority
+- Preserve each mapped test's stable identity fields (`id`, `title`, `file`, `line`, `level`, status flags) so Phase 1 can deduplicate unique tests before JSON export
 - Record heuristic signals:
   - Endpoint coverage present/missing (for API-impacting criteria)
   - Auth/authz coverage present/missing (positive and negative paths)
