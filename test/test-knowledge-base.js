@@ -88,7 +88,7 @@ function runTests() {
     const csv = fs.readFileSync(indexPath, 'utf8');
     records = parse(csv, { columns: true, skip_empty_lines: true });
 
-    assert(records.length === 42, 'tea-index.csv has 42 fragment records', `Found ${records.length}`);
+    assert(records.length === 49, 'tea-index.csv has 49 fragment records', `Found ${records.length}`);
 
     const requiredFields = ['id', 'name', 'description', 'tags', 'tier', 'fragment_file'];
     const missingFields = requiredFields.filter((field) => !Object.prototype.hasOwnProperty.call(records[0] || {}, field));

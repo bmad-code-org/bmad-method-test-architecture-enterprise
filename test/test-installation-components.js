@@ -169,12 +169,18 @@ async function runTests() {
 
   try {
     const teaIndexPath = path.join(projectRoot, 'src/agents/bmad-tea/resources/tea-index.csv');
+    const knowledgeDir = path.join(projectRoot, 'src/agents/bmad-tea/resources/knowledge');
 
     if (await pathExists(teaIndexPath)) {
       const csvContent = await fs.readFile(teaIndexPath, 'utf8');
-      const lines = csvContent.trim().split('\n');
+      const lines = csvContent.trim().split(/\r?\n/);
+      const knowledgeFiles = (await fs.readdir(knowledgeDir)).filter((fileName) => fileName.endsWith('.md'));
 
-      assert(lines.length === 43, 'tea-index.csv has 43 lines (header + 42 fragments)', `Found ${lines.length} lines`);
+      assert(
+        lines.length === knowledgeFiles.length + 1,
+        'tea-index.csv line count matches knowledge fragments',
+        `Found ${lines.length} lines for ${knowledgeFiles.length} knowledge fragments`,
+      );
       assert(lines[0].includes('id,name,description,tags,tier,fragment_file'), 'tea-index.csv has correct header format');
 
       // Verify no BMM references in CSV
