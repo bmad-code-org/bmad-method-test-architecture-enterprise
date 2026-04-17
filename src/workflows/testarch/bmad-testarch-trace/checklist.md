@@ -171,22 +171,25 @@ Knowledge fragments referenced:
 - [ ] `e2e-trace-summary.json` written to `{e2e_trace_summary_output}`
 - [ ] JSON is valid and parseable
 - [ ] `schema_version` field present
-- [ ] `repo`, `collection_mode`, `collection_status`, `coverage_basis`, and `source_sha` fields populated
+- [ ] `repo`, `collection_mode`, `collection_status`, `inventory_basis`, and `source_sha` fields populated
+- [ ] `gate_basis` populated (`priority_thresholds` when gate-eligible, `none` otherwise)
+- [ ] `snapshot_at` replaces the old `generated_at` timestamp field
 - [ ] Oracle metadata populated (`resolution_mode`, `confidence`, `sources`, `external_pointer_status`, `synthetic`)
 - [ ] `target.type` and `target.id` identify the evaluated story / epic / release / hotfix
 - [ ] `gate_status` populated only when `allow_gate: true` and `collection_status` is `COLLECTED`
-- [ ] `coverage_statistics` includes `priority_breakdown` (P0–P3) and `by_level` (e2e, api, component, unit)
+- [ ] `coverage.inventory` includes `covered`, `total`, and `pct`
+- [ ] `coverage.priority_breakdown` includes P0–P3 and `coverage.by_level` includes e2e/api/component/unit/other
 - [ ] `tests` counts are deduplicated from unique discovered tests (no per-requirement double counting)
-- [ ] `gap_analysis` counts match Phase 1 gap analysis
+- [ ] `risk_summary` counts match Phase 1 gap analysis
 - [ ] `heuristics` fields populated (`endpoint_gaps`, `auth_negative_path_status`, `error_path_status`)
 - [ ] UI heuristic fields populated when using a source-derived oracle (`ui_journey_status`, `ui_state_status`)
 - [ ] `gate_criteria` thresholds and actuals match gate decision
 - [ ] `blockers` array present (may be empty)
 - [ ] `recommendations` array present (may be empty)
 - [ ] `links.trace_report_path` points to `traceability-matrix.md`
-- [ ] `links.trace_report_url` and `links.artifact_url` fields present (may be empty)
+- [ ] `links.trace_report_url`, `links.artifact_url`, and `links.journey_evidence_url` fields present (may be empty)
 - [ ] `gate-decision.json` written to `{gate_decision_output}` when gate-eligible
-- [ ] `gate-decision.json` contains `gate_status`, `rationale`, and per-criterion status fields
+- [ ] `gate-decision.json` contains `evaluated_at`, `gate_basis`, `gate_status`, `rationale`, and per-criterion status fields
 
 ### Updated Story File (if enabled)
 

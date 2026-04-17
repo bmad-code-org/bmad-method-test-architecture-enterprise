@@ -75,12 +75,27 @@ if (coverageMatrix.phase !== 'PHASE_1_COMPLETE') {
 
 ```javascript
 const stats = coverageMatrix.coverage_statistics;
-const p0Coverage = stats.priority_breakdown.P0.percentage;
-const p1Coverage = stats.priority_breakdown.P1.percentage;
-const hasP1Requirements = (stats.priority_breakdown.P1.total || 0) > 0;
+if (
+  !stats ||
+  typeof stats !== 'object' ||
+  !stats.priority_breakdown ||
+  !stats.priority_breakdown.P0 ||
+  !stats.priority_breakdown.P1 ||
+  !stats.priority_breakdown.P2 ||
+  !stats.priority_breakdown.P3
+) {
+  throw new Error(
+    'Phase 1 coverage_statistics.priority_breakdown is missing or incomplete. ' +
+      'Step 4 must emit P0-P3 totals and coverage percentages before Step 5 can proceed.',
+  );
+}
+const priorityBreakdown = stats.priority_breakdown;
+const p0Coverage = priorityBreakdown.P0.percentage;
+const p1Coverage = priorityBreakdown.P1.percentage;
+const hasP1Requirements = (priorityBreakdown.P1.total || 0) > 0;
 const effectiveP1Coverage = hasP1Requirements ? p1Coverage : 100;
 const overallCoverage = stats.overall_coverage_percentage;
-const criticalGaps = coverageMatrix.gap_analysis.critical_gaps.length;
+const criticalGaps = (coverageMatrix.gap_analysis?.critical_gaps || []).length;
 const isUnresolved = (value) => typeof value === 'string' && value.startsWith('{') && value.endsWith('}');
 const normalizeResolvedToken = (value) => {
   if (value === undefined || value === null) return null;
@@ -224,7 +239,7 @@ const gateReport = {
       }
     : null,
 
-  uncovered_requirements: coverageMatrix.gap_analysis.critical_gaps.concat(coverageMatrix.gap_analysis.high_gaps),
+  uncovered_requirements: (coverageMatrix.gap_analysis?.critical_gaps || []).concat(coverageMatrix.gap_analysis?.high_gaps || []),
 
   recommendations: coverageMatrix.recommendations,
 };
@@ -346,17 +361,17 @@ const mapOptionalHeuristicStatus = (count, applicable) => {
   if (count === 0) return 'present';
   return count <= 2 ? 'partial' : 'none';
 };
+const gateBasis = gateEligible ? 'priority_thresholds' : 'none';
 
 const e2eTraceSummary = {
-  schema_version: 1,
-  generated_at: new Date().toISOString(),
-  workflow: 'bmad-testarch-trace',
+  schema_version: '0.1.0',
+  snapshot_at: new Date().toISOString(),
   repo: '{project_name}',
   collection_mode: collectionMode,
   collection_status: collectionStatus,
-  coverage_basis: coverageBasis,
-  source_sha: sourceSha,
-  gate_eligible: gateEligible,
+  inventory_basis: coverageBasis,
+  gate_basis: gateBasis,
+  source_sha: sourceSha || '',
   target: coverageMatrix.trace_target || { type: '{gate_type}', id: null, label: null },
   decision_mode: '{decision_mode}',
   evaluator: '{user_name}',
@@ -369,32 +384,32 @@ const e2eTraceSummary = {
     synthetic: syntheticOracle,
   },
 
-  coverage_statistics: {
-    total_requirements: stats.total_requirements,
-    fully_covered: stats.fully_covered,
-    partially_covered: stats.partially_covered ?? coverageMatrix.gap_analysis?.partial_coverage_items?.length ?? 0,
-    uncovered: stats.uncovered ?? 0,
-    overall_coverage_pct: stats.overall_coverage_percentage,
+  coverage: {
+    inventory: {
+      covered: stats.fully_covered,
+      total: stats.total_requirements,
+      pct: stats.overall_coverage_percentage,
+    },
     priority_breakdown: {
       P0: {
-        total: stats.priority_breakdown.P0.total,
-        covered: stats.priority_breakdown.P0.covered,
-        pct: stats.priority_breakdown.P0.percentage,
+        total: priorityBreakdown.P0.total,
+        covered: priorityBreakdown.P0.covered,
+        pct: priorityBreakdown.P0.percentage,
       },
       P1: {
-        total: stats.priority_breakdown.P1.total,
-        covered: stats.priority_breakdown.P1.covered,
-        pct: stats.priority_breakdown.P1.percentage,
+        total: priorityBreakdown.P1.total,
+        covered: priorityBreakdown.P1.covered,
+        pct: priorityBreakdown.P1.percentage,
       },
       P2: {
-        total: stats.priority_breakdown.P2.total,
-        covered: stats.priority_breakdown.P2.covered,
-        pct: stats.priority_breakdown.P2.percentage,
+        total: priorityBreakdown.P2.total,
+        covered: priorityBreakdown.P2.covered,
+        pct: priorityBreakdown.P2.percentage,
       },
       P3: {
-        total: stats.priority_breakdown.P3.total,
-        covered: stats.priority_breakdown.P3.covered,
-        pct: stats.priority_breakdown.P3.percentage,
+        total: priorityBreakdown.P3.total,
+        covered: priorityBreakdown.P3.covered,
+        pct: priorityBreakdown.P3.percentage,
       },
     },
     by_level: testInventory.by_level,
@@ -408,11 +423,11 @@ const e2eTraceSummary = {
     pending_cases: testInventory.pending_cases || 0,
   },
 
-  gap_analysis: {
-    critical_gaps: (coverageMatrix.gap_analysis?.critical_gaps || []).length,
-    high_gaps: (coverageMatrix.gap_analysis?.high_gaps || []).length,
-    medium_gaps: (coverageMatrix.gap_analysis?.medium_gaps || []).length,
-    low_gaps: (coverageMatrix.gap_analysis?.low_gaps || []).length,
+  risk_summary: {
+    critical_open: (coverageMatrix.gap_analysis?.critical_gaps || []).length,
+    high_open: (coverageMatrix.gap_analysis?.high_gaps || []).length,
+    medium_open: (coverageMatrix.gap_analysis?.medium_gaps || []).length,
+    low_open: (coverageMatrix.gap_analysis?.low_gaps || []).length,
   },
 
   heuristics: {
@@ -430,6 +445,7 @@ const e2eTraceSummary = {
     trace_report_path: '{outputFile}',
     trace_report_url: '', // populated by CI/CD runner after artifact upload
     artifact_url: '',
+    journey_evidence_url: '',
   },
 };
 
@@ -461,17 +477,18 @@ console.log(`✅ e2e-trace-summary.json written to {e2e_trace_summary_output}`);
 // populated when gateEligible is true, so constructing it outside would throw when !gateEligible.
 if (gateEligible && ['PASS', 'CONCERNS', 'FAIL', 'WAIVED'].includes(gateDecision)) {
   const gateDecisionSlim = {
-    schema_version: 1,
-    generated_at: e2eTraceSummary.generated_at,
+    schema_version: '0.1.0',
+    evaluated_at: e2eTraceSummary.snapshot_at,
     repo: e2eTraceSummary.repo,
     target: e2eTraceSummary.target,
     collection_status: e2eTraceSummary.collection_status,
+    gate_basis: e2eTraceSummary.gate_basis,
     gate_status: gateDecision,
     rationale: rationale,
     p0_status: e2eTraceSummary.gate_criteria.p0_status,
     p1_status: e2eTraceSummary.gate_criteria.p1_status,
     overall_status: e2eTraceSummary.gate_criteria.overall_status,
-    critical_gaps: e2eTraceSummary.gap_analysis.critical_gaps,
+    critical_open: e2eTraceSummary.risk_summary.critical_open,
     links: e2eTraceSummary.links,
   };
   fs.writeFileSync('{gate_decision_output}', JSON.stringify(gateDecisionSlim, null, 2), 'utf8');
