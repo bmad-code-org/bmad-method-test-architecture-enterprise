@@ -123,10 +123,43 @@ const oracleConfidence =
   }[oracleResolutionMode] ||
   'medium';
 const syntheticOracle = coverageMatrix.oracle?.synthetic === true || ['synthetic_requirements', 'user_journeys'].includes(coverageBasis);
+const deriveActiveTestCasesFromRequirements = (requirements) => {
+  const uniqueTests = new Map();
+
+  (requirements || []).forEach((req) => {
+    (req.tests || []).forEach((test) => {
+      const stableId =
+        test.id ||
+        [test.file, test.title || test.name, test.line]
+          .filter((value) => value !== undefined && value !== null && value !== '')
+          .join(':') ||
+        null;
+
+      if (stableId === null || uniqueTests.has(stableId)) return;
+
+      const explicitStatus = String(test.status || '')
+        .trim()
+        .toLowerCase();
+      const status = ['skipped', 'pending', 'fixme'].includes(explicitStatus)
+        ? explicitStatus
+        : test.fixme === true
+          ? 'fixme'
+          : test.pending === true
+            ? 'pending'
+            : test.skipped === true
+              ? 'skipped'
+              : 'active';
+
+      uniqueTests.set(stableId, status);
+    });
+  });
+
+  return [...uniqueTests.values()].filter((status) => status === 'active').length;
+};
 const summarizedTestInventory = coverageMatrix.test_inventory?.summary || null;
 const activeTestCases =
   summarizedTestInventory === null
-    ? 0
+    ? deriveActiveTestCasesFromRequirements(coverageMatrix.requirements)
     : Math.max(
         0,
         (summarizedTestInventory.cases || 0) -
