@@ -123,6 +123,54 @@ const oracleConfidence =
   }[oracleResolutionMode] ||
   'medium';
 const syntheticOracle = coverageMatrix.oracle?.synthetic === true || ['synthetic_requirements', 'user_journeys'].includes(coverageBasis);
+const deriveActiveTestCasesFromRequirements = (requirements) => {
+  const uniqueTests = new Map();
+
+  (requirements || []).forEach((req) => {
+    (req.tests || []).forEach((test) => {
+      const stableId =
+        test.id ||
+        [test.file, test.title || test.name, test.line]
+          .filter((value) => value !== undefined && value !== null && value !== '')
+          .join(':') ||
+        null;
+
+      if (stableId === null || uniqueTests.has(stableId)) return;
+
+      const explicitStatus = String(test.status || '')
+        .trim()
+        .toLowerCase();
+      const status = ['skipped', 'pending', 'fixme'].includes(explicitStatus)
+        ? explicitStatus
+        : test.fixme === true
+          ? 'fixme'
+          : test.pending === true
+            ? 'pending'
+            : test.skipped === true
+              ? 'skipped'
+              : 'active';
+
+      uniqueTests.set(stableId, status);
+    });
+  });
+
+  return [...uniqueTests.values()].filter((status) => status === 'active').length;
+};
+const summarizedTestInventory = coverageMatrix.test_inventory?.summary || null;
+const activeTestCases =
+  summarizedTestInventory === null
+    ? deriveActiveTestCasesFromRequirements(coverageMatrix.requirements)
+    : Math.max(
+        0,
+        (summarizedTestInventory.cases || 0) -
+          (summarizedTestInventory.skipped_cases || 0) -
+          (summarizedTestInventory.fixme_cases || 0) -
+          (summarizedTestInventory.pending_cases || 0),
+      );
+let effectiveOracleConfidence = oracleConfidence;
+if (effectiveOracleConfidence === 'high' && activeTestCases === 0) {
+  effectiveOracleConfidence = 'medium';
+}
 
 const normalizeBoolean = (value, defaultValue = true) => {
   if (typeof value === 'string') {
@@ -194,12 +242,12 @@ if (!gateEligible) {
   // if a stakeholder-approved waiver applies (wired through config or user input upstream).
 
   // Oracle confidence overlay
-  if (syntheticOracle && gateDecision === 'PASS' && oracleConfidence !== 'high') {
+  if (syntheticOracle && gateDecision === 'PASS' && effectiveOracleConfidence !== 'high') {
     gateDecision = 'CONCERNS';
     rationale =
-      `Coverage traced against inferred ${coverageBasis.replace('_', ' ')} with ${oracleConfidence} confidence. ` +
+      `Coverage traced against inferred ${coverageBasis.replace('_', ' ')} with ${effectiveOracleConfidence} confidence. ` +
       `Base coverage meets PASS thresholds, but confidence is not high enough for an unconditional PASS.`;
-  } else if (syntheticOracle && oracleConfidence === 'low' && gateDecision === 'NOT_EVALUATED') {
+  } else if (syntheticOracle && effectiveOracleConfidence === 'low' && gateDecision === 'NOT_EVALUATED') {
     gateDecision = 'CONCERNS';
     rationale =
       `Coverage traced against inferred ${coverageBasis.replace('_', ' ')} with low confidence. ` +
@@ -375,10 +423,10 @@ const e2eTraceSummary = {
   target: coverageMatrix.trace_target || { type: '{gate_type}', id: null, label: null },
   decision_mode: '{decision_mode}',
   evaluator: '{user_name}',
-  confidence: oracleConfidence,
+  confidence: effectiveOracleConfidence,
   oracle: {
     resolution_mode: oracleResolutionMode,
-    confidence: oracleConfidence,
+    confidence: effectiveOracleConfidence,
     sources: coverageMatrix.oracle?.sources || [],
     external_pointer_status: coverageMatrix.oracle?.external_pointer_status || 'not_used',
     synthetic: syntheticOracle,
