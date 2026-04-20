@@ -11,7 +11,7 @@ agents:
     title: Master Test Architect and Quality Advisor
     icon: "🧪"
     description: "Risk-based testing strategy, fixture architecture, ATDD, API and UI automation (Playwright, Cypress, pytest, JUnit, Go test, xUnit, RSpec), consumer-driven contract testing (Pact), and performance/load/chaos testing (k6). Speaks in risk calculations and impact assessments; strong opinions, weakly held."
-    team: tea
+    team: software-development
 
 # Variables from Core Config inserted automatically by installer:
 ## user_name
