@@ -181,7 +181,7 @@ async function runTests() {
       assert(teaAgentEntry.name === 'Murat', 'module.yaml bmad-tea entry has name: Murat');
       assert(teaAgentEntry.title && teaAgentEntry.title.length > 0, 'module.yaml bmad-tea entry has a title');
       assert(teaAgentEntry.icon === '🧪', 'module.yaml bmad-tea entry has icon 🧪');
-      assert(teaAgentEntry.team === 'tea', 'module.yaml bmad-tea entry has team: tea');
+      assert(teaAgentEntry.team === 'software-development', 'module.yaml bmad-tea entry has team: software-development');
       assert(
         typeof teaAgentEntry.description === 'string' && teaAgentEntry.description.length > 0,
         'module.yaml bmad-tea entry has a description',
