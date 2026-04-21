@@ -1,7 +1,7 @@
 ---
 name: 'step-03-map-criteria'
 description: 'Map coverage oracle items to tests and build traceability matrix'
-nextStepFile: './step-04-analyze-gaps.md'
+nextStepFile: '{skill-root}/steps-c/step-04-analyze-gaps.md'
 outputFile: '{test_artifacts}/traceability-matrix.md'
 ---
 

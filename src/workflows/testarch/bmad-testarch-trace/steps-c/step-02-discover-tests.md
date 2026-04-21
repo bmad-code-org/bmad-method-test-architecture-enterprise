@@ -1,7 +1,7 @@
 ---
 name: 'step-02-discover-tests'
 description: 'Discover and catalog tests by level'
-nextStepFile: './step-03-map-criteria.md'
+nextStepFile: '{skill-root}/steps-c/step-03-map-criteria.md'
 outputFile: '{test_artifacts}/traceability-matrix.md'
 ---
 

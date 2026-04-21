@@ -1,7 +1,7 @@
 ---
 name: 'step-03-quality-evaluation'
 description: 'Orchestrate adaptive quality dimension checks (agent-team, subagent, or sequential)'
-nextStepFile: './step-03f-aggregate-scores.md'
+nextStepFile: '{skill-root}/steps-c/step-03f-aggregate-scores.md'
 ---
 
 # Step 3: Orchestrate Adaptive Quality Evaluation

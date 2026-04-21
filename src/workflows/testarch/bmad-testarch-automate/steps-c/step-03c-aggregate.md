@@ -2,7 +2,7 @@
 name: 'step-03c-aggregate'
 description: 'Aggregate subagent outputs and complete test infrastructure'
 outputFile: '{test_artifacts}/automation-summary.md'
-nextStepFile: './step-04-validate-and-summarize.md'
+nextStepFile: '{skill-root}/steps-c/step-04-validate-and-summarize.md'
 ---
 
 # Step 3C: Aggregate Test Generation Results

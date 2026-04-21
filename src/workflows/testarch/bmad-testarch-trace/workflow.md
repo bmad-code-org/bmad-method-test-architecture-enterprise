@@ -12,6 +12,14 @@ web_bundle: true
 
 ---
 
+## PATH RESOLUTION
+
+- `{skill-root}` resolves to this workflow skill's installed directory.
+- `{project-root}` resolves to the repository working directory.
+- Resolve sibling workflow files such as `instructions.md`, `checklist.md`, `steps-c/...`, `steps-e/...`, `steps-v/...`, and templates from `{skill-root}`, not from the workspace root.
+
+---
+
 ## WORKFLOW ARCHITECTURE
 
 This workflow uses **tri-modal step-file architecture**:
@@ -35,9 +43,9 @@ This workflow uses **tri-modal step-file architecture**:
 
 ### 2. Route to First Step
 
-- **If C:** Load `steps-c/step-01-load-context.md`
-- **If R:** Load `steps-c/step-01b-resume.md`
-- **If V:** Load `steps-v/step-01-validate.md`
-- **If E:** Load `steps-e/step-01-assess.md`
+- **If C:** Load `{skill-root}/steps-c/step-01-load-context.md`
+- **If R:** Load `{skill-root}/steps-c/step-01b-resume.md`
+- **If V:** Load `{skill-root}/steps-v/step-01-validate.md`
+- **If E:** Load `{skill-root}/steps-e/step-01-assess.md`
 
 Create mode resolves the coverage oracle automatically in this order: formal requirements, contract/spec artifacts, resolvable external pointers (when `allow_external_pointer_resolution` is enabled), then synthetic journeys/requirements inferred from source (when `allow_synthetic_oracle` is enabled and no formal oracle exists).

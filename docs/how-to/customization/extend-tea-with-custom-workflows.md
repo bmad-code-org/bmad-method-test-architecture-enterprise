@@ -60,6 +60,35 @@ Then choose a normal update path so BMAD re-applies the customization and refres
 - Do not rely on old embedded-TEA behavior where local workflows appeared to be attached automatically.
 - Do not keep custom workflow logic only in chat instructions. Put it in a real workflow or module so it survives updates.
 
+## Path-Safe Authoring for GitHub Copilot and Other Workspace-Root Runtimes
+
+Some IDE skill runners, including GitHub Copilot slash commands in VS Code, execute commands from the **workspace root**, not from the folder that contains the installed `SKILL.md`.
+
+Author custom TEA skills and workflows with that constraint in mind:
+
+- Use `{skill-root}` for files that live inside the installed skill package.
+- Use `{project-root}` for files that live in the target repository.
+- Do not assume `scripts/...`, `workflow.md`, `./instructions.md`, or `steps-c/...` will resolve relative to the current markdown file unless you explicitly anchor them.
+
+Use patterns like these:
+
+```md
+Read `{skill-root}/workflow.md` and follow it exactly.
+Load `{skill-root}/steps-c/step-01-preflight.md`.
+Run: `python3 {skill-root}/scripts/resolve_customization.py --key inject`
+Read `{project-root}/_bmad/tea/config.yaml`.
+```
+
+Avoid patterns like these:
+
+```md
+Read `workflow.md`
+Load `steps-c/step-01-preflight.md`
+Run: `python3 scripts/resolve_customization.py --key inject`
+```
+
+This keeps the same skill portable across Codex, Claude Code, GitHub Copilot, and other runtimes that install skills into different directories.
+
 ## When to Use Which Approach
 
 - **Project-specific workflow**: add custom content and attach it to `bmad-tea`

@@ -2,7 +2,7 @@
 name: 'step-02-identify-targets'
 description: 'Identify automation targets and create coverage plan'
 outputFile: '{test_artifacts}/automation-summary.md'
-nextStepFile: './step-03-generate-tests.md'
+nextStepFile: '{skill-root}/steps-c/step-03-generate-tests.md'
 ---
 
 # Step 2: Identify Automation Targets

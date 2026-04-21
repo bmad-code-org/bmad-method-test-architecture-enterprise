@@ -3,7 +3,7 @@ name: 'step-01b-continue'
 description: 'Resume TEA Academy learning - load progress and display dashboard'
 
 progressFile: '{test_artifacts}/teaching-progress/{user_name}-tea-progress.yaml'
-nextStepFile: './step-03-session-menu.md'
+nextStepFile: '{skill-root}/steps-c/step-03-session-menu.md'
 ---
 
 # Step 1b: Continue TEA Academy

@@ -2,7 +2,7 @@
 name: 'step-04c-aggregate'
 description: 'Aggregate subagent outputs and complete ATDD test infrastructure'
 outputFile: '{test_artifacts}/atdd-checklist-{story_key}.md'
-nextStepFile: './step-05-validate-and-complete.md'
+nextStepFile: '{skill-root}/steps-c/step-05-validate-and-complete.md'
 ---
 
 # Step 4C: Aggregate ATDD Test Generation Results

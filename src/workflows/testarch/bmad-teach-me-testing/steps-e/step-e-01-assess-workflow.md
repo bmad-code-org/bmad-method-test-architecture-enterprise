@@ -2,8 +2,8 @@
 name: 'step-e-01-assess-workflow'
 description: 'Assess what needs to be edited in the teaching workflow'
 
-nextStepFile: './step-e-02-apply-edits.md'
-workflowPath: '../'
+nextStepFile: '{skill-root}/steps-e/step-e-02-apply-edits.md'
+workflowPath: '{skill-root}'
 advancedElicitationTask: '{project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml'
 partyModeWorkflow: '{project-root}/_bmad/core/workflows/party-mode/workflow.md'
 ---

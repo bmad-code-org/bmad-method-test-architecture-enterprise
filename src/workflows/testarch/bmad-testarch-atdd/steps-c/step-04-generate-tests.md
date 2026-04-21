@@ -1,7 +1,7 @@
 ---
 name: 'step-04-generate-tests'
 description: 'Orchestrate adaptive red-phase test scaffold generation (TDD red phase)'
-nextStepFile: './step-04c-aggregate.md'
+nextStepFile: '{skill-root}/steps-c/step-04c-aggregate.md'
 ---
 
 # Step 4: Orchestrate Adaptive Red-Phase Test Scaffold Generation

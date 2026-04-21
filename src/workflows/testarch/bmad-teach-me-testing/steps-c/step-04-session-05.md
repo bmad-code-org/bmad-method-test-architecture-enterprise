@@ -5,7 +5,7 @@ description: 'Session 5: ATDD & Automate - TDD red-green approach, generate test
 progressFile: '{test_artifacts}/teaching-progress/{user_name}-tea-progress.yaml'
 sessionNotesTemplate: '../templates/session-notes-template.md'
 sessionNotesFile: '{test_artifacts}/tea-academy/{user_name}/session-05-notes.md'
-nextStepFile: './step-03-session-menu.md'
+nextStepFile: '{skill-root}/steps-c/step-03-session-menu.md'
 advancedElicitationTask: '{project-root}/_bmad/core/workflows/advanced-elicitation/workflow.xml'
 partyModeWorkflow: '{project-root}/_bmad/core/workflows/party-mode/workflow.md'
 ---

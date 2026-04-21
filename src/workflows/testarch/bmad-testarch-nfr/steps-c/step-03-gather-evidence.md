@@ -1,7 +1,7 @@
 ---
 name: 'step-03-gather-evidence'
 description: 'Collect evidence for each NFR category'
-nextStepFile: './step-04-evaluate-and-score.md'
+nextStepFile: '{skill-root}/steps-c/step-04-evaluate-and-score.md'
 outputFile: '{test_artifacts}/nfr-assessment.md'
 ---
 

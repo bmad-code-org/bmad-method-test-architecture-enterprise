@@ -2,7 +2,7 @@
 name: 'step-01-preflight-and-context'
 description: 'Determine mode, verify framework, and load context and knowledge'
 outputFile: '{test_artifacts}/automation-summary.md'
-nextStepFile: './step-02-identify-targets.md'
+nextStepFile: '{skill-root}/steps-c/step-02-identify-targets.md'
 knowledgeIndex: './resources/tea-index.csv'
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: 'step-04e-aggregate-nfr'
 description: 'Aggregate NFR domain assessments into executive summary'
-nextStepFile: './step-05-generate-report.md'
+nextStepFile: '{skill-root}/steps-c/step-05-generate-report.md'
 outputFile: '{test_artifacts}/nfr-assessment.md'
 ---
 

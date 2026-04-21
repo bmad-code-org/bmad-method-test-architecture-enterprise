@@ -2,7 +2,7 @@
 name: 'step-e-02-apply-edits'
 description: 'Apply modifications to the teaching workflow based on edit plan'
 
-workflowPath: '../'
+workflowPath: '{skill-root}'
 ---
 
 # Edit Step 2: Apply Edits

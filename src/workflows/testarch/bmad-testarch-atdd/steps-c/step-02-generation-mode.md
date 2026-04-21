@@ -2,7 +2,7 @@
 name: 'step-02-generation-mode'
 description: 'Choose AI generation or recording mode'
 outputFile: '{test_artifacts}/atdd-checklist-{story_key}.md'
-nextStepFile: './step-03-test-strategy.md'
+nextStepFile: '{skill-root}/steps-c/step-03-test-strategy.md'
 ---
 
 # Step 2: Generation Mode Selection

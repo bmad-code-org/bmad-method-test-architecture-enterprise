@@ -1,7 +1,7 @@
 ---
 name: 'step-01-preflight'
 description: 'Verify prerequisites and detect CI platform'
-nextStepFile: './step-02-generate-pipeline.md'
+nextStepFile: '{skill-root}/steps-c/step-02-generate-pipeline.md'
 outputFile: '{test_artifacts}/ci-pipeline-progress.md'
 ---
 

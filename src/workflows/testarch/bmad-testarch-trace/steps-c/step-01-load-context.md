@@ -1,7 +1,7 @@
 ---
 name: 'step-01-load-context'
 description: 'Resolve coverage oracle, load knowledge base, and gather related artifacts'
-nextStepFile: './step-02-discover-tests.md'
+nextStepFile: '{skill-root}/steps-c/step-02-discover-tests.md'
 knowledgeIndex: './resources/tea-index.csv'
 outputFile: '{test_artifacts}/traceability-matrix.md'
 ---

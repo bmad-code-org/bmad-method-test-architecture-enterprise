@@ -1,7 +1,7 @@
 ---
 name: 'step-03-generate-tests'
 description: 'Orchestrate adaptive test generation (agent-team, subagent, or sequential)'
-nextStepFile: './step-03c-aggregate.md'
+nextStepFile: '{skill-root}/steps-c/step-03c-aggregate.md'
 ---
 
 # Step 3: Orchestrate Adaptive Test Generation

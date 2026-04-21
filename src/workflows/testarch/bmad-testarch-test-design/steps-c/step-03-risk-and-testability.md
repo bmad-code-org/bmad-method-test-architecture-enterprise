@@ -1,7 +1,7 @@
 ---
 name: 'step-03-risk-and-testability'
 description: 'Perform testability review (system-level) and risk assessment'
-nextStepFile: './step-04-coverage-plan.md'
+nextStepFile: '{skill-root}/steps-c/step-04-coverage-plan.md'
 outputFile: '{test_artifacts}/test-design-progress.md'
 ---
 

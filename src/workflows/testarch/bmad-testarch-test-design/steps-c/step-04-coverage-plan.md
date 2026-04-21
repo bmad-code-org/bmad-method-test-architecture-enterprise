@@ -1,7 +1,7 @@
 ---
 name: 'step-04-coverage-plan'
 description: 'Design test coverage, priorities, execution strategy, and estimates'
-nextStepFile: './step-05-generate-output.md'
+nextStepFile: '{skill-root}/steps-c/step-05-generate-output.md'
 outputFile: '{test_artifacts}/test-design-progress.md'
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: 'step-01-load-context'
 description: 'Load knowledge base, determine scope, and gather context'
-nextStepFile: './step-02-discover-tests.md'
+nextStepFile: '{skill-root}/steps-c/step-02-discover-tests.md'
 knowledgeIndex: './resources/tea-index.csv'
 outputFile: '{test_artifacts}/test-review.md'
 ---

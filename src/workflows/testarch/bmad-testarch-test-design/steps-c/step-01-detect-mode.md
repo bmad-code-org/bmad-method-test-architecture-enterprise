@@ -1,7 +1,7 @@
 ---
 name: 'step-01-detect-mode'
 description: 'Determine system-level vs epic-level mode and validate prerequisites'
-nextStepFile: './step-02-load-context.md'
+nextStepFile: '{skill-root}/steps-c/step-02-load-context.md'
 outputFile: '{test_artifacts}/test-design-progress.md'
 ---
 

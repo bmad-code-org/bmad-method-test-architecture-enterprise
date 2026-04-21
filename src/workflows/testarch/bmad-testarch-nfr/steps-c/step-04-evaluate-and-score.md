@@ -1,7 +1,7 @@
 ---
 name: 'step-04-evaluate-and-score'
 description: 'Orchestrate adaptive NFR domain assessments (agent-team, subagent, or sequential)'
-nextStepFile: './step-04e-aggregate-nfr.md'
+nextStepFile: '{skill-root}/steps-c/step-04e-aggregate-nfr.md'
 ---
 
 # Step 4: Orchestrate Adaptive NFR Assessment

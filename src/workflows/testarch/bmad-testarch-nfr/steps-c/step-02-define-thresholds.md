@@ -1,7 +1,7 @@
 ---
 name: 'step-02-define-thresholds'
 description: 'Identify NFR categories and thresholds'
-nextStepFile: './step-03-gather-evidence.md'
+nextStepFile: '{skill-root}/steps-c/step-03-gather-evidence.md'
 outputFile: '{test_artifacts}/nfr-assessment.md'
 ---
 

@@ -2,8 +2,8 @@
 name: 'step-v-01-validate'
 description: 'Validate teach-me-testing workflow quality against BMAD standards'
 
-workflowPath: '../'
-checklistFile: '../checklist.md'
+workflowPath: '{skill-root}'
+checklistFile: '{skill-root}/checklist.md'
 validationReport: '{test_artifacts}/workflow-validation/teach-me-testing-validation-{date}.md'
 ---
 

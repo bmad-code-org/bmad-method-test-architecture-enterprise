@@ -2,7 +2,7 @@
 name: 'step-01-preflight-and-context'
 description: 'Verify prerequisites and load story, framework, and knowledge base'
 outputFile: '{test_artifacts}/atdd-checklist-{story_key}.md'
-nextStepFile: './step-02-generation-mode.md'
+nextStepFile: '{skill-root}/steps-c/step-02-generation-mode.md'
 knowledgeIndex: './resources/tea-index.csv'
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: 'step-03f-aggregate-scores'
 description: 'Aggregate quality dimension scores into overall 0-100 score'
-nextStepFile: './step-04-generate-report.md'
+nextStepFile: '{skill-root}/steps-c/step-04-generate-report.md'
 outputFile: '{test_artifacts}/test-review.md'
 ---
 

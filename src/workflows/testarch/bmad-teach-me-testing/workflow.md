@@ -14,6 +14,14 @@ web_bundle: true
 
 ---
 
+## PATH RESOLUTION
+
+- `{skill-root}` resolves to this workflow skill's installed directory.
+- `{project-root}` resolves to the repository working directory.
+- Resolve sibling workflow files such as `instructions.md`, `checklist.md`, `steps-c/...`, `steps-e/...`, `steps-v/...`, and templates from `{skill-root}`, not from the workspace root.
+
+---
+
 ## WORKFLOW ARCHITECTURE
 
 This uses **step-file architecture** for disciplined execution:
@@ -79,12 +87,12 @@ Please select: [C]reate / [V]alidate / [E]dit"
 ### 3. Route to First Step
 
 **IF mode == create:**
-Load, read the full file and then execute `./steps-c/step-01-init.md` to begin the teaching workflow.
+Load, read the full file and then execute `{skill-root}/steps-c/step-01-init.md` to begin the teaching workflow.
 
 **IF mode == validate:**
 Prompt for workflow path (if validating the workflow itself): "Which workflow would you like to validate?"
-Then load, read the full file and then execute `./steps-v/step-v-01-validate.md`
+Then load, read the full file and then execute `{skill-root}/steps-v/step-v-01-validate.md`
 
 **IF mode == edit:**
 Prompt for what to edit: "What would you like to edit in the teaching workflow?"
-Then load, read the full file and then execute `./steps-e/step-e-01-assess-workflow.md`
+Then load, read the full file and then execute `{skill-root}/steps-e/step-e-01-assess-workflow.md`
