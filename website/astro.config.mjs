@@ -40,6 +40,17 @@ export default defineConfig({
     starlight({
       title: 'Test Architect (TEA)',
       tagline: 'Risk-based test strategy, automation guidance, and release gate decisions for quality-driven development.',
+      defaultLocale: 'root',
+      locales: {
+        root: {
+          label: 'English',
+          lang: 'en',
+        },
+        'vi-vn': {
+          label: 'Tiếng Việt',
+          lang: 'vi-VN',
+        },
+      },
 
       favicon: '/favicon.ico',
 
@@ -85,72 +96,173 @@ export default defineConfig({
 
       // Sidebar configuration (Diataxis structure)
       sidebar: [
-        { label: 'Welcome', slug: 'index' },
-        { label: 'TEA Overview', slug: 'explanation/tea-overview' },
+        {
+          label: 'Welcome',
+          translations: { 'vi-VN': 'Chào mừng' },
+          slug: 'index',
+        },
+        {
+          label: 'TEA Overview',
+          translations: { 'vi-VN': 'Tổng quan TEA' },
+          slug: 'explanation/tea-overview',
+        },
         {
           label: 'Tutorials',
+          translations: { 'vi-VN': 'Hướng dẫn học' },
           collapsed: false,
           autogenerate: { directory: 'tutorials' },
         },
         {
           label: 'How-To Guides',
+          translations: { 'vi-VN': 'Hướng dẫn thực hiện' },
           collapsed: true,
           items: [
             {
               label: 'Workflows',
+              translations: { 'vi-VN': 'Workflows' },
               items: [
-                { label: 'Teach Me Testing', slug: 'how-to/workflows/teach-me-testing' },
-                { label: 'Set Up Test Framework', slug: 'how-to/workflows/setup-test-framework' },
-                { label: 'Set Up CI Pipeline', slug: 'how-to/workflows/setup-ci' },
-                { label: 'Test Design', slug: 'how-to/workflows/run-test-design' },
+                {
+                  label: 'Teach Me Testing',
+                  translations: { 'vi-VN': 'Học kiểm thử' },
+                  slug: 'how-to/workflows/teach-me-testing',
+                },
+                {
+                  label: 'Set Up Test Framework',
+                  translations: { 'vi-VN': 'Thiết lập test framework' },
+                  slug: 'how-to/workflows/setup-test-framework',
+                },
+                {
+                  label: 'Set Up CI Pipeline',
+                  translations: { 'vi-VN': 'Thiết lập CI pipeline' },
+                  slug: 'how-to/workflows/setup-ci',
+                },
+                {
+                  label: 'Test Design',
+                  translations: { 'vi-VN': 'Thiết kế kiểm thử' },
+                  slug: 'how-to/workflows/run-test-design',
+                },
                 { label: 'ATDD', slug: 'how-to/workflows/run-atdd' },
-                { label: 'Automate', slug: 'how-to/workflows/run-automate' },
-                { label: 'Test Review', slug: 'how-to/workflows/run-test-review' },
-                { label: 'Trace', slug: 'how-to/workflows/run-trace' },
-                { label: 'NFR Assessment', slug: 'how-to/workflows/run-nfr-assess' },
+                {
+                  label: 'Automate',
+                  translations: { 'vi-VN': 'Tự động hóa' },
+                  slug: 'how-to/workflows/run-automate',
+                },
+                {
+                  label: 'Test Review',
+                  translations: { 'vi-VN': 'Đánh giá test' },
+                  slug: 'how-to/workflows/run-test-review',
+                },
+                {
+                  label: 'Trace',
+                  translations: { 'vi-VN': 'Truy vết' },
+                  slug: 'how-to/workflows/run-trace',
+                },
+                {
+                  label: 'NFR Assessment',
+                  translations: { 'vi-VN': 'Đánh giá NFR' },
+                  slug: 'how-to/workflows/run-nfr-assess',
+                },
               ],
             },
             {
               label: 'Customization',
+              translations: { 'vi-VN': 'Tùy biến' },
               autogenerate: { directory: 'how-to/customization' },
             },
             {
               label: 'Brownfield Projects',
+              translations: { 'vi-VN': 'Dự án brownfield' },
               autogenerate: { directory: 'how-to/brownfield' },
             },
           ],
         },
         {
           label: 'Explanation',
+          translations: { 'vi-VN': 'Giải thích' },
           collapsed: true,
           items: [
-            { label: 'Testing as Engineering', slug: 'explanation/testing-as-engineering' },
-            { label: 'Engagement Models', slug: 'explanation/engagement-models' },
-            { label: 'Risk-Based Testing', slug: 'explanation/risk-based-testing' },
-            { label: 'Test Quality Standards', slug: 'explanation/test-quality-standards' },
-            { label: 'Knowledge Base System', slug: 'explanation/knowledge-base-system' },
-            { label: 'Network-First Patterns', slug: 'explanation/network-first-patterns' },
-            { label: 'Fixture Architecture', slug: 'explanation/fixture-architecture' },
-            { label: 'Step-File Architecture', slug: 'explanation/step-file-architecture' },
-            { label: 'Subagent Architecture', slug: 'explanation/subagent-architecture' },
+            {
+              label: 'Testing as Engineering',
+              translations: { 'vi-VN': 'Testing as Engineering' },
+              slug: 'explanation/testing-as-engineering',
+            },
+            {
+              label: 'Engagement Models',
+              translations: { 'vi-VN': 'Mô hình engagement' },
+              slug: 'explanation/engagement-models',
+            },
+            {
+              label: 'Risk-Based Testing',
+              translations: { 'vi-VN': 'Kiểm thử dựa trên rủi ro' },
+              slug: 'explanation/risk-based-testing',
+            },
+            {
+              label: 'Test Quality Standards',
+              translations: { 'vi-VN': 'Tiêu chuẩn chất lượng test' },
+              slug: 'explanation/test-quality-standards',
+            },
+            {
+              label: 'Knowledge Base System',
+              translations: { 'vi-VN': 'Hệ thống knowledge base' },
+              slug: 'explanation/knowledge-base-system',
+            },
+            {
+              label: 'Network-First Patterns',
+              translations: { 'vi-VN': 'Pattern network-first' },
+              slug: 'explanation/network-first-patterns',
+            },
+            {
+              label: 'Fixture Architecture',
+              translations: { 'vi-VN': 'Kiến trúc fixture' },
+              slug: 'explanation/fixture-architecture',
+            },
+            {
+              label: 'Step-File Architecture',
+              translations: { 'vi-VN': 'Kiến trúc step-file' },
+              slug: 'explanation/step-file-architecture',
+            },
+            {
+              label: 'Subagent Architecture',
+              translations: { 'vi-VN': 'Kiến trúc subagent' },
+              slug: 'explanation/subagent-architecture',
+            },
           ],
         },
         {
           label: 'Reference',
+          translations: { 'vi-VN': 'Tham chiếu' },
           collapsed: true,
           items: [
-            { label: 'Commands', slug: 'reference/commands' },
-            { label: 'Configuration', slug: 'reference/configuration' },
-            { label: 'Knowledge Base', slug: 'reference/knowledge-base' },
-            { label: 'Troubleshooting', slug: 'reference/troubleshooting' },
+            {
+              label: 'Commands',
+              translations: { 'vi-VN': 'Lệnh' },
+              slug: 'reference/commands',
+            },
+            {
+              label: 'Configuration',
+              translations: { 'vi-VN': 'Cấu hình' },
+              slug: 'reference/configuration',
+            },
+            {
+              label: 'Knowledge Base',
+              translations: { 'vi-VN': 'Knowledge Base' },
+              slug: 'reference/knowledge-base',
+            },
+            {
+              label: 'Troubleshooting',
+              translations: { 'vi-VN': 'Khắc phục sự cố' },
+              slug: 'reference/troubleshooting',
+            },
           ],
         },
         {
           label: 'Glossary',
+          translations: { 'vi-VN': 'Thuật ngữ' },
           slug: 'glossary',
         },
         {
           label: 'BMad Ecosystem',
+          translations: { 'vi-VN': 'Hệ sinh thái BMad' },
           collapsed: false,
           items: [
             { label: 'BMad Method', link: 'https://docs.bmad-method.org/', attrs: { target: '_blank' } },
