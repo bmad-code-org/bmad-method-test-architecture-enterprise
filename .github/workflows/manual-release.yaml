@@ -33,15 +33,22 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: npm
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests and validation
+      - name: Verify npm credentials
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npm run validate:schemas
-          npm run format:check
-          npm run lint
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret is not configured." >&2
+            exit 1
+          fi
+
+      - name: Run tests and validation
+        run: npm test
 
       - name: Configure Git
         run: |
@@ -55,16 +62,63 @@ jobs:
             *)          npm version ${{ github.event.inputs.version_bump }} --no-git-tag-version ;;
           esac
 
-      - name: Get new version and previous tag
+      - name: Sync marketplace version
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const marketplacePath = '.claude-plugin/marketplace.json';
+          const marketplace = JSON.parse(fs.readFileSync(marketplacePath, 'utf8'));
+          const plugin = (marketplace.plugins || []).find((entry) => entry && entry.name === packageJson.name);
+
+          if (!plugin) {
+            throw new Error(`Marketplace entry not found for ${packageJson.name}`);
+          }
+
+          plugin.version = packageJson.version;
+          fs.writeFileSync(marketplacePath, `${JSON.stringify(marketplace, null, 2)}\n`);
+          NODE
+
+      - name: Validate release metadata
+        run: npm run test:release-metadata
+
+      - name: Get new version and release metadata
         id: version
         run: |
-          echo "new_version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "previous_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo 'v0.0.0')" >> $GITHUB_OUTPUT
+          case "$NEW_VERSION" in
+            *-alpha.*) echo "npm_tag=alpha" >> $GITHUB_OUTPUT ;;
+            *-beta.*) echo "npm_tag=beta" >> $GITHUB_OUTPUT ;;
+            *) echo "npm_tag=latest" >> $GITHUB_OUTPUT ;;
+          esac
 
       - name: Commit version bump
         run: |
-          git add .
+          git add package.json package-lock.json .claude-plugin/marketplace.json
           git commit -m "release: bump to v${{ steps.version.outputs.new_version }}"
+
+      - name: Create and push tag
+        run: |
+          # Check if tag already exists
+          if git rev-parse "v${{ steps.version.outputs.new_version }}" >/dev/null 2>&1; then
+            echo "Tag v${{ steps.version.outputs.new_version }} already exists, skipping tag creation"
+          else
+            git tag -a "v${{ steps.version.outputs.new_version }}" -m "Release v${{ steps.version.outputs.new_version }}"
+            git push origin "v${{ steps.version.outputs.new_version }}"
+          fi
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ "${{ steps.version.outputs.npm_tag }}" = "latest" ]; then
+            npm publish
+          else
+            npm publish --tag "${{ steps.version.outputs.npm_tag }}"
+          fi
 
       - name: Generate release notes
         id: release_notes
@@ -133,22 +187,12 @@ jobs:
           cat release_notes.md >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create and push tag
+      - name: Push changes to release branch
         run: |
-          # Check if tag already exists
-          if git rev-parse "v${{ steps.version.outputs.new_version }}" >/dev/null 2>&1; then
-            echo "Tag v${{ steps.version.outputs.new_version }} already exists, skipping tag creation"
+          if git push origin HEAD:${GITHUB_REF_NAME} 2>/dev/null; then
+            echo "✅ Successfully pushed to ${GITHUB_REF_NAME} branch"
           else
-            git tag -a "v${{ steps.version.outputs.new_version }}" -m "Release v${{ steps.version.outputs.new_version }}"
-            git push origin "v${{ steps.version.outputs.new_version }}"
-          fi
-
-      - name: Push changes to main
-        run: |
-          if git push origin HEAD:main 2>/dev/null; then
-            echo "✅ Successfully pushed to main branch"
-          else
-            echo "⚠️ Could not push to main (protected branch). This is expected."
+            echo "⚠️ Could not push to ${GITHUB_REF_NAME} (protected branch). This is expected."
             echo "📝 Version bump and tag were created successfully."
           fi
 
@@ -167,4 +211,6 @@ jobs:
           echo "## 🎉 Successfully released v${{ steps.version.outputs.new_version }}!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📦 Distribution" >> $GITHUB_STEP_SUMMARY
+          echo "- **NPM Package**: https://www.npmjs.com/package/bmad-method-test-architecture-enterprise" >> $GITHUB_STEP_SUMMARY
+          echo "- **NPM Dist-tag**: \`${{ steps.version.outputs.npm_tag }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- **GitHub Release**: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/releases/tag/v${{ steps.version.outputs.new_version }}" >> $GITHUB_STEP_SUMMARY

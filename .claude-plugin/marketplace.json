@@ -12,7 +12,7 @@
       "name": "bmad-method-test-architecture-enterprise",
       "source": "./",
       "description": "Master Test Architect module for quality strategy, test automation, CI/CD quality gates, and structured testing education. Part of the BMad Method ecosystem.",
-      "version": "1.7.2",
+      "version": "1.12.3",
       "author": {
         "name": "Murat K Ozcan (TEA Creator) & Brian (BMad) Madison"
       },

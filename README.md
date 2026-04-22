@@ -214,7 +214,7 @@ See `CONTRIBUTING.md` for guidelines.
 
 ## Publishing TEA to NPM
 
-TEA uses an automated release workflow that handles versioning, tagging, NPM publishing, and GitHub releases.
+TEA uses an automated release workflow that handles versioning, metadata sync, tagging, NPM publishing, and GitHub releases.
 
 ### Prerequisites (One-Time Setup)
 
@@ -229,13 +229,18 @@ TEA uses an automated release workflow that handles versioning, tagging, NPM pub
    # Check package.json settings
    cat package.json | grep -A 3 "publishConfig"
    # Should show: "access": "public"
+   if grep -Eq '"private"[[:space:]]*:[[:space:]]*true' package.json; then
+     echo '❌ package.json must not set "private": true'
+   else
+     echo '✅ package.json is publishable ("private": true not present)'
+   fi
    ```
 
 ### Release Process
 
 #### Option 1: Using npm Scripts (Recommended)
 
-From your local terminal after merging to `main`:
+From your local terminal after merging to the release branch you want to publish, typically `main`:
 
 ```bash
 # Beta release (first release or testing)
@@ -259,46 +264,47 @@ npm run release:major
 1. Go to **Actions** tab in GitHub
 2. Click **"Manual Release"** workflow
 3. Click **"Run workflow"**
-4. Select version bump type (alpha, beta, patch, minor, major)
-5. Click **"Run workflow"**
+4. Choose the branch to release, typically `main`
+5. Select version bump type (alpha, beta, patch, minor, major)
+6. Click **"Run workflow"**
 
 ### What Happens Automatically
 
 The workflow performs these steps:
 
-1. ✅ **Validation**: Runs all tests, linting, and format checks
-2. ✅ **Version Bump**: Updates `package.json` version
-   - `beta`: 0.1.0 → 0.1.1-beta.0
-   - `alpha`: 0.1.0 → 0.1.1-alpha.0
-   - `patch`: 0.1.0 → 0.1.1
-   - `minor`: 0.1.0 → 0.2.0
-   - `major`: 0.1.0 → 1.0.0
+1. ✅ **Validation**: Runs the full `npm test` suite, including schema checks, install tests, knowledge checks, linting, markdown linting, formatting, and release metadata validation
+2. ✅ **Version Bump**: Updates `package.json`, `package-lock.json`, and `.claude-plugin/marketplace.json`
+   - `beta`: 1.12.3 → 1.12.4-beta.0
+   - `alpha`: 1.12.3 → 1.12.4-alpha.0
+   - `patch`: 1.12.3 → 1.12.4
+   - `minor`: 1.12.3 → 1.13.0
+   - `major`: 1.12.3 → 2.0.0
 3. ✅ **Commit**: Creates version bump commit
-4. ✅ **Tag**: Creates git tag (e.g., v0.1.1-beta.0)
-5. ✅ **Push**: Pushes tag to GitHub
-6. ✅ **Publish**: Publishes to NPM registry
-   - Alpha → `npm install --tag alpha`
-   - Beta → `npm install` (tagged as `latest`)
-   - Stable → `npm install` (tagged as `latest`)
+4. ✅ **Tag**: Creates git tag (e.g., v1.12.4-beta.0)
+5. ✅ **Publish**: Publishes to NPM registry
+   - Alpha → dist-tag `alpha` (`npm install bmad-method-test-architecture-enterprise@alpha`)
+   - Beta → dist-tag `beta` (`npm install bmad-method-test-architecture-enterprise@beta`)
+   - Stable → dist-tag `latest` (`npm install bmad-method-test-architecture-enterprise`)
+6. ✅ **Push**: Pushes the version bump commit back to the selected branch when permitted, and always pushes the tag
 7. ✅ **GitHub Release**: Creates release with auto-generated notes
-8. ✅ **Summary**: Displays installation instructions
+8. ✅ **Summary**: Displays installation instructions and distribution links
 
 ### Version Bump Strategy
 
 **For TEA Module:**
 
-- **Beta (0.1.x-beta.x)**: Pre-1.0 testing, used for initial releases
-- **Alpha (0.1.x-alpha.x)**: Early development, experimental features
-- **Patch (0.1.x)**: Bug fixes, no new features
-- **Minor (0.x.0)**: New features, backwards compatible
-- **Major (x.0.0)**: Breaking changes (e.g., 1.0.0 release)
+- **Beta (`1.12.x-beta.x`)**: Release candidate testing on the next patch line
+- **Alpha (`1.12.x-alpha.x`)**: Early development and experimental validation
+- **Patch (`1.12.x`)**: Bug fixes, no breaking changes
+- **Minor (`1.x.0`)**: New features, backwards compatible
+- **Major (`x.0.0`)**: Breaking changes
 
 **Recommended Release Path:**
 
-1. `0.1.0` → `0.1.1-beta.0` (first beta)
+1. `1.12.3` → `1.12.4-beta.0` (first beta)
 2. Test beta with early adopters
-3. `0.1.1-beta.0` → `0.1.1-beta.1` (fixes)
-4. When stable: `0.1.1-beta.1` → `1.0.0` (official release)
+3. `1.12.4-beta.0` → `1.12.4-beta.1` (fixes)
+4. When stable: `1.12.4-beta.1` → `1.12.4`
 
 ### Verify Publication
 
@@ -329,10 +335,10 @@ If you need to unpublish a version:
 
 ```bash
 # Unpublish specific version (within 72 hours)
-npm unpublish bmad-method-test-architecture-enterprise@0.1.1-beta.0
+npm unpublish bmad-method-test-architecture-enterprise@1.12.4-beta.0
 
 # Deprecate version (preferred for older releases)
-npm deprecate bmad-method-test-architecture-enterprise@0.1.1-beta.0 "Use version X.Y.Z instead"
+npm deprecate bmad-method-test-architecture-enterprise@1.12.4-beta.0 "Use version X.Y.Z instead"
 ```
 
 ### Troubleshooting
@@ -354,7 +360,7 @@ npm deprecate bmad-method-test-architecture-enterprise@0.1.1-beta.0 "Use version
 
 **"Git push failed (protected branch)":**
 
-- This is expected for protected `main` branch
+- This is expected for a protected release branch
 - The tag and version bump are still created
 - You may need to manually merge the version bump commit
 
