@@ -38,6 +38,13 @@ The workflow automatically detects existing progress and resumes where you left 
 
 ## Workflow Structure
 
+### Step Entrypoints
+
+- Create / start: `{skill-root}/steps-c/step-01-init.md`
+- Continue existing progress: `{skill-root}/steps-c/step-01b-continue.md`
+- Validate the workflow: `{skill-root}/steps-v/step-v-01-validate.md`
+- Edit the workflow: `{skill-root}/steps-e/step-e-01-assess-workflow.md`
+
 ### 7 Sessions
 
 1. **Quick Start (30 min)** - TEA Lite intro, run automate workflow

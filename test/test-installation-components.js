@@ -240,48 +240,42 @@ async function runTests() {
   // ============================================================
   console.log(`${colors.yellow}Test Suite 4: Workflow Structure${colors.reset}\n`);
 
-  const teachMeWorkflowPath = path.join(projectRoot, 'src/workflows/testarch/bmad-teach-me-testing/workflow.md');
-  try {
-    if (await pathExists(teachMeWorkflowPath)) {
-      const teachMeContent = await fs.readFile(teachMeWorkflowPath, 'utf8');
-      assert(teachMeContent.length > 0, 'bmad-teach-me-testing/workflow.md exists');
-      assert(!teachMeContent.includes('_bmad/bmm/'), 'bmad-teach-me-testing has no _bmad/bmm/ references');
-    } else {
-      assert(false, 'bmad-teach-me-testing workflow exists', 'src/workflows/testarch/bmad-teach-me-testing/workflow.md not found');
-    }
-  } catch (error) {
-    assert(false, 'teach-me-testing workflow validates', error.message);
-  }
+  const workflowDirs = [
+    'bmad-teach-me-testing',
+    'bmad-testarch-framework',
+    'bmad-testarch-ci',
+    'bmad-testarch-test-design',
+    'bmad-testarch-atdd',
+    'bmad-testarch-automate',
+    'bmad-testarch-test-review',
+    'bmad-testarch-nfr',
+    'bmad-testarch-trace',
+  ];
 
-  const workflowDirs = {
-    'bmad-testarch-framework': 'framework',
-    'bmad-testarch-ci': 'ci',
-    'bmad-testarch-test-design': 'test-design',
-    'bmad-testarch-atdd': 'atdd',
-    'bmad-testarch-automate': 'automate',
-    'bmad-testarch-test-review': 'test-review',
-    'bmad-testarch-nfr': 'nfr-assess',
-    'bmad-testarch-trace': 'trace',
-  };
-
-  for (const [dirName, displayName] of Object.entries(workflowDirs)) {
+  for (const dirName of workflowDirs) {
     const skillMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/SKILL.md`);
-    const workflowMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/workflow.md`);
+    const customizeTomlPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/customize.toml`);
     const workflowYamlPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/workflow.yaml`);
     const instructionsMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/instructions.md`);
 
     if (await pathExists(skillMdPath)) {
       try {
         const skillContent = await fs.readFile(skillMdPath, 'utf8');
+        assert(skillContent && skillContent.trim().length > 0, `${dirName}/SKILL.md is not empty`);
         assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
         assert(
-          skillContent.includes('Read `{skill-root}/workflow.md` and follow it exactly.'),
-          `${dirName}/SKILL.md loads workflow.md from {skill-root}`,
+          skillContent.includes('resolve_customization.py --skill {skill-root} --key workflow'),
+          `${dirName}/SKILL.md resolves the workflow customization block`,
         );
+        assert(skillContent.includes('{workflow.activation_steps_prepend}'), `${dirName}/SKILL.md executes prepend activation steps`);
+        assert(skillContent.includes('{workflow.activation_steps_append}'), `${dirName}/SKILL.md executes append activation steps`);
+        assert(skillContent.includes('{workflow.persistent_facts}'), `${dirName}/SKILL.md loads persistent facts`);
         assert(
-          skillContent.includes('resolve them from `{skill-root}`, not from the workspace root'),
-          `${dirName}/SKILL.md explains workspace-root-safe relative path resolution`,
+          skillContent.includes('Resolve sibling workflow files such as `instructions.md`'),
+          `${dirName}/SKILL.md explains sibling workflow path resolution`,
         );
+        assert(/\{skill-root\}\/steps-[cev]\//.test(skillContent), `${dirName}/SKILL.md routes first step from {skill-root}`);
+        assert(!skillContent.includes('Read `{skill-root}/workflow.md`'), `${dirName}/SKILL.md no longer redirects to workflow.md`);
         assert(!skillContent.includes('[workflow.md](workflow.md)'), `${dirName}/SKILL.md no longer uses a bare relative workflow link`);
       } catch (error) {
         assert(false, `${dirName}/SKILL.md validates`, error.message);
@@ -290,23 +284,28 @@ async function runTests() {
       assert(false, `${dirName}/SKILL.md exists`, `src/workflows/testarch/${dirName}/SKILL.md not found`);
     }
 
-    if (await pathExists(workflowMdPath)) {
+    if (await pathExists(customizeTomlPath)) {
       try {
-        const workflowContent = await fs.readFile(workflowMdPath, 'utf8');
-        assert(workflowContent.includes('## PATH RESOLUTION'), `${dirName}/workflow.md documents path resolution`);
+        const customizeContent = await fs.readFile(customizeTomlPath, 'utf8');
+        assert(customizeContent.includes('[workflow]'), `${dirName}/customize.toml has [workflow] section`);
+        assert(customizeContent.includes('activation_steps_prepend'), `${dirName}/customize.toml defines activation_steps_prepend`);
+        assert(customizeContent.includes('activation_steps_append'), `${dirName}/customize.toml defines activation_steps_append`);
+        assert(customizeContent.includes('persistent_facts'), `${dirName}/customize.toml defines persistent_facts`);
+        assert(customizeContent.includes('on_complete'), `${dirName}/customize.toml defines on_complete`);
         assert(
-          workflowContent.includes(
-            'Resolve sibling workflow files such as `instructions.md`, `checklist.md`, `steps-c/...`, `steps-e/...`, `steps-v/...`, and templates from `{skill-root}`, not from the workspace root.',
-          ),
-          `${dirName}/workflow.md explains sibling workflow path resolution`,
+          customizeContent.includes('file:{project-root}/**/project-context.md'),
+          `${dirName}/customize.toml loads project-context.md as a persistent fact`,
         );
-        assert(/\{skill-root\}\/steps-[cev]\//.test(workflowContent), `${dirName}/workflow.md routes first step from {skill-root}`);
       } catch (error) {
-        assert(false, `${dirName}/workflow.md validates`, error.message);
+        assert(false, `${dirName}/customize.toml validates`, error.message);
       }
     } else {
-      assert(false, `${dirName}/workflow.md exists`, `src/workflows/testarch/${dirName}/workflow.md not found`);
+      assert(false, `${dirName}/customize.toml exists`, `src/workflows/testarch/${dirName}/customize.toml not found`);
     }
+
+    // workflow.md was folded into SKILL.md and removed (PR: workflow customization rollout).
+    const legacyWorkflowMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/workflow.md`);
+    assert(!(await pathExists(legacyWorkflowMdPath)), `${dirName}/workflow.md is removed (content lives in SKILL.md)`);
 
     if (await pathExists(workflowYamlPath)) {
       try {

@@ -8,10 +8,11 @@ Use this checklist to validate the teaching workflow meets quality standards.
 
 ## Foundation Quality
 
-- [ ] **workflow.md** exists with proper frontmatter
+- [ ] **SKILL.md** exists with proper frontmatter
+- [ ] **customize.toml** defines activation hooks and persistent facts
 - [ ] Tri-modal routing logic present (Create/Edit/Validate)
 - [ ] Configuration loading references correct module (TEA)
-- [ ] First step path correct (`./steps-c/step-01-init.md`)
+- [ ] First step path correct (`{skill-root}/steps-c/step-01-init.md`)
 - [ ] Folder structure complete (steps-c/, steps-e/, steps-v/, data/, templates/)
 
 ---

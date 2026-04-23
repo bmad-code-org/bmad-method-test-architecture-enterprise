@@ -63,7 +63,8 @@ This will validate:
 
 **Check:**
 
-- [ ] workflow.md exists with proper frontmatter
+- [ ] SKILL.md exists with proper frontmatter
+- [ ] customize.toml defines workflow customization surface
 - [ ] Tri-modal routing logic present
 - [ ] Configuration loading correct
 - [ ] First step path correct
@@ -261,3 +262,11 @@ Workflow is usable but could be improved.
 ✅ All validation checks run, comprehensive report generated, issues identified with remediation guidance, overall status determined.
 
 **Master Rule:** Check everything systematically, report findings clearly, provide actionable remediation.
+
+## On Complete
+
+Run: `python3 {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --key workflow.on_complete`
+
+If the resolver succeeds and returns a non-empty `workflow.on_complete`, execute that value as the final terminal instruction before exiting.
+
+If the resolver fails, returns no output, or resolves an empty value, skip the hook and exit normally.
