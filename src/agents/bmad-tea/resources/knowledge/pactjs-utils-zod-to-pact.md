@@ -88,24 +88,28 @@ await pact
 ### Example 3: Array responses with `eachLike`
 
 ```typescript
-import { MatchersV3 } from '@pact-foundation/pact';
+import { PactV4, MatchersV3 } from '@pact-foundation/pact';
 import { zodToPactMatchers, setJsonContent } from '@seontechnologies/pactjs-utils';
 import { ConsumerMovieSchema } from '../helpers/consumer-schemas';
 
 const { eachLike } = MatchersV3;
+const pact = new PactV4({ consumer: 'Movies Web', provider: 'Movies API' });
 const movie = { id: 1, name: 'My movie', year: 1999, rating: 8.5, director: 'John Doe' };
 
-.willRespondWith(
-  200,
-  setJsonContent({
-    body: {
-      status: 200,
-      data: eachLike(
-        zodToPactMatchers(ConsumerMovieSchema, movie) as Parameters<typeof eachLike>[0],
-      ),
-    },
-  }),
-);
+await pact
+  .addInteraction()
+  .given('Movies exist')
+  .uponReceiving('a request for all movies')
+  .withRequest('GET', '/movies')
+  .willRespondWith(
+    200,
+    setJsonContent({
+      body: {
+        status: 200,
+        data: eachLike(zodToPactMatchers(ConsumerMovieSchema, movie) as Parameters<typeof eachLike>[0]),
+      },
+    }),
+  );
 // data expands to: eachLike({ id: integer(1), name: string('My movie'), year: integer(1999), rating: decimal(8.5), director: string('John Doe') })
 ```
 
@@ -185,7 +189,7 @@ zodToPactMatchers(MovieSchema);
 - **Arrays without examples**: If the example array is empty, the first item's field matchers are derived from the schema (and `.openapi({ example })` metadata, if present).
 - **No extra `like()` wrapper**: For objects returned from `zodToPactMatchers`, do not wrap the whole object in `like()`; each field is already a matcher.
 - **Works for HTTP and message pacts**: The same function produces matchers for request/response bodies and for Kafka / async message payloads.
-- **TypeScript**: Import `import type { z } from 'zod'` in your own test helpers; the utility itself accepts any `z.ZodTypeAny`.
+- **TypeScript**: Import `z` as a runtime value when defining schemas (`import { z } from 'zod'`). If you need a schema type in helper signatures, import it separately (for example, `import type { ZodTypeAny } from 'zod'`).
 
 ## Related Fragments
 
