@@ -108,32 +108,12 @@ npx bmad-method install
 
 **Note:** TEA is automatically added to party mode after installation. Use `/party` to collaborate with TEA alongside other BMad agents.
 
-### Claude Cowork
-
-Claude.ai web and the Claude desktop chat have no access to your project files, so the `npx` installer's writes can't reach them. [Claude Cowork](https://www.claude.com/product/claude-code) does — it sandboxes your project in a VM and exposes a plugin manager. The `npx` installer still can't write into that sandbox, but Cowork accepts plugins via its marketplace API, which TEA's `.claude-plugin/marketplace.json` ships with.
-
-**Install** (two steps — register the marketplace, then install the plugin):
-
-```
-/plugin marketplace add bmad-code-org/bmad-method-test-architecture-enterprise
-/plugin install bmad-method-test-architecture-enterprise@bmad-method-test-architecture-enterprise
-```
-
-Restart the Cowork session, then `/bmad-method-test-architecture-enterprise:*` slash commands appear.
-
-**Update**: `/plugin marketplace update bmad-method-test-architecture-enterprise`
-
-**Uninstall**: `/plugin uninstall bmad-method-test-architecture-enterprise@bmad-method-test-architecture-enterprise`
-
-**Known issue**: Cowork's plugin reconciler currently has open bugs ([anthropics/claude-code#38429](https://github.com/anthropics/claude-code/issues/38429), [#39274](https://github.com/anthropics/claude-code/issues/39274)) that can purge third-party marketplace plugins on session sync. If your slash commands disappear, re-run the `/plugin install` line.
-
 ### Tool-specific invocation
 
-| Tool                            | Invocation style                 | Example                                                            |
-| ------------------------------- | -------------------------------- | ------------------------------------------------------------------ |
-| Claude Code / Cursor / Windsurf | Slash command                    | `/bmad:tea:automate`                                               |
-| Codex                           | `$` skill from `.agents/skills`  | `$bmad-tea` or `$bmad-tea-testarch-automate`                       |
-| Claude Cowork                   | Marketplace plugin slash command | `/bmad-method-test-architecture-enterprise:bmad-testarch-automate` |
+| Tool                            | Invocation style                | Example                                      |
+| ------------------------------- | ------------------------------- | -------------------------------------------- |
+| Claude Code / Cursor / Windsurf | Slash command                   | `/bmad:tea:automate`                         |
+| Codex                           | `$` skill from `.agents/skills` | `$bmad-tea` or `$bmad-tea-testarch-automate` |
 
 ## Quickstart
 
