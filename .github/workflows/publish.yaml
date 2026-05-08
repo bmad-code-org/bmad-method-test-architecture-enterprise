@@ -43,19 +43,19 @@ jobs:
       - name: Generate GitHub App token
         id: app-token
         if: github.event_name == 'workflow_dispatch' && inputs.channel == 'latest'
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: ".nvmrc"
           cache: "npm"
@@ -158,6 +158,19 @@ jobs:
             }
             found { print }
           ' CHANGELOG.md)
+          if [ -z "$BODY" ]; then
+            BODY=$(awk '
+              /^##[[:space:]]*\[Unreleased\]/ { found=1; next }
+              /^## / {
+                if (found) exit
+                next
+              }
+              found { print }
+            ' CHANGELOG.md)
+            if [ -n "$BODY" ]; then
+              echo "::notice::No CHANGELOG.md entry for $TAG — using [Unreleased] notes"
+            fi
+          fi
           if [ -z "$BODY" ]; then
             echo "::warning::No CHANGELOG.md entry for $TAG — falling back to auto-generated notes"
             gh release create "$TAG" --generate-notes
