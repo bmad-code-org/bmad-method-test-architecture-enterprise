@@ -3,8 +3,9 @@
 # Auto-fix changed files and stage them
 npx --no-install lint-staged
 
-# Validate everything
+# Validate everything (includes build:cowork-plugin)
 npm test
+git add cowork-plugin/
 
 # Validate docs links only when docs change
 if command -v rg >/dev/null 2>&1; then

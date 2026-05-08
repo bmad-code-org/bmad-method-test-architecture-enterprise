@@ -21,6 +21,7 @@
   "main": "",
   "bin": {},
   "scripts": {
+    "build:cowork-plugin": "node tools/build-cowork-plugin.js",
     "docs:build": "node tools/build-docs.js",
     "docs:dev": "npm --prefix website run dev",
     "docs:fix-links": "node tools/fix-doc-links.js --write",
@@ -37,7 +38,7 @@
     "release:minor": "gh workflow run publish.yaml -f channel=latest -f bump=minor",
     "release:next": "gh workflow run publish.yaml -f channel=next",
     "release:patch": "gh workflow run publish.yaml -f channel=latest -f bump=patch",
-    "test": "npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:release-metadata && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run validate:marketplace && npm run lint && npm run lint:md && npm run format:check",
+    "test": "npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:release-metadata && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run validate:marketplace && npm run build:cowork-plugin && npm run lint && npm run lint:md && npm run format:check",
     "test:coverage": "c8 npm test",
     "test:install": "node test/test-installation-components.js",
     "test:knowledge": "node test/test-knowledge-base.js",

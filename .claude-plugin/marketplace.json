@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "bmad-method-test-architecture-enterprise",
-      "source": "./",
+      "source": "./cowork-plugin",
       "description": "Master Test Architect module for quality strategy, test automation, CI/CD quality gates, and structured testing education. Part of the BMad Method ecosystem.",
       "version": "1.16.0",
       "author": {

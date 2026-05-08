@@ -110,22 +110,19 @@ npx bmad-method install
 
 ### Claude Cowork
 
-Claude.ai web and the Claude desktop chat have no access to your project files, so the `npx` installer's writes can't reach them. [Claude Cowork](https://www.claude.com/product/claude-code) does — it sandboxes your project in a VM and exposes a plugin manager. The `npx` installer still can't write into that sandbox, but Cowork accepts plugins via its marketplace API, which TEA's `.claude-plugin/marketplace.json` ships with.
+Claude.ai web and the Claude desktop chat have no access to your project files, so the `npx` installer's writes can't reach them. [Claude Cowork](https://www.claude.com/product/claude-code) is different — it sandboxes your project in a VM and supports a plugin marketplace. TEA ships a `.claude-plugin/marketplace.json` that Cowork can consume directly.
 
-**Install** (two steps — register the marketplace, then install the plugin):
+**Install**: In the Cowork desktop app, open **Customize → Browse plugins → Add marketplace** and enter:
 
 ```
-/plugin marketplace add bmad-code-org/bmad-method-test-architecture-enterprise
-/plugin install bmad-method-test-architecture-enterprise@bmad-method-test-architecture-enterprise
+bmad-code-org/bmad-method-test-architecture-enterprise
 ```
 
-Restart the Cowork session, then `/bmad-method-test-architecture-enterprise:*` slash commands appear.
+Accept the plugin, restart the session, and `/bmad-method-test-architecture-enterprise:*` slash commands appear.
 
-**Update**: `/plugin marketplace update bmad-method-test-architecture-enterprise`
+**Update**: Re-open Customize, find the marketplace, and sync/refresh it.
 
-**Uninstall**: `/plugin uninstall bmad-method-test-architecture-enterprise@bmad-method-test-architecture-enterprise`
-
-**Known issue**: Cowork's plugin reconciler currently has open bugs ([anthropics/claude-code#38429](https://github.com/anthropics/claude-code/issues/38429), [#39274](https://github.com/anthropics/claude-code/issues/39274)) that can purge third-party marketplace plugins on session sync. If your slash commands disappear, re-run the `/plugin install` line.
+**Known issue**: Cowork's personal plugin install has a [known persistence bug](https://github.com/anthropics/claude-code/issues/38429) — plugins may disappear after an app restart. The org-level install (Organisation settings → Plugins) is more reliable for teams.
 
 ### Tool-specific invocation
 
