@@ -151,7 +151,12 @@ jobs:
           TAG="v$(node -p 'require("./package.json").version')"
           VERSION="${TAG#v}"
           has_release_notes() {
-            [[ "$1" =~ [^[:space:]] ]]
+            awk '
+              /^[[:space:]]*$/ { next }
+              /^[[:space:]]*-{3,}[[:space:]]*$/ { next }
+              { found = 1 }
+              END { exit found ? 0 : 1 }
+            ' <<< "$1"
           }
           BODY=$(awk -v ver="$VERSION" '
             /^## / {
