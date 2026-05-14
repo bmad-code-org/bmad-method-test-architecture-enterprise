@@ -12,6 +12,7 @@
 
 const path = require('node:path');
 const fs = require('node:fs/promises');
+const { parse } = require('csv-parse/sync');
 const yaml = require('js-yaml');
 
 async function pathExists(filePath) {
@@ -253,10 +254,12 @@ async function runTests() {
   ];
 
   for (const dirName of workflowDirs) {
+    const workflowDir = path.join(projectRoot, `src/workflows/testarch/${dirName}`);
     const skillMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/SKILL.md`);
     const customizeTomlPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/customize.toml`);
     const workflowYamlPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/workflow.yaml`);
     const instructionsMdPath = path.join(projectRoot, `src/workflows/testarch/${dirName}/instructions.md`);
+    let workflowKnowledgeIndexValidated = false;
 
     if (await pathExists(skillMdPath)) {
       try {
@@ -370,6 +373,46 @@ async function runTests() {
           assert(!stepContent.includes("workflowPath: '../'"), `${stepLabel} has no relative workflowPath`);
           if (stepContent.includes('workflowPath:')) {
             assert(stepContent.includes("workflowPath: '{skill-root}'"), `${stepLabel} anchors workflowPath to {skill-root}`);
+          }
+
+          if (stepContent.includes('knowledgeIndex:')) {
+            const knowledgeIndexMatch = stepContent.match(/^knowledgeIndex:\s*['"]([^'"]+)['"]/m);
+            assert(Boolean(knowledgeIndexMatch), `${stepLabel} declares a parseable knowledgeIndex`);
+
+            const knowledgeIndexReference = knowledgeIndexMatch ? knowledgeIndexMatch[1] : '';
+            const knowledgeIndexPath = path.resolve(workflowDir, knowledgeIndexReference);
+            const expectedKnowledgeIndexPath = path.join(workflowDir, 'resources', 'tea-index.csv');
+
+            assert(knowledgeIndexPath === expectedKnowledgeIndexPath, `${stepLabel} uses the workflow-local knowledge index`);
+            assert(await pathExists(knowledgeIndexPath), `${stepLabel} knowledgeIndex target exists`);
+
+            if (!workflowKnowledgeIndexValidated && (await pathExists(knowledgeIndexPath))) {
+              const records = parse(await fs.readFile(knowledgeIndexPath, 'utf8'), { columns: true, skip_empty_lines: true });
+              const workflowKnowledgeDir = path.join(path.dirname(knowledgeIndexPath), 'knowledge');
+              const workflowKnowledgeFiles = (await fs.readdir(workflowKnowledgeDir)).filter((name) => name.endsWith('.md'));
+              const missingFragments = [];
+
+              for (const record of records) {
+                if (!record.fragment_file) {
+                  missingFragments.push(`${record.id || '<missing-id>'}: missing fragment_file`);
+                  continue;
+                }
+
+                const fragmentPath = path.resolve(path.dirname(knowledgeIndexPath), record.fragment_file);
+                if (!(await pathExists(fragmentPath))) {
+                  missingFragments.push(record.fragment_file);
+                }
+              }
+
+              assert(
+                records.length === workflowKnowledgeFiles.length,
+                `${dirName}/resources/tea-index.csv line count matches workflow-local fragments`,
+                `Found ${records.length} records for ${workflowKnowledgeFiles.length} fragments`,
+              );
+              assert(missingFragments.length === 0, `${dirName}/resources/tea-index.csv fragment files exist`, missingFragments.join(', '));
+
+              workflowKnowledgeIndexValidated = true;
+            }
           }
         } catch (error) {
           assert(false, `${dirName}/${stepDir}/${fileName} validates`, error.message);

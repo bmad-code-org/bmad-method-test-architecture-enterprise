@@ -43,8 +43,11 @@ TEA has two layers of files, and each has a specific job:
 | `steps-v/*.md`                                     | **Validate** steps — always 1 file: evaluate against checklist                                       | On demand                                               |
 | `checklist.md`                                     | Validation criteria — what "done" looks like for this workflow                                       | Read by steps-v                                         |
 | `*-template.md`                                    | Output skeleton with `{PLACEHOLDER}` vars — steps fill these in to produce the final artifact        | Read by steps-c when generating output                  |
-| `src/agents/bmad-tea/resources/tea-index.csv`      | Knowledge fragment index — id, name, tags, tier (core/extended/specialized), file path               | Read to decide which shared TEA fragments to load       |
+| `src/agents/bmad-tea/resources/tea-index.csv`      | Agent-level knowledge fragment index — id, name, tags, tier (core/extended/specialized), file path   | Read by the TEA agent for direct recommendations        |
+| `src/workflows/testarch/<workflow>/resources/`     | Workflow-local knowledge index and fragments                                                         | Read by workflow steps from that workflow's skill root  |
 | `resources/knowledge/*.md`                         | Reusable fragments — standards, patterns, API references                                             | Selectively read into context based on tier + config    |
+
+Workflow resource directories intentionally duplicate the TEA knowledge base. Each workflow skill must stay self-contained so it can be installed, copied, or invoked without reaching across skill boundaries. When knowledge changes, propagate the intended updates to the affected workflow resource directories instead of replacing them with a central runtime path.
 
 ```mermaid
 flowchart LR

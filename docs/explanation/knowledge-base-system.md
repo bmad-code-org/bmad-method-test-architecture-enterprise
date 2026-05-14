@@ -96,6 +96,8 @@ network-first,Network-First Safeguards,Intercept-before-navigate workflow,"netwo
 fixture-architecture,Fixture Architecture,Composable fixture patterns,"fixtures,architecture",knowledge/fixture-architecture.md
 ```
 
+The agent-level `resources/` directory is the reference catalog for Murat. Workflow skills also carry their own `resources/tea-index.csv` and `resources/knowledge/` directories. That duplication is intentional: workflow step frontmatter resolves `knowledgeIndex: './resources/tea-index.csv'` from `{skill-root}`, keeping each workflow skill modular and self-contained.
+
 **2. Workflow Loads Relevant Fragments**
 
 When user runs `atdd`:

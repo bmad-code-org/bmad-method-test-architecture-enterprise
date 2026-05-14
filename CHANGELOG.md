@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `actions/setup-node@v6`
   - `actions/create-github-app-token@v3`
 - Publish releases now use `[Unreleased]` changelog notes before falling back to generated GitHub release notes when an exact version section is missing.
+- Documented workflow-local knowledge resources as intentional self-contained skill packaging and added validation for workflow-local knowledge indexes.
 
 ---
 
