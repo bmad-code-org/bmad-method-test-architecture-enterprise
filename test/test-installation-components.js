@@ -24,6 +24,11 @@ async function pathExists(filePath) {
   }
 }
 
+function extractFrontmatter(content) {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  return match ? match[1] : '';
+}
+
 // ANSI colors
 const colors = {
   reset: '\u001B[0m',
@@ -347,6 +352,7 @@ async function runTests() {
         const stepPath = path.join(stepDirPath, fileName);
         try {
           const stepContent = await fs.readFile(stepPath, 'utf8');
+          const frontmatter = extractFrontmatter(stepContent);
           const stepLabel = `${dirName}/${stepDir}/${fileName}`;
 
           assert(!stepContent.includes("nextStepFile: './"), `${stepLabel} has no cwd-sensitive nextStepFile`);
@@ -375,8 +381,8 @@ async function runTests() {
             assert(stepContent.includes("workflowPath: '{skill-root}'"), `${stepLabel} anchors workflowPath to {skill-root}`);
           }
 
-          if (stepContent.includes('knowledgeIndex:')) {
-            const knowledgeIndexMatch = stepContent.match(/^knowledgeIndex:\s*['"]([^'"]+)['"]/m);
+          if (frontmatter.includes('knowledgeIndex:')) {
+            const knowledgeIndexMatch = frontmatter.match(/^knowledgeIndex:\s*['"]([^'"]+)['"]/m);
             assert(Boolean(knowledgeIndexMatch), `${stepLabel} declares a parseable knowledgeIndex`);
 
             const knowledgeIndexReference = knowledgeIndexMatch ? knowledgeIndexMatch[1] : '';
