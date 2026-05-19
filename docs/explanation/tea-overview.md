@@ -222,7 +222,7 @@ TEA spans multiple phases (Phase 3, Phase 4, and the release gate). Most BMM age
 | **Phase 2**  | (none)                                                    | -                | Planning phase - PM defines FRs/NFRs                            |
 | **Phase 3**  | `test-design` (system-level), `framework`, `ci`           | Once per project | System testability, NFR planning, and test infrastructure setup |
 | **Phase 4**  | `test-design`, `atdd`, `automate`, `test-review`, `trace` | Per epic/story   | Test planning per epic, then per-story testing                  |
-| **Release**  | `nfr-assess`, `trace` (Phase 2: gate)                     | Per epic/release | NFR evidence audit and go/no-go decision                        |
+| **Release**  | `nfr-assess` (optional), `trace` (Phase 2: gate)          | Per epic/release | Optional NFR evidence audit; go/no-go gate decision             |
 
 **Note**: `trace` is a two-phase workflow: Phase 1 (traceability) + Phase 2 (gate decision). This reduces cognitive load while maintaining natural workflow.
 

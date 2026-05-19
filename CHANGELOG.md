@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- NFR workflow boundary clarified: `test-design` now owns NFR planning (thresholds, planned evidence, NFR-derived risks) and `nfr-assess` is reframed as NFR Evidence Audit — evaluating implementation evidence against planned thresholds after code exists.
+- `nfr-assess` step-02 now checks for an existing `test-design` NFR plan first and uses it as the primary threshold source, falling back to raw documents only for missing or UNKNOWN thresholds.
+- TEA agent menu gains a `GATE` routing intent that guides users through the release gate sequence (optional test-review → optional nfr-assess → trace Phase 2 gate) without merging those workflows.
+- NFR domains in `nfr-assess` corrected from "maintainability" to "scalability" to match the four parallel subagent domains (security, performance, reliability, scalability).
+- TEA phase table updated: `nfr-assess` marked optional at the Release phase.
+- NFR planning items in `test-design` step-05 output checklist conditioned on NFR scope.
+- Engagement models table: TEA Solo row for NFR Evidence Audit updated from No to Optional.
 - GitHub Actions workflow dependencies upgraded to Node 24-compatible major versions:
   - `actions/checkout@v5`
   - `actions/setup-node@v6`
