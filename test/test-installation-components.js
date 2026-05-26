@@ -29,6 +29,18 @@ function extractFrontmatter(content) {
   return match ? match[1] : '';
 }
 
+function extractTomlTable(content, tableName) {
+  const tablePattern = new RegExp(`^\\[${tableName}]\\s*$`, 'm');
+  const tableMatch = tablePattern.exec(content);
+  if (!tableMatch) return '';
+
+  const tableStart = tableMatch.index + tableMatch[0].length;
+  const remainingContent = content.slice(tableStart);
+  const nextTableMatch = /^\s*\[[^\]]+]\s*$/m.exec(remainingContent);
+
+  return nextTableMatch ? remainingContent.slice(0, nextTableMatch.index) : remainingContent;
+}
+
 // ANSI colors
 const colors = {
   reset: '\u001B[0m',
@@ -156,13 +168,14 @@ async function runTests() {
     // without adding a TOML dep.
     if (await pathExists(customizePath)) {
       const customizeContent = await fs.readFile(customizePath, 'utf8');
+      const configBlock = extractTomlTable(customizeContent, 'config');
 
       assert(customizeContent.includes('[agent]'), 'customize.toml has [agent] section');
-      assert(customizeContent.includes('[config]'), 'customize.toml has [config] defaults section');
-      assert(/^\s*tea_use_playwright_utils\s*=\s*true/m.test(customizeContent), 'customize.toml defaults Playwright Utils on');
-      assert(/^\s*tea_use_pactjs_utils\s*=\s*true/m.test(customizeContent), 'customize.toml defaults Pact.js Utils on');
-      assert(/^\s*tea_pact_mcp\s*=\s*"mcp"/m.test(customizeContent), 'customize.toml defaults Pact MCP on');
-      assert(/^\s*tea_browser_automation\s*=\s*"auto"/m.test(customizeContent), 'customize.toml defaults browser automation to auto');
+      assert(configBlock.length > 0, 'customize.toml has [config] defaults section');
+      assert(/^\s*tea_use_playwright_utils\s*=\s*true/m.test(configBlock), 'customize.toml [config] defaults Playwright Utils on');
+      assert(/^\s*tea_use_pactjs_utils\s*=\s*true/m.test(configBlock), 'customize.toml [config] defaults Pact.js Utils on');
+      assert(/^\s*tea_pact_mcp\s*=\s*"mcp"/m.test(configBlock), 'customize.toml [config] defaults Pact MCP on');
+      assert(/^\s*tea_browser_automation\s*=\s*"auto"/m.test(configBlock), 'customize.toml [config] defaults browser automation to auto');
       assert(/^\s*name\s*=\s*"Murat"/m.test(customizeContent), 'customize.toml pins agent.name = "Murat"');
       assert(/^\s*title\s*=\s*"Master Test Architect and Quality Advisor"/m.test(customizeContent), 'customize.toml pins agent.title');
       assert(/^\s*icon\s*=\s*"🧪"/m.test(customizeContent), 'customize.toml pins agent.icon');
