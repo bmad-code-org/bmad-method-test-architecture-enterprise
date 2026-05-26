@@ -370,7 +370,7 @@ Want to understand TEA principles and patterns in depth?
 Production-ready fixtures and utilities that enhance TEA workflows.
 
 - Install: `npm install -D @seontechnologies/playwright-utils`
-  > Note: Playwright Utils is enabled via the installer. Only set `tea_use_playwright_utils` in `_bmad/tea/config.yaml` if you need to override the installer choice.
+  > Note: Playwright Utils is enabled by default. Only set `tea_use_playwright_utils` in `_bmad/tea/config.yaml` if you need to override the default.
 - Impacts: `framework`, `atdd`, `automate`, `test-review`, `ci`
 - Utilities include: api-request, auth-session, network-recorder, intercept-network-call, recurse, log, file-utils, burn-in, network-error-monitor, fixtures-composition
 
@@ -379,7 +379,7 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 Production-ready contract testing utilities that reduce raw Pact.js boilerplate and standardize provider verification patterns.
 
 - Install: `npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact`
-- Config: `tea_use_pactjs_utils: true` (default is `false`, opt in only when you want Pact-aware workflows)
+- Config: `tea_use_pactjs_utils: true` (default is `true`; set it to `false` only when you want to suppress Pact-aware workflows)
 - Impacts: `framework`, `atdd`, `automate`, `test-design`, `test-review`, `ci`
 - Utilities include: createProviderState, toJsonMap, setJsonBody, setJsonContent, buildVerifierOptions, buildMessageVerifierOptions, createRequestFilter, noOpRequestFilter, handlePactBrokerUrlAndSelectors, getProviderVersionTags
 - Supports local monorepo flow (`pactUrls`) and remote broker flow (`PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`)
@@ -422,12 +422,14 @@ Optional MCP integration for design-time broker interaction in contract testing 
 
 **Configuration** (`_bmad/tea/config.yaml`):
 
-    tea_pact_mcp: "none"  # none | mcp
+    tea_pact_mcp: "mcp"  # none | mcp
 
 | Mode   | What happens                                                                                                        |
 | ------ | ------------------------------------------------------------------------------------------------------------------- |
 | `mcp`  | TEA can use SmartBear MCP tools for provider-state discovery, test review support, can-i-deploy, and matrix checks. |
-| `none` | Default. TEA skips broker/MCP integration entirely unless you explicitly enable it.                                 |
+| `none` | TEA skips broker/MCP integration entirely.                                                                          |
+
+If `mcp` is configured but the SmartBear MCP server or broker credentials are unavailable, TEA should continue without broker-assisted context and note the missing MCP capability in the workflow output.
 
 **Setup:**
 

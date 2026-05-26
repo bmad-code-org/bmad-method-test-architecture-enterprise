@@ -94,7 +94,7 @@ TEA can integrate with `@seontechnologies/playwright-utils` for advanced fixture
 npm install -D @seontechnologies/playwright-utils
 ```
 
-Enable during BMad installation or set `tea_use_playwright_utils: true` in config.
+Playwright Utils is enabled by default in TEA config. Set `tea_use_playwright_utils: false` only when you need vanilla framework output.
 
 **Utilities available:** api-request, network-recorder, auth-session, intercept-network-call, recurse, log, file-utils, burn-in, network-error-monitor
 

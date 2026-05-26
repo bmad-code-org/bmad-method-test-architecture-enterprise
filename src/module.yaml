@@ -21,20 +21,22 @@ agents:
 ## project_root
 
 # TEA-specific configuration variables
+# These are non-interactive defaults. User-visible overrides live in
+# customize.toml/BMad customization tooling rather than installer questions.
 # IMPORTANT: tea_use_playwright_utils, tea_use_pactjs_utils, tea_pact_mcp, tea_browser_automation,
 # tea_execution_mode, tea_capability_probe, test_stack_type, ci_platform,
 # and test_framework are ACTIVELY USED in workflows
 # Other variables are FUTURE placeholders for Phase 10 enhancements
 
 test_artifacts:
-  prompt: "Where should test artifacts be stored? (test plans, coverage reports, quality audits)"
+  prompt: false
   default: "{output_folder}/test-artifacts"
   result: "{project-root}/{value}"
 
 # ✅ ACTIVELY USED - Playwright Utils integration (referenced in 6 workflows: automate, atdd, framework, test-design, test-review, ci)
 # CRITICAL: Must be boolean (true/false) not string - workflows check "if config.tea_use_playwright_utils: true"
 tea_use_playwright_utils:
-  prompt: "Enable Playwright Utils integration?"
+  prompt: false
   default: true
   result: "{value}"
   single-select:
@@ -46,8 +48,8 @@ tea_use_playwright_utils:
 # ✅ ACTIVELY USED - Pact.js Utils integration for contract testing (referenced in workflows: automate, atdd, framework, test-design, test-review, ci)
 # CRITICAL: Must be boolean (true/false) not string - workflows check "if config.tea_use_pactjs_utils: true"
 tea_use_pactjs_utils:
-  prompt: "Enable Pact.js Utils for consumer-driven contract testing?"
-  default: false
+  prompt: false
+  default: true
   result: "{value}"
   single-select:
     - value: true
@@ -59,8 +61,8 @@ tea_use_pactjs_utils:
 # Controls how TEA interacts with PactFlow/Pact Broker during test generation and review
 # CRITICAL: Must be a string value: "mcp" | "none"
 tea_pact_mcp:
-  prompt: "Enable SmartBear MCP for PactFlow/Pact Broker? Only needed if you already use a broker."
-  default: "none"
+  prompt: false
+  default: "mcp"
   result: "{value}"
   single-select:
     - value: "mcp"
@@ -72,7 +74,7 @@ tea_pact_mcp:
 # Controls how TEA interacts with live browsers during test generation
 # CRITICAL: Must be a string value: "auto" | "cli" | "mcp" | "none"
 tea_browser_automation:
-  prompt: "How should TEA interact with browsers during test generation?"
+  prompt: false
   default: "auto"
   result: "{value}"
   single-select:
@@ -89,7 +91,7 @@ tea_browser_automation:
 # Controls whether TEA runs orchestration steps sequentially, with subagents, or with agent teams
 # CRITICAL: Must be a string value: "auto" | "subagent" | "agent-team" | "sequential"
 tea_execution_mode:
-  prompt: "How should TEA orchestrate multi-step generation and evaluation?"
+  prompt: false
   default: "auto"
   result: "{value}"
   single-select:
@@ -105,7 +107,7 @@ tea_execution_mode:
 # ✅ ACTIVELY USED - Probe runtime capabilities before selecting execution mode
 # When true, TEA checks whether subagent/agent-team execution is actually supported and falls back safely.
 tea_capability_probe:
-  prompt: "Probe runtime capabilities before selecting execution mode?"
+  prompt: false
   default: true
   result: "{value}"
   single-select:
@@ -116,7 +118,7 @@ tea_capability_probe:
 
 # ✅ ACTIVELY USED - Stack type detection for multi-framework support
 test_stack_type:
-  prompt: "What type of project is this?"
+  prompt: false
   default: "auto"
   result: "{value}"
   single-select:
@@ -131,7 +133,7 @@ test_stack_type:
 
 # ✅ ACTIVELY USED - CI/CD platform detection
 ci_platform:
-  prompt: "Which CI/CD platform do you use?"
+  prompt: false
   default: "auto"
   result: "{value}"
   single-select:
@@ -154,7 +156,7 @@ ci_platform:
 
 # ✅ ACTIVELY USED - Test framework selection for multi-stack support
 test_framework:
-  prompt: "Which test framework are you using?"
+  prompt: false
   default: "auto"
   result: "{value}"
   single-select:
@@ -183,7 +185,7 @@ test_framework:
 
 # ⏭️ FUTURE - Risk threshold (not currently used in test-design workflow, marked for Phase 10)
 risk_threshold:
-  prompt: "What risk level requires mandatory testing?"
+  prompt: false
   default: "p1"
   result: "{value}"
   single-select:
@@ -199,17 +201,17 @@ risk_threshold:
 # ⏭️ FUTURE - Test output folders (not currently wired into workflows, marked for Phase 10)
 # IMPORTANT: test_artifacts already resolves to {project-root}/..., so don't re-prepend {project-root}
 test_design_output:
-  prompt: "Where should test design documents be stored?"
+  prompt: false
   default: "test-design"
   result: "{test_artifacts}/{value}"
 
 test_review_output:
-  prompt: "Where should test review reports be stored?"
+  prompt: false
   default: "test-reviews"
   result: "{test_artifacts}/{value}"
 
 trace_output:
-  prompt: "Where should traceability reports be stored?"
+  prompt: false
   default: "traceability"
   result: "{test_artifacts}/{value}"
 
