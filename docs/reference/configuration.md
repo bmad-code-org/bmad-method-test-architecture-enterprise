@@ -1077,11 +1077,11 @@ document_output_language: english
 3. Edit with your name and preferences
 4. Install dependencies:
    npm install
-5. Install playwright-utils when you want generated tests to use the default utility profile:
+5. Install playwright-utils to use the enabled-by-default utility fixtures:
    npm install -D @seontechnologies/playwright-utils
-6. Install pactjs-utils when you want generated tests to use the default contract-testing profile:
+6. Install pactjs-utils to use the enabled-by-default contract-testing patterns:
    npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
-7. Configure Pact MCP when your service uses PactFlow/Pact Broker:
+7. Install SmartBear MCP if your service uses PactFlow/Pact Broker:
    npm install -g @smartbear/mcp
 ```
 
