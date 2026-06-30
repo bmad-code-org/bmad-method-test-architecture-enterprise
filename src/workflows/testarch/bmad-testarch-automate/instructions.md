@@ -34,7 +34,9 @@ This workflow uses **step-file architecture** for disciplined execution:
 From `workflow.yaml`, resolve:
 
 - `config_source`, `test_artifacts`, `user_name`, `communication_language`, `document_output_language`, `date`
-- `test_dir`, `source_dir`, `coverage_target`, `standalone_mode`
+- `test_dir`, `source_dir`, `coverage_target`, `standalone_mode`, `ta_evidence_output`
+- Keep `{test_artifacts}/automation-summary.md` as the human-readable report.
+- Use `{ta_evidence_output}` for machine-readable TA planning evidence.
 
 ### 2. First Step
 

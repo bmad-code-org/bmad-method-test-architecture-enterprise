@@ -27,6 +27,7 @@ variables:
   # Directory paths
   test_dir: "{project-root}/tests" # Root test directory
   source_dir: "{project-root}" # Source code directory (customize if needed, e.g., {project-root}/src or {project-root}/lib)
+  ta_evidence_output: "{test_artifacts}/tea-ta.evidence.json" # Machine-readable TA planning evidence
 
 # Output configuration
 default_output_file: "{test_artifacts}/automation-summary.md"

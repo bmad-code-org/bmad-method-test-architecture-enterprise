@@ -361,6 +361,47 @@ Before starting this workflow, verify:
 
 ## Step 6: Automation Summary Generated
 
+### Structured TA Evidence Generated
+
+- [ ] Structured evidence file created at `{test_artifacts}/tea-ta.evidence.json`
+- [ ] `tea-ta.evidence.json` is valid JSON
+- [ ] Evidence includes the required envelope fields:
+  - [ ] `contract_version`
+  - [ ] `workflow`
+  - [ ] `story_ref`
+  - [ ] `node`
+  - [ ] `round`
+  - [ ] `gate`
+  - [ ] `generated_at`
+  - [ ] `report_file`
+  - [ ] `changed_tests`
+  - [ ] `fixture_needs`
+  - [ ] `quality_concerns`
+  - [ ] `nfr_signals`
+  - [ ] `coverage`
+  - [ ] `artifact_pointers`
+- [ ] `changed_tests` includes every test file created or updated by Step 3C
+- [ ] each `changed_tests` entry includes string `file`, `test_level`, `description`, and `source` fields
+- [ ] each `changed_tests` entry includes complete non-negative integer `priority_coverage` counts
+- [ ] `fixture_needs` is present as an array, even when empty
+- [ ] `quality_concerns` is present as an array, even when empty
+- [ ] `nfr_signals` is present as an array, even when empty
+- [ ] each `nfr_signals` entry includes non-empty `category`, `source`, and `evidence` fields
+- [ ] `contract_version` is `1.0`
+- [ ] `generated_at` is a parseable ISO-8601 timestamp
+- [ ] `coverage.total_tests` equals the sum of `coverage.by_level.*`
+- [ ] `report_file` points to `automation-summary.md`
+- [ ] `artifact_pointers.automation_summary` points to `automation-summary.md`
+- [ ] `artifact_pointers.generated_test_files` lists generated or updated test files
+- [ ] generated test file pointers stay inside expected generated-test boundaries such as `tests/`, `pact/`, `pacts/`, or the configured test directory
+- [ ] `changed_tests` and `artifact_pointers.generated_test_files` reference the same generated-test file set
+- [ ] `{ta_evidence_output}` is resolved before Step 4 writes structured evidence
+- [ ] Evidence uses `gate: "PASS"` only when the evidence file is valid and consumable
+- [ ] Evidence uses `gate: "ERROR"` when any pre-existing `quality_concerns` entry has error severity, case-insensitive
+- [ ] Evidence uses `gate: "ERROR"` when evidence is untrusted, incomplete, mismatched, or invalid
+- [ ] missing or invalid structured evidence is treated as `ERROR` by consumers
+- [ ] TA evidence remains planning evidence and does not make Archon route decisions
+
 ### Automation Summary Document
 
 - [ ] Output file created at `{output_summary}`
@@ -491,6 +532,8 @@ All of the following must be true before marking this workflow as complete:
 - [ ] **Healing report generated** (if healing attempted)
 - [ ] **Unfixable tests marked** with test.fixme() and detailed comments (if any)
 - [ ] **Automation summary created** and saved to correct location
+- [ ] **Structured TA evidence created** at `{test_artifacts}/tea-ta.evidence.json`
+- [ ] **Structured TA evidence validates** required envelope fields and arrays
 - [ ] **Output file formatted correctly**
 - [ ] **Knowledge base references applied** and documented (including healing fragments if used)
 - [ ] **No test quality issues** (flaky patterns, race conditions, hardcoded data, page objects)

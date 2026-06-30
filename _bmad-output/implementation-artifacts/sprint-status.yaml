@@ -1,5 +1,5 @@
 # generated: 2026-06-30 10:50:10 +0700
-# last_updated: 2026-06-30 10:50:10 +0700
+# last_updated: 2026-06-30 16:10:41 +0700
 # project: BMAD-TEA
 # project_key: NOKEY
 # tracking_system: file-system
@@ -41,28 +41,28 @@
 # - Retrospective appends its action items to action_items; sprint-status surfaces open ones
 
 generated: "2026-06-30 10:50:10 +0700"
-last_updated: "2026-06-30 10:50:10 +0700"
+last_updated: "2026-06-30 16:10:41 +0700"
 project: BMAD-TEA
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/dale/Desktop/workspace/OceanLabs/workflow-engine/BMAD-TEA/_bmad-output/implementation-artifacts
 
 development_status:
-  epic-t1: backlog
-  t1-1-emit-structured-ta-evidence: backlog
+  epic-t1: in-progress
+  t1-1-emit-structured-ta-evidence: done
   epic-t1-retrospective: optional
-  epic-t2: backlog
-  t2-1-emit-rv-gate-contract: backlog
-  t2-2-validate-rv-skipped-contract-compatibility: backlog
+  epic-t2: in-progress
+  t2-1-emit-rv-gate-contract: ready-for-dev
+  t2-2-validate-rv-skipped-contract-compatibility: ready-for-dev
   epic-t2-retrospective: optional
-  epic-t3: backlog
-  t3-1-emit-nr-gate-contract: backlog
-  t3-2-validate-nr-skipped-contract-compatibility: backlog
+  epic-t3: in-progress
+  t3-1-emit-nr-gate-contract: ready-for-dev
+  t3-2-validate-nr-skipped-contract-compatibility: ready-for-dev
   epic-t3-retrospective: optional
-  epic-t4: backlog
-  t4-1-emit-tr-traceability-contract: backlog
-  t4-2-validate-tr-skipped-contract-compatibility: backlog
+  epic-t4: in-progress
+  t4-1-emit-tr-traceability-contract: ready-for-dev
+  t4-2-validate-tr-skipped-contract-compatibility: ready-for-dev
   epic-t4-retrospective: optional
-  epic-t5: backlog
-  t5-1-add-tea-gate-contract-fixtures: backlog
+  epic-t5: in-progress
+  t5-1-add-tea-gate-contract-fixtures: ready-for-dev
   epic-t5-retrospective: optional
