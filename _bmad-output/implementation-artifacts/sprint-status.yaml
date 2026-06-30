@@ -1,0 +1,68 @@
+# generated: 2026-06-30 10:50:10 +0700
+# last_updated: 2026-06-30 10:50:10 +0700
+# project: BMAD-TEA
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: /Users/dale/Desktop/workspace/OceanLabs/workflow-engine/BMAD-TEA/_bmad-output/implementation-artifacts
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created via create-story
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review via Dev's code-review workflow
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review in a fresh context
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+
+generated: "2026-06-30 10:50:10 +0700"
+last_updated: "2026-06-30 10:50:10 +0700"
+project: BMAD-TEA
+project_key: NOKEY
+tracking_system: file-system
+story_location: /Users/dale/Desktop/workspace/OceanLabs/workflow-engine/BMAD-TEA/_bmad-output/implementation-artifacts
+
+development_status:
+  epic-t1: backlog
+  t1-1-emit-structured-ta-evidence: backlog
+  epic-t1-retrospective: optional
+  epic-t2: backlog
+  t2-1-emit-rv-gate-contract: backlog
+  t2-2-validate-rv-skipped-contract-compatibility: backlog
+  epic-t2-retrospective: optional
+  epic-t3: backlog
+  t3-1-emit-nr-gate-contract: backlog
+  t3-2-validate-nr-skipped-contract-compatibility: backlog
+  epic-t3-retrospective: optional
+  epic-t4: backlog
+  t4-1-emit-tr-traceability-contract: backlog
+  t4-2-validate-tr-skipped-contract-compatibility: backlog
+  epic-t4-retrospective: optional
+  epic-t5: backlog
+  t5-1-add-tea-gate-contract-fixtures: backlog
+  epic-t5-retrospective: optional
