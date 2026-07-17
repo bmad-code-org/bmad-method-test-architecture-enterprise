@@ -234,4 +234,4 @@ jobs:
 # Rotation is intentional (security review, suspected leak) not calendar-driven
 ```
 
-_Source: PactFlow webhook documentation, GitHub `repository_dispatch` REST API, seon-mcp-server / seon-admin-panel production incident April 2026_
+_Source: PactFlow webhook documentation, GitHub `repository_dispatch` REST API, an internal production incident (April 2026)_
