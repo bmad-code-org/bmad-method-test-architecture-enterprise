@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- TEA-specific installer questions are now non-interactive defaults, with module config defaults mirrored in `src/agents/bmad-tea/customize.toml` for BMad customization/global config tooling.
+- TEA now defaults Playwright Utils, Pact.js Utils, Pact MCP, and browser automation integrations on (`tea_use_playwright_utils: true`, `tea_use_pactjs_utils: true`, `tea_pact_mcp: "mcp"`, `tea_browser_automation: "auto"`).
 - NFR workflow boundary clarified: `test-design` now owns NFR planning (thresholds, planned evidence, NFR-derived risks) and `nfr-assess` is reframed as NFR Evidence Audit — evaluating implementation evidence against planned thresholds after code exists.
 - `nfr-assess` step-02 now checks for an existing `test-design` NFR plan first and uses it as the primary threshold source, falling back to raw documents only for missing or UNKNOWN thresholds.
 - TEA agent menu gains a `GATE` routing intent that guides users through the release gate sequence (optional test-review → optional nfr-assess → trace Phase 2 gate) without merging those workflows.

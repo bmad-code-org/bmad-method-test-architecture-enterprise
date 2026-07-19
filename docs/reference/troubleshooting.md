@@ -385,36 +385,30 @@ If you are creating a custom TEA workflow, see [Extend TEA with Custom Workflows
 
 ## Configuration Issues
 
-### Variables Not Prompting During Installation
+### TEA Configuration Not Asked During Installation
 
-**Symptom**: Installation completes without asking for TEA configuration (test_artifacts, Playwright Utils, etc.).
+**Symptom**: Installation completes without asking for TEA configuration (test_artifacts, Playwright Utils, Pact.js Utils, etc.).
 
-**Causes**:
+**Cause**:
 
-- Variables marked as `prompt: false` in module.yaml
-- Installation running in non-interactive mode
-- Module.yaml misconfigured
+- This is expected. TEA-specific installer questions were removed; defaults now come from `src/module.yaml` and `src/agents/bmad-tea/customize.toml`.
 
 **Solutions**:
 
-1. Check variable prompt settings:
+1. Check the installed defaults:
 
    ```bash
    cat _bmad/tea/module.yaml | grep -A 3 "test_artifacts"
-   # Should show prompt: true
+   # Should show prompt: false and a default value
    ```
 
-2. Manually edit module.yaml if needed:
+2. Override project config if needed:
 
    ```bash
-   # Update _bmad/tea/module.yaml
-   vi _bmad/tea/module.yaml
+   vi _bmad/tea/config.yaml
    ```
 
-3. Run installation in interactive mode:
-   ```bash
-   npx bmad-method install --interactive
-   ```
+3. Use BMad customization tooling when available to override `customize.toml` defaults.
 
 ### Playwright Utils Integration Not Working
 

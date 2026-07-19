@@ -4,6 +4,25 @@
 # identity of this agent. Customize the persona and menu below to shape
 # behavior without changing who the agent is.
 
+# Module configuration defaults. These mirror the non-interactive defaults in
+# src/module.yaml and are intended for BMad customize/global config tooling.
+
+[config]
+test_artifacts = "{output_folder}/test-artifacts"
+tea_use_playwright_utils = true
+tea_use_pactjs_utils = true
+tea_pact_mcp = "mcp"
+tea_browser_automation = "auto"
+tea_execution_mode = "auto"
+tea_capability_probe = true
+test_stack_type = "auto"
+ci_platform = "auto"
+test_framework = "auto"
+risk_threshold = "p1"
+test_design_output = "test-design"
+test_review_output = "test-reviews"
+trace_output = "traceability"
+
 [agent]
 # non-configurable skill frontmatter, create a custom agent if you need a new name/title
 name = "Murat"

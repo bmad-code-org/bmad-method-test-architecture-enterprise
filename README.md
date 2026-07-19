@@ -84,7 +84,7 @@ BMad workflows and Claude Code Skills solve different problems at different scal
 | **Context mgmt**  | Everything in one shot      | Just-in-time step loading, subagent isolation (separate contexts)            |
 | **Output**        | Freeform                    | Templates with `{PLACEHOLDER}` vars filled by specific steps                 |
 | **Validation**    | None                        | Dedicated mode (`steps-v/`) evaluating against checklists                    |
-| **Configuration** | None                        | `module.yaml` with prompted config flags driving conditional behavior        |
+| **Configuration** | None                        | `customize.toml` defaults plus `module.yaml` config metadata drive behavior  |
 | **Modes**         | None                        | Create / Edit / Validate — three separate step chains per workflow           |
 
 The key insight is that there is **no external runtime engine** — the LLM _is_ the engine. BMad workflows are structured markdown that the LLM follows as instructions: "read this file, execute it completely, save your output, load the next file." Skills are a single tool in a toolbox; BMad workflows are a workshop with a process manual.
@@ -151,13 +151,15 @@ npx bmad-method install
 
 ## Configuration
 
-TEA variables are defined in `src/module.yaml` and prompted during install:
+TEA variables have non-interactive defaults in `src/module.yaml` and
+`src/agents/bmad-tea/customize.toml`. BMad customize/global config tooling can
+override the `customize.toml` defaults without adding installer questions.
 
 - `test_artifacts` — base output folder for test artifacts
-- `tea_use_playwright_utils` — enable Playwright Utils integration (boolean)
-- `tea_use_pactjs_utils` — enable Pact.js Utils integration for contract testing when your project explicitly uses Pact (boolean)
-- `tea_pact_mcp` — SmartBear MCP for PactFlow/Broker interaction when broker integration is needed: mcp, none (string)
-- `tea_browser_automation` — browser automation mode: auto, cli, mcp, none (string)
+- `tea_use_playwright_utils` — enable Playwright Utils integration; defaults to `true`
+- `tea_use_pactjs_utils` — enable Pact.js Utils integration for contract testing; defaults to `true`
+- `tea_pact_mcp` — SmartBear MCP for PactFlow/Broker interaction; defaults to `mcp`
+- `tea_browser_automation` — browser automation mode: auto, cli, mcp, none; defaults to `auto`
 - `test_framework` — detected or configured test framework (Playwright, Cypress, Jest, Vitest, pytest, JUnit, Go test, dotnet test, RSpec)
 - `test_stack_type` — detected or configured stack type (frontend, backend, fullstack)
 - `ci_platform` — CI platform (auto, github-actions, gitlab-ci, jenkins, azure-devops, harness, circle-ci)

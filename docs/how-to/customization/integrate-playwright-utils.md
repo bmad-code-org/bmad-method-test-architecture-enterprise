@@ -766,7 +766,7 @@ npm install -D @seontechnologies/playwright-utils
 
 **Causes:**
 
-1. Config not set: `tea_use_playwright_utils: false`
+1. Config disabled: `tea_use_playwright_utils: false`
 2. Workflow run before config change
 3. Package not installed
 

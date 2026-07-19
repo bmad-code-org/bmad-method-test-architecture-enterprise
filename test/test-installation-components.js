@@ -29,6 +29,18 @@ function extractFrontmatter(content) {
   return match ? match[1] : '';
 }
 
+function extractTomlTable(content, tableName) {
+  const tablePattern = new RegExp(`^\\[${tableName}]\\s*$`, 'm');
+  const tableMatch = tablePattern.exec(content);
+  if (!tableMatch) return '';
+
+  const tableStart = tableMatch.index + tableMatch[0].length;
+  const remainingContent = content.slice(tableStart);
+  const nextTableMatch = /^\s*\[[^\]]+]\s*$/m.exec(remainingContent);
+
+  return nextTableMatch ? remainingContent.slice(0, nextTableMatch.index) : remainingContent;
+}
+
 // ANSI colors
 const colors = {
   reset: '\u001B[0m',
@@ -81,16 +93,31 @@ async function runTests() {
     assert(moduleYaml.name === 'Test Architect', 'module.yaml has correct name');
     assert(typeof moduleYaml.description === 'string' && moduleYaml.description.length > 0, 'module.yaml has description');
     assert(typeof moduleYaml.default_selected === 'boolean', 'module.yaml has boolean default_selected');
-    assert(moduleYaml.tea_use_pactjs_utils.default === false, 'module.yaml defaults Pact.js Utils to false');
-    assert(moduleYaml.tea_pact_mcp.default === 'none', 'module.yaml defaults Pact MCP to none');
-    assert(
-      moduleYaml.tea_use_pactjs_utils.prompt.includes('consumer-driven contract testing'),
-      'module.yaml Pact.js Utils prompt explains CDC intent',
-    );
-    assert(
-      moduleYaml.tea_pact_mcp.prompt.includes('Only needed if you already use a broker'),
-      'module.yaml Pact MCP prompt explains broker prerequisite',
-    );
+    assert(moduleYaml.tea_use_playwright_utils.default === true, 'module.yaml defaults Playwright Utils to true');
+    assert(moduleYaml.tea_use_pactjs_utils.default === true, 'module.yaml defaults Pact.js Utils to true');
+    assert(moduleYaml.tea_pact_mcp.default === 'mcp', 'module.yaml defaults Pact MCP to mcp');
+    assert(moduleYaml.tea_browser_automation.default === 'auto', 'module.yaml defaults browser automation to auto');
+
+    const nonInteractiveConfigKeys = [
+      'test_artifacts',
+      'tea_use_playwright_utils',
+      'tea_use_pactjs_utils',
+      'tea_pact_mcp',
+      'tea_browser_automation',
+      'tea_execution_mode',
+      'tea_capability_probe',
+      'test_stack_type',
+      'ci_platform',
+      'test_framework',
+      'risk_threshold',
+      'test_design_output',
+      'test_review_output',
+      'trace_output',
+    ];
+    for (const key of nonInteractiveConfigKeys) {
+      assert(moduleYaml[key]?.prompt === false, `module.yaml does not prompt for ${key}`);
+      assert(moduleYaml[key]?.default !== undefined, `module.yaml keeps a default for ${key}`);
+    }
   } catch (error) {
     assert(false, 'module.yaml loads and validates', error.message);
   }
@@ -141,8 +168,14 @@ async function runTests() {
     // without adding a TOML dep.
     if (await pathExists(customizePath)) {
       const customizeContent = await fs.readFile(customizePath, 'utf8');
+      const configBlock = extractTomlTable(customizeContent, 'config');
 
       assert(customizeContent.includes('[agent]'), 'customize.toml has [agent] section');
+      assert(configBlock.length > 0, 'customize.toml has [config] defaults section');
+      assert(/^\s*tea_use_playwright_utils\s*=\s*true/m.test(configBlock), 'customize.toml [config] defaults Playwright Utils on');
+      assert(/^\s*tea_use_pactjs_utils\s*=\s*true/m.test(configBlock), 'customize.toml [config] defaults Pact.js Utils on');
+      assert(/^\s*tea_pact_mcp\s*=\s*"mcp"/m.test(configBlock), 'customize.toml [config] defaults Pact MCP on');
+      assert(/^\s*tea_browser_automation\s*=\s*"auto"/m.test(configBlock), 'customize.toml [config] defaults browser automation to auto');
       assert(/^\s*name\s*=\s*"Murat"/m.test(customizeContent), 'customize.toml pins agent.name = "Murat"');
       assert(/^\s*title\s*=\s*"Master Test Architect and Quality Advisor"/m.test(customizeContent), 'customize.toml pins agent.title');
       assert(/^\s*icon\s*=\s*"🧪"/m.test(customizeContent), 'customize.toml pins agent.icon');
@@ -441,6 +474,31 @@ async function runTests() {
     );
   } catch (error) {
     assert(false, 'framework scaffold fragment list validates', error.message);
+  }
+
+  const pactConfigUsageChecks = [
+    {
+      label: 'ATDD preflight',
+      path: 'src/workflows/testarch/bmad-testarch-atdd/steps-c/step-01-preflight-and-context.md',
+    },
+    {
+      label: 'test-review context load',
+      path: 'src/workflows/testarch/bmad-testarch-test-review/steps-c/step-01-load-context.md',
+    },
+    {
+      label: 'CI pipeline generation',
+      path: 'src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md',
+    },
+  ];
+
+  for (const usageCheck of pactConfigUsageChecks) {
+    try {
+      const stepContent = await fs.readFile(path.join(projectRoot, usageCheck.path), 'utf8');
+      assert(stepContent.includes('tea_use_pactjs_utils'), `${usageCheck.label} references tea_use_pactjs_utils`);
+      assert(stepContent.includes('tea_pact_mcp'), `${usageCheck.label} references tea_pact_mcp`);
+    } catch (error) {
+      assert(false, `${usageCheck.label} Pact config usage validates`, error.message);
+    }
   }
 
   console.log('');
