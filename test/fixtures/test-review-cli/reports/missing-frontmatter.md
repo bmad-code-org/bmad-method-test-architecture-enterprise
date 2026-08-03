@@ -10,6 +10,10 @@
 
 **Recommendation**: Approve
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 This fixture intentionally has no YAML frontmatter; without the workflowType and

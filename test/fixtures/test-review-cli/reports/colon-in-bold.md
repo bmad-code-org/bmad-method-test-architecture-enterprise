@@ -15,6 +15,10 @@ stepsCompleted: [step-01-load-context, step-02-discover-tests, step-03-review-te
 
 **Recommendation:** Approve
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 This fixture writes the Recommendation label with the colon inside the bold

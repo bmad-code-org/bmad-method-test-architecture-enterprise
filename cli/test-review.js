@@ -2,11 +2,16 @@
 /**
  * tea-test-review — headless runner for the bmad-testarch-test-review skill.
  *
- * Locates the installed skill in a consuming project, scopes the review to the
- * PR's changed test files, builds a headless prompt that bypasses the skill's
- * interactive menu, spawns the agent with the prompt on stdin (optionally under
- * filesystem isolation), and parses the strict-schema test-review.md into a
- * JSON verdict with a CI-friendly exit code.
+ * Locates the installed skill in a consuming project, splits the PR diff into
+ * the test files to review and the rest of the change to read as context,
+ * builds a headless prompt that bypasses the skill's interactive menu, spawns
+ * the agent with the prompt on stdin (optionally under filesystem isolation),
+ * and parses the strict-schema test-review.md into a JSON verdict with a
+ * CI-friendly exit code.
+ *
+ * The context set takes no configuration: if the story is in the PR it is in
+ * the diff. The report must publish the resulting Context Basis, so an Approve
+ * reached without requirements says so on its face.
  *
  * Exit codes: 0 pass/skip (or a verdict failure waived with --waive), 1 review
  * verdict fail (or a skip with --fail-on-skip / a deletions-only diff),
@@ -28,14 +33,17 @@ const { resolveSkill } = require('./lib/resolve-skill');
 const {
   getChangedFiles,
   getChangedTestFiles,
+  getContextFiles,
   getDeletedTestFiles,
+  contextBasisFor,
+  isTestFile,
   assertSafePaths,
   registerExtraTestPattern,
 } = require('./lib/changed-tests');
 const { buildPrompt } = require('./lib/build-prompt');
 const { parseReport, verdictFor, scoreFails } = require('./lib/parse-report');
 const { runAgent } = require('./lib/run-agent');
-const { AGENT_ADAPTERS } = require('./lib/agent-adapters');
+const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES } = require('./lib/resolve-tea-config');
 
@@ -101,7 +109,7 @@ function main() {
   program
     .name('tea-test-review')
     .description(
-      "Headless runner for the bmad-testarch-test-review skill: scopes the review to the PR's changed test files and emits a JSON verdict with CI-friendly exit codes.",
+      "Headless runner for the bmad-testarch-test-review skill: scopes the review to the PR's changed test files, reads the rest of the diff as context, and emits a JSON verdict with CI-friendly exit codes.",
     )
     .option('--base <ref>', 'git base ref used to diff changed files', 'origin/main')
     .option(
@@ -132,6 +140,14 @@ function main() {
       '--agent <agent>',
       `review executor: ${[...Object.keys(AGENT_ADAPTERS), 'none'].join('|')} (none prints the prompt bundle only)`,
       'claude',
+    )
+    .option(
+      '--model <model>',
+      `model the review agent runs on, overriding whatever the vendor CLI would resolve from its own config (pinned defaults: ${Object.entries(
+        AGENT_ADAPTERS,
+      )
+        .map(([name, adapter]) => `${name}=${adapter.defaultModel}`)
+        .join(', ')})`,
     )
     .option('--agent-cmd <path>', 'override the agent executable (advanced; used by tests with a stub agent)')
     .option('--claude-arg <arg>', 'extra argument passed through to the claude CLI (repeatable)', collect, [])
@@ -189,6 +205,23 @@ function main() {
   }
   if (options.pactMcp !== undefined && !PACT_MCP_VALUES.includes(options.pactMcp)) {
     fail(EXIT.ENV_ERROR, `--pact-mcp must be one of ${PACT_MCP_VALUES.join(', ')}; got "${options.pactMcp}".`);
+  }
+  // Rejected rather than ignored: --agent none runs no agent, so honoring a
+  // model here would be a lie, and silently dropping a stated input is the
+  // failure mode --model exists to remove.
+  if (options.model !== undefined && options.agent === 'none') {
+    fail(EXIT.ENV_ERROR, '--model has no meaning with --agent none, which runs no agent; drop one of the two.');
+  }
+  let resolvedModel = null;
+  if (options.agent !== 'none') {
+    try {
+      resolvedModel = resolveModel(options.agent, options.model, options.claudeArg);
+    } catch (error) {
+      if (error.code === 'MODEL_ARG_INVALID' || error.code === 'MODEL_ARG_CONFLICT') {
+        fail(EXIT.ENV_ERROR, error.message);
+      }
+      throw error;
+    }
   }
   const timeoutMs = Number.parseInt(options.timeoutMs, 10);
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
@@ -321,24 +354,38 @@ function main() {
     return { ...payload, waived: true, waiveReason: waiver.reason, waiveUntil: waiver.until };
   }
 
+  // One diff, both lists. Test files are the review set and get scored;
+  // everything else is the context set and gets read. If the story is in the
+  // PR it is in the diff, which is why there is no flag for any of this.
+  // An explicit --files list is authoritative user intent and never consults
+  // git, so it produces a review set and no context.
   const filesProvided = options.files.length > 0;
+  let allChangedFiles = null;
   let changedTestFiles;
+  let contextFiles = [];
+  let contextTruncated = false;
   try {
-    changedTestFiles = getChangedTestFiles({
-      base: options.base,
-      files: filesProvided ? options.files : undefined,
-      projectRoot,
-    });
+    if (filesProvided) {
+      changedTestFiles = getChangedTestFiles({ files: options.files, projectRoot });
+    } else {
+      allChangedFiles = getChangedFiles({ base: options.base, projectRoot });
+      changedTestFiles = allChangedFiles.filter((file) => isTestFile(file));
+      ({ files: contextFiles, truncated: contextTruncated } = getContextFiles(allChangedFiles));
+    }
   } catch (error) {
     if (error.code === 'GIT_DIFF_FAILED' || error.code === 'BASE_UNRESOLVABLE') {
       fail(EXIT.ENV_ERROR, error.message);
     }
     throw error;
   }
+  const contextBasis = contextBasisFor({ files: contextFiles, truncated: contextTruncated });
 
-  // Fail closed on hostile paths before they reach the prompt (or anywhere else).
+  // Fail closed on hostile paths before they reach the prompt (or anywhere
+  // else). Context paths travel in their own delimited block and get the same
+  // treatment as the review set.
   try {
     assertSafePaths(changedTestFiles);
+    assertSafePaths(contextFiles);
   } catch (error) {
     if (error.code === 'UNSAFE_PATH') {
       fail(EXIT.ENV_ERROR, error.message);
@@ -368,6 +415,8 @@ function main() {
       recommendation: null,
       qualityScore: null,
       files: [],
+      contextBasis,
+      contextFiles,
     };
     if (deletionsOnly) {
       skipped.deletedFiles = deletedTestFiles;
@@ -391,10 +440,12 @@ function main() {
       scope: options.scope,
       testDir: options.testDir,
       teaConfig,
+      contextFiles,
+      contextBasis,
     });
     console.log(prompt);
     if (jsonPath) {
-      writeJsonFile(jsonPath, { promptOnly: true, files: changedTestFiles });
+      writeJsonFile(jsonPath, { promptOnly: true, files: changedTestFiles, contextFiles, contextBasis });
     }
     process.exit(EXIT.PASS);
   }
@@ -408,7 +459,6 @@ function main() {
     const relativeSkillRoot = path.relative(projectRoot, skillRoot);
     const skillInsideProject = relativeSkillRoot === '' || (!relativeSkillRoot.startsWith('..') && !path.isAbsolute(relativeSkillRoot));
     if (skillInsideProject) {
-      const allChangedFiles = getChangedFiles({ base: options.base, projectRoot });
       const skillPrefix = relativeSkillRoot === '' ? './' : relativeSkillRoot.split(path.sep).join('/') + '/';
       const touched = relativeSkillRoot === '' ? allChangedFiles : allChangedFiles.filter((file) => file.startsWith(skillPrefix));
       if (touched.length > 0) {
@@ -461,8 +511,10 @@ function main() {
   // hung. This heartbeat is a separate OS process, not a JS timer, because
   // nothing in this process can run while runAgent's spawnSync call blocks it.
   const startHeartbeat = (intervalSeconds = 15) => {
+    // Printed from Node, not from inside the sh -c script, so the model name
+    // never has to survive shell quoting.
+    console.error(`tea-test-review: agent running (${options.agent}, model ${resolvedModel})...`);
     const script =
-      'echo "tea-test-review: agent running..." 1>&2; ' +
       'i=0; while true; do sleep ' +
       intervalSeconds +
       '; i=$((i + ' +
@@ -495,6 +547,8 @@ function main() {
       scope: options.scope,
       testDir: options.testDir,
       teaConfig,
+      contextFiles,
+      contextBasis,
     });
 
     const stopHeartbeat = startHeartbeat();
@@ -503,6 +557,7 @@ function main() {
         agent: options.agent,
         agentCommand: options.agentCmd,
         agentArgs: options.claudeArg,
+        model: options.model,
         timeout: timeoutMs,
         cwd: agentCwd,
         envPass: options.envPass,
@@ -533,7 +588,11 @@ function main() {
 
     let parsed;
     try {
-      parsed = parseReport(fs.readFileSync(agentOutputPath, 'utf8'));
+      parsed = parseReport(fs.readFileSync(agentOutputPath, 'utf8'), {
+        reviewedFiles: changedTestFiles,
+        contextFiles,
+        contextBasis,
+      });
     } catch (error) {
       if (error.code === 'REPORT_UNPARSEABLE') {
         // Same reasoning as the freshness check above: throw, don't exit, so
@@ -548,7 +607,15 @@ function main() {
 
     // The verdict JSON files manifest is the report's own Reviewed Files
     // section — what the agent actually reviewed — never the input list.
-    const verdictPayload = { report: path.relative(projectRoot, outputPath), files: parsed.reviewedFiles, ...parsed };
+    // agent/model travel with it so a stored verdict says what produced it:
+    // a score is only comparable against another score from the same reviewer.
+    const verdictPayload = {
+      report: path.relative(projectRoot, outputPath),
+      files: parsed.reviewedFiles,
+      agent: options.agent,
+      model: resolvedModel,
+      ...parsed,
+    };
     if (gateFailures.length > 0) {
       verdictPayload.gateFailures = gateFailures;
     }

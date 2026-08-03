@@ -1,6 +1,11 @@
 /**
- * Compute the PR's changed test files from `git diff <base>...HEAD`, or from an
+ * Split the PR's diff into the two lists a review needs, or normalize an
  * explicit --files list that skips git entirely (fixture/CI-shallow-clone use).
+ *
+ * The diff yields both lists, which is why nothing here is configurable:
+ * - files matching isTestFile are the REVIEW SET, scored against the ledger;
+ * - everything else is the CONTEXT SET, read for understanding and never
+ *   scored. If the story is in the PR it is in the diff, so it gets read.
  *
  * Hardening notes:
  * - The git invocation uses `-c core.quotePath=false` and `-z` so non-ASCII paths
@@ -9,8 +14,8 @@
  *   diffs), and a trailing `--` after the rev so the rev can never be re-parsed
  *   as a pathspec. The base ref is validated up front: a base starting with `-`
  *   would be a git option injection and is rejected with BASE_UNRESOLVABLE.
- * - assertSafePaths fails closed on review-set paths that could corrupt the
- *   prompt's file block (newlines, carriage returns, NUL, or the BEGIN/END
+ * - assertSafePaths fails closed on paths that could corrupt either of the
+ *   prompt's delimited blocks (newlines, carriage returns, NUL, or the BEGIN/END
  *   delimiter literals); unsafe paths are never silently dropped.
  */
 
@@ -122,7 +127,91 @@ function splitGitPathList(stdout) {
   return stdout.split('\0').filter(Boolean);
 }
 
-const UNSAFE_PATH_MARKERS = ['---BEGIN FILES---', '---END FILES---'];
+const UNSAFE_PATH_MARKERS = ['---BEGIN FILES---', '---END FILES---', '---BEGIN CONTEXT---', '---END CONTEXT---'];
+
+// Context-set exclusions. Not an option: a lockfile or a binary asset carries
+// no requirements the review could use, and every one of them costs the agent
+// a read. These are internal noise rules, not a user-facing filter.
+const CONTEXT_NOISE_FILENAMES = new Set([
+  'package-lock.json',
+  'yarn.lock',
+  'pnpm-lock.yaml',
+  'bun.lockb',
+  'gemfile.lock',
+  'poetry.lock',
+  'cargo.lock',
+  'composer.lock',
+  'go.sum',
+]);
+const CONTEXT_NOISE_DIR_SEGMENTS = new Set(['node_modules', 'dist', 'build', 'coverage', 'vendor', '.next', '.nuxt', '__snapshots__']);
+const CONTEXT_NOISE_EXTENSION_PATTERN =
+  /\.(snap|map|lock|png|jpe?g|gif|svg|webp|avif|ico|pdf|zip|gz|tgz|tar|woff2?|ttf|otf|eot|mp[34]|webm|mov|wasm|so|dylib|dll|exe|bin)$/i;
+const CONTEXT_NOISE_SUFFIXES = ['.min.js', '.min.css'];
+
+// Documentation is the likeliest oracle in a diff (story, PRD, test design), so
+// it is ordered ahead of source. This only matters when the cap below bites:
+// the requirements have to survive the trim, not the twentieth controller.
+const CONTEXT_DOC_EXTENSION_PATTERN = /\.(md|mdx|markdown|adoc|rst|txt)$/i;
+
+// The agent reads every context file, so an unbounded set is an unbounded run.
+// Trimming is always reported as pr_diff_truncated: a report never implies it
+// read a whole change it only partly saw.
+const MAX_CONTEXT_FILES = 40;
+
+const CONTEXT_BASIS_VALUES = ['none', 'pr_diff', 'pr_diff_truncated'];
+
+/**
+ * Whether a changed non-test file is worth handing to the reviewer as context.
+ *
+ * @param {string} filePath - Repo-relative file path.
+ * @returns {boolean}
+ */
+function isContextNoise(filePath) {
+  const segments = filePath.replaceAll('\\', '/').split('/');
+  const filename = segments.at(-1).toLowerCase();
+  if (CONTEXT_NOISE_FILENAMES.has(filename)) {
+    return true;
+  }
+  if (CONTEXT_NOISE_EXTENSION_PATTERN.test(filename) || CONTEXT_NOISE_SUFFIXES.some((suffix) => filename.endsWith(suffix))) {
+    return true;
+  }
+  return segments.slice(0, -1).some((segment) => CONTEXT_NOISE_DIR_SEGMENTS.has(segment.toLowerCase()));
+}
+
+/**
+ * Derive the read-only context set from an already-computed changed-file list:
+ * everything in the diff that is not a test file and not noise, documentation
+ * first, capped.
+ *
+ * Takes the list rather than a base ref so the CLI runs `git diff` once and
+ * derives both lists (and the control-plane guard) from the same snapshot.
+ *
+ * @param {string[]} changedFiles - Repo-relative changed file paths.
+ * @returns {{files: string[], truncated: boolean}}
+ */
+function getContextFiles(changedFiles) {
+  const candidates = changedFiles.filter((file) => !isTestFile(file) && !isContextNoise(file));
+  const docs = candidates.filter((file) => CONTEXT_DOC_EXTENSION_PATTERN.test(file));
+  const rest = candidates.filter((file) => !CONTEXT_DOC_EXTENSION_PATTERN.test(file));
+  const ordered = [...docs, ...rest];
+  return { files: ordered.slice(0, MAX_CONTEXT_FILES), truncated: ordered.length > MAX_CONTEXT_FILES };
+}
+
+/**
+ * The context_basis value for a resolved context set. Derived, never supplied:
+ * the oracle is whatever the PR happens to contain, so there is nothing to pick.
+ *
+ * @param {object} options
+ * @param {string[]} options.files - The resolved context set.
+ * @param {boolean} [options.truncated] - Whether the size cap trimmed the set.
+ * @returns {'none'|'pr_diff'|'pr_diff_truncated'}
+ */
+function contextBasisFor({ files, truncated = false }) {
+  if (files.length === 0) {
+    return 'none';
+  }
+  return truncated ? 'pr_diff_truncated' : 'pr_diff';
+}
 
 /**
  * Fail closed on paths that could corrupt or inject into the prompt's file
@@ -247,12 +336,17 @@ function getChangedTestFiles({ files, ...rest } = {}) {
 module.exports = {
   getChangedFiles,
   getChangedTestFiles,
+  getContextFiles,
   getDeletedFiles,
   getDeletedTestFiles,
+  contextBasisFor,
   isTestFile,
+  isContextNoise,
   splitGitPathList,
   assertSafePaths,
   extraTestPatterns,
   registerExtraTestPattern,
   resetExtraTestPatterns,
+  CONTEXT_BASIS_VALUES,
+  MAX_CONTEXT_FILES,
 };

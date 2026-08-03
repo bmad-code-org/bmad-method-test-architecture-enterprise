@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: Block
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 Hard waits throughout, no isolation, shared mutable state across tests.

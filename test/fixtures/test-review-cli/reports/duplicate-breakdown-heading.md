@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: Request Changes
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 This fixture has two "## Quality Score Breakdown" headings. A parser that

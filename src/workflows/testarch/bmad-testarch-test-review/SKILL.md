@@ -73,7 +73,8 @@ When `headless: true` is resolved (from `workflow.yaml` defaults, a `customize.t
 - Skip the greeting (On Activation, Step 5) AND the interactive Mode Determination menu below.
 - Execute **Create mode** directly, starting at `{skill-root}/steps-c/step-01-load-context.md`.
 - Never prompt the user — resolve every input from configuration and supplied values.
-- Honor `review_files` (authoritative review set), `output_file_override` (replaces `default_output_file` for the run), and `generate_inline_comments` (inline `// TODO (TEA Review)` comments) as first-class inputs, as documented in `workflow.yaml` and `instructions.md`.
+- Honor `review_files` (authoritative review set), `context_files` (read-only context set), `output_file_override` (replaces `default_output_file` for the run), and `generate_inline_comments` (inline `// TODO (TEA Review)` comments) as first-class inputs, as documented in `workflow.yaml` and `instructions.md`.
+- Never go looking for a story, PRD, or test design that `context_files` did not name. With no human to confirm what was found, an unrequested artifact is a nondeterministic input.
 
 When `headless` is false (default), the interactive path below is unchanged.
 

@@ -24,6 +24,14 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 
 **Recommendation**: {Approve | Approve with Comments | Request Changes | Block}
 
+**Context Basis**: {none | pr_diff | pr_diff_truncated}
+
+**Context Waivers Applied**: 0
+
+<!-- What this review was judged against, resolved in step 1. `none` means no story, test design, or source accompanied the tests: the verdict speaks to how the tests are built, not to whether they match a requirement. -->
+
+<!-- Context can add findings and clarify impact. It cannot waive a rubric violation, change severity, or alter the score. This machine-readable value must remain 0. -->
+
 ### Key Strengths
 
 ✅ {strength_1}
@@ -245,13 +253,19 @@ Grade:                   {grade}
 
 ## Context and Integration
 
+### What the Context Said
+
+{If `context_basis` is `none`: state that no context was supplied, so nothing here checked the tests against a requirement.}
+
+{Otherwise, what the context artifacts established and how it bore on the findings: acceptance criteria the tests do or do not exercise, changed code paths no assertion touches, a story claim contradicted by a test. Context raises findings; it never waives one.}
+
 ### Related Artifacts
 
-{If story file found:}
+{If story file supplied:}
 
 - **Story File**: [{story_filename}]({story_path})
 
-{If test-design found:}
+{If test-design supplied:}
 
 - **Test Design**: [{test_design_filename}]({test_design_path})
 - **Risk Assessment**: {risk_level}
@@ -390,7 +404,7 @@ If you have questions or feedback on this review:
 3. Request clarification on specific violations
 4. Pair with QA engineer to apply patterns
 
-This review is guidance, not rigid rules. Context matters - if a pattern is justified, document it with a comment.
+This review applies the rubric consistently. Context can reveal additional findings and clarify impact; it cannot waive a violation, change severity, or alter the score. Formal risk acceptance belongs in trace or the release gate.
 
 ---
 
@@ -400,3 +414,10 @@ This review is guidance, not rigid rules. Context matters - if a pattern is just
 
 - {relative_path_1}
 - {relative_path_2}
+
+<!-- Machine-readable context manifest. Every context artifact actually read, one repo-relative path per line, or the single word `none`. Required whenever Context Basis is not `none`. These files were read, never scored: no path may appear in both this section and Reviewed Files. -->
+
+## Review Context
+
+- {context_path_1}
+- {context_path_2}

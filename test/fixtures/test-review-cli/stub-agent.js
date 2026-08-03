@@ -13,6 +13,14 @@
  *                      partial | nothing | fail | forbidden-write | stale-copy
  *   STUB_ASSERT_STDIN  when "1", fail if the prompt did not arrive on stdin or
  *                      if any of it leaked into argv
+ *   STUB_ASSERT_MODEL  expected model value; fail unless argv carries a model
+ *                      flag set to exactly it. Proves the resolved model
+ *                      actually reaches the vendor argv, which a unit test of
+ *                      buildArgv alone cannot show.
+ *   STUB_CONTEXT_OVERRIDE
+ *                      JSON path array used in the report's Review Context
+ *                      manifest. Adversarial tests use it to prove the CLI
+ *                      binds report claims to the supplied context set.
  *   STUB_OLD_REPORT    stale-copy source: a report pre-placed with an old mtime
  */
 
@@ -51,6 +59,33 @@ if (process.env.STUB_ASSERT_STDIN === '1') {
   }
 }
 
+if (process.env.STUB_ASSERT_MODEL) {
+  const argv = process.argv.slice(2);
+  const modelValues = [];
+  for (let index = 0; index < argv.length; index++) {
+    const arg = argv[index];
+    if (arg === '-m' || arg === '--model') {
+      modelValues.push(argv[index + 1]);
+    } else if (arg.startsWith('-m=') || arg.startsWith('--model=')) {
+      modelValues.push(arg.slice(arg.indexOf('=') + 1));
+    }
+  }
+  // More than one model flag is a real failure, not pedantry: codex rejects a
+  // repeated --model with a clap usage error, so a duplicate here would break
+  // every codex run.
+  if (modelValues.length > 1) {
+    console.error(`stub-agent: argv sets the model ${modelValues.length} times; codex rejects a repeated --model`);
+    process.exit(92);
+  }
+  const actual = modelValues[0] ?? null;
+  if (actual !== process.env.STUB_ASSERT_MODEL) {
+    console.error(
+      `stub-agent: expected model "${process.env.STUB_ASSERT_MODEL}" in argv, got ${actual === null ? 'no model flag' : `"${actual}"`}`,
+    );
+    process.exit(93);
+  }
+}
+
 const mode = process.env.STUB_MODE || 'approve';
 
 if (mode === 'fail') {
@@ -69,9 +104,60 @@ if (!outputMatch) {
 }
 const outputPath = outputMatch[1];
 
+function promptArray(begin, end) {
+  const start = prompt.indexOf(`${begin}\n`);
+  const finish = prompt.indexOf(`\n${end}`, start);
+  if (start === -1 || finish === -1) {
+    return [];
+  }
+  return JSON.parse(prompt.slice(start + begin.length + 1, finish));
+}
+
+const reviewedFiles = promptArray('---BEGIN FILES---', '---END FILES---');
+const contextFiles = promptArray('---BEGIN CONTEXT---', '---END CONTEXT---');
+const reportedContextFiles = process.env.STUB_CONTEXT_OVERRIDE
+  ? JSON.parse(process.env.STUB_CONTEXT_OVERRIDE)
+  : contextFiles;
+const contextBasisMatch = prompt.match(/\*\*Context Basis\*\*: (none|pr_diff|pr_diff_truncated)/);
+const contextBasis = contextBasisMatch ? contextBasisMatch[1] : 'none';
+
+function replaceManifestSection(report, heading, files, { remove = false, addBefore } = {}) {
+  const lines = report.split('\n');
+  const start = lines.findIndex((line) => line === `## ${heading}`);
+  if (start === -1) {
+    if (remove || !addBefore) {
+      return report;
+    }
+    const insertion = lines.findIndex((line) => line === `## ${addBefore}`);
+    if (insertion === -1) {
+      return report;
+    }
+    lines.splice(insertion, 0, `## ${heading}`, '', ...files.map((file) => `- ${file}`), '');
+    return lines.join('\n');
+  }
+  let finish = start + 1;
+  while (finish < lines.length && !lines[finish].startsWith('## ')) {
+    finish++;
+  }
+  const replacement = remove ? [] : [`## ${heading}`, '', ...files.map((file) => `- ${file}`), ''];
+  lines.splice(start, finish - start, ...replacement);
+  return lines.join('\n');
+}
+
+function bindReportToPrompt(report) {
+  let bound = report.replace(/^\*\*Context Basis\*\*:[ \t]*[^\n]+$/m, `**Context Basis**: ${contextBasis}`);
+  bound = replaceManifestSection(bound, 'Reviewed Files', reviewedFiles);
+  bound = replaceManifestSection(bound, 'Review Context', reportedContextFiles, {
+    remove: contextBasis === 'none',
+    addBefore: 'Reviewed Files',
+  });
+  return bound;
+}
+
 function writeFixtureReport(fixtureName) {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.copyFileSync(path.join(__dirname, 'reports', fixtureName), outputPath);
+  const report = fs.readFileSync(path.join(__dirname, 'reports', fixtureName), 'utf8');
+  fs.writeFileSync(outputPath, bindReportToPrompt(report));
 }
 
 if (mode === 'forbidden-write') {

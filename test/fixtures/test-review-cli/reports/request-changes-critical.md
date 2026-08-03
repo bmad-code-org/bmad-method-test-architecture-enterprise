@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: Request Changes
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 One critical violation (shared mutable state across tests) plus follow-ups;

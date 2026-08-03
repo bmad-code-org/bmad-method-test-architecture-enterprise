@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: Approve
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 Everything else in this fixture satisfies the strict schema; only the Decision

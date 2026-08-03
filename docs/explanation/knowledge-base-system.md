@@ -195,7 +195,7 @@ Benefits it provides
 
 ### Example 1: Basic Usage
 
-```code
+```text
 [Runnable code example]
 ```
 ````
@@ -204,7 +204,7 @@ Benefits it provides
 
 ### Example 2: Advanced Pattern
 
-```code
+```text
 [More complex example]
 ```
 
@@ -214,7 +214,7 @@ Benefits it provides
 
 ### Don't Do This
 
-```code
+```text
 [Bad code example]
 ```
 
