@@ -87,6 +87,12 @@ Final Score:             {final_score}/100
 Grade:                   {grade}
 ```
 
+<!-- This ledger is the workflow's only scoring model (see steps-c/step-03f-aggregate-scores.md).
+     Every bonus line is 0 or 5, never a partial value, and the six categories above are the
+     complete set. {grade} is exactly one of A, B, C, D, F, with no modifier such as A+ or B-.
+     The lines above must sum to {final_score}, which must equal the **Quality Score** line;
+     headless runners recompute the ledger and reject a report whose arithmetic disagrees. -->
+
 ---
 
 ## Critical Issues (Must Fix)
@@ -385,3 +391,12 @@ If you have questions or feedback on this review:
 4. Pair with QA engineer to apply patterns
 
 This review is guidance, not rigid rules. Context matters - if a pattern is justified, document it with a comment.
+
+---
+
+<!-- Machine-readable evidence manifest. Every file actually reviewed, one repo-relative path per line, nothing else in this section: headless runners parse it verbatim as the reviewed-file list. -->
+
+## Reviewed Files
+
+- {relative_path_1}
+- {relative_path_2}

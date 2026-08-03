@@ -35,7 +35,7 @@ Resume an interrupted workflow by loading the existing output document, displayi
 
 ### 1. Load Output Document
 
-Read `{outputFile}` and parse YAML frontmatter for:
+Read `{outputFile}` and parse YAML frontmatter for (when `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default):
 
 - `stepsCompleted` -- array of completed step names
 - `lastStep` -- last completed step name

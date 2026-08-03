@@ -31,6 +31,10 @@ From `workflow.yaml`, resolve:
 
 - `config_source`, `test_artifacts`, `user_name`, `communication_language`, `document_output_language`, `date`
 - `test_dir`, `review_scope`
+- `headless` — when `true`, skip the greeting and interactive menu, execute Create mode directly, and never prompt the user
+- `review_files` — comma-separated authoritative review set; when non-empty it IS the complete review set (takes precedence over `review_scope` discovery)
+- `output_file_override` — when non-empty, this IS `{outputFile}` for every step: it replaces both `default_output_file` and the `outputFile` declared in each step's frontmatter
+- `generate_inline_comments` — when `true`, write `// TODO (TEA Review)` inline comments into reviewed test files; default `false` is report-only
 
 ### 2. First Step
 

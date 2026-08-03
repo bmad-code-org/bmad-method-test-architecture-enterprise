@@ -64,3 +64,7 @@ _bmad-output
 website/.astro/
 website/dist/
 build/
+
+# Test fixtures: stub skill installs must be tracked (negations must follow the _bmad/.claude exclusions)
+!test/fixtures/test-review-cli/project/_bmad
+!test/fixtures/test-review-cli/project-claude/.claude

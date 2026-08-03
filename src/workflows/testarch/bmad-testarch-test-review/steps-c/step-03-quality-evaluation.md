@@ -238,8 +238,8 @@ Load next step: `{nextStepFile}`
 The aggregation step (3F) will:
 
 - Read all 4 subagent outputs
-- Calculate weighted overall score (0-100)
 - Aggregate violations by severity
+- Calculate the overall score (0-100) from the deduction ledger
 - Generate review report with top suggestions
 
 ---

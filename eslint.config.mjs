@@ -81,9 +81,9 @@ export default [
     },
   },
 
-  // CLI scripts under tools/** and test/**
+  // CLI scripts under cli/**, tools/** and test/**
   {
-    files: ['tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.js'],
+    files: ['cli/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.js'],
     rules: {
       // Allow CommonJS patterns for Node CLI scripts
       'unicorn/prefer-module': 'off',
@@ -136,6 +136,16 @@ export default [
     rules: {
       'yml/no-empty-mapping-value': 'off',
       'unicorn/filename-case': 'off',
+    },
+  },
+
+  // Copy-paste GitHub Actions example for consuming repos: .yml extension and
+  // empty mapping values (e.g. `pull_request:`) are idiomatic there
+  {
+    files: ['cli/examples/**/*.yml'],
+    rules: {
+      'yml/file-extension': 'off',
+      'yml/no-empty-mapping-value': 'off',
     },
   },
 ];

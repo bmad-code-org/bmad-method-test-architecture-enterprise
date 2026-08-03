@@ -1,0 +1,269 @@
+# tea-test-review — a starting template for a required test-review gate.
+#
+# Two jobs: `review` runs the headless TEA test review against the PR's
+# changed test files and uploads the report artifacts; `comment` publishes the
+# outcome as a single upserted PR comment. Make the `review` job a required
+# status check to gate merges on the review verdict.
+#
+# Prerequisites:
+#   - An ANTHROPIC_API_KEY repository secret (this template's review step uses
+#     --agent claude, executed by the claude CLI installed below). --agent
+#     codex is also supported (OPENAI_API_KEY instead) — see the --agent flag
+#     in docs/reference/tea-test-review-cli.md and swap the installed package
+#     and secret accordingly.
+#   - A vetted version of the bmad-method-test-architecture-enterprise npm
+#     package, pinned exactly (see TEA_VERSION below).
+#
+# Honest limitations — read before requiring this check:
+#   - This workflow cannot be the sole required check for repositories that
+#     accept fork pull requests: forks receive no secrets by design, so the
+#     fork guard below skips the review for them and the gate never runs.
+#     Fork coverage needs a separate privileged design (for example a
+#     pull_request_target workflow with strict controls), which is out of
+#     scope for this template.
+#   - The review skill is installed from the pinned npm package below, not
+#     from the PR checkout, and the run step pins it explicitly with
+#     --skill-root — the CLI never probes the PR checkout for the reviewer,
+#     closing the vendored-checkout trust gap for this shipped path. The
+#     residual trust assumption: you are trusting the pinned version as
+#     published on the npm registry — vet that version once, pin it exactly,
+#     and bump the pin deliberately.
+#
+# Gate-policy flags (all optional; tune to your gate policy):
+#   --min-score <n>            fail below a quality-score floor (0-100); tune to your gate policy
+#   --max-critical <n>         fail above a Critical-violation cap (default: no cap); tune to your gate policy
+#   --min-files <n>            fail when fewer than n files were reviewed (default 1); tune to your gate policy
+#   --waive/--waive-until      record a time-boxed waiver: any verdict failure exits 0 with a WAIVED
+#                              banner and waived fields in the JSON (exit 2/3 are never waivable);
+#                              tune to your gate policy
+name: TEA Test Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# Default deny; each job grants exactly the permissions it needs.
+permissions: {}
+
+jobs:
+  review:
+    name: Headless test review
+    runs-on: ubuntu-latest
+    # Forks receive no secrets, so the review cannot run for them; skip
+    # honestly instead of failing (see the header comment).
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
+    steps:
+      - name: Checkout (full history for the PR diff)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          # The review only reads the tree; never hand the PR checkout a
+          # credentials-bearing git config.
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Install the review skill from the pinned package
+        env:
+          # Pin to the version you vetted.
+          TEA_VERSION: 1.19.1
+        # Deterministic, non-interactive install: the skill content the CLI
+        # discovers under _bmad/ comes from the vetted package tarball, never
+        # from the PR checkout.
+        run: |
+          npm pack "bmad-method-test-architecture-enterprise@${TEA_VERSION}"
+          tar -xzf "bmad-method-test-architecture-enterprise-${TEA_VERSION}.tgz"
+          mkdir -p _bmad/tea/workflows/testarch
+          cp -R package/src/workflows/testarch/bmad-testarch-test-review _bmad/tea/workflows/testarch/bmad-testarch-test-review
+
+      - name: Install the pinned CLI and agent
+        env:
+          # Both pinned: the reviewer's control plane must be the exact code
+          # you vetted, not whatever `latest` resolves to when a PR lands.
+          TEA_VERSION: 1.19.1
+          CLAUDE_CODE_VERSION: 2.1.220
+        run: npm install --global "bmad-method-test-architecture-enterprise@${TEA_VERSION}" "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      - name: Run headless test review
+        id: run-review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BASE_REF: origin/${{ github.base_ref }}
+        # No ${{ }} expansion inside run text: the base ref arrives via the
+        # environment so a crafted branch name cannot inject shell.
+        # --skill-root pins the reviewer to the pinned npm copy installed
+        # above: the CLI skips probing the PR checkout for the skill, so a PR
+        # that edits its own vendored _bmad/ copy cannot rewrite the reviewer.
+        #
+        # TEA config: this job installs the skill from a tarball rather than
+        # running the interactive installer, so _bmad/tea/config.yaml does not
+        # exist and the module defaults apply (Playwright Utils on, Pact off,
+        # no Pact MCP). Those defaults are stated in the prompt, so the run is
+        # deterministic either way. If this repository uses contract testing,
+        # say so or the review loads the generic contract-testing fragment
+        # instead of the pactjs-utils set:
+        #   --use-pactjs-utils [--pact-mcp mcp]
+        # Committing _bmad/tea/config.yaml works too; the flags win over it.
+        run: tea-test-review --base "$BASE_REF" --agent claude --skill-root "$GITHUB_WORKSPACE/_bmad/tea/workflows/testarch/bmad-testarch-test-review" --output test-review.md --json test-review.json
+
+      - name: Upload review artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tea-test-review
+          path: |
+            test-review.md
+            test-review.json
+
+      - name: Export the verdict as a job output
+        id: verdict
+        if: always()
+        env:
+          # The CLI exit code is the verdict (it already folds in --fail-on,
+          # --min-score and deletions-only handling), so the step outcome is
+          # the faithful pass/fail signal; the JSON carries the detail.
+          REVIEW_OUTCOME: ${{ steps.run-review.outcome }}
+        run: |
+          verdict="failed"
+          if [ "$REVIEW_OUTCOME" = "success" ]; then
+            verdict="passed"
+          fi
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+
+  comment:
+    name: Comment the outcome
+    needs: review
+    # Always run after the review (success or failure) so a failed review is
+    # still reported; never run for forks (nothing was reviewed there).
+    if: always() && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      # No PR checkout and no ANTHROPIC_API_KEY in this job: it only reads
+      # the uploaded artifacts and writes a PR comment.
+      - name: Download review artifacts
+        id: download
+        uses: actions/download-artifact@v4
+        # A missing artifact is reported below as an infrastructure failure,
+        # not raised as a step failure.
+        continue-on-error: true
+        with:
+          name: tea-test-review
+
+      - name: Find-and-update the review comment
+        uses: actions/github-script@v7
+        env:
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+          REVIEW_RESULT: ${{ needs.review.result }}
+          REVIEW_VERDICT: ${{ needs.review.outputs.verdict }}
+        with:
+          script: |
+            const fs = require("fs");
+            const marker = "<!-- tea-test-review -->";
+            const artifactsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}#artifacts`;
+            // GitHub caps a comment body at 65536 chars; this leaves headroom
+            // for the digest and wrapper around the inlined report.
+            const MAX_INLINE_REPORT_CHARS = 40000;
+
+            let body = null;
+            const artifactAvailable = process.env.DOWNLOAD_OUTCOME === "success" && fs.existsSync("test-review.json");
+            if (artifactAvailable) {
+              try {
+                const verdict = JSON.parse(fs.readFileSync("test-review.json", "utf8"));
+                if (verdict.skipped) {
+                  body = [
+                    marker,
+                    "## TEA Test Review: skipped",
+                    "",
+                    `${verdict.reason ?? "No changed test files in this PR"}.`,
+                    "",
+                    `[Review job artifacts](${artifactsUrl})`,
+                  ].join("\n");
+                } else {
+                  const counts = verdict.violations ?? {};
+                  const violations = `${counts.critical ?? 0} Critical / ${counts.high ?? 0} High / ${counts.medium ?? 0} Medium / ${counts.low ?? 0} Low`;
+                  const weaknesses = (verdict.keyWeaknesses ?? []).slice(0, 3);
+
+                  const lines = [
+                    marker,
+                    `## TEA Test Review: ${verdict.recommendation}`,
+                    "",
+                    `- **Quality score**: ${verdict.qualityScore ?? "n/a"}/100`,
+                    `- **Recommendation**: ${verdict.recommendation}`,
+                    `- **Violations**: ${violations}`,
+                    `- **Reviewed files**: ${(verdict.reviewedFiles ?? []).length}`,
+                  ];
+                  if (weaknesses.length > 0) {
+                    lines.push("", "**Key weaknesses**:", ...weaknesses.map((w) => `- ${w}`));
+                  }
+                  lines.push("");
+
+                  // Inline the full report (not just the digest above) so a
+                  // reviewer can paste it straight into an AI coding agent to
+                  // apply the fixes, no artifact download required. Falls back
+                  // to the artifact link alone if the report is too large or
+                  // missing from the download.
+                  const reportText = fs.existsSync("test-review.md") ? fs.readFileSync("test-review.md", "utf8") : null;
+                  if (reportText && reportText.length <= MAX_INLINE_REPORT_CHARS) {
+                    lines.push(
+                      "<details>",
+                      "<summary>Full report (paste into your AI coding agent to apply the fixes)</summary>",
+                      "",
+                      reportText,
+                      "",
+                      "</details>",
+                      "",
+                      `[Verdict JSON](${artifactsUrl})`,
+                    );
+                  } else {
+                    lines.push(`[Full report and verdict JSON](${artifactsUrl})`);
+                  }
+                  body = lines.join("\n");
+                }
+              } catch {
+                body = null;
+              }
+            }
+            if (body === null) {
+              body = [
+                marker,
+                "## TEA Test Review: infrastructure failure",
+                "",
+                "The review job did not produce a readable verdict artifact.",
+                "This is **not** a review verdict — treat the gate as broken, not as approved tests.",
+                "",
+                `Review job result: ${process.env.REVIEW_RESULT} (verdict output: ${process.env.REVIEW_VERDICT || "n/a"}).`,
+                `[Review job artifacts](${artifactsUrl})`,
+              ].join("\n");
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

@@ -35,6 +35,8 @@ Collect test files in scope and parse structure/metadata.
 
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
+> **Exception — `review_files` supplied:** If `review_files` is non-empty, the discovered set equals `review_files` (comma-separated paths). Validate that each file exists — report missing files in the review report rather than silently dropping them — skip the glob in section 1, and continue the sequence from section 2. This is a first-class branch of the file-set source; the sequence remains mandatory.
+
 ## 1. Discover Test Files
 
 - **single**: use provided file path
@@ -86,12 +88,13 @@ After capturing `trace.zip`, prefer Playwright's newer trace CLI for local or do
 
 ## 4. Save Progress
 
-**Save this step's accumulated work to `{outputFile}`.**
+**Save this step's accumulated work to `{outputFile}`.** When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
 
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
+  workflowType: 'testarch-test-review'
   stepsCompleted: ['step-02-discover-tests']
   lastStep: 'step-02-discover-tests'
   lastSaved: '{date}'
