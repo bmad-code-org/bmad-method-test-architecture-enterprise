@@ -69,7 +69,14 @@ function selectBackend(env = process.env, platform = process.platform) {
     if (override === 'chmod' && platform !== 'win32') {
       return 'chmod';
     }
-    return null;
+    // A typo (e.g. "chmodd") or a backend name that is real but wrong for this
+    // platform (e.g. "bwrap" on darwin) must not silently degrade to "no
+    // isolation": that would run the agent unsandboxed while looking, from the
+    // log, exactly like a deliberate "none". Only the literal "none" opts out.
+    throw isolationError(
+      `${BACKEND_OVERRIDE_ENV}="${override}" is not a valid isolation backend for ${platform} ` +
+        '(sandbox-exec on darwin, bwrap on linux, chmod on darwin/linux, or none).',
+    );
   }
   if (platform === 'darwin' && executableOnPath('sandbox-exec', env)) {
     return 'sandbox-exec';
@@ -83,7 +90,11 @@ function selectBackend(env = process.env, platform = process.platform) {
   return null;
 }
 
-/** Whether any isolation backend can run on this machine. */
+/**
+ * Whether any isolation backend can run on this machine. Propagates
+ * selectBackend's ISOLATION_ERROR for an invalid override rather than
+ * swallowing it to a plain `false` — a typo is a config bug, not "unavailable".
+ */
 function isolationAvailable() {
   return selectBackend() !== null;
 }

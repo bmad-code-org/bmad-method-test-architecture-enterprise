@@ -36,7 +36,7 @@ const { buildPrompt } = require('./lib/build-prompt');
 const { parseReport, verdictFor, scoreFails } = require('./lib/parse-report');
 const { runAgent } = require('./lib/run-agent');
 const { AGENT_ADAPTERS } = require('./lib/agent-adapters');
-const { withIsolation, isolationAvailable } = require('./lib/isolate');
+const { withIsolation, selectBackend } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES } = require('./lib/resolve-tea-config');
 
 const EXIT = {
@@ -426,7 +426,16 @@ function main() {
   const isolateRequested = isolateExplicit ? options.isolate : Boolean(process.env.CI);
   let isolationActive = false;
   if (isolateRequested) {
-    if (isolationAvailable()) {
+    let backend;
+    try {
+      backend = selectBackend();
+    } catch (error) {
+      if (error.code === 'ISOLATION_ERROR') {
+        fail(EXIT.ENV_ERROR, error.message);
+      }
+      throw error;
+    }
+    if (backend !== null) {
       isolationActive = true;
     } else if (isolateExplicit) {
       fail(EXIT.ENV_ERROR, '--isolate was requested but no isolation backend (sandbox-exec, bwrap, chmod) is available on this platform.');
@@ -460,6 +469,10 @@ function main() {
       intervalSeconds +
       ')); echo "tea-test-review: agent still running (${i}s elapsed)..." 1>&2; done';
     const heartbeat = spawn('sh', ['-c', script], { stdio: ['ignore', 'ignore', 'inherit'] });
+    // Cosmetic (progress dots for a long blocking spawnSync call): a spawn
+    // failure here must never surface as an uncaught 'error' event and take
+    // the real review down with it.
+    heartbeat.on('error', () => {});
     heartbeat.unref();
     return () => heartbeat.kill();
   };
@@ -500,10 +513,16 @@ function main() {
     }
 
     if (!fs.existsSync(agentOutputPath) || fs.statSync(agentOutputPath).mtimeMs <= runStart) {
-      fail(
-        EXIT.AGENT_OR_PARSE_ERROR,
+      // Throw rather than fail()/process.exit() here: this runs inside
+      // withIsolation's callback, and exiting the process skips its finally
+      // block (restoreModes(), the chmod-fallback permission restore) along
+      // with the outer redirectDir cleanup below. Thrown errors propagate
+      // through both finally blocks before the outer catch calls fail().
+      const error = new Error(
         `Agent finished but no fresh report was written to ${agentOutputPath}; refusing to parse a stale or missing report.`,
       );
+      error.code = 'REPORT_MISSING';
+      throw error;
     }
 
     // The report is copied back even when the verdict fails or parsing fails;
@@ -517,7 +536,11 @@ function main() {
       parsed = parseReport(fs.readFileSync(agentOutputPath, 'utf8'));
     } catch (error) {
       if (error.code === 'REPORT_UNPARSEABLE') {
-        fail(EXIT.AGENT_OR_PARSE_ERROR, `${error.message} (report: ${outputPath})`);
+        // Same reasoning as the freshness check above: throw, don't exit, so
+        // isolation cleanup runs before the process actually terminates.
+        const wrapped = new Error(`${error.message} (report: ${outputPath})`);
+        wrapped.code = 'REPORT_UNPARSEABLE';
+        throw wrapped;
       }
       throw error;
     }
@@ -551,7 +574,12 @@ function main() {
       executeRun({ agentCwd: projectRoot, spawnPrefix: [] });
     }
   } catch (error) {
-    if (error.code === 'AGENT_FAILED' || error.code === 'AGENT_NOT_FOUND') {
+    if (
+      error.code === 'AGENT_FAILED' ||
+      error.code === 'AGENT_NOT_FOUND' ||
+      error.code === 'REPORT_MISSING' ||
+      error.code === 'REPORT_UNPARSEABLE'
+    ) {
       fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);
     }
     if (error.code === 'ISOLATION_ERROR') {

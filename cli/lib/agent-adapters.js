@@ -9,8 +9,10 @@
  * OAuth/subscription credentials under files keyed by HOME, so the envNames
  * below are only the API-key fallbacks a user may set instead.
  *
- * codex argv verified live against codex-cli 0.146.0 (2026-08-03) — see
- * docs/reference/tea-test-review-cli.md for what "verified" means per vendor.
+ * claude argv verified live against claude CLI 2.1.220, codex argv against
+ * codex-cli 0.146.0 (both 2026-08-03, same review target: a real Playwright
+ * spec, not a stub) — see docs/reference/tea-test-review-cli.md for what
+ * "verified" means per vendor.
  *
  * A gemini adapter was drafted and partially probed (the real `-p`/
  * `--approval-mode yolo`/`--skip-trust` flag surface, and that --skip-trust

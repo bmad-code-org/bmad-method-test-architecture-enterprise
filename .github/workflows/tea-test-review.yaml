@@ -114,6 +114,10 @@ jobs:
           REVIEW_RESULT: ${{ needs.review.result }}
           REVIEW_VERDICT: ${{ needs.review.outputs.verdict }}
         with:
+          # Kept in sync by hand with cli/examples/pr-test-review.yml's
+          # "Find-and-update the review comment" step: same comment-building
+          # logic, duplicated because that file is a standalone copy-paste
+          # template for other repos and cannot depend on this one.
           script: |
             const fs = require("fs");
             const marker = "<!-- tea-test-review -->";
@@ -162,11 +166,17 @@ jobs:
                   // missing from the download.
                   const reportText = fs.existsSync("test-review.md") ? fs.readFileSync("test-review.md", "utf8") : null;
                   if (reportText && reportText.length <= MAX_INLINE_REPORT_CHARS) {
+                    // A reviewed file's own content can contain a literal
+                    // </details>; inserting a zero-width space breaks that as
+                    // an HTML closing tag while leaving the visible text
+                    // effectively unchanged, so it cannot end this block early
+                    // and spill raw markdown into the rest of the comment.
+                    const safeReportText = reportText.replace(/<\/details>/gi, "<\u200B/details>");
                     lines.push(
                       "<details>",
                       "<summary>Full report (paste into your AI coding agent to apply the fixes)</summary>",
                       "",
-                      reportText,
+                      safeReportText,
                       "",
                       "</details>",
                       "",

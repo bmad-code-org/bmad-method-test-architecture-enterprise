@@ -88,6 +88,10 @@ if (mode === 'forbidden-write') {
 
 if (mode === 'stale-copy') {
   const source = process.env.STUB_OLD_REPORT;
+  if (!source) {
+    console.error('stub-agent: STUB_OLD_REPORT must be set (and --env-pass STUB_OLD_REPORT passed) for STUB_MODE=stale-copy');
+    process.exit(94);
+  }
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.copyFileSync(source, outputPath);
   const sourceStat = fs.statSync(source);

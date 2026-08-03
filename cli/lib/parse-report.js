@@ -36,7 +36,11 @@ const RECOMMENDATION_LINE = /\*\*Recommendation:?\*\*:?[ \t]*([^\n]+)/;
 const SCORE_PATTERN = /\*\*Quality Score\*\*:\s*(\d+)\s*\/\s*100/;
 const VIOLATIONS_LINE = /\*\*Total Violations:?\*\*:?[ \t]*([^\n]+)/;
 const VIOLATION_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
-const BONUS_TOTAL_LINE = /^[ \t]*Total Bonus[ \t]*:[ \t]*\+?[ \t]*(\d+)[ \t]*$/m;
+// The template always prints the bonus with a leading "+" (every fixture in
+// test/fixtures/test-review-cli/reports/ does, including the zero case,
+// "Total Bonus:             +0"), so an unsigned "Total Bonus: 0" is already
+// off the mandated format and should not silently parse.
+const BONUS_TOTAL_LINE = /^[ \t]*Total Bonus[ \t]*:[ \t]*\+[ \t]*(\d+)[ \t]*$/m;
 const SEVERITY_DEDUCTIONS = { critical: 10, high: 5, medium: 2, low: 1 };
 const MAX_BONUS = 30; // six bonus categories, worth 0 or 5 each
 
@@ -257,6 +261,18 @@ function parseReviewedFiles(text) {
  * the ledger under "## Quality Score Breakdown" is ever consulted.
  */
 function verifyScoreLedger(rawText, qualityScore, violations) {
+  // extractSection's regex takes the first match; on raw (fence-intact) text
+  // that is exploitable if the reviewed file's own quoted content contains a
+  // second "## Quality Score Breakdown" heading earlier in the report than
+  // the real one, with fabricated arithmetic crafted to pass. Counting the
+  // heading first closes that: more than one is rejected outright rather than
+  // silently taking whichever the regex happens to find.
+  const headingCount = (rawText.match(/^## Quality Score Breakdown[ \t]*$/gm) || []).length;
+  if (headingCount > 1) {
+    unparseable(
+      `Report has ${headingCount} "## Quality Score Breakdown" headings; expected exactly one, so quoted content cannot supply a decoy ledger`,
+    );
+  }
   const section = extractSection(rawText, 'Quality Score Breakdown');
   if (section === null) {
     unparseable('Report is missing the "## Quality Score Breakdown" section');

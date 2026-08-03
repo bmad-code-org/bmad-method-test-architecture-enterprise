@@ -292,6 +292,7 @@ async function runTests() {
       ['score-mismatch.md', 'published score contradicts its own deduction ledger'],
       ['bonus-not-multiple.md', 'bonus total is not a multiple of the 5-point category value'],
       ['missing-breakdown.md', 'no Quality Score Breakdown, so the score cannot be recomputed'],
+      ['duplicate-breakdown-heading.md', 'two Quality Score Breakdown headings, so neither can be trusted as the real ledger'],
       ['missing-reviewed-files.md', 'no Reviewed Files section'],
       ['bad-value.md', 'Recommendation value "LGTM" outside the enum'],
     ];
@@ -898,7 +899,30 @@ async function runTests() {
 
     assert(selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'none' }, 'darwin') === null, 'backend override "none" disables isolation');
     assert(selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'chmod' }, 'darwin') === 'chmod', 'backend override "chmod" forces the fallback');
-    assert(selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'bwrap' }, 'darwin') === null, 'backend override "bwrap" is unavailable off linux');
+    // A recognized backend name that is wrong for this platform (bwrap is
+    // linux-only) must fail closed, not silently degrade to "no isolation":
+    // that would run the agent unsandboxed while logging nothing distinct
+    // from a deliberate "none".
+    try {
+      selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'bwrap' }, 'darwin');
+      assert(false, 'backend override "bwrap" on darwin throws rather than silently disabling isolation');
+    } catch (error) {
+      assert(
+        error.code === 'ISOLATION_ERROR' && error.message.includes('bwrap') && error.message.includes('darwin'),
+        'backend override "bwrap" on darwin throws ISOLATION_ERROR naming the bad combination',
+        `${error.code}: ${error.message}`,
+      );
+    }
+    try {
+      selectBackend({ TEA_TEST_REVIEW_ISOLATION: 'chmodd' }, 'darwin');
+      assert(false, "a typo'd backend override throws rather than silently disabling isolation");
+    } catch (error) {
+      assert(
+        error.code === 'ISOLATION_ERROR' && error.message.includes('chmodd'),
+        'a typo\'d backend override ("chmodd") throws ISOLATION_ERROR naming the bad value',
+        `${error.code}: ${error.message}`,
+      );
+    }
     assert(selectBackend({ PATH: '' }, 'darwin') === 'chmod', 'darwin without sandbox-exec on PATH falls back to chmod');
     assert(selectBackend({ PATH: '' }, 'linux') === 'chmod', 'linux without bwrap on PATH falls back to chmod');
     assert(selectBackend({}, 'win32') === null, 'win32 has no isolation backend');
@@ -2170,13 +2194,85 @@ async function runTests() {
         'chmod isolation: restore leaves a deliberately read-only file read-only',
         (fs.statSync(readOnly).mode & 0o777).toString(8),
       );
+
+      // A report-PARSE failure (not an agent-spawn failure) used to reach
+      // fail()/process.exit() from inside withIsolation's callback, which
+      // skips its finally block: the chmod lock was never lifted. STUB_MODE
+      // conflict writes a real report that parseReport rejects, so this
+      // exercises that cleanup path specifically.
+      const isoParseFail = path.join(tmpRoot, 'isolation-parse-fail');
+      const isoParseFailSkill = path.join(isoParseFail, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review');
+      fs.mkdirSync(isoParseFailSkill, { recursive: true });
+      fs.copyFileSync(path.join(isoSkillDir, 'SKILL.md'), path.join(isoParseFailSkill, 'SKILL.md'));
+      const parseFailRun = runCli(
+        [
+          '--files',
+          'tests/checkout.spec.ts',
+          '--project-root',
+          isoParseFail,
+          '--output',
+          'test-review.md',
+          '--agent-cmd',
+          stubAgent,
+          '--isolate',
+          ...stubPass('STUB_MODE'),
+        ],
+        { STUB_MODE: 'conflict', TEA_TEST_REVIEW_ISOLATION: 'chmod' },
+      );
+      assert(
+        parseFailRun.status === 3,
+        'chmod isolation: a report-parse failure still exits 3',
+        `status=${parseFailRun.status} stderr=${parseFailRun.stderr}`,
+      );
+      let parseFailRestored = false;
+      try {
+        fs.writeFileSync(path.join(isoParseFail, 'probe-after-parse-failure.txt'), 'writable\n');
+        parseFailRestored = true;
+      } catch {
+        parseFailRestored = false;
+      }
+      assert(parseFailRestored, 'chmod isolation: permissions are restored after a report-parse failure, not just after a passing run');
     } else {
       const reason = isRoot ? 'running as root' : 'platform unsupported';
       skip('chmod isolation denies the forbidden write', reason);
       skip('chmod isolation restores repo permissions', reason);
       skip('chmod isolation copies root-level artifacts back', reason);
       skip('chmod isolation restores exact permission bits', reason);
+      skip('chmod isolation restores permissions after a report-parse failure', reason);
     }
+
+    // Platform-independent: an invalid override must exit 2 (not silently run
+    // unsandboxed) whether isolation was requested explicitly or via CI, since
+    // both paths now call selectBackend directly instead of the boolean
+    // isolationAvailable() probe. --agent none exits before the isolation
+    // check even runs, so this needs a real (stubbed) agent path.
+    const badOverrideExplicit = runCli(
+      [
+        '--files',
+        'tests/checkout.spec.ts',
+        '--project-root',
+        fixtureProject,
+        '--agent-cmd',
+        stubAgent,
+        '--isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'approve', TEA_TEST_REVIEW_ISOLATION: 'chmodd' },
+    );
+    assert(
+      badOverrideExplicit.status === 2 && badOverrideExplicit.stderr.includes('chmodd'),
+      '--isolate with an invalid TEA_TEST_REVIEW_ISOLATION override exits 2 naming the bad value',
+      `status=${badOverrideExplicit.status} stderr=${badOverrideExplicit.stderr}`,
+    );
+    const badOverrideCi = runCli(
+      ['--files', 'tests/checkout.spec.ts', '--project-root', fixtureProject, '--agent-cmd', stubAgent, ...stubPass('STUB_MODE')],
+      { STUB_MODE: 'approve', TEA_TEST_REVIEW_ISOLATION: 'chmodd', CI: 'true' },
+    );
+    assert(
+      badOverrideCi.status === 2 && badOverrideCi.stderr.includes('chmodd'),
+      'CI-implicit isolation with an invalid TEA_TEST_REVIEW_ISOLATION override also exits 2, not a silent unsandboxed run',
+      `status=${badOverrideCi.status} stderr=${badOverrideCi.stderr}`,
+    );
 
     const controlRoot = path.join(tmpRoot, 'isolation-control');
     const controlSkillDir = path.join(controlRoot, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review');

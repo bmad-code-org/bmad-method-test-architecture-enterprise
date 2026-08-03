@@ -117,7 +117,11 @@ function runAgent(
     if (stderrTail) {
       console.error(`Agent stderr (last ${STDERR_TAIL_LINES} lines):\n${stderrTail}`);
     }
-    const error = new Error(`Agent "${command}" exited with code ${result.status}.`);
+    // A signal-killed child (OOM, an external kill, anything outside the
+    // ETIMEDOUT case already handled above) reports status as null; naming
+    // the signal beats a bare "exited with code null".
+    const outcome = result.signal ? `was killed by signal ${result.signal}` : `exited with code ${result.status}`;
+    const error = new Error(`Agent "${command}" ${outcome}.`);
     error.code = 'AGENT_FAILED';
     throw error;
   }
