@@ -44,6 +44,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const { spawnSync } = require('node:child_process');
+const vm = require('node:vm');
 const yaml = require('js-yaml');
 
 const { parseReport, verdictFor, scoreFails, CONTEXT_BASIS_ENUM } = require('../cli/lib/parse-report');
@@ -112,6 +113,59 @@ function readFixture(...segments) {
 
 function runCli(args, env = {}) {
   return spawnSync(process.execPath, [cliPath, ...args], { encoding: 'utf8', env: { ...process.env, ...env } });
+}
+
+async function buildWorkflowComment(workflowPath, verdict) {
+  const workflow = yaml.load(fs.readFileSync(workflowPath, 'utf8'));
+  const commentStep = workflow.jobs.comment.steps.find((step) => step.name === 'Find-and-update the review comment');
+  let body = null;
+  const mockFs = {
+    existsSync(filePath) {
+      return filePath === 'test-review.json';
+    },
+    readFileSync(filePath) {
+      if (filePath === 'test-review.json') {
+        return JSON.stringify(verdict);
+      }
+      throw new Error(`unexpected workflow fixture read: ${filePath}`);
+    },
+  };
+  const github = {
+    rest: {
+      issues: {
+        async listComments() {
+          return { data: [] };
+        },
+        async createComment(payload) {
+          body = payload.body;
+        },
+        async updateComment(payload) {
+          body = payload.body;
+        },
+      },
+    },
+  };
+  const context = {
+    repo: { owner: 'bmad-code-org', repo: 'fixture' },
+    runId: 123,
+    issue: { number: 456 },
+  };
+  const workflowProcess = {
+    env: { DOWNLOAD_OUTCOME: 'success', REVIEW_RESULT: 'success', REVIEW_VERDICT: 'passed' },
+  };
+  const sandbox = {
+    require(name) {
+      if (name === 'fs') {
+        return mockFs;
+      }
+      throw new Error(`unexpected workflow dependency: ${name}`);
+    },
+    github,
+    context,
+    process: workflowProcess,
+  };
+  await vm.runInNewContext(`(async () => {\n${commentStep.with.script}\n})()`, sandbox);
+  return body;
 }
 
 /** --env-pass flags so STUB_* vars reach the stub through the minimal env. */
@@ -1407,6 +1461,36 @@ async function runTests() {
       );
     }
 
+    const hostileReviewedPath = 'tests/a` **Injected** `b.spec.ts';
+    const normalReviewedPath = 'tests/normal.spec.ts';
+    const reviewedFiles = [
+      hostileReviewedPath,
+      normalReviewedPath,
+      ...Array.from({ length: 9 }, (_, index) => `tests/extra-${index}.spec.ts`),
+    ];
+    const commentVerdict = {
+      recommendation: 'Approve',
+      qualityScore: 100,
+      violations: { critical: 0, high: 0, medium: 0, low: 0 },
+      reviewedFiles,
+      keyWeaknesses: [],
+    };
+    for (const workflowPath of [
+      path.join(repoRoot, '.github', 'workflows', 'tea-test-review.yaml'),
+      path.join(repoRoot, 'cli', 'examples', 'pr-test-review.yml'),
+    ]) {
+      const commentBody = await buildWorkflowComment(workflowPath, commentVerdict);
+      assert(
+        commentBody.includes('- **Reviewed files**: 11') &&
+          commentBody.includes(`  - \`\`${hostileReviewedPath}\`\``) &&
+          commentBody.includes(`  - \`${normalReviewedPath}\``) &&
+          commentBody.includes('  - … and 1 more') &&
+          !commentBody.includes('tests/extra-8.spec.ts'),
+        `${path.relative(repoRoot, workflowPath)} safely renders reviewed paths and preserves count/truncation`,
+        commentBody,
+      );
+    }
+
     console.log('');
 
     // ============================================================
@@ -1424,6 +1508,26 @@ async function runTests() {
         promptOnly.stdout.includes('review_scope=single'),
       'prompt-only run prints the prompt bundle (JSON file block, write restriction, derived scope)',
       promptOnly.stdout,
+    );
+
+    const truncatedStubOutput = path.join(tmpRoot, 'stub-truncated-context', 'test-review.md');
+    const truncatedStubPrompt = buildPrompt({
+      skillRoot,
+      files: ['tests/checkout.spec.ts'],
+      outputPath: truncatedStubOutput,
+      contextFiles: ['src/app.ts'],
+      contextBasis: 'pr_diff_truncated',
+    });
+    const truncatedStubRun = spawnSync(process.execPath, [stubAgent], {
+      input: truncatedStubPrompt,
+      encoding: 'utf8',
+      env: { ...process.env, STUB_MODE: 'approve' },
+    });
+    const truncatedStubReport = fs.readFileSync(truncatedStubOutput, 'utf8');
+    assert(
+      truncatedStubRun.status === 0 && truncatedStubReport.includes('**Context Basis**: pr_diff_truncated'),
+      'stub agent preserves the full pr_diff_truncated context basis from the prompt',
+      `status=${truncatedStubRun.status} stderr=${truncatedStubRun.stderr}`,
     );
 
     const promptMulti = runCli([

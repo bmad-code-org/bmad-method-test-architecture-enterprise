@@ -118,7 +118,7 @@ const contextFiles = promptArray('---BEGIN CONTEXT---', '---END CONTEXT---');
 const reportedContextFiles = process.env.STUB_CONTEXT_OVERRIDE
   ? JSON.parse(process.env.STUB_CONTEXT_OVERRIDE)
   : contextFiles;
-const contextBasisMatch = prompt.match(/\*\*Context Basis\*\*: (none|pr_diff|pr_diff_truncated)/);
+const contextBasisMatch = prompt.match(/\*\*Context Basis\*\*: (none|pr_diff_truncated|pr_diff)/);
 const contextBasis = contextBasisMatch ? contextBasisMatch[1] : 'none';
 
 function replaceManifestSection(report, heading, files, { remove = false, addBefore } = {}) {

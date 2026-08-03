@@ -147,6 +147,13 @@ jobs:
                   // Named, not just counted: a finding that cites "line 200" is
                   // unattributable on a PR touching more than one test file.
                   const reviewed = Array.isArray(verdict.reviewedFiles) ? verdict.reviewedFiles : [];
+                  const markdownCodeSpan = (value) => {
+                    const text = String(value);
+                    const longestBacktickRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+                    const fence = "`".repeat(longestBacktickRun + 1);
+                    const padding = text.startsWith("`") || text.endsWith("`") ? " " : "";
+                    return `${fence}${padding}${text}${padding}${fence}`;
+                  };
 
                   const lines = [
                     marker,
@@ -156,7 +163,7 @@ jobs:
                     `- **Recommendation**: ${verdict.recommendation}`,
                     `- **Violations**: ${violations}`,
                     `- **Reviewed files**: ${reviewed.length}`,
-                    ...reviewed.slice(0, 10).map((f) => `  - \`${f}\``),
+                    ...reviewed.slice(0, 10).map((f) => `  - ${markdownCodeSpan(f)}`),
                     ...(reviewed.length > 10 ? [`  - … and ${reviewed.length - 10} more`] : []),
                   ];
                   if (weaknesses.length > 0) {
