@@ -27,6 +27,10 @@ inputDocuments:
 
 **Recommendation**: Approve with Comments
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 **Total Violations**: 0 Critical, 2 High, 2 Medium, 3 Low
 
 ## Quality Score Breakdown

@@ -17,6 +17,10 @@ stepsCompleted:
 
 **Recommendation**: Approve
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 The six bonus categories are worth 0 or 5 each, so +11 cannot be a legal total.

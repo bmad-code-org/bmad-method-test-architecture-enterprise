@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: Approve with Comments
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 The template's decision lines look like this example:
 
 ```markdown

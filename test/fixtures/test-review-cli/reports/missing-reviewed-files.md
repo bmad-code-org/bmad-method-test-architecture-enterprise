@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: Approve
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 This fixture intentionally omits the Reviewed Files manifest; the CLI needs the

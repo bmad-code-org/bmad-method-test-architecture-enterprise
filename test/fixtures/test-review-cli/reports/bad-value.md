@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: LGTM
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 "LGTM" is not a legal Recommendation value; the CLI must reject the report

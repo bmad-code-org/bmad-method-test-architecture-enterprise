@@ -9,8 +9,8 @@ stepsCompleted:
 # Test Quality Review: checkout.spec.ts
 
 **Quality Score**: 93/100 (A)
-**Review Date**: 2026-07-29
-**Review Scope**: single
+**Review Date**: 2026-08-03
+**Review Scope**: directory
 
 ## Executive Summary
 
@@ -18,14 +18,14 @@ stepsCompleted:
 
 **Recommendation**: Approve
 
-**Context Basis**: none
+**Context Basis**: pr_diff
 
 **Context Waivers Applied**: 0
 
 ### Summary
 
-Tests follow fixture architecture and network-first patterns. One high-severity
-note about a missing test ID, two medium notes, three low notes.
+`tests/checkout.spec.ts` appears in both manifests, so the report cannot say
+whether it was scored against the ledger or merely read as background.
 
 **Total Violations**: 0 Critical, 1 High, 2 Medium, 3 Low
 
@@ -50,4 +50,10 @@ Grade:                   A
 
 ## Reviewed Files
 
-tests/checkout.spec.ts
+- tests/checkout.spec.ts
+- tests/cart.spec.ts
+
+## Review Context
+
+- docs/stories/checkout-decline.md
+- tests/checkout.spec.ts

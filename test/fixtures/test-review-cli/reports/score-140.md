@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: Approve
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 A score above 100 is outside the legal range; the CLI must reject it instead of

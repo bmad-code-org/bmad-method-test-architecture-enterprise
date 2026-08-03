@@ -18,7 +18,7 @@
  */
 
 const { spawnSync } = require('node:child_process');
-const { AGENT_ADAPTERS } = require('./agent-adapters');
+const { AGENT_ADAPTERS, resolveModel } = require('./agent-adapters');
 
 const STDERR_TAIL_LINES = 20;
 const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
@@ -58,6 +58,7 @@ function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames 
  * @param {string} [options.agentCommand] - Executable override (--agent-cmd); replaces only the
  *   adapter's default command, not its argv/env.
  * @param {string[]} [options.agentArgs] - Extra args appended after the adapter's own argv (--claude-arg passthrough).
+ * @param {string} [options.model] - Model to pin for this run; defaults to the adapter's defaultModel.
  * @param {number} [options.timeout] - Wall-clock timeout in ms (default 1800000); SIGTERM on expiry.
  * @param {string} [options.cwd] - Working directory for the agent.
  * @param {string[]} [options.envPass] - Extra env var names allowed through to the child.
@@ -72,6 +73,7 @@ function runAgent(
     agent = 'claude',
     agentCommand,
     agentArgs = [],
+    model,
     timeout = DEFAULT_TIMEOUT_MS,
     cwd = process.cwd(),
     envPass = [],
@@ -85,7 +87,7 @@ function runAgent(
     throw error;
   }
   const resolvedCommand = agentCommand || adapter.command;
-  const agentArgv = adapter.buildArgv(agentArgs);
+  const agentArgv = adapter.buildArgv(agentArgs, resolveModel(agent, model, agentArgs));
   const isolated = spawnPrefix.length > 0;
   const command = isolated ? spawnPrefix[0] : resolvedCommand;
   const args = isolated ? [...spawnPrefix.slice(1), resolvedCommand, ...agentArgv] : agentArgv;

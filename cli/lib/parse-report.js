@@ -12,12 +12,19 @@
  * - A "## Quality Score Breakdown" ledger whose arithmetic reproduces the
  *   published score; the skill's deduction model is the only scoring model, so
  *   a score that contradicts its own breakdown is rejected rather than gated on.
- * - A final "## Reviewed Files" section listing every reviewed file.
+ * - A "## Reviewed Files" section listing every reviewed file.
+ * - Exactly one "**Context Basis**:" line inside the Executive Summary, plus a
+ *   "## Review Context" manifest whenever that basis is not `none`.
+ * - Exactly one "**Context Waivers Applied**: 0" line inside the Executive
+ *   Summary. Context can add findings and cannot exempt rubric violations.
  *
- * Consistency cross-check: the template defines Critical as Must Fix, so a
+ * Consistency cross-checks. The template defines Critical as Must Fix, so a
  * report with Critical > 0 alongside an Approve / Approve with Comments
- * recommendation is a broken report, not a pass; it is rejected as
- * REPORT_UNPARSEABLE.
+ * recommendation is a broken report, not a pass. And the two manifests are
+ * disjoint by construction: context is read, never scored, so a path in both
+ * means the reviewer scored something the ledger does not describe. Both are
+ * rejected as REPORT_UNPARSEABLE. When a run contract is supplied, canonical
+ * manifests are also bound to the exact reviewed and context inputs.
  *
  * Two more fields, `keyStrengths` and `keyWeaknesses`, are extracted best-effort
  * from the Executive Summary's "### Key Strengths" / "### Key Weaknesses"
@@ -31,8 +38,13 @@
  * report quoted inside the real one can never spoof a verdict.
  */
 
+const path = require('node:path');
+
 const RECOMMENDATION_ENUM = ['Approve', 'Approve with Comments', 'Request Changes', 'Block'];
 const RECOMMENDATION_LINE = /\*\*Recommendation:?\*\*:?[ \t]*([^\n]+)/;
+const CONTEXT_BASIS_ENUM = ['none', 'pr_diff', 'pr_diff_truncated'];
+const CONTEXT_BASIS_LINE_SOURCE = String.raw`^[ \t]*\*\*Context Basis:?\*\*:?[ \t]*([^\r\n]+)[ \t]*$`;
+const CONTEXT_WAIVERS_LINE_SOURCE = String.raw`^[ \t]*\*\*Context Waivers Applied:?\*\*:?[ \t]*([^\r\n]+)[ \t]*$`;
 const SCORE_PATTERN = /\*\*Quality Score\*\*:\s*(\d+)\s*\/\s*100/;
 const VIOLATIONS_LINE = /\*\*Total Violations:?\*\*:?[ \t]*([^\n]+)/;
 const VIOLATION_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
@@ -220,22 +232,81 @@ function looksLikeFilePath(entry) {
   return !/\s/.test(entry) || /\.[A-Za-z0-9_+-]{1,12}$/.test(entry);
 }
 
+/**
+ * Remove markdown emphasis that WRAPS a value, leaving the value intact.
+ *
+ * Deliberately not a global strip of `` ` ``, `*`, and `_`: those characters
+ * are legal inside the things this parser reads. A global strip turns the path
+ * `tests/user_profile.spec.ts` into `tests/userprofile.spec.ts` in the evidence
+ * manifest, and the enum value `pr_diff` into `prdiff`.
+ */
+function stripWrappers(value) {
+  let result = value.trim();
+  for (const wrapper of ['```', '**', '__', '`', '*', '_']) {
+    while (result.length > 2 * wrapper.length && result.startsWith(wrapper) && result.endsWith(wrapper)) {
+      result = result.slice(wrapper.length, -wrapper.length).trim();
+    }
+  }
+  return result;
+}
+
+/**
+ * Strip a manifest section down to its candidate entries: bullet markers,
+ * wrapping emphasis, headings, and horizontal rules removed. A rule is dropped
+ * rather than kept because "---" has no whitespace and would otherwise satisfy
+ * looksLikeFilePath and inflate the evidence count.
+ */
+function manifestEntries(sectionText) {
+  return sectionText
+    .split('\n')
+    .map((line) => stripWrappers(line.trim().replace(/^[-*]\s+/, '')))
+    .filter((line) => line.length > 0 && !line.startsWith('#') && !/^(-{3,}|={3,})$/.test(line));
+}
+
+/** Canonicalize a report manifest path into a safe repo-relative POSIX path. */
+function canonicalManifestPath(value, manifestLabel) {
+  const portable = stripWrappers(value).replaceAll('\\', '/');
+  if (path.posix.isAbsolute(portable) || /^[A-Za-z]:\//.test(portable)) {
+    unparseable(`Report "${manifestLabel}" manifest path ${JSON.stringify(value)} must be repo-relative`);
+  }
+  const canonical = path.posix.normalize(portable);
+  if (canonical === '.' || canonical === '..' || canonical.startsWith('../')) {
+    unparseable(`Report "${manifestLabel}" manifest path ${JSON.stringify(value)} escapes or does not name a file`);
+  }
+  return canonical;
+}
+
+/** Canonicalize a manifest and reject aliases that collapse to duplicates. */
+function canonicalizeManifest(files, manifestLabel) {
+  if (!Array.isArray(files)) {
+    unparseable(`Report run contract "${manifestLabel}" must be an array of repo-relative paths`);
+  }
+  const canonical = files.map((file) => canonicalManifestPath(file, manifestLabel));
+  const seen = new Set();
+  const duplicates = [];
+  for (const file of canonical) {
+    if (seen.has(file)) {
+      duplicates.push(file);
+    }
+    seen.add(file);
+  }
+  if (duplicates.length > 0) {
+    unparseable(
+      `Report "${manifestLabel}" manifest contains duplicate path aliases after normalization: ${JSON.stringify(
+        [...new Set(duplicates)].slice(0, 3),
+      )}`,
+    );
+  }
+  return canonical;
+}
+
 /** Parse the mandatory "## Reviewed Files" manifest into a path array. */
 function parseReviewedFiles(text) {
   const section = extractSection(text, 'Reviewed Files');
   if (section === null) {
     unparseable('Report is missing the "## Reviewed Files" section');
   }
-  const entries = section
-    .split('\n')
-    .map((line) =>
-      line
-        .trim()
-        .replace(/^[-*]\s+/, '')
-        .replaceAll(/[`*_]/g, '')
-        .trim(),
-    )
-    .filter((line) => line.length > 0 && !line.startsWith('#'));
+  const entries = manifestEntries(section);
   if (entries.length === 0) {
     unparseable('Report "## Reviewed Files" section is empty');
   }
@@ -243,7 +314,132 @@ function parseReviewedFiles(text) {
   if (files.length === 0) {
     unparseable(`Report "## Reviewed Files" section lists no file paths (found only prose: ${JSON.stringify(entries.slice(0, 3))})`);
   }
-  return files;
+  return canonicalizeManifest(files, '## Reviewed Files');
+}
+
+/** Extract one machine field, owned exclusively by the Executive Summary. */
+function executiveSingleton(text, source, label) {
+  const executiveSection = extractSection(text, 'Executive Summary');
+  if (executiveSection === null) {
+    unparseable('Report is missing the "## Executive Summary" section');
+  }
+  const allMatches = [...text.matchAll(new RegExp(source, 'gm'))];
+  const executiveMatches = [...executiveSection.matchAll(new RegExp(source, 'gm'))];
+  if (allMatches.length !== 1 || executiveMatches.length !== 1) {
+    unparseable(
+      `Report must contain exactly one "**${label}**:" line, and it must be inside "## Executive Summary"; ` +
+        `found ${allMatches.length} total and ${executiveMatches.length} there`,
+    );
+  }
+  return executiveMatches[0][1];
+}
+
+/** Parse the Executive Summary's unique "**Context Basis**:" line. */
+function parseContextBasis(text) {
+  const raw = executiveSingleton(text, CONTEXT_BASIS_LINE_SOURCE, 'Context Basis');
+  const cleaned = stripWrappers(raw.replaceAll(/\s+/g, ' ')).toLowerCase();
+  if (!CONTEXT_BASIS_ENUM.includes(cleaned)) {
+    unparseable(`Report Context Basis "${cleaned}" is not one of: ${CONTEXT_BASIS_ENUM.join(' | ')}`);
+  }
+  return cleaned;
+}
+
+/** Context can add findings. A nonzero waiver declaration invalidates the report. */
+function parseContextWaivers(text) {
+  const raw = stripWrappers(executiveSingleton(text, CONTEXT_WAIVERS_LINE_SOURCE, 'Context Waivers Applied'));
+  if (!/^\d+$/.test(raw)) {
+    unparseable(`Report Context Waivers Applied ${JSON.stringify(raw)} must be the integer 0`);
+  }
+  const applied = Number.parseInt(raw, 10);
+  if (applied !== 0) {
+    unparseable(`Report declares ${applied} context waiver(s); context cannot waive rubric violations or alter the score`);
+  }
+  return applied;
+}
+
+/**
+ * Parse the "## Review Context" manifest. Required whenever the basis is not
+ * `none`; absent (or the single word `none`) otherwise. A basis of `none`
+ * alongside a populated manifest is a contradiction, not a pass.
+ */
+function parseContextFiles(text, contextBasis) {
+  const section = extractSection(text, 'Review Context');
+  const entries = section === null ? [] : manifestEntries(section);
+  const declaredNone = entries.length === 1 && entries[0].toLowerCase() === 'none';
+  const files = declaredNone ? [] : entries.filter((entry) => looksLikeFilePath(entry));
+
+  if (contextBasis === 'none') {
+    if (files.length > 0) {
+      unparseable(
+        `Report declares "Context Basis: none" but its "## Review Context" section lists ${files.length} artifact(s): ` +
+          JSON.stringify(files.slice(0, 3)),
+      );
+    }
+    return [];
+  }
+
+  if (section === null) {
+    unparseable(`Report declares "Context Basis: ${contextBasis}" but has no "## Review Context" section naming what it read`);
+  }
+  if (files.length === 0) {
+    unparseable(`Report declares "Context Basis: ${contextBasis}" but its "## Review Context" section names no artifacts`);
+  }
+  return canonicalizeManifest(files, '## Review Context');
+}
+
+function manifestDifference(left, right) {
+  const rightSet = new Set(right);
+  return left.filter((file) => !rightSet.has(file));
+}
+
+/** Bind report claims to the exact evidence supplied to this run. */
+function verifyRunContract({ reviewedFiles, contextBasis, contextFiles }, runContract) {
+  const has = (key) => Object.prototype.hasOwnProperty.call(runContract, key);
+
+  if (has('reviewedFiles')) {
+    const suppliedReviewed = canonicalizeManifest(runContract.reviewedFiles, 'supplied reviewed files');
+    const missing = manifestDifference(suppliedReviewed, reviewedFiles);
+    const foreign = manifestDifference(reviewedFiles, suppliedReviewed);
+    if (missing.length > 0 || foreign.length > 0) {
+      unparseable(
+        'Report "## Reviewed Files" manifest does not match the authoritative review set: ' +
+          `missing ${JSON.stringify(missing.slice(0, 3))}, foreign ${JSON.stringify(foreign.slice(0, 3))}`,
+      );
+    }
+  }
+
+  let suppliedContext = null;
+  if (has('contextFiles')) {
+    suppliedContext = canonicalizeManifest(runContract.contextFiles, 'supplied context files');
+    const foreign = manifestDifference(contextFiles, suppliedContext);
+    if (foreign.length > 0) {
+      unparseable(`Report "## Review Context" manifest names artifacts this run did not supply: ${JSON.stringify(foreign.slice(0, 3))}`);
+    }
+  }
+
+  if (has('contextBasis')) {
+    const suppliedBasis = runContract.contextBasis;
+    if (!CONTEXT_BASIS_ENUM.includes(suppliedBasis)) {
+      unparseable(`Report run contract Context Basis "${suppliedBasis}" is invalid`);
+    }
+    const rank = { none: 0, pr_diff_truncated: 1, pr_diff: 2 };
+    if (rank[contextBasis] > rank[suppliedBasis]) {
+      unparseable(
+        `Report declares "Context Basis: ${contextBasis}" while this run supplied ${suppliedBasis}; ` +
+          'a report cannot claim evidence it was never given',
+      );
+    }
+    if (suppliedContext !== null && contextBasis === suppliedBasis) {
+      const missing = manifestDifference(suppliedContext, contextFiles);
+      if (missing.length > 0) {
+        unparseable(
+          `Report "## Review Context" manifest omits supplied artifacts while claiming ${contextBasis}: ${JSON.stringify(
+            missing.slice(0, 3),
+          )}`,
+        );
+      }
+    }
+  }
 }
 
 /**
@@ -304,10 +500,13 @@ function verifyScoreLedger(rawText, qualityScore, violations) {
  * Extract the strict-schema verdict from report text.
  *
  * @param {string} reportText - Full test-review.md contents.
- * @returns {{recommendation: string, qualityScore: number, violations: object, reviewedFiles: string[]}}
+ * @param {object} [runContract] - Exact reviewed/context evidence supplied by the runner.
+ * @returns {{recommendation: string, qualityScore: number, violations: object,
+ *   reviewedFiles: string[], contextBasis: string, contextFiles: string[],
+ *   contextWaiversApplied: number}}
  * @throws {Error} With code REPORT_UNPARSEABLE on any missing/invalid element.
  */
-function parseReport(reportText) {
+function parseReport(reportText, runContract = {}) {
   const text = stripFencedCodeBlocks(reportText);
 
   parseFrontmatter(text);
@@ -337,6 +536,25 @@ function parseReport(reportText) {
 
   verifyScoreLedger(reportText, qualityScore, violations);
 
+  const reviewedFiles = parseReviewedFiles(text);
+  const contextBasis = parseContextBasis(text);
+  const contextWaiversApplied = parseContextWaivers(text);
+  const contextFiles = parseContextFiles(text, contextBasis);
+
+  // Read and scored are different jobs. An overlap means either a context
+  // artifact was run through the deduction ledger or a reviewed test was
+  // excused as background reading; the report cannot say which.
+  const reviewedSet = new Set(reviewedFiles);
+  const overlap = contextFiles.filter((file) => reviewedSet.has(file));
+  if (overlap.length > 0) {
+    unparseable(
+      `Report lists ${JSON.stringify(overlap.slice(0, 3))} in both "## Reviewed Files" and "## Review Context"; ` +
+        'context is read, never scored, so the two manifests must be disjoint',
+    );
+  }
+
+  verifyRunContract({ reviewedFiles, contextBasis, contextFiles }, runContract);
+
   const executiveSection = extractSection(text, 'Executive Summary');
   const keyStrengths = extractBullets(extractSubsection(executiveSection, 'Key Strengths'), '✅');
   const keyWeaknesses = extractBullets(extractSubsection(executiveSection, 'Key Weaknesses'), '❌');
@@ -345,7 +563,10 @@ function parseReport(reportText) {
     recommendation: executive,
     qualityScore,
     violations,
-    reviewedFiles: parseReviewedFiles(text),
+    reviewedFiles,
+    contextBasis,
+    contextFiles,
+    contextWaiversApplied,
     keyStrengths,
     keyWeaknesses,
   };
@@ -377,4 +598,4 @@ function scoreFails(score, minScore) {
   return score < minScore;
 }
 
-module.exports = { parseReport, verdictFor, scoreFails };
+module.exports = { parseReport, verdictFor, scoreFails, CONTEXT_BASIS_ENUM };

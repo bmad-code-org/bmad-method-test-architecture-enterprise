@@ -363,10 +363,10 @@ Coverage criteria are intentionally excluded from this checklist.
 
 ### Context Awareness
 
-- [ ] Review considers project context (some patterns may be justified)
-- [ ] Violations with justification comments noted as acceptable
+- [ ] Context used to discover requirement mismatches and clarify impact
+- [ ] Every rubric violation remains cataloged at its rubric-defined severity
 - [ ] Edge cases acknowledged
-- [ ] Recommendations are pragmatic, not dogmatic
+- [ ] Context does not change severity, deductions, or the score
 
 ---
 
@@ -417,12 +417,12 @@ Coverage criteria are intentionally excluded from this checklist.
 - [ ] Framework-specific violations detected (e.g., Cypress anti-patterns)
 - [ ] Knowledge fragments applied appropriately for framework
 
-### Justified Violations
+### Context and Risk Acceptance
 
-- [ ] Violations with justification comments in code noted as acceptable
-- [ ] Justifications evaluated for legitimacy
-- [ ] Report acknowledges justified patterns
-- [ ] Score not penalized for justified violations
+- [ ] Justification comments captured as context without exempting violations
+- [ ] Claims that conflict with the rubric reported as findings
+- [ ] Formal risk acceptance routed to trace or the release gate
+- [ ] Context Waivers Applied remains 0 and every violation affects the score
 
 ---
 
@@ -471,5 +471,5 @@ Record any issues, observations, or important context during workflow execution:
 - **Quality Score**: [0-100 score, letter grade]
 - **Critical Issues**: [Count of P0/P1 violations]
 - **Recommendation**: [Approve / Approve with Comments / Request Changes / Block]
-- **Special Considerations**: [Legacy code, justified patterns, edge cases]
+- **Special Considerations**: [Legacy code, context constraints, edge cases]
 - **Follow-up Actions**: [Re-review after fixes, pair programming, etc.]

@@ -17,6 +17,10 @@ stepsCompleted:
 
 **Recommendation**: Approve
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 Two High violations deduct 10 with no bonus, so the ledger lands on 90 while the

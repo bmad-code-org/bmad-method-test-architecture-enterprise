@@ -144,6 +144,16 @@ jobs:
                   const counts = verdict.violations ?? {};
                   const violations = `${counts.critical ?? 0} Critical / ${counts.high ?? 0} High / ${counts.medium ?? 0} Medium / ${counts.low ?? 0} Low`;
                   const weaknesses = (verdict.keyWeaknesses ?? []).slice(0, 3);
+                  // Named, not just counted: a finding that cites "line 200" is
+                  // unattributable on a PR touching more than one test file.
+                  const reviewed = Array.isArray(verdict.reviewedFiles) ? verdict.reviewedFiles : [];
+                  const markdownCodeSpan = (value) => {
+                    const text = String(value);
+                    const longestBacktickRun = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+                    const fence = "`".repeat(longestBacktickRun + 1);
+                    const padding = text.startsWith("`") || text.endsWith("`") ? " " : "";
+                    return `${fence}${padding}${text}${padding}${fence}`;
+                  };
 
                   const lines = [
                     marker,
@@ -152,7 +162,9 @@ jobs:
                     `- **Quality score**: ${verdict.qualityScore ?? "n/a"}/100`,
                     `- **Recommendation**: ${verdict.recommendation}`,
                     `- **Violations**: ${violations}`,
-                    `- **Reviewed files**: ${(verdict.reviewedFiles ?? []).length}`,
+                    `- **Reviewed files**: ${reviewed.length}`,
+                    ...reviewed.slice(0, 10).map((f) => `  - ${markdownCodeSpan(f)}`),
+                    ...(reviewed.length > 10 ? [`  - … and ${reviewed.length - 10} more`] : []),
                   ];
                   if (weaknesses.length > 0) {
                     lines.push("", "**Key weaknesses**:", ...weaknesses.map((w) => `- ${w}`));

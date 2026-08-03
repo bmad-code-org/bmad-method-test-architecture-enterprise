@@ -27,6 +27,7 @@ variables:
   # Headless mode (non-interactive runs, e.g. the tea-test-review CLI)
   headless: false # true: skip the greeting and interactive menu, execute Create mode directly, never prompt the user
   review_files: "" # comma-separated authoritative review set; when non-empty it IS the complete review set (takes precedence over review_scope discovery)
+  context_files: "" # comma-separated read-only context artifacts (story, PRD, test design, changed source); read for understanding, NEVER reviewed and never scored
   output_file_override: "" # when non-empty, replaces default_output_file for this run
   generate_inline_comments: false # true: write // TODO (TEA Review) comments into test files at violation locations; default false is report-only
 
@@ -35,7 +36,7 @@ default_output_file: "{test_artifacts}/test-review.md"
 
 # Required tools
 required_tools:
-  - read_file # Read test files, story, test-design
+  - read_file # Read test files under review, plus the context artifacts named by context_files (story, test-design, changed source)
   - write_file # Create review report
   - list_files # Discover test files in directory
   - search_repo # Find tests by patterns

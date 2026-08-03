@@ -33,6 +33,7 @@ From `workflow.yaml`, resolve:
 - `test_dir`, `review_scope`
 - `headless` — when `true`, skip the greeting and interactive menu, execute Create mode directly, and never prompt the user
 - `review_files` — comma-separated authoritative review set; when non-empty it IS the complete review set (takes precedence over `review_scope` discovery)
+- `context_files` — comma-separated read-only context artifacts (story, PRD, test design, changed source). Read for understanding, never reviewed and never scored. Step 1 resolves `{context_basis}` from what it actually read, and step 4 publishes it
 - `output_file_override` — when non-empty, this IS `{outputFile}` for every step: it replaces both `default_output_file` and the `outputFile` declared in each step's frontmatter
 - `generate_inline_comments` — when `true`, write `// TODO (TEA Review)` inline comments into reviewed test files; default `false` is report-only
 

@@ -18,6 +18,10 @@ stepsCompleted:
 
 **Recommendation**: Approve
 
+**Context Basis**: none
+
+**Context Waivers Applied**: 0
+
 ### Summary
 
 One critical data-cleanup violation was found, yet the report still approves —
