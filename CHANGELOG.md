@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tea-test-review` chmod isolation now restores the project tree's exact permission bits from a snapshot taken before the lock. The previous `chmod -R u+w` restore is not an inverse of `chmod -R a-w`: it stripped group and other write bits and left deliberately read-only files writable.
 - `tea-test-review` reviewed-files manifest ignores prose lines and strips inline markup, so a sentence inside the report's `## Reviewed Files` section can no longer inflate the `--min-files` evidence floor; a section with no file paths is a parse failure rather than a pass.
 - `tea-test-review` no longer false-fails a valid report whose `stepsCompleted` frontmatter is a YAML flow sequence wrapped across several lines, which is the shape a formatter produces once the list outgrows one line. A live run produced an otherwise complete 742-line report and the CLI rejected it with exit 3.
+- `cli/examples/pr-test-review.yml` pins `TEA_VERSION: 1.20.0`, the first release that ships the `tea-test-review` bin. The template was authored against 1.19.1, which publishes the review skill with an empty `bin`, so any repository that copied it installed a package with no CLI and failed on `tea-test-review: command not found` after two successful install steps.
 
 ---
 

@@ -59,7 +59,11 @@ jobs:
     env:
       # Single source of truth for both install steps below, so bumping the
       # pin can't update one and silently leave the other on the old version.
-      TEA_VERSION: 1.19.1
+      # 1.20.0 is the first release that ships the tea-test-review bin; every
+      # earlier version publishes the skill with an empty `bin`. An exact
+      # version is required either way, because the tar step below reconstructs
+      # the tarball filename from it.
+      TEA_VERSION: 1.20.0
     steps:
       - name: Checkout (full history for the PR diff)
         uses: actions/checkout@v5
