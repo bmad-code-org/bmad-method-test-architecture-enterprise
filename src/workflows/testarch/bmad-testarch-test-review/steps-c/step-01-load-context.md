@@ -44,7 +44,9 @@ Use `review_scope`:
 - **directory**: all tests in folder
 - **suite**: all tests in repo
 
-If unclear, ask the user.
+When `review_files` is non-empty, it is the authoritative review set and takes precedence over `review_scope` discovery.
+
+If unclear, ask the user — except in headless mode (`headless: true`), which never asks: resolve the scope from the supplied inputs (`review_scope`, `review_files`) and continue.
 
 **Stack Detection** (for context-aware loading):
 
@@ -161,12 +163,13 @@ Coverage mapping and coverage gates are out of scope in `test-review`. Route tho
 
 ## 4. Save Progress
 
-**Save this step's accumulated work to `{outputFile}`.**
+**Save this step's accumulated work to `{outputFile}`.** When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
 
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
+  workflowType: 'testarch-test-review'
   stepsCompleted: ['step-01-load-context']
   lastStep: 'step-01-load-context'
   lastSaved: '{date}'

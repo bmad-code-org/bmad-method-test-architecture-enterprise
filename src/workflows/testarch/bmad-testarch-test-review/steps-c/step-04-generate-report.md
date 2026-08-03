@@ -68,12 +68,13 @@ Validate against `checklist.md` and fix any gaps.
 
 ## 4. Save Progress
 
-**Save this step's accumulated work to `{outputFile}`.**
+**Save this step's accumulated work to `{outputFile}`.** When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
 
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
+  workflowType: 'testarch-test-review'
   stepsCompleted: ['step-04-generate-report']
   lastStep: 'step-04-generate-report'
   lastSaved: '{date}'

@@ -24,6 +24,12 @@ variables:
   review_scope: "single" # single (one file), directory (folder), suite (all tests)
   test_stack_type: "auto" # auto, frontend, backend, fullstack - from config or auto-detected
 
+  # Headless mode (non-interactive runs, e.g. the tea-test-review CLI)
+  headless: false # true: skip the greeting and interactive menu, execute Create mode directly, never prompt the user
+  review_files: "" # comma-separated authoritative review set; when non-empty it IS the complete review set (takes precedence over review_scope discovery)
+  output_file_override: "" # when non-empty, replaces default_output_file for this run
+  generate_inline_comments: false # true: write // TODO (TEA Review) comments into test files at violation locations; default false is report-only
+
 # Output configuration
 default_output_file: "{test_artifacts}/test-review.md"
 

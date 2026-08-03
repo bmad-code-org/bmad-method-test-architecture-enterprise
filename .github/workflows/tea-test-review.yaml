@@ -1,0 +1,228 @@
+# Dogfoods tea-test-review on this repo's own test suite (test/*.js). Unlike
+# cli/examples/pr-test-review.yml, this repo IS the skill source, so it points
+# --skill-root at src/workflows/testarch/bmad-testarch-test-review directly
+# instead of installing a pinned npm tarball.
+#
+# NOT YET ENABLED: no ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN repository
+# secret exists yet, so the agent-running steps below are commented out and
+# the trigger is workflow_dispatch only, not pull_request. A run without
+# either secret would just fail and post a confusing "infrastructure failure"
+# comment on every real PR.
+#
+# To enable: add one of the two secrets, uncomment the "Install the pinned
+# agent CLI" and "Run headless test review" steps, and switch `on:` back to
+# `pull_request: { types: [opened, synchronize, reopened] }`.
+#   - ANTHROPIC_API_KEY: pay-per-token via the Anthropic Console.
+#   - CLAUDE_CODE_OAUTH_TOKEN: a long-lived token from an existing Claude
+#     subscription, generated locally with `claude setup-token`. No separate
+#     API billing. Already supported by cli/lib/run-agent.js's env allowlist.
+#
+# Honest limitation: forks receive no secrets, so the review skips for fork
+# PRs (the fork guard below) rather than failing. A skipped required check
+# still satisfies branch protection, so this cannot be the sole gate against
+# untrusted external contributions; see cli/examples/pr-test-review.yml's
+# header comment for the same caveat.
+name: TEA Test Review
+
+on:
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  review:
+    name: Headless test review
+    runs-on: ubuntu-latest
+    # Self-adapting fork guard: on workflow_dispatch there's no pull_request
+    # context to check, so this is trivially true; on pull_request it skips
+    # forks (no secrets there). No change needed when switching triggers back.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
+    steps:
+      - name: Checkout (full history for the PR diff)
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # - name: Install the pinned agent CLI
+      #   env:
+      #     CLAUDE_CODE_VERSION: 2.1.220
+      #   run: npm install --global "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+      # - name: Run headless test review
+      #   id: run-review
+      #   env:
+      #     ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      #     # or: CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      #     BASE_REF: origin/${{ github.base_ref }}
+      #   run: node cli/test-review.js --base "$BASE_REF" --agent claude --skill-root src/workflows/testarch/bmad-testarch-test-review --test-dir test --output test-review.md --json test-review.json
+
+      - name: Upload review artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tea-test-review
+          path: |
+            test-review.md
+            test-review.json
+
+      - name: Export the verdict as a job output
+        id: verdict
+        if: always()
+        env:
+          REVIEW_OUTCOME: ${{ steps.run-review.outcome }}
+        run: |
+          verdict="failed"
+          if [ "$REVIEW_OUTCOME" = "success" ]; then
+            verdict="passed"
+          fi
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+
+  comment:
+    name: Comment the outcome
+    needs: review
+    # Only meaningful with a PR to comment on; skips cleanly on workflow_dispatch.
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Download review artifacts
+        id: download
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: tea-test-review
+
+      - name: Find-and-update the review comment
+        uses: actions/github-script@v7
+        env:
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+          REVIEW_RESULT: ${{ needs.review.result }}
+          REVIEW_VERDICT: ${{ needs.review.outputs.verdict }}
+        with:
+          # Kept in sync by hand with cli/examples/pr-test-review.yml's
+          # "Find-and-update the review comment" step: same comment-building
+          # logic, duplicated because that file is a standalone copy-paste
+          # template for other repos and cannot depend on this one.
+          script: |
+            const fs = require("fs");
+            const marker = "<!-- tea-test-review -->";
+            const artifactsUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}#artifacts`;
+            // GitHub caps a comment body at 65536 chars; this leaves headroom
+            // for the digest and wrapper around the inlined report.
+            const MAX_INLINE_REPORT_CHARS = 40000;
+
+            let body = null;
+            const artifactAvailable = process.env.DOWNLOAD_OUTCOME === "success" && fs.existsSync("test-review.json");
+            if (artifactAvailable) {
+              try {
+                const verdict = JSON.parse(fs.readFileSync("test-review.json", "utf8"));
+                if (verdict.skipped) {
+                  body = [
+                    marker,
+                    "## TEA Test Review: skipped",
+                    "",
+                    `${verdict.reason ?? "No changed test files in this PR"}.`,
+                    "",
+                    `[Review job artifacts](${artifactsUrl})`,
+                  ].join("\n");
+                } else {
+                  const counts = verdict.violations ?? {};
+                  const violations = `${counts.critical ?? 0} Critical / ${counts.high ?? 0} High / ${counts.medium ?? 0} Medium / ${counts.low ?? 0} Low`;
+                  const weaknesses = (verdict.keyWeaknesses ?? []).slice(0, 3);
+
+                  const lines = [
+                    marker,
+                    `## TEA Test Review: ${verdict.recommendation}`,
+                    "",
+                    `- **Quality score**: ${verdict.qualityScore ?? "n/a"}/100`,
+                    `- **Recommendation**: ${verdict.recommendation}`,
+                    `- **Violations**: ${violations}`,
+                    `- **Reviewed files**: ${(verdict.reviewedFiles ?? []).length}`,
+                  ];
+                  if (weaknesses.length > 0) {
+                    lines.push("", "**Key weaknesses**:", ...weaknesses.map((w) => `- ${w}`));
+                  }
+                  lines.push("");
+
+                  // Inline the full report (not just the digest above) so a
+                  // reviewer can paste it straight into an AI coding agent to
+                  // apply the fixes, no artifact download required. Falls back
+                  // to the artifact link alone if the report is too large or
+                  // missing from the download.
+                  const reportText = fs.existsSync("test-review.md") ? fs.readFileSync("test-review.md", "utf8") : null;
+                  if (reportText && reportText.length <= MAX_INLINE_REPORT_CHARS) {
+                    // A reviewed file's own content can contain a literal
+                    // </details>; inserting a zero-width space breaks that as
+                    // an HTML closing tag while leaving the visible text
+                    // effectively unchanged, so it cannot end this block early
+                    // and spill raw markdown into the rest of the comment.
+                    const safeReportText = reportText.replace(/<\/details>/gi, "<\u200B/details>");
+                    lines.push(
+                      "<details>",
+                      "<summary>Full report (paste into your AI coding agent to apply the fixes)</summary>",
+                      "",
+                      safeReportText,
+                      "",
+                      "</details>",
+                      "",
+                      `[Verdict JSON](${artifactsUrl})`,
+                    );
+                  } else {
+                    lines.push(`[Full report and verdict JSON](${artifactsUrl})`);
+                  }
+                  body = lines.join("\n");
+                }
+              } catch {
+                body = null;
+              }
+            }
+            if (body === null) {
+              body = [
+                marker,
+                "## TEA Test Review: infrastructure failure",
+                "",
+                "The review job did not produce a readable verdict artifact.",
+                "This is **not** a review verdict; treat the gate as broken, not as approved tests.",
+                "",
+                `Review job result: ${process.env.REVIEW_RESULT} (verdict output: ${process.env.REVIEW_VERDICT || "n/a"}).`,
+                `[Review job artifacts](${artifactsUrl})`,
+              ].join("\n");
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }

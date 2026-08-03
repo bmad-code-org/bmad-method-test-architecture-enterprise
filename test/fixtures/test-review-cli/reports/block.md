@@ -1,0 +1,48 @@
+---
+workflowType: 'testarch-test-review'
+stepsCompleted:
+  - step-01-load-context
+  - step-02-discover-tests
+  - step-03-review-tests
+---
+
+# Test Quality Review: legacy-login.spec.ts
+
+**Quality Score**: 41/100 (F)
+**Review Date**: 2026-07-29
+**Review Scope**: single
+
+## Executive Summary
+
+**Overall Assessment**: Critical Issues
+
+**Recommendation**: Block
+
+### Summary
+
+Hard waits throughout, no isolation, shared mutable state across tests.
+
+**Total Violations**: 2 Critical, 7 High, 2 Medium, 0 Low
+
+## Quality Score Breakdown
+
+```
+Starting Score:          100
+Critical Violations:     -2 × 10 = -20
+High Violations:         -7 × 5 = -35
+Medium Violations:       -2 × 2 = -4
+Low Violations:          -0 × 1 = -0
+
+Total Bonus:             +0
+
+Final Score:             41/100
+Grade:                   F
+```
+
+## Decision
+
+**Recommendation**: Block
+
+## Reviewed Files
+
+tests/legacy-login.spec.ts

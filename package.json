@@ -19,7 +19,9 @@
   "license": "MIT",
   "author": "Murat K Ozcan (TEA Creator) & Brian (BMad) Madison",
   "main": "",
-  "bin": {},
+  "bin": {
+    "tea-test-review": "cli/test-review.js"
+  },
   "scripts": {
     "docs:build": "node tools/build-docs.js",
     "docs:dev": "npm --prefix website run dev",
@@ -38,6 +40,7 @@
     "release:next": "gh workflow run publish.yaml -f channel=next",
     "release:patch": "gh workflow run publish.yaml -f channel=latest -f bump=patch",
     "test": "npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:release-metadata && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
+    "test:cli": "node test/test-test-review-cli.js",
     "test:coverage": "c8 npm test",
     "test:install": "node test/test-installation-components.js",
     "test:knowledge": "node test/test-knowledge-base.js",

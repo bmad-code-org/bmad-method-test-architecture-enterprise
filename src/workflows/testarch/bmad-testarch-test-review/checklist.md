@@ -266,7 +266,7 @@ Coverage criteria are intentionally excluded from this checklist.
 
 ### Step 6: Optional Outputs Generation
 
-**Inline Comments** (if `generate_inline_comments: true`):
+**Inline Comments** (apply only when `generate_inline_comments` resolves `true`; the default `false` skips these items — the run is report-only):
 
 - [ ] Inline comments generated at violation locations
 - [ ] Comment format: `// TODO (TEA Review): [Issue] - See test-review-{filename}.md`
@@ -334,7 +334,7 @@ Coverage criteria are intentionally excluded from this checklist.
 - [ ] Issue explanations are understandable
 - [ ] Recommended fixes are implementable
 - [ ] Code examples are correct and runnable
-- [ ] Recommendation (Approve/Request changes) is clear
+- [ ] Recommendation (Approve / Approve with Comments / Request Changes / Block) is clear
 
 ---
 
@@ -470,6 +470,6 @@ Record any issues, observations, or important context during workflow execution:
 - **Review Scope**: [single file, directory, full suite]
 - **Quality Score**: [0-100 score, letter grade]
 - **Critical Issues**: [Count of P0/P1 violations]
-- **Recommendation**: [Approve / Approve with comments / Request changes / Block]
+- **Recommendation**: [Approve / Approve with Comments / Request Changes / Block]
 - **Special Considerations**: [Legacy code, justified patterns, edge cases]
 - **Follow-up Actions**: [Re-review after fixes, pair programming, etc.]

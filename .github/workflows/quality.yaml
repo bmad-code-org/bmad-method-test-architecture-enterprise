@@ -115,3 +115,6 @@ jobs:
 
       - name: Test agent compilation components
         run: npm run test:install
+
+      - name: Test TEA test-review CLI
+        run: npm run test:cli

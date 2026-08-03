@@ -133,6 +133,7 @@ export default defineConfig({
             { label: 'Fixture Architecture', slug: 'explanation/fixture-architecture' },
             { label: 'Step-File Architecture', slug: 'explanation/step-file-architecture' },
             { label: 'Subagent Architecture', slug: 'explanation/subagent-architecture' },
+            { label: 'Test Review CLI Architecture', slug: 'explanation/test-review-cli-architecture' },
           ],
         },
         {
@@ -142,6 +143,7 @@ export default defineConfig({
             { label: 'Commands', slug: 'reference/commands' },
             { label: 'Configuration', slug: 'reference/configuration' },
             { label: 'Knowledge Base', slug: 'reference/knowledge-base' },
+            { label: 'tea-test-review CLI', slug: 'reference/tea-test-review-cli' },
             { label: 'Troubleshooting', slug: 'reference/troubleshooting' },
           ],
         },
