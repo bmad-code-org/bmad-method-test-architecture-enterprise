@@ -41,7 +41,7 @@ const {
   registerExtraTestPattern,
 } = require('./lib/changed-tests');
 const { buildPrompt } = require('./lib/build-prompt');
-const { parseReport, verdictFor, scoreFails } = require('./lib/parse-report');
+const { parseReport, normalizeReportScore, verdictFor, scoreFails } = require('./lib/parse-report');
 const { runAgent } = require('./lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
@@ -640,9 +640,10 @@ function main() {
       fs.copyFileSync(agentOutputPath, outputPath);
     }
 
+    const rawReport = fs.readFileSync(agentOutputPath, 'utf8');
     let parsed;
     try {
-      parsed = parseReport(fs.readFileSync(agentOutputPath, 'utf8'), {
+      parsed = parseReport(rawReport, {
         reviewedFiles: changedTestFiles,
         contextFiles,
         contextBasis,
@@ -656,6 +657,17 @@ function main() {
         throw wrapped;
       }
       throw error;
+    }
+
+    if (parsed.reportedQualityScore !== undefined) {
+      const normalizedReport = normalizeReportScore(rawReport, parsed.qualityScore);
+      fs.writeFileSync(agentOutputPath, normalizedReport);
+      if (redirectDir) {
+        fs.copyFileSync(agentOutputPath, outputPath);
+      }
+      console.error(
+        `tea-test-review: normalized agent Quality Score ${parsed.reportedQualityScore} to deterministic ledger score ${parsed.qualityScore}.`,
+      );
     }
     gateFailures = evaluateGates(parsed);
 

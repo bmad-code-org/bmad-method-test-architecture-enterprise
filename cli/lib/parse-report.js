@@ -10,9 +10,9 @@
  *   it is normalized.
  * - "**Quality Score**: N/100" with N an integer in 0-100.
  * - A "**Total Violations**:" line with all four severity counts.
- * - A "## Quality Score Breakdown" ledger whose arithmetic reproduces the
- *   published score; the skill's deduction model is the only scoring model, so
- *   a score that contradicts its own breakdown is rejected rather than gated on.
+ * - A "## Quality Score Breakdown" ledger from which the CLI computes the
+ *   authoritative score; the skill's deduction model is the only scoring
+ *   model, so agent arithmetic never controls the gate.
  * - A "## Reviewed Files" section listing every reviewed file.
  * - Exactly one "**Context Basis**:" line inside the Executive Summary, plus a
  *   "## Review Context" manifest whenever that basis is not `none`.
@@ -444,20 +444,19 @@ function verifyRunContract({ reviewedFiles, contextBasis, contextFiles }, runCon
 }
 
 /**
- * Recompute the template's deduction ledger and reject a report whose
- * arithmetic disagrees with the score it published.
+ * Compute the authoritative quality score from the template's deduction
+ * ledger. The agent's published score is presentation data only.
  *
- * Two live runs over an identical four-file set returned 83/100 and 92/100, and
- * the lower one printed a breakdown that summed to 92, so a published score
- * cannot be trusted on its face. The ledger in `test-review-template.md` is the
- * workflow's only scoring model, which makes it recomputable here from the
- * violation counts the report already declares.
+ * Live runs have repeatedly published arithmetic that contradicts their own
+ * ledgers. The ledger in `test-review-template.md` is the workflow's only
+ * scoring model, so the CLI derives the score from the violation counts and
+ * bonus instead of asking a probabilistic producer to perform gate arithmetic.
  *
  * The breakdown sits inside a fenced block, which the verdict scan strips, so
  * this reads the raw report instead and anchors on the section heading: only
  * the ledger under "## Quality Score Breakdown" is ever consulted.
  */
-function verifyScoreLedger(rawText, qualityScore, violations) {
+function deriveQualityScore(rawText, violations) {
   // extractSection's regex takes the first match; on raw (fence-intact) text
   // that is exploitable if the reviewed file's own quoted content contains a
   // second "## Quality Score Breakdown" heading earlier in the report than
@@ -488,13 +487,25 @@ function verifyScoreLedger(rawText, qualityScore, violations) {
     const key = level.toLowerCase();
     return sum + violations[key] * SEVERITY_DEDUCTIONS[key];
   }, 0);
-  const expected = Math.max(0, Math.min(100, 100 - deductions + bonus));
-  if (expected !== qualityScore) {
-    unparseable(
-      `Report Quality Score ${qualityScore} contradicts its own breakdown: ` +
-        `100 - ${deductions} deductions + ${bonus} bonus = ${expected}`,
-    );
-  }
+  return Math.max(0, Math.min(100, 100 - deductions + bonus));
+}
+
+function gradeForScore(score) {
+  if (score >= 90) return 'A';
+  if (score >= 80) return 'B';
+  if (score >= 70) return 'C';
+  if (score >= 60) return 'D';
+  return 'F';
+}
+
+/** Normalize the report's schema-owned score and grade fields to CLI arithmetic. */
+function normalizeReportScore(reportText, qualityScore) {
+  const grade = gradeForScore(qualityScore);
+  return reportText
+    .replace(/^([ \t]*\*\*Quality Score\*\*:[ \t]*)\d+([ \t]*\/[ \t]*100)/m, `$1${qualityScore}$2`)
+    .replace(/^([ \t]*\*\*Quality Score\*\*:[^\r\n]*\([ \t]*)[A-F](?=[ \t)-])/m, `$1${grade}`)
+    .replace(/^([ \t]*Final Score[ \t]*:[ \t]*)\d+([ \t]*\/[ \t]*100[ \t]*)$/m, `$1${qualityScore}$2`)
+    .replace(/^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*)$/m, `$1${grade}$2`);
 }
 
 /**
@@ -502,7 +513,7 @@ function verifyScoreLedger(rawText, qualityScore, violations) {
  *
  * @param {string} reportText - Full test-review.md contents.
  * @param {object} [runContract] - Exact reviewed/context evidence supplied by the runner.
- * @returns {{recommendation: string, qualityScore: number, violations: object,
+ * @returns {{recommendation: string, qualityScore: number, reportedQualityScore?: number, violations: object,
  *   reviewedFiles: string[], contextBasis: string, contextFiles: string[],
  *   contextWaiversApplied: number}}
  * @throws {Error} With code REPORT_UNPARSEABLE on any missing/invalid element.
@@ -522,9 +533,9 @@ function parseReport(reportText, runContract = {}) {
   if (!scoreMatch) {
     unparseable('Report is missing the "**Quality Score**: N/100" line');
   }
-  const qualityScore = Number.parseInt(scoreMatch[1], 10);
-  if (qualityScore < 0 || qualityScore > 100) {
-    unparseable(`Report Quality Score ${qualityScore} is outside the required 0-100 range`);
+  const reportedQualityScore = Number.parseInt(scoreMatch[1], 10);
+  if (reportedQualityScore < 0 || reportedQualityScore > 100) {
+    unparseable(`Report Quality Score ${reportedQualityScore} is outside the required 0-100 range`);
   }
 
   const violations = parseViolations(text);
@@ -535,7 +546,7 @@ function parseReport(reportText, runContract = {}) {
     );
   }
 
-  verifyScoreLedger(reportText, qualityScore, violations);
+  const qualityScore = deriveQualityScore(reportText, violations);
 
   const reviewedFiles = parseReviewedFiles(text);
   const contextBasis = parseContextBasis(text);
@@ -560,7 +571,7 @@ function parseReport(reportText, runContract = {}) {
   const keyStrengths = extractBullets(extractSubsection(executiveSection, 'Key Strengths'), '✅');
   const keyWeaknesses = extractBullets(extractSubsection(executiveSection, 'Key Weaknesses'), '❌');
 
-  return {
+  const parsed = {
     recommendation: executive,
     qualityScore,
     violations,
@@ -571,6 +582,10 @@ function parseReport(reportText, runContract = {}) {
     keyStrengths,
     keyWeaknesses,
   };
+  if (reportedQualityScore !== qualityScore) {
+    parsed.reportedQualityScore = reportedQualityScore;
+  }
+  return parsed;
 }
 
 /**
@@ -599,4 +614,4 @@ function scoreFails(score, minScore) {
   return score < minScore;
 }
 
-module.exports = { parseReport, verdictFor, scoreFails, CONTEXT_BASIS_ENUM };
+module.exports = { parseReport, normalizeReportScore, verdictFor, scoreFails, CONTEXT_BASIS_ENUM };

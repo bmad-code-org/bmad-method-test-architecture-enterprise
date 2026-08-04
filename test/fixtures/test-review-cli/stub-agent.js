@@ -10,7 +10,8 @@
  *
  *   STUB_MODE          approve (default) | approve-low | block | request-changes |
  *                      request-changes-critical | critical-approve | conflict |
- *                      partial | nothing | fail | forbidden-write | stale-copy
+ *                      score-mismatch | partial | nothing | fail |
+ *                      forbidden-write | stale-copy
  *   STUB_ASSERT_STDIN  when "1", fail if the prompt did not arrive on stdin or
  *                      if any of it leaked into argv
  *   STUB_ASSERT_MODEL  expected model value; fail unless argv carries a model
@@ -35,6 +36,7 @@ const REPORTS = {
   'request-changes-critical': 'request-changes-critical.md',
   'critical-approve': 'critical-approve.md',
   conflict: 'conflicting.md',
+  'score-mismatch': 'score-mismatch.md',
   partial: 'malformed.md',
 };
 

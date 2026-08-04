@@ -121,7 +121,7 @@ Same logic on the report: a parse failure is never a silent pass, stale artifact
 
 Prompt contract, parser, and report template are one contract in three files; they version together.
 
-Clearest example: the scoring model. The report template defines the deduction ledger, the prompt states its arithmetic, the parser recomputes the score and rejects anything that contradicts the ledger. Change one without the others and the gate rejects every valid report. Shipping CLI and skill in the same package, same version, prevents that.
+Clearest example: the scoring model. The report template defines the deduction ledger, the prompt states its arithmetic, and the parser computes the authoritative score from the declared violations and bonus. The CLI then normalizes the report before gating, so model arithmetic cannot break CI or control the verdict. Shipping CLI and skill in the same package, same version, keeps that contract synchronized.
 
 ---
 

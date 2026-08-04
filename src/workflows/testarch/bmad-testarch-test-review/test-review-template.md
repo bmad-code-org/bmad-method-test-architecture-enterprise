@@ -99,7 +99,7 @@ Grade:                   {grade}
      Every bonus line is 0 or 5, never a partial value, and the six categories above are the
      complete set. {grade} is exactly one of A, B, C, D, F, with no modifier such as A+ or B-.
      The lines above must sum to {final_score}, which must equal the **Quality Score** line;
-     headless runners recompute the ledger and reject a report whose arithmetic disagrees. -->
+     headless runners compute the authoritative result and normalize score and grade fields. -->
 
 ---
 

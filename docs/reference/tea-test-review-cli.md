@@ -228,7 +228,7 @@ The report itself is strictly validated:
 
 Fenced code blocks are stripped first, so a quoted example can't spoof a verdict. Markdown emphasis is stripped only where it wraps a whole value, so `tests/user_profile.spec.ts` survives the manifest intact.
 
-The score is recomputed rather than trusted: the CLI evaluates `100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + Total Bonus` against the report's own violation counts, and rejects a score that contradicts its breakdown, a bonus total outside the legal multiples of 5 from 0 to 30, or a missing breakdown section. The prompt states this same arithmetic.
+The score is computed rather than trusted: the CLI evaluates `100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + Total Bonus` from the report's violation counts and bonus. That result becomes the verdict score, and the CLI normalizes the report's score and grade fields before publishing it. The original model value is retained as `reportedQualityScore` metadata when corrected. An invalid bonus total or missing breakdown still fails closed. The prompt states this same arithmetic.
 
 A report declaring Critical violations alongside an approve-type recommendation is rejected as an inconsistent verdict (exit 3): Critical means Must Fix. Stale artifacts are never parsed, output files are deleted before the run and must be freshly written by it.
 
