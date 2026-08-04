@@ -213,6 +213,10 @@ function main() {
     )
     .option('--test-dir <dir>', 'test directory hint passed to the skill', 'tests')
     .option(
+      '--focus <text>',
+      'requester focus note handed to the reviewer verbatim (e.g. the text after an @mention that triggered the run); may raise scrutiny, never waives findings, and is quoted as a **Focus**: line in the report',
+    )
+    .option(
       '--test-glob <substring-or-regex>',
       'extra test-file matcher appended to the built-in rules: a plain substring or a /regex/ matched against the repo-relative path (repeatable)',
       collect,
@@ -535,6 +539,7 @@ function main() {
       teaConfig,
       contextFiles,
       contextBasis,
+      focus: options.focus,
     });
     console.log(prompt);
     if (jsonPath) {
@@ -639,6 +644,7 @@ function main() {
     teaConfig,
     contextFiles,
     contextBasis,
+    focus: options.focus,
   });
 
   const executeAgent = ({ agentCwd, spawnPrefix }) => {

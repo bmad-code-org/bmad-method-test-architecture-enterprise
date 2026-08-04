@@ -1294,6 +1294,29 @@ async function runTests() {
     const overridePrompt = buildPrompt({ skillRoot, files: ['a.spec.ts', 'b.spec.ts'], outputPath: absoluteOutput, scope: 'suite' });
     assert(overridePrompt.includes('review_scope=suite'), 'explicit scope override wins over the derived value');
 
+    // A focus note is the requester's stated priority: it steers the review
+    // but, like context, can never waive, and the report must quote it so a
+    // reader knows what the review was steered by.
+    const focusPrompt = buildPrompt({
+      skillRoot,
+      files: ['tests/checkout.spec.ts'],
+      outputPath: absoluteOutput,
+      focus: 'concentrate on the retry paths',
+    });
+    assert(
+      focusPrompt.includes('---BEGIN FOCUS---\nconcentrate on the retry paths\n---END FOCUS---'),
+      'prompt carries the focus note verbatim inside its own delimited block',
+    );
+    assert(
+      focusPrompt.includes('may RAISE scrutiny on what it names') && focusPrompt.includes('may NEVER waive a violation'),
+      'prompt lets a focus note raise scrutiny but never waive, same rule as context',
+    );
+    assert(
+      focusPrompt.includes('"**Focus**: <the note>" line in the Executive Summary'),
+      'prompt requires the report to quote the focus note, so a score states what steered it',
+    );
+    assert(!prompt.includes('---BEGIN FOCUS---'), 'no focus note, no focus block: an unstated input stays unstated');
+
     console.log('');
 
     // ============================================================
