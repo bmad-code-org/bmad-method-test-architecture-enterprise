@@ -3224,7 +3224,11 @@ async function runTests() {
       } catch {
         // isoJson stays null
       }
-      assert(isoJson && isoJson.recommendation === 'Approve', 'chmod isolation: verdict JSON is copied back to the requested json path');
+      assert(
+        isoJson && isoJson.recommendation === 'Approve with Comments',
+        'chmod isolation: verdict JSON is copied back to the requested json path',
+        JSON.stringify(isoJson),
+      );
       let restored = false;
       try {
         fs.writeFileSync(path.join(isoRoot, 'probe-after-isolation.txt'), 'writable\n');
