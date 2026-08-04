@@ -5,17 +5,21 @@ stepsCompleted:
   - step-04-generate-report
 ---
 
-# Test Quality Review: mismatch.spec.ts
+# Test Quality Review: alert-preferences-dogfood.spec.ts
 
-**Quality Score**: 95/100 (A)
-**Review Date**: 2026-07-30
+```markdown
+**Quality Score**: 42/100 (F - Example only)
+```
+
+**Quality Score**: 86/100 (B)
+**Review Date**: 2026-08-04
 **Review Scope**: single
 
 ## Executive Summary
 
-**Overall Assessment**: Excellent
+**Overall Assessment**: Needs Improvement
 
-**Recommendation**: Approve
+**Recommendation**: Approve with Comments
 
 **Context Basis**: none
 
@@ -23,11 +27,11 @@ stepsCompleted:
 
 ### Summary
 
-Two High violations deduct 10 with no bonus, so the ledger lands on 90 while the
-report publishes 95. This is the shape a live run produced: a breakdown that
-does not sum to the score printed above it.
+Two High and two Medium violations deduct 14. A five-point bonus makes the
+authoritative score 91, while this live Codex report published 86 because it
+forgot to add the bonus.
 
-**Total Violations**: 0 Critical, 2 High, 0 Medium, 0 Low
+**Total Violations**: 0 Critical, 2 High, 2 Medium, 0 Low
 
 ## Quality Score Breakdown
 
@@ -35,19 +39,19 @@ does not sum to the score printed above it.
 Starting Score:          100
 Critical Violations:     -0 × 10 = -0
 High Violations:         -2 × 5 = -10
-Medium Violations:       -0 × 2 = -0
+Medium Violations:       -2 × 2 = -4
 Low Violations:          -0 × 1 = -0
 
-Total Bonus:             +0
+Total Bonus:             +5
 
-Final Score:             95/100
-Grade:                   A
+Final Score:             86/100
+Grade:                   B
 ```
 
 ## Decision
 
-**Recommendation**: Approve
+Recommendation: Approve with Comments
 
 ## Reviewed Files
 
-tests/mismatch.spec.ts
+playwright/tests/api/alert-preferences-dogfood.spec.ts

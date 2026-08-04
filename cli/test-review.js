@@ -15,8 +15,9 @@
  *
  * Exit codes: 0 pass/skip (or a verdict failure waived with --waive), 1 review
  * verdict fail (or a skip with --fail-on-skip / a deletions-only diff),
- * 2 environment/config error, 3 agent or parse failure. A waiver never applies
- * to exit 2 or 3: environment, agent, and parse failures are never waivable.
+ * 2 environment/config error, 3 agent, parse, or report-artifact failure. A
+ * waiver never applies to exit 2 or 3: infrastructure failures are never
+ * waivable.
  *
  * Usage:
  *   tea-test-review --base origin/main --agent claude --json test-review.json
@@ -24,6 +25,7 @@
  */
 
 const fs = require('node:fs');
+const { randomUUID } = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
@@ -41,7 +43,7 @@ const {
   registerExtraTestPattern,
 } = require('./lib/changed-tests');
 const { buildPrompt } = require('./lib/build-prompt');
-const { parseReport, verdictFor, scoreFails } = require('./lib/parse-report');
+const { parseReport, normalizeReportScore, verdictFor, scoreFails } = require('./lib/parse-report');
 const { runAgent } = require('./lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
@@ -149,6 +151,45 @@ function writeJsonFile(jsonPath, payload) {
   } catch (error) {
     fail(EXIT.ENV_ERROR, `Failed to write JSON verdict to ${jsonPath}: ${error.message}`);
   }
+}
+
+function reportArtifactFailure(action, artifactPath, cause) {
+  const error = new Error(`Failed to ${action} report artifact ${artifactPath}: ${cause.message}`);
+  error.code = 'REPORT_ARTIFACT';
+  return error;
+}
+
+function reportTemporaryPath(artifactPath) {
+  return path.join(path.dirname(artifactPath), `.${path.basename(artifactPath)}.${randomUUID()}.tmp`);
+}
+
+function replaceReportArtifact(artifactPath, temporaryPath, writeTemporary) {
+  let temporaryReady = false;
+  try {
+    fs.mkdirSync(path.dirname(artifactPath), { recursive: true });
+    writeTemporary(temporaryPath);
+    temporaryReady = true;
+    fs.renameSync(temporaryPath, artifactPath);
+  } catch (error) {
+    try {
+      fs.rmSync(temporaryPath, { force: true });
+    } catch {
+      // Preserve the artifact error that caused the failure.
+    }
+    throw reportArtifactFailure(temporaryReady ? 'replace' : 'prepare', artifactPath, error);
+  }
+}
+
+function copyReportArtifact(sourcePath, artifactPath, temporaryPath) {
+  replaceReportArtifact(artifactPath, temporaryPath, (temporary) => {
+    fs.copyFileSync(sourcePath, temporary);
+  });
+}
+
+function writeReportArtifact(artifactPath, temporaryPath, content) {
+  replaceReportArtifact(artifactPath, temporaryPath, (temporary) => {
+    fs.writeFileSync(temporary, content, 'utf8');
+  });
 }
 
 function main() {
@@ -554,7 +595,8 @@ function main() {
   }
   const runStart = Date.now();
 
-  const writablePaths = [outputPath, ...(jsonPath ? [jsonPath] : [])];
+  const copiedReportTemporaryPath = reportTemporaryPath(outputPath);
+  const normalizedReportTemporaryPath = reportTemporaryPath(outputPath);
   let redirectDir = null;
   let gateFailures = [];
 
@@ -581,28 +623,25 @@ function main() {
     return () => heartbeat.kill();
   };
 
-  const executeRun = ({ agentCwd, spawnPrefix }) => {
-    // Under isolation the agent writes into a fresh tmpdir; the CLI copies the
-    // artifacts back to the requested paths after a successful run.
-    let agentOutputPath = outputPath;
-    let agentJsonPath = jsonPath;
-    if (isolationActive) {
-      redirectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-test-review-'));
-      agentOutputPath = path.join(redirectDir, 'test-review.md');
-      agentJsonPath = jsonPath ? path.join(redirectDir, 'verdict.json') : null;
-    }
+  // Under isolation the agent writes into a fresh tmpdir. Artifact processing
+  // happens after withIsolation restores the project, so an atomic rename never
+  // needs a project directory to be writable while the agent is running.
+  if (isolationActive) {
+    redirectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-test-review-'));
+  }
+  const agentOutputPath = redirectDir ? path.join(redirectDir, 'test-review.md') : outputPath;
+  const prompt = buildPrompt({
+    skillRoot,
+    files: changedTestFiles,
+    outputPath: agentOutputPath,
+    scope: options.scope,
+    testDir: options.testDir,
+    teaConfig,
+    contextFiles,
+    contextBasis,
+  });
 
-    const prompt = buildPrompt({
-      skillRoot,
-      files: changedTestFiles,
-      outputPath: agentOutputPath,
-      scope: options.scope,
-      testDir: options.testDir,
-      teaConfig,
-      contextFiles,
-      contextBasis,
-    });
-
+  const executeAgent = ({ agentCwd, spawnPrefix }) => {
     const stopHeartbeat = startHeartbeat();
     let agentResult;
     try {
@@ -622,40 +661,44 @@ function main() {
 
     if (!fs.existsSync(agentOutputPath) || fs.statSync(agentOutputPath).mtimeMs <= runStart) {
       printMissingReportDiagnostics(agentResult);
-      // Throw rather than fail()/process.exit() here: this runs inside
-      // withIsolation's callback, and exiting the process skips its finally
-      // block (restoreModes(), the chmod-fallback permission restore) along
-      // with the outer redirectDir cleanup below. Thrown errors propagate
-      // through both finally blocks before the outer catch calls fail().
       const error = new Error(
         `Agent finished but no fresh report was written to ${agentOutputPath}; refusing to parse a stale or missing report.`,
       );
       error.code = 'REPORT_MISSING';
       throw error;
     }
+  };
 
+  const processReport = () => {
     // The report is copied back even when the verdict fails or parsing fails;
     // on agent failure nothing was produced and nothing is copied.
     if (redirectDir) {
-      fs.copyFileSync(agentOutputPath, outputPath);
+      copyReportArtifact(agentOutputPath, outputPath, copiedReportTemporaryPath);
     }
 
+    const rawReport = fs.readFileSync(agentOutputPath, 'utf8');
     let parsed;
     try {
-      parsed = parseReport(fs.readFileSync(agentOutputPath, 'utf8'), {
+      parsed = parseReport(rawReport, {
         reviewedFiles: changedTestFiles,
         contextFiles,
         contextBasis,
       });
     } catch (error) {
       if (error.code === 'REPORT_UNPARSEABLE') {
-        // Same reasoning as the freshness check above: throw, don't exit, so
-        // isolation cleanup runs before the process actually terminates.
         const wrapped = new Error(`${error.message} (report: ${outputPath})`);
         wrapped.code = 'REPORT_UNPARSEABLE';
         throw wrapped;
       }
       throw error;
+    }
+
+    if (parsed.reportedQualityScore !== undefined) {
+      const normalizedReport = normalizeReportScore(rawReport, parsed.qualityScore);
+      writeReportArtifact(outputPath, normalizedReportTemporaryPath, normalizedReport);
+      console.error(
+        `tea-test-review: normalized agent Quality Score ${parsed.reportedQualityScore} to deterministic ledger score ${parsed.qualityScore}.`,
+      );
     }
     gateFailures = evaluateGates(parsed);
 
@@ -676,41 +719,58 @@ function main() {
     const finalPayload = applyWaiver(verdictPayload, gateFailures.length > 0);
     console.log(JSON.stringify(finalPayload, null, 2));
 
-    if (agentJsonPath) {
+    if (jsonPath) {
       // No freshness check here, unlike the report: the CLI is the only writer of
       // the verdict JSON and writeJsonFile already fails closed on a write error,
       // so a stale verdict is not reachable. The pre-run rm still applies, so a
       // failed run leaves no previous verdict behind.
-      writeJsonFile(agentJsonPath, finalPayload);
-      if (redirectDir) {
-        fs.copyFileSync(agentJsonPath, jsonPath);
+      writeJsonFile(jsonPath, finalPayload);
+    }
+  };
+
+  const cleanupRunArtifacts = () => {
+    for (const temporaryPath of [copiedReportTemporaryPath, normalizedReportTemporaryPath]) {
+      try {
+        fs.rmSync(temporaryPath, { force: true });
+      } catch (error) {
+        console.error(`tea-test-review WARNING: failed to remove temporary report ${temporaryPath}: ${error.message}`);
       }
+    }
+    if (redirectDir) {
+      try {
+        fs.rmSync(redirectDir, { recursive: true, force: true });
+      } catch (error) {
+        console.error(`tea-test-review WARNING: failed to remove temporary directory ${redirectDir}: ${error.message}`);
+      }
+      redirectDir = null;
     }
   };
 
   try {
     if (isolationActive) {
-      withIsolation(projectRoot, writablePaths, executeRun);
+      withIsolation(projectRoot, [], executeAgent);
     } else {
-      executeRun({ agentCwd: projectRoot, spawnPrefix: [] });
+      executeAgent({ agentCwd: projectRoot, spawnPrefix: [] });
     }
+    processReport();
   } catch (error) {
     if (
       error.code === 'AGENT_FAILED' ||
       error.code === 'AGENT_NOT_FOUND' ||
       error.code === 'REPORT_MISSING' ||
-      error.code === 'REPORT_UNPARSEABLE'
+      error.code === 'REPORT_UNPARSEABLE' ||
+      error.code === 'REPORT_ARTIFACT'
     ) {
+      cleanupRunArtifacts();
       fail(EXIT.AGENT_OR_PARSE_ERROR, error.message);
     }
     if (error.code === 'ISOLATION_ERROR') {
+      cleanupRunArtifacts();
       fail(EXIT.ENV_ERROR, error.message);
     }
     throw error;
   } finally {
-    if (redirectDir) {
-      fs.rmSync(redirectDir, { recursive: true, force: true });
-    }
+    cleanupRunArtifacts();
   }
 
   for (const failure of gateFailures) {

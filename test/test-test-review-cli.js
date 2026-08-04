@@ -47,7 +47,7 @@ const { spawnSync } = require('node:child_process');
 const vm = require('node:vm');
 const yaml = require('js-yaml');
 
-const { parseReport, verdictFor, scoreFails, CONTEXT_BASIS_ENUM } = require('../cli/lib/parse-report');
+const { parseReport, normalizeReportScore, verdictFor, scoreFails, CONTEXT_BASIS_ENUM } = require('../cli/lib/parse-report');
 const {
   isTestFile,
   isContextNoise,
@@ -353,7 +353,6 @@ async function runTests() {
       ['missing-violations.md', 'no Total Violations line'],
       ['missing-frontmatter.md', 'no YAML frontmatter'],
       ['empty-steps-flow.md', 'wrapped stepsCompleted flow sequence with no entries'],
-      ['score-mismatch.md', 'published score contradicts its own deduction ledger'],
       ['bonus-not-multiple.md', 'bonus total is not a multiple of the 5-point category value'],
       ['missing-breakdown.md', 'no Quality Score Breakdown, so the score cannot be recomputed'],
       ['duplicate-breakdown-heading.md', 'two Quality Score Breakdown headings, so neither can be trusted as the real ledger'],
@@ -371,6 +370,45 @@ async function runTests() {
       } catch (error) {
         assert(error.code === 'REPORT_UNPARSEABLE', `${fixture} (${description}) throws REPORT_UNPARSEABLE`, error.message);
       }
+    }
+
+    // Regression from couture-cast run 30897431283: Codex correctly declared
+    // its deductions and bonus, then published arithmetic that omitted the
+    // bonus. Derived
+    // arithmetic belongs to the CLI, while the model remains responsible for
+    // the findings, severity counts, and bonus declarations.
+    try {
+      const source = readFixture('reports', 'score-mismatch.md');
+      const corrected = parseReport(source);
+      assert(
+        corrected.qualityScore === 91 && corrected.reportedQualityScore === 86,
+        'score-mismatch fixture: CLI derives 91/A and preserves the agent-reported 86/B score as metadata',
+        JSON.stringify(corrected),
+      );
+      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      assert(
+        normalized.includes('**Quality Score**: 42/100 (F - Example only)') &&
+          normalized.includes('**Quality Score**: 91/100 (A)') &&
+          normalized.includes('Final Score:             91/100') &&
+          normalized.includes('Grade:                   A'),
+        'score-mismatch fixture: every active score and grade field normalizes while an earlier fenced example stays untouched',
+        normalized,
+      );
+    } catch (error) {
+      assert(false, 'score-mismatch fixture is corrected deterministically', error.message);
+    }
+
+    try {
+      const source = readFixture('reports', 'approve.md').replace('93/100 (A)', '93/100 (F)');
+      const corrected = parseReport(source);
+      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      assert(
+        corrected.qualityScore === 93 && corrected.reportedQualityScore === 93 && normalized.includes('**Quality Score**: 93/100 (A)'),
+        'grade-only mismatch triggers normalization even when the reported numeric score is correct',
+        JSON.stringify(corrected),
+      );
+    } catch (error) {
+      assert(false, 'grade-only score mismatch is corrected deterministically', error.message);
     }
 
     try {
@@ -1164,15 +1202,16 @@ async function runTests() {
       'prompt requires Quality Score 0-100',
     );
     assert(prompt.includes('**Total Violations**: line is required'), 'prompt requires the Total Violations line');
-    // The parser recomputes the ledger, so the prompt has to state the same
-    // model; a strict check the producer was never told about is a false FAIL.
+    // The parser computes the authoritative score, so the prompt has to state
+    // the same model and make clear that agent arithmetic is provisional.
     assert(
-      prompt.includes('"## Quality Score Breakdown" section is required and its ledger must reproduce the score'),
-      'prompt requires a breakdown that reproduces the score',
+      prompt.includes('"## Quality Score Breakdown" section is required') &&
+        prompt.includes('replaces it with the deterministic ledger result before gating'),
+      'prompt identifies the ledger as the CLI-owned score source',
     );
     assert(
       prompt.includes('100 - (Critical×10 + High×5 + Medium×2 + Low×1) + Total Bonus'),
-      'prompt states the deduction ledger the CLI recomputes',
+      'prompt states the deduction ledger the CLI computes',
     );
     assert(prompt.includes('multiple of 5 from 0 to 30'), 'prompt bounds the bonus total to legal category values');
     assert(prompt.includes('exactly one of A, B, C, D, F'), 'prompt bounds the grade scale');
@@ -1749,6 +1788,92 @@ async function runTests() {
       );
     } catch (error) {
       assert(false, 'verdict JSON parses', error.message);
+    }
+
+    const normalizedScoreOut = path.join(tmpRoot, 'normalized-score-run', 'test-review.md');
+    const normalizedScoreJsonPath = path.join(tmpRoot, 'normalized-score-run', 'verdict.json');
+    const normalizedScoreRun = runCli(
+      [
+        '--files',
+        'playwright/tests/api/alert-preferences-dogfood.spec.ts',
+        '--project-root',
+        fixtureProject,
+        '--output',
+        normalizedScoreOut,
+        '--json',
+        normalizedScoreJsonPath,
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'score-mismatch' },
+    );
+    assert(
+      normalizedScoreRun.status === 0 && normalizedScoreRun.stderr.includes('normalized agent Quality Score 86'),
+      'score arithmetic mismatch is normalized instead of failing the run',
+      `status=${normalizedScoreRun.status} stderr=${normalizedScoreRun.stderr}`,
+    );
+    try {
+      const normalizedPayload = JSON.parse(fs.readFileSync(normalizedScoreJsonPath, 'utf8'));
+      const normalizedReport = fs.readFileSync(normalizedScoreOut, 'utf8');
+      assert(
+        normalizedPayload.qualityScore === 91 && normalizedPayload.reportedQualityScore === 86,
+        'normalized verdict JSON uses the CLI score crossing into grade A and preserves the agent score',
+        JSON.stringify(normalizedPayload),
+      );
+      assert(
+        normalizedReport.includes('**Quality Score**: 42/100 (F - Example only)') &&
+          normalizedReport.includes('**Quality Score**: 91/100 (A)') &&
+          normalizedReport.includes('Final Score:             91/100') &&
+          normalizedReport.includes('Grade:                   A'),
+        'normalized report publishes the same derived score and grade as the verdict JSON while preserving fenced examples',
+        normalizedReport,
+      );
+    } catch (error) {
+      assert(false, 'normalized score artifacts are readable', error.message);
+    }
+
+    const artifactPermissionsTestable = process.platform !== 'win32' && !(typeof process.getuid === 'function' && process.getuid() === 0);
+    if (artifactPermissionsTestable) {
+      const lockedArtifactDir = path.join(tmpRoot, 'locked-normalized-score-run');
+      const lockedArtifactOut = path.join(lockedArtifactDir, 'test-review.md');
+      const lockedArtifactRun = runCli(
+        [
+          '--files',
+          'playwright/tests/api/alert-preferences-dogfood.spec.ts',
+          '--project-root',
+          fixtureProject,
+          '--output',
+          lockedArtifactOut,
+          '--agent-cmd',
+          stubAgent,
+          '--no-isolate',
+          ...stubPass('STUB_MODE', 'STUB_LOCK_OUTPUT'),
+        ],
+        { STUB_MODE: 'score-mismatch', STUB_LOCK_OUTPUT: '1' },
+      );
+      let preservedArtifact = '';
+      try {
+        preservedArtifact = fs.readFileSync(lockedArtifactOut, 'utf8');
+      } finally {
+        fs.chmodSync(lockedArtifactDir, 0o755);
+        if (fs.existsSync(lockedArtifactOut)) {
+          fs.chmodSync(lockedArtifactOut, 0o644);
+        }
+      }
+      assert(
+        lockedArtifactRun.status === 3 && lockedArtifactRun.stderr.includes('Failed to prepare report artifact'),
+        'normalized report write failures are classified as report-artifact failures',
+        `status=${lockedArtifactRun.status} stderr=${lockedArtifactRun.stderr}`,
+      );
+      assert(
+        preservedArtifact.includes('**Quality Score**: 86/100 (B)') && !preservedArtifact.includes('**Quality Score**: 91/100 (A)'),
+        'failed normalized report writes preserve the original agent artifact',
+        preservedArtifact,
+      );
+    } else {
+      skip('normalized report write failure preserves the original artifact', 'filesystem permissions cannot be enforced');
     }
 
     // --agent selects the adapter (codex here, not just the claude default);
