@@ -28,6 +28,7 @@
     "docs:fix-links": "node tools/fix-doc-links.js --write",
     "docs:preview": "npm --prefix website run preview",
     "docs:validate-links": "node tools/validate-doc-links.js",
+    "eval:test-review": "node test/eval-test-review.js",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write .",
     "format:fix:staged": "prettier --write",

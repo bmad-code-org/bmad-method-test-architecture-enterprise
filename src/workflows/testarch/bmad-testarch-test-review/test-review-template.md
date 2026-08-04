@@ -24,6 +24,14 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 
 **Recommendation**: {Approve | Approve with Comments | Request Changes | Block}
 
+<!-- COMPUTED, never chosen. steps-c/step-03f-aggregate-scores.md §3b derives this from the
+     deduped violation counts: any CRITICAL => Block; any HIGH => Request Changes; score < 70 =>
+     Request Changes; any remaining finding => Approve with Comments; otherwise Approve. Copy the
+     computed value into this line and into `## Decision` unchanged — the CLI rejects a report
+     whose two copies disagree, and a verdict picked by judgment beside a deterministic score is
+     how two reviewers reached 82 and 85 on the same files and still returned opposite outcomes.
+     A waiver changes the exit code, never this value. -->
+
 **Context Basis**: {none | pr_diff | pr_diff_truncated}
 
 **Context Waivers Applied**: 0
@@ -52,23 +60,34 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 
 ## Quality Criteria Assessment
 
-| Criterion                            | Status                          | Violations | Notes        |
-| ------------------------------------ | ------------------------------- | ---------- | ------------ |
-| BDD Format (Given-When-Then)         | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Test IDs                             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Priority Markers (P0/P1/P2/P3)       | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Hard Waits (sleep, waitForTimeout)   | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Determinism (no conditionals)        | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Isolation (cleanup, no shared state) | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Fixture Patterns                     | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Data Factories                       | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Network-First Pattern                | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Explicit Assertions                  | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
-| Test Length (≤300 lines)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {lines}    | {brief_note} |
-| Test Duration (≤1.5 min)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {duration} | {brief_note} |
-| Flakiness Patterns                   | {✅ PASS \| ⚠️ WARN \| ❌ FAIL} | {count}    | {brief_note} |
+| Criterion                            | Status                                           | Violations | Basis    | Notes        |
+| ------------------------------------ | ------------------------------------------------ | ---------- | -------- | ------------ |
+| BDD Format (Given-When-Then)         | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Test IDs                             | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Priority Markers (P0/P1/P2/P3)       | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Disabled or Focused Tests            | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
+| Hard Waits (sleep, waitForTimeout)   | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
+| Determinism (no conditionals)        | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Isolation (cleanup, no shared state) | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
+| Fixture Patterns                     | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Data Factories                       | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Network-First Pattern                | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Explicit Assertions                  | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
+| Test Length (≤300 lines)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {lines}    | Absolute | {brief_note} |
+| Test Duration (≤1.5 min)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {duration} | Absolute | {brief_note} |
+| Flakiness Patterns                   | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+
+<!-- {basis} states what decided the row, per steps-c/criteria-registry.md: `Absolute`,
+     `Applicability: <what the file must do>`, or `Convention: <key> (<adopted> of <sampled>)`.
+     A `✅ PASS (n/a)` row MUST name why the gate was closed and MUST deduct nothing — an absent
+     convention or an inapplicable pattern is not a finding. A bare WARN with no basis is the
+     defect this column exists to prevent: it reads identically in a repo that has the
+     convention and one that has never used it, so the reader cannot tell drift from the
+     rubric's own preference. Never leave {basis} unfilled. -->
 
 **Total Violations**: {critical_count} Critical, {high_count} High, {medium_count} Medium, {low_count} Low
+
+**Convention Baseline**: {sampled} test files sampled outside the review set{, or `unavailable: <reason>`}
 
 ---
 
@@ -421,3 +440,11 @@ This review applies the rubric consistently. Context can reveal additional findi
 
 - {context_path_1}
 - {context_path_2}
+
+<!-- Disclosure manifest. Present ONLY when the run supplied an ---BEGIN UNSCORABLE--- block; omit the whole section otherwise. Reproduce that list verbatim, one repo-relative path per line, adding none and dropping none. These are changed test artifacts in a format the deduction ledger has no criteria for, so they were neither reviewed nor scored, and no path here may appear in Reviewed Files. A manifest that silently omits a changed test artifact reads as though the diff held nothing else to review. -->
+
+## Excluded From Review Set
+
+- {unscorable_path_1} — format not scorable by the ledger
+
+`--test-glob` brings any of these into the review set when it should be scored.

@@ -611,8 +611,12 @@ function parseReport(reportText, runContract = {}) {
   const keyStrengths = extractBullets(extractSubsection(executiveSection, 'Key Strengths'), '✅');
   const keyWeaknesses = extractBullets(extractSubsection(executiveSection, 'Key Weaknesses'), '❌');
 
+  // Same treatment the score already gets: derive it, publish the derived value, and
+  // keep what the agent said so the substitution is visible rather than silent.
+  const derivedRecommendation = deriveRecommendation(violations, qualityScore);
+
   const parsed = {
-    recommendation: executive,
+    recommendation: derivedRecommendation,
     qualityScore,
     violations,
     reviewedFiles,
@@ -628,7 +632,35 @@ function parseReport(reportText, runContract = {}) {
   ) {
     parsed.reportedQualityScore = reportedQualityScore;
   }
+  if (derivedRecommendation !== executive) {
+    parsed.reportedRecommendation = executive;
+  }
   return parsed;
+}
+
+/**
+ * The recommendation the violation counts require, per
+ * `steps-c/step-03f-aggregate-scores.md` §3b.
+ *
+ * The score has always been derived here rather than trusted. The recommendation
+ * beside it was not, and `--fail-on` acts on the recommendation. That asymmetry was
+ * measurable: on couture-cast PR #103 two reviewers of the same four files scored 82
+ * and 85, a 3-point spread that is noise, and returned "Request Changes" against
+ * "meets our quality bar for merge". The half of the report the CLI did not derive
+ * was the half that decided the gate.
+ *
+ * @param {object} violations - {critical, high, medium, low} counts.
+ * @param {number} qualityScore - The derived ledger score, never the reported one.
+ * @returns {string} A member of RECOMMENDATION_ENUM.
+ */
+function deriveRecommendation(violations, qualityScore) {
+  if (violations.critical > 0) return 'Block';
+  if (violations.high > 0) return 'Request Changes';
+  // Volume alone can fail the bar: fifteen MEDIUM findings is a systemic problem a
+  // rule keyed only on severity tiers would wave through.
+  if (qualityScore < 70) return 'Request Changes';
+  if (violations.medium + violations.low > 0) return 'Approve with Comments';
+  return 'Approve';
 }
 
 /**
@@ -657,4 +689,4 @@ function scoreFails(score, minScore) {
   return score < minScore;
 }
 
-module.exports = { parseReport, normalizeReportScore, verdictFor, scoreFails, CONTEXT_BASIS_ENUM };
+module.exports = { parseReport, normalizeReportScore, deriveRecommendation, verdictFor, scoreFails, CONTEXT_BASIS_ENUM };

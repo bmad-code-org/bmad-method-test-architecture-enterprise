@@ -127,7 +127,14 @@ function splitGitPathList(stdout) {
   return stdout.split('\0').filter(Boolean);
 }
 
-const UNSAFE_PATH_MARKERS = ['---BEGIN FILES---', '---END FILES---', '---BEGIN CONTEXT---', '---END CONTEXT---'];
+const UNSAFE_PATH_MARKERS = [
+  '---BEGIN FILES---',
+  '---END FILES---',
+  '---BEGIN CONTEXT---',
+  '---END CONTEXT---',
+  '---BEGIN UNSCORABLE---',
+  '---END UNSCORABLE---',
+];
 
 // Context-set exclusions. Not an option: a lockfile or a binary asset carries
 // no requirements the review could use, and every one of them costs the agent
@@ -176,6 +183,55 @@ function isContextNoise(filePath) {
     return true;
   }
   return segments.slice(0, -1).some((segment) => CONTEXT_NOISE_DIR_SEGMENTS.has(segment.toLowerCase()));
+}
+
+// Test artifacts written in a format isTestFile deliberately will not match,
+// because every built-in rule requires a code extension. A Maestro flow, a
+// Gherkin feature, a Robot suite or an .http collection is a test the reviewer
+// cannot score, and staying silent about it reads as "there was nothing else to
+// review". These only ever produce a disclosure line and a --test-glob hint;
+// they never enter the review set on their own, since scoring a format the
+// ledger has no criteria for would be worse than declining it.
+const NON_CODE_TEST_DIR_SEGMENTS = new Set([
+  'maestro',
+  'cypress',
+  'playwright',
+  'features',
+  'e2e',
+  'test',
+  'tests',
+  'spec',
+  'specs',
+  '__tests__',
+  'postman',
+  'newman',
+  'karate',
+  'gatling',
+]);
+const NON_CODE_TEST_EXTENSION_PATTERN = /\.(ya?ml|feature|robot|http|rest|hurl)$/i;
+const NON_CODE_TEST_FILENAME_PATTERN = /(flow|test|spec|scenario|suite|journey|smoke)/i;
+
+/**
+ * Changed files that look like test artifacts but cannot be scored, so the
+ * report can name them instead of omitting them.
+ *
+ * Deliberately narrow: a non-code extension AND either a test-tool directory
+ * segment or a test-shaped filename. A CI workflow or a locale JSON in the same
+ * diff must not land here, or the disclosure becomes noise nobody reads.
+ *
+ * @param {string[]} changedFiles - Repo-relative changed file paths.
+ * @returns {string[]}
+ */
+function getUnscorableTestArtifacts(changedFiles) {
+  return (Array.isArray(changedFiles) ? changedFiles : []).filter((file) => {
+    if (typeof file !== 'string' || file.length === 0) return false;
+    if (isTestFile(file) || isContextNoise(file)) return false;
+    const segments = file.replaceAll('\\', '/').split('/');
+    const filename = segments.at(-1);
+    if (!NON_CODE_TEST_EXTENSION_PATTERN.test(filename)) return false;
+    const inTestDir = segments.slice(0, -1).some((segment) => NON_CODE_TEST_DIR_SEGMENTS.has(segment.toLowerCase()));
+    return inTestDir || NON_CODE_TEST_FILENAME_PATTERN.test(filename);
+  });
 }
 
 /**
@@ -337,6 +393,7 @@ module.exports = {
   getChangedFiles,
   getChangedTestFiles,
   getContextFiles,
+  getUnscorableTestArtifacts,
   getDeletedFiles,
   getDeletedTestFiles,
   contextBasisFor,

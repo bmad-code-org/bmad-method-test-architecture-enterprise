@@ -15,7 +15,7 @@ stepsCompleted:
 
 **Overall Assessment**: Good
 
-**Recommendation**: approve
+**Recommendation**: approve with comments
 
 **Context Basis**: none
 
@@ -46,7 +46,7 @@ Grade:                   A
 
 ## Decision
 
-**Recommendation**: Approve
+**Recommendation**: Approve with Comments
 
 ## Reviewed Files
 

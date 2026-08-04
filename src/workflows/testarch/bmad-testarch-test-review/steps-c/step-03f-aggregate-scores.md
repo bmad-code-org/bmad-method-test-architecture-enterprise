@@ -74,23 +74,41 @@ const allViolations = dimensions.flatMap((dim) =>
   })),
 );
 
+// Deduplicate before counting. Some registry rows are detectable by more than one
+// worker (M4 by isolation and maintainability, H5 by maintainability and
+// performance), and counting the same defect twice deducts twice for it. Identity
+// is the registry row at a location, never the prose description, which differs
+// between workers describing the same line.
+const seenViolations = new Set();
+const dedupedViolations = allViolations.filter((v) => {
+  const key = `${v.file}:${v.line}:${v.row ?? v.category}`;
+  if (seenViolations.has(key)) return false;
+  seenViolations.add(key);
+  return true;
+});
+
 // Group by severity (four tiers, matching the report template).
 // CRITICAL: violations placed in the report's `## Critical Issues (Must Fix)`
 // section (P0) count as CRITICAL; subagent HIGH/MEDIUM/LOW map to the
 // report's Recommendations section (P1/P2/P3).
-const criticalSeverity = allViolations.filter((v) => v.severity === 'CRITICAL');
-const highSeverity = allViolations.filter((v) => v.severity === 'HIGH');
-const mediumSeverity = allViolations.filter((v) => v.severity === 'MEDIUM');
-const lowSeverity = allViolations.filter((v) => v.severity === 'LOW');
+const criticalSeverity = dedupedViolations.filter((v) => v.severity === 'CRITICAL');
+const highSeverity = dedupedViolations.filter((v) => v.severity === 'HIGH');
+const mediumSeverity = dedupedViolations.filter((v) => v.severity === 'MEDIUM');
+const lowSeverity = dedupedViolations.filter((v) => v.severity === 'LOW');
 
 const violationSummary = {
-  total: allViolations.length,
+  total: dedupedViolations.length,
   CRITICAL: criticalSeverity.length,
   HIGH: highSeverity.length,
   MEDIUM: mediumSeverity.length,
   LOW: lowSeverity.length,
 };
 ```
+
+**Every violation must carry the registry row that produced it.** A violation with
+no `row` is a severity somebody chose, which is the thing the registry exists to
+prevent. Reject the dimension output and re-run that worker rather than scoring an
+unattributed violation.
 
 ---
 
@@ -146,6 +164,59 @@ const getGrade = (score) => {
 const overallGrade = getGrade(roundedScore);
 ```
 
+---
+
+### 3b. Derive the Recommendation
+
+**The recommendation is computed, never chosen.** Until this rule existed the score
+was fully deterministic and the verdict beside it was free-form: the report template
+offered four enum values and the reviewer picked one by judgment, while the CLI
+checked only that the value was legal and that the two sections agreed. Nothing
+bound the verdict to the findings.
+
+That asymmetry is measurable. On couture-cast PR #103, two reviewers of the same
+four files scored 82 and 85, a 3-point spread that is noise, and returned
+`Request Changes` and "meets our quality bar for merge", which is the opposite
+outcome. `--fail-on request-changes` acts on the verdict, so the gate was decided by
+the unpinned half of the report.
+
+```javascript
+const deriveRecommendation = ({ CRITICAL, HIGH, MEDIUM, LOW }, score) => {
+  if (CRITICAL > 0) return 'Block'; // a test that cannot fail is not a suggestion
+  if (HIGH > 0) return 'Request Changes';
+  if (score < 70) return 'Request Changes'; // volume of MEDIUM/LOW can also fail the bar
+  if (MEDIUM + LOW > 0) return 'Approve with Comments';
+  return 'Approve';
+};
+
+const recommendation = deriveRecommendation(violationSummary, roundedScore);
+```
+
+Why these boundaries:
+
+- **`CRITICAL > 0` is `Block`.** A committed `.skip` on the one test that matters, a
+  `expect(true).toBe(true)`, or an assertion against a self-configured mock means the
+  suite reports green while proving nothing. That is worse than an absent test,
+  because it buys false confidence, and it is not something a reviewer approves with
+  a comment.
+- **`HIGH > 0` is `Request Changes`.** Every HIGH row is either a test that can pass
+  while the behavior is broken or one that fails at random. Both waste more
+  engineering time downstream than fixing them costs now.
+- **`score < 70` is `Request Changes` even with no HIGH.** Fifteen MEDIUM findings is
+  a suite with a systemic problem, and a rule keyed only on severity tiers would wave
+  it through.
+- **Anything else with findings is `Approve with Comments`.** Real, worth fixing, not
+  worth blocking a merge.
+
+The reviewer's remaining judgment is which rows fired, which is where judgment
+belongs. Write this value into **both** the `## Executive Summary` and the
+`## Decision` section; the CLI rejects a report whose two copies disagree.
+
+**A waiver is the only way past this**, it is recorded in the verdict payload, and it
+never changes the computed value: `--waive` changes the exit code, not the
+recommendation. Never soften the derived recommendation because context, a story, or
+a focus note argued the findings were acceptable here.
+
 **Before continuing, verify the ledger prints what it computed.** The breakdown
 block in the report must show these exact deduction lines, this bonus total, and
 this final score. A breakdown whose lines do not sum to the stated score is a
@@ -181,6 +252,12 @@ const reviewSummary = {
   overall_score: roundedScore,
   overall_grade: overallGrade,
   quality_assessment: getQualityAssessment(roundedScore),
+  // Computed in 3b from the deduped violation counts. Publish this value in both
+  // report sections verbatim; it is not a starting point for a judgment call.
+  recommendation,
+  // Carried through so the report can cite adoption counts on Convention rows and
+  // say `PASS (n/a)` where a convention is absent rather than a bare WARN.
+  convention_baseline: subagentContext.convention_baseline,
 
   dimension_scores: {
     determinism: results.determinism.score,

@@ -6,7 +6,7 @@ description: How Playwright-Utils, pactjs-utils, TEA workflows, Playwright CLI, 
 AI-generated tests frequently fail in production because they lack systematic quality standards. This document explains the problem and presents a solution combining utility standards, TEA workflows, and automation interfaces across both UI, API and contract testing.
 
 :::note[Source]
-This article is adapted from [The Testing Meta Most Teams Have Not Caught Up To Yet](https://dev.to/muratkeremozcan/the-testing-meta-most-teams-have-not-caught-up-to-yet-5765) by Murat K Ozcan.
+This article is adapted from [The Testing Meta Most Teams Have Not Caught Up To Yet](https://dev.to/muratkeremozcan/the-testing-meta-most-teams-have-not-caught-up-to-yet-o5i) by Murat K Ozcan.
 :::
 
 ## The Problem with AI-Generated Tests
