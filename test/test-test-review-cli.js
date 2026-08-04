@@ -373,25 +373,42 @@ async function runTests() {
     }
 
     // Regression from couture-cast run 30897431283: Codex correctly declared
-    // 19 deductions and a +5 bonus, then published 81 instead of 86. Derived
+    // its deductions and bonus, then published arithmetic that omitted the
+    // bonus. Derived
     // arithmetic belongs to the CLI, while the model remains responsible for
     // the findings, severity counts, and bonus declarations.
     try {
       const source = readFixture('reports', 'score-mismatch.md');
       const corrected = parseReport(source);
       assert(
-        corrected.qualityScore === 86 && corrected.reportedQualityScore === 81,
-        'score-mismatch fixture: CLI derives 86 and preserves the agent-reported 81 as metadata',
+        corrected.qualityScore === 91 && corrected.reportedQualityScore === 86,
+        'score-mismatch fixture: CLI derives 91/A and preserves the agent-reported 86/B score as metadata',
         JSON.stringify(corrected),
       );
       const normalized = normalizeReportScore(source, corrected.qualityScore);
       assert(
-        normalized.includes('**Quality Score**: 86/100 (B - Good)') && normalized.includes('Final Score:             86/100'),
-        'score-mismatch fixture: report score fields normalize to the deterministic ledger result',
+        normalized.includes('**Quality Score**: 42/100 (F - Example only)') &&
+          normalized.includes('**Quality Score**: 91/100 (A)') &&
+          normalized.includes('Final Score:             91/100') &&
+          normalized.includes('Grade:                   A'),
+        'score-mismatch fixture: every active score and grade field normalizes while an earlier fenced example stays untouched',
         normalized,
       );
     } catch (error) {
       assert(false, 'score-mismatch fixture is corrected deterministically', error.message);
+    }
+
+    try {
+      const source = readFixture('reports', 'approve.md').replace('93/100 (A)', '93/100 (F)');
+      const corrected = parseReport(source);
+      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      assert(
+        corrected.qualityScore === 93 && corrected.reportedQualityScore === 93 && normalized.includes('**Quality Score**: 93/100 (A)'),
+        'grade-only mismatch triggers normalization even when the reported numeric score is correct',
+        JSON.stringify(corrected),
+      );
+    } catch (error) {
+      assert(false, 'grade-only score mismatch is corrected deterministically', error.message);
     }
 
     try {
@@ -1793,7 +1810,7 @@ async function runTests() {
       { STUB_MODE: 'score-mismatch' },
     );
     assert(
-      normalizedScoreRun.status === 0 && normalizedScoreRun.stderr.includes('normalized agent Quality Score 81'),
+      normalizedScoreRun.status === 0 && normalizedScoreRun.stderr.includes('normalized agent Quality Score 86'),
       'score arithmetic mismatch is normalized instead of failing the run',
       `status=${normalizedScoreRun.status} stderr=${normalizedScoreRun.stderr}`,
     );
@@ -1801,17 +1818,62 @@ async function runTests() {
       const normalizedPayload = JSON.parse(fs.readFileSync(normalizedScoreJsonPath, 'utf8'));
       const normalizedReport = fs.readFileSync(normalizedScoreOut, 'utf8');
       assert(
-        normalizedPayload.qualityScore === 86 && normalizedPayload.reportedQualityScore === 81,
-        'normalized verdict JSON uses the CLI score and preserves the agent score',
+        normalizedPayload.qualityScore === 91 && normalizedPayload.reportedQualityScore === 86,
+        'normalized verdict JSON uses the CLI score crossing into grade A and preserves the agent score',
         JSON.stringify(normalizedPayload),
       );
       assert(
-        normalizedReport.includes('**Quality Score**: 86/100 (B - Good)') && normalizedReport.includes('Final Score:             86/100'),
-        'normalized report publishes the same score as the verdict JSON',
+        normalizedReport.includes('**Quality Score**: 42/100 (F - Example only)') &&
+          normalizedReport.includes('**Quality Score**: 91/100 (A)') &&
+          normalizedReport.includes('Final Score:             91/100') &&
+          normalizedReport.includes('Grade:                   A'),
+        'normalized report publishes the same derived score and grade as the verdict JSON while preserving fenced examples',
         normalizedReport,
       );
     } catch (error) {
       assert(false, 'normalized score artifacts are readable', error.message);
+    }
+
+    const artifactPermissionsTestable = process.platform !== 'win32' && !(typeof process.getuid === 'function' && process.getuid() === 0);
+    if (artifactPermissionsTestable) {
+      const lockedArtifactDir = path.join(tmpRoot, 'locked-normalized-score-run');
+      const lockedArtifactOut = path.join(lockedArtifactDir, 'test-review.md');
+      const lockedArtifactRun = runCli(
+        [
+          '--files',
+          'playwright/tests/api/alert-preferences-dogfood.spec.ts',
+          '--project-root',
+          fixtureProject,
+          '--output',
+          lockedArtifactOut,
+          '--agent-cmd',
+          stubAgent,
+          '--no-isolate',
+          ...stubPass('STUB_MODE', 'STUB_LOCK_OUTPUT'),
+        ],
+        { STUB_MODE: 'score-mismatch', STUB_LOCK_OUTPUT: '1' },
+      );
+      let preservedArtifact = '';
+      try {
+        preservedArtifact = fs.readFileSync(lockedArtifactOut, 'utf8');
+      } finally {
+        fs.chmodSync(lockedArtifactDir, 0o755);
+        if (fs.existsSync(lockedArtifactOut)) {
+          fs.chmodSync(lockedArtifactOut, 0o644);
+        }
+      }
+      assert(
+        lockedArtifactRun.status === 3 && lockedArtifactRun.stderr.includes('Failed to prepare report artifact'),
+        'normalized report write failures are classified as report-artifact failures',
+        `status=${lockedArtifactRun.status} stderr=${lockedArtifactRun.stderr}`,
+      );
+      assert(
+        preservedArtifact.includes('**Quality Score**: 86/100 (B)') && !preservedArtifact.includes('**Quality Score**: 91/100 (A)'),
+        'failed normalized report writes preserve the original agent artifact',
+        preservedArtifact,
+      );
+    } else {
+      skip('normalized report write failure preserves the original artifact', 'filesystem permissions cannot be enforced');
     }
 
     // --agent selects the adapter (codex here, not just the claude default);

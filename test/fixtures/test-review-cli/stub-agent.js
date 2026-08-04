@@ -23,6 +23,8 @@
  *                      manifest. Adversarial tests use it to prove the CLI
  *                      binds report claims to the supplied context set.
  *   STUB_OLD_REPORT    stale-copy source: a report pre-placed with an old mtime
+ *   STUB_LOCK_OUTPUT   when "1", make the report and its parent read-only after
+ *                      writing so artifact replacement failure handling runs
  */
 
 const fs = require('node:fs');
@@ -162,6 +164,10 @@ function writeFixtureReport(fixtureName) {
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   const report = fs.readFileSync(path.join(__dirname, 'reports', fixtureName), 'utf8');
   fs.writeFileSync(outputPath, bindReportToPrompt(report));
+  if (process.env.STUB_LOCK_OUTPUT === '1') {
+    fs.chmodSync(outputPath, 0o444);
+    fs.chmodSync(path.dirname(outputPath), 0o555);
+  }
 }
 
 if (mode === 'forbidden-write') {

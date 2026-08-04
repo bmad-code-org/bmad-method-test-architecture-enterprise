@@ -46,7 +46,7 @@ const RECOMMENDATION_LINE = /^[ \t]*(?:\*\*Recommendation\*\*:|\*\*Recommendatio
 const CONTEXT_BASIS_ENUM = ['none', 'pr_diff', 'pr_diff_truncated'];
 const CONTEXT_BASIS_LINE_SOURCE = String.raw`^[ \t]*\*\*Context Basis:?\*\*:?[ \t]*([^\r\n]+)[ \t]*$`;
 const CONTEXT_WAIVERS_LINE_SOURCE = String.raw`^[ \t]*\*\*Context Waivers Applied:?\*\*:?[ \t]*([^\r\n]+)[ \t]*$`;
-const SCORE_PATTERN = /\*\*Quality Score\*\*:\s*(\d+)\s*\/\s*100/;
+const SCORE_PATTERN = /\*\*Quality Score\*\*:\s*(\d+)\s*\/\s*100(?:[ \t]*\([ \t]*([A-F])(?=[ \t)-]))?/;
 const VIOLATIONS_LINE = /\*\*Total Violations:?\*\*:?[ \t]*([^\n]+)/;
 const VIOLATION_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
 // The template always prints the bonus with a leading "+" (every fixture in
@@ -501,11 +501,50 @@ function gradeForScore(score) {
 /** Normalize the report's schema-owned score and grade fields to CLI arithmetic. */
 function normalizeReportScore(reportText, qualityScore) {
   const grade = gradeForScore(qualityScore);
+  let inFence = false;
+  let section = null;
+  let summaryNormalized = false;
+  let finalScoreNormalized = false;
+  let finalGradeNormalized = false;
+
   return reportText
-    .replace(/^([ \t]*\*\*Quality Score\*\*:[ \t]*)\d+([ \t]*\/[ \t]*100)/m, `$1${qualityScore}$2`)
-    .replace(/^([ \t]*\*\*Quality Score\*\*:[^\r\n]*\([ \t]*)[A-F](?=[ \t)-])/m, `$1${grade}`)
-    .replace(/^([ \t]*Final Score[ \t]*:[ \t]*)\d+([ \t]*\/[ \t]*100[ \t]*)$/m, `$1${qualityScore}$2`)
-    .replace(/^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*)$/m, `$1${grade}$2`);
+    .split('\n')
+    .map((originalLine) => {
+      let line = originalLine;
+      if (/^\s*```/.test(line)) {
+        inFence = !inFence;
+        return line;
+      }
+
+      if (!inFence) {
+        const heading = /^##[ \t]+([^\r\n]+?)[ \t]*\r?$/.exec(line);
+        if (heading) {
+          section = heading[1];
+        }
+        if (!summaryNormalized && /^[ \t]*\*\*Quality Score\*\*:/.test(line)) {
+          line = line
+            .replace(/^([ \t]*\*\*Quality Score\*\*:[ \t]*)\d+([ \t]*\/[ \t]*100)/, `$1${qualityScore}$2`)
+            .replace(/^([ \t]*\*\*Quality Score\*\*:[^\r\n]*\([ \t]*)[A-F](?=[ \t)-])/, `$1${grade}`);
+          summaryNormalized = true;
+        }
+      }
+
+      // The score ledger is itself a fenced block. Its fields remain active
+      // only inside the unique Quality Score Breakdown section validated by
+      // deriveQualityScore; unrelated fenced examples stay untouched.
+      if (section === 'Quality Score Breakdown') {
+        if (!finalScoreNormalized && /^[ \t]*Final Score[ \t]*:/.test(line)) {
+          line = line.replace(/^([ \t]*Final Score[ \t]*:[ \t]*)\d+([ \t]*\/[ \t]*100[ \t]*\r?)$/, `$1${qualityScore}$2`);
+          finalScoreNormalized = true;
+        }
+        if (!finalGradeNormalized && /^[ \t]*Grade[ \t]*:/.test(line)) {
+          line = line.replace(/^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*\r?)$/, `$1${grade}$2`);
+          finalGradeNormalized = true;
+        }
+      }
+      return line;
+    })
+    .join('\n');
 }
 
 /**
@@ -534,6 +573,7 @@ function parseReport(reportText, runContract = {}) {
     unparseable('Report is missing the "**Quality Score**: N/100" line');
   }
   const reportedQualityScore = Number.parseInt(scoreMatch[1], 10);
+  const reportedQualityGrade = scoreMatch[2];
   if (reportedQualityScore < 0 || reportedQualityScore > 100) {
     unparseable(`Report Quality Score ${reportedQualityScore} is outside the required 0-100 range`);
   }
@@ -582,7 +622,10 @@ function parseReport(reportText, runContract = {}) {
     keyStrengths,
     keyWeaknesses,
   };
-  if (reportedQualityScore !== qualityScore) {
+  if (
+    reportedQualityScore !== qualityScore ||
+    (reportedQualityGrade !== undefined && reportedQualityGrade !== gradeForScore(qualityScore))
+  ) {
     parsed.reportedQualityScore = reportedQualityScore;
   }
   return parsed;
