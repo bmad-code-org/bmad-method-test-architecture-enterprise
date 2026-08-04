@@ -236,8 +236,14 @@ function getUnscorableTestArtifacts(changedFiles) {
 
 /**
  * Derive the read-only context set from an already-computed changed-file list:
- * everything in the diff that is not a test file and not noise, documentation
- * first, capped.
+ * everything in the diff that is not a test file, not noise, and not an
+ * unscorable test artifact, documentation first, capped.
+ *
+ * Unscorable artifacts are removed here rather than left to the caller because
+ * they travel in their own manifest. A Maestro flow satisfies neither isTestFile
+ * nor isContextNoise, so without this it lands in the context set AND the
+ * exclusion set, and the report's two manifests are contractually disjoint. It
+ * would also spend one of the MAX_CONTEXT_FILES slots the story has to survive.
  *
  * Takes the list rather than a base ref so the CLI runs `git diff` once and
  * derives both lists (and the control-plane guard) from the same snapshot.
@@ -246,7 +252,8 @@ function getUnscorableTestArtifacts(changedFiles) {
  * @returns {{files: string[], truncated: boolean}}
  */
 function getContextFiles(changedFiles) {
-  const candidates = changedFiles.filter((file) => !isTestFile(file) && !isContextNoise(file));
+  const unscorable = new Set(getUnscorableTestArtifacts(changedFiles));
+  const candidates = changedFiles.filter((file) => !isTestFile(file) && !isContextNoise(file) && !unscorable.has(file));
   const docs = candidates.filter((file) => CONTEXT_DOC_EXTENSION_PATTERN.test(file));
   const rest = candidates.filter((file) => !CONTEXT_DOC_EXTENSION_PATTERN.test(file));
   const ordered = [...docs, ...rest];

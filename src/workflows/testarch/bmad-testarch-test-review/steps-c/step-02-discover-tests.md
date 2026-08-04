@@ -37,7 +37,13 @@ Collect test files in scope and parse structure/metadata.
 
 > **Exception — `review_files` supplied:** If `review_files` is non-empty, the discovered set equals `review_files` (comma-separated paths). Validate that each file exists — report missing files in the review report rather than silently dropping them — skip the glob in section 1, and continue the sequence from section 2. This is a first-class branch of the file-set source; the sequence remains mandatory.
 
-> **Disclose every exclusion, on every branch.** The rule above is not specific to `review_files`: any file that a reader would expect in the reviewed set and that is not there gets named in the report with its reason, never omitted. That covers a missing path, a file skipped as unparseable, and any changed test artifact in a format the ledger has no criteria for (a Maestro flow, a `.feature` file, an `.http` collection). When the run supplies an `---BEGIN UNSCORABLE---` block, reproduce it verbatim as `## Excluded From Review Set` per the template, adding no path and dropping none. A reviewed-files manifest that quietly omits a changed test artifact reads as "the diff held nothing else to review", which is a false statement the report makes on your behalf.
+> **Disclose every exclusion, on every branch.** The rule above is not specific to `review_files`: any file that a reader would expect in the reviewed set and that is not there gets named in the report's `## Excluded From Review Set` section with its reason, never omitted. One section, one entry shape — `path — reason` — and exactly three reasons are legal:
+>
+> - `path does not exist` — a `review_files` entry that is not on disk.
+> - `file could not be parsed` — a discovered file the read or the parse failed on.
+> - `format not scorable by the ledger` — a changed test artifact the registry has no criteria for (a Maestro flow, a `.feature` file, an `.http` collection).
+>
+> The third reason is the only one the runner can supply. When the run supplies an `---BEGIN UNSCORABLE---` block, reproduce every path in it verbatim with that exact reason, dropping none; the CLI rejects a report that dropped one. The first two you discover yourself, so add them to the same section with their own reason. No path may appear both here and in `## Reviewed Files`. A reviewed-files manifest that quietly omits a changed test artifact reads as "the diff held nothing else to review", which is a false statement the report makes on your behalf.
 
 ## 1. Discover Test Files
 

@@ -87,9 +87,9 @@ const score = Math.max(0, 100 - totalPenalty);
 ```json
 {
   "dimension": "performance",
-  "score": 80,
+  "score": 90,
   "max_score": 100,
-  "grade": "B",
+  "grade": "A",
   "violations": [
     {
       "file": "tests/e2e/search.spec.ts",
@@ -115,8 +115,9 @@ const score = Math.max(0, 100 - totalPenalty);
   "passed_checks": 13,
   "failed_checks": 2,
   "violation_summary": {
-    "HIGH": 1,
-    "MEDIUM": 1,
+    "CRITICAL": 0,
+    "HIGH": 0,
+    "MEDIUM": 2,
     "LOW": 0
   },
   "performance_metrics": {

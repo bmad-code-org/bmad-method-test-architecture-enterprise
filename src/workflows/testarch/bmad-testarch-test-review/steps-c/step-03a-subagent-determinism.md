@@ -103,43 +103,59 @@ violation with no `row`, because an unattributed severity is one somebody chose.
 ```javascript
 const violations = [];
 
-// C1 — a skipped test. The most expensive row in the registry: the suite reports
-// green while the case nobody wants to lose goes unrun.
-if (/\b(?:test|it|describe)\.skip\b|\bxit\b|\bxdescribe\b/.test(testFileContent)) {
+// Every predicate below reports the line of the syntax that ACTUALLY matched,
+// never a hardcoded literal. A file skipped with `xit` and a file skipped with
+// `.skip` are the same row; a violation citing a line the reader cannot find is
+// a finding they have to re-derive by hand.
+
+// C1 — a skipped test, in every form the registry row names. The most expensive
+// row in the registry: the suite reports green while the case nobody wants to
+// lose goes unrun.
+const skipMatch = /\b(?:test|it|describe)\.(?:skip|todo)\b|\bxit\b|\bxdescribe\b|@Ignore\b|@Disabled\b|pytest\.mark\.skip\w*/.exec(
+  testFileContent,
+);
+// A skip carrying a documented reason that is still true is exempt: check the
+// matched line and the line above it for one before reporting.
+if (skipMatch && !hasStillTrueReason(testFileContent, skipMatch)) {
   violations.push({
     file: testFile,
-    line: findLineNumber('.skip'),
+    line: findLineNumber(skipMatch[0]),
     row: 'C1',
     severity: 'CRITICAL', // from the registry, not chosen here
     category: 'disabled-test',
-    description: 'Test is skipped with no still-true reason recorded',
+    description: `Test is disabled with \`${skipMatch[0]}\` and no still-true reason recorded`,
     suggestion: 'Re-enable it, or record why it is skipped and what re-enables it',
   });
 }
 
-// C3 — an assertion that cannot fail.
-if (/expect\(\s*(true|1|'[^']*')\s*\)\.(?:toBe|toEqual)\(\s*\1\s*\)/.test(testFileContent)) {
+// C3 — an assertion that cannot fail. Both shapes the registry row names: a
+// literal compared to itself, and any operand compared to itself.
+const selfComparison =
+  /expect\(\s*([^()]+?)\s*\)\.(?:toBe|toEqual)\(\s*\1\s*\)/.exec(testFileContent) ??
+  /\bassert\s+([A-Za-z_$][\w.$]*)\s*==\s*\1\b/.exec(testFileContent);
+if (selfComparison) {
   violations.push({
     file: testFile,
-    line: findLineNumber('expect(true)'),
+    line: findLineNumber(selfComparison[0]),
     row: 'C3',
     severity: 'CRITICAL',
     category: 'tautological-assertion',
-    description: 'Assertion compares a value to itself, so it can never fail',
+    description: `\`${selfComparison[0]}\` compares a value to itself, so it can never fail`,
     suggestion: 'Assert the behavior the test name claims',
   });
 }
 
 // H1 — hard wait. HIGH, and owned by this worker alone: the performance worker
 // must not emit it again, or one timer deducts twice.
-if (/waitForTimeout|\bsleep\(|time\.sleep\(|Thread\.sleep\(|cy\.wait\(\s*\d/.test(testFileContent)) {
+const hardWait = /waitForTimeout|\bsleep\(|time\.sleep\(|Thread\.sleep\(|cy\.wait\(\s*\d/.exec(testFileContent);
+if (hardWait) {
   violations.push({
     file: testFile,
-    line: findLineNumber('waitForTimeout'),
+    line: findLineNumber(hardWait[0]),
     row: 'H1',
     severity: 'HIGH',
     category: 'hard-wait',
-    description: 'A bare timer orders steps instead of a condition',
+    description: `A bare timer (\`${hardWait[0]}\`) orders steps instead of a condition`,
     suggestion: 'Await the observable state: expect(locator).toBeVisible(), or a network-first intercept',
   });
 }
@@ -147,14 +163,15 @@ if (/waitForTimeout|\bsleep\(|time\.sleep\(|Thread\.sleep\(|cy\.wait\(\s*\d/.tes
 // H2 — wall-clock fixture. GATED: only when the value governs an expiry, token
 // lifetime, TTL, or scheduling boundary. A timestamp used as opaque test data is
 // not a violation, which is why the old unconditional Date.now() check over-fired.
-if (/Date\.now\(\)|new Date\(\s*\)/.test(testFileContent) && governsATimeBoundary(testFileContent) && !usesFakeTimers(testFileContent)) {
+const wallClock = /Date\.now\(\)|new Date\(\s*\)|time\.time\(\)/.exec(testFileContent);
+if (wallClock && governsATimeBoundary(testFileContent) && !usesFakeTimers(testFileContent)) {
   violations.push({
     file: testFile,
-    line: findLineNumber('Date.now()'),
+    line: findLineNumber(wallClock[0]),
     row: 'H2',
     severity: 'HIGH',
     category: 'time-dependency',
-    description: 'An expiry or lifetime is derived from the live clock with no fake timers',
+    description: `An expiry or lifetime is derived from the live clock (\`${wallClock[0]}\`) with no fake timers`,
     suggestion: 'Freeze time (vi.useFakeTimers / setSystemTime) and add explicit expired and still-valid boundary cases',
   });
 }

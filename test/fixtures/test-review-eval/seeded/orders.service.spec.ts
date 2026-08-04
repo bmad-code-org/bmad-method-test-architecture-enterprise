@@ -1,8 +1,8 @@
 // EVAL FIXTURE — every defect below is planted on purpose.
-// Ground truth lives in orders.service.expected.json. Do not "fix" this file.
+// Ground truth lives in test/fixtures/test-review-eval/ground-truth.json. Do not "fix" this file.
 import { beforeEach, expect, it, vi } from 'vitest'
 
-import { OrdersService } from '../../../src/orders.service'
+import { OrdersService } from '../../../src/orders.service' // module absent on purpose: read as text, never compiled
 
 let repository: { findMany: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> }
 let service: OrdersService

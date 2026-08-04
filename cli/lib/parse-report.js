@@ -25,7 +25,10 @@
  * disjoint by construction: context is read, never scored, so a path in both
  * means the reviewer scored something the ledger does not describe. Both are
  * rejected as REPORT_UNPARSEABLE. When a run contract is supplied, canonical
- * manifests are also bound to the exact reviewed and context inputs.
+ * manifests are also bound to the exact reviewed and context inputs, and every
+ * changed test artifact the run excluded must still be named under
+ * "## Excluded From Review Set": the disclosure is part of the contract, not a
+ * courtesy the agent may drop.
  *
  * Two more fields, `keyStrengths` and `keyWeaknesses`, are extracted best-effort
  * from the Executive Summary's "### Key Strengths" / "### Key Weaknesses"
@@ -388,14 +391,49 @@ function parseContextFiles(text, contextBasis) {
   return canonicalizeManifest(files, '## Review Context');
 }
 
+/**
+ * Parse the optional "## Excluded From Review Set" disclosure manifest.
+ *
+ * Entries carry a reason after the path ("path — format not scorable by the
+ * ledger"), and the section closes with a prose line about --test-glob, so an
+ * entry is reduced to its leading token and kept only when that token still
+ * looks like a file. The section is absent whenever nothing was excluded.
+ */
+function parseExcludedFiles(text) {
+  const section = extractSection(text, 'Excluded From Review Set');
+  if (section === null) {
+    return [];
+  }
+  const files = manifestEntries(section)
+    .map((entry) => stripWrappers(entry.split(/\s+/)[0]))
+    .filter((entry) => /\.[A-Za-z0-9_+-]{1,12}$/.test(entry));
+  return canonicalizeManifest(files, '## Excluded From Review Set');
+}
+
 function manifestDifference(left, right) {
   const rightSet = new Set(right);
   return left.filter((file) => !rightSet.has(file));
 }
 
 /** Bind report claims to the exact evidence supplied to this run. */
-function verifyRunContract({ reviewedFiles, contextBasis, contextFiles }, runContract) {
+function verifyRunContract({ reviewedFiles, contextBasis, contextFiles, excludedFiles }, runContract) {
   const has = (key) => Object.prototype.hasOwnProperty.call(runContract, key);
+
+  if (has('unscorableTestArtifacts')) {
+    const suppliedExcluded = canonicalizeManifest(runContract.unscorableTestArtifacts, 'supplied excluded files');
+    const dropped = manifestDifference(suppliedExcluded, excludedFiles);
+    if (dropped.length > 0) {
+      unparseable(
+        `Report "## Excluded From Review Set" omits changed test artifacts this run excluded: ${JSON.stringify(dropped.slice(0, 3))}; ` +
+          'a manifest that drops one reads as though the diff held nothing else to review',
+      );
+    }
+    // No foreign check here, unlike the context manifest. The CLI knows the
+    // artifacts IT excluded; the workflow also discloses exclusions the CLI
+    // cannot see (a review_files path that does not exist, a file that would
+    // not parse), and rejecting those would make its own disclose-every-exclusion
+    // rule unimplementable.
+  }
 
   if (has('reviewedFiles')) {
     const suppliedReviewed = canonicalizeManifest(runContract.reviewedFiles, 'supplied reviewed files');
@@ -592,6 +630,7 @@ function parseReport(reportText, runContract = {}) {
   const contextBasis = parseContextBasis(text);
   const contextWaiversApplied = parseContextWaivers(text);
   const contextFiles = parseContextFiles(text, contextBasis);
+  const excludedFiles = parseExcludedFiles(text);
 
   // Read and scored are different jobs. An overlap means either a context
   // artifact was run through the deduction ledger or a reviewed test was
@@ -604,8 +643,15 @@ function parseReport(reportText, runContract = {}) {
         'context is read, never scored, so the two manifests must be disjoint',
     );
   }
+  const scoredAndExcluded = excludedFiles.filter((file) => reviewedSet.has(file));
+  if (scoredAndExcluded.length > 0) {
+    unparseable(
+      `Report lists ${JSON.stringify(scoredAndExcluded.slice(0, 3))} in both "## Reviewed Files" and ` +
+        '"## Excluded From Review Set"; a file was either scored or excluded, never both',
+    );
+  }
 
-  verifyRunContract({ reviewedFiles, contextBasis, contextFiles }, runContract);
+  verifyRunContract({ reviewedFiles, contextBasis, contextFiles, excludedFiles }, runContract);
 
   const executiveSection = extractSection(text, 'Executive Summary');
   const keyStrengths = extractBullets(extractSubsection(executiveSection, 'Key Strengths'), '✅');

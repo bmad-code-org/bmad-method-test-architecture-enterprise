@@ -45,6 +45,9 @@ const CLI = path.join(__dirname, '..', 'cli', 'test-review.js');
  * and vendor drift, so a bar nobody can clear teaches nothing and a bar everyone
  * clears teaches nothing either. Raise them as the rubric tightens.
  */
+const RUN_TIMEOUT_MINUTES = 15;
+const RUN_TIMEOUT_MS = RUN_TIMEOUT_MINUTES * 60_000;
+
 const THRESHOLDS = {
   criticalRecall: 1, // every CRITICAL row must be found. A missed .skip is the whole failure mode.
   recall: 0.7,
@@ -104,6 +107,33 @@ function fatal(code, message) {
 }
 
 /**
+ * Whether a vendor has no usable credential in ANY of the shapes its CLI accepts.
+ * Returns a problem string, or null when the vendor can authenticate.
+ *
+ * An environment variable is not the only shape, and treating it as the only one
+ * blocks the eval on a machine where the vendor is plainly logged in. Both CLIs
+ * read a stored credential keyed by HOME (which is why run-agent.js forwards HOME
+ * and USER): claude keeps one in the macOS Keychain or ~/.claude/.credentials.json,
+ * codex in ~/.codex/auth.json — verified 2026-08-03, see agent-adapters.js.
+ */
+function missingCredential(agent) {
+  const home = process.env.HOME || os.homedir();
+  if (agent === 'claude') {
+    if (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN) return null;
+    if (fs.existsSync(path.join(home, '.claude', '.credentials.json'))) return null;
+    const keychain = spawnSync('security', ['find-generic-password', '-s', 'Claude Code-credentials'], { encoding: 'utf8' });
+    if (!keychain.error && keychain.status === 0) return null;
+    return 'claude needs ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, or a stored login (keychain / ~/.claude/.credentials.json)';
+  }
+  if (agent === 'codex') {
+    if (process.env.OPENAI_API_KEY) return null;
+    if (fs.existsSync(path.join(home, '.codex', 'auth.json'))) return null;
+    return 'codex needs OPENAI_API_KEY or a stored login at ~/.codex/auth.json (codex login)';
+  }
+  return null;
+}
+
+/**
  * Bounded pre-flight. For a skill the environment IS repo state plus tool
  * availability, and that is where every unintended defect in the earlier
  * experiment rounds lived. Without this, a missing credential reports as 0% recall
@@ -142,12 +172,20 @@ function preflight(agents) {
     }
   }
 
-  const credentialFor = { codex: 'OPENAI_API_KEY', claude: 'ANTHROPIC_API_KEY' };
+  // mustNotReport is only meaningful on a fixture with nothing planted, and
+  // scoreVerdict derives the clean set from `planted.length === 0` rather than
+  // from the key. Pin the invariant here so the two cannot drift apart.
+  for (const entry of groundTruth?.files ?? []) {
+    if (entry.mustNotReport && (entry.planted ?? []).length > 0) {
+      problems.push(`${entry.path}: mustNotReport requires an empty planted array; precision is measured on clean fixtures only`);
+    }
+  }
+
   for (const agent of agents) {
     const probe = spawnSync(agent, ['--version'], { encoding: 'utf8' });
     if (probe.error) problems.push(`vendor CLI "${agent}" is not on PATH (${probe.error.code})`);
-    const variable = credentialFor[agent];
-    if (variable && !process.env[variable]) problems.push(`${agent} needs ${variable} in the environment`);
+    const credential = missingCredential(agent);
+    if (credential) problems.push(credential);
   }
 
   if (problems.length > 0) {
@@ -163,44 +201,104 @@ function preflight(agents) {
 
 /** One review of the whole fixture corpus. Returns the parsed verdict, or null. */
 function runReview(agent, runIndex) {
-  const jsonPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-')), 'verdict.json');
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-'));
+  const jsonPath = path.join(runDir, 'verdict.json');
   const reviewFiles = ['seeded/checkout.spec.ts', 'seeded/orders.service.spec.ts', 'clean/profile.spec.ts'].map((relative) =>
     path.join(FIXTURE_ROOT, relative),
   );
 
-  // No --fail-on override: the enum is request-changes|block, so there is no "never".
-  // A verdict failure exits 1 and still writes the verdict, which is all this needs;
-  // the harness reads the JSON regardless of exit code and only treats a MISSING
-  // verdict as a failed run.
-  const result = spawnSync(process.execPath, [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath], {
-    encoding: 'utf8',
-    cwd: path.join(__dirname, '..'),
-  });
-
-  if (!fs.existsSync(jsonPath)) {
-    console.error(`  ${colors.red}run ${runIndex + 1}: no verdict written${colors.reset} (exit ${result.status})`);
-    if (result.stderr) console.error(`  ${colors.dim}${result.stderr.trim().split('\n').slice(-3).join('\n  ')}${colors.reset}`);
-    return null;
-  }
   try {
-    return JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
-  } catch (error) {
-    console.error(`  ${colors.red}run ${runIndex + 1}: verdict is not valid JSON: ${error.message}${colors.reset}`);
+    // No --fail-on override: the enum is request-changes|block, so there is no "never".
+    // A verdict failure exits 1 and still writes the verdict, which is all this needs;
+    // the harness reads the JSON regardless of exit code and only treats a MISSING
+    // verdict as a failed run.
+    //
+    // Every run is bounded. An agent that hangs would otherwise stall the whole
+    // matrix with no output and no way to tell a hang from a slow model.
+    const result = spawnSync(process.execPath, [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath], {
+      encoding: 'utf8',
+      cwd: path.join(__dirname, '..'),
+      timeout: RUN_TIMEOUT_MS,
+    });
+
+    if (result.error?.code === 'ETIMEDOUT' || result.signal === 'SIGTERM') {
+      console.error(`  ${colors.red}run ${runIndex + 1}: timed out after ${RUN_TIMEOUT_MINUTES} minutes${colors.reset}`);
+      return null;
+    }
+    if (!fs.existsSync(jsonPath)) {
+      console.error(`  ${colors.red}run ${runIndex + 1}: no verdict written${colors.reset} (exit ${result.status})`);
+      if (result.stderr) console.error(`  ${colors.dim}${result.stderr.trim().split('\n').slice(-3).join('\n  ')}${colors.reset}`);
+      return null;
+    }
+    try {
+      return JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    } catch (error) {
+      console.error(`  ${colors.red}run ${runIndex + 1}: verdict is not valid JSON: ${error.message}${colors.reset}`);
+      return null;
+    }
+  } finally {
+    fs.rmSync(runDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The per-finding list, read out of the report the verdict points at.
+ *
+ * The verdict's own `violations` field is four severity COUNTS, not findings, so
+ * recall cannot be scored from it. The report is the contract, and it renders each
+ * finding with a `**Row**:` identity beside its `**Location**:` line — matching on
+ * the registry row is what makes a hit comparable across vendors, since prose
+ * descriptions of the same defect differ and row identities do not.
+ *
+ * Returns null when the report cannot be read, or when it declares findings it did
+ * not attribute to rows, so a contract change surfaces as "unmeasurable" instead of
+ * as a confident 0% recall. A report that genuinely found nothing returns [], which
+ * IS a measured miss on a corpus with planted defects.
+ */
+function findingsFromReport(verdict) {
+  const reportPath = path.resolve(path.join(__dirname, '..'), String(verdict.report ?? ''));
+  if (!verdict.report || !fs.existsSync(reportPath)) return null;
+  const counts = verdict.violations ?? {};
+  const declared = ['critical', 'high', 'medium', 'low'].reduce((sum, key) => sum + (Number(counts[key]) || 0), 0);
+
+  const findings = [];
+  let location = null;
+  for (const line of fs.readFileSync(reportPath, 'utf8').split('\n')) {
+    const locationMatch = /^\*\*Location\*\*:\s*`?([^`\s]+):(\d+)`?/.exec(line.trim());
+    if (locationMatch) {
+      location = { file: locationMatch[1], line: Number.parseInt(locationMatch[2], 10) };
+      continue;
+    }
+    const rowMatch = /^\*\*Row\*\*:\s*`?([A-Za-z]\d+)`?/.exec(line.trim());
+    if (rowMatch && location) {
+      findings.push({ ...location, row: rowMatch[1] });
+      location = null;
+    }
+  }
+  if (findings.length < declared) {
+    console.error(
+      `  ${colors.yellow}report declares ${declared} violation(s) but attributes ${findings.length} to a registry row${colors.reset}`,
+    );
     return null;
   }
+  return findings;
 }
 
 /**
  * Score one verdict against ground truth.
  *
- * A planted defect counts as found when a reported violation cites the same
+ * A planted defect counts as found when a reported finding cites the same
  * registry row within lineTolerance of the planted line. Matching on the row is
  * what makes this comparable across vendors: prose descriptions of the same defect
  * differ, row identities do not.
+ *
+ * Returns null when the run produced no attributed findings to score against, so
+ * "the contract changed" never reports as "the reviewer found nothing".
  */
 function scoreVerdict(verdict, groundTruth) {
   const tolerance = groundTruth.lineTolerance ?? 0;
-  const reported = (verdict.violations ?? verdict.allViolations ?? []).filter(Boolean);
+  const reported = findingsFromReport(verdict);
+  if (reported === null) return null;
   const cleanPaths = new Set((groundTruth.files ?? []).filter((f) => (f.planted ?? []).length === 0).map((f) => f.path));
 
   const planted = [];
@@ -292,6 +390,10 @@ function main() {
       const verdict = runReview(agent, runIndex);
       if (!verdict) continue;
       const scored = scoreVerdict(verdict, groundTruth);
+      if (!scored) {
+        console.error(`  ${colors.red}run ${runIndex + 1}: findings could not be scored against ground truth${colors.reset}`);
+        continue;
+      }
       results.push(scored);
       console.log(
         `  run ${runIndex + 1}: score ${scored.score}, ${scored.recommendation}, ` +
@@ -335,10 +437,20 @@ function main() {
       for (const miss of missed) console.log(`    ${miss.row} ${miss.path}:${miss.line} â€” ${miss.what}`);
     }
 
+    // NaN fails every comparison, so an unmeasurable metric would otherwise pass
+    // its threshold silently: a reviewer that reports nothing at all divides by
+    // zero for precision and clears the bar it never met. Unmeasurable is a
+    // failure here, and it says which metric. scoreSpread is the one exception,
+    // since a single run legitimately has no variance to measure.
     const failures = [];
-    if (criticalRecall < THRESHOLDS.criticalRecall) failures.push('CRITICAL recall');
-    if (recall < THRESHOLDS.recall) failures.push('recall');
-    if (precision < THRESHOLDS.precision) failures.push('precision');
+    for (const [label, value, threshold] of [
+      ['CRITICAL recall', criticalRecall, THRESHOLDS.criticalRecall],
+      ['recall', recall, THRESHOLDS.recall],
+      ['precision', precision, THRESHOLDS.precision],
+    ]) {
+      if (Number.isNaN(value)) failures.push(`${label} (unmeasurable)`);
+      else if (value < threshold) failures.push(label);
+    }
     if (!Number.isNaN(scoreSpread) && scoreSpread > THRESHOLDS.maxScoreStdev) failures.push('score variance');
     if (verdicts.size > 1) failures.push('verdict stability');
 
@@ -353,4 +465,10 @@ function main() {
   process.exit(anyBelowThreshold ? 1 : 0);
 }
 
-main();
+// Only when invoked directly, so the scoring internals can be exercised without
+// spending a vendor run: the harness that measures the reviewer needs measuring too.
+if (require.main === module) {
+  main();
+}
+
+module.exports = { findingsFromReport, scoreVerdict, missingCredential, THRESHOLDS };

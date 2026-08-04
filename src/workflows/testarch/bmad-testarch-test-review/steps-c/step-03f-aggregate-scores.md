@@ -74,14 +74,33 @@ const allViolations = dimensions.flatMap((dim) =>
   })),
 );
 
+// Attribution first, because everything below depends on it. A violation with no
+// registry `row` is a severity somebody chose, which is the thing the registry
+// exists to prevent, and there is no safe fallback: keying dedup on `category`
+// instead lets two workers describing one defect survive as two.
+const unattributed = allViolations.filter((v) => !v.row);
+if (unattributed.length > 0) {
+  const dimensions = [...new Set(unattributed.map((v) => v.dimension))];
+  throw new Error(`${unattributed.length} violation(s) carry no registry row; re-run these workers: ${dimensions.join(', ')}`);
+}
+
 // Deduplicate before counting. Some registry rows are detectable by more than one
 // worker (M4 by isolation and maintainability, H5 by maintainability and
 // performance), and counting the same defect twice deducts twice for it. Identity
 // is the registry row at a location, never the prose description, which differs
 // between workers describing the same line.
+//
+// File-level rows carry no meaningful line: H5 is a property of the whole file,
+// and the pact config rows are properties of the whole config. Two workers each
+// pick a plausible line for the same finding (1 and 341 for the same 341-line
+// file), so the line is dropped from the key for those rows or the dedup this
+// block exists for never fires on its own worked example.
+const FILE_LEVEL_ROWS = new Set(['H5', 'H6', 'H7', 'H8', 'L4']);
+const locationOf = (v) => (FILE_LEVEL_ROWS.has(v.row) ? 'file' : v.line);
+
 const seenViolations = new Set();
 const dedupedViolations = allViolations.filter((v) => {
-  const key = `${v.file}:${v.line}:${v.row ?? v.category}`;
+  const key = `${v.file}:${locationOf(v)}:${v.row}`;
   if (seenViolations.has(key)) return false;
   seenViolations.add(key);
   return true;
@@ -105,10 +124,15 @@ const violationSummary = {
 };
 ```
 
-**Every violation must carry the registry row that produced it.** A violation with
-no `row` is a severity somebody chose, which is the thing the registry exists to
-prevent. Reject the dimension output and re-run that worker rather than scoring an
-unattributed violation.
+**Every violation must carry the registry row that produced it**, which is what the
+attribution guard above enforces. A violation with no `row` is a severity somebody
+chose, which is the thing the registry exists to prevent. Reject the dimension
+output and re-run that worker rather than scoring an unattributed violation, and
+never substitute the prose `category` for a missing row.
+
+**Everything downstream reads `dedupedViolations`.** The counts, the persisted
+violation list, and every report-facing collection come from the same array, or the
+report prints more findings than its own summary counts.
 
 ---
 
@@ -275,7 +299,9 @@ const reviewSummary = {
 
   violations_summary: violationSummary,
 
-  all_violations: allViolations,
+  // Deduped, not raw: violations_summary counts this same array, and a report
+  // listing a defect twice beside a count of one is a report nobody can check.
+  all_violations: dedupedViolations,
 
   critical_severity_violations: criticalSeverity,
 

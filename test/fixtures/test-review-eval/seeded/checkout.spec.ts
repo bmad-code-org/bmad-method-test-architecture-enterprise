@@ -1,5 +1,5 @@
 // EVAL FIXTURE — every defect below is planted on purpose.
-// Ground truth lives in checkout.spec.expected.json. Do not "fix" this file:
+// Ground truth lives in test/fixtures/test-review-eval/ground-truth.json. Do not "fix" this file:
 // the harness measures whether the reviewer finds these, so a repair here is a
 // silent change to the benchmark. See test/eval-test-review.js.
 import { expect, test } from '@playwright/test'

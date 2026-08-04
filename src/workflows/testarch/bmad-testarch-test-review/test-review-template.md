@@ -122,6 +122,8 @@ Grade:                   {grade}
 
 ---
 
+<!-- **Row** is the criteria-registry identity that produced the finding (C1, H2, M4, ...), the same value the subagent violation carried. It is what makes one reviewer's finding comparable to another's: prose descriptions of a defect differ between runs and vendors, row identities do not. A finding with no row has no severity either, so it belongs in Best Practices or Recommendations as prose, not here. -->
+
 ## Critical Issues (Must Fix)
 
 {If no critical issues: "No critical issues detected. ✅"}
@@ -132,6 +134,7 @@ Grade:                   {grade}
 
 **Severity**: P0 (Critical)
 **Location**: `{filename}:{line_number}`
+**Row**: {registry_row_id}
 **Criterion**: {criterion_name}
 **Knowledge Base**: [{fragment_name}]({fragment_path})
 
@@ -174,6 +177,7 @@ Grade:                   {grade}
 
 **Severity**: {P1 (High) | P2 (Medium) | P3 (Low)}
 **Location**: `{filename}:{line_number}`
+**Row**: {registry_row_id}
 **Criterion**: {criterion_name}
 **Knowledge Base**: [{fragment_name}]({fragment_path})
 
@@ -441,10 +445,12 @@ This review applies the rubric consistently. Context can reveal additional findi
 - {context_path_1}
 - {context_path_2}
 
-<!-- Disclosure manifest. Present ONLY when the run supplied an ---BEGIN UNSCORABLE--- block; omit the whole section otherwise. Reproduce that list verbatim, one repo-relative path per line, adding none and dropping none. These are changed test artifacts in a format the deduction ledger has no criteria for, so they were neither reviewed nor scored, and no path here may appear in Reviewed Files. A manifest that silently omits a changed test artifact reads as though the diff held nothing else to review. -->
+<!-- Disclosure manifest. Present whenever anything a reader would expect in the reviewed set is not there; omit the whole section when nothing was excluded. One repo-relative path per line, each with one of the three reasons from step-02-discover-tests: `path does not exist`, `file could not be parsed`, or `format not scorable by the ledger`. When the run supplied an ---BEGIN UNSCORABLE--- block, reproduce every path in it here verbatim with the third reason, dropping none — the CLI rejects a report that dropped one. Nothing here was reviewed or scored, and no path here may appear in Reviewed Files. A manifest that silently omits a changed test artifact reads as though the diff held nothing else to review. -->
 
 ## Excluded From Review Set
 
 - {unscorable_path_1} — format not scorable by the ledger
+- {missing_path_1} — path does not exist
+- {unparseable_path_1} — file could not be parsed
 
 `--test-glob` brings any of these into the review set when it should be scored.

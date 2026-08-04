@@ -8,8 +8,11 @@
     "offending line has still found the defect. It is deliberately small: a tolerance wide",
     "enough to cover a whole file would score 'named the file' as 'named the defect'.",
     "",
-    "mustNotReport is as load-bearing as planted. A reviewer that reports everything scores",
-    "100% recall and is worthless, so precision is measured on the same run."
+    "Precision is scored from the fixtures with an EMPTY planted array, not from the mustNotReport",
+    "key: a reviewer that reports everything scores 100% recall and is worthless, so precision is",
+    "measured on the same run. mustNotReport and negativeControls are documentation for whoever",
+    "reads a false positive later, and nothing in the harness branches on them. The pre-flight does",
+    "assert that a mustNotReport fixture plants nothing, so the prose and the scoring cannot drift."
   ],
   "lineTolerance": 4,
   "files": [

@@ -84,9 +84,9 @@ const score = Math.max(0, 100 - totalPenalty);
 ```json
 {
   "dimension": "maintainability",
-  "score": 75,
+  "score": 90,
   "max_score": 100,
-  "grade": "C",
+  "grade": "A",
   "violations": [
     {
       "file": "tests/e2e/complex-flow.spec.ts",
@@ -100,18 +100,19 @@ const score = Math.max(0, 100 - totalPenalty);
     }
   ],
   "passed_checks": 10,
-  "failed_checks": 5,
+  "failed_checks": 1,
   "violation_summary": {
-    "HIGH": 2,
-    "MEDIUM": 2,
-    "LOW": 1
+    "CRITICAL": 0,
+    "HIGH": 1,
+    "MEDIUM": 0,
+    "LOW": 0
   },
   "recommendations": [
     "Split large test files into smaller, focused files (<100 lines each)",
     "Add test.describe grouping for related tests",
     "Extract duplicate logic into helper functions"
   ],
-  "summary": "Tests have maintainability issues - 5 violations (2 HIGH)"
+  "summary": "1 maintainability violation (1 HIGH)"
 }
 ```
 

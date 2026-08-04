@@ -709,6 +709,7 @@ function main() {
         reviewedFiles: changedTestFiles,
         contextFiles,
         contextBasis,
+        unscorableTestArtifacts,
       });
     } catch (error) {
       if (error.code === 'REPORT_UNPARSEABLE') {
@@ -750,9 +751,9 @@ function main() {
       model: resolvedModel,
       ...parsed,
     };
-    // CLI-computed, so the disclosure holds whether or not the agent rendered
-    // the report section it was told to. A consumer reading only the verdict
-    // still learns that a changed test artifact went unscored.
+    // Also CLI-computed, so a consumer reading only the verdict learns that a
+    // changed test artifact went unscored. parseReport separately refuses a
+    // report that dropped any of these from its disclosure section.
     if (unscorableTestArtifacts.length > 0) {
       verdictPayload.unscorableTestArtifacts = unscorableTestArtifacts;
     }
