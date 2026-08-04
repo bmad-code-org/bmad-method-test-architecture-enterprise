@@ -36,18 +36,18 @@ stepsCompleted:
 
 Strong smoke coverage with one governance gap.
 
-**Total Violations**: 0 Critical, 1 High, 0 Medium, 2 Low
+**Total Violations**: 0 Critical, 0 High, 0 Medium, 2 Low
 
 ## Quality Score Breakdown
 
 ```
 Starting Score:          100
 Critical Violations:     -0 × 10 = -0
-High Violations:         -1 × 5 = -5
+High Violations:         -0 × 5 = -0
 Medium Violations:       -0 × 2 = -0
 Low Violations:          -2 × 1 = -2
 
-Total Bonus:             +5
+Total Bonus:             +0
 
 Final Score:             98/100
 Grade:                   A

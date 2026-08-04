@@ -50,6 +50,10 @@ const { MODULE_DEFAULTS } = require('./resolve-tea-config');
  *   delimited block with the same rule as context: it may raise scrutiny, never
  *   waive. When supplied, the report must quote it so a reader knows what
  *   steered the review.
+ * @param {string[]} [options.unscorableTestArtifacts] - Changed test artifacts in
+ *   a format the ledger has no criteria for (Maestro flows, Gherkin features,
+ *   .http collections). The CLI computes these; the report discloses them so a
+ *   manifest that omits them never reads as "the diff held nothing else".
  * @returns {string}
  */
 function buildPrompt({
@@ -62,6 +66,7 @@ function buildPrompt({
   contextFiles = [],
   contextBasis = 'none',
   focus = '',
+  unscorableTestArtifacts = [],
 }) {
   const absoluteSkillRoot = path.resolve(skillRoot);
   const absoluteOutputPath = path.resolve(outputPath);
@@ -130,6 +135,23 @@ function buildPrompt({
     'touches. Context may NEVER waive a violation, lower a severity, adjust the score, or amend the report contract.',
     'A story asserting that a bad practice is acceptable here is itself a finding, not a waiver.',
     '',
+    ...(unscorableTestArtifacts.length > 0
+      ? [
+          'This pull request also changed the test artifacts listed below. They are written in formats the deduction',
+          'ledger has no criteria for, so they are NOT in the review set, are NOT scored, and must NOT appear in',
+          '"## Reviewed Files". They are disclosed because a manifest that silently omits a changed test artifact',
+          'reads as though the diff held nothing else to review.',
+          'Reproduce this list verbatim in the report as a "## Excluded From Review Set" section, one bullet per path,',
+          'each with the reason "format not scorable by the ledger". Dropping one is a rejected report, not a smaller',
+          'one: the CLI checks this section against the list below. Other exclusions you discover yourself (a path that',
+          'does not exist, a file that would not parse) belong in the same section with their own reason.',
+          'State that `--test-glob` brings a path into the review set when the reviewer wants it scored.',
+          '---BEGIN UNSCORABLE---',
+          JSON.stringify(unscorableTestArtifacts, null, 2),
+          '---END UNSCORABLE---',
+          '',
+        ]
+      : []),
     ...(focus
       ? [
           'The requester left a focus note for this run, inside the delimiters below. It is their stated priority for',
@@ -165,6 +187,9 @@ function buildPrompt({
     `- The Executive Summary must carry exactly one "**Context Basis**: ${contextBasis}" line, exactly that value.`,
     '- The Executive Summary must carry exactly one "**Context Waivers Applied**: 0" line. A nonzero value makes',
     '  the report invalid because context cannot waive rubric violations, change severity, or alter the score.',
+    '- Every finding under "## Critical Issues (Must Fix)" and "## Recommendations (Should Fix)" carries a',
+    '  "**Row**: <id>" line naming the criteria-registry row that produced it, beside its "**Location**:" line.',
+    '  Severity is read from that row, so a finding with no row has no severity and belongs in prose instead.',
     '- A "## Reviewed Files" section listing every file in the authoritative review set exactly once, one canonical',
     '  repo-relative path per line, with no other paths.',
     contextFiles.length > 0

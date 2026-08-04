@@ -31,15 +31,15 @@ inputDocuments:
 
 **Context Waivers Applied**: 0
 
-**Total Violations**: 0 Critical, 2 High, 2 Medium, 3 Low
+**Total Violations**: 0 Critical, 0 High, 7 Medium, 3 Low
 
 ## Quality Score Breakdown
 
 ```
 Starting Score:          100
 Critical Violations:     -0 × 10 = -0
-High Violations:         -2 × 5 = -10
-Medium Violations:       -2 × 2 = -4
+High Violations:         -0 × 5 = -0
+Medium Violations:       -7 × 2 = -14
 Low Violations:          -3 × 1 = -3
 
 Total Bonus:             +0

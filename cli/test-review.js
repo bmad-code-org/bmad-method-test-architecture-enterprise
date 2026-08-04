@@ -36,6 +36,7 @@ const {
   getChangedFiles,
   getChangedTestFiles,
   getContextFiles,
+  getUnscorableTestArtifacts,
   getDeletedTestFiles,
   contextBasisFor,
   isTestFile,
@@ -461,6 +462,11 @@ function main() {
   let changedTestFiles;
   let contextFiles = [];
   let contextTruncated = false;
+  // Changed test artifacts the ledger has no criteria for (Maestro flows,
+  // Gherkin features, .http collections). They stay out of the review set, but
+  // a reviewed-files manifest that simply omits them reads as though the diff
+  // held nothing else, so they are disclosed and carry the --test-glob remedy.
+  let unscorableTestArtifacts = [];
   try {
     if (filesProvided) {
       changedTestFiles = getChangedTestFiles({ files: options.files, projectRoot });
@@ -468,6 +474,7 @@ function main() {
       allChangedFiles = getChangedFiles({ base: options.base, projectRoot });
       changedTestFiles = allChangedFiles.filter((file) => isTestFile(file));
       ({ files: contextFiles, truncated: contextTruncated } = getContextFiles(allChangedFiles));
+      unscorableTestArtifacts = getUnscorableTestArtifacts(allChangedFiles);
     }
   } catch (error) {
     if (error.code === 'GIT_DIFF_FAILED' || error.code === 'BASE_UNRESOLVABLE') {
@@ -483,6 +490,7 @@ function main() {
   try {
     assertSafePaths(changedTestFiles);
     assertSafePaths(contextFiles);
+    assertSafePaths(unscorableTestArtifacts);
   } catch (error) {
     if (error.code === 'UNSAFE_PATH') {
       fail(EXIT.ENV_ERROR, error.message);
@@ -515,11 +523,21 @@ function main() {
       contextBasis,
       contextFiles,
     };
+    // The worst case for a silent scope cap: a diff whose ONLY test change is a
+    // Maestro flow or a .feature file skips with "no changed test files", which
+    // reads as "this PR touched no tests" when it plainly did.
+    if (unscorableTestArtifacts.length > 0) {
+      skipped.unscorableTestArtifacts = unscorableTestArtifacts;
+      skipped.reason = `${skipped.reason}; ${unscorableTestArtifacts.length} changed test artifact${unscorableTestArtifacts.length === 1 ? '' : 's'} in a format the ledger cannot score (use --test-glob to include)`;
+    }
     if (deletionsOnly) {
       skipped.deletedFiles = deletedTestFiles;
       console.log('Only test deletions detected in the diff; nothing to review.');
     } else {
       console.log('No changed test files detected; skipping test review.');
+    }
+    for (const artifact of unscorableTestArtifacts) {
+      console.error(`tea-test-review: changed test artifact not scorable by the ledger: ${artifact} (use --test-glob to include it)`);
     }
     const skippedPayload = applyWaiver(skipped, skipFails);
     console.log(JSON.stringify(skippedPayload, null, 2));
@@ -540,10 +558,11 @@ function main() {
       contextFiles,
       contextBasis,
       focus: options.focus,
+      unscorableTestArtifacts,
     });
     console.log(prompt);
     if (jsonPath) {
-      writeJsonFile(jsonPath, { promptOnly: true, files: changedTestFiles, contextFiles, contextBasis });
+      writeJsonFile(jsonPath, { promptOnly: true, files: changedTestFiles, contextFiles, contextBasis, unscorableTestArtifacts });
     }
     process.exit(EXIT.PASS);
   }
@@ -645,6 +664,7 @@ function main() {
     contextFiles,
     contextBasis,
     focus: options.focus,
+    unscorableTestArtifacts,
   });
 
   const executeAgent = ({ agentCwd, spawnPrefix }) => {
@@ -689,6 +709,7 @@ function main() {
         reviewedFiles: changedTestFiles,
         contextFiles,
         contextBasis,
+        unscorableTestArtifacts,
       });
     } catch (error) {
       if (error.code === 'REPORT_UNPARSEABLE') {
@@ -706,6 +727,17 @@ function main() {
         `tea-test-review: normalized agent Quality Score ${parsed.reportedQualityScore} to deterministic ledger score ${parsed.qualityScore}.`,
       );
     }
+    // Loudly, because it is the gate that moved. The agent's recommendation is a
+    // free-text field; the one the gate acts on is now computed from the counts, so a
+    // substitution here means the report would have let something through (or blocked
+    // something) that its own findings do not support.
+    if (parsed.reportedRecommendation !== undefined) {
+      console.error(
+        `tea-test-review: normalized agent Recommendation "${parsed.reportedRecommendation}" to "${parsed.recommendation}", ` +
+          `required by ${parsed.violations.critical} Critical / ${parsed.violations.high} High / ` +
+          `${parsed.violations.medium} Medium / ${parsed.violations.low} Low at score ${parsed.qualityScore}.`,
+      );
+    }
     gateFailures = evaluateGates(parsed);
 
     // The verdict JSON files manifest is the report's own Reviewed Files
@@ -719,6 +751,12 @@ function main() {
       model: resolvedModel,
       ...parsed,
     };
+    // Also CLI-computed, so a consumer reading only the verdict learns that a
+    // changed test artifact went unscored. parseReport separately refuses a
+    // report that dropped any of these from its disclosure section.
+    if (unscorableTestArtifacts.length > 0) {
+      verdictPayload.unscorableTestArtifacts = unscorableTestArtifacts;
+    }
     if (gateFailures.length > 0) {
       verdictPayload.gateFailures = gateFailures;
     }

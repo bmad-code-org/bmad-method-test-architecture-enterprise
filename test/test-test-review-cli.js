@@ -47,12 +47,20 @@ const { spawnSync } = require('node:child_process');
 const vm = require('node:vm');
 const yaml = require('js-yaml');
 
-const { parseReport, normalizeReportScore, verdictFor, scoreFails, CONTEXT_BASIS_ENUM } = require('../cli/lib/parse-report');
+const {
+  parseReport,
+  normalizeReportScore,
+  deriveRecommendation,
+  verdictFor,
+  scoreFails,
+  CONTEXT_BASIS_ENUM,
+} = require('../cli/lib/parse-report');
 const {
   isTestFile,
   isContextNoise,
   getChangedTestFiles,
   getContextFiles,
+  getUnscorableTestArtifacts,
   contextBasisFor,
   splitGitPathList,
   assertSafePaths,
@@ -207,12 +215,21 @@ async function runTests() {
 
     try {
       const approve = parseReport(readFixture('reports', 'approve.md'));
-      assert(approve.recommendation === 'Approve', 'approve fixture: recommendation is Approve', JSON.stringify(approve));
+      assert(
+        approve.recommendation === 'Approve with Comments',
+        'approve fixture: recommendation is Approve with Comments',
+        JSON.stringify(approve),
+      );
+      assert(
+        approve.reportedRecommendation === undefined,
+        'approve fixture: nothing normalized, so the report agreed with its own findings',
+        JSON.stringify(approve),
+      );
       assert(approve.qualityScore === 93, 'approve fixture: quality score is 93', JSON.stringify(approve));
       assert(
         approve.violations &&
           approve.violations.critical === 0 &&
-          approve.violations.high === 1 &&
+          approve.violations.high === 0 &&
           approve.violations.medium === 2 &&
           approve.violations.low === 3,
         'approve fixture: violation counts parsed',
@@ -316,12 +333,63 @@ async function runTests() {
     try {
       const lowScore = parseReport(readFixture('reports', 'approve-low-score.md'));
       assert(
-        lowScore.recommendation === 'Approve' && lowScore.qualityScore === 40,
-        'approve-low-score fixture parses to Approve / 40',
+        lowScore.recommendation === 'Approve with Comments' && lowScore.qualityScore === 70,
+        'approve-low-score fixture parses to Approve with Comments / 70',
+        JSON.stringify(lowScore),
+      );
+      // 70 is the boundary of the score<70 rule, so this also pins that a score of
+      // exactly 70 does NOT get escalated to Request Changes.
+      assert(
+        lowScore.reportedRecommendation === undefined,
+        'a score of exactly 70 is not escalated: the rule is score < 70',
         JSON.stringify(lowScore),
       );
     } catch (error) {
       assert(false, 'approve-low-score fixture parses', error.message);
+    }
+
+    // The recommendation is derived from the violation counts, not trusted. Before
+    // this, the score was CLI-normalized while the verdict beside it was a free-form
+    // pick from the enum, and --fail-on acts on the verdict: that is how two reviewers
+    // of couture-cast PR #103's four files scored 82 and 85 (noise) yet returned
+    // opposite outcomes. approve-with-high.md is the old approve fixture verbatim:
+    // 1 High violation with an "Approve" recommendation.
+    try {
+      const normalized = parseReport(readFixture('reports', 'approve-with-high.md'));
+      assert(
+        normalized.recommendation === 'Request Changes',
+        'a High violation forces Request Changes regardless of what the agent wrote',
+        JSON.stringify(normalized),
+      );
+      assert(
+        normalized.reportedRecommendation === 'Approve',
+        'the agent-written recommendation is preserved, so the substitution is visible',
+        JSON.stringify(normalized),
+      );
+      assert(
+        verdictFor(normalized.recommendation, 'request-changes') === 'fail',
+        'the derived recommendation is what the gate acts on',
+        JSON.stringify(normalized),
+      );
+    } catch (error) {
+      assert(false, 'approve-with-high fixture normalizes its recommendation', error.message);
+    }
+
+    // The rule itself, at every boundary.
+    {
+      const counts = (critical, high, medium, low) => ({ critical, high, medium, low });
+      const cases = [
+        [counts(1, 0, 0, 0), 100, 'Block', 'any Critical blocks, whatever the score'],
+        [counts(0, 1, 0, 0), 100, 'Request Changes', 'any High requests changes'],
+        [counts(0, 0, 35, 0), 30, 'Request Changes', 'volume alone fails the bar below 70'],
+        [counts(0, 0, 0, 1), 99, 'Approve with Comments', 'a lone Low is a comment, not a block'],
+        [counts(0, 0, 0, 0), 100, 'Approve', 'a clean report approves'],
+        [counts(0, 0, 0, 0), 69, 'Request Changes', 'score below 70 outranks an empty finding list'],
+      ];
+      for (const [violations, score, expected, description] of cases) {
+        const actual = deriveRecommendation(violations, score);
+        assert(actual === expected, `deriveRecommendation: ${description}`, `got ${actual}, expected ${expected}`);
+      }
     }
 
     // Regression: a live claude -p run wrote stepsCompleted as a wrapped YAML
@@ -622,7 +690,7 @@ async function runTests() {
     try {
       const colon = parseReport(readFixture('reports', 'colon-in-bold.md'));
       assert(
-        colon.recommendation === 'Approve' && colon.qualityScore === 90,
+        colon.recommendation === 'Approve with Comments' && colon.qualityScore === 90,
         'colon-in-bold fixture: "**Recommendation:**" form parses, inline stepsCompleted accepted',
         JSON.stringify(colon),
       );
@@ -654,7 +722,11 @@ async function runTests() {
 
     try {
       const lowercase = parseReport(readFixture('reports', 'lowercase.md'));
-      assert(lowercase.recommendation === 'Approve', 'lowercase fixture: "approve" normalizes to Approve', JSON.stringify(lowercase));
+      assert(
+        lowercase.recommendation === 'Approve with Comments',
+        'lowercase fixture: "approve with comments" normalizes to the canonical enum casing',
+        JSON.stringify(lowercase),
+      );
       assert(
         lowercase.violations &&
           lowercase.violations.critical === 0 &&
@@ -682,9 +754,19 @@ async function runTests() {
 
     try {
       const consistent = parseReport(readFixture('reports', 'request-changes-critical.md'));
+      // Still parses rather than being rejected, which is this fixture's purpose. But a
+      // Critical violation now derives Block: "Request Changes" is not a verdict a
+      // reviewer gets to choose when a test cannot fail. Note the consequence — a repo
+      // on the softer `--fail-on block` used to pass a Critical finding and no longer
+      // does.
       assert(
-        consistent.recommendation === 'Request Changes' && consistent.violations.critical === 1,
-        'request-changes-critical fixture parses: Critical > 0 with Request Changes is consistent',
+        consistent.recommendation === 'Block' && consistent.violations.critical === 1,
+        'request-changes-critical fixture: Critical escalates Request Changes to Block',
+        JSON.stringify(consistent),
+      );
+      assert(
+        consistent.reportedRecommendation === 'Request Changes',
+        'the escalation is visible: the agent-written Request Changes is preserved',
         JSON.stringify(consistent),
       );
     } catch (error) {
@@ -702,8 +784,10 @@ async function runTests() {
       .readFileSync(path.join(skillRootSource, 'test-review-template.md'), 'utf8')
       .replace(/^stepsCompleted: \[]$/m, "stepsCompleted: ['step-01-load-context', 'step-04-generate-report']")
       .replaceAll('{score}', '88')
-      // 0 Critical, 2 High, 3 Medium, 1 Low deducts 17; +5 bonus lands on 88,
+      // 0 Critical, 0 High, 8 Medium, 1 Low deducts 17; +5 bonus lands on 88,
       // so the template's own ledger has to reproduce the score it publishes.
+      // No High, because the derived recommendation makes "Approve with Comments"
+      // beside a High violation an illegal report rather than a lenient one.
       .replaceAll('{bonus_total}', '5')
       .replaceAll('{final_score}', '88')
       .replaceAll('{grade}', 'B')
@@ -713,7 +797,7 @@ async function runTests() {
       )
       .replace(
         '**Total Violations**: {critical_count} Critical, {high_count} High, {medium_count} Medium, {low_count} Low',
-        '**Total Violations**: 0 Critical, 2 High, 3 Medium, 1 Low',
+        '**Total Violations**: 0 Critical, 0 High, 8 Medium, 1 Low',
       )
       .replaceAll('**Context Basis**: {none | pr_diff | pr_diff_truncated}', '**Context Basis**: pr_diff')
       .replaceAll('{relative_path_1}', 'tests/checkout.spec.ts')
@@ -725,7 +809,8 @@ async function runTests() {
       assert(
         templateShaped.recommendation === 'Approve with Comments' &&
           templateShaped.qualityScore === 88 &&
-          templateShaped.violations.high === 2,
+          templateShaped.violations.medium === 8 &&
+          templateShaped.reportedRecommendation === undefined,
         "skill's own report template parses: the strict schema never false-fails a template-shaped report",
         JSON.stringify(templateShaped),
       );
@@ -1063,6 +1148,63 @@ async function runTests() {
       `getContextFiles caps the context set at ${MAX_CONTEXT_FILES} and reports the trim`,
       JSON.stringify({ length: capped.files.length, truncated: capped.truncated }),
     );
+
+    // Unscorable test artifacts: disclosed, never scored. The couture-cast case
+    // that motivated this is maestro/garment-capture-flow.yaml, a changed test
+    // artifact that reached Review Context and never Reviewed Files.
+    const unscorable = getUnscorableTestArtifacts([
+      'maestro/garment-capture-flow.yaml',
+      'features/checkout.feature',
+      'tests/api/orders.http',
+      'apps/api/src/wardrobe.service.spec.ts',
+      '.github/workflows/pr-gate.yml',
+      'apps/mobile/assets/locales/en-US.json',
+      'packages/db/prisma/schema.prisma',
+      'openapi.yaml',
+    ]);
+    assert(
+      unscorable.includes('maestro/garment-capture-flow.yaml'),
+      'getUnscorableTestArtifacts names a changed Maestro flow rather than omitting it',
+      JSON.stringify(unscorable),
+    );
+    assert(
+      unscorable.includes('features/checkout.feature') && unscorable.includes('tests/api/orders.http'),
+      'getUnscorableTestArtifacts covers Gherkin features and .http collections',
+      JSON.stringify(unscorable),
+    );
+    assert(
+      !unscorable.includes('apps/api/src/wardrobe.service.spec.ts'),
+      'getUnscorableTestArtifacts never claims a file the review set already scores',
+      JSON.stringify(unscorable),
+    );
+    assert(
+      !unscorable.some((file) => ['.github/workflows/pr-gate.yml', 'apps/mobile/assets/locales/en-US.json', 'openapi.yaml'].includes(file)),
+      'getUnscorableTestArtifacts stays narrow: a CI workflow, a locale file and a spec-less yaml are not test artifacts',
+      JSON.stringify(unscorable),
+    );
+    assert(
+      getUnscorableTestArtifacts([]).length === 0 && getUnscorableTestArtifacts().length === 0,
+      'getUnscorableTestArtifacts tolerates an empty or missing diff',
+    );
+
+    const unscorablePromptArgs = { skillRoot: '/skill', files: ['tests/checkout.spec.ts'], outputPath: 'test-review.md' };
+    const unscorablePrompt = buildPrompt({ ...unscorablePromptArgs, unscorableTestArtifacts: ['maestro/garment-capture-flow.yaml'] });
+    assert(
+      unscorablePrompt.includes('---BEGIN UNSCORABLE---') && unscorablePrompt.includes('maestro/garment-capture-flow.yaml'),
+      'buildPrompt delimits the unscorable list so the report can disclose it verbatim',
+    );
+    assert(unscorablePrompt.includes('Excluded From Review Set'), 'buildPrompt names the report section the unscorable list must land in');
+    assert(!buildPrompt(unscorablePromptArgs).includes('UNSCORABLE'), 'buildPrompt omits the block entirely when nothing was excluded');
+    try {
+      assertSafePaths(['maestro/---BEGIN UNSCORABLE---.yaml']);
+      assert(false, 'assertSafePaths rejects a path that could forge the unscorable delimiter');
+    } catch (error) {
+      assert(
+        error.code === 'UNSAFE_PATH',
+        'assertSafePaths rejects a path that could forge the unscorable delimiter with UNSAFE_PATH',
+        error.message,
+      );
+    }
 
     assert(contextBasisFor({ files: [] }) === 'none', 'contextBasisFor: an empty context set is none');
     assert(contextBasisFor({ files: ['docs/story.md'] }) === 'pr_diff', 'contextBasisFor: a populated set is pr_diff');
@@ -1795,7 +1937,11 @@ async function runTests() {
       'stub approve exits 0 (stub verified the prompt arrived on stdin, not argv)',
       `status=${approveRun.status} stderr=${approveRun.stderr}`,
     );
-    assert(approveRun.stdout.includes('"recommendation": "Approve"'), 'approve run prints the verdict JSON', approveRun.stdout);
+    assert(
+      approveRun.stdout.includes('"recommendation": "Approve with Comments"'),
+      'approve run prints the verdict JSON',
+      approveRun.stdout,
+    );
     try {
       const approvePayload = JSON.parse(fs.readFileSync(approveJsonPath, 'utf8'));
       assert(
@@ -2217,7 +2363,7 @@ async function runTests() {
         '--output',
         minScoreOut,
         '--min-score',
-        '50',
+        '71',
         '--agent-cmd',
         stubAgent,
         '--no-isolate',
@@ -2226,8 +2372,8 @@ async function runTests() {
       { STUB_MODE: 'approve-low' },
     );
     assert(
-      minScoreRun.status === 1 && minScoreRun.stderr.includes('fails --min-score 50'),
-      '--min-score 50 fails an approve report scoring 40 (verdict fail, exit 1)',
+      minScoreRun.status === 1 && minScoreRun.stderr.includes('fails --min-score 71'),
+      '--min-score 71 fails a passing report scoring 70 on the floor alone (verdict fail, exit 1)',
       `status=${minScoreRun.status} stderr=${minScoreRun.stderr}`,
     );
 
@@ -2241,7 +2387,7 @@ async function runTests() {
         '--output',
         minScorePassOut,
         '--min-score',
-        '40',
+        '70',
         '--agent-cmd',
         stubAgent,
         '--no-isolate',
@@ -2251,7 +2397,7 @@ async function runTests() {
     );
     assert(
       minScorePassRun.status === 0,
-      '--min-score 40 passes a report scoring exactly 40 (boundary)',
+      '--min-score 70 passes a report scoring exactly 70 (boundary)',
       `status=${minScorePassRun.status}`,
     );
 
@@ -2676,9 +2822,19 @@ async function runTests() {
       ],
       { STUB_MODE: 'request-changes-critical' },
     );
+    // This test used to assert exit 0: --max-critical 1 raised the cap, --fail-on
+    // block let a Request Changes verdict through, and a report with 1 Critical
+    // passed. The derived recommendation ends that. Any Critical now derives Block,
+    // and Block fails at every --fail-on level, so no configuration lets a Critical
+    // finding pass. --max-critical can therefore only ever be redundant now: it is
+    // kept for explicitness, but it cannot widen the gate.
+    //
+    // That is the intended direction. A Critical row means the test cannot fail or
+    // never reaches the system under test, and a knob that waves that through is the
+    // hole the rubric exists to close. Use --waive, which is recorded in the verdict.
     assert(
-      maxCritPassRun.status === 0,
-      '--max-critical 1 passes a report declaring exactly 1 Critical (boundary)',
+      maxCritPassRun.status === 1 && maxCritPassRun.stderr.includes('Block'),
+      'a Critical finding fails even under --fail-on block with --max-critical 1: no cap lets a Critical pass',
       `status=${maxCritPassRun.status} stderr=${maxCritPassRun.stderr}`,
     );
 
@@ -2788,7 +2944,7 @@ async function runTests() {
     );
     assert(
       gitHappy.status === 0 &&
-        gitHappy.stdout.includes('"recommendation": "Approve"') &&
+        gitHappy.stdout.includes('"recommendation": "Approve with Comments"') &&
         gitHappy.stdout.includes('tests/checkout.spec.ts'),
       'git fixture: modified-spec branch runs the review end-to-end (stdin prompt verified)',
       `status=${gitHappy.status} stderr=${gitHappy.stderr}`,
@@ -2934,7 +3090,7 @@ async function runTests() {
         { STUB_MODE: 'approve' },
       );
       assert(
-        run.status === 0 && run.stdout.includes('"recommendation": "Approve"'),
+        run.status === 0 && run.stdout.includes('"recommendation": "Approve with Comments"'),
         `git fixture: --test-glob ${label} "${glob}" pulls src/app.ts into the review set`,
         `status=${run.status} stderr=${run.stderr}`,
       );
@@ -3003,7 +3159,7 @@ async function runTests() {
       { STUB_MODE: 'approve' },
     );
     assert(
-      gitPoisonOutsideRoot.status === 0 && gitPoisonOutsideRoot.stdout.includes('"recommendation": "Approve"'),
+      gitPoisonOutsideRoot.status === 0 && gitPoisonOutsideRoot.stdout.includes('"recommendation": "Approve with Comments"'),
       'git fixture: explicit --skill-root outside the project makes the guard moot (pinned reviewer runs)',
       `status=${gitPoisonOutsideRoot.status} stderr=${gitPoisonOutsideRoot.stderr}`,
     );
@@ -3046,7 +3202,7 @@ async function runTests() {
         { STUB_MODE: 'forbidden-write', TEA_TEST_REVIEW_ISOLATION: 'chmod' },
       );
       assert(
-        isoRun.status === 0 && isoRun.stdout.includes('"recommendation": "Approve"'),
+        isoRun.status === 0 && isoRun.stdout.includes('"recommendation": "Approve with Comments"'),
         'chmod isolation: forbidden write is denied, run completes with the stub verdict',
         `status=${isoRun.status} stderr=${isoRun.stderr}`,
       );
@@ -3068,7 +3224,11 @@ async function runTests() {
       } catch {
         // isoJson stays null
       }
-      assert(isoJson && isoJson.recommendation === 'Approve', 'chmod isolation: verdict JSON is copied back to the requested json path');
+      assert(
+        isoJson && isoJson.recommendation === 'Approve with Comments',
+        'chmod isolation: verdict JSON is copied back to the requested json path',
+        JSON.stringify(isoJson),
+      );
       let restored = false;
       try {
         fs.writeFileSync(path.join(isoRoot, 'probe-after-isolation.txt'), 'writable\n');

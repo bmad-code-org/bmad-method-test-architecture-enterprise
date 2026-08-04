@@ -1,0 +1,60 @@
+{
+  "$comment": [
+    "Ground truth for the test-review eval harness. Line numbers are derived from the",
+    "fixture files, not guessed; re-derive them if a fixture changes or recall is measured",
+    "against the wrong lines and the number silently lies.",
+    "",
+    "lineTolerance exists because a reviewer citing the enclosing test rather than the exact",
+    "offending line has still found the defect. It is deliberately small: a tolerance wide",
+    "enough to cover a whole file would score 'named the file' as 'named the defect'.",
+    "",
+    "Precision is scored from the fixtures with an EMPTY planted array, not from the mustNotReport",
+    "key: a reviewer that reports everything scores 100% recall and is worthless, so precision is",
+    "measured on the same run. mustNotReport and negativeControls are documentation for whoever",
+    "reads a false positive later, and nothing in the harness branches on them. The pre-flight does",
+    "assert that a mustNotReport fixture plants nothing, so the prose and the scoring cannot drift."
+  ],
+  "lineTolerance": 4,
+  "files": [
+    {
+      "path": "seeded/checkout.spec.ts",
+      "planted": [
+        { "row": "H4", "line": 9, "what": "module-level mutable state mutated in a test with no reset" },
+        { "row": "H1", "line": 16, "what": "waitForTimeout used to order steps" },
+        { "row": "L1", "line": 19, "what": "CSS id locator where a role locator is available" },
+        { "row": "H3", "line": 31, "what": "conditional decides whether anything is asserted" },
+        { "row": "C1", "line": 38, "what": "the tenant-boundary test is skipped with no reason" }
+      ]
+    },
+    {
+      "path": "seeded/orders.service.spec.ts",
+      "planted": [
+        { "row": "C3", "line": 17, "what": "expect(true).toBe(true) can never fail" },
+        { "row": "C4", "line": 23, "what": "test body has no assertion" },
+        { "row": "C5", "line": 31, "what": "asserts a mock it configured; the service is never called" },
+        { "row": "M3", "line": 39, "what": "typeof shape assertion instead of the value" }
+      ]
+    },
+    {
+      "path": "clean/profile.spec.ts",
+      "planted": [],
+      "mustNotReport": {
+        "reason": "Deliberately clean. Any violation here is a false positive.",
+        "commonFalsePositives": [
+          "network-first: the intercept IS registered before the navigation",
+          "priority markers: [P1]/[P2] are present in the test names",
+          "data factories: buildProfile is a factory with overrides",
+          "selector resilience: every locator is role-based"
+        ]
+      }
+    }
+  ],
+  "negativeControls": [
+    {
+      "id": "coverage-out-of-scope",
+      "expectation": "A changed implementation with no accompanying test must NOT be reported by test-review.",
+      "why": "Coverage is out of scope for this workflow and belongs to trace. Murat's original seeded-PR design listed 'an implementation change with no test' among the planted defects, but for THIS workflow finding it is a scope violation rather than a hit. Scored as a false positive, never as recall.",
+      "howToExercise": "Include a changed source file with no matching test in the context set, then assert the report raises no coverage violation."
+    }
+  ]
+}

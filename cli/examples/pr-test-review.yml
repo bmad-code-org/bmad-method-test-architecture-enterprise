@@ -221,6 +221,15 @@ jobs:
                     ...reviewed.slice(0, 10).map((f) => `  - ${markdownCodeSpan(f)}`),
                     ...(reviewed.length > 10 ? [`  - … and ${reviewed.length - 10} more`] : []),
                   ];
+                  // A score with no attribution cannot be compared to another
+                  // score. The verdict JSON already carries the resolved agent
+                  // and model for that reason; without this line the human
+                  // surface loses it, and 82 from one vendor reads as
+                  // interchangeable with 82 from another.
+                  const reviewer = [verdict.agent, verdict.model].filter((v) => typeof v === "string" && v.length > 0);
+                  if (reviewer.length > 0) {
+                    lines.push(`- **Reviewer**: ${reviewer.join(" / ")}`);
+                  }
                   if (weaknesses.length > 0) {
                     lines.push("", "**Key weaknesses**:", ...weaknesses.map((w) => `- ${w}`));
                   }
@@ -233,12 +242,23 @@ jobs:
                   // missing from the download.
                   const reportText = fs.existsSync("test-review.md") ? fs.readFileSync("test-review.md", "utf8") : null;
                   if (reportText && reportText.length <= MAX_INLINE_REPORT_CHARS) {
+                    // The report opens with `---\nkey: value\n---`, and markdown
+                    // reads that closing `---` as a setext underline, so the
+                    // resume-state block renders as an <h2> above the report's
+                    // own title. Fencing keeps it verbatim for the paste path at
+                    // code-block size. Only a closing block at the very start is
+                    // touched, and never one whose values contain a fence.
+                    const fenceFrontmatter = (text) => {
+                      const match = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/.exec(text);
+                      if (!match || match[1].includes("```")) return text;
+                      return `\`\`\`yaml\n${match[1]}\n\`\`\`${match[2]}${text.slice(match[0].length)}`;
+                    };
                     // A reviewed file's own content can contain a literal
                     // </details>; inserting a zero-width space breaks that as
                     // an HTML closing tag while leaving the visible text
                     // effectively unchanged, so it cannot end this block early
                     // and spill raw markdown into the rest of the comment.
-                    const safeReportText = reportText.replace(/<\/details>/gi, "<\u200B/details>");
+                    const safeReportText = fenceFrontmatter(reportText).replace(/<\/details>/gi, "<\u200B/details>");
                     lines.push(
                       "<details>",
                       "<summary>Full report (paste into your AI coding agent to apply the fixes)</summary>",
