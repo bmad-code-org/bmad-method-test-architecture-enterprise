@@ -592,6 +592,28 @@ async function runTests() {
       assert(false, 'colon-in-bold fixture parses', error.message);
     }
 
+    // Regression: a live Codex CI run produced the correct Decision value but
+    // omitted Markdown bolding from that one label. Styling cannot invalidate
+    // an otherwise complete verdict whose two Recommendation values agree.
+    try {
+      const source = readFixture('reports', 'request-changes.md');
+      const liveCodexShape = source.replace(
+        '## Decision\n\n**Recommendation**: Request Changes',
+        '## Decision\n\nRecommendation: Request Changes',
+      );
+      if (liveCodexShape === source) {
+        throw new Error('plain Recommendation regression setup did not modify the fixture');
+      }
+      const plainDecision = parseReport(liveCodexShape);
+      assert(
+        plainDecision.recommendation === 'Request Changes' && plainDecision.qualityScore === 63,
+        'plain Decision Recommendation from live Codex output parses',
+        JSON.stringify(plainDecision),
+      );
+    } catch (error) {
+      assert(false, 'plain Decision Recommendation from live Codex output parses', error.message);
+    }
+
     try {
       const lowercase = parseReport(readFixture('reports', 'lowercase.md'));
       assert(lowercase.recommendation === 'Approve', 'lowercase fixture: "approve" normalizes to Approve', JSON.stringify(lowercase));

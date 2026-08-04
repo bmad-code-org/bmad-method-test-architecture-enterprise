@@ -4,9 +4,10 @@
  * Strict, section-aware schema (every element is mandatory):
  * - YAML frontmatter declaring workflowType: testarch-test-review and a
  *   non-empty stepsCompleted list.
- * - A "**Recommendation**:" line in BOTH the "## Executive Summary" and the
- *   "## Decision" section; the two must agree (case-insensitively) and the
- *   value must be one of the legal enum, to which it is normalized.
+ * - A "Recommendation:" line, with or without Markdown bolding, in BOTH the
+ *   "## Executive Summary" and the "## Decision" section; the two must agree
+ *   (case-insensitively) and the value must be one of the legal enum, to which
+ *   it is normalized.
  * - "**Quality Score**: N/100" with N an integer in 0-100.
  * - A "**Total Violations**:" line with all four severity counts.
  * - A "## Quality Score Breakdown" ledger whose arithmetic reproduces the
@@ -41,7 +42,7 @@
 const path = require('node:path');
 
 const RECOMMENDATION_ENUM = ['Approve', 'Approve with Comments', 'Request Changes', 'Block'];
-const RECOMMENDATION_LINE = /\*\*Recommendation:?\*\*:?[ \t]*([^\n]+)/;
+const RECOMMENDATION_LINE = /^[ \t]*(?:\*\*Recommendation\*\*:|\*\*Recommendation:\*\*|Recommendation:)[ \t]*([^\r\n]+?)[ \t]*$/m;
 const CONTEXT_BASIS_ENUM = ['none', 'pr_diff', 'pr_diff_truncated'];
 const CONTEXT_BASIS_LINE_SOURCE = String.raw`^[ \t]*\*\*Context Basis:?\*\*:?[ \t]*([^\r\n]+)[ \t]*$`;
 const CONTEXT_WAIVERS_LINE_SOURCE = String.raw`^[ \t]*\*\*Context Waivers Applied:?\*\*:?[ \t]*([^\r\n]+)[ \t]*$`;
@@ -148,7 +149,7 @@ function recommendationFromSection(text, heading) {
   }
   const match = section.match(RECOMMENDATION_LINE);
   if (!match) {
-    unparseable(`Report is missing the "**Recommendation**:" line in the "## ${heading}" section`);
+    unparseable(`Report is missing the "Recommendation:" line in the "## ${heading}" section`);
   }
   return normalizeRecommendation(match[1], `"## ${heading}"`);
 }
@@ -514,7 +515,7 @@ function parseReport(reportText, runContract = {}) {
   const executive = recommendationFromSection(text, 'Executive Summary');
   const decision = recommendationFromSection(text, 'Decision');
   if (executive !== decision) {
-    unparseable(`Report has conflicting "**Recommendation**:" lines (${executive} in Executive Summary vs ${decision} in Decision)`);
+    unparseable(`Report has conflicting "Recommendation:" lines (${executive} in Executive Summary vs ${decision} in Decision)`);
   }
 
   const scoreMatch = text.match(SCORE_PATTERN);
