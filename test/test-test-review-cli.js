@@ -1352,7 +1352,7 @@ async function runTests() {
       const argv = adapter.buildArgv(['--extra-marker']);
       assert(
         Array.isArray(argv) && argv.includes('--extra-marker') && argv.at(-1) === '--extra-marker',
-        `${name} adapter buildArgv appends extra args (--claude-arg passthrough) last`,
+        `${name} adapter buildArgv appends extra args (--agent-arg passthrough) last`,
         JSON.stringify(argv),
       );
       assert(typeof adapter.command === 'string' && adapter.command.length > 0, `${name} adapter declares a default command`);
@@ -1651,7 +1651,7 @@ async function runTests() {
       help.status === 0 &&
         [
           '--agent-cmd',
-          '--claude-arg',
+          '--agent-arg',
           '--timeout-ms',
           '--test-glob',
           '--env-pass',
@@ -1815,17 +1815,17 @@ async function runTests() {
       assert(false, 'verdict JSON records the pinned default when --model is absent', error.message);
     }
 
-    // The --claude-arg escape hatch predates --model and still has to work: a
-    // second --model would be a clap usage error on codex.
+    // The generic passthrough can name a model. A second --model would be a
+    // clap usage error on codex.
     const passthroughRun = modelRun(
       'model-passthrough',
-      ['--claude-arg', '-m', '--claude-arg', 'passthrough-model'],
+      ['--agent-arg', '-m', '--agent-arg', 'passthrough-model'],
       'passthrough-model',
       'codex',
     );
     assert(
       passthroughRun.status === 0 && passthroughRun.stderr.includes('model passthrough-model'),
-      'a --claude-arg model passthrough becomes the resolved model and suppresses the pinned default',
+      'an --agent-arg model passthrough becomes the resolved model and suppresses the pinned default',
       `status=${passthroughRun.status} stderr=${passthroughRun.stderr}`,
     );
     try {
@@ -1839,9 +1839,23 @@ async function runTests() {
       assert(false, 'verdict JSON records the passthrough model that actually produced the score', error.message);
     }
 
+    const legacyPassthroughRun = modelRun(
+      'model-passthrough-legacy-alias',
+      ['--claude-arg', '-m', '--claude-arg', 'legacy-passthrough-model'],
+      'legacy-passthrough-model',
+      'codex',
+    );
+    assert(
+      legacyPassthroughRun.status === 0 &&
+        legacyPassthroughRun.stderr.includes('--claude-arg is deprecated; use --agent-arg') &&
+        legacyPassthroughRun.stderr.includes('model legacy-passthrough-model'),
+      'the legacy --claude-arg alias preserves passthrough order and emits a migration warning',
+      `status=${legacyPassthroughRun.status} stderr=${legacyPassthroughRun.stderr}`,
+    );
+
     for (const [agent, passthroughArg, expected] of [
-      ['claude', '--claude-arg=--model=claude-equals', 'claude-equals'],
-      ['codex', '--claude-arg=-m=codex-equals', 'codex-equals'],
+      ['claude', '--agent-arg=--model=claude-equals', 'claude-equals'],
+      ['codex', '--agent-arg=-m=codex-equals', 'codex-equals'],
     ]) {
       const equalsRun = modelRun(`model-passthrough-equals-${agent}`, [passthroughArg], expected, agent);
       assert(
@@ -1860,7 +1874,7 @@ async function runTests() {
       fixtureProject,
       '--model',
       'explicit-model',
-      '--claude-arg=--model=passthrough-model',
+      '--agent-arg=--model=passthrough-model',
     ]);
     assert(
       modelConflict.status === 2 && modelConflict.stderr.includes('both --model'),
@@ -1875,8 +1889,8 @@ async function runTests() {
       'tests/checkout.spec.ts',
       '--project-root',
       fixtureProject,
-      '--claude-arg=-m=first-model',
-      '--claude-arg=--model=second-model',
+      '--agent-arg=-m=first-model',
+      '--agent-arg=--model=second-model',
     ]);
     assert(
       duplicatePassthroughModel.status === 2 && duplicatePassthroughModel.stderr.includes('declares the model 2 times'),
@@ -1891,7 +1905,7 @@ async function runTests() {
       'tests/checkout.spec.ts',
       '--project-root',
       fixtureProject,
-      '--claude-arg=--model',
+      '--agent-arg=--model',
     ]);
     assert(
       missingPassthroughModel.status === 2 && missingPassthroughModel.stderr.includes('passthrough value'),
@@ -2134,6 +2148,14 @@ async function runTests() {
       staleRun.status === 3,
       'stub writing nothing exits 3 despite a stale pre-placed report',
       `status=${staleRun.status} stderr=${staleRun.stderr}`,
+    );
+    assert(
+      staleRun.stderr.includes('Agent stdout before missing report (bounded tail):') &&
+        staleRun.stderr.includes('exited successfully without writing the requested report') &&
+        staleRun.stderr.includes('Agent stderr before missing report (bounded tail):') &&
+        staleRun.stderr.includes('success-path stderr before missing report'),
+      'an exit-0 missing-report failure surfaces bounded stdout and stderr diagnostics',
+      staleRun.stderr,
     );
     assert(!staleRun.stdout.includes('"recommendation": "Block"'), 'stale pre-placed report is never parsed', staleRun.stdout);
     assert(!fs.existsSync(staleOut), 'stale pre-placed report is deleted before the agent runs', staleOut);

@@ -109,7 +109,7 @@ function modelFromArgs(flags, extra = []) {
 }
 
 /**
- * Model argv for an adapter, suppressed when the --claude-arg passthrough
+ * Model argv for an adapter, suppressed when the --agent-arg passthrough
  * already sets the model itself.
  *
  * The suppression is not politeness, it is required for codex: clap rejects a
@@ -171,7 +171,7 @@ const AGENT_ADAPTERS = {
     // on a one-word prompt, measured 2026-08-03), but it is codex-only, so
     // pinning it in this vendor-agnostic table would give the flag a meaning
     // no other adapter can honor. Set it per run with
-    // --claude-arg -c --claude-arg model_reasoning_effort=low.
+    // --agent-arg -c --agent-arg model_reasoning_effort=low.
     buildArgv: (extra = [], model) => [
       'exec',
       '--skip-git-repo-check',

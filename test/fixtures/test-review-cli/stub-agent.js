@@ -94,6 +94,8 @@ if (mode === 'fail') {
 }
 
 if (mode === 'nothing') {
+  console.log('stub-agent: exited successfully without writing the requested report');
+  console.error('stub-agent: success-path stderr before missing report');
   process.exit(0);
 }
 

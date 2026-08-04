@@ -87,7 +87,7 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 | `--agent <agent>`                                      | `claude`                                   | `claude` or `codex` spawn the matching CLI via its adapter (`cli/lib/agent-adapters.js`); `none` prints the prompt only.          |
 | `--model <model>`                                      | `claude`: `sonnet`, `codex`: `gpt-5.6-sol` | Model the agent runs on. Overrides whatever the vendor CLI would pick from its own config. Rejected with `--agent none`.          |
 | `--agent-cmd <path>`                                   | the selected adapter's command             | Override the agent executable; the selected `--agent` adapter's argv/env still apply (advanced).                                  |
-| `--claude-arg <arg>`                                   | -                                          | Extra argument appended to the selected agent's argv (repeatable; name predates multi-vendor support).                            |
+| `--agent-arg <arg>`                                    | -                                          | Extra argument appended to the selected agent's argv (repeatable).                                                                |
 | `--env-pass <NAME>`                                    | -                                          | Env var allowed through beyond the default set (repeatable).                                                                      |
 | `--timeout-ms <n>`                                     | `1800000` (30 min)                         | Agent wall-clock timeout (SIGTERM on expiry).                                                                                     |
 | `--min-score <n>`                                      | -                                          | Fail when the quality score is below `n` (0-100).                                                                                 |
@@ -132,13 +132,15 @@ Left unstated, the model is whatever the vendor CLI resolves for itself: `~/.cod
 | `claude`  | `sonnet`       | `--model <model>` |
 | `codex`   | `gpt-5.6-sol`  | `--model <model>` |
 
-The resolved model travels in the verdict JSON as `model`, alongside `agent`, so a stored verdict says what produced it. A model supplied through `--claude-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn. Two scores are only comparable when those two fields match.
+The resolved model travels in the verdict JSON as `model`, alongside `agent`, so a stored verdict says what produced it. A model supplied through `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn. Two scores are only comparable when those two fields match.
+
+`--claude-arg` remains accepted as a deprecated alias for compatibility with workflows created before multi-vendor support. It emits a migration warning and preserves argument order. New workflows should use `--agent-arg`.
 
 The pinned values are aliases: they hold the tier steady, not the exact weights. Pass a fully-qualified slug to `--model` when a run has to be reproducible across model generations.
 
 `--model` is rejected with `--agent none`, which runs no agent. Honoring it there would be a lie, and quietly dropping it is the failure mode `--model` exists to remove.
 
-**Codex reasoning effort is a second unstated input, and it is not pinned here.** A local `model_reasoning_effort = "max"` costs about ten extra seconds even on a one-word prompt, and far more on a real review. It is codex-only, so it gets no vendor-agnostic flag; set it per run with `--claude-arg -c --claude-arg model_reasoning_effort=low`.
+**Codex reasoning effort is a second unstated input, and it is not pinned here.** A local `model_reasoning_effort = "max"` costs about ten extra seconds even on a one-word prompt, and far more on a real review. It is codex-only, so it gets no vendor-agnostic flag; set it per run with `--agent-arg -c --agent-arg model_reasoning_effort=low`.
 
 ## TEA config resolution
 

@@ -59,6 +59,8 @@ const SCOPES = new Set(['single', 'directory', 'suite']);
 const FAIL_ON_LEVELS = new Set(['request-changes', 'block']);
 const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
 const ENV_PASS_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const AGENT_OUTPUT_TAIL_LINES = 20;
+const AGENT_OUTPUT_TAIL_CHARS = 8000;
 
 function fail(exitCode, message) {
   console.error(`tea-test-review: ${message}`);
@@ -67,6 +69,52 @@ function fail(exitCode, message) {
 
 function collect(value, previous) {
   return [...previous, value];
+}
+
+/**
+ * Keep the pre-multi-vendor passthrough spelling working while exposing the
+ * generic name as the only documented interface. Normalizing argv before
+ * Commander parses it preserves the exact order when old and new spellings
+ * are mixed, which matters for paired vendor arguments such as `-c value`.
+ *
+ * @param {string[]} argv - Process argv.
+ * @returns {{ argv: string[], usedDeprecatedAlias: boolean }}
+ */
+function normalizeAgentArgAliases(argv) {
+  let usedDeprecatedAlias = false;
+  const normalized = argv.map((arg) => {
+    if (arg === '--claude-arg') {
+      usedDeprecatedAlias = true;
+      return '--agent-arg';
+    }
+    if (arg.startsWith('--claude-arg=')) {
+      usedDeprecatedAlias = true;
+      return `--agent-arg=${arg.slice('--claude-arg='.length)}`;
+    }
+    return arg;
+  });
+  return { argv: normalized, usedDeprecatedAlias };
+}
+
+function boundedAgentOutputTail(value) {
+  const byLines = String(value || '')
+    .trim()
+    .split(/\r?\n/)
+    .slice(-AGENT_OUTPUT_TAIL_LINES)
+    .join('\n');
+  return byLines.length > AGENT_OUTPUT_TAIL_CHARS ? byLines.slice(-AGENT_OUTPUT_TAIL_CHARS) : byLines;
+}
+
+function printMissingReportDiagnostics(agentResult) {
+  for (const [label, value] of [
+    ['stdout', agentResult && agentResult.stdout],
+    ['stderr', agentResult && agentResult.stderr],
+  ]) {
+    const tail = boundedAgentOutputTail(value);
+    if (tail) {
+      console.error(`Agent ${label} before missing report (bounded tail):\n${tail}`);
+    }
+  }
 }
 
 /**
@@ -150,7 +198,7 @@ function main() {
         .join(', ')})`,
     )
     .option('--agent-cmd <path>', 'override the agent executable (advanced; used by tests with a stub agent)')
-    .option('--claude-arg <arg>', 'extra argument passed through to the claude CLI (repeatable)', collect, [])
+    .option('--agent-arg <arg>', 'extra argument appended to the selected agent CLI argv (repeatable)', collect, [])
     .option(
       '--env-pass <NAME>',
       'environment variable name allowed through to the agent beyond the minimal default set (repeatable)',
@@ -183,8 +231,12 @@ function main() {
     .option('--pact-mcp <mode>', `force tea_pact_mcp, overriding _bmad/tea/config.yaml (${PACT_MCP_VALUES.join('|')}; default: none)`);
 
   program.exitOverride();
+  const normalizedArgv = normalizeAgentArgAliases(process.argv);
+  if (normalizedArgv.usedDeprecatedAlias) {
+    console.error('tea-test-review: --claude-arg is deprecated; use --agent-arg.');
+  }
   try {
-    program.parse(process.argv);
+    program.parse(normalizedArgv.argv);
   } catch (error) {
     // --help/--version print their output and throw with exitCode 0.
     if (error.exitCode === 0) {
@@ -215,7 +267,7 @@ function main() {
   let resolvedModel = null;
   if (options.agent !== 'none') {
     try {
-      resolvedModel = resolveModel(options.agent, options.model, options.claudeArg);
+      resolvedModel = resolveModel(options.agent, options.model, options.agentArg);
     } catch (error) {
       if (error.code === 'MODEL_ARG_INVALID' || error.code === 'MODEL_ARG_CONFLICT') {
         fail(EXIT.ENV_ERROR, error.message);
@@ -552,11 +604,12 @@ function main() {
     });
 
     const stopHeartbeat = startHeartbeat();
+    let agentResult;
     try {
-      runAgent(prompt, {
+      agentResult = runAgent(prompt, {
         agent: options.agent,
         agentCommand: options.agentCmd,
-        agentArgs: options.claudeArg,
+        agentArgs: options.agentArg,
         model: options.model,
         timeout: timeoutMs,
         cwd: agentCwd,
@@ -568,6 +621,7 @@ function main() {
     }
 
     if (!fs.existsSync(agentOutputPath) || fs.statSync(agentOutputPath).mtimeMs <= runStart) {
+      printMissingReportDiagnostics(agentResult);
       // Throw rather than fail()/process.exit() here: this runs inside
       // withIsolation's callback, and exiting the process skips its finally
       // block (restoreModes(), the chmod-fallback permission restore) along

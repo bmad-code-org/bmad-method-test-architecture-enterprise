@@ -57,13 +57,13 @@ function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames 
  * @param {string} [options.agent] - Adapter key from agent-adapters.js (default claude).
  * @param {string} [options.agentCommand] - Executable override (--agent-cmd); replaces only the
  *   adapter's default command, not its argv/env.
- * @param {string[]} [options.agentArgs] - Extra args appended after the adapter's own argv (--claude-arg passthrough).
+ * @param {string[]} [options.agentArgs] - Extra args appended after the adapter's own argv (--agent-arg passthrough).
  * @param {string} [options.model] - Model to pin for this run; defaults to the adapter's defaultModel.
  * @param {number} [options.timeout] - Wall-clock timeout in ms (default 1800000); SIGTERM on expiry.
  * @param {string} [options.cwd] - Working directory for the agent.
  * @param {string[]} [options.envPass] - Extra env var names allowed through to the child.
  * @param {string[]} [options.spawnPrefix] - Isolation wrapper (e.g. sandbox-exec -f profile).
- * @returns {string} Agent stdout.
+ * @returns {{ stdout: string, stderr: string }} Captured output from a successful agent run.
  * @throws {Error} AGENT_NOT_FOUND when the executable is missing, AGENT_FAILED
  *   on spawn error, timeout, or non-zero exit.
  */
@@ -128,7 +128,7 @@ function runAgent(
     throw error;
   }
 
-  return result.stdout;
+  return { stdout: result.stdout || '', stderr: result.stderr || '' };
 }
 
 module.exports = { runAgent, buildMinimalEnv };
