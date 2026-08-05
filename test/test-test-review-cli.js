@@ -466,6 +466,31 @@ async function runTests() {
       assert(false, 'score-mismatch fixture is corrected deterministically', error.message);
     }
 
+    // Regression from couture-cast run 31048018105: codex reflowed the ledger
+    // into a markdown table, so the bonus line the CLI reads was absent and a
+    // complete review with a correct verdict failed the gate on rendering alone.
+    // The table row is now read, and it must normalize like the line form or the
+    // published ledger contradicts the score the gate acted on.
+    try {
+      const source = readFixture('reports', 'table-breakdown.md');
+      const corrected = parseReport(source);
+      assert(
+        corrected.qualityScore === 90 && corrected.reportedQualityScore === 85 && corrected.recommendation === 'Request Changes',
+        'table-breakdown fixture: a table-rendered ledger derives 90/A and preserves the agent-reported 85',
+        JSON.stringify(corrected),
+      );
+      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      assert(
+        normalized.includes('**Quality Score**: 90/100 (A)') &&
+          normalized.includes('| Final score | 90 |') &&
+          normalized.includes('| Grade | A |'),
+        'table-breakdown fixture: the table ledger rows normalize to the derived score and grade',
+        normalized,
+      );
+    } catch (error) {
+      assert(false, 'table-breakdown fixture parses and normalizes', error.message);
+    }
+
     try {
       const source = readFixture('reports', 'approve.md').replace('93/100 (A)', '93/100 (F)');
       const corrected = parseReport(source);
@@ -1356,6 +1381,12 @@ async function runTests() {
       'prompt states the deduction ledger the CLI computes',
     );
     assert(prompt.includes('multiple of 5 from 0 to 30'), 'prompt bounds the bonus total to legal category values');
+    // A format the parser reads and the prompt never states is a nondeterministic
+    // format: run 31048018105 spent a whole review on a reflowed ledger.
+    assert(
+      prompt.includes('Total Bonus:             +0') && prompt.includes('reflowing the ledger into a'),
+      'prompt pins the literal ledger line form the CLI parses',
+    );
     assert(prompt.includes('exactly one of A, B, C, D, F'), 'prompt bounds the grade scale');
     assert(
       prompt.includes('"## Reviewed Files" section listing every file in the authoritative review set exactly once'),

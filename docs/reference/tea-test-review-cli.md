@@ -231,6 +231,8 @@ Fenced code blocks are stripped first, so a quoted example can't spoof a verdict
 
 The score is computed rather than trusted: the CLI evaluates `100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + Total Bonus` from the report's violation counts and bonus. That result becomes the verdict score, and the CLI normalizes the report's score and grade fields before publishing it. The original model value is retained as `reportedQualityScore` metadata when corrected. An invalid bonus total or missing breakdown still fails closed. The prompt states this same arithmetic.
 
+The bonus is read from the template's `Total Bonus:             +N` line, and a `| Total Bonus | N |` table row is accepted as well, because agents reflow the ledger into a table and a rendering choice should not decide a gate. Both forms normalize their `Final Score` and `Grade` fields, so the published ledger always agrees with the score the gate acted on. The prompt still pins the line form as the one to produce.
+
 A report declaring Critical violations alongside an approve-type recommendation is rejected as an inconsistent verdict (exit 3): Critical means Must Fix. Stale artifacts are never parsed, output files are deleted before the run and must be freshly written by it.
 
 ## Example workflow

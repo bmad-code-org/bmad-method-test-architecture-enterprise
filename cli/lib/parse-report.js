@@ -57,6 +57,14 @@ const VIOLATION_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
 // "Total Bonus:             +0"), so an unsigned "Total Bonus: 0" is already
 // off the mandated format and should not silently parse.
 const BONUS_TOTAL_LINE = /^[ \t]*Total Bonus[ \t]*:[ \t]*\+[ \t]*(\d+)[ \t]*$/m;
+// Live codex runs reflow the ledger into a markdown table (couture-cast run
+// 31048018105 published "| Total Bonus | 0 |"), which step-04's own "tables
+// aligned" polish invites. Rendering is not the contract: the enclosing heading
+// is already validated unique, so a row inside that section carries the same
+// weight as a line, and refusing it turns a substantively complete review into a
+// red gate. The cell sign is optional because no observed table rendering keeps
+// it, and the label case drifts alongside the reflow.
+const BONUS_TOTAL_ROW = /^[ \t]*\|[ \t]*Total Bonus[ \t]*\|[ \t]*\+?[ \t]*(\d+)[ \t]*\|?[ \t]*$/im;
 const SEVERITY_DEDUCTIONS = { critical: 10, high: 5, medium: 2, low: 1 };
 const MAX_BONUS = 30; // six bonus categories, worth 0 or 5 each
 
@@ -511,9 +519,12 @@ function deriveQualityScore(rawText, violations) {
   if (section === null) {
     unparseable('Report is missing the "## Quality Score Breakdown" section');
   }
-  const bonusMatch = section.match(BONUS_TOTAL_LINE);
+  const bonusMatch = section.match(BONUS_TOTAL_LINE) || section.match(BONUS_TOTAL_ROW);
   if (!bonusMatch) {
-    unparseable('Report "## Quality Score Breakdown" is missing its "Total Bonus:" line');
+    unparseable(
+      'Report "## Quality Score Breakdown" is missing its "Total Bonus:" line; the template prints ' +
+        '"Total Bonus:             +N" inside the fenced ledger, and a "| Total Bonus | N |" table row is also read',
+    );
   }
   const bonus = Number.parseInt(bonusMatch[1], 10);
   if (bonus > MAX_BONUS || bonus % 5 !== 0) {
@@ -570,13 +581,26 @@ function normalizeReportScore(reportText, qualityScore) {
       // The score ledger is itself a fenced block. Its fields remain active
       // only inside the unique Quality Score Breakdown section validated by
       // deriveQualityScore; unrelated fenced examples stay untouched.
+      // A ledger reflowed into a table row is accepted by deriveQualityScore, so
+      // it has to normalize too. Left un-normalized it published the agent's own
+      // Final score and Grade beside a corrected headline, which is the
+      // self-contradicting report the derived score exists to prevent.
       if (section === 'Quality Score Breakdown') {
         if (!finalScoreNormalized && /^[ \t]*Final Score[ \t]*:/.test(line)) {
           line = line.replace(/^([ \t]*Final Score[ \t]*:[ \t]*)\d+([ \t]*\/[ \t]*100[ \t]*\r?)$/, `$1${qualityScore}$2`);
           finalScoreNormalized = true;
+        } else if (!finalScoreNormalized && /^[ \t]*\|[ \t]*Final Score[ \t]*\|/i.test(line)) {
+          line = line.replace(
+            /^([ \t]*\|[ \t]*Final Score[ \t]*\|[ \t]*)\d+((?:[ \t]*\/[ \t]*100)?[ \t]*\|?[ \t]*\r?)$/i,
+            `$1${qualityScore}$2`,
+          );
+          finalScoreNormalized = true;
         }
         if (!finalGradeNormalized && /^[ \t]*Grade[ \t]*:/.test(line)) {
           line = line.replace(/^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*\r?)$/, `$1${grade}$2`);
+          finalGradeNormalized = true;
+        } else if (!finalGradeNormalized && /^[ \t]*\|[ \t]*Grade[ \t]*\|/i.test(line)) {
+          line = line.replace(/^([ \t]*\|[ \t]*Grade[ \t]*\|[ \t]*)[A-F]([ \t]*\|?[ \t]*\r?)$/i, `$1${grade}$2`);
           finalGradeNormalized = true;
         }
       }
