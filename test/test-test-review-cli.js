@@ -491,6 +491,42 @@ async function runTests() {
       assert(false, 'table-breakdown fixture parses and normalizes', error.message);
     }
 
+    // A valid bonus beside a malformed final row. Normalization used to latch on
+    // the label, so the unparseable row consumed the slot and the valid row below
+    // it kept the agent's score. Only a landed replacement latches now.
+    try {
+      const source = readFixture('reports', 'table-breakdown.md').replace(
+        '| Final score | 85 |',
+        '| Final score | eighty-five |\n| Final score | 85 |',
+      );
+      const corrected = parseReport(source);
+      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      assert(
+        corrected.qualityScore === 90 &&
+          normalized.includes('| Final score | 90 |') &&
+          normalized.includes('| Final score | eighty-five |'),
+        'a malformed ledger row no longer blocks the valid row beneath it from normalizing',
+        normalized,
+      );
+    } catch (error) {
+      assert(false, 'malformed ledger row does not consume the normalization slot', error.message);
+    }
+
+    // Final Score and Grade are normalized presentation, never gate inputs: the
+    // line-form ledger has never required them either, so a table ledger missing
+    // them still derives a score rather than failing the gate on a rendering.
+    try {
+      const source = readFixture('reports', 'table-breakdown.md').replace('| Final score | 85 |\n', '').replace('| Grade | B |\n', '');
+      const corrected = parseReport(source);
+      assert(
+        corrected.qualityScore === 90 && corrected.recommendation === 'Request Changes',
+        'a table ledger with a valid bonus but no final score or grade row still derives the score',
+        JSON.stringify(corrected),
+      );
+    } catch (error) {
+      assert(false, 'a ledger missing its presentation fields still derives a score', error.message);
+    }
+
     try {
       const source = readFixture('reports', 'approve.md').replace('93/100 (A)', '93/100 (F)');
       const corrected = parseReport(source);

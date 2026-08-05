@@ -67,6 +67,17 @@ const BONUS_TOTAL_LINE = /^[ \t]*Total Bonus[ \t]*:[ \t]*\+[ \t]*(\d+)[ \t]*$/m;
 const BONUS_TOTAL_ROW = /^[ \t]*\|[ \t]*Total Bonus[ \t]*\|[ \t]*\+?[ \t]*(\d+)[ \t]*\|?[ \t]*$/im;
 const SEVERITY_DEDUCTIONS = { critical: 10, high: 5, medium: 2, low: 1 };
 const MAX_BONUS = 30; // six bonus categories, worth 0 or 5 each
+// Both renderings of the two normalized ledger fields, line form first. Held as
+// lists so normalization latches on the replacement that landed rather than on
+// the label it recognized.
+const FINAL_SCORE_PATTERNS = [
+  /^([ \t]*Final Score[ \t]*:[ \t]*)\d+([ \t]*\/[ \t]*100[ \t]*\r?)$/,
+  /^([ \t]*\|[ \t]*Final Score[ \t]*\|[ \t]*)\d+((?:[ \t]*\/[ \t]*100)?[ \t]*\|?[ \t]*\r?)$/i,
+];
+const FINAL_GRADE_PATTERNS = [
+  /^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*\r?)$/,
+  /^([ \t]*\|[ \t]*Grade[ \t]*\|[ \t]*)[A-F]([ \t]*\|?[ \t]*\r?)$/i,
+];
 
 function unparseable(message) {
   const error = new Error(`${message}; a parse failure is never a silent pass.`);
@@ -547,6 +558,23 @@ function gradeForScore(score) {
   return 'F';
 }
 
+/**
+ * Rewrite a line with the first pattern that matches it, reporting whether one did.
+ *
+ * Callers latch a field as normalized on `matched`. Latching on a looser label
+ * probe instead let a malformed row consume the slot: the replacement silently
+ * failed, no later row could fill it, and the report published a ledger value the
+ * gate disagreed with.
+ */
+function replaceFirstMatch(line, patterns, replacement) {
+  for (const pattern of patterns) {
+    if (pattern.test(line)) {
+      return { line: line.replace(pattern, replacement), matched: true };
+    }
+  }
+  return { line, matched: false };
+}
+
 /** Normalize the report's schema-owned score and grade fields to CLI arithmetic. */
 function normalizeReportScore(reportText, qualityScore) {
   const grade = gradeForScore(qualityScore);
@@ -586,22 +614,15 @@ function normalizeReportScore(reportText, qualityScore) {
       // Final score and Grade beside a corrected headline, which is the
       // self-contradicting report the derived score exists to prevent.
       if (section === 'Quality Score Breakdown') {
-        if (!finalScoreNormalized && /^[ \t]*Final Score[ \t]*:/.test(line)) {
-          line = line.replace(/^([ \t]*Final Score[ \t]*:[ \t]*)\d+([ \t]*\/[ \t]*100[ \t]*\r?)$/, `$1${qualityScore}$2`);
-          finalScoreNormalized = true;
-        } else if (!finalScoreNormalized && /^[ \t]*\|[ \t]*Final Score[ \t]*\|/i.test(line)) {
-          line = line.replace(
-            /^([ \t]*\|[ \t]*Final Score[ \t]*\|[ \t]*)\d+((?:[ \t]*\/[ \t]*100)?[ \t]*\|?[ \t]*\r?)$/i,
-            `$1${qualityScore}$2`,
-          );
-          finalScoreNormalized = true;
+        if (!finalScoreNormalized) {
+          const scored = replaceFirstMatch(line, FINAL_SCORE_PATTERNS, `$1${qualityScore}$2`);
+          line = scored.line;
+          finalScoreNormalized = scored.matched;
         }
-        if (!finalGradeNormalized && /^[ \t]*Grade[ \t]*:/.test(line)) {
-          line = line.replace(/^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*\r?)$/, `$1${grade}$2`);
-          finalGradeNormalized = true;
-        } else if (!finalGradeNormalized && /^[ \t]*\|[ \t]*Grade[ \t]*\|/i.test(line)) {
-          line = line.replace(/^([ \t]*\|[ \t]*Grade[ \t]*\|[ \t]*)[A-F]([ \t]*\|?[ \t]*\r?)$/i, `$1${grade}$2`);
-          finalGradeNormalized = true;
+        if (!finalGradeNormalized) {
+          const graded = replaceFirstMatch(line, FINAL_GRADE_PATTERNS, `$1${grade}$2`);
+          line = graded.line;
+          finalGradeNormalized = graded.matched;
         }
       }
       return line;
