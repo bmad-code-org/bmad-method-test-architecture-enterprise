@@ -57,8 +57,27 @@ const VIOLATION_LEVELS = ['Critical', 'High', 'Medium', 'Low'];
 // "Total Bonus:             +0"), so an unsigned "Total Bonus: 0" is already
 // off the mandated format and should not silently parse.
 const BONUS_TOTAL_LINE = /^[ \t]*Total Bonus[ \t]*:[ \t]*\+[ \t]*(\d+)[ \t]*$/m;
+// Live codex runs reflow the ledger into a markdown table (couture-cast run
+// 31048018105 published "| Total Bonus | 0 |"), which step-04's own "tables
+// aligned" polish invites. Rendering is not the contract: the enclosing heading
+// is already validated unique, so a row inside that section carries the same
+// weight as a line, and refusing it turns a substantively complete review into a
+// red gate. The cell sign is optional because no observed table rendering keeps
+// it, and the label case drifts alongside the reflow.
+const BONUS_TOTAL_ROW = /^[ \t]*\|[ \t]*Total Bonus[ \t]*\|[ \t]*\+?[ \t]*(\d+)[ \t]*\|?[ \t]*$/im;
 const SEVERITY_DEDUCTIONS = { critical: 10, high: 5, medium: 2, low: 1 };
 const MAX_BONUS = 30; // six bonus categories, worth 0 or 5 each
+// Both renderings of the two normalized ledger fields, line form first. Held as
+// lists so normalization latches on the replacement that landed rather than on
+// the label it recognized.
+const FINAL_SCORE_PATTERNS = [
+  /^([ \t]*Final Score[ \t]*:[ \t]*)\d+([ \t]*\/[ \t]*100[ \t]*\r?)$/,
+  /^([ \t]*\|[ \t]*Final Score[ \t]*\|[ \t]*)\d+((?:[ \t]*\/[ \t]*100)?[ \t]*\|?[ \t]*\r?)$/i,
+];
+const FINAL_GRADE_PATTERNS = [
+  /^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*\r?)$/,
+  /^([ \t]*\|[ \t]*Grade[ \t]*\|[ \t]*)[A-F]([ \t]*\|?[ \t]*\r?)$/i,
+];
 
 function unparseable(message) {
   const error = new Error(`${message}; a parse failure is never a silent pass.`);
@@ -511,9 +530,12 @@ function deriveQualityScore(rawText, violations) {
   if (section === null) {
     unparseable('Report is missing the "## Quality Score Breakdown" section');
   }
-  const bonusMatch = section.match(BONUS_TOTAL_LINE);
+  const bonusMatch = section.match(BONUS_TOTAL_LINE) || section.match(BONUS_TOTAL_ROW);
   if (!bonusMatch) {
-    unparseable('Report "## Quality Score Breakdown" is missing its "Total Bonus:" line');
+    unparseable(
+      'Report "## Quality Score Breakdown" is missing its "Total Bonus:" line; the template prints ' +
+        '"Total Bonus:             +N" inside the fenced ledger, and a "| Total Bonus | N |" table row is also read',
+    );
   }
   const bonus = Number.parseInt(bonusMatch[1], 10);
   if (bonus > MAX_BONUS || bonus % 5 !== 0) {
@@ -534,6 +556,23 @@ function gradeForScore(score) {
   if (score >= 70) return 'C';
   if (score >= 60) return 'D';
   return 'F';
+}
+
+/**
+ * Rewrite a line with the first pattern that matches it, reporting whether one did.
+ *
+ * Callers latch a field as normalized on `matched`. Latching on a looser label
+ * probe instead let a malformed row consume the slot: the replacement silently
+ * failed, no later row could fill it, and the report published a ledger value the
+ * gate disagreed with.
+ */
+function replaceFirstMatch(line, patterns, replacement) {
+  for (const pattern of patterns) {
+    if (pattern.test(line)) {
+      return { line: line.replace(pattern, replacement), matched: true };
+    }
+  }
+  return { line, matched: false };
 }
 
 /** Normalize the report's schema-owned score and grade fields to CLI arithmetic. */
@@ -570,14 +609,20 @@ function normalizeReportScore(reportText, qualityScore) {
       // The score ledger is itself a fenced block. Its fields remain active
       // only inside the unique Quality Score Breakdown section validated by
       // deriveQualityScore; unrelated fenced examples stay untouched.
+      // A ledger reflowed into a table row is accepted by deriveQualityScore, so
+      // it has to normalize too. Left un-normalized it published the agent's own
+      // Final score and Grade beside a corrected headline, which is the
+      // self-contradicting report the derived score exists to prevent.
       if (section === 'Quality Score Breakdown') {
-        if (!finalScoreNormalized && /^[ \t]*Final Score[ \t]*:/.test(line)) {
-          line = line.replace(/^([ \t]*Final Score[ \t]*:[ \t]*)\d+([ \t]*\/[ \t]*100[ \t]*\r?)$/, `$1${qualityScore}$2`);
-          finalScoreNormalized = true;
+        if (!finalScoreNormalized) {
+          const scored = replaceFirstMatch(line, FINAL_SCORE_PATTERNS, `$1${qualityScore}$2`);
+          line = scored.line;
+          finalScoreNormalized = scored.matched;
         }
-        if (!finalGradeNormalized && /^[ \t]*Grade[ \t]*:/.test(line)) {
-          line = line.replace(/^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*\r?)$/, `$1${grade}$2`);
-          finalGradeNormalized = true;
+        if (!finalGradeNormalized) {
+          const graded = replaceFirstMatch(line, FINAL_GRADE_PATTERNS, `$1${grade}$2`);
+          line = graded.line;
+          finalGradeNormalized = graded.matched;
         }
       }
       return line;
