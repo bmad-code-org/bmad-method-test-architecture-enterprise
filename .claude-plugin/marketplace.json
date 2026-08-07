@@ -22,7 +22,9 @@
     "contract-testing",
     "pact",
     "playwright",
-    "cypress"
+    "cypress",
+    "mobile",
+    "maestro"
   ],
   "plugins": [
     {

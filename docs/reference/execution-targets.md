@@ -13,12 +13,12 @@ See [Verification Architecture](/docs/explanation/verification-architecture.md) 
 
 An execution target needs six things from TEA: detection, project layout, runner configuration, commands, CI wiring, and review criteria. How many of the six are present determines the tier.
 
-| Tier           | Detection | Scaffold | Test generation | Knowledge fragments | Review criteria |
-| -------------- | --------- | -------- | --------------- | ------------------- | --------------- |
-| **Full**       | Yes       | Yes      | Yes             | Yes                 | Yes             |
-| **Generation** | Yes       | Yes      | Yes             | No                  | Partial         |
-| **Evidence**   | n/a       | No       | No              | Partial             | No              |
-| **Core only**  | No        | No       | No              | No                  | No              |
+| Tier           | Detection | Project layout | Runner configuration | Commands | CI wiring | Review criteria |
+| -------------- | --------- | -------------- | -------------------- | -------- | --------- | --------------- |
+| **Full**       | Yes       | Yes            | Yes                  | Yes      | Yes       | Yes             |
+| **Generation** | Yes       | Yes            | Yes                  | Yes      | Yes       | Partial         |
+| **Evidence**   | n/a       | No             | No                   | No       | No        | No              |
+| **Core only**  | No        | No             | No                   | No       | No        | No              |
 
 **Core only is not "unsupported."** Risk assessment, test design, NFR planning, traceability, and the release gate all work on a Core-only target. What you do not get is scaffolding, generated tests, or a quality score.
 

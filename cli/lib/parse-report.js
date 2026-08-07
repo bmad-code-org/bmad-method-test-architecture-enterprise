@@ -456,7 +456,7 @@ function verifyRunContract({ reviewedFiles, contextBasis, contextFiles, excluded
 
   if (has('reviewedFiles')) {
     const suppliedReviewed = canonicalizeManifest(runContract.reviewedFiles, 'supplied reviewed files');
-    const missing = manifestDifference(suppliedReviewed, reviewedFiles);
+    const missing = manifestDifference(suppliedReviewed, reviewedFiles).filter((file) => !excludedFiles.includes(file));
     const foreign = manifestDifference(reviewedFiles, suppliedReviewed);
     if (missing.length > 0 || foreign.length > 0) {
       unparseable(

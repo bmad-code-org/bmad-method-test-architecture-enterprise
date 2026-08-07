@@ -68,11 +68,12 @@ Store result as `{detected_stack}` = `frontend` | `backend` | `fullstack` | `mob
 
 **If {detected_stack} is `mobile`:**
 
-- A `maestro/` or `.maestro/` directory exists
-- The app's own unit/component test config exists (`jest.config.*`, `vitest.config.*`, `build.gradle` test block, an XCTest target, or `test/` for Flutter)
-- `maestro` is on PATH. If it is not, do not HALT: flows can still be generated, so record that they cannot be executed in this run and say so in the summary.
+- Required project framework configuration (HALT if missing either):
+  - A `maestro/` or `.maestro/` directory exists
+  - The app's own unit/component test config exists (`jest.config.*`, `vitest.config.*`, `build.gradle` test block, an XCTest target, or `test/` for Flutter)
+- Environment PATH check: `maestro` command on PATH. If missing from PATH, do NOT halt: flows can still be generated, so record that they cannot be executed in this run environment and say so in the summary.
 
-If missing: **HALT** with message "Run `framework` workflow first."
+If required framework configuration is missing: **HALT** with message "Run `framework` workflow first."
 
 ---
 

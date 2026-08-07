@@ -73,13 +73,13 @@ From `config.test_framework` and project manifests:
 
 Every generated flow must satisfy the `maestro-flows.md` checklist:
 
-- `clearState` before `launchApp`
+- `clearState` before `launchApp` for top-level `device-flow` entries (omit `clearState` and `launchApp` in `subflow` entries like `subflows/login.yaml` invoked via `runFlow` so they do not reset or relaunch the app mid-journey)
 - Accessibility-id selectors first; `text` only when no id exists; scoped relations for repeated labels
 - No bare `index:` and no `point:` coordinates
 - `extendedWaitUntil` on a named condition with an explicit timeout, never `sleep`
 - At least one `assertVisible` / `assertNotVisible` / `assertTrue` on the destination state
 - `${ENV_VAR}` for every credential, never a literal
-- One user journey per file, shared setup extracted to `maestro/subflows/`
+- One user journey per file, shared setup extracted to `{maestro_root}/subflows/` (where `{maestro_root}` is the resolved Maestro root: `maestro/` or `.maestro/`)
 - A `P0`-`P3` tag matching the priority the coverage plan assigned
 
 **Confidence gate:** if you cannot determine an element's accessibility id from the source, do not invent one. Record it as an unknown in `assumptions` and mark the flow as needing an id, per `confidence-gate.md`.
@@ -106,6 +106,7 @@ Write JSON to temp file: `/tmp/tea-automate-mobile-tests-{{timestamp}}.json`
 ```json
 {
   "subagentType": "mobile",
+  "success": true,
   "testsGenerated": [
     {
       "file": "maestro/checkout-happy-path.yaml",
@@ -138,6 +139,16 @@ Write JSON to temp file: `/tmp/tea-automate-mobile-tests-{{timestamp}}.json`
     "fixtureNeeds": ["test account provisioning per run", "backend seed for a saved card"]
   },
   "assumptions": ["checkout_submit_button accessibility id not found in source; flow needs the id added"]
+}
+```
+
+If test generation fails, write a failure payload to the same file path:
+
+```json
+{
+  "subagentType": "mobile",
+  "success": false,
+  "error": "Failed to generate mobile tests: [description of failure reason]"
 }
 ```
 

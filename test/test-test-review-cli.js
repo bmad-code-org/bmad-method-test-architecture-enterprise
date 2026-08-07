@@ -1220,6 +1220,7 @@ async function runTests() {
       'a Maestro flow is a native test file, no --test-glob required',
     );
     assert(isNativeTestFile('flows/checkout.flow.yaml'), 'a *.flow.yaml is recognized as a Maestro flow anywhere in the tree');
+    assert(isNativeTestFile('flows/checkout.flow.yml'), 'a *.flow.yml is recognized as a Maestro flow anywhere in the tree');
     assert(
       !isNativeTestFile('.maestro/config.yaml') && !isNativeTestFile('maestro/config.yml'),
       "Maestro's workspace config is configuration, not a flow",
@@ -1883,6 +1884,37 @@ async function runTests() {
       truncatedStubRun.status === 0 && truncatedStubReport.includes('**Context Basis**: pr_diff_truncated'),
       'stub agent preserves the full pr_diff_truncated context basis from the prompt',
       `status=${truncatedStubRun.status} stderr=${truncatedStubRun.stderr}`,
+    );
+
+    const forcedFeatureOutput = path.join(tmpRoot, 'stub-forced-feature', 'test-review.md');
+    const forcedFeatureRun = runCli([
+      '--agent-cmd',
+      stubAgent,
+      '--test-glob',
+      'features/',
+      '--files',
+      'features/checkout.feature',
+      '--output',
+      forcedFeatureOutput,
+      '--project-root',
+      fixtureProject,
+    ]);
+    const forcedFeatureReport = fs.existsSync(forcedFeatureOutput) ? fs.readFileSync(forcedFeatureOutput, 'utf8') : '';
+    assert(
+      forcedFeatureRun.status === 0,
+      'stub-agent run with forced .feature candidate exits 0',
+      `status=${forcedFeatureRun.status} stderr=${forcedFeatureRun.stderr}`,
+    );
+    assert(
+      forcedFeatureReport.includes('## Excluded From Review Set') &&
+        forcedFeatureReport.includes('features/checkout.feature — format not scorable by the ledger'),
+      'forced .feature candidate is named in ## Excluded From Review Set section',
+      forcedFeatureReport,
+    );
+    assert(
+      !forcedFeatureReport.includes('## Reviewed Files\n\n- features/checkout.feature'),
+      'forced .feature candidate is excluded from ## Reviewed Files manifest',
+      forcedFeatureReport,
     );
 
     const promptMulti = runCli([

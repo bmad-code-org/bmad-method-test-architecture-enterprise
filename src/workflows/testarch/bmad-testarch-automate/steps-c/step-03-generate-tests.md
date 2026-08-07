@@ -357,7 +357,7 @@ The aggregate step expects both outputs to include `success`, but the payload sh
 
 - `step-03b-subagent-e2e.md` output includes `success`, `subagent`, `tests`, `fixture_needs`, `knowledge_fragments_used`, `test_count`, and `summary`.
 - `step-03b-subagent-backend.md` output includes `success`, `subagent`, `subagentType`, `testsGenerated`, `coverageSummary` (with `fixtureNeeds`), `status`, `knowledge_fragments_used`, and `summary`.
-- `step-03b-subagent-mobile.md` output follows the backend shape (`subagentType`, `testsGenerated`, `coverageSummary`) and adds a `level` field per generated file (`device-flow`, `subflow`, `unit`, `component`) plus `assumptions`. Subflows are counted separately from device flows, so never sum them into a test count.
+- `step-03b-subagent-mobile.md` output includes `success` (required boolean), follows the backend shape (`subagentType`, `testsGenerated`, `coverageSummary`), and adds a `level` field per generated file (`device-flow`, `subflow`, `unit`, `component`) plus `assumptions`. Subflows are counted separately from device flows, so never sum them into a test count.
 
 The aggregate step reads whichever output file(s) exist based on `{detected_stack}` and must use the matching schema per subagent type.
 

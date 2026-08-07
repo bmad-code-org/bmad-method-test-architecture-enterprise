@@ -10,7 +10,7 @@ TEA was built to solve AI-generated tests that rot in review. For the problem st
 :::
 
 :::note[Scope]
-TEA's risk, design, NFR, traceability, and gate workflows are stack-neutral and apply to any system under test. Its execution depth is not uniform: browsers, HTTP services, and contracts are covered end to end, while other stacks are covered at shallower tiers. [Verification Architecture](/docs/explanation/verification-architecture.md) explains the split; [Execution Targets](/docs/reference/execution-targets.md) publishes the per-target matrix and the known gaps.
+TEA's risk, design, NFR, traceability, and gate workflows are stack-neutral and apply to any system under test. Its execution depth is not uniform: browsers, HTTP services, contracts, and mobile native (Maestro) are covered end to end, while other stacks are covered at shallower tiers. [Verification Architecture](/docs/explanation/verification-architecture.md) explains the split; [Execution Targets](/docs/reference/execution-targets.md) publishes the per-target matrix and the known gaps.
 :::
 
 ## Overview

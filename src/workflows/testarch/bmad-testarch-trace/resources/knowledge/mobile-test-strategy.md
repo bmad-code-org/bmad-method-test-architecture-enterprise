@@ -19,13 +19,13 @@ Mobile applies the same level discipline as any other stack: push verification t
 
 ## The Mobile Test Level Framework
 
-| Level                     | Runs on                    | Covers                                                                  | Typical share     |
-| ------------------------- | -------------------------- | ----------------------------------------------------------------------- | ----------------- |
-| **Unit**                  | Node / JVM / Swift runtime | Pure logic, reducers, formatters, validation, mappers                   | 60-70%            |
-| **Component / screen**    | Test renderer, no device   | Rendering, props, interaction handlers, conditional UI                  | 20-25%            |
-| **Contract**              | No device                  | The app's HTTP boundary against its backend (Pact or schema validation) | small, high value |
-| **Device flow (Maestro)** | Simulator/emulator/device  | Cross-screen journeys, permissions, deep links, background/foreground   | 5-15%             |
-| **Manual / exploratory**  | Real device                | Gestures, haptics, biometrics, accessibility, real-network degradation  | remainder         |
+| Level                     | Runs on                    | Covers                                                                  | Typical share (indicative) |
+| ------------------------- | -------------------------- | ----------------------------------------------------------------------- | -------------------------- |
+| **Unit**                  | Node / JVM / Swift runtime | Pure logic, reducers, formatters, validation, mappers                   | 60-70%                     |
+| **Component / screen**    | Test renderer, no device   | Rendering, props, interaction handlers, conditional UI                  | 20-25%                     |
+| **Contract**              | No device                  | The app's HTTP boundary against its backend (Pact or schema validation) | small, high value          |
+| **Device flow (Maestro)** | Simulator/emulator/device  | Cross-screen journeys, permissions, deep links, background/foreground   | 5-15%                      |
+| **Manual / exploratory**  | Real device                | Gestures, haptics, biometrics, accessibility, real-network degradation  | remainder                  |
 
 **Duplicate coverage guard** (same rule as every other stack): before adding a device flow, check whether a component test or a contract test already proves the behavior. A device flow that only verifies a label renders is a unit test wearing a 90-second costume.
 
@@ -39,7 +39,7 @@ Promote to a Maestro flow when the risk is in the **integration**, not the logic
 - Background, foreground, and process-death restoration
 - Offline and reconnect behavior
 - Push notification tap-through
-- App upgrade with existing local data
+- App upgrade with existing local data (explicit exception to clearState isolation: seeds previous-build state, installs the new build without clearState, asserts migration, and cleans up in teardown)
 
 Keep out of device flows:
 
@@ -86,14 +86,14 @@ Run the full matrix nightly and on release candidates. Run the primary target on
 
 ## Anti-Patterns
 
-| Anti-pattern                                     | Why it fails                                                   | Fix                                                        |
-| ------------------------------------------------ | -------------------------------------------------------------- | ---------------------------------------------------------- |
-| Every acceptance criterion becomes a device flow | Suite runtime explodes; failures are slow to diagnose          | Apply the level framework and the duplicate-coverage guard |
-| Full device matrix on every PR                   | Gate becomes too slow to block on, so people bypass it         | Primary target on PRs, matrix nightly                      |
-| Performance asserted inside a Maestro flow       | Measures the harness, not the app                              | Platform instrumentation as NFR evidence                   |
-| Flows depend on a shared logged-in account       | Parallel runs collide; failures are not reproducible           | Per-run account or `clearState` plus seeded login          |
-| No offline or permission-denied coverage         | The paths users actually hit in the wild are the untested ones | Score them as risks; they are usually P0 or P1             |
-| Testing against a production backend             | Non-deterministic data, and a test order can mutate real state | Dedicated environment or a stubbed backend                 |
+| Anti-pattern                                     | Why it fails                                                   | Fix                                                                       |
+| ------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Every acceptance criterion becomes a device flow | Suite runtime explodes; failures are slow to diagnose          | Apply the level framework and the duplicate-coverage guard                |
+| Full device matrix on every PR                   | Gate becomes too slow to block on, so people bypass it         | Primary target on PRs, matrix nightly                                     |
+| Performance asserted inside a Maestro flow       | Measures the harness, not the app                              | Platform instrumentation as NFR evidence                                  |
+| Flows depend on a shared logged-in account       | Parallel runs collide; failures are not reproducible           | Per-run accounts/data or explicit backend reset when server state changes |
+| No offline or permission-denied coverage         | The paths users actually hit in the wild are the untested ones | Score them as risks; they are usually P0 or P1                            |
+| Testing against a production backend             | Non-deterministic data, and a test order can mutate real state | Dedicated environment or a stubbed backend                                |
 
 ## Mobile Strategy Checklist
 

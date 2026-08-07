@@ -90,6 +90,7 @@ The mobile payload uses the backend shape (`testsGenerated`, `coverageSummary.fi
 - Check `apiTestsOutput.success === true`
 - If E2E was launched: check `e2eTestsOutput.success === true`
 - If Backend was launched: check `backendTestsOutput.success === true`
+- If Mobile was launched: check `mobileTestsOutput.success === true`
 - If any failed, report error and stop (don't proceed)
 
 ---

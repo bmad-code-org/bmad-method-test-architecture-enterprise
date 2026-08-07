@@ -68,6 +68,7 @@ Record detected `test_stack_type` in step output.
 
 - Check for framework configuration based on detected stack:
   - **Frontend/Fullstack**: `playwright.config.*` or `cypress.config.*` exists
+  - **Mobile**: `maestro/` or `.maestro/` directory exists, app unit/component test config exists (`jest.config.*`, `vitest.config.*`, `build.gradle` test block, XCTest target, or `test/` for Flutter), and `maestro` command is available
   - **Backend (Node.js)**: `jest.config.*` or `vitest.config.*` or test scripts in `package.json`
   - **Backend (Python)**: `pyproject.toml` with `[tool.pytest]` or `pytest.ini` or `setup.cfg` with pytest config
   - **Backend (Java/Kotlin)**: `pom.xml` with surefire/failsafe plugins or `build.gradle` with test task

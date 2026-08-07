@@ -34,6 +34,7 @@ tags:
   - auth
 ---
 - clearState # isolation: no leftover session from a prior flow
+- clearKeychain
 - launchApp
 
 - assertVisible:

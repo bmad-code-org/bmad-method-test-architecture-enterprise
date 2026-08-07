@@ -138,16 +138,16 @@ Create the idiomatic test directory for the detected language:
 
 **If {detected_stack} is `mobile`:**
 
-- `maestro/` — device flows, one journey per file
-- `maestro/subflows/` — reusable sequences (login, onboarding dismissal, seed navigation) invoked via `runFlow`
-- `.maestro/config.yaml` — workspace config (flow include/exclude, execution order)
+- `{maestro_root}/` — device flows, one journey per file (where `{maestro_root}` is `maestro/` or `.maestro/`)
+- `{maestro_root}/subflows/` — reusable sequences (login, onboarding dismissal, seed navigation) invoked via `runFlow`
+- `{maestro_root}/config.yaml` or `.maestro/config.yaml` — workspace config (flow include/exclude, execution order)
 - Plus the idiomatic unit and component test directory for the app's language:
   - **React Native / Expo**: `__tests__/` or `src/**/*.test.tsx` with Jest or Vitest and React Native Testing Library
   - **Native iOS**: `<App>Tests/` (XCTest unit) and `<App>UITests/` if XCUITest is also in use
   - **Native Android**: `app/src/test/java/` (JUnit unit) and `app/src/androidTest/java/` (instrumented)
   - **Flutter**: `test/` for unit and widget tests, `integration_test/` for integration
 
-Keep `maestro/subflows/` separate from the flow root so a flow count never counts shared setup as a test.
+Keep `{maestro_root}/subflows/` separate from the flow root so a flow count never counts shared setup as a test.
 
 **If `config.tea_use_pactjs_utils` is enabled and runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
 
@@ -187,7 +187,7 @@ Create the idiomatic test config for the detected framework:
 
 **If {detected_stack} is `mobile`:**
 
-Create `.maestro/config.yaml`:
+Create `{maestro_root}/config.yaml` (or `.maestro/config.yaml`):
 
 - **flows**: glob for the flow files to include, excluding `subflows/`
 - **includeTags / excludeTags**: so CI can run a risk-appropriate subset (`P0` on the PR gate, everything nightly)
@@ -227,24 +227,24 @@ Create the idiomatic version file for the detected language:
 
 ## 4. Fixtures & Factories
 
-Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `config.tea_use_playwright_utils`:
-
-**If Playwright Utils enabled:**
-
-- `overview.md`, `fixtures-composition.md`, `auth-session.md`, `api-request.md`, `recurse.md`, `log.md`, `burn-in.md`, `network-error-monitor.md`, `data-factories.md`
-- If `{detected_stack}` is `frontend` or `fullstack`, also load `intercept-network-call.md`
-- Recommend installing `@seontechnologies/playwright-utils`
-
-**If disabled:**
-
-- `fixture-architecture.md`, `data-factories.md`, `network-first.md`, `playwright-config.md`, `test-quality.md`
+Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{detected_stack}`:
 
 **If `{detected_stack}` is `mobile`:**
 
 - `mobile-test-strategy.md` (CRITICAL: load this first — it decides which behaviors become device flows at all, and most should not)
 - `maestro-flows.md` (flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition)
 - `test-levels-framework.md`, `test-priorities-matrix.md`, `test-quality.md`
-- Skip the browser fragments: `network-first.md`, `playwright-config.md`, and `intercept-network-call.md` describe a DOM and a request interceptor a device flow does not have
+- Do NOT load browser fragments: `network-first.md`, `playwright-config.md`, and `intercept-network-call.md` describe a DOM and a request interceptor a device flow does not have
+
+**If `{detected_stack}` is `frontend`, `fullstack`, or `backend`:**
+
+- **If Playwright Utils enabled:**
+  - `overview.md`, `fixtures-composition.md`, `auth-session.md`, `api-request.md`, `recurse.md`, `log.md`, `burn-in.md`, `network-error-monitor.md`, `data-factories.md`
+  - If `{detected_stack}` is `frontend` or `fullstack`, also load `intercept-network-call.md`
+  - Recommend installing `@seontechnologies/playwright-utils`
+
+- **If disabled:**
+  - `fixture-architecture.md`, `data-factories.md`, `network-first.md`, `playwright-config.md`, `test-quality.md`
 
 **If Pact.js Utils enabled** (`config.tea_use_pactjs_utils`):
 

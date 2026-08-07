@@ -1,7 +1,7 @@
 code: tea
 name: "Test Architect"
 header: "Test Architect: quality strategy, automation, and release gates"
-subheader: "Stack-neutral risk, traceability, and release-gate workflows for BMad Method/Enterprise, with stack-specific execution for web, API, contract, and backend test suites"
+subheader: "Stack-neutral risk, traceability, and release-gate workflows for BMad Method/Enterprise, with stack-specific execution for web, API, contract, mobile native (Maestro), and backend test suites"
 description: "Master Test Architect for quality strategy, test automation, and release gates"
 default_selected: false
 
@@ -229,7 +229,7 @@ post-install-notes:
         - Full-stack: both frontend and backend indicators present
         Mobile is checked before frontend, because a React Native project carries
         package.json with react and would otherwise misdetect as a web frontend.
-        Existing installations without test_stack_type default to "auto" (detects frontend).
+        Projects with mobile indicators are classified as Mobile even when test_stack_type is auto, while preserving the existing frontend behavior for projects without those indicators.
   ci_platform:
     auto: |
       CI Platform Auto-Detection:

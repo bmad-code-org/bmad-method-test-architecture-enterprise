@@ -19,7 +19,9 @@
     "contract-testing",
     "pact",
     "playwright",
-    "cypress"
+    "cypress",
+    "mobile",
+    "maestro"
   ],
   "repository": {
     "type": "git",

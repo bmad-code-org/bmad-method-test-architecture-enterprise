@@ -71,8 +71,8 @@ Add the idiomatic test commands for the detected framework:
 
 Add to `package.json` (React Native/Expo) or the `Makefile` (native):
 
-- `test:flows`: `maestro test maestro/` — the full device suite
-- `test:flows:p0`: `maestro test maestro/ --include-tags P0` — the PR-gate subset
+- `test:flows`: `maestro test {maestro_root}/` (or explicitly passing `.maestro/config.yaml`) — the full device suite
+- `test:flows:p0`: `maestro test {maestro_root}/ --include-tags P0` — the PR-gate subset
 - `test:unit`: the app's own unit runner (`jest`, `vitest`, `xcodebuild test`, `./gradlew test`, `flutter test`)
 - `maestro:studio`: `maestro studio` — interactive flow authoring and element inspection
 
