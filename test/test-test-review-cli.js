@@ -1916,8 +1916,9 @@ async function runTests() {
       'scorable test file remains in ## Reviewed Files manifest',
       forcedFeatureReport,
     );
+    const reviewedSection = (forcedFeatureReport.split('## Reviewed Files')[1] || '').split('## ')[0];
     assert(
-      !forcedFeatureReport.includes('- features/checkout.feature'),
+      !reviewedSection.includes('features/checkout.feature'),
       'forced .feature candidate is excluded from ## Reviewed Files manifest',
       forcedFeatureReport,
     );
