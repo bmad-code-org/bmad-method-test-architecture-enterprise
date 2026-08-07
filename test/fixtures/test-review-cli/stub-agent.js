@@ -154,13 +154,15 @@ function replaceManifestSection(report, heading, files, { remove = false, addBef
 
 function bindReportToPrompt(report) {
   let bound = report.replace(/^\*\*Context Basis\*\*:[ \t]*[^\n]+$/m, `**Context Basis**: ${contextBasis}`);
-  const effectiveReviewed = reviewedFiles.filter((f) => !forcedUnscorableFiles.includes(f));
+  const isCodeFile = (f) => /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rb|php|cs|java|kt|swift|rs|dart)$/i.test(f);
+  const unscorableForced = forcedUnscorableFiles.filter((f) => !isCodeFile(f));
+  const effectiveReviewed = reviewedFiles.filter((f) => !unscorableForced.includes(f));
   bound = replaceManifestSection(bound, 'Reviewed Files', effectiveReviewed);
   bound = replaceManifestSection(bound, 'Review Context', reportedContextFiles, {
     remove: contextBasis === 'none',
     addBefore: 'Reviewed Files',
   });
-  const allExcluded = [...unscorableFiles, ...forcedUnscorableFiles];
+  const allExcluded = [...unscorableFiles, ...unscorableForced];
   if (allExcluded.length > 0) {
     bound = replaceManifestSection(
       bound,

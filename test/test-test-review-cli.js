@@ -1893,7 +1893,7 @@ async function runTests() {
       '--test-glob',
       'features/',
       '--files',
-      'features/checkout.feature',
+      'tests/checkout.spec.ts,features/checkout.feature',
       '--output',
       forcedFeatureOutput,
       '--project-root',
@@ -1912,7 +1912,12 @@ async function runTests() {
       forcedFeatureReport,
     );
     assert(
-      !forcedFeatureReport.includes('## Reviewed Files\n\n- features/checkout.feature'),
+      forcedFeatureReport.includes('## Reviewed Files') && forcedFeatureReport.includes('tests/checkout.spec.ts'),
+      'scorable test file remains in ## Reviewed Files manifest',
+      forcedFeatureReport,
+    );
+    assert(
+      !forcedFeatureReport.includes('- features/checkout.feature'),
       'forced .feature candidate is excluded from ## Reviewed Files manifest',
       forcedFeatureReport,
     );
