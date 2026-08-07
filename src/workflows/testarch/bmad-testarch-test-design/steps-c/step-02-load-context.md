@@ -52,9 +52,11 @@ From `{config_source}`:
 
 If `test_stack_type` is `"auto"` or not configured, infer `{detected_stack}` by scanning `{project-root}`:
 
+- **Mobile indicators**: `.maestro/` or `maestro/` flow directory, `app.json`/`app.config.*` declaring expo or react-native, `Podfile`, `android/app/build.gradle`, `*.xcodeproj`, `pubspec.yaml`
 - **Frontend indicators**: `playwright.config.*`, `cypress.config.*`, `package.json` with react/vue/angular
 - **Backend indicators**: `pyproject.toml`, `pom.xml`/`build.gradle`, `go.mod`, `*.csproj`, `Gemfile`, `Cargo.toml`
-- **Both present** → `fullstack`; only frontend → `frontend`; only backend → `backend`
+- **Check mobile first** → `mobile`. A React Native or Expo project carries `package.json` with react and misdetects as `frontend` otherwise. When both mobile and backend indicators are present, preserve backend manifests and context alongside mobile context rather than discarding backend information.
+- **Both frontend and backend present** → `fullstack`; only frontend → `frontend`; only backend → `backend`
 - Explicit `test_stack_type` overrides auto-detection
 
 ---

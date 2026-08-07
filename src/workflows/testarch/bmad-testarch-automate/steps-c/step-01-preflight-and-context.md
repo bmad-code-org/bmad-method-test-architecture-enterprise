@@ -44,13 +44,16 @@ Determine execution mode, verify framework readiness, and load the necessary art
 **Auto-Detection Algorithm** (when `test_stack_type` is `"auto"` or not configured):
 
 - Scan `{project-root}` for project manifests:
+  - **Mobile indicators**: `.maestro/` or `maestro/` flow directory, `app.json`/`app.config.*` declaring expo or react-native, `Podfile`, `android/app/build.gradle`, `*.xcodeproj`/`*.xcworkspace`, `pubspec.yaml`
   - **Frontend indicators**: `package.json` with react/vue/angular/next dependencies, `playwright.config.*`, `vite.config.*`, `webpack.config.*`
   - **Backend indicators**: `pyproject.toml`, `pom.xml`/`build.gradle`, `go.mod`, `*.csproj`/`*.sln`, `Gemfile`, `Cargo.toml`
-  - **Both present** = `fullstack`; only frontend = `frontend`; only backend = `backend`
+  - **Check mobile first.** A React Native or Expo project carries `package.json` with react and misdetects as `frontend` otherwise.
+  - **Mobile present** = `mobile`; frontend and backend both present = `fullstack`; only frontend = `frontend`; only backend = `backend`
+  - A mobile client and its own backend in one repo detects as `mobile`. Set `test_stack_type` explicitly to cover both surfaces in one run.
 - Explicit `test_stack_type` config value overrides auto-detection
 - **Backward compatibility**: if `test_stack_type` is not in config, treat as `"auto"` (preserves current frontend behavior for existing installs)
 
-Store result as `{detected_stack}` = `frontend` | `backend` | `fullstack`
+Store result as `{detected_stack}` = `frontend` | `backend` | `fullstack` | `mobile`
 
 **Verify framework exists:**
 
@@ -63,7 +66,14 @@ Store result as `{detected_stack}` = `frontend` | `backend` | `fullstack`
 
 - Relevant test config exists (e.g., `conftest.py`, `src/test/`, `*_test.go`, `.rspec`, test project `*.csproj`)
 
-If missing: **HALT** with message "Run `framework` workflow first."
+**If {detected_stack} is `mobile`:**
+
+- Required project framework configuration (HALT if missing either):
+  - A `maestro/` or `.maestro/` directory exists
+  - The app's own unit/component test config exists (`jest.config.*`, `vitest.config.*`, `build.gradle` test block, an XCTest target, or `test/` for Flutter)
+- Environment PATH check: `maestro` command on PATH. If missing from PATH, do NOT halt: flows can still be generated, so record that they cannot be executed in this run environment and say so in the summary.
+
+If required framework configuration is missing: **HALT** with message "Run `framework` workflow first."
 
 ---
 
@@ -123,7 +133,11 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 - **Full UI+API profile** (when `{detected_stack}` is `frontend`/`fullstack` or browser tests detected):
   Load: all Playwright Utils core fragments (~4,500 lines)
 
-**Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile.
+- **Mobile profile** (when `{detected_stack}` is `mobile`):
+  Load: `mobile-test-strategy`, `maestro-flows`, `test-levels-framework`, `test-priorities-matrix`, `test-quality`, plus `overview`, `api-request`, `auth-session`, `recurse` for the app's HTTP boundary.
+  Do NOT load the browser fragments (`network-first`, `playwright-config`, `intercept-network-call`, `selector-resilience`): a device flow has no DOM and no request interceptor, and loading them invites browser patterns into a Maestro flow.
+
+**Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile. A `maestro/` or `.maestro/` directory selects the mobile profile regardless of what `{test_dir}` holds.
 
 ### Pact.js Utils Loading
 

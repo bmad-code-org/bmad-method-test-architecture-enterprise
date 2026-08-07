@@ -47,6 +47,7 @@ Use `{knowledgeIndex}` to load `ci-burn-in.md` guidance:
 
 - **Frontend or Fullstack** (`test_stack_type` is `frontend` or `fullstack`): Enable burn-in by default. Burn-in targets UI flakiness (race conditions, selector instability, timing issues).
 - **Backend only** (`test_stack_type` is `backend`): Skip burn-in by default. Backend tests (unit, integration, API) are deterministic and rarely exhibit UI-related flakiness. If the user explicitly requests burn-in for backend, honor that override.
+- **Mobile** (`test_stack_type` is `mobile`): Enable burn-in by default, and scope it to new and changed Maestro flows only. Device flows are the most flake-prone level in any suite (emulator boot, app install, animation timing, real network), so a new flow that has not survived repeated runs is not evidence. Never burn in the whole flow suite on a PR: run the changed flows N times on the primary target, and leave the full matrix to the nightly job.
 
 **Security: Script injection prevention for reusable burn-in workflows:**
 

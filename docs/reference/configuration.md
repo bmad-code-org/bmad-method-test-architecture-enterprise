@@ -469,21 +469,25 @@ Detected or configured project stack type. Controls CI pipeline generation and f
 
 **Default:** `"auto"`
 
-**Options:** `"auto"` | `"frontend"` | `"backend"` | `"fullstack"`
+**Options:** `"auto"` | `"frontend"` | `"backend"` | `"fullstack"` | `"mobile"`
 
 **Purpose:** Determines stack-specific behavior:
 
-| Stack Type  | Behavior                                                                                                   |
-| ----------- | ---------------------------------------------------------------------------------------------------------- |
-| `auto`      | Auto-detect from project manifests (playwright.config, jest.config, etc.)                                  |
-| `frontend`  | Browser-based tests (Playwright/Cypress), browser install in CI, burn-in enabled                           |
-| `backend`   | API/unit tests (pytest, JUnit, Go test, Jest/Vitest, etc.), no browser install, burn-in skipped by default |
-| `fullstack` | Both frontend and backend tests, full CI pipeline                                                          |
+| Stack Type  | Behavior                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto`      | Auto-detect from project manifests (playwright.config, jest.config, etc.)                                                             |
+| `frontend`  | Browser-based tests (Playwright/Cypress), browser install in CI, burn-in enabled                                                      |
+| `backend`   | API/unit tests (pytest, JUnit, Go test, Jest/Vitest, etc.), no browser install, burn-in skipped by default                            |
+| `fullstack` | Both frontend and backend tests, full CI pipeline                                                                                     |
+| `mobile`    | Native app: Maestro device flows plus the app's unit/component suite, no browser install, burn-in enabled and scoped to changed flows |
 
 **Affects Workflows:**
 
-- `ci` - Stack-conditional pipeline stages (browser install, burn-in)
+- `ci` - Stack-conditional pipeline stages (browser install, burn-in, device/emulator legs)
 - `framework` - Framework scaffold adapts to stack type
+- `automate` - Selects which generation workers launch (`mobile` runs the API worker plus the mobile worker)
+
+Detection checks mobile first: a React Native or Expo project carries `package.json` with react and would otherwise misdetect as `frontend`.
 
 **Example:**
 
@@ -535,9 +539,9 @@ Detected or configured test framework preference.
 
 **Default:** `"auto"`
 
-**Options:** `"auto"` | `"playwright"` | `"cypress"` | `"jest"` | `"vitest"` | `"pytest"` | `"junit"` | `"go-test"` | `"dotnet-test"` | `"rspec"` | `"other"`
+**Options:** `"auto"` | `"playwright"` | `"cypress"` | `"jest"` | `"vitest"` | `"pytest"` | `"junit"` | `"go-test"` | `"dotnet-test"` | `"rspec"` | `"maestro"` | `"other"`
 
-**Purpose:** Controls which test framework patterns TEA uses for code generation. When set to `"auto"`, TEA detects from project configuration files and manifests. Supports both frontend (Playwright, Cypress, Jest, Vitest) and backend (pytest, JUnit, Go test, dotnet test, RSpec) frameworks.
+**Purpose:** Controls which test framework patterns TEA uses for code generation. When set to `"auto"`, TEA detects from project configuration files and manifests. Supports frontend (Playwright, Cypress, Jest, Vitest), backend (pytest, JUnit, Go test, dotnet test, RSpec), and mobile native (Maestro) frameworks.
 
 **Affects Workflows:**
 

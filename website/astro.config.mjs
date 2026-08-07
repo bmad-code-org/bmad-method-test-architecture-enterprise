@@ -125,6 +125,7 @@ export default defineConfig({
           collapsed: true,
           items: [
             { label: 'Testing as Engineering', slug: 'explanation/testing-as-engineering' },
+            { label: 'Verification Architecture', slug: 'explanation/verification-architecture' },
             { label: 'Engagement Models', slug: 'explanation/engagement-models' },
             { label: 'Risk-Based Testing', slug: 'explanation/risk-based-testing' },
             { label: 'Test Quality Standards', slug: 'explanation/test-quality-standards' },
@@ -142,6 +143,7 @@ export default defineConfig({
           items: [
             { label: 'Commands', slug: 'reference/commands' },
             { label: 'Configuration', slug: 'reference/configuration' },
+            { label: 'Execution Targets', slug: 'reference/execution-targets' },
             { label: 'Knowledge Base', slug: 'reference/knowledge-base' },
             { label: 'tea-test-review CLI', slug: 'reference/tea-test-review-cli' },
             { label: 'Troubleshooting', slug: 'reference/troubleshooting' },

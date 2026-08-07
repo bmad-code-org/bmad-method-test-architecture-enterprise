@@ -73,11 +73,24 @@ if (detected_stack === 'backend' || detected_stack === 'fullstack') {
 }
 ```
 
+**Read Mobile test subagent output (if {detected_stack} is `mobile`):**
+
+```javascript
+let mobileTestsOutput = null;
+if (detected_stack === 'mobile') {
+  const mobileTestsPath = '/tmp/tea-automate-mobile-tests-{{timestamp}}.json';
+  mobileTestsOutput = JSON.parse(fs.readFileSync(mobileTestsPath, 'utf8'));
+}
+```
+
+The mobile payload uses the backend shape (`testsGenerated`, `coverageSummary.fixtureNeeds`) plus a per-file `level`. When counting tests, exclude entries whose `level` is `subflow`: a shared sequence is setup, not coverage, and counting it inflates the reported number.
+
 **Verify all launched subagents succeeded:**
 
 - Check `apiTestsOutput.success === true`
 - If E2E was launched: check `e2eTestsOutput.success === true`
 - If Backend was launched: check `backendTestsOutput.success === true`
+- If Mobile was launched: check `mobileTestsOutput.success === true`
 - If any failed, report error and stop (don't proceed)
 
 ---

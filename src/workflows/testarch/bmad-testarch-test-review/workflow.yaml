@@ -22,7 +22,7 @@ template: "./test-review-template.md"
 variables:
   test_dir: "{project-root}/tests" # Root test directory
   review_scope: "single" # single (one file), directory (folder), suite (all tests)
-  test_stack_type: "auto" # auto, frontend, backend, fullstack - from config or auto-detected
+  test_stack_type: "auto" # auto, frontend, backend, fullstack, mobile - from config or auto-detected
 
   # Headless mode (non-interactive runs, e.g. the tea-test-review CLI)
   headless: false # true: skip the greeting and interactive menu, execute Create mode directly, never prompt the user

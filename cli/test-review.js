@@ -37,6 +37,7 @@ const {
   getChangedTestFiles,
   getContextFiles,
   getUnscorableTestArtifacts,
+  getForcedUnscorableCandidates,
   getDeletedTestFiles,
   contextBasisFor,
   isTestFile,
@@ -462,8 +463,8 @@ function main() {
   let changedTestFiles;
   let contextFiles = [];
   let contextTruncated = false;
-  // Changed test artifacts the ledger has no criteria for (Maestro flows,
-  // Gherkin features, .http collections). They stay out of the review set, but
+  // Changed test artifacts the ledger has no criteria for (Gherkin features,
+  // Robot suites, .http collections). They stay out of the review set, but
   // a reviewed-files manifest that simply omits them reads as though the diff
   // held nothing else, so they are disclosed and carry the --test-glob remedy.
   let unscorableTestArtifacts = [];
@@ -483,6 +484,11 @@ function main() {
     throw error;
   }
   const contextBasis = contextBasisFor({ files: contextFiles, truncated: contextTruncated });
+
+  // Files --test-glob forced in that no built-in rule recognizes. The CLI cannot
+  // tell whether a registry row attached, so it names them to the agent rather
+  // than letting a zero-violation run publish 100/Approve over an unread format.
+  const forcedUnscorableCandidates = getForcedUnscorableCandidates(changedTestFiles);
 
   // Fail closed on hostile paths before they reach the prompt (or anywhere
   // else). Context paths travel in their own delimited block and get the same
@@ -559,6 +565,7 @@ function main() {
       contextBasis,
       focus: options.focus,
       unscorableTestArtifacts,
+      forcedUnscorableCandidates,
     });
     console.log(prompt);
     if (jsonPath) {
@@ -665,6 +672,7 @@ function main() {
     contextBasis,
     focus: options.focus,
     unscorableTestArtifacts,
+    forcedUnscorableCandidates,
   });
 
   const executeAgent = ({ agentCwd, spawnPrefix }) => {

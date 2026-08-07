@@ -1,18 +1,21 @@
 # Test Architect (TEA)
 
-[![Python Version](https://img.shields.io/badge/python-%3E%3D3.10-blue?logo=python&logoColor=white)](https://www.python.org)
-[![uv](https://img.shields.io/badge/uv-package%20manager-blueviolet?logo=uv)](https://docs.astral.sh/uv/)
+[![Node Version](https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js&logoColor=white)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
 TEA (Test Engineering Architect) is a standalone BMAD module that delivers risk-based test strategy, test automation guidance, and release gate decisions. It provides a single expert agent (Murat, Master Test Architect and Quality Advisor) and nine workflows spanning Teach Me Testing (TEA Academy), test design, framework setup, CI guidance, ATDD, automation, test review, NFR Evidence Audit, and traceability.
+
+TEA is two layers. **TEA Core** decides what must be verified, at what depth, with what evidence, and whether that evidence is sufficient to release; it assumes nothing about your language, framework, or platform. **Execution targets** turn those decisions into runnable tests on a specific stack, and that layer is swappable. See [Verification Architecture](./docs/explanation/verification-architecture.md) for the split, and [Execution Targets](./docs/reference/execution-targets.md) for exactly which stacks are covered at which depth.
 
 Docs: <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/>
 
 ## Why TEA
 
-- Risk-based testing with measurable quality gates
-- Consistent, knowledge-base driven outputs
-- Clear prioritization (P0-P3) and traceability
-- Optional Playwright Utils, CLI, and MCP browser automation
+- Risk-based prioritization (P0-P3) from probability × impact, with measurable quality gates
+- Requirements traced to evidence, and PASS / CONCERNS / FAIL / WAIVED release decisions that survive an audit
+- NFR thresholds set at design time and audited against real evidence, defaulting to CONCERNS when evidence is missing
+- Consistent, knowledge-base driven outputs instead of whatever the model felt like producing
+- Stack-aware execution: Playwright and Cypress for browsers, Maestro for mobile native, Pact for contracts, pytest / JUnit / Go test / xUnit / RSpec for backend services, k6 and scanners as NFR evidence
 
 ## How BMad Works
 
@@ -80,7 +83,7 @@ BMad workflows and Claude Code Skills solve different problems at different scal
 | ----------------- | --------------------------- | ---------------------------------------------------------------------------- |
 | **Execution**     | Single prompt, one shot     | 5-9 sequential steps with explicit handoffs                                  |
 | **State**         | Stateless                   | YAML frontmatter tracking (`stepsCompleted`, `lastStep`) with resume         |
-| **Knowledge**     | Whatever fits in one prompt | Tiered index (40 fragments), conditional loading by config + stack detection |
+| **Knowledge**     | Whatever fits in one prompt | Tiered index (54 fragments), conditional loading by config + stack detection |
 | **Context mgmt**  | Everything in one shot      | Just-in-time step loading, subagent isolation (separate contexts)            |
 | **Output**        | Freeform                    | Templates with `{PLACEHOLDER}` vars filled by specific steps                 |
 | **Validation**    | None                        | Dedicated mode (`steps-v/`) evaluating against checklists                    |
@@ -137,17 +140,17 @@ npx bmad-method install
 
 ## Workflows
 
-| Trigger | Slash Command                | Codex Skill                      | Purpose                                                   |
-| ------- | ---------------------------- | -------------------------------- | --------------------------------------------------------- |
-| TMT     | `/bmad:tea:teach-me-testing` | `$bmad-tea-teach-me-testing`     | Teach Me Testing (TEA Academy)                            |
-| TD      | `/bmad:tea:test-design`      | `$bmad-tea-testarch-test-design` | System-level or epic-level test design and NFR planning   |
-| TF      | `/bmad:tea:framework`        | `$bmad-tea-testarch-framework`   | Scaffold test framework (frontend, backend, or fullstack) |
-| CI      | `/bmad:tea:ci`               | `$bmad-tea-testarch-ci`          | Set up CI/CD quality pipeline (multi-platform)            |
-| AT      | `/bmad:tea:atdd`             | `$bmad-tea-testarch-atdd`        | Generate failing acceptance tests + checklist             |
-| TA      | `/bmad:tea:automate`         | `$bmad-tea-testarch-automate`    | Expand test automation coverage                           |
-| RV      | `/bmad:tea:test-review`      | `$bmad-tea-testarch-test-review` | Review test quality and score                             |
-| NR      | `/bmad:tea:nfr-assess`       | `$bmad-tea-testarch-nfr`         | Audit implemented NFR evidence                            |
-| TR      | `/bmad:tea:trace`            | `$bmad-tea-testarch-trace`       | Trace requirements to tests + gate decision               |
+| Trigger | Slash Command                | Codex Skill                      | Purpose                                                           |
+| ------- | ---------------------------- | -------------------------------- | ----------------------------------------------------------------- |
+| TMT     | `/bmad:tea:teach-me-testing` | `$bmad-tea-teach-me-testing`     | Teach Me Testing (TEA Academy)                                    |
+| TD      | `/bmad:tea:test-design`      | `$bmad-tea-testarch-test-design` | System-level or epic-level test design and NFR planning           |
+| TF      | `/bmad:tea:framework`        | `$bmad-tea-testarch-framework`   | Scaffold test framework (frontend, backend, fullstack, or mobile) |
+| CI      | `/bmad:tea:ci`               | `$bmad-tea-testarch-ci`          | Set up CI/CD quality pipeline (multi-platform)                    |
+| AT      | `/bmad:tea:atdd`             | `$bmad-tea-testarch-atdd`        | Generate failing acceptance tests + checklist                     |
+| TA      | `/bmad:tea:automate`         | `$bmad-tea-testarch-automate`    | Expand test automation coverage                                   |
+| RV      | `/bmad:tea:test-review`      | `$bmad-tea-testarch-test-review` | Review test quality and score                                     |
+| NR      | `/bmad:tea:nfr-assess`       | `$bmad-tea-testarch-nfr`         | Audit implemented NFR evidence                                    |
+| TR      | `/bmad:tea:trace`            | `$bmad-tea-testarch-trace`       | Trace requirements to tests + gate decision                       |
 
 ## Configuration
 
@@ -158,8 +161,8 @@ TEA variables are defined in `src/module.yaml` and prompted during install:
 - `tea_use_pactjs_utils` — enable Pact.js Utils integration for contract testing when your project explicitly uses Pact (boolean)
 - `tea_pact_mcp` — SmartBear MCP for PactFlow/Broker interaction when broker integration is needed: mcp, none (string)
 - `tea_browser_automation` — browser automation mode: auto, cli, mcp, none (string)
-- `test_framework` — detected or configured test framework (Playwright, Cypress, Jest, Vitest, pytest, JUnit, Go test, dotnet test, RSpec)
-- `test_stack_type` — detected or configured stack type (frontend, backend, fullstack)
+- `test_framework` — detected or configured test framework (Playwright, Cypress, Jest, Vitest, pytest, JUnit, Go test, dotnet test, RSpec, Maestro)
+- `test_stack_type` — detected or configured stack type (frontend, backend, fullstack, mobile)
 - `ci_platform` — CI platform (auto, github-actions, gitlab-ci, jenkins, azure-devops, harness, circle-ci)
 - `risk_threshold` — risk cutoff for mandatory testing (future)
 - `test_design_output`, `test_review_output`, `trace_output` — subfolders under `test_artifacts`

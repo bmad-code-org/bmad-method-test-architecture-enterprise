@@ -171,11 +171,16 @@ Report selected mode before dispatch:
 
 **Select subagents based on `{detected_stack}`:**
 
-| `{detected_stack}` | Subagent A (API) | Subagent B (E2E) | Subagent B-backend |
-| ------------------ | ---------------- | ---------------- | ------------------ |
-| `frontend`         | Launch           | Launch           | Skip               |
-| `backend`          | Launch           | Skip             | Launch             |
-| `fullstack`        | Launch           | Launch           | Launch             |
+| `{detected_stack}` | Subagent A (API) | Subagent B (E2E) | Subagent B-backend | Subagent B-mobile |
+| ------------------ | ---------------- | ---------------- | ------------------ | ----------------- |
+| `frontend`         | Launch           | Launch           | Skip               | Skip              |
+| `backend`          | Launch           | Skip             | Launch             | Skip              |
+| `fullstack`        | Launch           | Launch           | Launch             | Skip              |
+| `mobile`           | Launch           | Skip             | Skip               | Launch            |
+
+Subagent A still launches for `mobile`: a mobile app has an HTTP boundary, and
+`mobile-test-strategy.md` puts most coverage below the device level. A run that
+generates only device flows has misread the level framework.
 
 ### 3A. Runtime-Managed Parallelism
 
@@ -271,6 +276,32 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 ---
 
+### 6b. Dispatch Worker B-mobile: Mobile Test Generation (mobile only)
+
+**If {detected_stack} is `mobile`:**
+
+**Dispatch worker:**
+
+- **Subagent File:** `./step-03b-subagent-mobile.md`
+- **Output File:** `/tmp/tea-automate-mobile-tests-${timestamp}.json`
+- **Context:** Pass `subagentContext`
+- **Execution:**
+  - `agent-team` or `subagent`: launch non-blocking
+  - `sequential`: run blocking and wait before next dispatch
+
+**System Action:**
+
+```
+🚀 Launching Subagent B-mobile: Mobile Test Generation
+📝 Output: /tmp/tea-automate-mobile-tests-${timestamp}.json
+⚙️ Mode: ${resolvedMode}
+⏳ Status: Running...
+```
+
+**If {detected_stack} is not `mobile`:** Skip this subagent.
+
+---
+
 ### 7. Wait for Expected Worker Completion
 
 **If `resolvedMode` is `agent-team` or `subagent`:**
@@ -279,7 +310,8 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 ⏳ Waiting for subagents to complete...
   ├── Subagent A (API): Running... ⟳
   ├── Subagent B (E2E): Running... ⟳       [if frontend/fullstack]
-  └── Subagent B-backend: Running... ⟳     [if backend/fullstack]
+  ├── Subagent B-backend: Running... ⟳     [if backend/fullstack]
+  └── Subagent B-mobile: Running... ⟳      [if mobile]
 
 [... time passes ...]
 
@@ -310,6 +342,10 @@ if (detected_stack === 'backend' || detected_stack === 'fullstack') {
   const backendOutputExists = fs.existsSync(`/tmp/tea-automate-backend-tests-${timestamp}.json`);
   if (!backendOutputExists) throw new Error('Backend subagent output missing!');
 }
+if (detected_stack === 'mobile') {
+  const mobileOutputExists = fs.existsSync(`/tmp/tea-automate-mobile-tests-${timestamp}.json`);
+  if (!mobileOutputExists) throw new Error('Mobile subagent output missing!');
+}
 if (!apiOutputExists) throw new Error('API subagent output missing!');
 ```
 
@@ -321,6 +357,7 @@ The aggregate step expects both outputs to include `success`, but the payload sh
 
 - `step-03b-subagent-e2e.md` output includes `success`, `subagent`, `tests`, `fixture_needs`, `knowledge_fragments_used`, `test_count`, and `summary`.
 - `step-03b-subagent-backend.md` output includes `success`, `subagent`, `subagentType`, `testsGenerated`, `coverageSummary` (with `fixtureNeeds`), `status`, `knowledge_fragments_used`, and `summary`.
+- `step-03b-subagent-mobile.md` output includes `success` (required boolean), follows the backend shape (`subagentType`, `testsGenerated`, `coverageSummary`), and adds a `level` field per generated file (`device-flow`, `subflow`, `unit`, `component`) plus `assumptions`. Subflows are counted separately from device flows, so never sum them into a test count.
 
 The aggregate step reads whichever output file(s) exist based on `{detected_stack}` and must use the matching schema per subagent type.
 
@@ -337,6 +374,7 @@ The aggregate step reads whichever output file(s) exist based on `{detected_stac
 - API Test Generation: ~X minutes
 - E2E Test Generation: ~Y minutes       [if frontend/fullstack]
 - Backend Test Generation: ~Z minutes    [if backend/fullstack]
+- Mobile Test Generation: ~Z minutes      [if mobile]
 - Total Elapsed: ~mode-dependent
 - Parallel Gain: ~40-70% faster when mode is subagent/agent-team
 ```
@@ -364,6 +402,7 @@ Proceed to Step 3C (Aggregation) when:
 - ✅ Subagent A (API tests) completed successfully
 - ✅ Subagent B (E2E tests) completed successfully [if frontend/fullstack]
 - ✅ Subagent B-backend (Backend tests) completed successfully [if backend/fullstack]
+- ✅ Subagent B-mobile (Mobile tests) completed successfully [if mobile]
 - ✅ All expected output files exist and are valid JSON
 - ✅ Execution metrics displayed
 

@@ -136,6 +136,19 @@ Create the idiomatic test directory for the detected language:
 - **Ruby (RSpec)**: `spec/` with `spec/unit/`, `spec/integration/`, `spec/api/`, `spec/support/`
 - **Rust**: `tests/` for integration tests, inline `#[cfg(test)]` modules for unit tests
 
+**If {detected_stack} is `mobile`:**
+
+- `{maestro_root}/` — device flows, one journey per file (where `{maestro_root}` is `maestro/` or `.maestro/`)
+- `{maestro_root}/subflows/` — reusable sequences (login, onboarding dismissal, seed navigation) invoked via `runFlow`
+- `{maestro_root}/config.yaml` or `.maestro/config.yaml` — workspace config (flow include/exclude, execution order)
+- Plus the idiomatic unit and component test directory for the app's language:
+  - **React Native / Expo**: `__tests__/` or `src/**/*.test.tsx` with Jest or Vitest and React Native Testing Library
+  - **Native iOS**: `<App>Tests/` (XCTest unit) and `<App>UITests/` if XCUITest is also in use
+  - **Native Android**: `app/src/test/java/` (JUnit unit) and `app/src/androidTest/java/` (instrumented)
+  - **Flutter**: `test/` for unit and widget tests, `integration_test/` for integration
+
+Keep `{maestro_root}/subflows/` separate from the flow root so a flow count never counts shared setup as a test.
+
 **If `config.tea_use_pactjs_utils` is enabled and runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
 
 Create Node.js/TypeScript contract testing directory structure per `pact-consumer-framework-setup.md`:
@@ -172,6 +185,16 @@ Create the idiomatic test config for the detected framework:
 - **xUnit**: `.csproj` test project with xUnit and coverlet dependencies
 - **RSpec**: `.rspec` config file with `spec_helper.rb` and `rails_helper.rb` (if Rails)
 
+**If {detected_stack} is `mobile`:**
+
+Create `{maestro_root}/config.yaml` (or `.maestro/config.yaml`):
+
+- **flows**: glob for the flow files to include, excluding `subflows/`
+- **includeTags / excludeTags**: so CI can run a risk-appropriate subset (`P0` on the PR gate, everything nightly)
+- **Execution**: leave flows order-independent; every flow starts with `clearState` per `maestro-flows.md`
+
+Also create the unit/component test config for the app's language (`jest.config.js` with the `react-native` preset, `vitest.config.ts`, or the platform-native equivalent). Per `mobile-test-strategy.md` the device suite is the smallest layer, so the unit config is not optional.
+
 ---
 
 ## 3. Environment Setup
@@ -194,21 +217,34 @@ Create the idiomatic version file for the detected language:
 - **C#/.NET**: `global.json` with SDK version if not already present
 - **Ruby**: `.ruby-version` with current stable Ruby
 
+**If {detected_stack} is `mobile`:**
+
+- `.nvmrc` when the app is React Native or Expo (the JS toolchain still applies)
+- Add `MAESTRO_APP_ID`, `MAESTRO_DRIVER_STARTUP_TIMEOUT`, and any test-account variables to `.env.example`
+- Never commit a test credential: `maestro-flows.md` H9 treats an inlined secret as a HIGH violation
+
 ---
 
 ## 4. Fixtures & Factories
 
-Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `config.tea_use_playwright_utils`:
+Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{detected_stack}`:
 
-**If Playwright Utils enabled:**
+**If `{detected_stack}` is `mobile`:**
 
-- `overview.md`, `fixtures-composition.md`, `auth-session.md`, `api-request.md`, `recurse.md`, `log.md`, `burn-in.md`, `network-error-monitor.md`, `data-factories.md`
-- If `{detected_stack}` is `frontend` or `fullstack`, also load `intercept-network-call.md`
-- Recommend installing `@seontechnologies/playwright-utils`
+- `mobile-test-strategy.md` (CRITICAL: load this first — it decides which behaviors become device flows at all, and most should not)
+- `maestro-flows.md` (flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition)
+- `test-levels-framework.md`, `test-priorities-matrix.md`, `test-quality.md`
+- Do NOT load browser fragments: `network-first.md`, `playwright-config.md`, and `intercept-network-call.md` describe a DOM and a request interceptor a device flow does not have
 
-**If disabled:**
+**If `{detected_stack}` is `frontend`, `fullstack`, or `backend`:**
 
-- `fixture-architecture.md`, `data-factories.md`, `network-first.md`, `playwright-config.md`, `test-quality.md`
+- **If Playwright Utils enabled:**
+  - `overview.md`, `fixtures-composition.md`, `auth-session.md`, `api-request.md`, `recurse.md`, `log.md`, `burn-in.md`, `network-error-monitor.md`, `data-factories.md`
+  - If `{detected_stack}` is `frontend` or `fullstack`, also load `intercept-network-call.md`
+  - Recommend installing `@seontechnologies/playwright-utils`
+
+- **If disabled:**
+  - `fixture-architecture.md`, `data-factories.md`, `network-first.md`, `playwright-config.md`, `test-quality.md`
 
 **If Pact.js Utils enabled** (`config.tea_use_pactjs_utils`):
 
@@ -254,6 +290,19 @@ Create example tests in the idiomatic location for the detected language:
 - **Go**: `example_test.go` alongside source with table-driven tests and `testify` assertions
 - **C#/.NET**: `tests/ExampleTests.cs` with xUnit `[Fact]`/`[Theory]` and fixture injection
 - **Ruby**: `spec/example_spec.rb` with RSpec `describe`/`context`/`it` and factory_bot
+
+**If {detected_stack} is `mobile`:**
+
+Create `maestro/example-flow.yaml` demonstrating the patterns in `maestro-flows.md`:
+
+- `clearState` then `launchApp` for isolation
+- Accessibility-id selectors, never `index:` or `point:`
+- `extendedWaitUntil` on a named condition instead of `sleep`
+- An `assertVisible` on the destination state, so the flow proves something
+- A `P0` tag so CI can select it
+- `${ENV_VAR}` for any credential
+
+Also create `maestro/subflows/login.yaml` showing `runFlow` composition with `env` passing, plus one unit or component example in the app's own framework so the sample suite reflects the real level distribution.
 
 Create helpers for:
 

@@ -9,10 +9,15 @@ description: Test Architect (TEA) - Risk-based testing workflows, automation gui
 
 TEA (Test Engineering Architect) is a BMAD module for testing strategy and automation. It provides nine workflows covering learning, setup, design, automation, review, and release gates.
 
-- **Workflow‑Driven**: Multiple workflows covering covering day to day activities of a test architect.
+- **Workflow‑Driven**: Multiple workflows covering day-to-day activities of a test architect.
 - **Consistent Outputs**: Knowledge-base guidance keeps standards consistent, no matter the agent being used.
 - **Risk‑Based**: P0–P3 prioritization from probability × impact.
 - **Release Gates**: Evidence‑backed go/no‑go decisions with traceability.
+- **Two Layers**: Stack-neutral verification reasoning, plus swappable execution targets. See [Verification Architecture](/explanation/verification-architecture).
+
+## What TEA Works On
+
+Risk assessment, test design, NFR planning, traceability, and release gates apply to any stack. Execution depth varies: browsers, HTTP services, and contracts are covered end to end; Python, Java, Go, .NET, and Ruby backends get detection, scaffolding, and generation; performance and security are planned and audited rather than executed. [Execution Targets](/reference/execution-targets) publishes the full matrix, including the gaps.
 
 ## Quick Install
 

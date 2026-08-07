@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Fixed
+
+- Aligned forced-unscorable candidate handling in `cli/lib/build-prompt.js` and `cli/lib/parse-report.js`: candidates without matching criteria rows are removed from `## Reviewed Files` when excluded in `## Excluded From Review Set`. Added end-to-end stub-agent coverage in `test/test-test-review-cli.js`.
+- Corrected shared-account guidance in `mobile-test-strategy.md` to recommend per-run accounts/data or explicit backend reset when server state changes.
+- Added `clearKeychain` between `clearState` and `launchApp` in `maestro-flows.md` login setup across all workflow copies.
+- Fixed mobile preflight HALT condition in `bmad-testarch-automate` so missing `maestro` on PATH records run as non-executable without halting.
+- Aligned mobile worker success contract across automation subagent, generation, and aggregate steps by adding required `success` boolean to mobile schema and validating it before aggregation.
+- Updated generated mobile flow guidance to require `clearState` only for device-flow entries, keeping subflows from resetting or relaunching mid-journey.
+- Resolved Maestro root directory (`maestro/` or `.maestro/`) and propagated it across generation, scaffolding, and CI pipeline steps.
+- Added Mobile framework verification branch to CI preflight step.
+- Replaced unpinned Maestro curl installer in CI pipeline generation with release-pinned or checksum-verified immutable artifact.
+- Added Mobile prerequisite and context loading branches to framework preflight step, and updated mobile+backend surface handling across framework and test-design workflows.
+- Reordered framework scaffold knowledge loading so mobile projects skip Playwright browser fragments, and aligned Maestro config and flow paths.
+- Updated Flutter detection in `pubspec.yaml` to require Flutter SDK dependency or platform project directory before classifying as mobile, recognized `*.flow.yml` in Maestro review triggers, and skipped DOM `selector-resilience` for mobile reviews.
+- Added `mobile` and `maestro` keywords to `package.json` and `.claude-plugin/marketplace.json`.
+- Updated `src/module.yaml`, `docs/explanation/tea-overview.md`, `docs/index.md`, `docs/reference/execution-targets.md`, and `docs/reference/knowledge-base.md` to align mobile native (Maestro) execution targets, tier dimensions, and knowledge fragment loading contracts.
+- Normalized the `test-review` checklist's Recommendation vocabulary to the canonical four-value enum (`checklist.md`).
 
 - New `tea-test-review` CLI (`bin` entry) — headless runner for the `bmad-testarch-test-review` skill: changed-test scoping from the PR diff (`--base`, or an explicit `--files` list), prompt-only mode (`--agent none`), JSON verdict (`--json`), and CI exit codes (`--fail-on request-changes|block`). Hardened for required-gate use: stdin-delivered prompt, filesystem isolation (`--isolate`, on by default in CI, `--no-isolate` to opt out), extra test-file matchers (`--test-glob`), a quality-score floor (`--min-score`), non-pass on skips (`--fail-on-skip`) and deletions-only diffs, and strict report validation (dual-section Recommendation, bounded score, violations line, frontmatter, and a `## Reviewed Files` manifest). Ships with `cli/examples/pr-test-review.yml`, a two-job (review + comment) starting template for a required test-review gate, plus `cli/examples/README.md` covering two real adaptations: a central reusable-workflows repo, and a repo already running a third-party review bot.
 - `tea-test-review` is no longer Claude-only: `--agent` resolves against a per-vendor adapter table (`cli/lib/agent-adapters.js`) instead of hardcoding `claude -p`'s argv at every call site `--agent-cmd` could override. `--agent codex` spawns `codex exec --sandbox workspace-write`, live-verified with a real review against a real Playwright spec (`codex-cli` 0.146.0) whose report `parseReport()` accepted; that run wrote Key Strengths/Weaknesses as plain bullets instead of the `✅`/`❌`-prefixed form claude reliably produces, which the existing best-effort extraction already tolerates by design (`plain-bullets-key-strengths.md` fixture). A drafted `--agent gemini` adapter was not shipped: this account's `gemini` CLI OAuth login is on a deprecated Code Assist tier with no fallback API key configured, so it was never verified end-to-end.
@@ -41,8 +57,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `actions/create-github-app-token@v3`
 - Publish releases now use `[Unreleased]` changelog notes before falling back to generated GitHub release notes when an exact version section is missing.
 - Documented workflow-local knowledge resources as intentional self-contained skill packaging and added validation for workflow-local knowledge indexes.
-
-### Fixed
 
 - Normalized the `test-review` checklist's Recommendation vocabulary to the canonical four-value enum (`checklist.md`).
 - `test-review` score aggregation now emits a CRITICAL severity tier (`step-03f`), mapped to the report's `Critical Issues (Must Fix)` section, matching the template's four-tier violations line; `generate_inline_comments` is now a defined workflow input (default `false`) instead of an unresolved reference in the checklist.

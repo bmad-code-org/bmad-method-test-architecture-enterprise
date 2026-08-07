@@ -43,13 +43,16 @@ Verify the project is ready for framework scaffolding and gather key context.
 **Auto-Detection Algorithm** (when `test_stack_type` is `"auto"` or not configured):
 
 - Scan `{project-root}` for project manifests:
+  - **Mobile indicators**: `.maestro/` or `maestro/` flow directory, `app.json`/`app.config.*` declaring expo or react-native, `Podfile`, `android/app/build.gradle`, `*.xcodeproj`/`*.xcworkspace`, `pubspec.yaml`
   - **Frontend indicators**: `package.json` with react/vue/angular/next dependencies, `playwright.config.*`, `vite.config.*`, `webpack.config.*`
   - **Backend indicators**: `pyproject.toml`, `pom.xml`/`build.gradle`, `go.mod`, `*.csproj`/`*.sln`, `Gemfile`, `Cargo.toml`
-  - **Both present** = `fullstack`; only frontend = `frontend`; only backend = `backend`
+  - **Check mobile first.** A React Native or Expo project carries `package.json` with react and misdetects as `frontend` otherwise.
+  - **Mobile present** = `mobile`; frontend and backend both present = `fullstack`; only frontend = `frontend`; only backend = `backend`
+  - A project containing both a mobile client and a backend service detects as `mobile` by default. Run separate framework scaffolding passes (or specify `test_stack_type = backend` for the backend surface) when scaffolding both mobile and backend test frameworks.
 - Explicit `test_stack_type` config value overrides auto-detection
 - **Backward compatibility**: if `test_stack_type` is not in config, treat as `"auto"` (preserves current frontend behavior for existing installs)
 
-Store result as `{detected_stack}` = `frontend` | `backend` | `fullstack`
+Store result as `{detected_stack}` = `frontend` | `backend` | `fullstack` | `mobile`
 
 ---
 
@@ -59,6 +62,11 @@ Store result as `{detected_stack}` = `frontend` | `backend` | `fullstack`
 
 - `package.json` exists in project root
 - No existing E2E framework (`playwright.config.*`, `cypress.config.*`, `cypress.json`)
+
+**If {detected_stack} is `mobile`:**
+
+- App manifest exists (`app.json`, `app.config.*`, `android/app/build.gradle`, `*.xcodeproj`/`*.xcworkspace`, `pubspec.yaml`)
+- Recognize existing Maestro (`maestro/`, `.maestro/`) or Appium configuration if present
 
 **If {detected_stack} is `backend` or `fullstack`:**
 
@@ -76,6 +84,11 @@ If any fail, **HALT** and report the missing requirement.
 **If {detected_stack} is `frontend` or `fullstack`:**
 
 - Read `package.json` to identify framework, bundler, dependencies
+
+**If {detected_stack} is `mobile`:**
+
+- Read app manifest (`app.json`, `Podfile`, `build.gradle`, `pubspec.yaml`) to identify mobile framework (React Native/Expo, Native Android/iOS, Flutter), language, and toolchain
+- Load mobile language and toolchain context required for unit, component, and flow scaffolding
 
 **If {detected_stack} is `backend` or `fullstack`:**
 

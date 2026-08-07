@@ -121,6 +121,8 @@ function promptArray(begin, end) {
 
 const reviewedFiles = promptArray('---BEGIN FILES---', '---END FILES---');
 const contextFiles = promptArray('---BEGIN CONTEXT---', '---END CONTEXT---');
+const unscorableFiles = promptArray('---BEGIN UNSCORABLE---', '---END UNSCORABLE---');
+const forcedUnscorableFiles = promptArray('---BEGIN FORCED-UNSCORABLE-CANDIDATES---', '---END FORCED-UNSCORABLE-CANDIDATES---');
 const reportedContextFiles = process.env.STUB_CONTEXT_OVERRIDE
   ? JSON.parse(process.env.STUB_CONTEXT_OVERRIDE)
   : contextFiles;
@@ -152,11 +154,23 @@ function replaceManifestSection(report, heading, files, { remove = false, addBef
 
 function bindReportToPrompt(report) {
   let bound = report.replace(/^\*\*Context Basis\*\*:[ \t]*[^\n]+$/m, `**Context Basis**: ${contextBasis}`);
-  bound = replaceManifestSection(bound, 'Reviewed Files', reviewedFiles);
+  const isCodeFile = (f) => /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rb|php|cs|java|kt|swift|rs|dart)$/i.test(f);
+  const unscorableForced = forcedUnscorableFiles.filter((f) => !isCodeFile(f));
+  const effectiveReviewed = reviewedFiles.filter((f) => !unscorableForced.includes(f));
+  bound = replaceManifestSection(bound, 'Reviewed Files', effectiveReviewed);
   bound = replaceManifestSection(bound, 'Review Context', reportedContextFiles, {
     remove: contextBasis === 'none',
     addBefore: 'Reviewed Files',
   });
+  const allExcluded = [...unscorableFiles, ...unscorableForced];
+  if (allExcluded.length > 0) {
+    bound = replaceManifestSection(
+      bound,
+      'Excluded From Review Set',
+      allExcluded.map((f) => `${f} — format not scorable by the ledger`),
+      { addBefore: 'Quality Score Breakdown' },
+    );
+  }
   return bound;
 }
 

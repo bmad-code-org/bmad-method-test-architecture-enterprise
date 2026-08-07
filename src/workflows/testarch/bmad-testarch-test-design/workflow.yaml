@@ -25,7 +25,7 @@ template: "./test-design-template.md"
 variables:
   design_level: "full" # full, targeted, minimal - scope of design effort
   mode: "auto-detect" # auto-detect (default), system-level, epic-level
-  test_stack_type: "auto" # auto, frontend, backend, fullstack - from config or auto-detected
+  test_stack_type: "auto" # auto, frontend, backend, fullstack, mobile - from config or auto-detected
 
 # Output configuration
 # Note: Actual output file determined dynamically based on mode detection

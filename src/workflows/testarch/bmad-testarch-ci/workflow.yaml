@@ -21,7 +21,7 @@ validation: "./checklist.md"
 variables:
   ci_platform: "auto" # auto, github-actions, gitlab-ci, circle-ci, jenkins, azure-devops, harness - user can override
   test_dir: "{project-root}/tests" # Root test directory
-  test_stack_type: "auto" # auto, frontend, backend, fullstack - detected or user override
+  test_stack_type: "auto" # auto, frontend, backend, fullstack, mobile - detected or user override
   test_framework: "auto" # auto, playwright, cypress, jest, vitest - detected or user override
 
 # Output configuration (resolved dynamically based on ci_platform detection)

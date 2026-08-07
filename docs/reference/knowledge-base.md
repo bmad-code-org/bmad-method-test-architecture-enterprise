@@ -191,6 +191,21 @@ Contract testing fundamentals plus Pact.js Utils and Pact MCP integrations.
 
 ---
 
+### Mobile Native
+
+Maestro device flows and the level discipline that decides what becomes a flow at all. Loaded when `test_stack_type` is `mobile` or when the review set contains a Maestro flow (`.yaml`/`.yml` under `maestro/` or `.maestro/`, or `*.flow.yaml` or `*.flow.yml`).
+
+| Fragment                                                                                                                                                                    | Description                                                                                                     | Key Topics                                          |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| [mobile-test-strategy](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/mobile-test-strategy.md) | Mobile test level framework, what belongs in a device flow, mobile risk categories, device matrix, CI shape     | Levels, risk, device matrix, permissions, lifecycle |
+| [maestro-flows](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/maestro-flows.md)               | Flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition | Maestro, selectors, isolation, anti-patterns        |
+
+**Used in:** `framework`, `automate`, `atdd`, `test-design`, `test-review`, `ci` (when `test_stack_type` is `mobile` or a Maestro flow is present)
+
+The browser fragments (`network-first`, `playwright-config`, `intercept-network-call`, `selector-resilience`) are deliberately NOT loaded for a mobile stack: a device flow has no DOM and no request interceptor.
+
+---
+
 ### Browser Automation
 
 CLI and MCP integration for AI-driven browser automation during test generation.

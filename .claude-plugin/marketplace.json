@@ -6,7 +6,26 @@
   "license": "MIT",
   "homepage": "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise",
   "repository": "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise",
-  "keywords": ["bmad", "test-architect", "testing", "quality", "automation", "playwright", "test-engineering"],
+  "keywords": [
+    "bmad",
+    "test-architect",
+    "test-engineering",
+    "testing",
+    "quality",
+    "quality-gates",
+    "risk-based-testing",
+    "verification-and-validation",
+    "traceability",
+    "nfr",
+    "test-automation",
+    "automation",
+    "contract-testing",
+    "pact",
+    "playwright",
+    "cypress",
+    "mobile",
+    "maestro"
+  ],
   "plugins": [
     {
       "name": "bmad-method-test-architecture-enterprise",
