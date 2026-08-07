@@ -6,11 +6,20 @@
   "keywords": [
     "bmad",
     "test-architect",
+    "test-engineering",
     "testing",
     "quality",
+    "quality-gates",
+    "risk-based-testing",
+    "verification-and-validation",
+    "traceability",
+    "nfr",
+    "test-automation",
     "automation",
+    "contract-testing",
+    "pact",
     "playwright",
-    "test-engineering"
+    "cypress"
   ],
   "repository": {
     "type": "git",

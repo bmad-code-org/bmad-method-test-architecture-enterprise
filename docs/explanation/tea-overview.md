@@ -9,6 +9,10 @@ The Test Architect (TEA) is a specialized agent focused on quality strategy, tes
 TEA was built to solve AI-generated tests that rot in review. For the problem statement and design principles, see [Testing as Engineering](/docs/explanation/testing-as-engineering.md). For setup, see [Setup Test Framework](/docs/how-to/workflows/setup-test-framework.md).
 :::
 
+:::note[Scope]
+TEA's risk, design, NFR, traceability, and gate workflows are stack-neutral and apply to any system under test. Its execution depth is not uniform: browsers, HTTP services, and contracts are covered end to end, while other stacks are covered at shallower tiers. [Verification Architecture](/docs/explanation/verification-architecture.md) explains the split; [Execution Targets](/docs/reference/execution-targets.md) publishes the per-target matrix and the known gaps.
+:::
+
 ## Overview
 
 - **Persona:** Murat, Master Test Architect and Quality Advisor focused on risk-based testing, fixture architecture, ATDD, and CI/CD governance.

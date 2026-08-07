@@ -1,6 +1,6 @@
 ---
 title: 'AI-Generated Testing: Why Most Approaches Fail'
-description: How Playwright-Utils, pactjs-utils, TEA workflows, Playwright CLI, and MCPs solve AI test quality problems
+description: Why prompt-driven test generation produces unreliable suites, and how standardized utilities, structured workflows, and deterministic interfaces fix it (worked through a JavaScript stack)
 ---
 
 AI-generated tests frequently fail in production because they lack systematic quality standards. This document explains the problem and presents a solution combining utility standards, TEA workflows, and automation interfaces across both UI, API and contract testing.

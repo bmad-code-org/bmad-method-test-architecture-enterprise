@@ -61,6 +61,8 @@ const {
   getChangedTestFiles,
   getContextFiles,
   getUnscorableTestArtifacts,
+  getForcedUnscorableCandidates,
+  isNativeTestFile,
   contextBasisFor,
   splitGitPathList,
   assertSafePaths,
@@ -1210,11 +1212,26 @@ async function runTests() {
       JSON.stringify({ length: capped.files.length, truncated: capped.truncated }),
     );
 
-    // Unscorable test artifacts: disclosed, never scored. The couture-cast case
-    // that motivated this is maestro/garment-capture-flow.yaml, a changed test
-    // artifact that reached Review Context and never Reviewed Files.
+    // Maestro is a scorable format now that the criteria registry carries mobile
+    // rows (C4, H1, H3, H4, H9, M8, L8). The couture-cast case that used to be
+    // disclosed-but-unscored, maestro/garment-capture-flow.yaml, is reviewed.
+    assert(
+      isNativeTestFile('maestro/garment-capture-flow.yaml') && isNativeTestFile('.maestro/login.yaml'),
+      'a Maestro flow is a native test file, no --test-glob required',
+    );
+    assert(isNativeTestFile('flows/checkout.flow.yaml'), 'a *.flow.yaml is recognized as a Maestro flow anywhere in the tree');
+    assert(
+      !isNativeTestFile('.maestro/config.yaml') && !isNativeTestFile('maestro/config.yml'),
+      "Maestro's workspace config is configuration, not a flow",
+    );
+    assert(
+      !isNativeTestFile('e2e/docker-compose.yaml') && !isNativeTestFile('openapi.yaml'),
+      'the Maestro exception stays scoped: unrelated yaml never enters the review set',
+    );
+
     const unscorable = getUnscorableTestArtifacts([
       'maestro/garment-capture-flow.yaml',
+      '.maestro/config.yaml',
       'features/checkout.feature',
       'tests/api/orders.http',
       'apps/api/src/wardrobe.service.spec.ts',
@@ -1224,8 +1241,13 @@ async function runTests() {
       'openapi.yaml',
     ]);
     assert(
-      unscorable.includes('maestro/garment-capture-flow.yaml'),
-      'getUnscorableTestArtifacts names a changed Maestro flow rather than omitting it',
+      !unscorable.includes('maestro/garment-capture-flow.yaml'),
+      'a Maestro flow is no longer disclosed as unscorable: it is scored',
+      JSON.stringify(unscorable),
+    );
+    assert(
+      !unscorable.includes('.maestro/config.yaml'),
+      "Maestro's workspace config is not disclosed as an unscorable test artifact",
       JSON.stringify(unscorable),
     );
     assert(
@@ -1248,10 +1270,50 @@ async function runTests() {
       'getUnscorableTestArtifacts tolerates an empty or missing diff',
     );
 
-    const unscorablePromptArgs = { skillRoot: '/skill', files: ['tests/checkout.spec.ts'], outputPath: 'test-review.md' };
-    const unscorablePrompt = buildPrompt({ ...unscorablePromptArgs, unscorableTestArtifacts: ['maestro/garment-capture-flow.yaml'] });
+    // A file --test-glob forces in that no built-in rule recognizes used to
+    // vanish from the unscorable manifest, and with no registry row able to
+    // attach, 100 - 0 published as 100/Grade A/Approve with no disclosure.
+    // It now travels to the agent as a rule-4 candidate instead.
+    resetExtraTestPatterns();
     assert(
-      unscorablePrompt.includes('---BEGIN UNSCORABLE---') && unscorablePrompt.includes('maestro/garment-capture-flow.yaml'),
+      getForcedUnscorableCandidates(['features/checkout.feature']).length === 0,
+      'getForcedUnscorableCandidates is empty when --test-glob registered nothing',
+    );
+    registerExtraTestPattern('features/');
+    assert(
+      isTestFile('features/checkout.feature') && !isNativeTestFile('features/checkout.feature'),
+      '--test-glob forces a non-code artifact into the review set by explicit intent',
+    );
+    assert(
+      getForcedUnscorableCandidates(['features/checkout.feature', 'tests/checkout.spec.ts']).length === 1 &&
+        getForcedUnscorableCandidates(['features/checkout.feature', 'tests/checkout.spec.ts'])[0] === 'features/checkout.feature',
+      'getForcedUnscorableCandidates names the forced artifact and never a natively recognized test',
+    );
+    resetExtraTestPatterns();
+
+    const forcedPrompt = buildPrompt({
+      skillRoot: '/skill',
+      files: ['features/checkout.feature'],
+      outputPath: 'test-review.md',
+      forcedUnscorableCandidates: ['features/checkout.feature'],
+    });
+    assert(
+      forcedPrompt.includes('---BEGIN FORCED-UNSCORABLE-CANDIDATES---') && forcedPrompt.includes('features/checkout.feature'),
+      'buildPrompt delimits the forced --test-glob candidates for the agent',
+    );
+    assert(
+      forcedPrompt.includes('criteria-registry rule 4') && forcedPrompt.includes('100/Approve'),
+      'buildPrompt tells the agent to decline rather than publish a perfect score over an unread format',
+    );
+    assert(
+      !buildPrompt({ skillRoot: '/skill', files: ['tests/checkout.spec.ts'], outputPath: 'test-review.md' }).includes('FORCED-UNSCORABLE'),
+      'buildPrompt omits the forced-candidate block when --test-glob forced nothing',
+    );
+
+    const unscorablePromptArgs = { skillRoot: '/skill', files: ['tests/checkout.spec.ts'], outputPath: 'test-review.md' };
+    const unscorablePrompt = buildPrompt({ ...unscorablePromptArgs, unscorableTestArtifacts: ['features/checkout.feature'] });
+    assert(
+      unscorablePrompt.includes('---BEGIN UNSCORABLE---') && unscorablePrompt.includes('features/checkout.feature'),
       'buildPrompt delimits the unscorable list so the report can disclose it verbatim',
     );
     assert(unscorablePrompt.includes('Excluded From Review Set'), 'buildPrompt names the report section the unscorable list must land in');

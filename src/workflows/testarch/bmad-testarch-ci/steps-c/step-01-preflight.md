@@ -51,9 +51,11 @@ Determine the project's test stack type (`test_stack_type`) using the following 
 
 1. If `test_stack_type` is explicitly set in config (not `"auto"`), use that value.
 2. Otherwise, auto-detect by scanning project manifests:
+   - **Mobile indicators**: `.maestro/` or `maestro/` flow directory, `app.json`/`app.config.*` declaring expo or react-native, `Podfile`, `android/app/build.gradle`, `*.xcodeproj`/`*.xcworkspace`, `pubspec.yaml`
    - **Frontend indicators**: `playwright.config.*`, `cypress.config.*`, `vite.config.*`, `next.config.*`, `src/components/`, `src/pages/`, `src/app/`
    - **Backend indicators**: `pyproject.toml`, `pom.xml`/`build.gradle`, `go.mod`, `*.csproj`/`*.sln`, `Gemfile`, `Cargo.toml`, `jest.config.*`, `vitest.config.*`, `src/routes/`, `src/controllers/`, `src/api/`, `Dockerfile`, `serverless.yml`
-   - **Both present** → `fullstack`
+   - **Mobile present** → `mobile` (check first; a React Native or Expo project carries frontend indicators too)
+   - **Both frontend and backend present** → `fullstack`
    - **Only frontend** → `frontend`
    - **Only backend** → `backend`
    - **Cannot determine** → default to `fullstack` and note assumption

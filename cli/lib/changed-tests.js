@@ -27,6 +27,14 @@ const TEST_DIR_SEGMENTS = new Set(['test', 'tests', '__tests__', 'e2e', 'spec', 
 // so fixtures like tests/data.json or e2e/docker-compose.yaml stay out.
 const CODE_EXTENSION_PATTERN = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rb|php|cs|java|kt|swift|rs|dart|exs|ex|vue|svelte)$/;
 
+// Maestro flows are declarative YAML, not code, but the criteria registry carries
+// mobile rows for them, so they are a scorable format and belong in the review set.
+const MAESTRO_DIR_SEGMENTS = new Set(['maestro', '.maestro']);
+const YAML_EXTENSION_PATTERN = /\.ya?ml$/i;
+const MAESTRO_FLOW_FILENAME_PATTERN = /\.flow\.ya?ml$/i;
+// .maestro/config.yaml is the workspace config, not a flow.
+const MAESTRO_NON_FLOW_FILENAMES = new Set(['config.yaml', 'config.yml']);
+
 const TEST_FILENAME_PATTERNS = [
   /^test_.*\.py$/, // pytest: test_checkout.py
   /_test\.py$/, // pytest: checkout_test.py
@@ -83,23 +91,32 @@ function resetExtraTestPatterns() {
 }
 
 /**
- * Match a repo-relative path that looks like a test/spec file. Directory
- * segments match case-insensitively but only on exact segment equality (so
- * src/latest/run.ts and src/test-utils/helpers.ts stay out). Every built-in
- * rule requires a code extension, so docs/example.spec.md is documentation,
- * not a test. Registered --test-glob matchers bypass the extension gate by
- * explicit user intent.
+ * Match a repo-relative path that looks like a test/spec file using the built-in
+ * rules only, ignoring the --test-glob registry. Directory segments match
+ * case-insensitively but only on exact segment equality (so src/latest/run.ts and
+ * src/test-utils/helpers.ts stay out).
+ *
+ * Code extensions are the general gate, so docs/example.spec.md is documentation,
+ * not a test. Maestro is the one deliberate exception: the criteria registry
+ * carries mobile rows (C4, H1, H3, H4, H9, M8, L8), so a declarative YAML flow is
+ * a format the ledger CAN score and it is recognized natively rather than needing
+ * --test-glob. The exception is scoped to YAML under a Maestro directory (or a
+ * *.flow.yaml anywhere) and excludes Maestro's own workspace config, which is
+ * configuration rather than a flow.
  *
  * @param {string} filePath - Repo-relative file path.
  * @returns {boolean}
  */
-function isTestFile(filePath) {
+function isNativeTestFile(filePath) {
   const segments = filePath.replaceAll('\\', '/').split('/');
   const filename = segments.at(-1);
   const directories = segments.slice(0, -1);
 
-  for (const matches of extraTestPatterns) {
-    if (matches(filePath)) {
+  if (YAML_EXTENSION_PATTERN.test(filename) && !MAESTRO_NON_FLOW_FILENAMES.has(filename.toLowerCase())) {
+    if (directories.some((segment) => MAESTRO_DIR_SEGMENTS.has(segment.toLowerCase()))) {
+      return true;
+    }
+    if (MAESTRO_FLOW_FILENAME_PATTERN.test(filename)) {
       return true;
     }
   }
@@ -113,6 +130,47 @@ function isTestFile(filePath) {
   }
 
   return TEST_FILENAME_PATTERNS.some((pattern) => pattern.test(filename));
+}
+
+/**
+ * Match a repo-relative path that belongs in the review set. Registered
+ * --test-glob matchers bypass every gate by explicit user intent; everything
+ * else goes through the built-in rules.
+ *
+ * @param {string} filePath - Repo-relative file path.
+ * @returns {boolean}
+ */
+function isTestFile(filePath) {
+  for (const matches of extraTestPatterns) {
+    if (matches(filePath)) {
+      return true;
+    }
+  }
+
+  return isNativeTestFile(filePath);
+}
+
+/**
+ * Review-set files that are present ONLY because --test-glob forced them in and
+ * that no built-in rule recognizes as a scorable format.
+ *
+ * This is the gap that used to produce a silent perfect score. A --test-glob
+ * match short-circuits isTestFile, which removes the file from the unscorable
+ * manifest, and if the registry then has no row that can attach to its syntax the
+ * arithmetic runs 100 - 0 and publishes 100/Approve with no findings and no
+ * disclosure. The CLI cannot know which criteria attached, so it does not guess:
+ * it names these files to the agent, which applies criteria-registry rule 4 and
+ * declines to score a file no row could match.
+ *
+ * @param {string[]} reviewFiles - The computed review set.
+ * @returns {string[]}
+ */
+function getForcedUnscorableCandidates(reviewFiles) {
+  return (Array.isArray(reviewFiles) ? reviewFiles : []).filter((file) => {
+    if (typeof file !== 'string' || file.length === 0) return false;
+    if (isNativeTestFile(file)) return false;
+    return extraTestPatterns.some((matches) => matches(file));
+  });
 }
 
 /**
@@ -185,15 +243,18 @@ function isContextNoise(filePath) {
   return segments.slice(0, -1).some((segment) => CONTEXT_NOISE_DIR_SEGMENTS.has(segment.toLowerCase()));
 }
 
-// Test artifacts written in a format isTestFile deliberately will not match,
-// because every built-in rule requires a code extension. A Maestro flow, a
-// Gherkin feature, a Robot suite or an .http collection is a test the reviewer
-// cannot score, and staying silent about it reads as "there was nothing else to
-// review". These only ever produce a disclosure line and a --test-glob hint;
-// they never enter the review set on their own, since scoring a format the
+// Test artifacts written in a format the built-in rules deliberately will not
+// match. A Gherkin feature, a Robot suite or an .http collection is a test the
+// reviewer cannot score, and staying silent about it reads as "there was nothing
+// else to review". These only ever produce a disclosure line and a --test-glob
+// hint; they never enter the review set on their own, since scoring a format the
 // ledger has no criteria for would be worse than declining it.
+//
+// Maestro is deliberately absent from this set: the criteria registry now carries
+// mobile rows, so a Maestro flow is scorable and isNativeTestFile claims it before
+// it can reach here. Only Maestro's workspace config stays out, and it is
+// configuration rather than a test artifact, so it should not be disclosed either.
 const NON_CODE_TEST_DIR_SEGMENTS = new Set([
-  'maestro',
   'cypress',
   'playwright',
   'features',
@@ -401,10 +462,12 @@ module.exports = {
   getChangedTestFiles,
   getContextFiles,
   getUnscorableTestArtifacts,
+  getForcedUnscorableCandidates,
   getDeletedFiles,
   getDeletedTestFiles,
   contextBasisFor,
   isTestFile,
+  isNativeTestFile,
   isContextNoise,
   splitGitPathList,
   assertSafePaths,

@@ -51,9 +51,13 @@ const { MODULE_DEFAULTS } = require('./resolve-tea-config');
  *   waive. When supplied, the report must quote it so a reader knows what
  *   steered the review.
  * @param {string[]} [options.unscorableTestArtifacts] - Changed test artifacts in
- *   a format the ledger has no criteria for (Maestro flows, Gherkin features,
+ *   a format the ledger has no criteria for (Gherkin features, Robot suites,
  *   .http collections). The CLI computes these; the report discloses them so a
  *   manifest that omits them never reads as "the diff held nothing else".
+ * @param {string[]} [options.forcedUnscorableCandidates] - Review-set files that
+ *   only --test-glob put there and that no built-in rule recognizes. The CLI
+ *   cannot know whether a registry row attached, so it names them and the agent
+ *   applies criteria-registry rule 4 rather than publishing 100 - 0 = 100.
  * @returns {string}
  */
 function buildPrompt({
@@ -67,6 +71,7 @@ function buildPrompt({
   contextBasis = 'none',
   focus = '',
   unscorableTestArtifacts = [],
+  forcedUnscorableCandidates = [],
 }) {
   const absoluteSkillRoot = path.resolve(skillRoot);
   const absoluteOutputPath = path.resolve(outputPath);
@@ -149,6 +154,23 @@ function buildPrompt({
           '---BEGIN UNSCORABLE---',
           JSON.stringify(unscorableTestArtifacts, null, 2),
           '---END UNSCORABLE---',
+          '',
+        ]
+      : []),
+    ...(forcedUnscorableCandidates.length > 0
+      ? [
+          'The paths listed below are in the review set only because --test-glob put them there, and no built-in rule',
+          'recognizes their format. Apply criteria-registry rule 4 to each one: read it, and determine whether any',
+          'registry row can attach to its syntax at all.',
+          '- If rows attach, review and score it normally. Nothing further is required.',
+          '- If NO row can attach, the file is unscorable. Do not score it, do not let it contribute to the total, and',
+          '  name it in "## Excluded From Review Set" with the reason "format not scorable by the ledger". Say plainly',
+          '  in the Executive Summary that --test-glob forced it in and the ledger has no criteria for its format.',
+          'A gate closed because the registry lacks a rule is not the same as a gate that opened and found nothing.',
+          'Publishing 100/Approve over a file no criterion could read is a defect in the review, not a clean result.',
+          '---BEGIN FORCED-UNSCORABLE-CANDIDATES---',
+          JSON.stringify(forcedUnscorableCandidates, null, 2),
+          '---END FORCED-UNSCORABLE-CANDIDATES---',
           '',
         ]
       : []),

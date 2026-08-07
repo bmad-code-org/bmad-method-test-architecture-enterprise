@@ -52,9 +52,11 @@ If unclear, ask the user — except in headless mode (`headless: true`), which n
 
 Read `test_stack_type` from `{config_source}`. If `"auto"` or not configured, infer `{detected_stack}` by scanning `{project-root}`:
 
+- **Mobile indicators**: `.maestro/` or `maestro/` flow directory, `app.json`/`app.config.*` declaring expo or react-native, `Podfile`, `android/app/build.gradle`, `*.xcodeproj`, `pubspec.yaml`
 - **Frontend indicators**: `playwright.config.*`, `cypress.config.*`, `package.json` with react/vue/angular
 - **Backend indicators**: `pyproject.toml`, `pom.xml`/`build.gradle`, `go.mod`, `*.csproj`, `Gemfile`, `Cargo.toml`
-- **Both present** → `fullstack`; only frontend → `frontend`; only backend → `backend`
+- **Check mobile first** → `mobile`. A React Native or Expo project carries `package.json` with react and misdetects as `frontend` otherwise.
+- **Both frontend and backend present** → `fullstack`; only frontend → `frontend`; only backend → `backend`
 - Explicit `test_stack_type` overrides auto-detection
 
 ---
@@ -112,6 +114,13 @@ Read `{config_source}` and check `tea_use_playwright_utils`, `tea_use_pactjs_uti
 - `test-healing-patterns.md`
 - `selector-resilience.md`
 - `timing-debugging.md`
+
+**If `{detected_stack}` is `mobile`, or the review set contains a Maestro flow (`.yaml`/`.yml` under `maestro/` or `.maestro/`, or `*.flow.yaml`):**
+
+- `maestro-flows.md`: required to score rows M8, H9, L8 and to judge C4, H1, H3, H4 against flow syntax
+- `mobile-test-strategy.md`: required to judge whether a flow belongs at the device level at all
+
+Without these, a flow is reviewed against browser predicates that cannot match it, which is how a flow used to score 100 by matching nothing.
 
 **If Playwright Utils enabled:**
 

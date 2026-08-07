@@ -1,7 +1,7 @@
 code: tea
 name: "Test Architect"
 header: "Test Architect: quality strategy, automation, and release gates"
-subheader: "Risk-based testing workflows for BMad Method/Enterprise with optional Playwright CLI/MCP enhancements"
+subheader: "Stack-neutral risk, traceability, and release-gate workflows for BMad Method/Enterprise, with stack-specific execution for web, API, contract, and backend test suites"
 description: "Master Test Architect for quality strategy, test automation, and release gates"
 default_selected: false
 
@@ -10,7 +10,7 @@ agents:
     name: Murat
     title: Master Test Architect and Quality Advisor
     icon: "🧪"
-    description: "Risk-based testing strategy, fixture architecture, ATDD, API and UI automation (Playwright, Cypress, pytest, JUnit, Go test, xUnit, RSpec), consumer-driven contract testing (Pact), and performance/load/chaos testing (k6). Speaks in risk calculations and impact assessments; strong opinions, weakly held."
+    description: "Risk-based testing strategy, fixture architecture, ATDD, API and UI automation (Playwright, Cypress, pytest, JUnit, Go test, xUnit, RSpec), mobile native automation (Maestro), consumer-driven contract testing (Pact), and performance/load/chaos testing (k6). Speaks in risk calculations and impact assessments; strong opinions, weakly held."
     team: software-development
 
 # Variables from Core Config inserted automatically by installer:
@@ -128,6 +128,8 @@ test_stack_type:
       label: "Backend (Python, Java, Go, .NET, Rust)"
     - value: "fullstack"
       label: "Full-stack (both frontend and backend)"
+    - value: "mobile"
+      label: "Mobile native (iOS, Android, React Native, Flutter)"
 
 # ✅ ACTIVELY USED - CI/CD platform detection
 ci_platform:
@@ -178,6 +180,8 @@ test_framework:
       label: "dotnet test (C#/.NET)"
     - value: "rspec"
       label: "RSpec (Ruby)"
+    - value: "maestro"
+      label: "Maestro (mobile native: iOS/Android)"
     - value: "other"
       label: "Other/Custom"
 
@@ -220,7 +224,11 @@ post-install-notes:
         TEA will detect your project type from manifest files:
         - Frontend: package.json with react/vue/angular, playwright.config.*, vite.config.*
         - Backend: pyproject.toml, pom.xml, go.mod, *.csproj, Gemfile, Cargo.toml
+        - Mobile: .maestro/ or maestro/ flows, app.json with expo/react-native, Podfile,
+          android/app/build.gradle, *.xcodeproj, pubspec.yaml
         - Full-stack: both frontend and backend indicators present
+        Mobile is checked before frontend, because a React Native project carries
+        package.json with react and would otherwise misdetect as a web frontend.
         Existing installations without test_stack_type default to "auto" (detects frontend).
   ci_platform:
     auto: |
