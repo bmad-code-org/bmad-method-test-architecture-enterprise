@@ -75,7 +75,7 @@ Use patterns like these:
 ```md
 Read `{skill-root}/workflow.md` and follow it exactly.
 Load `{skill-root}/steps-c/step-01-preflight.md`.
-Run: `python3 {skill-root}/scripts/resolve_customization.py --key inject`
+Run: `uv run {skill-root}/scripts/resolve_customization.py --key inject`
 Read `{project-root}/_bmad/tea/config.yaml`.
 ```
 
@@ -84,7 +84,7 @@ Avoid patterns like these:
 ```md
 Read `workflow.md`
 Load `steps-c/step-01-preflight.md`
-Run: `python3 scripts/resolve_customization.py --key inject`
+Run: `uv run scripts/resolve_customization.py --key inject`
 ```
 
 This keeps the same skill portable across Codex, Claude Code, GitHub Copilot, and other runtimes that install skills into different directories.

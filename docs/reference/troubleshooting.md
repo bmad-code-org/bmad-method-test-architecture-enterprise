@@ -227,7 +227,7 @@ See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-c
 **Symptom**: A workflow or custom skill launched through GitHub Copilot in VS Code fails with an error such as:
 
 ```text
-python3 scripts/resolve_customization.py ...
+uv run scripts/resolve_customization.py ...
 can't open file 'C:\path\to\workspace\scripts\resolve_customization.py': [Errno 2] No such file or directory
 ```
 
@@ -244,7 +244,7 @@ can't open file 'C:\path\to\workspace\scripts\resolve_customization.py': [Errno 
 ```md
 Read `{skill-root}/workflow.md`
 Load `{skill-root}/steps-c/step-01-preflight.md`
-Run: `python3 {skill-root}/scripts/resolve_customization.py --key inject`
+Run: `uv run {skill-root}/scripts/resolve_customization.py --key inject`
 Read `{project-root}/_bmad/tea/config.yaml`
 ```
 
@@ -253,7 +253,7 @@ Read `{project-root}/_bmad/tea/config.yaml`
 ```md
 Read `workflow.md`
 Load `steps-c/step-01-preflight.md`
-Run: `python3 scripts/resolve_customization.py --key inject`
+Run: `uv run scripts/resolve_customization.py --key inject`
 ```
 
 If you are creating a custom TEA workflow, see [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md) and author it with `{skill-root}` / `{project-root}` from the start.
