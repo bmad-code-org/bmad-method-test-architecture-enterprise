@@ -371,7 +371,7 @@ teach-me-testing/
 ├── templates/                               # Document templates
 │   ├── progress-template.yaml
 │   ├── session-notes-template.md
-│   └── certificate-template.md
+│   └── completion-summary-template.md
 │
 ├── instructions.md
 └── checklist.md
@@ -488,17 +488,17 @@ teach-me-testing/
 
 ```
 teach-me-testing/
-├── workflow.md                           ✓ Created
-├── steps-c/                              ✓ Created (empty, to be populated)
-├── steps-e/                              ✓ Created (empty, to be populated)
-├── steps-v/                              ✓ Created (empty, to be populated)
-├── data/                                 ✓ Created (empty, to be populated)
-├── templates/                            ✓ Created
-│   ├── progress-template.yaml            ✓ Created
-│   ├── session-notes-template.md         ✓ Created
-│   └── certificate-template.md           ✓ Created
-├── instructions.md                       ✓ Created
-└── checklist.md                          ✓ Created
+├── workflow.md                            ✓ Created
+├── steps-c/                               ✓ Created (empty, to be populated)
+├── steps-e/                               ✓ Created (empty, to be populated)
+├── steps-v/                               ✓ Created (empty, to be populated)
+├── data/                                  ✓ Created (empty, to be populated)
+├── templates/                             ✓ Created
+│   ├── progress-template.yaml             ✓ Created
+│   ├── session-notes-template.md          ✓ Created
+│   └── completion-summary-template.md     ✓ Created
+├── instructions.md                        ✓ Created
+└── checklist.md                           ✓ Created
 ```
 
 **Location:** {external-project-root}/\_bmad-output/bmb-creations/workflows/teach-me-testing/
@@ -507,7 +507,7 @@ teach-me-testing/
 
 - Workflow name: teach-me-testing
 - Continuable: Yes (multi-session learning)
-- Document output: Yes (Progress YAML, Session notes MD, Certificate MD)
+- Document output: Yes (Progress YAML, Session notes MD, Completion Summary MD)
 - Mode: Tri-modal (Create + Edit + Validate)
 - Module: TEA (Test Architecture Enterprise)
 
@@ -533,8 +533,8 @@ teach-me-testing/
    - Quiz results
    - Practical examples
 
-4. **templates/certificate-template.md**
-   - Completion certificate structure
+4. **templates/completion-summary-template.md**
+   - Completion summary structure
    - All 7 sessions with scores
    - Skills acquired checklist
    - Learning artifacts paths
@@ -889,7 +889,7 @@ teach-me-testing/
 
 - progress-template.yaml
 - session-notes-template.md
-- certificate-template.md
+- completion-summary-template.md
 
 ### CREATE Mode (12 step files)
 

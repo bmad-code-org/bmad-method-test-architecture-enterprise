@@ -48,7 +48,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 - Progress tracking file (`teaching-progress/{user}-tea-progress.yaml`)
 - Session notes for each completed session
-- Completion certificate (after all 7 sessions)
+- Completion summary (after all 7 sessions)
 - Learning artifacts (notes, test examples)
 
 **7 Sessions:**

@@ -81,7 +81,7 @@ Report findings: Pass/Fail for each check.
 - [ ] Session status fields present
 - [ ] stepsCompleted array present
 - [ ] session-notes-template.md has required sections
-- [ ] certificate-template.md includes all 7 sessions
+- [ ] completion-summary-template.md includes all 7 sessions
 
 Report findings.
 

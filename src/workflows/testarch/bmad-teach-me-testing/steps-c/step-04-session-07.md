@@ -199,7 +199,7 @@ Append 'step-04-session-07' to stepsCompleted.
 
 {If sessions_completed == 7:}
 🏆 **Congratulations!** You've completed ALL 7 sessions!
-Your completion certificate will be generated when you return to the menu.
+Your completion summary will be generated when you return to the menu.
 
 {Otherwise:}
 **Progress:** {completion_percentage}% complete ({sessions_completed} of 7 sessions)

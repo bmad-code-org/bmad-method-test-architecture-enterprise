@@ -190,8 +190,8 @@ stepsCompleted: ['step-01-init']
 lastStep: 'step-01-init'
 lastContinued: { current_date }
 
-certificate_generated: false
-certificate_path: null
+summary_generated: false
+summary_path: null
 completion_date: null
 ---
 ```
