@@ -1,5 +1,5 @@
 ---
-certificate_type: tea-academy-completion
+summary_type: tea-academy-completion
 user: { { user_name } }
 role: { { role } }
 completion_date: { { completion_date } }
@@ -8,17 +8,13 @@ total_duration: { { total_duration } }
 average_score: { { average_score } }
 ---
 
-# 🏆 TEA Academy Completion Certificate
+# 🎓 TEA Academy Completion Summary
 
 ---
 
-## Certificate of Completion
+## {{user_name}}'s Learning Journey
 
-**This certifies that**
-
-## {{user_name}}
-
-**has successfully completed the TEA Academy testing curriculum**
+**{{user_name}} completed the TEA Academy testing curriculum**
 
 ---
 
@@ -83,4 +79,4 @@ All session notes and progress tracking available at:
 
 ---
 
-🧪 **Master Test Architect and Quality Advisor**
+🧪 **Keep building your testing craft.**

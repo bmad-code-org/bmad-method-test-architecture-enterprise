@@ -84,7 +84,7 @@ Ask targeted questions based on their response:
 
 - Progress template?
 - Session notes template?
-- Certificate template?
+- Completion summary template?
 - What fields need changing?
 
 **If editing data files:**

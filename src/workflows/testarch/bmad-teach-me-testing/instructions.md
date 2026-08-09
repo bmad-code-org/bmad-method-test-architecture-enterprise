@@ -79,7 +79,7 @@ Your progress is automatically saved after each session:
 
 - **Progress file:** `{test_artifacts}/teaching-progress/{your-name}-tea-progress.yaml`
 - **Session notes:** `{test_artifacts}/tea-academy/{your-name}/session-{N}-notes.md`
-- **Certificate:** `{test_artifacts}/tea-academy/{your-name}/tea-completion-certificate.md`
+- **Completion Summary:** `{test_artifacts}/tea-academy/{your-name}/tea-completion-summary.md`
 
 ## Quiz Scoring
 
@@ -89,7 +89,7 @@ Your progress is automatically saved after each session:
 
 ## Completion
 
-Complete all 7 sessions to receive your TEA Academy completion certificate with:
+Complete all 7 sessions to receive your TEA Academy completion summary with:
 
 - Session completion dates and scores
 - Skills acquired checklist

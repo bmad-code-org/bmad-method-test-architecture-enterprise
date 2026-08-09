@@ -39,7 +39,7 @@ Use TEA's `teach-me-testing` workflow (TEA Academy) to learn testing progressive
 - ✅ Testing fundamentals (risk-based, test pyramid, types)
 - ✅ TEA methodology (9 workflows, architecture patterns)
 - ✅ Practical skills (write your first good test)
-- ✅ Knowledge artifacts (session notes, completion certificate)
+- ✅ Knowledge artifacts (session notes, completion summary)
 - ✅ Confidence to apply TEA to your project
 
 ## Prerequisites
@@ -108,7 +108,7 @@ Your progress is automatically saved:
 
 - **Progress file:** `{test_artifacts}/teaching-progress/{your-name}-tea-progress.yaml`
 - **Session notes:** `{test_artifacts}/tea-academy/{your-name}/session-{N}-notes.md`
-- **Certificate:** `{test_artifacts}/tea-academy/{your-name}/tea-completion-certificate.md` (after all 7 sessions)
+- **Completion summary:** `{test_artifacts}/tea-academy/{your-name}/tea-completion-summary.md` (after all 7 sessions)
 
 ### Resuming Later
 
@@ -228,9 +228,9 @@ Skip fundamentals, focus on:
 **Resources:** All 42 knowledge fragments
 **GitHub:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge)
 
-## Completion Certificate
+## Completion Summary
 
-Complete all 7 sessions to receive your TEA Academy completion certificate with:
+Complete all 7 sessions to receive your TEA Academy completion summary with:
 
 - Session completion dates and scores
 - Average score across all sessions

@@ -107,7 +107,7 @@ learning_paths:
       - session-07-advanced
     skip_optional:
       - session-01-quickstart # Can skip if already familiar
-    certificate_eligible_if_skipped: false
+    summary_eligible_if_skipped: false
 
   experienced:
     recommended_sequence:
@@ -119,11 +119,11 @@ learning_paths:
       - session-07-advanced
     skip_optional:
       - session-01-quickstart
-    certificate_eligible_if_skipped: false
+    summary_eligible_if_skipped: false
 
 # Completion Requirements
 completion:
-  minimum_sessions: 7 # All sessions required for certificate
+  minimum_sessions: 7 # All sessions required for completion summary
   passing_score: 70 # Minimum quiz score to pass session
-  average_score_threshold: 70 # Minimum average for certificate
-  certificate_note: "Certificate eligibility requires completion.minimum_sessions. If intermediate.skip_optional or experienced.skip_optional sessions are skipped, certificate eligibility is forfeited."
+  average_score_threshold: 70 # Minimum average for completion summary
+  summary_note: "Completion summary eligibility requires completion.minimum_sessions. If intermediate.skip_optional or experienced.skip_optional sessions are skipped, summary eligibility is forfeited."

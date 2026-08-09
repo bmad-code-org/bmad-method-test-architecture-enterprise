@@ -42,7 +42,7 @@ BMad does not mandate TEA. There are five valid ways to use it (or skip it). Pic
 - Interactive learning companion that teaches testing progressively through 7 structured sessions.
 - Perfect for: QAs, developers learning testing, anyone wanting comprehensive testing knowledge.
 - **Time:** 1-2 weeks self-paced (30-90 min per session).
-- **Features:** State persistence (pause/resume), role-adapted examples (QA/Dev/Lead/VP), quiz validation, completion certificate.
+- **Features:** State persistence (pause/resume), role-adapted examples (QA/Dev/Lead/VP), quiz validation, completion summary.
 - **Command:** `teach-me-testing` or `TMT` in TEA agent.
 - See [Learn Testing with TEA Academy Tutorial](/docs/tutorials/learn-testing-tea-academy.md).
 

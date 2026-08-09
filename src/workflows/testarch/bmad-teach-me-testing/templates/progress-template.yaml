@@ -89,7 +89,7 @@ stepsCompleted: []
 lastStep: ""
 lastContinued: ""
 
-# Completion Certificate
-certificate_generated: false
-certificate_path: null
+# Completion Summary
+summary_generated: false
+summary_path: null
 completion_date: null

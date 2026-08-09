@@ -24,7 +24,7 @@ Use this checklist to validate the teaching workflow meets quality standards.
 - [ ] Session status tracking fields present (not-started/in-progress/completed)
 - [ ] stepsCompleted array for continuation tracking
 - [ ] **session-notes-template.md** has all required sections
-- [ ] **certificate-template.md** includes all 7 sessions
+- [ ] **completion-summary-template.md** includes all 7 sessions
 
 ---
 
@@ -63,8 +63,8 @@ Use this checklist to validate the teaching workflow meets quality standards.
 ### Completion Step
 
 - [ ] **step-05-completion.md** verifies all 7 sessions complete
-- [ ] Certificate generated with accurate data
-- [ ] Final progress file update (certificate_generated: true)
+- [ ] Completion summary generated with accurate data
+- [ ] Final progress file update (summary_generated: true)
 - [ ] Congratulations message shown
 
 ---

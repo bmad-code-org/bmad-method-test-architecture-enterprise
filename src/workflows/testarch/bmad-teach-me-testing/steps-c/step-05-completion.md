@@ -1,17 +1,17 @@
 ---
 name: 'step-05-completion'
-description: 'Generate completion certificate, final progress update, congratulate learner'
+description: 'Generate completion summary, final progress update, congratulate learner'
 
 progressFile: '{test_artifacts}/teaching-progress/{user_name}-tea-progress.yaml'
-certificateTemplate: '../templates/certificate-template.md'
-certificateFile: '{test_artifacts}/tea-academy/{user_name}/tea-completion-certificate.md'
+summaryTemplate: '../templates/completion-summary-template.md'
+summaryFile: '{test_artifacts}/tea-academy/{user_name}/tea-completion-summary.md'
 ---
 
-# Step 5: Completion & Certificate Generation
+# Step 5: Completion & Summary Generation
 
 ## STEP GOAL:
 
-To generate the TEA Academy completion certificate, update final progress, and congratulate the learner on completing all 7 sessions.
+To generate the TEA Academy completion summary, update final progress, and congratulate the learner on completing all 7 sessions.
 
 ## MANDATORY EXECUTION RULES (READ FIRST):
 
@@ -30,19 +30,19 @@ To generate the TEA Academy completion certificate, update final progress, and c
 
 - 🎯 Focus on completion and celebration
 - 🚫 FORBIDDEN to proceed without verifying all 7 sessions complete
-- 💬 Approach: Congratulate, generate certificate, inspire next steps
+- 💬 Approach: Congratulate, generate completion summary, inspire next steps
 
 ## EXECUTION PROTOCOLS:
 
 - 🎯 Verify all sessions complete
-- 💾 Generate completion certificate
+- 💾 Generate completion summary
 - 📖 Final progress update
 - 🎉 This is the final step - no next step
 
 ## CONTEXT BOUNDARIES:
 
 - Available context: Progress file with all 7 sessions completed
-- Focus: Certificate generation and celebration
+- Focus: Summary generation and celebration
 - Dependencies: All 7 sessions must be complete
 
 ## MANDATORY SEQUENCE
@@ -63,7 +63,7 @@ Display:
 
 You still have {7 - sessions_completed} sessions remaining.
 
-Please return to the session menu to complete the remaining sessions before generating your certificate."
+Please return to the session menu to complete the remaining sessions before generating your completion summary."
 
 **THEN:** Stop and do not proceed. This is an error state.
 
@@ -116,15 +116,15 @@ You've completed all 7 sessions of TEA Academy!
 - Session 6 (Quality & Trace): {session_06_score}/100
 - Session 7 (Advanced Patterns): {session_07_score}/100
 
-Generating your completion certificate..."
+Generating your completion summary..."
 
-### 4. Generate Completion Certificate
+### 4. Generate Completion Summary
 
-Load {certificateTemplate} and create {certificateFile} with:
+Load {summaryTemplate} and create {summaryFile} with:
 
 ```markdown
 ---
-certificate_type: tea-academy-completion
+summary_type: tea-academy-completion
 user: { user_name }
 role: { role }
 completion_date: { current_date }
@@ -133,17 +133,13 @@ total_duration: { total_duration }
 average_score: { average_score }
 ---
 
-# 🏆 TEA Academy Completion Certificate
+# 🎓 TEA Academy Completion Summary
 
 ---
 
-## Certificate of Completion
+## {user_name}'s Learning Journey
 
-**This certifies that**
-
-# {user_name}
-
-**has successfully completed the TEA Academy testing curriculum**
+**{user_name} completed the TEA Academy testing curriculum**
 
 ---
 
@@ -227,10 +223,10 @@ All session notes and progress tracking available at:
 
 ---
 
-🧪 **Master Test Architect and Quality Advisor**
+🧪 **Keep building your testing craft.**
 ```
 
-Save certificate to {certificateFile}.
+Save summary to {summaryFile}.
 
 ### 5. Update Progress File (Final)
 
@@ -247,8 +243,8 @@ Load {progressFile} and make final updates:
 
 - `sessions_completed: 7`
 - `completion_percentage: 100`
-- `certificate_generated: true`
-- `certificate_path: '{certificateFile}'`
+- `summary_generated: true`
+- `summary_path: '{summaryFile}'`
 - `completion_date: {current_date}`
 
 **Update stepsCompleted:**
@@ -259,9 +255,9 @@ Load {progressFile} and make final updates:
 
 Save final progress file.
 
-### 6. Display Certificate
+### 6. Display Summary
 
-Display the complete certificate content to the user.
+Display the complete summary content to the user.
 
 ### 7. Final Celebration
 
@@ -276,11 +272,11 @@ You've successfully completed the entire TEA Academy curriculum!
 - ✅ 7 sessions completed
 - ✅ Average score: {average_score}/100
 - ✅ {total_duration} of dedicated learning
-- ✅ Certificate generated
+- ✅ Completion summary generated
 
 **All Your Artifacts:**
 
-- **Certificate:** {certificateFile}
+- **Completion Summary:** {summaryFile}
 - **Progress:** {progressFile}
 - **Session Notes:** {test_artifacts}/tea-academy/{user_name}/
 
@@ -318,10 +314,10 @@ Workflow ends here. User can run the workflow again to re-take sessions or explo
 
 ### ✅ SUCCESS:
 
-- All 7 sessions verified complete before certificate generation
+- All 7 sessions verified complete before summary generation
 - Average score calculated correctly
-- Certificate generated with all session data
-- Certificate saved to file
+- Summary generated with all session data
+- Summary saved to file
 - Progress file updated with completion status
 - Final celebration message displayed
 - All artifacts paths provided to user
@@ -329,14 +325,14 @@ Workflow ends here. User can run the workflow again to re-take sessions or explo
 
 ### ❌ SYSTEM FAILURE:
 
-- Generating certificate without verifying all sessions complete
+- Generating summary without verifying all sessions complete
 - Incorrect average score calculation
-- Missing session data in certificate
+- Missing session data in summary
 - Not updating progress file with completion status
 - Not providing artifact paths to user
 - Proceeding to next step (this is final - no next step)
 
-**Master Rule:** Verify completion, generate certificate, celebrate achievement, end workflow. This is the finale.
+**Master Rule:** Verify completion, generate completion summary, celebrate achievement, end workflow. This is the finale.
 
 ## On Complete
 

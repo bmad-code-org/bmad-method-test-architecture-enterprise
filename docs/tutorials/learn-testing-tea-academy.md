@@ -17,7 +17,7 @@ TEA Academy is an interactive learning companion that teaches testing through 7 
 - **Validates understanding:** Quiz after each session (≥70% to pass)
 - **Tracks progress:** Resume anytime with automatic state persistence
 - **Adapts to your role:** Examples customized for QA/Dev/Lead/VP
-- **Generates artifacts:** Session notes and completion certificate
+- **Generates artifacts:** Session notes and completion summary
 
 ## Quick Start
 
@@ -65,9 +65,9 @@ Each session:
 - Generates session notes
 - Saves progress automatically
 
-### 6. Earn Your Certificate
+### 6. Get Your Completion Summary
 
-Complete all 7 sessions to receive your TEA Academy completion certificate!
+Complete all 7 sessions to receive your TEA Academy completion summary!
 
 ## The 7 Sessions
 
@@ -188,7 +188,7 @@ All generated artifacts are saved:
         ├── session-02-notes.md
         ├── ...
         ├── session-07-notes.md
-        └── tea-completion-certificate.md    # Certificate (after all 7)
+        └── tea-completion-summary.md        # Completion summary (after all 7)
 ```
 
 ## Customization by Role
@@ -232,7 +232,7 @@ You can review the content and try again, or continue anyway. Your score is reco
 Yes! Run the workflow and select any session again. It will update your score.
 
 **Do I need to complete all 7 sessions?**
-For the completion certificate, yes. But you can learn from individual sessions anytime.
+For the completion summary, yes. But you can learn from individual sessions anytime.
 
 **Can multiple people use this?**
 Yes! Progress files are per-user. Each team member gets their own progress tracking.
