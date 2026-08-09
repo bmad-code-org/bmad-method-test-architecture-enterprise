@@ -34,7 +34,7 @@ Create an ongoing learning companion that teaches testing progressively through 
 
 - Multi-session learning journey (7 sessions, 30-90 min each)
 - Session-by-session progress tracking via persistent state file
-- Learning artifacts: session notes, test files, reports, completion certificate
+- Learning artifacts: session notes, test files, reports, completion summary
 - Personalized learning paths customized by role (QA vs Dev vs Lead vs VP)
 - Knowledge validation through quizzes after each session
 - Resume capability - users can pause and continue across days/weeks
@@ -64,7 +64,7 @@ Create an ongoing learning companion that teaches testing progressively through 
 
 **4 Key Decisions:**
 
-1. **Document Output:** Yes (produces progress files, session notes, artifacts, completion certificate)
+1. **Document Output:** Yes (produces progress files, session notes, artifacts, completion summary)
 2. **Module Affiliation:** TEA module (9th workflow in test architecture)
 3. **Session Type:** Continuable (multi-session learning over 1-2 weeks)
 4. **Lifecycle Support:** Tri-modal (Create + Edit + Validate for future-proofing)
@@ -74,7 +74,7 @@ Create an ongoing learning companion that teaches testing progressively through 
 - **Tri-modal architecture:** Needs `steps-c/`, `steps-e/`, `steps-v/` folders
 - **Continuable workflow:** Requires `step-01-init.md` with continuation detection + `step-01b-continue.md` for resuming
 - **State tracking:** Uses `stepsCompleted` in progress file frontmatter
-- **Document templates:** Progress tracking YAML, session notes markdown, completion certificate
+- **Document templates:** Progress tracking YAML, session notes markdown, completion summary
 - **Module integration:** Access to TEA module variables, docs paths, knowledge base paths
 - **Data folder:** Shared data for curriculum structure, role paths, session content mappings
 
@@ -84,7 +84,7 @@ Create an ongoing learning companion that teaches testing progressively through 
 
 - Pattern: Mixed (non-linear between sessions, linear within sessions, branching at start only)
 - Phases: Initial assessment → Session selection (non-linear) → Session execution (linear: teach → quiz → artifact) → Completion
-- Estimated steps: Init + Continue + Assessment + 7 Session steps + Final Polish/Certificate generation = ~10-12 core step files
+- Estimated steps: Init + Continue + Assessment + 7 Session steps + Final Polish/Summary generation = ~10-12 core step files
 - Session jumping: Users can skip to any session based on experience level
 - Within session: Strictly linear progression through teaching content
 
@@ -119,15 +119,15 @@ Create an ongoing learning companion that teaches testing progressively through 
 - Format: Mixed formats
   - Progress file: Structured YAML with specific schema (sessions, scores, artifacts, completed_date, next_recommended)
   - Session notes: Free-form markdown built progressively per session
-  - Completion certificate: Structured format with completion data
+  - Completion summary: Structured format with completion data
 - Sections:
   - Progress file has fixed schema
   - Session notes vary by session content
-  - Certificate has standard completion fields
+  - Completion summary has standard completion fields
 - Frequency:
   - Progress file: Updated after each session
   - Session notes: Generated per session
-  - Certificate: Generated at final completion
+  - Completion summary: Generated at final completion
 
 **Success Criteria:**
 
@@ -163,7 +163,7 @@ Create an ongoing learning companion that teaches testing progressively through 
 **LLM Features:**
 
 - **Web-Browsing:** Included - Use case: Safety net for framework updates (Cypress, Jest, newer Playwright versions) and frameworks not covered in TEA docs. Motto: "Only reach out when you don't have the info"
-- **File I/O:** Included - Operations: Read TEA docs (/docs/_.md), read knowledge fragments (/src/agents/bmad-tea/resources/knowledge/_.md), write progress file ({user}-tea-progress.yaml), write session notes, write completion certificate
+- **File I/O:** Included - Operations: Read TEA docs (/docs/_.md), read knowledge fragments (/src/agents/bmad-tea/resources/knowledge/_.md), write progress file ({user}-tea-progress.yaml), write session notes, write completion summary
 - **Sub-Agents:** Excluded - Sessions are linear teaching steps handled by TEA agent, not complex specialized tasks requiring delegation
 - **Sub-Processes:** Excluded - Learning is sequential (one session at a time), no parallel processing needed
 
@@ -197,7 +197,7 @@ Create an ongoing learning companion that teaches testing progressively through 
 
 ### Complete Flow Overview
 
-**Entry → Init (check for progress) → [New User: Assessment | Returning User: Dashboard] → Session Menu (hub) → Sessions 1-7 (loop back to menu) → Completion Certificate**
+**Entry → Init (check for progress) → [New User: Assessment | Returning User: Dashboard] → Session Menu (hub) → Sessions 1-7 (loop back to menu) → Completion Summary**
 
 ### Step Structure (CREATE mode - steps-c/)
 
@@ -262,10 +262,10 @@ Create an ongoing learning companion that teaches testing progressively through 
 #### Phase 4: Completion
 
 12. **step-05-completion.md** (Final Step)
-    - Goal: Generate completion certificate, final progress update, congratulate
+    - Goal: Generate completion summary, final progress update, congratulate
     - Type: Final - no nextStepFile, marks workflow complete
     - Menu: None (final step)
-    - Logic: Generates certificate, displays congratulations, workflow ends
+    - Logic: Generates completion summary, displays congratulations, workflow ends
 
 ### Interaction Patterns
 
@@ -317,7 +317,7 @@ lastContinued: '2026-01-27'
 - **step-02-assess:** Updates role, experience, goals, pain_points
 - **step-03-session-menu:** Reads sessions array (display status)
 - **step-04-session-[N]:** Reads progress (for role), writes session notes, updates sessions array
-- **step-05-completion:** Reads all sessions data, writes certificate
+- **step-05-completion:** Reads all sessions data, writes completion summary
 
 **Error Handling:**
 
@@ -409,7 +409,7 @@ teach-me-testing/
 
 - Progress file: Schema, status, score (0-100), date, artifact paths
 - Session notes: Frontmatter present, content not empty (min 100 chars)
-- Certificate: All 7 sessions complete, valid dates, user info present
+- Completion summary: All 7 sessions complete, valid dates, user info present
 
 **User Input Validation:**
 
@@ -428,7 +428,7 @@ teach-me-testing/
 **Success Criteria:**
 
 - Session complete: Content presented, quiz passed, notes generated, progress updated
-- Workflow complete: All 7 sessions done, avg score ≥70%, artifacts created, certificate generated
+- Workflow complete: All 7 sessions done, avg score ≥70%, artifacts created, completion summary generated
 
 ### Special Features
 
@@ -604,7 +604,7 @@ teach-me-testing/
 - Build step-02-assess.md (assessment)
 - Build step-03-session-menu.md (hub)
 - Build 7 session steps (step-04-session-01 through step-04-session-07)
-- Build step-05-completion.md (certificate generation)
+- Build step-05-completion.md (completion summary generation)
 
 ## Step 02 Build Complete
 
@@ -642,7 +642,7 @@ teach-me-testing/
 
 - step-03-session-menu (hub with branching)
 - step-04-session-01 through step-04-session-07 (7 teaching sessions)
-- step-05-completion (certificate generation)
+- step-05-completion (completion summary generation)
 
 ## Step 03 Build Complete
 
@@ -687,7 +687,7 @@ teach-me-testing/
 **Remaining Steps:** 8 more to build
 
 - step-04-session-01 through step-04-session-07 (7 teaching sessions)
-- step-05-completion (certificate generation)
+- step-05-completion (completion summary generation)
 
 ## Step 04-Session-01 Build Complete
 
@@ -734,7 +734,7 @@ teach-me-testing/
 **Remaining Steps:** 7 more to build
 
 - step-04-session-02 through step-04-session-07 (6 more teaching sessions)
-- step-05-completion (certificate generation)
+- step-05-completion (completion summary generation)
 
 ## Step 04-Session-02 Build Complete
 
@@ -798,9 +798,9 @@ teach-me-testing/
 **Created:** 2026-01-28
 **Files:** `steps-c/step-05-completion.md` ✓
 **Type:** Final Step (no next step)
-**Purpose:** Verify all 7 sessions complete, generate certificate, final progress update, celebrate
-**Certificate:** Includes all session scores, skills acquired, learning artifacts, next steps
-**Final:** Updates progress (certificate_generated: true, completion_date)
+**Purpose:** Verify all 7 sessions complete, generate completion summary, final progress update, celebrate
+**Completion Summary:** Includes all session scores, skills acquired, learning artifacts, next steps
+**Final:** Updates progress (summary_generated: true, completion_date)
 **No Menu:** Workflow ends here
 
 ---
@@ -820,7 +820,7 @@ teach-me-testing/
 9. step-04-session-05.md - ATDD & Automate
 10. step-04-session-06.md - Quality & Trace
 11. step-04-session-07.md - Advanced Patterns
-12. step-05-completion.md - Certificate generation
+12. step-05-completion.md - Completion summary generation
 
 **Remaining:**
 
