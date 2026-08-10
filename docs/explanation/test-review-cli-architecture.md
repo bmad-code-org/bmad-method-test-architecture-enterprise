@@ -13,18 +13,24 @@ A TEA workflow expects a human: it asks which mode to run and what inputs to use
 
 ---
 
-## Five problems, five modules
+## Eight problems, nine modules
 
-| Problem                           | Module                               |
-| --------------------------------- | ------------------------------------ |
-| Find the skill                    | `lib/resolve-skill.js`               |
-| Decide what to feed it            | `lib/changed-tests.js`               |
-| Settle its configuration          | `lib/resolve-tea-config.js`          |
-| Make it run with no human present | `lib/build-prompt.js`                |
-| Spawn it without trusting it      | `lib/run-agent.js`, `lib/isolate.js` |
-| Turn prose into an exit code      | `lib/parse-report.js`                |
+| Problem                                          | Module                               |
+| ------------------------------------------------ | ------------------------------------ |
+| Find the skill                                   | `lib/resolve-skill.js`               |
+| Decide what to feed it                           | `lib/changed-tests.js`               |
+| Measure the house convention it's judged against | `lib/convention-baseline.js`         |
+| Know what severity a finding is really allowed   | `lib/registry-rows.js`               |
+| Settle its configuration                         | `lib/resolve-tea-config.js`          |
+| Make it run with no human present                | `lib/build-prompt.js`                |
+| Spawn it without trusting it                     | `lib/run-agent.js`, `lib/isolate.js` |
+| Turn prose into an exit code                     | `lib/parse-report.js`                |
 
-`cli/test-review.js` runs them in order: resolve skill, resolve config, split the diff, build prompt, spawn agent under isolation, parse report, emit verdict, exit.
+`cli/test-review.js` runs them in order: resolve skill, resolve config, split the diff, measure the convention baseline, load the registry's row severities, build prompt, spawn agent under isolation, parse report, emit verdict, exit.
+
+`lib/registry-rows.js` closes a second gap found while auditing the first: a report could document a real, row-cited Critical finding in prose while its `**Total Violations**:` summary line claimed zero, and nothing checked the two against each other — the CLI computed Approve at 100/100 straight from the summary line, the finding sitting right there unread. It reads `criteria-registry.md`'s row → severity map directly from the skill (never a hardcoded copy, so it can't drift), and `parse-report.js` uses it to bind every `**Row**: <id>` citation to a real row with a matching severity, and the number of Critical/High finding blocks actually documented to the counts the summary line claims. Scoped to Critical and High only — the two severities that actually flip `deriveRecommendation`'s output.
+
+`lib/convention-baseline.js` exists for the same reason the score is computed rather than trusted (see below): a live codex run on couture-cast PR #106 reported `Convention: priorityMarkers (18 of 40 sampled)` against a repo with zero real instances of that convention anywhere, because nothing forced the "sample the corpus" step the skill's own `step-02-discover-tests.md` §2b describes to be a real Glob/Grep instead of a plausible-sounding guess. The CLI now does that sampling itself — `git ls-files`, the review set excluded, ranked closest-first by directory distance, capped at 40 — states the result in the prompt as a fixed fact, and rejects (exit 3) a report whose `Convention: <key> (<adopted> of <sampled> sampled)` citations disagree with what it actually measured.
 
 ---
 

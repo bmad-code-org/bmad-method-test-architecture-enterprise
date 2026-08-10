@@ -46,6 +46,8 @@ const {
 } = require('./lib/changed-tests');
 const { buildPrompt } = require('./lib/build-prompt');
 const { parseReport, normalizeReportScore, verdictFor, scoreFails } = require('./lib/parse-report');
+const { computeConventionBaseline } = require('./lib/convention-baseline');
+const { loadRegistryRowSeverities } = require('./lib/registry-rows');
 const { runAgent } = require('./lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
@@ -553,6 +555,19 @@ function main() {
     process.exit(skipFails && !waiver ? EXIT.VERDICT_FAIL : EXIT.PASS);
   }
 
+  // step-02-discover-tests.md §2b's convention baseline, computed here instead of
+  // left to the agent to sample: see cli/lib/convention-baseline.js's header
+  // comment for why an agent-derived sampled fraction cannot be trusted. Computed
+  // once and reused for both the printed prompt and (below) the parsed-report
+  // cross-check, so the two can never see a different corpus.
+  const conventionBaseline = computeConventionBaseline({ projectRoot, reviewFiles: changedTestFiles });
+
+  // criteria-registry.md's row -> severity map, read from the skill itself so a
+  // report's "**Row**: <id>" citations can be checked against real rows instead of
+  // trusted. null on a skill root with no registry file (e.g. a bare test fixture);
+  // parseReport treats that as "no grounding available" rather than failing closed.
+  const registryRowSeverities = loadRegistryRowSeverities(skillRoot);
+
   if (options.agent === 'none') {
     const prompt = buildPrompt({
       skillRoot,
@@ -566,6 +581,7 @@ function main() {
       focus: options.focus,
       unscorableTestArtifacts,
       forcedUnscorableCandidates,
+      conventionBaseline,
     });
     console.log(prompt);
     if (jsonPath) {
@@ -673,6 +689,7 @@ function main() {
     focus: options.focus,
     unscorableTestArtifacts,
     forcedUnscorableCandidates,
+    conventionBaseline,
   });
 
   const executeAgent = ({ agentCwd, spawnPrefix }) => {
@@ -718,6 +735,8 @@ function main() {
         contextFiles,
         contextBasis,
         unscorableTestArtifacts,
+        conventionBaseline,
+        registryRowSeverities,
       });
     } catch (error) {
       if (error.code === 'REPORT_UNPARSEABLE') {

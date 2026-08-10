@@ -188,11 +188,24 @@ A passing review (also written to `--json <file>` when given):
   "contextFiles": ["docs/stories/checkout-decline.md", "src/checkout/payment.ts"],
   "contextWaiversApplied": 0,
   "keyStrengths": ["Fully deterministic, no conditional branching or timing dependencies"],
-  "keyWeaknesses": ["Missing explicit test IDs on two test cases"]
+  "keyWeaknesses": ["Missing explicit test IDs on two test cases"],
+  "conventionBaseline": {
+    "baselineUnavailable": false,
+    "corpusSize": 47,
+    "sampled": 40,
+    "sampledFiles": ["tests/login.spec.ts", "tests/profile.spec.ts"],
+    "conventions": {
+      "priorityMarkers": { "mechanical": true, "adopted": 0, "mechanicalSignal": false },
+      "testIds": { "mechanical": true, "adopted": 6, "mechanicalSignal": true },
+      "bddNaming": { "mechanical": false }
+    }
+  }
 }
 ```
 
 `contextWaiversApplied` is strict and always `0`. `keyStrengths` and `keyWeaknesses` are best-effort, pulled from the report's Executive Summary bullet lists for PR-comment display; they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
+
+`conventionBaseline` is the CLI's own deterministic measurement of step-02-discover-tests.md §2b's convention baseline — never the agent's — carried into the verdict alongside `agent`/`model` so a stored score also says what house convention it was judged against and how that was actually established. `sampledFiles` and per-key `mechanicalSignal` are computed by [`cli/lib/convention-baseline.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/convention-baseline.js) by reading the real sampled files' content, not by asking the agent; the report's own `Convention: <key> (<adopted> of <sampled> sampled)` citations are rejected (exit 3) when they disagree with it — most pointedly, a citation claiming nonzero adoption for a key this scan found zero real occurrences of anywhere in the sampled corpus. The field is absent only when no baseline was computed for this run (e.g. a bare `parseReport` call in a unit test with no CLI around it).
 
 A failing verdict adds `gateFailures` (machine-readable reasons, e.g. `"insufficient evidence: 1 files reviewed (3 required)"`); a waived failure adds `waived`, `waiveReason`, `waiveUntil`.
 
@@ -226,6 +239,7 @@ The report itself is strictly validated:
 - The Reviewed Files manifest
 - Exactly one `**Context Basis**` line in the Executive Summary, plus a run-bound `## Review Context` manifest whenever the basis is not `none`
 - Exactly one `**Context Waivers Applied**: 0` line in the Executive Summary
+- Every finding under `## Critical Issues (Must Fix)` / `## Recommendations (Should Fix)` cites a real `**Row**: <id>` whose criteria-registry.md severity matches its own `**Severity**` line; the number of Critical findings documented must equal the Critical count in `**Total Violations**`, and the number of P1 (High) findings documented must equal the High count
 
 Fenced code blocks are stripped first, so a quoted example can't spoof a verdict. Markdown emphasis is stripped only where it wraps a whole value, so `tests/user_profile.spec.ts` survives the manifest intact.
 
@@ -234,6 +248,8 @@ The score is computed rather than trusted: the CLI evaluates `100 - (Critical ×
 The bonus is read from the template's `Total Bonus:             +N` line, and a `| Total Bonus | N |` table row is accepted as well, because agents reflow the ledger into a table and a rendering choice should not decide a gate. Both forms normalize their `Final Score` and `Grade` fields, so the published ledger always agrees with the score the gate acted on. The prompt still pins the line form as the one to produce.
 
 A report declaring Critical violations alongside an approve-type recommendation is rejected as an inconsistent verdict (exit 3): Critical means Must Fix. Stale artifacts are never parsed, output files are deleted before the run and must be freshly written by it.
+
+The `**Total Violations**` summary line is not trusted either: the CLI counts the finding blocks actually documented under `## Critical Issues (Must Fix)` and the P1 (High) ones under `## Recommendations (Should Fix)`, and rejects a report whose summary disagrees with what it wrote (exit 3) — this closes a real defect where a report documented a genuine Critical finding in prose while its summary line claimed zero, and the CLI computed Approve at 100/100 from the summary alone. Scoped to Critical and High only, the two severities `deriveRecommendation` actually acts on ([`cli/lib/registry-rows.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/registry-rows.js) reads the row→severity map straight from the skill's own `criteria-registry.md`, so this never drifts from the shipped rubric); Medium/Low counts are not cross-checked.
 
 ## Example workflow
 

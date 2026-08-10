@@ -80,6 +80,35 @@ before judging against it.
 Sample the repository's **existing** test corpus and measure what it actually
 does. Then `criteria-registry.md` scores each Convention row against the result.
 
+> **Exception — convention baseline supplied.** A headless run through
+> `tea-test-review` computes this baseline deterministically instead of leaving it
+> to you: `corpusSize`, `sampled`, the exact sampled file list, and — for
+> `priorityMarkers`, `testIds`, `networkFirst`, `dataFactories`, and `fixtures` — a
+> mechanical zero/nonzero adoption signal from actually reading every sampled
+> file's real content (see `cli/lib/convention-baseline.js`). When the prompt
+> states this data, use it verbatim: do not re-glob, re-sample, or re-derive
+> `corpusSize`/`sampled`, and read only the files named. The CLI independently
+> re-checks every `Convention: <key> (<adopted> of <sampled> sampled)` citation
+> against what it measured and rejects a report that disagrees — most pointedly,
+> a report that claims nonzero adoption for a key the CLI's own scan found zero
+> real occurrences of anywhere in the sampled corpus. `bddNaming` and
+> `assertionStyle` carry no mechanical signal (no single token distinguishes
+> "adopted" from "not" for a naming style or a dialect choice), so read the named
+> files yourself and judge those two; the sampled/corpusSize grounding still
+> applies to them.
+
+**No CLI, no exception: never estimate.** In every other context (an interactive
+run inside an editor, a `suite`-scope review with no headless wrapper), you must
+actually invoke a real search — Glob for the file list, Grep or a full read for
+the adoption count — before writing `corpusSize`, `sampled`, or an `adopted`
+count. A number that was not produced by reading real file contents is
+fabrication, not measurement, and is exactly the failure this section exists to
+prevent: a live run once reported `18 of 40 sampled` files carrying a
+`priorityMarkers` convention against a repository with zero real instances of a
+P0-P3 marker anywhere in it. Report the standard's absence honestly (see the
+`baselineUnavailable` fallback below) rather than produce a plausible-sounding
+number.
+
 ### Sampling rules
 
 - Sample test files that are **not in the review set**. A pull request adding four

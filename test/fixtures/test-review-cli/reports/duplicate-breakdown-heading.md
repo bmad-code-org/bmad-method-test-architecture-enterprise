@@ -63,6 +63,21 @@ Grade:                   D
 
 **Total Violations**: 1 Critical, 1 High, 2 Medium, 3 Low
 
+## Critical Issues (Must Fix)
+
+### 1. Fixture stub Critical finding 1
+
+**Severity**: P0 (Critical)
+**Row**: C1
+
+## Recommendations (Should Fix)
+
+### 1. Fixture stub High finding 1
+
+**Severity**: P1 (High)
+**Row**: H1
+
+
 ## Decision
 
 **Recommendation**: Request Changes

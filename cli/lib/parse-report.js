@@ -30,6 +30,18 @@
  * "## Excluded From Review Set": the disclosure is part of the contract, not a
  * courtesy the agent may drop.
  *
+ * A third, opt-in cross-check: when the run contract carries `conventionBaseline`
+ * (every real CLI run does; see cli/lib/convention-baseline.js), the report's
+ * "**Convention Baseline**:" line and every "Convention: <key> (<adopted> of
+ * <sampled> sampled)" citation anywhere in the text are bound to what the CLI
+ * actually measured over the real sampled files — never a number the agent
+ * produced on its own. This exists because a live codex run on couture-cast PR #106
+ * reported "Convention: priorityMarkers (18 of 40 sampled)" against a repo with
+ * zero real instances of that convention anywhere, and nothing downstream ever
+ * checked the claim: no fixture in this repo's own test suite even included a
+ * "Convention Baseline" line before this cross-check existed. See
+ * verifyConventionBaseline.
+ *
  * Two more fields, `keyStrengths` and `keyWeaknesses`, are extracted best-effort
  * from the Executive Summary's "### Key Strengths" / "### Key Weaknesses"
  * bullet lists for PR-comment display. These are not part of the strict schema
@@ -43,6 +55,9 @@
  */
 
 const path = require('node:path');
+
+const { CONVENTION_KEYS } = require('./convention-baseline');
+const { SEVERITY_ENUM } = require('./registry-rows');
 
 const RECOMMENDATION_ENUM = ['Approve', 'Approve with Comments', 'Request Changes', 'Block'];
 const RECOMMENDATION_LINE = /^[ \t]*(?:\*\*Recommendation\*\*:|\*\*Recommendation:\*\*|Recommendation:)[ \t]*([^\r\n]+?)[ \t]*$/m;
@@ -65,6 +80,16 @@ const BONUS_TOTAL_LINE = /^[ \t]*Total Bonus[ \t]*:[ \t]*\+[ \t]*(\d+)[ \t]*$/m;
 // red gate. The cell sign is optional because no observed table rendering keeps
 // it, and the label case drifts alongside the reflow.
 const BONUS_TOTAL_ROW = /^[ \t]*\|[ \t]*Total Bonus[ \t]*\|[ \t]*\+?[ \t]*(\d+)[ \t]*\|?[ \t]*$/im;
+// Required literal forms, matched verbatim against what build-prompt.js's
+// conventionBaselinePromptLines instructs the agent to write. Anchored full-line so
+// a report cannot bury an unmodeled qualifier in the one line the CLI treats as
+// ground truth for the whole baseline.
+const CONVENTION_BASELINE_LINE_SOURCE = String.raw`^[ \t]*\*\*Convention Baseline\*\*:[ \t]*([^\r\n]+?)[ \t]*$`;
+const CONVENTION_BASELINE_AVAILABLE_PATTERN = /^(\d+)\s*test files sampled outside the review set\.?$/i;
+const CONVENTION_BASELINE_UNAVAILABLE_PATTERN = /^unavailable:\s*(.+)$/i;
+// Not anchored to a section: a fabricated fraction is just as much a defect
+// whether it lands in the criteria table's Basis column or in prose Notes.
+const CONVENTION_CITATION_PATTERN = /Convention:\s*([A-Za-z]+)\s*\(\s*(\d+)\s*of\s*(\d+)\s*sampled\s*\)/gi;
 const SEVERITY_DEDUCTIONS = { critical: 10, high: 5, medium: 2, low: 1 };
 const MAX_BONUS = 30; // six bonus categories, worth 0 or 5 each
 // Both renderings of the two normalized ledger fields, line form first. Held as
@@ -101,9 +126,18 @@ function stripFencedCodeBlocks(text) {
   return kept.join('\n');
 }
 
-/** Extract a level-2 section's text, up to the next level-2 heading or EOF. */
+/** Escape a literal string for interpolation into a RegExp source. */
+function escapeRegExp(literal) {
+  return literal.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+/**
+ * Extract a level-2 section's text, up to the next level-2 heading or EOF.
+ * `heading` is a literal string (escaped internally), not a regex fragment: some
+ * real headings contain parens ("Critical Issues (Must Fix)").
+ */
 function extractSection(text, heading) {
-  const match = new RegExp(`^## ${heading}[ \\t]*$`, 'm').exec(text);
+  const match = new RegExp(`^## ${escapeRegExp(heading)}[ \\t]*$`, 'm').exec(text);
   if (!match) {
     return null;
   }
@@ -500,6 +534,251 @@ function verifyRunContract({ reviewedFiles, contextBasis, contextFiles, excluded
   }
 }
 
+/** Extract every "Convention: <key> (<adopted> of <sampled> sampled)" citation in the report, wherever it appears. */
+function parseConventionCitations(text) {
+  return [...text.matchAll(CONVENTION_CITATION_PATTERN)].map((match) => ({
+    key: match[1],
+    adopted: Number.parseInt(match[2], 10),
+    sampled: Number.parseInt(match[3], 10),
+  }));
+}
+
+/** Extract the optional, at-most-one "**Convention Baseline**:" line's raw value. */
+function parseConventionBaselineLine(text) {
+  const matches = [...text.matchAll(new RegExp(CONVENTION_BASELINE_LINE_SOURCE, 'gm'))];
+  if (matches.length === 0) {
+    return null;
+  }
+  if (matches.length > 1) {
+    unparseable(`Report must contain at most one "**Convention Baseline**:" line; found ${matches.length}`);
+  }
+  return stripWrappers(matches[0][1]);
+}
+
+/**
+ * Bind every "Convention: <key> (<adopted> of <sampled> sampled)" citation, and the
+ * "**Convention Baseline**:" line, to what this run actually measured — never to a
+ * number the agent produced on its own. See this file's header comment for why.
+ *
+ * Two tiers, matching cli/lib/convention-baseline.js's own two tiers of confidence:
+ * - `sampled` (and the overall corpus size) is 100% mechanical, so any disagreement
+ *   is unconditionally rejected: a report cannot cite a corpus this run never sampled.
+ * - `adopted` is only checked one direction. The CLI's own scan over the real
+ *   sampled files is high-recall by design (see convention-baseline.js's doc
+ *   comment), so a report claiming a nonzero adopted count for a key the CLI found
+ *   zero real occurrences of is provably fabricated and rejected. A report claiming
+ *   a LOWER or equally-nonzero count than the CLI found is left to the agent's
+ *   judgment — a regex cannot know intent, so it is never used to force a number up.
+ *
+ * @param {string} text - Fence-stripped report text.
+ * @param {object} [conventionBaselineContract] - The run's cli/lib/convention-baseline.js
+ *   result, or undefined when the caller supplied no ground truth (e.g. a unit test
+ *   of an unrelated feature) — in that case only the cheap, contract-free sanity
+ *   checks below run (unrecognized key, adopted > sampled).
+ */
+function verifyConventionBaseline(text, conventionBaselineContract) {
+  const citations = parseConventionCitations(text);
+  for (const citation of citations) {
+    if (!CONVENTION_KEYS.includes(citation.key)) {
+      unparseable(`Report cites an unrecognized Convention key "${citation.key}"; expected one of: ${CONVENTION_KEYS.join(', ')}`);
+    }
+    if (citation.adopted > citation.sampled) {
+      unparseable(
+        `Report Convention citation "${citation.key}" claims ${citation.adopted} adopted of only ${citation.sampled} sampled, ` +
+          'which is impossible',
+      );
+    }
+  }
+
+  const baselineLineRaw = parseConventionBaselineLine(text);
+  if (!conventionBaselineContract) {
+    return;
+  }
+
+  if (conventionBaselineContract.baselineUnavailable) {
+    if (citations.length > 0) {
+      unparseable(
+        `Report cites Convention baseline fraction(s) (e.g. "${citations[0].key} (${citations[0].adopted} of ${citations[0].sampled} sampled)") ` +
+          `while this run recorded baselineUnavailable (${conventionBaselineContract.reason}); an unmeasurable baseline may never be cited as a ` +
+          'specific sampled fraction',
+      );
+    }
+    if (baselineLineRaw !== null && !CONVENTION_BASELINE_UNAVAILABLE_PATTERN.test(baselineLineRaw)) {
+      unparseable(
+        `Report "**Convention Baseline**:" line "${baselineLineRaw}" must read "unavailable: <reason>"; this run could not measure a ` +
+          `baseline (${conventionBaselineContract.reason})`,
+      );
+    }
+    return;
+  }
+
+  if (baselineLineRaw === null) {
+    unparseable('Report is missing the "**Convention Baseline**:" line; this run measured a real baseline and the report must state it');
+  }
+  const availableMatch = CONVENTION_BASELINE_AVAILABLE_PATTERN.exec(baselineLineRaw);
+  if (!availableMatch) {
+    unparseable(
+      `Report "**Convention Baseline**:" line "${baselineLineRaw}" does not match the required ` +
+        '"<N> test files sampled outside the review set" form',
+    );
+  }
+  const declaredSampled = Number.parseInt(availableMatch[1], 10);
+  if (declaredSampled !== conventionBaselineContract.sampled) {
+    unparseable(
+      `Report "**Convention Baseline**:" declares ${declaredSampled} sampled files, but this run actually sampled ` +
+        `${conventionBaselineContract.sampled} outside the review set`,
+    );
+  }
+
+  for (const citation of citations) {
+    if (citation.sampled !== conventionBaselineContract.sampled) {
+      unparseable(
+        `Report Convention citation "${citation.key}" cites ${citation.sampled} sampled files, but this run actually sampled ` +
+          `${conventionBaselineContract.sampled} outside the review set; a Convention row must be judged against the corpus this run ` +
+          'measured, never a different count',
+      );
+    }
+    const measured = conventionBaselineContract.conventions && conventionBaselineContract.conventions[citation.key];
+    if (measured && measured.mechanical && measured.mechanicalSignal === false && citation.adopted > 0) {
+      unparseable(
+        `Report Convention citation "${citation.key} (${citation.adopted} of ${citation.sampled} sampled)" claims adoption, but this run ` +
+          `scanned every one of the ${conventionBaselineContract.sampled} sampled files for the recognized forms and found zero occurrences; ` +
+          'a convention with no real evidence in the sampled corpus must be reported as absent (0 adopted), never a fabricated nonzero count',
+      );
+    }
+  }
+}
+
+const CRITICAL_ISSUES_HEADING = 'Critical Issues (Must Fix)';
+const RECOMMENDATIONS_HEADING = 'Recommendations (Should Fix)';
+const FINDING_HEADING_PATTERN = /^### /m;
+const FINDING_SEVERITY_LINE = /^\*\*Severity\*\*:\s*P([0-3])\s*\(([A-Za-z]+)\)/m;
+// Captures whatever token follows, valid-looking or not, so a fabricated ID (e.g.
+// "Z9") is reported as "not a real row" rather than misread as "no Row line at all".
+const FINDING_ROW_LINE = /^\*\*Row\*\*:\s*(\S+)/m;
+const ROW_ID_SHAPE = /^[CHML]\d+$/;
+const PRIORITY_TO_SEVERITY = { 0: 'Critical', 1: 'High', 2: 'Medium', 3: 'Low' };
+
+/** Split a section's text into its "### N. Title" finding blocks (empty when none). */
+function splitFindingBlocks(sectionText) {
+  if (!sectionText || !FINDING_HEADING_PATTERN.test(sectionText)) {
+    return [];
+  }
+  // The template's "No critical issues detected. ✅" / "No additional recommendations..."
+  // placeholder is plain prose with no "### " heading, so it never produces a block here;
+  // an empty array already represents "no findings" correctly.
+  return sectionText
+    .split(FINDING_HEADING_PATTERN)
+    .slice(1)
+    .map((body) => `### ${body}`);
+}
+
+/** Parse one finding block's declared Severity and Row citation. */
+function parseFinding(block) {
+  const severityMatch = block.match(FINDING_SEVERITY_LINE);
+  let severity = null;
+  if (severityMatch) {
+    const word = severityMatch[2];
+    const canonical = SEVERITY_ENUM.find((candidate) => candidate.toLowerCase() === word.toLowerCase());
+    // Only trust a P-number/word pair that agree with each other (per the template,
+    // P0 is always "(Critical)", never "(High)" attached to a P0 by mistake).
+    severity = canonical && PRIORITY_TO_SEVERITY[severityMatch[1]] === canonical ? canonical : null;
+  }
+  return {
+    severity,
+    rawSeverity: severityMatch ? severityMatch[0].replace(/^\*\*Severity\*\*:\s*/, '') : null,
+    rowMatch: block.match(FINDING_ROW_LINE),
+  };
+}
+
+/**
+ * Bind every finding actually documented under "## Critical Issues (Must Fix)" and
+ * "## Recommendations (Should Fix)" to the report's own "**Total Violations**:" line,
+ * and every cited "**Row**:" to a real criteria-registry.md row with the severity the
+ * finding claims. Scoped to Critical and High only — the two severities that actually
+ * change the CI verdict (`deriveRecommendation`: any Critical → Block, any High →
+ * Request Changes); Medium/Low only ever add "Approve with Comments" regardless of
+ * count, so a miscount there doesn't flip a merge decision the way this does.
+ *
+ * Why this exists: nothing here was ever checked before. A report could — and, in the
+ * defect this fixes, would — document a real, row-cited Critical finding in prose
+ * while its "**Total Violations**:" line claimed zero, and the CLI computed Approve
+ * at 100/100 from the summary line alone, never reading the finding it sat beside.
+ *
+ * @param {string} text - Fence-stripped report text.
+ * @param {{critical: number, high: number}} violations - Parsed Total Violations counts.
+ * @param {object|null} registryRowSeverities - cli/lib/registry-rows.js's row→severity
+ *   map, or null when unavailable (e.g. a bare test-fixture skill root with no
+ *   criteria-registry.md) — row IDs are still required and internally validated, but
+ *   the "does this row really exist, and is its real severity what the finding claims"
+ *   cross-check is skipped without it.
+ */
+function verifyFindingSeverityCounts(text, violations, registryRowSeverities) {
+  function findingsIn(heading) {
+    return splitFindingBlocks(extractSection(text, heading)).map(parseFinding);
+  }
+
+  function requireRow(finding, sectionLabel) {
+    if (!finding.rowMatch) {
+      unparseable(
+        `A finding under "## ${sectionLabel}" has no "**Row**:" line; every finding there must cite the criteria-registry ` +
+          'row that produced it, per the report contract',
+      );
+    }
+    const row = finding.rowMatch[1];
+    // Contract-free shape check: a token that isn't even <letter><digits> shaped is
+    // fabricated regardless of whether registry data is available to check further.
+    if (!ROW_ID_SHAPE.test(row)) {
+      unparseable(
+        `A finding under "## ${sectionLabel}" cites Row "${row}", which is not a criteria-registry row ID ` +
+          '(expected a shape like "C1", "H5", "M3", "L2")',
+      );
+    }
+    if (!registryRowSeverities) {
+      return row;
+    }
+    const rowSeverity = registryRowSeverities[row];
+    if (!rowSeverity) {
+      unparseable(`A finding under "## ${sectionLabel}" cites Row "${row}", which is not a row in criteria-registry.md`);
+    }
+    if (rowSeverity !== finding.severity) {
+      unparseable(
+        `A finding under "## ${sectionLabel}" cites Row "${row}" (registry severity ${rowSeverity}) but declares Severity ` +
+          `${finding.severity ?? finding.rawSeverity ?? '(unrecognized)'}; severity is read from the row, never chosen`,
+      );
+    }
+    return row;
+  }
+
+  const criticalFindings = findingsIn(CRITICAL_ISSUES_HEADING);
+  for (const finding of criticalFindings) {
+    if (finding.severity !== 'Critical') {
+      unparseable(
+        `A finding under "## ${CRITICAL_ISSUES_HEADING}" declares Severity ${finding.rawSeverity ?? '(missing)'} instead of ` +
+          `P0 (Critical); "## ${CRITICAL_ISSUES_HEADING}" is Critical-only by contract`,
+      );
+    }
+    requireRow(finding, CRITICAL_ISSUES_HEADING);
+  }
+  if (criticalFindings.length !== violations.critical) {
+    unparseable(
+      `Report "**Total Violations**:" declares ${violations.critical} Critical, but "## ${CRITICAL_ISSUES_HEADING}" documents ` +
+        `${criticalFindings.length} finding(s); the two must agree exactly`,
+    );
+  }
+
+  const highFindings = findingsIn(RECOMMENDATIONS_HEADING).filter((finding) => finding.severity === 'High');
+  for (const finding of highFindings) {
+    requireRow(finding, RECOMMENDATIONS_HEADING);
+  }
+  if (highFindings.length !== violations.high) {
+    unparseable(
+      `Report "**Total Violations**:" declares ${violations.high} High, but "## ${RECOMMENDATIONS_HEADING}" documents ` +
+        `${highFindings.length} High-severity finding(s); the two must agree exactly`,
+    );
+  }
+}
+
 /**
  * Compute the authoritative quality score from the template's deduction
  * ledger. The agent's published score is presentation data only.
@@ -668,6 +947,7 @@ function parseReport(reportText, runContract = {}) {
         'critical violations with an approve recommendation is an inconsistent verdict',
     );
   }
+  verifyFindingSeverityCounts(text, violations, runContract.registryRowSeverities ?? null);
 
   const qualityScore = deriveQualityScore(reportText, violations);
 
@@ -697,6 +977,7 @@ function parseReport(reportText, runContract = {}) {
   }
 
   verifyRunContract({ reviewedFiles, contextBasis, contextFiles, excludedFiles }, runContract);
+  verifyConventionBaseline(text, runContract.conventionBaseline);
 
   const executiveSection = extractSection(text, 'Executive Summary');
   const keyStrengths = extractBullets(extractSubsection(executiveSection, 'Key Strengths'), '✅');
@@ -717,6 +998,13 @@ function parseReport(reportText, runContract = {}) {
     keyStrengths,
     keyWeaknesses,
   };
+  // Surfaced (not just used to gate) so a stored verdict JSON says what this run
+  // actually measured, the same reasoning as attaching agent/model: a fabricated
+  // baseline is invisible to a human reviewer unless the ground truth travels with
+  // the verdict, not just the pass/fail outcome of checking against it.
+  if (runContract.conventionBaseline) {
+    parsed.conventionBaseline = runContract.conventionBaseline;
+  }
   if (
     reportedQualityScore !== qualityScore ||
     (reportedQualityGrade !== undefined && reportedQualityGrade !== gradeForScore(qualityScore))
@@ -780,4 +1068,14 @@ function scoreFails(score, minScore) {
   return score < minScore;
 }
 
-module.exports = { parseReport, normalizeReportScore, deriveRecommendation, verdictFor, scoreFails, CONTEXT_BASIS_ENUM };
+module.exports = {
+  parseReport,
+  normalizeReportScore,
+  deriveRecommendation,
+  verdictFor,
+  scoreFails,
+  CONTEXT_BASIS_ENUM,
+  verifyConventionBaseline,
+  parseConventionCitations,
+  verifyFindingSeverityCounts,
+};
