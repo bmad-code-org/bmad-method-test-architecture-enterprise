@@ -13,7 +13,7 @@ A TEA workflow expects a human: it asks which mode to run and what inputs to use
 
 ---
 
-## Seven problems, seven modules
+## Eight problems, nine modules
 
 | Problem                                          | Module                               |
 | ------------------------------------------------ | ------------------------------------ |

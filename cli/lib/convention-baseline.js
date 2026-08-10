@@ -192,7 +192,10 @@ function computeConventionBaseline({ projectRoot, reviewFiles, cap = MAX_SAMPLED
   const reviewedDirs = reviewFiles.length > 0 ? reviewFiles.map(directoryOf) : [''];
   const ranked = eligible
     .map((file) => ({ file, distance: closestDistance(directoryOf(file), reviewedDirs) }))
-    .sort((a, b) => a.distance - b.distance || a.file.localeCompare(b.file));
+    // Plain code-unit comparison, not localeCompare: the tie-break order has to be
+    // the same sampled set on every machine regardless of the runtime's ICU/locale
+    // data, or "deterministic sampling" would itself be an environment-dependent claim.
+    .sort((a, b) => a.distance - b.distance || (a.file < b.file ? -1 : a.file > b.file ? 1 : 0));
   const sampledFiles = ranked.slice(0, cap).map((entry) => entry.file);
 
   return {

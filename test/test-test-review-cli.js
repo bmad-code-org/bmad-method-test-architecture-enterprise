@@ -1013,7 +1013,10 @@ async function runTests() {
       };
       const unavailableBaseline = {
         baselineUnavailable: true,
-        reason: 'no test files exist outside the review set',
+        // The exact string cli/lib/convention-baseline.js's empty-corpus branch
+        // produces, not an abridged stand-in, so this contract stays a faithful
+        // mock of what a real run would actually supply.
+        reason: 'no test files exist outside the review set to measure a house convention against',
         corpusSize: 0,
         sampled: 0,
         sampledFiles: [],
@@ -1751,7 +1754,9 @@ async function runTests() {
     // parse-report.js's verifyConventionBaseline — see that file's own comment on
     // keeping the two in sync.
     assert(
-      !prompt.includes('convention baseline'),
+      !prompt.includes('**Convention Baseline**') &&
+        !prompt.includes('Convention: <key>') &&
+        !prompt.includes('---BEGIN CONVENTION CORPUS---'),
       'omitting conventionBaseline entirely emits no baseline block at all (opt-in, never silently assumed)',
     );
 

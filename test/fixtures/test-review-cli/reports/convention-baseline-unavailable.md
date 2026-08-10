@@ -33,9 +33,9 @@ instead of guessing a baseline from the reviewed files themselves.
 
 | Criterion                      | Status        | Violations | Basis                          | Notes                                  |
 | ------------------------------- | ------------- | ---------- | -------------------------------- | ---------------------------------------- |
-| Priority Markers (P0/P1/P2/P3) | ✅ PASS (n/a) | 0          | Convention: priorityMarkers n/a | baseline could not be measured (no test files exist outside the review set) |
+| Priority Markers (P0/P1/P2/P3) | ✅ PASS (n/a) | 0          | Convention: priorityMarkers n/a | baseline could not be measured (no test files exist outside the review set to measure a house convention against) |
 
-**Convention Baseline**: unavailable: no test files exist outside the review set
+**Convention Baseline**: unavailable: no test files exist outside the review set to measure a house convention against
 
 ## Quality Score Breakdown
 

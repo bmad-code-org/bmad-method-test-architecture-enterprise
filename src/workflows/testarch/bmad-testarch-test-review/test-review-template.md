@@ -80,7 +80,7 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 <!-- {basis} states what decided the row, per steps-c/criteria-registry.md: `Absolute`,
      `Applicability: <what the file must do>`, or `Convention: <key> (<adopted> of <sampled> sampled)` —
      that exact literal form, "sampled" spelled out both after the count and at the close, e.g.
-     `Convention: priorityMarkers (0 of 40 sampled)`. When a headless run supplies a pre-computed
+     `Convention: priorityMarkers ({adopted} of {sampled} sampled)`. When a headless run supplies a pre-computed
      `convention_baseline` (see step-02-discover-tests.md §2b's CLI exception), `<sampled>` here MUST
      equal the corpus's `sampled` value exactly, and `<adopted>` MUST be 0 for any mechanically-checked
      key the run reports found zero real occurrences of — the CLI parses this line verbatim and rejects
