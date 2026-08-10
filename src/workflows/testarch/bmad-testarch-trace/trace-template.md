@@ -194,7 +194,7 @@ Note: This workflow does not generate tests. If gaps exist, run `*atdd` or `*aut
 **WARNING Issues** ⚠️
 
 - `1.3-E2E-001` - 145 seconds (exceeds 90s target) - Optimize fixture setup to reduce test duration
-- `1.3-UNIT-005` - 520 lines (exceeds 500 line limit) - Split into multiple focused test files
+- `1.3-UNIT-005` - 1020 lines (exceeds 1000 line limit) - Split into multiple focused test files
 
 **INFO Issues** ℹ️
 
@@ -261,7 +261,7 @@ Note: This workflow does not generate tests. If gaps exist, run `*atdd` or `*aut
 **Short-term Actions (This Milestone)**
 
 1. **Enhance P2 Coverage** - Add E2E validation for session timeout (`1.3-E2E-005`). Currently UNIT-ONLY coverage.
-2. **Split Large Test File** - Break `1.3-UNIT-005` (520 lines) into multiple focused test files (≤500 lines each).
+2. **Split Large Test File** - Break `1.3-UNIT-005` (1020 lines) into multiple focused test files (≤1000 lines each).
 
 **Long-term Actions (Backlog)**
 

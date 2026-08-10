@@ -439,7 +439,7 @@ Follow the patterns in existing tests:
 ✅ Tests clean up after themselves
 ✅ Tests can run in parallel
 ✅ Execution time < 1.5 minutes per test
-✅ Test files ≤ 500 lines
+✅ Test files ≤ 1000 lines
 ```
 
 ### 7. Run the Tests

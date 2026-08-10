@@ -92,7 +92,7 @@ if (unattributed.length > 0) {
 //
 // File-level rows carry no meaningful line: H5 is a property of the whole file,
 // and the pact config rows are properties of the whole config. Two workers each
-// pick a plausible line for the same finding (1 and 341 for the same 341-line
+// pick a plausible line for the same finding (1 and 1041 for the same 1041-line
 // file), so the line is dropped from the key for those rows or the dedup this
 // block exists for never fires on its own worked example.
 const FILE_LEVEL_ROWS = new Set(['H5', 'H6', 'H7', 'H8', 'L4']);
