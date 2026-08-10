@@ -236,3 +236,60 @@ Changes** on `HIGH > 0`.
 The score lands on the persona run's 85 and the verdict stays where the codex run put
 it. Treat that as a sanity check on the arithmetic, not as validation: one hand-worked
 example is not a measurement, which is what the harness is for.
+
+## 2026-08-10: the baseline was never actually being measured
+
+Motivated by couture-cast PR #106 (comment 5234513259, `tea-test-review.yml`,
+`--agent codex`), which fired four LOW `Priority Markers` violations citing
+`Convention: priorityMarkers (18 of 40 sampled)`. `grep -rlniE "['"@]P[0-3]['"@ :.]"`
+across the entire target repo found zero real matches — one incidental hit, a `'p1'`
+silhouette-profile-ID fixture, nothing that is actually a priority tag. The installed
+`test-quality.md` knowledge fragment the report cited as its criteria source doesn't
+mention "priority" at all. The codex run invented a plausible, specific fraction for a
+convention that has never once been used in that repository.
+
+§2b above already designed against exactly this — sample the corpus outside the
+review set, cap at 40, record `corpusSize`/`sampled`, fall back to
+`baselineUnavailable: true` when nothing can be measured, "guessing a convention is
+worse than admitting it wasn't measured" — but the design lived entirely in prose the
+agent was trusted to follow. Nothing forced the sampling to be a real Glob/Grep
+instead of a number that merely sounded right, and nothing downstream ever checked
+the claim: not one report fixture in this repo's own `test/fixtures/test-review-cli/`
+suite even included a `**Convention Baseline**:` line, and `parse-report.js` had no
+code path that looked for one.
+
+Same fix as the score and the recommendation before it: stop trusting the agent to
+compute a number the CLI can compute itself. `cli/lib/convention-baseline.js` now
+performs §2b's sampling deterministically — `git ls-files`, the review set excluded,
+ranked closest-first by directory distance, capped at 40 — and, for the five keys
+with a literal recognized form (`priorityMarkers`, `testIds`, `networkFirst`,
+`dataFactories`, `fixtures`), scans the real sampled files for it. `bddNaming` and
+`assertionStyle` get no mechanical signal (no single token separates "adopted" from
+"not" for a naming style or a dialect choice) and stay agent-judged; the
+sampled/corpusSize grounding still applies to them.
+
+The result travels into the prompt as a fixed fact, the same way the review set
+already does, and `parse-report.js`'s `verifyConventionBaseline` binds every
+`Convention: <key> (<adopted> of <sampled> sampled)` citation and the
+`**Convention Baseline**:` line to it, one direction strictly (the sampled/corpusSize
+counts must match exactly — they're 100% mechanical) and one direction only
+downward (a citation claiming nonzero adoption for a key the CLI's own scan found
+zero real occurrences of anywhere in the sampled corpus is rejected outright; a lower
+or judgment-based count is left alone, because a regex cannot know intent and was
+never used to force a number up). Applied to #106's actual corpus, this scan finds
+zero `priorityMarkers` signal too — the same zero grep found — so the fabricated
+`(18 of 40 sampled)` citation would now fail closed (exit 3) instead of reaching a PR
+comment. `test/test-test-review-cli.js` Test Suite 11 and the git-fixture additions to
+Suite 8 reproduce this end-to-end against a real temp git repo built to the same
+shape (real neighbor test files, zero real priority markers anywhere).
+
+Not fixed here, and worth naming: the "seven keys" §2b measures don't map onto the
+registry's Convention gate class evenly. Only three published criteria are actually
+Convention-gated (`priorityMarkers` → L2, `testIds` → L3, `bddNaming` → L5);
+`networkFirst`/`dataFactories`/`fixtures` deliberately became Applicability-gated
+instead (see "The baseline is measured before it is judged against" above —
+popularity shouldn't demote a navigation race), and `assertionStyle` → L7 has no
+published report-table row at all. That's an intentional design choice for the first
+three, not the fabrication bug, so `convention-baseline.js` still grounds all seven
+uniformly (future-proofing, and Notes prose can cite any of them), but the deduction
+schedule only reads three of the seven back.

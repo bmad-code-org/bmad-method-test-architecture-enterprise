@@ -188,11 +188,24 @@ A passing review (also written to `--json <file>` when given):
   "contextFiles": ["docs/stories/checkout-decline.md", "src/checkout/payment.ts"],
   "contextWaiversApplied": 0,
   "keyStrengths": ["Fully deterministic, no conditional branching or timing dependencies"],
-  "keyWeaknesses": ["Missing explicit test IDs on two test cases"]
+  "keyWeaknesses": ["Missing explicit test IDs on two test cases"],
+  "conventionBaseline": {
+    "baselineUnavailable": false,
+    "corpusSize": 47,
+    "sampled": 40,
+    "sampledFiles": ["tests/login.spec.ts", "tests/profile.spec.ts"],
+    "conventions": {
+      "priorityMarkers": { "mechanical": true, "adopted": 0, "mechanicalSignal": false },
+      "testIds": { "mechanical": true, "adopted": 6, "mechanicalSignal": true },
+      "bddNaming": { "mechanical": false }
+    }
+  }
 }
 ```
 
 `contextWaiversApplied` is strict and always `0`. `keyStrengths` and `keyWeaknesses` are best-effort, pulled from the report's Executive Summary bullet lists for PR-comment display; they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
+
+`conventionBaseline` is the CLI's own deterministic measurement of step-02-discover-tests.md §2b's convention baseline — never the agent's — carried into the verdict alongside `agent`/`model` so a stored score also says what house convention it was judged against and how that was actually established. `sampledFiles` and per-key `mechanicalSignal` are computed by [`cli/lib/convention-baseline.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/convention-baseline.js) by reading the real sampled files' content, not by asking the agent; the report's own `Convention: <key> (<adopted> of <sampled> sampled)` citations are rejected (exit 3) when they disagree with it — most pointedly, a citation claiming nonzero adoption for a key this scan found zero real occurrences of anywhere in the sampled corpus. The field is absent only when no baseline was computed for this run (e.g. a bare `parseReport` call in a unit test with no CLI around it).
 
 A failing verdict adds `gateFailures` (machine-readable reasons, e.g. `"insufficient evidence: 1 files reviewed (3 required)"`); a waived failure adds `waived`, `waiveReason`, `waiveUntil`.
 

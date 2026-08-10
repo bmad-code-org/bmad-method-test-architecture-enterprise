@@ -13,18 +13,21 @@ A TEA workflow expects a human: it asks which mode to run and what inputs to use
 
 ---
 
-## Five problems, five modules
+## Six problems, six modules
 
-| Problem                           | Module                               |
-| --------------------------------- | ------------------------------------ |
-| Find the skill                    | `lib/resolve-skill.js`               |
-| Decide what to feed it            | `lib/changed-tests.js`               |
-| Settle its configuration          | `lib/resolve-tea-config.js`          |
-| Make it run with no human present | `lib/build-prompt.js`                |
-| Spawn it without trusting it      | `lib/run-agent.js`, `lib/isolate.js` |
-| Turn prose into an exit code      | `lib/parse-report.js`                |
+| Problem                                          | Module                               |
+| ------------------------------------------------ | ------------------------------------ |
+| Find the skill                                   | `lib/resolve-skill.js`               |
+| Decide what to feed it                           | `lib/changed-tests.js`               |
+| Measure the house convention it's judged against | `lib/convention-baseline.js`         |
+| Settle its configuration                         | `lib/resolve-tea-config.js`          |
+| Make it run with no human present                | `lib/build-prompt.js`                |
+| Spawn it without trusting it                     | `lib/run-agent.js`, `lib/isolate.js` |
+| Turn prose into an exit code                     | `lib/parse-report.js`                |
 
-`cli/test-review.js` runs them in order: resolve skill, resolve config, split the diff, build prompt, spawn agent under isolation, parse report, emit verdict, exit.
+`cli/test-review.js` runs them in order: resolve skill, resolve config, split the diff, measure the convention baseline, build prompt, spawn agent under isolation, parse report, emit verdict, exit.
+
+`lib/convention-baseline.js` exists for the same reason the score is computed rather than trusted (see below): a live codex run on couture-cast PR #106 reported `Convention: priorityMarkers (18 of 40 sampled)` against a repo with zero real instances of that convention anywhere, because nothing forced the "sample the corpus" step the skill's own `step-02-discover-tests.md` §2b describes to be a real Glob/Grep instead of a plausible-sounding guess. The CLI now does that sampling itself — `git ls-files`, the review set excluded, ranked closest-first by directory distance, capped at 40 — states the result in the prompt as a fixed fact, and rejects (exit 3) a report whose `Convention: <key> (<adopted> of <sampled> sampled)` citations disagree with what it actually measured.
 
 ---
 

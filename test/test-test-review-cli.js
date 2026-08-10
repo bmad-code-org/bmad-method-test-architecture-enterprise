@@ -56,6 +56,15 @@ const {
   CONTEXT_BASIS_ENUM,
 } = require('../cli/lib/parse-report');
 const {
+  computeConventionBaseline,
+  directoryDistance,
+  directoryOf,
+  measureConventions,
+  CONVENTION_KEYS,
+  MECHANICAL_CONVENTION_KEYS,
+  JUDGMENT_ONLY_CONVENTION_KEYS,
+} = require('../cli/lib/convention-baseline');
+const {
   isTestFile,
   isContextNoise,
   getChangedTestFiles,
@@ -971,6 +980,135 @@ async function runTests() {
       );
     }
 
+    // parse-report: convention-baseline grounding (couture-cast PR #106's actual
+    // defect — a fabricated "Convention: priorityMarkers (18 of 40 sampled)" against
+    // a repo with zero real instances of that convention). See
+    // cli/lib/convention-baseline.js and verifyConventionBaseline for the fix.
+    {
+      const measuredBaseline = {
+        baselineUnavailable: false,
+        reason: null,
+        corpusSize: 40,
+        sampled: 40,
+        sampledFiles: [],
+        conventions: { priorityMarkers: { mechanical: true, adopted: 0, mechanicalSignal: false } },
+      };
+      const unavailableBaseline = {
+        baselineUnavailable: true,
+        reason: 'no test files exist outside the review set',
+        corpusSize: 0,
+        sampled: 0,
+        sampledFiles: [],
+        conventions: {},
+      };
+
+      try {
+        parseReport(readFixture('reports', 'convention-fabricated.md'), { conventionBaseline: measuredBaseline });
+        assert(false, 'a fabricated nonzero Convention citation against a zero-mechanical-signal corpus throws');
+      } catch (error) {
+        assert(
+          error.code === 'REPORT_UNPARSEABLE' && /found zero occurrences/.test(error.message) && /priorityMarkers/.test(error.message),
+          'a fabricated nonzero Convention citation against a zero-mechanical-signal corpus throws REPORT_UNPARSEABLE naming the key',
+          error.message,
+        );
+      }
+
+      const honest = parseReport(readFixture('reports', 'convention-honest-absent.md'), { conventionBaseline: measuredBaseline });
+      assert(
+        honest.conventionBaseline === measuredBaseline,
+        'a Convention citation matching the measured baseline exactly (0 of 40, zero signal) parses and the ground truth is surfaced on the parsed result',
+        JSON.stringify(honest.conventionBaseline),
+      );
+
+      const unavailableReport = parseReport(readFixture('reports', 'convention-baseline-unavailable.md'), {
+        conventionBaseline: unavailableBaseline,
+      });
+      assert(
+        unavailableReport.conventionBaseline === unavailableBaseline,
+        'a report correctly declaring "unavailable: <reason>" and citing no fraction parses when the run recorded baselineUnavailable',
+        JSON.stringify(unavailableReport.conventionBaseline),
+      );
+
+      try {
+        parseReport(readFixture('reports', 'convention-honest-absent.md'), {
+          conventionBaseline: unavailableBaseline,
+        });
+        assert(false, 'a Convention fraction cited while the run recorded baselineUnavailable throws');
+      } catch (error) {
+        assert(
+          error.code === 'REPORT_UNPARSEABLE' && /baselineUnavailable/.test(error.message),
+          'a Convention fraction cited while the run recorded baselineUnavailable throws REPORT_UNPARSEABLE (an unmeasurable baseline may never be cited as a specific fraction)',
+          error.message,
+        );
+      }
+
+      try {
+        parseReport(readFixture('reports', 'convention-honest-absent.md'), {
+          conventionBaseline: { ...measuredBaseline, sampled: 12, corpusSize: 12 },
+        });
+        assert(false, "a Convention citation whose sampled count disagrees with the run's real corpus throws");
+      } catch (error) {
+        assert(
+          error.code === 'REPORT_UNPARSEABLE' && /sampled 12 outside the review set/.test(error.message),
+          "a Convention citation whose sampled count disagrees with the run's real corpus throws REPORT_UNPARSEABLE, not a silent pass on a different corpus",
+          error.message,
+        );
+      }
+
+      try {
+        parseReport(readFixture('reports', 'approve.md'), { conventionBaseline: measuredBaseline });
+        assert(false, 'a report with no "**Convention Baseline**:" line throws when this run actually measured one');
+      } catch (error) {
+        assert(
+          error.code === 'REPORT_UNPARSEABLE' && /missing the "\*\*Convention Baseline\*\*:" line/.test(error.message),
+          'a report omitting the "**Convention Baseline**:" line throws REPORT_UNPARSEABLE when this run measured a real baseline (the line is optional only when the baseline is genuinely unavailable)',
+          error.message,
+        );
+      }
+
+      // Contract-free sanity checks: catch impossible citations even when no CLI
+      // ground truth was supplied at all (e.g. a bare unit test of an unrelated
+      // report shape), so the checks are never purely an opt-in feature.
+      try {
+        parseReport(
+          readFixture('reports', 'convention-fabricated.md').replace('priorityMarkers (18 of 40 sampled)', 'notARealKey (1 of 5 sampled)'),
+        );
+        assert(false, 'citing an unrecognized Convention key throws even with no runContract supplied');
+      } catch (error) {
+        assert(
+          error.code === 'REPORT_UNPARSEABLE' && /unrecognized Convention key "notARealKey"/.test(error.message),
+          'citing an unrecognized Convention key throws REPORT_UNPARSEABLE with no runContract needed',
+          error.message,
+        );
+      }
+      try {
+        parseReport(
+          readFixture('reports', 'convention-fabricated.md').replace(
+            'priorityMarkers (18 of 40 sampled)',
+            'priorityMarkers (41 of 40 sampled)',
+          ),
+        );
+        assert(false, 'a citation claiming more adopted than sampled throws even with no runContract supplied');
+      } catch (error) {
+        assert(
+          error.code === 'REPORT_UNPARSEABLE' && /41 adopted of only 40 sampled/.test(error.message),
+          'a citation claiming more adopted than sampled throws REPORT_UNPARSEABLE regardless of ground truth',
+          error.message,
+        );
+      }
+
+      // No runContract at all (the common case for every other fixture test in this
+      // suite): a report with no Convention Baseline line and no citations is
+      // untouched by this feature, proving it never turns into an unconditional
+      // requirement outside of a real CLI run.
+      const untouched = parseReport(readFixture('reports', 'approve.md'));
+      assert(
+        untouched.conventionBaseline === undefined,
+        'a report with no Convention citations and no runContract.conventionBaseline is unaffected by this check',
+        JSON.stringify(untouched),
+      );
+    }
+
     console.log('');
 
     // ============================================================
@@ -1588,6 +1726,112 @@ async function runTests() {
       'prompt requires the report to quote the focus note, so a score states what steered it',
     );
     assert(!prompt.includes('---BEGIN FOCUS---'), 'no focus note, no focus block: an unstated input stays unstated');
+
+    // build-prompt: convention baseline states pre-computed grounding as a fixed
+    // fact instead of an instruction to derive one, mirroring the review-set FILES
+    // block immediately above it. Every literal line here is read verbatim by
+    // parse-report.js's verifyConventionBaseline — see that file's own comment on
+    // keeping the two in sync.
+    assert(
+      !prompt.includes('convention baseline'),
+      'omitting conventionBaseline entirely emits no baseline block at all (opt-in, never silently assumed)',
+    );
+
+    const measuredConventionPrompt = buildPrompt({
+      skillRoot,
+      files: ['tests/checkout.spec.ts'],
+      outputPath: absoluteOutput,
+      conventionBaseline: {
+        baselineUnavailable: false,
+        reason: null,
+        corpusSize: 40,
+        sampled: 40,
+        sampledFiles: ['tests/login.spec.ts', 'tests/profile.spec.ts'],
+        conventions: {
+          priorityMarkers: { mechanical: true, adopted: 0, mechanicalSignal: false },
+          testIds: { mechanical: true, adopted: 6, mechanicalSignal: true },
+          bddNaming: { mechanical: false },
+          networkFirst: { mechanical: true, adopted: 0, mechanicalSignal: false },
+          dataFactories: { mechanical: true, adopted: 3, mechanicalSignal: true },
+          fixtures: { mechanical: true, adopted: 0, mechanicalSignal: false },
+          assertionStyle: { mechanical: false },
+        },
+      },
+    });
+    assert(
+      measuredConventionPrompt.includes('- corpusSize: 40, sampled: 40'),
+      'prompt states the CLI-measured corpusSize/sampled as a fixed fact',
+    );
+    assert(
+      measuredConventionPrompt.includes(
+        'The "**Convention Baseline**:" line must read exactly: 40 test files sampled outside the review set',
+      ),
+      'prompt states the exact required literal form for the Convention Baseline line, matching parse-report.js verbatim',
+    );
+    assert(
+      measuredConventionPrompt.includes('---BEGIN CONVENTION CORPUS---') &&
+        measuredConventionPrompt.includes(JSON.stringify(['tests/login.spec.ts', 'tests/profile.spec.ts'], null, 2)) &&
+        measuredConventionPrompt.includes('---END CONVENTION CORPUS---'),
+      'prompt names the exact sampled files as a delimited, do-not-substitute block',
+    );
+    assert(
+      /priorityMarkers: mechanically scanned across all 40 sampled files; zero occurrences[\s\S]*?MUST be reported as absent: adopted = 0/.test(
+        measuredConventionPrompt,
+      ),
+      'prompt forbids a nonzero priorityMarkers claim when the CLI already found zero occurrences in every sampled file',
+    );
+    assert(
+      /networkFirst: mechanically scanned across all 40 sampled files; zero occurrences/.test(measuredConventionPrompt),
+      'the zero-signal floor instruction applies uniformly to every mechanically-scanned key, not just priorityMarkers',
+    );
+    assert(
+      /testIds: mechanically scanned; at least one sampled file contains a recognized form\. Read the sampled files\s+yourself to judge the true adopted count \(0-40\)/.test(
+        measuredConventionPrompt,
+      ),
+      "a key with a nonzero mechanical signal is left to the agent's judgment for the true count, never forced to a specific number",
+    );
+    assert(
+      /bddNaming: not mechanically pre-scanned; read the sampled files yourself/.test(measuredConventionPrompt),
+      'a judgment-only key (no literal recognized form) is honestly disclosed as not mechanically pre-scanned',
+    );
+    assert(
+      /assertionStyle: not mechanically pre-scanned/.test(measuredConventionPrompt),
+      'the second judgment-only key is also disclosed the same way',
+    );
+
+    const unavailableConventionPrompt = buildPrompt({
+      skillRoot,
+      files: ['tests/checkout.spec.ts'],
+      outputPath: absoluteOutput,
+      conventionBaseline: {
+        baselineUnavailable: true,
+        reason: 'no test files exist outside the review set to measure a house convention against',
+        corpusSize: 0,
+        sampled: 0,
+        sampledFiles: [],
+        conventions: {},
+      },
+    });
+    assert(
+      unavailableConventionPrompt.includes(
+        'could NOT be\nmeasured: no test files exist outside the review set to measure a house convention against.',
+      ),
+      'prompt states the measured-unavailable reason verbatim',
+    );
+    assert(
+      unavailableConventionPrompt.includes(
+        'The "**Convention Baseline**:" line must read exactly:\nunavailable: no test files exist outside the review set to measure a house convention against',
+      ),
+      'prompt states the exact required unavailable literal form, matching parse-report.js verbatim',
+    );
+    assert(
+      unavailableConventionPrompt.includes('No finding, Basis column, or Note anywhere in the report may cite'),
+      'prompt forbids citing any sampled fraction at all when the baseline could not be measured',
+    );
+    assert(
+      !unavailableConventionPrompt.includes('---BEGIN CONVENTION CORPUS---'),
+      'no corpus block is emitted when there is no corpus to name',
+    );
 
     console.log('');
 
@@ -3332,6 +3576,83 @@ async function runTests() {
     );
     git(['checkout', 'main'], gitRepo);
 
+    // couture-cast PR #106 end-to-end reproduction: a codex run reported
+    // "Convention: priorityMarkers (18 of 40 sampled)" against a repo with zero real
+    // P0-P3 markers anywhere. These corpus files exist on `main`, before the review
+    // branch forks, so they sit outside the diff (the review set) while remaining
+    // real, `git ls-files`-discoverable neighbors of the reviewed file — exactly what
+    // cli/lib/convention-baseline.js samples. None of them carries a priority marker
+    // in any recognized form.
+    fs.writeFileSync(path.join(gitRepo, 'tests', 'login.spec.ts'), "test('logs in with valid credentials', () => {});\n");
+    fs.writeFileSync(path.join(gitRepo, 'tests', 'profile.spec.ts'), "test('updates the profile name', () => {});\n");
+    fs.writeFileSync(path.join(gitRepo, 'tests', 'orders.spec.ts'), "test('lists recent orders', () => {});\n");
+    fs.writeFileSync(path.join(gitRepo, 'tests', 'cart.spec.ts'), "test('adds an item to the cart', () => {});\n");
+    git(['add', '.'], gitRepo);
+    git(['commit', '-m', 'add convention-baseline corpus (no priority markers anywhere)'], gitRepo);
+
+    git(['checkout', '-b', 'convention-baseline-review'], gitRepo);
+    fs.writeFileSync(
+      path.join(gitRepo, 'tests', 'checkout.spec.ts'),
+      "test('checkout with the convention-baseline scenario', () => {});\n",
+    );
+    git(['add', '.'], gitRepo);
+    git(['commit', '-m', 'change only the reviewed file'], gitRepo);
+
+    const fabricatedConventionRun = runCli(
+      [
+        '--base',
+        'main',
+        '--project-root',
+        gitRepo,
+        '--output',
+        path.join(tmpRoot, 'git-fabricated-convention', 'test-review.md'),
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'fabricated-convention' },
+    );
+    assert(
+      fabricatedConventionRun.status === 3 &&
+        fabricatedConventionRun.stderr.includes('found zero occurrences') &&
+        fabricatedConventionRun.stderr.includes('priorityMarkers'),
+      'git fixture: a report fabricating priorityMarkers adoption against a real zero-signal corpus is rejected end-to-end (exit 3), never published',
+      `status=${fabricatedConventionRun.status} stderr=${fabricatedConventionRun.stderr}`,
+    );
+
+    const honestAbsentConventionRun = runCli(
+      [
+        '--base',
+        'main',
+        '--project-root',
+        gitRepo,
+        '--output',
+        path.join(tmpRoot, 'git-honest-absent-convention', 'test-review.md'),
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'honest-absent-convention' },
+    );
+    let honestVerdict = null;
+    try {
+      honestVerdict = JSON.parse(honestAbsentConventionRun.stdout);
+    } catch {
+      // assert below reports the raw stdout on failure
+    }
+    assert(
+      honestAbsentConventionRun.status === 0 &&
+        honestVerdict?.recommendation === 'Approve' &&
+        honestVerdict?.conventionBaseline?.baselineUnavailable === false &&
+        honestVerdict?.conventionBaseline?.sampled === 4 &&
+        honestVerdict?.conventionBaseline?.conventions?.priorityMarkers?.mechanicalSignal === false,
+      'git fixture: honestly reporting priorityMarkers as absent against the same real corpus passes end-to-end, and the verdict JSON carries the CLI-measured baseline (sampled=4, zero mechanical signal)',
+      `status=${honestAbsentConventionRun.status} stdout=${honestAbsentConventionRun.stdout} stderr=${honestAbsentConventionRun.stderr}`,
+    );
+    git(['checkout', 'main'], gitRepo);
+
     console.log('');
 
     // ============================================================
@@ -3779,6 +4100,127 @@ async function runTests() {
       badPactMcpRun.status === 2 && badPactMcpRun.stderr.includes('--pact-mcp must be one of'),
       'CLI end-to-end: an out-of-enum --pact-mcp is an environment error (exit 2)',
       `status=${badPactMcpRun.status} stderr=${badPactMcpRun.stderr}`,
+    );
+
+    console.log('');
+
+    // ============================================================
+    // Test Suite 11: convention-baseline
+    // ============================================================
+    console.log(`${colors.yellow}Test Suite 11: convention-baseline${colors.reset}\n`);
+
+    assert(
+      CONVENTION_KEYS.length === 7 &&
+        MECHANICAL_CONVENTION_KEYS.length === 5 &&
+        JUDGMENT_ONLY_CONVENTION_KEYS.length === 2 &&
+        MECHANICAL_CONVENTION_KEYS.every((key) => CONVENTION_KEYS.includes(key)) &&
+        JUDGMENT_ONLY_CONVENTION_KEYS.every((key) => CONVENTION_KEYS.includes(key)),
+      'the seven step-02 §2b convention keys split into five mechanically-detectable and two judgment-only, covering every key exactly once',
+      JSON.stringify({ CONVENTION_KEYS, MECHANICAL_CONVENTION_KEYS, JUDGMENT_ONLY_CONVENTION_KEYS }),
+    );
+
+    assert(directoryOf('tests/checkout.spec.ts') === 'tests', 'directoryOf strips the filename');
+    assert(directoryOf('checkout.spec.ts') === '', 'directoryOf returns "" for a root-level file');
+    assert(directoryDistance('tests/e2e', 'tests/e2e') === 0, 'directoryDistance is 0 for the same directory');
+    assert(directoryDistance('tests/e2e', 'tests/unit') === 2, 'directoryDistance counts one differing segment on each side as 2');
+    assert(directoryDistance('a/b/c', 'a') === 2, 'directoryDistance counts unshared depth past a common prefix');
+    assert(directoryDistance('', 'tests/e2e') === 2, 'directoryDistance handles a root-level directory on one side');
+
+    const cbRoot = path.join(tmpRoot, 'convention-baseline-fixture');
+    fs.mkdirSync(cbRoot, { recursive: true });
+
+    assert(
+      computeConventionBaseline({ projectRoot: cbRoot, reviewFiles: ['tests/checkout.spec.ts'] }).baselineUnavailable === true,
+      'a directory that is not a git repo at all reports baselineUnavailable (git ls-files fails) instead of throwing',
+    );
+
+    git(['init', '-b', 'main'], cbRoot);
+    git(['config', 'user.email', 'tea-tests@example.com'], cbRoot);
+    git(['config', 'user.name', 'TEA Tests'], cbRoot);
+    git(['config', 'commit.gpgsign', 'false'], cbRoot);
+    fs.mkdirSync(path.join(cbRoot, 'tests'), { recursive: true });
+    fs.writeFileSync(path.join(cbRoot, 'tests', 'checkout.spec.ts'), "test('checkout', () => {});\n");
+    git(['add', '.'], cbRoot);
+    git(['commit', '-m', 'only the reviewed file'], cbRoot);
+
+    const soleFileBaseline = computeConventionBaseline({ projectRoot: cbRoot, reviewFiles: ['tests/checkout.spec.ts'] });
+    assert(
+      soleFileBaseline.baselineUnavailable === true && /no test files exist outside the review set/.test(soleFileBaseline.reason),
+      'a repo whose only test file IS the reviewed file reports baselineUnavailable with the step-02 §2b reason, not a zero-sample false measurement',
+      JSON.stringify(soleFileBaseline),
+    );
+
+    // A close neighbor (same directory as the reviewed file) and a distant one
+    // (nested three levels under an unrelated directory), plus enough filler to
+    // exceed the 40-file cap and prove ranking, not just membership.
+    fs.writeFileSync(path.join(cbRoot, 'tests', 'login.spec.ts'), "test('[P1] logs in', () => { expect(true).toBe(true); });\n");
+    fs.mkdirSync(path.join(cbRoot, 'legacy', 'archive', 'old-suite'), { recursive: true });
+    fs.writeFileSync(
+      path.join(cbRoot, 'legacy', 'archive', 'old-suite', 'ancient.spec.ts'),
+      "test('ancient', () => { expect(true).toBe(true); });\n",
+    );
+    // Named to sort AFTER "login.spec.ts" alphabetically (tie-break order at equal
+    // distance), so the cap test below proves ranking by distance, not an artifact
+    // of alphabetical luck: login.spec.ts must survive the 40-file cap on its
+    // distance alone, with 45 same-distance rivals crowding in behind it.
+    for (let index = 0; index < 45; index++) {
+      fs.writeFileSync(path.join(cbRoot, 'tests', `zzz-filler-${String(index).padStart(2, '0')}.spec.ts`), "test('filler', () => {});\n");
+    }
+    git(['add', '.'], cbRoot);
+    git(['commit', '-m', 'add corpus: close neighbor, distant file, and cap-exceeding filler'], cbRoot);
+
+    const rankedBaseline = computeConventionBaseline({ projectRoot: cbRoot, reviewFiles: ['tests/checkout.spec.ts'] });
+    assert(
+      rankedBaseline.baselineUnavailable === false && rankedBaseline.corpusSize === 47,
+      'corpusSize counts every eligible file outside the review set, uncapped (1 login + 1 ancient + 45 filler)',
+      JSON.stringify({ corpusSize: rankedBaseline.corpusSize, baselineUnavailable: rankedBaseline.baselineUnavailable }),
+    );
+    assert(rankedBaseline.sampled === 40, 'sampled is capped at 40 even though 47 files are eligible', String(rankedBaseline.sampled));
+    assert(
+      !rankedBaseline.sampledFiles.includes('legacy/archive/old-suite/ancient.spec.ts'),
+      'closest-first ranking drops the distant file before the cap is reached (same-directory neighbors rank first)',
+      JSON.stringify(rankedBaseline.sampledFiles),
+    );
+    assert(
+      rankedBaseline.sampledFiles.includes('tests/login.spec.ts'),
+      'the same-directory neighbor survives the cap',
+      JSON.stringify(rankedBaseline.sampledFiles),
+    );
+    assert(
+      rankedBaseline.conventions.priorityMarkers.mechanical === true &&
+        rankedBaseline.conventions.priorityMarkers.adopted === 1 &&
+        rankedBaseline.conventions.priorityMarkers.mechanicalSignal === true,
+      'mechanical scan finds the one real "[P1]" marker among the sampled files and reports a nonzero signal',
+      JSON.stringify(rankedBaseline.conventions.priorityMarkers),
+    );
+    assert(
+      rankedBaseline.conventions.testIds.mechanical === true &&
+        rankedBaseline.conventions.testIds.adopted === 0 &&
+        rankedBaseline.conventions.testIds.mechanicalSignal === false,
+      "mechanical scan correctly finds zero testIds occurrences: this is the exact shape of couture-cast PR #106's actual corpus",
+      JSON.stringify(rankedBaseline.conventions.testIds),
+    );
+    assert(
+      rankedBaseline.conventions.bddNaming.mechanical === false && rankedBaseline.conventions.assertionStyle.mechanical === false,
+      'the two judgment-only keys carry no adopted count or mechanicalSignal at all — never a guessed one',
+      JSON.stringify({ bddNaming: rankedBaseline.conventions.bddNaming, assertionStyle: rankedBaseline.conventions.assertionStyle }),
+    );
+    assert(
+      CONVENTION_KEYS.every((key) => Object.prototype.hasOwnProperty.call(rankedBaseline.conventions, key)),
+      'every one of the seven keys is present in the returned conventions object, mechanical or not',
+      JSON.stringify(Object.keys(rankedBaseline.conventions)),
+    );
+
+    // measureConventions in isolation: an unreadable file contributes no signal
+    // rather than crashing the whole scan.
+    const unreadableSignal = measureConventions({
+      projectRoot: cbRoot,
+      sampledFiles: ['tests/does-not-exist.spec.ts', 'tests/login.spec.ts'],
+    });
+    assert(
+      unreadableSignal.priorityMarkers.adopted === 1,
+      'a missing/unreadable sampled file is skipped rather than thrown on, and the real file is still scanned',
+      JSON.stringify(unreadableSignal.priorityMarkers),
     );
 
     console.log('');

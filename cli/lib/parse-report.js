@@ -30,6 +30,18 @@
  * "## Excluded From Review Set": the disclosure is part of the contract, not a
  * courtesy the agent may drop.
  *
+ * A third, opt-in cross-check: when the run contract carries `conventionBaseline`
+ * (every real CLI run does; see cli/lib/convention-baseline.js), the report's
+ * "**Convention Baseline**:" line and every "Convention: <key> (<adopted> of
+ * <sampled> sampled)" citation anywhere in the text are bound to what the CLI
+ * actually measured over the real sampled files — never a number the agent
+ * produced on its own. This exists because a live codex run on couture-cast PR #106
+ * reported "Convention: priorityMarkers (18 of 40 sampled)" against a repo with
+ * zero real instances of that convention anywhere, and nothing downstream ever
+ * checked the claim: no fixture in this repo's own test suite even included a
+ * "Convention Baseline" line before this cross-check existed. See
+ * verifyConventionBaseline.
+ *
  * Two more fields, `keyStrengths` and `keyWeaknesses`, are extracted best-effort
  * from the Executive Summary's "### Key Strengths" / "### Key Weaknesses"
  * bullet lists for PR-comment display. These are not part of the strict schema
@@ -43,6 +55,8 @@
  */
 
 const path = require('node:path');
+
+const { CONVENTION_KEYS } = require('./convention-baseline');
 
 const RECOMMENDATION_ENUM = ['Approve', 'Approve with Comments', 'Request Changes', 'Block'];
 const RECOMMENDATION_LINE = /^[ \t]*(?:\*\*Recommendation\*\*:|\*\*Recommendation:\*\*|Recommendation:)[ \t]*([^\r\n]+?)[ \t]*$/m;
@@ -65,6 +79,16 @@ const BONUS_TOTAL_LINE = /^[ \t]*Total Bonus[ \t]*:[ \t]*\+[ \t]*(\d+)[ \t]*$/m;
 // red gate. The cell sign is optional because no observed table rendering keeps
 // it, and the label case drifts alongside the reflow.
 const BONUS_TOTAL_ROW = /^[ \t]*\|[ \t]*Total Bonus[ \t]*\|[ \t]*\+?[ \t]*(\d+)[ \t]*\|?[ \t]*$/im;
+// Required literal forms, matched verbatim against what build-prompt.js's
+// conventionBaselinePromptLines instructs the agent to write. Anchored full-line so
+// a report cannot bury an unmodeled qualifier in the one line the CLI treats as
+// ground truth for the whole baseline.
+const CONVENTION_BASELINE_LINE_SOURCE = String.raw`^[ \t]*\*\*Convention Baseline\*\*:[ \t]*([^\r\n]+?)[ \t]*$`;
+const CONVENTION_BASELINE_AVAILABLE_PATTERN = /^(\d+)\s*test files sampled outside the review set\.?$/i;
+const CONVENTION_BASELINE_UNAVAILABLE_PATTERN = /^unavailable:\s*(.+)$/i;
+// Not anchored to a section: a fabricated fraction is just as much a defect
+// whether it lands in the criteria table's Basis column or in prose Notes.
+const CONVENTION_CITATION_PATTERN = /Convention:\s*([A-Za-z]+)\s*\(\s*(\d+)\s*of\s*(\d+)\s*sampled\s*\)/gi;
 const SEVERITY_DEDUCTIONS = { critical: 10, high: 5, medium: 2, low: 1 };
 const MAX_BONUS = 30; // six bonus categories, worth 0 or 5 each
 // Both renderings of the two normalized ledger fields, line form first. Held as
@@ -500,6 +524,121 @@ function verifyRunContract({ reviewedFiles, contextBasis, contextFiles, excluded
   }
 }
 
+/** Extract every "Convention: <key> (<adopted> of <sampled> sampled)" citation in the report, wherever it appears. */
+function parseConventionCitations(text) {
+  return [...text.matchAll(CONVENTION_CITATION_PATTERN)].map((match) => ({
+    key: match[1],
+    adopted: Number.parseInt(match[2], 10),
+    sampled: Number.parseInt(match[3], 10),
+  }));
+}
+
+/** Extract the optional, at-most-one "**Convention Baseline**:" line's raw value. */
+function parseConventionBaselineLine(text) {
+  const matches = [...text.matchAll(new RegExp(CONVENTION_BASELINE_LINE_SOURCE, 'gm'))];
+  if (matches.length === 0) {
+    return null;
+  }
+  if (matches.length > 1) {
+    unparseable(`Report must contain at most one "**Convention Baseline**:" line; found ${matches.length}`);
+  }
+  return stripWrappers(matches[0][1]);
+}
+
+/**
+ * Bind every "Convention: <key> (<adopted> of <sampled> sampled)" citation, and the
+ * "**Convention Baseline**:" line, to what this run actually measured — never to a
+ * number the agent produced on its own. See this file's header comment for why.
+ *
+ * Two tiers, matching cli/lib/convention-baseline.js's own two tiers of confidence:
+ * - `sampled` (and the overall corpus size) is 100% mechanical, so any disagreement
+ *   is unconditionally rejected: a report cannot cite a corpus this run never sampled.
+ * - `adopted` is only checked one direction. The CLI's own scan over the real
+ *   sampled files is high-recall by design (see convention-baseline.js's doc
+ *   comment), so a report claiming a nonzero adopted count for a key the CLI found
+ *   zero real occurrences of is provably fabricated and rejected. A report claiming
+ *   a LOWER or equally-nonzero count than the CLI found is left to the agent's
+ *   judgment — a regex cannot know intent, so it is never used to force a number up.
+ *
+ * @param {string} text - Fence-stripped report text.
+ * @param {object} [conventionBaselineContract] - The run's cli/lib/convention-baseline.js
+ *   result, or undefined when the caller supplied no ground truth (e.g. a unit test
+ *   of an unrelated feature) — in that case only the cheap, contract-free sanity
+ *   checks below run (unrecognized key, adopted > sampled).
+ */
+function verifyConventionBaseline(text, conventionBaselineContract) {
+  const citations = parseConventionCitations(text);
+  for (const citation of citations) {
+    if (!CONVENTION_KEYS.includes(citation.key)) {
+      unparseable(`Report cites an unrecognized Convention key "${citation.key}"; expected one of: ${CONVENTION_KEYS.join(', ')}`);
+    }
+    if (citation.adopted > citation.sampled) {
+      unparseable(
+        `Report Convention citation "${citation.key}" claims ${citation.adopted} adopted of only ${citation.sampled} sampled, ` +
+          'which is impossible',
+      );
+    }
+  }
+
+  const baselineLineRaw = parseConventionBaselineLine(text);
+  if (!conventionBaselineContract) {
+    return;
+  }
+
+  if (conventionBaselineContract.baselineUnavailable) {
+    if (citations.length > 0) {
+      unparseable(
+        `Report cites Convention baseline fraction(s) (e.g. "${citations[0].key} (${citations[0].adopted} of ${citations[0].sampled} sampled)") ` +
+          `while this run recorded baselineUnavailable (${conventionBaselineContract.reason}); an unmeasurable baseline may never be cited as a ` +
+          'specific sampled fraction',
+      );
+    }
+    if (baselineLineRaw !== null && !CONVENTION_BASELINE_UNAVAILABLE_PATTERN.test(baselineLineRaw)) {
+      unparseable(
+        `Report "**Convention Baseline**:" line "${baselineLineRaw}" must read "unavailable: <reason>"; this run could not measure a ` +
+          `baseline (${conventionBaselineContract.reason})`,
+      );
+    }
+    return;
+  }
+
+  if (baselineLineRaw === null) {
+    unparseable('Report is missing the "**Convention Baseline**:" line; this run measured a real baseline and the report must state it');
+  }
+  const availableMatch = CONVENTION_BASELINE_AVAILABLE_PATTERN.exec(baselineLineRaw);
+  if (!availableMatch) {
+    unparseable(
+      `Report "**Convention Baseline**:" line "${baselineLineRaw}" does not match the required ` +
+        '"<N> test files sampled outside the review set" form',
+    );
+  }
+  const declaredSampled = Number.parseInt(availableMatch[1], 10);
+  if (declaredSampled !== conventionBaselineContract.sampled) {
+    unparseable(
+      `Report "**Convention Baseline**:" declares ${declaredSampled} sampled files, but this run actually sampled ` +
+        `${conventionBaselineContract.sampled} outside the review set`,
+    );
+  }
+
+  for (const citation of citations) {
+    if (citation.sampled !== conventionBaselineContract.sampled) {
+      unparseable(
+        `Report Convention citation "${citation.key}" cites ${citation.sampled} sampled files, but this run actually sampled ` +
+          `${conventionBaselineContract.sampled} outside the review set; a Convention row must be judged against the corpus this run ` +
+          'measured, never a different count',
+      );
+    }
+    const measured = conventionBaselineContract.conventions && conventionBaselineContract.conventions[citation.key];
+    if (measured && measured.mechanical && measured.mechanicalSignal === false && citation.adopted > 0) {
+      unparseable(
+        `Report Convention citation "${citation.key} (${citation.adopted} of ${citation.sampled} sampled)" claims adoption, but this run ` +
+          `scanned every one of the ${conventionBaselineContract.sampled} sampled files for the recognized forms and found zero occurrences; ` +
+          'a convention with no real evidence in the sampled corpus must be reported as absent (0 adopted), never a fabricated nonzero count',
+      );
+    }
+  }
+}
+
 /**
  * Compute the authoritative quality score from the template's deduction
  * ledger. The agent's published score is presentation data only.
@@ -697,6 +836,7 @@ function parseReport(reportText, runContract = {}) {
   }
 
   verifyRunContract({ reviewedFiles, contextBasis, contextFiles, excludedFiles }, runContract);
+  verifyConventionBaseline(text, runContract.conventionBaseline);
 
   const executiveSection = extractSection(text, 'Executive Summary');
   const keyStrengths = extractBullets(extractSubsection(executiveSection, 'Key Strengths'), '✅');
@@ -717,6 +857,13 @@ function parseReport(reportText, runContract = {}) {
     keyStrengths,
     keyWeaknesses,
   };
+  // Surfaced (not just used to gate) so a stored verdict JSON says what this run
+  // actually measured, the same reasoning as attaching agent/model: a fabricated
+  // baseline is invisible to a human reviewer unless the ground truth travels with
+  // the verdict, not just the pass/fail outcome of checking against it.
+  if (runContract.conventionBaseline) {
+    parsed.conventionBaseline = runContract.conventionBaseline;
+  }
   if (
     reportedQualityScore !== qualityScore ||
     (reportedQualityGrade !== undefined && reportedQualityGrade !== gradeForScore(qualityScore))
@@ -780,4 +927,13 @@ function scoreFails(score, minScore) {
   return score < minScore;
 }
 
-module.exports = { parseReport, normalizeReportScore, deriveRecommendation, verdictFor, scoreFails, CONTEXT_BASIS_ENUM };
+module.exports = {
+  parseReport,
+  normalizeReportScore,
+  deriveRecommendation,
+  verdictFor,
+  scoreFails,
+  CONTEXT_BASIS_ENUM,
+  verifyConventionBaseline,
+  parseConventionCitations,
+};

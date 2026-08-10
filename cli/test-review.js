@@ -46,6 +46,7 @@ const {
 } = require('./lib/changed-tests');
 const { buildPrompt } = require('./lib/build-prompt');
 const { parseReport, normalizeReportScore, verdictFor, scoreFails } = require('./lib/parse-report');
+const { computeConventionBaseline } = require('./lib/convention-baseline');
 const { runAgent } = require('./lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
@@ -553,6 +554,13 @@ function main() {
     process.exit(skipFails && !waiver ? EXIT.VERDICT_FAIL : EXIT.PASS);
   }
 
+  // step-02-discover-tests.md §2b's convention baseline, computed here instead of
+  // left to the agent to sample: see cli/lib/convention-baseline.js's header
+  // comment for why an agent-derived sampled fraction cannot be trusted. Computed
+  // once and reused for both the printed prompt and (below) the parsed-report
+  // cross-check, so the two can never see a different corpus.
+  const conventionBaseline = computeConventionBaseline({ projectRoot, reviewFiles: changedTestFiles });
+
   if (options.agent === 'none') {
     const prompt = buildPrompt({
       skillRoot,
@@ -566,6 +574,7 @@ function main() {
       focus: options.focus,
       unscorableTestArtifacts,
       forcedUnscorableCandidates,
+      conventionBaseline,
     });
     console.log(prompt);
     if (jsonPath) {
@@ -673,6 +682,7 @@ function main() {
     focus: options.focus,
     unscorableTestArtifacts,
     forcedUnscorableCandidates,
+    conventionBaseline,
   });
 
   const executeAgent = ({ agentCwd, spawnPrefix }) => {
@@ -718,6 +728,7 @@ function main() {
         contextFiles,
         contextBasis,
         unscorableTestArtifacts,
+        conventionBaseline,
       });
     } catch (error) {
       if (error.code === 'REPORT_UNPARSEABLE') {

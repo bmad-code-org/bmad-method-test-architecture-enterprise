@@ -11,7 +11,8 @@
  *   STUB_MODE          approve (default) | approve-low | block | request-changes |
  *                      request-changes-critical | critical-approve | conflict |
  *                      score-mismatch | partial | nothing | fail |
- *                      forbidden-write | stale-copy
+ *                      forbidden-write | stale-copy | fabricated-convention |
+ *                      honest-absent-convention
  *   STUB_ASSERT_STDIN  when "1", fail if the prompt did not arrive on stdin or
  *                      if any of it leaked into argv
  *   STUB_ASSERT_MODEL  expected model value; fail unless argv carries a model
@@ -129,6 +130,37 @@ const reportedContextFiles = process.env.STUB_CONTEXT_OVERRIDE
 const contextBasisMatch = prompt.match(/\*\*Context Basis\*\*: (none|pr_diff_truncated|pr_diff)/);
 const contextBasis = contextBasisMatch ? contextBasisMatch[1] : 'none';
 
+// Every real CLI run now supplies a pre-computed convention baseline (see
+// cli/lib/convention-baseline.js), which parse-report.js requires the report to
+// state honestly whenever one was actually measured — even the git fixtures used
+// by tests that have nothing to do with conventions can turn up a real (if tiny)
+// corpus once a --test-glob run leaves an unrelated tracked test file outside the
+// review set. Static report fixtures predate this contract, so — same treatment
+// as Reviewed Files / Review Context above — derive the required line from the
+// prompt and inject it whenever a fixture doesn't already declare its own.
+function conventionBaselineLineFromPrompt() {
+  const measuredMatch = prompt.match(/- corpusSize: \d+, sampled: (\d+)/);
+  if (measuredMatch) {
+    return `**Convention Baseline**: ${measuredMatch[1]} test files sampled outside the review set`;
+  }
+  // Greedy: correctly closes on the LAST ")" on the line even when the reason
+  // text itself contains parentheses (e.g. "git ls-files failed (not a git repo,
+  // or a git error)").
+  const unavailableMatch = prompt.match(/- baselineUnavailable: true \((.*)\)/);
+  return unavailableMatch ? `**Convention Baseline**: unavailable: ${unavailableMatch[1]}` : null;
+}
+const conventionBaselineLine = conventionBaselineLineFromPrompt();
+
+function insertLineBeforeHeading(report, heading, line) {
+  const lines = report.split('\n');
+  const insertion = lines.findIndex((entry) => entry === `## ${heading}`);
+  if (insertion === -1) {
+    return report;
+  }
+  lines.splice(insertion, 0, line, '');
+  return lines.join('\n');
+}
+
 function replaceManifestSection(report, heading, files, { remove = false, addBefore } = {}) {
   const lines = report.split('\n');
   const start = lines.findIndex((line) => line === `## ${heading}`);
@@ -171,6 +203,9 @@ function bindReportToPrompt(report) {
       { addBefore: 'Quality Score Breakdown' },
     );
   }
+  if (conventionBaselineLine && !/^\*\*Convention Baseline\*\*:/m.test(bound)) {
+    bound = insertLineBeforeHeading(bound, 'Quality Score Breakdown', conventionBaselineLine);
+  }
   return bound;
 }
 
@@ -193,6 +228,79 @@ if (mode === 'forbidden-write') {
     // Expected under isolation: the write is denied, so the review can proceed.
   }
   writeFixtureReport('approve.md');
+  process.exit(0);
+}
+
+// Reproduces couture-cast PR #106's actual defect (a codex run reporting
+// "Convention: priorityMarkers (18 of 40 sampled)" against a corpus with zero real
+// P0-P3 markers) end-to-end against a real CLI-computed baseline, instead of
+// asserting the un-integrated pieces in isolation. `sampled` is read out of the
+// prompt's pre-computed conventionBaseline block rather than hardcoded, so the test
+// stays correct regardless of how many files the git fixture happens to carry.
+if (mode === 'fabricated-convention' || mode === 'honest-absent-convention') {
+  const sampledMatch = prompt.match(/- corpusSize: \d+, sampled: (\d+)/);
+  if (!sampledMatch) {
+    console.error(`stub-agent: STUB_MODE=${mode} requires the prompt to state a measured (not unavailable) convention baseline`);
+    process.exit(91);
+  }
+  const sampled = sampledMatch[1];
+  const fabricating = mode === 'fabricated-convention';
+  const report = [
+    '---',
+    "workflowType: 'testarch-test-review'",
+    'stepsCompleted:',
+    '  - step-01-load-context',
+    '  - step-02-discover-tests',
+    '---',
+    '',
+    `**Quality Score**: ${fabricating ? 99 : 100}/100 (A)`,
+    '',
+    '## Executive Summary',
+    '',
+    `**Recommendation**: ${fabricating ? 'Approve with Comments' : 'Approve'}`,
+    '**Context Basis**: none',
+    '**Context Waivers Applied**: 0',
+    '',
+    '### Summary',
+    fabricating
+      ? 'Simulates a review agent inventing a plausible-sounding adoption fraction for a convention the CLI actually measured as absent.'
+      : 'Honestly reports the convention as absent, matching what the CLI itself measured over the real sampled corpus.',
+    '',
+    `**Total Violations**: 0 Critical, 0 High, 0 Medium, ${fabricating ? 1 : 0} Low`,
+    '',
+    '## Quality Criteria Assessment',
+    '',
+    '| Criterion | Status | Violations | Basis | Notes |',
+    '| --- | --- | --- | --- | --- |',
+    fabricating
+      ? `| Priority Markers (P0/P1/P2/P3) | ⚠️ WARN | 1 | Convention: priorityMarkers (3 of ${sampled} sampled) | fabricated: no test in the sampled corpus actually carries a P0-P3 marker |`
+      : `| Priority Markers (P0/P1/P2/P3) | ✅ PASS (n/a) | 0 | Convention: priorityMarkers (0 of ${sampled} sampled) | the repo uses no such convention (0 of ${sampled} sampled) |`,
+    '',
+    `**Convention Baseline**: ${sampled} test files sampled outside the review set`,
+    '',
+    '## Quality Score Breakdown',
+    '```',
+    'Starting Score:          100',
+    'Critical Violations:     -0 × 10 = -0',
+    'High Violations:         -0 × 5 = -0',
+    'Medium Violations:       -0 × 2 = -0',
+    `Low Violations:          -${fabricating ? 1 : 0} × 1 = -${fabricating ? 1 : 0}`,
+    '',
+    'Total Bonus:             +0',
+    '',
+    `Final Score:             ${fabricating ? 99 : 100}/100`,
+    'Grade:                   A',
+    '```',
+    '',
+    '## Decision',
+    '',
+    `**Recommendation**: ${fabricating ? 'Approve with Comments' : 'Approve'}`,
+    '',
+    '## Reviewed Files',
+    '',
+  ].join('\n');
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, bindReportToPrompt(report));
   process.exit(0);
 }
 

@@ -78,16 +78,27 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 | Flakiness Patterns                   | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
 
 <!-- {basis} states what decided the row, per steps-c/criteria-registry.md: `Absolute`,
-     `Applicability: <what the file must do>`, or `Convention: <key> (<adopted> of <sampled>)`.
-     A `✅ PASS (n/a)` row MUST name why the gate was closed and MUST deduct nothing — an absent
-     convention or an inapplicable pattern is not a finding. A bare WARN with no basis is the
-     defect this column exists to prevent: it reads identically in a repo that has the
-     convention and one that has never used it, so the reader cannot tell drift from the
-     rubric's own preference. Never leave {basis} unfilled. -->
+     `Applicability: <what the file must do>`, or `Convention: <key> (<adopted> of <sampled> sampled)` —
+     that exact literal form, "sampled" spelled out both after the count and at the close, e.g.
+     `Convention: priorityMarkers (0 of 40 sampled)`. When a headless run supplies a pre-computed
+     `convention_baseline` (see step-02-discover-tests.md §2b's CLI exception), `<sampled>` here MUST
+     equal the corpus's `sampled` value exactly, and `<adopted>` MUST be 0 for any mechanically-checked
+     key the run reports found zero real occurrences of — the CLI parses this line verbatim and rejects
+     a report that disagrees with what it actually measured. A `✅ PASS (n/a)` row MUST name why the
+     gate was closed and MUST deduct nothing — an absent convention or an inapplicable pattern is not a
+     finding. A bare WARN with no basis is the defect this column exists to prevent: it reads identically
+     in a repo that has the convention and one that has never used it, so the reader cannot tell drift
+     from the rubric's own preference. Never leave {basis} unfilled. -->
 
 **Total Violations**: {critical_count} Critical, {high_count} High, {medium_count} Medium, {low_count} Low
 
-**Convention Baseline**: {sampled} test files sampled outside the review set{, or `unavailable: <reason>`}
+<!-- Exactly one line below, exactly one of two literal forms — the CLI parses it and rejects any other
+     shape: `{sampled} test files sampled outside the review set`, or, only when the baseline could not
+     be measured, `unavailable: {reason}` in place of the whole value after the colon. Omit the line
+     entirely only when a headless run recorded baselineUnavailable AND you are citing no
+     "Convention: <key> (...)" fraction anywhere in the report; otherwise it is required. -->
+
+**Convention Baseline**: {sampled} test files sampled outside the review set
 
 ---
 
