@@ -136,7 +136,7 @@ For each mapped test, verify:
 - [ ] Test follows Given-When-Then structure
 - [ ] No hard waits or sleeps (deterministic waiting only)
 - [ ] Self-cleaning (test cleans up its data)
-- [ ] File size ≤ 500 lines
+- [ ] File size ≤ 1000 lines
 - [ ] Test duration < 90 seconds
 
 Quality issues flagged:

@@ -34,11 +34,11 @@ Evaluate exactly these registry rows and no others. Load
 `{skill-root}/steps-c/criteria-registry.md` for each row's firing predicate, its
 pinned severity, and its gate.
 
-| Row | Criterion                       | Severity | Gate          |
-| --- | ------------------------------- | -------: | ------------- |
-| M1  | Network-first violated          |   MEDIUM | Applicability |
-| M6  | Unawaited async                 |   MEDIUM | Absolute      |
-| H5  | Oversize test file (>500 lines) |     HIGH | Absolute      |
+| Row | Criterion                        | Severity | Gate          |
+| --- | -------------------------------- | -------: | ------------- |
+| M1  | Network-first violated           |   MEDIUM | Applicability |
+| M6  | Unawaited async                  |   MEDIUM | Absolute      |
+| H5  | Oversize test file (>1000 lines) |     HIGH | Absolute      |
 
 **The hard-wait double count is fixed here.** This worker used to score
 `waitForTimeout(5000)` as MEDIUM while the determinism worker scored the identical
