@@ -54,6 +54,7 @@ const {
   verdictFor,
   scoreFails,
   CONTEXT_BASIS_ENUM,
+  verifyFindingSeverityCounts,
 } = require('../cli/lib/parse-report');
 const {
   computeConventionBaseline,
@@ -64,6 +65,7 @@ const {
   MECHANICAL_CONVENTION_KEYS,
   JUDGMENT_ONLY_CONVENTION_KEYS,
 } = require('../cli/lib/convention-baseline');
+const { loadRegistryRowSeverities, SEVERITY_ENUM } = require('../cli/lib/registry-rows');
 const {
   isTestFile,
   isContextNoise,
@@ -870,6 +872,22 @@ async function runTests() {
       .replace(
         '**Total Violations**: {critical_count} Critical, {high_count} High, {medium_count} Medium, {low_count} Low',
         '**Total Violations**: 0 Critical, 0 High, 8 Medium, 1 Low',
+      )
+      // The template's own "{For each critical/recommendation issue:}" example
+      // blocks are instructional placeholder prose for the agent, not real
+      // content, but read raw they still look like one real "### N. Title" finding
+      // with "**Severity**: P0 (Critical)"/"P1 (High)" each — exactly the shape
+      // verifyFindingSeverityCounts now counts. Collapse both to the template's own
+      // "no findings" placeholder text, matching the 0 Critical / 0 High declared
+      // above (Medium/Low aren't cross-checked, so the Recommendations section can
+      // stay empty even though 8 Medium + 1 Low are declared).
+      .replace(
+        /(## Critical Issues \(Must Fix\)\n\n)[\s\S]*?(\n\n---\n\n## Recommendations \(Should Fix\)\n\n)/,
+        '$1No critical issues detected. ✅$2',
+      )
+      .replace(
+        /(## Recommendations \(Should Fix\)\n\n)[\s\S]*?(\n\n---\n\n## Best Practices Found)/,
+        '$1No additional recommendations. Test quality is excellent. ✅$2',
       )
       .replaceAll('**Context Basis**: {none | pr_diff | pr_diff_truncated}', '**Context Basis**: pr_diff')
       .replaceAll('{relative_path_1}', 'tests/checkout.spec.ts')
@@ -3297,6 +3315,14 @@ async function runTests() {
       path.join(fixtureProject, '_bmad', 'tea', 'workflows', 'testarch', 'bmad-testarch-test-review', 'SKILL.md'),
       path.join(gitSkillDir, 'SKILL.md'),
     );
+    // The real criteria-registry.md, so registryRowSeverities is populated for these
+    // git-fixture runs and the row/severity cross-check (not just the count check) is
+    // exercised end-to-end too.
+    fs.mkdirSync(path.join(gitSkillDir, 'steps-c'), { recursive: true });
+    fs.copyFileSync(
+      path.join(repoRoot, 'src', 'workflows', 'testarch', 'bmad-testarch-test-review', 'steps-c', 'criteria-registry.md'),
+      path.join(gitSkillDir, 'steps-c', 'criteria-registry.md'),
+    );
     fs.mkdirSync(path.join(gitRepo, 'tests'));
     fs.writeFileSync(path.join(gitRepo, 'tests', 'checkout.spec.ts'), "test('checkout', () => {});\n");
     fs.mkdirSync(path.join(gitRepo, 'src'));
@@ -3650,6 +3676,60 @@ async function runTests() {
         honestVerdict?.conventionBaseline?.conventions?.priorityMarkers?.mechanicalSignal === false,
       'git fixture: honestly reporting priorityMarkers as absent against the same real corpus passes end-to-end, and the verdict JSON carries the CLI-measured baseline (sampled=4, zero mechanical signal)',
       `status=${honestAbsentConventionRun.status} stdout=${honestAbsentConventionRun.stdout} stderr=${honestAbsentConventionRun.stderr}`,
+    );
+
+    // Second live defect, same investigation: a report documenting a real Critical
+    // finding while its own summary line claims zero.
+    const fabricatedCriticalCountRun = runCli(
+      [
+        '--base',
+        'main',
+        '--project-root',
+        gitRepo,
+        '--output',
+        path.join(tmpRoot, 'git-fabricated-critical-count', 'test-review.md'),
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'fabricated-critical-count' },
+    );
+    assert(
+      fabricatedCriticalCountRun.status === 3 &&
+        fabricatedCriticalCountRun.stderr.includes('declares 0 Critical') &&
+        fabricatedCriticalCountRun.stderr.includes('documents 1 finding'),
+      'git fixture: a report documenting a real Critical finding while its "Total Violations" line claims 0 is rejected end-to-end (exit 3), never published as a clean Approve',
+      `status=${fabricatedCriticalCountRun.status} stderr=${fabricatedCriticalCountRun.stderr}`,
+    );
+
+    const honestCriticalCountRun = runCli(
+      [
+        '--base',
+        'main',
+        '--project-root',
+        gitRepo,
+        '--output',
+        path.join(tmpRoot, 'git-honest-critical-count', 'test-review.md'),
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'honest-critical-count' },
+    );
+    let honestCriticalVerdict = null;
+    try {
+      honestCriticalVerdict = JSON.parse(honestCriticalCountRun.stdout);
+    } catch {
+      // assert below reports the raw stdout on failure
+    }
+    assert(
+      honestCriticalCountRun.status === 1 &&
+        honestCriticalVerdict?.recommendation === 'Block' &&
+        honestCriticalVerdict?.violations?.critical === 1,
+      'git fixture: honestly declaring the one documented Critical finding passes parsing and fails the gate on its own merits (exit 1, Block) rather than the report itself being rejected',
+      `status=${honestCriticalCountRun.status} stdout=${honestCriticalCountRun.stdout} stderr=${honestCriticalCountRun.stderr}`,
     );
     git(['checkout', 'main'], gitRepo);
 
@@ -4221,6 +4301,238 @@ async function runTests() {
       unreadableSignal.priorityMarkers.adopted === 1,
       'a missing/unreadable sampled file is skipped rather than thrown on, and the real file is still scanned',
       JSON.stringify(unreadableSignal.priorityMarkers),
+    );
+
+    console.log('');
+
+    // ============================================================
+    // Test Suite 12: finding-severity-count grounding
+    // ============================================================
+    console.log(`${colors.yellow}Test Suite 12: finding-severity-count grounding${colors.reset}\n`);
+
+    // A live report once declared "0 Critical, 0 High..." in its summary line while
+    // documenting a real, row-cited Critical finding in prose beside it, and nothing
+    // downstream ever checked the two against each other: the CLI computed Approve
+    // at 100/100 straight from the summary, the finding sitting right there unread.
+    // registry-rows.js + verifyFindingSeverityCounts fix that; these tests prove it.
+    const registrySkillRoot = path.join(repoRoot, 'src', 'workflows', 'testarch', 'bmad-testarch-test-review');
+    const registryRowSeverities = loadRegistryRowSeverities(registrySkillRoot);
+    assert(
+      registryRowSeverities !== null && Object.keys(registryRowSeverities).length === 31,
+      'loadRegistryRowSeverities reads all 31 real rows (C1-C6, H1-H9, M1-M8, L1-L8) from criteria-registry.md',
+      JSON.stringify(registryRowSeverities ? Object.keys(registryRowSeverities).length : null),
+    );
+    assert(
+      registryRowSeverities.C1 === 'Critical' &&
+        registryRowSeverities.H5 === 'High' &&
+        registryRowSeverities.M2 === 'Medium' &&
+        registryRowSeverities.L7 === 'Low',
+      'a spot-check of known rows carries the registry-declared severity (C1 Critical, H5 High, M2 Medium, L7 Low)',
+      JSON.stringify({
+        C1: registryRowSeverities.C1,
+        H5: registryRowSeverities.H5,
+        M2: registryRowSeverities.M2,
+        L7: registryRowSeverities.L7,
+      }),
+    );
+    assert(
+      loadRegistryRowSeverities(path.join(fixturesRoot, 'project-empty')) === null,
+      'a skill root with no criteria-registry.md returns null (grounding unavailable) instead of throwing',
+    );
+    assert(
+      SEVERITY_ENUM.length === 4 && SEVERITY_ENUM.includes('Critical') && SEVERITY_ENUM.includes('Low'),
+      'SEVERITY_ENUM carries the four canonical severities',
+      JSON.stringify(SEVERITY_ENUM),
+    );
+
+    /** A minimal, valid report with N Critical / M High finding blocks citing the given rows. */
+    function findingReport({ totalCritical, totalHigh, criticalRows = [], highRows = [], recommendation = 'Approve' }) {
+      const findingBlock = (num, severityLabel, row) =>
+        `### ${num}. Fixture-only finding\n\n**Severity**: ${severityLabel}\n**Row**: ${row}\n`;
+      const lines = [
+        '---',
+        "workflowType: 'testarch-test-review'",
+        'stepsCompleted:',
+        '  - step-01-load-context',
+        '---',
+        '',
+        '**Quality Score**: 100/100 (A)',
+        '',
+        '## Executive Summary',
+        `**Recommendation**: ${recommendation}`,
+        '**Context Basis**: none',
+        '**Context Waivers Applied**: 0',
+        '',
+        `**Total Violations**: ${totalCritical} Critical, ${totalHigh} High, 0 Medium, 0 Low`,
+        '',
+      ];
+      if (criticalRows.length > 0) {
+        lines.push('## Critical Issues (Must Fix)', '');
+        for (const [i, row] of criticalRows.entries()) lines.push(findingBlock(i + 1, 'P0 (Critical)', row), '');
+      }
+      if (highRows.length > 0) {
+        lines.push('## Recommendations (Should Fix)', '');
+        for (const [i, row] of highRows.entries()) lines.push(findingBlock(i + 1, 'P1 (High)', row), '');
+      }
+      lines.push(
+        '## Quality Score Breakdown',
+        '```',
+        'Starting Score:          100',
+        `Critical Violations:     -${totalCritical} × 10 = -${totalCritical * 10}`,
+        `High Violations:         -${totalHigh} × 5 = -${totalHigh * 5}`,
+        'Medium Violations:       -0 × 2 = -0',
+        'Low Violations:          -0 × 1 = -0',
+        'Total Bonus:             +0',
+        `Final Score:             ${100 - totalCritical * 10 - totalHigh * 5}/100`,
+        'Grade:                   A',
+        '```',
+        '',
+        '## Decision',
+        `**Recommendation**: ${recommendation}`,
+        '',
+        '## Reviewed Files',
+        '- tests/x.spec.ts',
+      );
+      return lines.join('\n');
+    }
+
+    try {
+      parseReport(findingReport({ totalCritical: 0, totalHigh: 0, criticalRows: ['C1'] }), { registryRowSeverities });
+      assert(false, 'a real Critical finding documented while the summary claims 0 Critical throws');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /declares 0 Critical, but.*documents 1 finding/.test(error.message),
+        'a real Critical finding documented while the summary claims 0 Critical throws REPORT_UNPARSEABLE naming the mismatch (the exact defect this fix closes)',
+        error.message,
+      );
+    }
+
+    try {
+      parseReport(findingReport({ totalCritical: 2, totalHigh: 0, criticalRows: ['C1'], recommendation: 'Block' }), {
+        registryRowSeverities,
+      });
+      assert(false, 'over-declaring the Critical count relative to documented findings throws');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /declares 2 Critical, but.*documents 1 finding/.test(error.message),
+        'over-declaring Critical (2 claimed, 1 documented) throws too: the check is exact equality, not a floor',
+        error.message,
+      );
+    }
+
+    try {
+      const parsed = parseReport(
+        findingReport({ totalCritical: 1, totalHigh: 2, criticalRows: ['C1'], highRows: ['H1', 'H2'], recommendation: 'Block' }),
+        {
+          registryRowSeverities,
+        },
+      );
+      assert(
+        parsed.violations.critical === 1 && parsed.violations.high === 2,
+        'matching counts (1 Critical documented and declared, 2 High documented and declared) parse cleanly',
+        JSON.stringify(parsed.violations),
+      );
+    } catch (error) {
+      assert(false, 'matching Critical/High counts should parse, not throw', error.message);
+    }
+
+    try {
+      parseReport(findingReport({ totalCritical: 1, totalHigh: 0, criticalRows: ['H1'], recommendation: 'Block' }), {
+        registryRowSeverities,
+      });
+      assert(false, 'citing a real row whose registry severity disagrees with the declared Severity throws');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /Row "H1" \(registry severity High\) but declares Severity Critical/.test(error.message),
+        'citing H1 (registry severity High) under a P0 (Critical) finding throws: severity is read from the row, never chosen',
+        error.message,
+      );
+    }
+
+    try {
+      parseReport(findingReport({ totalCritical: 1, totalHigh: 0, criticalRows: ['C99'], recommendation: 'Block' }), {
+        registryRowSeverities,
+      });
+      assert(false, 'citing a nonexistent row throws');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /Row "C99", which is not a row in criteria-registry\.md/.test(error.message),
+        'citing a fabricated row ID (shaped correctly but not a real row) throws, naming it',
+        error.message,
+      );
+    }
+
+    try {
+      parseReport(
+        findingReport({ totalCritical: 1, totalHigh: 0, criticalRows: ['C1'], recommendation: 'Block' }).replace('**Row**: C1\n', ''),
+        {
+          registryRowSeverities,
+        },
+      );
+      assert(false, 'a finding with no Row line at all throws');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /has no "\*\*Row\*\*:" line/.test(error.message),
+        'a Critical Issues finding missing its Row line entirely throws, not silently accepted with no severity grounding',
+        error.message,
+      );
+    }
+
+    // Without registry data (e.g. a bare test-fixture skill root with no
+    // criteria-registry.md), the row must still be shaped like a real ID, but its
+    // existence/severity can't be cross-checked — a degraded, not a silent, mode.
+    try {
+      const parsed = parseReport(findingReport({ totalCritical: 1, totalHigh: 0, criticalRows: ['C1'], recommendation: 'Block' }));
+      assert(
+        parsed.violations.critical === 1,
+        'with no registryRowSeverities supplied, a shaped row ID still parses (count-matching alone is unconditional)',
+      );
+    } catch (error) {
+      assert(false, 'a real report should still parse with no registry data supplied', error.message);
+    }
+    try {
+      parseReport(findingReport({ totalCritical: 1, totalHigh: 0, criticalRows: ['banana'], recommendation: 'Block' }));
+      assert(false, 'an unshaped row token throws even with no registry data supplied');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /not a criteria-registry row ID/.test(error.message),
+        'a row token that is not even letter+digits shaped is rejected on shape alone, registry-independent',
+        error.message,
+      );
+    }
+
+    // Medium/Low are explicitly out of this fix's scope (they never flip the CI
+    // verdict away from "Approve with Comments"): a mismatched Medium count must NOT
+    // throw, proving the narrower guarantee is exactly as scoped, not accidentally
+    // stricter.
+    try {
+      const mediumMismatch = findingReport({ totalCritical: 0, totalHigh: 0, recommendation: 'Approve with Comments' }).replace(
+        '**Total Violations**: 0 Critical, 0 High, 0 Medium, 0 Low',
+        '**Total Violations**: 0 Critical, 0 High, 5 Medium, 0 Low',
+      );
+      const parsed = parseReport(mediumMismatch, { registryRowSeverities });
+      assert(
+        parsed.violations.medium === 5,
+        "a Medium count with zero documented Medium findings does NOT throw: Medium/Low are out of this fix's scope by design",
+        JSON.stringify(parsed.violations),
+      );
+    } catch (error) {
+      assert(false, 'Medium/Low counts must stay unchecked (out of scope)', error.message);
+    }
+
+    // build-prompt states the same contract it now enforces.
+    const findingCountsPrompt = buildPrompt({
+      skillRoot: registrySkillRoot,
+      files: ['tests/checkout.spec.ts'],
+      outputPath: path.join(tmpRoot, 'finding-counts-prompt', 'test-review.md'),
+    });
+    assert(
+      findingCountsPrompt.includes('registry severity must match') && findingCountsPrompt.includes('Critical-only by contract'),
+      "prompt states that a cited row's registry severity must match the finding's declared Severity",
+    );
+    assert(
+      findingCountsPrompt.includes('must equal the Critical count') && findingCountsPrompt.includes('must equal the High count'),
+      'prompt states that documented finding counts must equal the Total Violations counts exactly',
     );
 
     console.log('');

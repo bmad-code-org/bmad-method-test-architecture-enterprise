@@ -290,6 +290,13 @@ function buildPrompt({
     '- Every finding under "## Critical Issues (Must Fix)" and "## Recommendations (Should Fix)" carries a',
     '  "**Row**: <id>" line naming the criteria-registry row that produced it, beside its "**Location**:" line.',
     '  Severity is read from that row, so a finding with no row has no severity and belongs in prose instead.',
+    '  The CLI checks this: a cited row must be a real criteria-registry.md row, and its registry severity must match',
+    '  the finding\'s own "**Severity**:" line exactly. "## Critical Issues (Must Fix)" is Critical-only by contract.',
+    '- The number of findings actually documented under "## Critical Issues (Must Fix)" must equal the Critical count',
+    '  in "**Total Violations**:" exactly, and the number of P1 (High) findings documented under',
+    '  "## Recommendations (Should Fix)" must equal the High count exactly. The CLI counts the finding blocks itself',
+    '  and rejects a report whose summary line disagrees with what it actually documented — a Critical or High finding',
+    '  described in prose but left out of the summary line (or the reverse) is a broken report, not a clean one.',
     '- A "## Reviewed Files" section listing every file in the authoritative review set exactly once, one canonical',
     '  repo-relative path per line, with no other paths.',
     contextFiles.length > 0

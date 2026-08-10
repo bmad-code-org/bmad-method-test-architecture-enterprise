@@ -12,7 +12,8 @@
  *                      request-changes-critical | critical-approve | conflict |
  *                      score-mismatch | partial | nothing | fail |
  *                      forbidden-write | stale-copy | fabricated-convention |
- *                      honest-absent-convention
+ *                      honest-absent-convention | fabricated-critical-count |
+ *                      honest-critical-count
  *   STUB_ASSERT_STDIN  when "1", fail if the prompt did not arrive on stdin or
  *                      if any of it leaked into argv
  *   STUB_ASSERT_MODEL  expected model value; fail unless argv carries a model
@@ -295,6 +296,77 @@ if (mode === 'fabricated-convention' || mode === 'honest-absent-convention') {
     '## Decision',
     '',
     `**Recommendation**: ${fabricating ? 'Approve with Comments' : 'Approve'}`,
+    '',
+    '## Reviewed Files',
+    '',
+  ].join('\n');
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, bindReportToPrompt(report));
+  process.exit(0);
+}
+
+// Reproduces the second live defect this repo found while auditing the first
+// (couture-cast PR #106's fabricated convention baseline): a report can document a
+// real, row-cited Critical finding in prose while its "**Total Violations**:" line
+// claims 0 Critical, and nothing checked the two against each other — the CLI
+// computed Approve at 100/100 straight from the summary line, the documented finding
+// never read. registry-rows.js + parse-report.js's verifyFindingSeverityCounts fixes
+// this; this mode reproduces the exact shape end-to-end.
+if (mode === 'fabricated-critical-count' || mode === 'honest-critical-count') {
+  const fabricating = mode === 'fabricated-critical-count';
+  const declaredCritical = fabricating ? 0 : 1;
+  const report = [
+    '---',
+    "workflowType: 'testarch-test-review'",
+    'stepsCompleted:',
+    '  - step-01-load-context',
+    '  - step-02-discover-tests',
+    '---',
+    '',
+    `**Quality Score**: ${fabricating ? 100 : 90}/100 (${fabricating ? 'A' : 'A'})`,
+    '',
+    '## Executive Summary',
+    '',
+    `**Recommendation**: ${fabricating ? 'Approve' : 'Block'}`,
+    '**Context Basis**: none',
+    '**Context Waivers Applied**: 0',
+    '',
+    '### Summary',
+    fabricating
+      ? 'Simulates a review agent documenting a real Critical finding while its own summary line claims zero.'
+      : 'Honestly declares the one Critical finding it documents.',
+    '',
+    `**Total Violations**: ${declaredCritical} Critical, 0 High, 0 Medium, 0 Low`,
+    '',
+    '## Critical Issues (Must Fix)',
+    '',
+    '### 1. Disabled test hides a real regression',
+    '',
+    '**Severity**: P0 (Critical)',
+    '**Location**: `tests/checkout.spec.ts:1`',
+    '**Row**: C1',
+    '**Criterion**: Disabled test',
+    '',
+    '**Issue Description**:',
+    'The whole suite is behind test.skip with no reason. Nothing here has run in months.',
+    '',
+    '## Quality Score Breakdown',
+    '```',
+    'Starting Score:          100',
+    `Critical Violations:     -${declaredCritical} × 10 = -${declaredCritical * 10}`,
+    'High Violations:         -0 × 5 = -0',
+    'Medium Violations:       -0 × 2 = -0',
+    'Low Violations:          -0 × 1 = -0',
+    '',
+    'Total Bonus:             +0',
+    '',
+    `Final Score:             ${100 - declaredCritical * 10}/100`,
+    'Grade:                   A',
+    '```',
+    '',
+    '## Decision',
+    '',
+    `**Recommendation**: ${fabricating ? 'Approve' : 'Block'}`,
     '',
     '## Reviewed Files',
     '',

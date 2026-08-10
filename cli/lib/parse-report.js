@@ -57,6 +57,7 @@
 const path = require('node:path');
 
 const { CONVENTION_KEYS } = require('./convention-baseline');
+const { SEVERITY_ENUM } = require('./registry-rows');
 
 const RECOMMENDATION_ENUM = ['Approve', 'Approve with Comments', 'Request Changes', 'Block'];
 const RECOMMENDATION_LINE = /^[ \t]*(?:\*\*Recommendation\*\*:|\*\*Recommendation:\*\*|Recommendation:)[ \t]*([^\r\n]+?)[ \t]*$/m;
@@ -125,9 +126,18 @@ function stripFencedCodeBlocks(text) {
   return kept.join('\n');
 }
 
-/** Extract a level-2 section's text, up to the next level-2 heading or EOF. */
+/** Escape a literal string for interpolation into a RegExp source. */
+function escapeRegExp(literal) {
+  return literal.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+/**
+ * Extract a level-2 section's text, up to the next level-2 heading or EOF.
+ * `heading` is a literal string (escaped internally), not a regex fragment: some
+ * real headings contain parens ("Critical Issues (Must Fix)").
+ */
 function extractSection(text, heading) {
-  const match = new RegExp(`^## ${heading}[ \\t]*$`, 'm').exec(text);
+  const match = new RegExp(`^## ${escapeRegExp(heading)}[ \\t]*$`, 'm').exec(text);
   if (!match) {
     return null;
   }
@@ -639,6 +649,136 @@ function verifyConventionBaseline(text, conventionBaselineContract) {
   }
 }
 
+const CRITICAL_ISSUES_HEADING = 'Critical Issues (Must Fix)';
+const RECOMMENDATIONS_HEADING = 'Recommendations (Should Fix)';
+const FINDING_HEADING_PATTERN = /^### /m;
+const FINDING_SEVERITY_LINE = /^\*\*Severity\*\*:\s*P([0-3])\s*\(([A-Za-z]+)\)/m;
+// Captures whatever token follows, valid-looking or not, so a fabricated ID (e.g.
+// "Z9") is reported as "not a real row" rather than misread as "no Row line at all".
+const FINDING_ROW_LINE = /^\*\*Row\*\*:\s*(\S+)/m;
+const ROW_ID_SHAPE = /^[CHML]\d+$/;
+const PRIORITY_TO_SEVERITY = { 0: 'Critical', 1: 'High', 2: 'Medium', 3: 'Low' };
+
+/** Split a section's text into its "### N. Title" finding blocks (empty when none). */
+function splitFindingBlocks(sectionText) {
+  if (!sectionText || !FINDING_HEADING_PATTERN.test(sectionText)) {
+    return [];
+  }
+  // The template's "No critical issues detected. ✅" / "No additional recommendations..."
+  // placeholder is plain prose with no "### " heading, so it never produces a block here;
+  // an empty array already represents "no findings" correctly.
+  return sectionText
+    .split(FINDING_HEADING_PATTERN)
+    .slice(1)
+    .map((body) => `### ${body}`);
+}
+
+/** Parse one finding block's declared Severity and Row citation. */
+function parseFinding(block) {
+  const severityMatch = block.match(FINDING_SEVERITY_LINE);
+  let severity = null;
+  if (severityMatch) {
+    const word = severityMatch[2];
+    const canonical = SEVERITY_ENUM.find((candidate) => candidate.toLowerCase() === word.toLowerCase());
+    // Only trust a P-number/word pair that agree with each other (per the template,
+    // P0 is always "(Critical)", never "(High)" attached to a P0 by mistake).
+    severity = canonical && PRIORITY_TO_SEVERITY[severityMatch[1]] === canonical ? canonical : null;
+  }
+  return {
+    severity,
+    rawSeverity: severityMatch ? severityMatch[0].replace(/^\*\*Severity\*\*:\s*/, '') : null,
+    rowMatch: block.match(FINDING_ROW_LINE),
+  };
+}
+
+/**
+ * Bind every finding actually documented under "## Critical Issues (Must Fix)" and
+ * "## Recommendations (Should Fix)" to the report's own "**Total Violations**:" line,
+ * and every cited "**Row**:" to a real criteria-registry.md row with the severity the
+ * finding claims. Scoped to Critical and High only — the two severities that actually
+ * change the CI verdict (`deriveRecommendation`: any Critical → Block, any High →
+ * Request Changes); Medium/Low only ever add "Approve with Comments" regardless of
+ * count, so a miscount there doesn't flip a merge decision the way this does.
+ *
+ * Why this exists: nothing here was ever checked before. A report could — and, in the
+ * defect this fixes, would — document a real, row-cited Critical finding in prose
+ * while its "**Total Violations**:" line claimed zero, and the CLI computed Approve
+ * at 100/100 from the summary line alone, never reading the finding it sat beside.
+ *
+ * @param {string} text - Fence-stripped report text.
+ * @param {{critical: number, high: number}} violations - Parsed Total Violations counts.
+ * @param {object|null} registryRowSeverities - cli/lib/registry-rows.js's row→severity
+ *   map, or null when unavailable (e.g. a bare test-fixture skill root with no
+ *   criteria-registry.md) — row IDs are still required and internally validated, but
+ *   the "does this row really exist, and is its real severity what the finding claims"
+ *   cross-check is skipped without it.
+ */
+function verifyFindingSeverityCounts(text, violations, registryRowSeverities) {
+  function findingsIn(heading) {
+    return splitFindingBlocks(extractSection(text, heading)).map(parseFinding);
+  }
+
+  function requireRow(finding, sectionLabel) {
+    if (!finding.rowMatch) {
+      unparseable(
+        `A finding under "## ${sectionLabel}" has no "**Row**:" line; every finding there must cite the criteria-registry ` +
+          'row that produced it, per the report contract',
+      );
+    }
+    const row = finding.rowMatch[1];
+    // Contract-free shape check: a token that isn't even <letter><digits> shaped is
+    // fabricated regardless of whether registry data is available to check further.
+    if (!ROW_ID_SHAPE.test(row)) {
+      unparseable(
+        `A finding under "## ${sectionLabel}" cites Row "${row}", which is not a criteria-registry row ID ` +
+          '(expected a shape like "C1", "H5", "M3", "L2")',
+      );
+    }
+    if (!registryRowSeverities) {
+      return row;
+    }
+    const rowSeverity = registryRowSeverities[row];
+    if (!rowSeverity) {
+      unparseable(`A finding under "## ${sectionLabel}" cites Row "${row}", which is not a row in criteria-registry.md`);
+    }
+    if (rowSeverity !== finding.severity) {
+      unparseable(
+        `A finding under "## ${sectionLabel}" cites Row "${row}" (registry severity ${rowSeverity}) but declares Severity ` +
+          `${finding.severity ?? finding.rawSeverity ?? '(unrecognized)'}; severity is read from the row, never chosen`,
+      );
+    }
+    return row;
+  }
+
+  const criticalFindings = findingsIn(CRITICAL_ISSUES_HEADING);
+  for (const finding of criticalFindings) {
+    if (finding.severity !== 'Critical') {
+      unparseable(
+        `A finding under "## ${CRITICAL_ISSUES_HEADING}" declares Severity ${finding.rawSeverity ?? '(missing)'} instead of ` +
+          `P0 (Critical); "## ${CRITICAL_ISSUES_HEADING}" is Critical-only by contract`,
+      );
+    }
+    requireRow(finding, CRITICAL_ISSUES_HEADING);
+  }
+  if (criticalFindings.length !== violations.critical) {
+    unparseable(
+      `Report "**Total Violations**:" declares ${violations.critical} Critical, but "## ${CRITICAL_ISSUES_HEADING}" documents ` +
+        `${criticalFindings.length} finding(s); the two must agree exactly`,
+    );
+  }
+
+  const highFindings = findingsIn(RECOMMENDATIONS_HEADING).filter((finding) => finding.severity === 'High');
+  for (const finding of highFindings) {
+    requireRow(finding, RECOMMENDATIONS_HEADING);
+  }
+  if (highFindings.length !== violations.high) {
+    unparseable(
+      `Report "**Total Violations**:" declares ${violations.high} High, but "## ${RECOMMENDATIONS_HEADING}" documents ` +
+        `${highFindings.length} High-severity finding(s); the two must agree exactly`,
+    );
+  }
+}
+
 /**
  * Compute the authoritative quality score from the template's deduction
  * ledger. The agent's published score is presentation data only.
@@ -807,6 +947,7 @@ function parseReport(reportText, runContract = {}) {
         'critical violations with an approve recommendation is an inconsistent verdict',
     );
   }
+  verifyFindingSeverityCounts(text, violations, runContract.registryRowSeverities ?? null);
 
   const qualityScore = deriveQualityScore(reportText, violations);
 
@@ -936,4 +1077,5 @@ module.exports = {
   CONTEXT_BASIS_ENUM,
   verifyConventionBaseline,
   parseConventionCitations,
+  verifyFindingSeverityCounts,
 };

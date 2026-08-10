@@ -64,6 +64,14 @@ The story raised AC-3 in this PR and `src/checkout/payment.ts` gained the
 decline branch that implements it. No test in the review set touches that path,
 so the gap is a finding rather than an inference.
 
+## Recommendations (Should Fix)
+
+### 1. Fixture stub High finding 1
+
+**Severity**: P1 (High)
+**Row**: H1
+
+
 ## Decision
 
 **Recommendation**: Approve with Comments

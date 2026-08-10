@@ -239,6 +239,7 @@ The report itself is strictly validated:
 - The Reviewed Files manifest
 - Exactly one `**Context Basis**` line in the Executive Summary, plus a run-bound `## Review Context` manifest whenever the basis is not `none`
 - Exactly one `**Context Waivers Applied**: 0` line in the Executive Summary
+- Every finding under `## Critical Issues (Must Fix)` / `## Recommendations (Should Fix)` cites a real `**Row**: <id>` whose criteria-registry.md severity matches its own `**Severity**` line; the number of Critical findings documented must equal the Critical count in `**Total Violations**`, and the number of P1 (High) findings documented must equal the High count
 
 Fenced code blocks are stripped first, so a quoted example can't spoof a verdict. Markdown emphasis is stripped only where it wraps a whole value, so `tests/user_profile.spec.ts` survives the manifest intact.
 
@@ -247,6 +248,8 @@ The score is computed rather than trusted: the CLI evaluates `100 - (Critical ×
 The bonus is read from the template's `Total Bonus:             +N` line, and a `| Total Bonus | N |` table row is accepted as well, because agents reflow the ledger into a table and a rendering choice should not decide a gate. Both forms normalize their `Final Score` and `Grade` fields, so the published ledger always agrees with the score the gate acted on. The prompt still pins the line form as the one to produce.
 
 A report declaring Critical violations alongside an approve-type recommendation is rejected as an inconsistent verdict (exit 3): Critical means Must Fix. Stale artifacts are never parsed, output files are deleted before the run and must be freshly written by it.
+
+The `**Total Violations**` summary line is not trusted either: the CLI counts the finding blocks actually documented under `## Critical Issues (Must Fix)` and the P1 (High) ones under `## Recommendations (Should Fix)`, and rejects a report whose summary disagrees with what it wrote (exit 3) — this closes a real defect where a report documented a genuine Critical finding in prose while its summary line claimed zero, and the CLI computed Approve at 100/100 from the summary alone. Scoped to Critical and High only, the two severities `deriveRecommendation` actually acts on ([`cli/lib/registry-rows.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/registry-rows.js) reads the row→severity map straight from the skill's own `criteria-registry.md`, so this never drifts from the shipped rubric); Medium/Low counts are not cross-checked.
 
 ## Example workflow
 

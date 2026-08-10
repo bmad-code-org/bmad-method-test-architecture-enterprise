@@ -43,6 +43,56 @@ Final Score:             41/100
 Grade:                   F
 ```
 
+## Critical Issues (Must Fix)
+
+### 1. Fixture stub Critical finding 1
+
+**Severity**: P0 (Critical)
+**Row**: C1
+
+### 2. Fixture stub Critical finding 2
+
+**Severity**: P0 (Critical)
+**Row**: C2
+
+## Recommendations (Should Fix)
+
+### 1. Fixture stub High finding 1
+
+**Severity**: P1 (High)
+**Row**: H1
+
+### 2. Fixture stub High finding 2
+
+**Severity**: P1 (High)
+**Row**: H2
+
+### 3. Fixture stub High finding 3
+
+**Severity**: P1 (High)
+**Row**: H3
+
+### 4. Fixture stub High finding 4
+
+**Severity**: P1 (High)
+**Row**: H4
+
+### 5. Fixture stub High finding 5
+
+**Severity**: P1 (High)
+**Row**: H5
+
+### 6. Fixture stub High finding 6
+
+**Severity**: P1 (High)
+**Row**: H6
+
+### 7. Fixture stub High finding 7
+
+**Severity**: P1 (High)
+**Row**: H7
+
+
 ## Decision
 
 **Recommendation**: Block

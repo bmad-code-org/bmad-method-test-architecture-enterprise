@@ -293,3 +293,44 @@ published report-table row at all. That's an intentional design choice for the f
 three, not the fabrication bug, so `convention-baseline.js` still grounds all seven
 uniformly (future-proofing, and Notes prose can cite any of them), but the deduction
 schedule only reads three of the seven back.
+
+## 2026-08-10, same day: the summary line was never checked against the findings either
+
+Auditing the fix above for the same class of defect elsewhere turned up a second one,
+worse in effect: `parse-report.js` never read `## Critical Issues (Must Fix)` or
+`## Recommendations (Should Fix)` at all. It trusted the agent's own
+`**Total Violations**:` summary line and nothing else. Reproduced directly: a report
+can document a real, row-cited Critical finding (`.skip` on a whole suite, `**Row**:
+C1`, a location, a description) in full prose, and if the line beside it says
+`0 Critical, 0 High, 0 Medium, 0 Low`, the CLI computes **Approve, 100/100** — the
+documented finding is invisible to the gate that's supposed to act on it. Unlike the
+convention-baseline defect this is a Block-vs-Approve flip, not a false LOW.
+
+`lib/registry-rows.js` (new) reads `criteria-registry.md`'s row → severity map
+straight from the skill, and `parse-report.js`'s `verifyFindingSeverityCounts` counts
+the finding blocks actually documented and binds them to the summary line: the number
+of Critical findings must equal the Total Violations Critical count exactly, the
+number of P1 (High) findings under Recommendations must equal the High count exactly,
+and every cited `**Row**: <id>` must be a real row whose registry severity matches the
+finding's own declared Severity (severity is read from the row, never chosen — the
+registry's own rule 1, previously unenforced downstream).
+
+Scoped to Critical and High only, deliberately. `deriveRecommendation` only acts on
+those two (`critical > 0` → Block, `high > 0` → Request Changes); Medium/Low only ever
+add "Approve with Comments" regardless of count, so a miscount there doesn't flip a
+merge decision the way this one does. The scope decision also had a practical forcing
+function: doing this for all four severities meant rewriting every fixture in this
+suite that declares a nonzero Medium/Low count with matching finding-detail blocks,
+a much larger and lower-value change for the two severities that were never the risk.
+
+Fifteen of the pre-existing report fixtures under `test/fixtures/test-review-cli/reports/`
+declared nonzero Critical/High counts with no finding section behind them at all
+(minimal fixtures, written before this check existed, testing other parser behavior).
+Each now carries the minimum real content the check requires — `### N. Title`,
+`**Severity**:`, `**Row**:`, nothing else — so their pre-existing assertions (which
+depend on the exact declared counts, verified individually before touching any of
+them) stay intact. Two fixtures needed no change: `fenced-recommendation.md`'s
+apparent 9/9 was inside its own fenced decoy example and the real (fence-stripped)
+count was already 0/0; `critical-approve.md`'s Critical-with-Approve combination
+already throws via the pre-existing inconsistent-verdict check, before this one ever
+runs.

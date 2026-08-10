@@ -49,6 +49,19 @@ Final Score:             92/100
 Grade:                   A
 ```
 
+## Recommendations (Should Fix)
+
+### 1. Fixture stub High finding 1
+
+**Severity**: P1 (High)
+**Row**: H1
+
+### 2. Fixture stub High finding 2
+
+**Severity**: P1 (High)
+**Row**: H2
+
+
 ## Decision
 
 **Recommendation**: Approve
