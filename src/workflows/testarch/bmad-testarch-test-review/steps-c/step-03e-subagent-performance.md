@@ -38,7 +38,7 @@ pinned severity, and its gate.
 | --- | ------------------------------- | -------: | ------------- |
 | M1  | Network-first violated          |   MEDIUM | Applicability |
 | M6  | Unawaited async                 |   MEDIUM | Absolute      |
-| H5  | Oversize test file (>300 lines) |     HIGH | Absolute      |
+| H5  | Oversize test file (>500 lines) |     HIGH | Absolute      |
 
 **The hard-wait double count is fixed here.** This worker used to score
 `waitForTimeout(5000)` as MEDIUM while the determinism worker scored the identical

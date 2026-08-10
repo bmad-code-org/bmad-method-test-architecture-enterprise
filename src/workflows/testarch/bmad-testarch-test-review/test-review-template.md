@@ -73,7 +73,7 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 | Data Factories                       | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
 | Network-First Pattern                | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
 | Explicit Assertions                  | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
-| Test Length (≤300 lines)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {lines}    | Absolute | {brief_note} |
+| Test Length (≤500 lines)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {lines}    | Absolute | {brief_note} |
 | Test Duration (≤1.5 min)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {duration} | Absolute | {brief_note} |
 | Flakiness Patterns                   | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
 
@@ -300,7 +300,7 @@ Grade:                   {grade}
 
 This review consulted the following knowledge base fragments:
 
-- **[test-quality.md](../../../agents/bmad-tea/resources/knowledge/test-quality.md)** - Definition of Done for tests (no hard waits, <300 lines, <1.5 min, self-cleaning)
+- **[test-quality.md](../../../agents/bmad-tea/resources/knowledge/test-quality.md)** - Definition of Done for tests (no hard waits, <500 lines, <1.5 min, self-cleaning)
 - **[fixture-architecture.md](../../../agents/bmad-tea/resources/knowledge/fixture-architecture.md)** - Pure function → Fixture → mergeTests pattern
 - **[network-first.md](../../../agents/bmad-tea/resources/knowledge/network-first.md)** - Route intercept before navigate (race condition prevention)
 - **[data-factories.md](../../../agents/bmad-tea/resources/knowledge/data-factories.md)** - Factory functions with overrides, API-first setup

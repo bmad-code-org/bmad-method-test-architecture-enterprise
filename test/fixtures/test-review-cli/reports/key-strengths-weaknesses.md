@@ -32,7 +32,7 @@ stepsCompleted:
 
 ❌ Missing explicit test IDs on two test cases
 ❌ One assertion relies on implicit ordering instead of an explicit wait
-❌ Test file exceeds the 300-line guideline by a small margin
+❌ Test file exceeds the 500-line guideline by a small margin
 
 ### Summary
 

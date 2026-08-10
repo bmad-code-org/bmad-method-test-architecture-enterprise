@@ -101,7 +101,7 @@ worker saw it:
 - Shared state was LOW in determinism and HIGH in isolation. It is H4, isolation's.
 - Test order dependency was MEDIUM in determinism and HIGH in isolation. Also H4.
 - The maintainability worker deducted HIGH for "tests >100 lines" against a published
-  criterion of `Test Length (≤300 lines)`. One threshold now: H5 at 300.
+  criterion of `Test Length (≤500 lines)`. One threshold now: H5 at 500.
 - The performance worker deducted for "slow setup/teardown (creating fresh DB for
   every test)" and for `describe.serial`. Both punish correct isolation, and the
   second contradicts the pact rules in the determinism worker that **require**
