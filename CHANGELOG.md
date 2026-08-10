@@ -73,6 +73,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.22.0] - 2026-08-09
+
+### Fixed
+
+- All forty-two `resolve_customization.py` call sites are invoked with `uv run` instead of a bare `python3` (#120). The script declares `requires-python = ">=3.11"` and hard-exits below it, because `tomllib` is a 3.11 stdlib addition. On macOS without Homebrew or Ubuntu 22.04, where `python3` is 3.10, activation fell through to the skill's "if the script fails" path and hand-merged the TOML layers in-context — no error surfaced, so a run could resolve customization subtly wrong and look fine. `uv run` reads the script's own `requires-python` and provisions a matching interpreter, so whatever `python3` resolves to on your PATH no longer matters. Covers the agent, all nine testarch workflows, and their `steps-v`/`steps-e`/`steps-c` hooks.
+- The customization guidance in `docs/reference/troubleshooting.md` and `docs/how-to/customization/extend-tea-with-custom-workflows.md` uses `uv run` (#120). These are the extension guides, so every custom TEA workflow authored from them was reproducing the defect on day one.
+- Removed remaining certificate wording from the `bmad-teach-me-testing` plan doc, completing the rename to completion summary.
+
+### Requirements
+
+- `uv` is what you need; a system Python is not. TEA skills no longer invoke a bare interpreter. Install [`uv`](https://docs.astral.sh/uv/) and it provisions the right Python per script.
+
+---
+
 ## [1.16.0] - 2026-05-08
 
 ### Added
