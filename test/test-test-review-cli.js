@@ -1753,11 +1753,18 @@ async function runTests() {
     // block immediately above it. Every literal line here is read verbatim by
     // parse-report.js's verifyConventionBaseline — see that file's own comment on
     // keeping the two in sync.
+    // Distinct from the report-contract bullet's own instruction text: that bullet
+    // legitimately contains the literal strings '**Convention Baseline**' and
+    // 'Convention: <key>' ("Omit the ... line and any ... citation"), so checking
+    // for their absence would false-fail on the correct behavior. Anchor instead on
+    // conventionBaselinePromptLines' unique opening phrase and its corpus delimiter,
+    // neither of which appears anywhere in the omit-instruction text, and positively
+    // confirm the omit instruction itself fired.
     assert(
-      !prompt.includes('**Convention Baseline**') &&
-        !prompt.includes('Convention: <key>') &&
-        !prompt.includes('---BEGIN CONVENTION CORPUS---'),
-      'omitting conventionBaseline entirely emits no baseline block at all (opt-in, never silently assumed)',
+      !prompt.includes('convention baseline has already been computed') &&
+        !prompt.includes('---BEGIN CONVENTION CORPUS---') &&
+        prompt.includes('Omit the "**Convention Baseline**:" line'),
+      'omitting conventionBaseline entirely emits no baseline block at all, and the report contract says to omit the line (opt-in, never silently assumed)',
     );
 
     const measuredConventionPrompt = buildPrompt({
