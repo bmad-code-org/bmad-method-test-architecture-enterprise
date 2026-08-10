@@ -158,9 +158,9 @@ Coverage criteria are intentionally excluded from this checklist.
 #### Test Length (if `check_test_length: true`)
 
 - [ ] File line count calculated
-- [ ] Threshold comparison (≤300 lines ideal)
+- [ ] Threshold comparison (≤500 lines ideal)
 - [ ] Status assigned (PASS/WARN/FAIL)
-- [ ] Splitting recommendations generated (if >300 lines)
+- [ ] Splitting recommendations generated (if >500 lines)
 
 #### Test Duration (if `check_test_duration: true`)
 

@@ -405,7 +405,7 @@ npx playwright test
 - **Risk Governance**: `risk-governance.md` - Risk scoring methodology
 - **Test Priorities Matrix**: `test-priorities-matrix.md` - P0-P3 criteria
 - **Test Levels Framework**: `test-levels-framework.md` - E2E vs API vs Unit selection
-- **Test Quality**: `test-quality.md` - Definition of Done (no hard waits, <300 lines, <1.5 min)
+- **Test Quality**: `test-quality.md` - Definition of Done (no hard waits, ≤500 lines, <1.5 min)
 
 ---
 

@@ -41,7 +41,7 @@ pinned severity, and its gate.
 | M4  | Ungrouped suite                 |   MEDIUM | Absolute                     |
 | M5  | Low-level event dispatch        |   MEDIUM | Applicability                |
 | M7  | Excessive nesting               |   MEDIUM | Absolute                     |
-| H5  | Oversize test file (>300 lines) |     HIGH | Absolute                     |
+| H5  | Oversize test file (>500 lines) |     HIGH | Absolute                     |
 | L1  | Fragile selector                |      LOW | Applicability                |
 | L3  | Missing stable test id          |      LOW | Convention: `testIds`        |
 | L5  | Implementation-shaped name      |      LOW | Convention: `bddNaming`      |
@@ -50,9 +50,9 @@ pinned severity, and its gate.
 
 Three rules this dimension used to get wrong, now fixed by the registry:
 
-- **The 300-line threshold is the only length rule.** The old list deducted HIGH
+- **The 500-line threshold is the only length rule.** The old list deducted HIGH
   for "tests >100 lines", which contradicted both the published criteria table
-  (`Test Length (≤300 lines)`) and the template. One threshold, one row: H5.
+  (`Test Length (≤500 lines)`) and the template. One threshold, one row: H5.
 - **Naming and test ids are Convention rows.** A repo with no behavioral-naming
   convention and no test-id convention takes no deduction for either, and the
   report says `PASS (n/a)` with the adoption count. A role- or label-based locator
@@ -94,9 +94,9 @@ const score = Math.max(0, 100 - totalPenalty);
       "row": "H5",
       "severity": "HIGH",
       "category": "oversize-test-file",
-      "description": "File is 341 lines, over the 300-line threshold",
-      "suggestion": "Split by feature area. 250 lines would NOT fire this row; the threshold is 300 and there is only one",
-      "code_snippet": "test.describe('Complex flow', () => { /* 341 lines */ });"
+      "description": "File is 541 lines, over the 500-line threshold",
+      "suggestion": "Split by feature area. 450 lines would NOT fire this row; the threshold is 500 and there is only one",
+      "code_snippet": "test.describe('Complex flow', () => { /* 541 lines */ });"
     }
   ],
   "passed_checks": 10,
