@@ -2,7 +2,7 @@
 
 ## Principle
 
-Tests must be deterministic, isolated, explicit, focused, and fast. Every test should execute in under 1.5 minutes, contain fewer than 500 lines, avoid hard waits and conditionals, keep assertions visible in test bodies, and clean up after itself for parallel execution.
+Tests must be deterministic, isolated, explicit, focused, and fast. Every test should execute in under 1.5 minutes, contain 500 lines or fewer, avoid hard waits and conditionals, keep assertions visible in test bodies, and clean up after itself for parallel execution.
 
 ## Rationale
 
@@ -451,12 +451,12 @@ test('admin can update notification preferences', async ({ adminPage, seedUser }
 });
 
 // TOTAL: 3 tests × 60 lines avg = 180 lines
-// Each test is focused, debuggable, and under 500 lines
+// Each test is focused, debuggable, and at or under 500 lines
 ```
 
 **Key Points**:
 
-- Split monolithic tests into focused scenarios (<500 lines each)
+- Split monolithic tests into focused scenarios (≤500 lines each)
 - Extract common setup into fixtures (auto-runs for each test)
 - Each test validates one concern (user creation, permissions, preferences)
 - Failures are easier to diagnose: "Permission assignment failed" vs "Complete journey failed"
@@ -654,7 +654,7 @@ Every test must pass these criteria:
 
 - [ ] **No Hard Waits** - Use `waitForResponse`, `waitForLoadState`, or element state (not `waitForTimeout`)
 - [ ] **No Conditionals** - Tests execute the same path every time (no if/else, try/catch for flow control)
-- [ ] **< 500 Lines** - Keep tests focused; split large tests or extract setup to fixtures
+- [ ] **≤ 500 Lines** - Keep tests focused; split large tests or extract setup to fixtures
 - [ ] **< 1.5 Minutes** - Optimize with API setup, parallel operations, and shared auth
 - [ ] **Self-Cleaning** - Use fixtures with auto-cleanup or explicit `afterEach()` teardown
 - [ ] **Explicit Assertions** - Keep `expect()` calls in test bodies, not hidden in helpers

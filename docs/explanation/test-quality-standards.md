@@ -361,7 +361,7 @@ test('should display profile with correct data', async ({ page }) => {
 
 **Requirements:**
 
-- ✅ Test size < 500 lines
+- ✅ Test size ≤ 500 lines
 - ✅ Single responsibility (test one thing well)
 - ✅ Clear describe/test names
 - ✅ Appropriate scope (not too granular, not too broad)
@@ -568,7 +568,7 @@ TEA reviews tests against these standards in `test-review`:
 
 **Structure (10 points):**
 
-- Test size < 500 lines: 5 points
+- Test size ≤ 500 lines: 5 points
 - Clear naming: 5 points
 
 **Performance (10 points):**
@@ -609,7 +609,7 @@ flowchart LR
     end
 
     subgraph Struct[Structure - 10 pts]
-        S1[Size < 500 lines<br/>5 pts]
+        S1[Size ≤ 500 lines<br/>5 pts]
         S2[Clear naming<br/>5 pts]
     end
 
@@ -792,7 +792,7 @@ test('should submit contact form', async ({ page }) => {
   expect(result.success).toBe(true);
   await expect(page.getByText('Message sent')).toBeVisible();
 
-  // Size: 15 lines (< 500 ✓)
+  // Size: 15 lines (≤ 500 ✓)
   // Execution: ~2 seconds (< 90s ✓)
 });
 ```
@@ -836,7 +836,7 @@ When is a test "done"?
 - [ ] No try-catch for flow control
 - [ ] Network-first patterns used
 - [ ] Assertions explicit in test body
-- [ ] Test size < 500 lines
+- [ ] Test size ≤ 500 lines
 - [ ] Clear, descriptive test name
 - [ ] Self-cleaning (cleanup in afterEach or test)
 - [ ] Unique test data (no hard-coded values)
