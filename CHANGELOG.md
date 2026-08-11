@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Stable releases now convert `[Unreleased]` into a dated version section on their own. The publish workflow runs `tools/stamp-changelog.js` after the version bump and commits `CHANGELOG.md` with it, so the GitHub Release step finds an exact version heading instead of falling back to an `[Unreleased]` block that grows across releases. Contributors keep writing under `[Unreleased]` exactly as before. Covered by `npm run test:changelog`.
+
 ### Fixed
 
 - Aligned forced-unscorable candidate handling in `cli/lib/build-prompt.js` and `cli/lib/parse-report.js`: candidates without matching criteria rows are removed from `## Reviewed Files` when excluded in `## Excluded From Review Set`. Added end-to-end stub-agent coverage in `test/test-test-review-cli.js`.

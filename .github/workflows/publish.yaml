@@ -104,6 +104,10 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.channel == 'latest'
         run: npm version "${{ inputs.bump }}" --no-git-tag-version
 
+      - name: Stamp CHANGELOG release section
+        if: github.event_name == 'workflow_dispatch' && inputs.channel == 'latest'
+        run: node tools/stamp-changelog.js
+
       - name: Sync marketplace version
         run: |
           node <<'NODE'
@@ -133,7 +137,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.channel == 'latest'
         run: |
           VERSION=$(node -p 'require("./package.json").version')
-          git add package.json package-lock.json .claude-plugin/marketplace.json
+          git add package.json package-lock.json .claude-plugin/marketplace.json CHANGELOG.md
           git commit -m "release: bump to v${VERSION} [skip ci]"
           git tag -a "v${VERSION}" -m "Release v${VERSION}"
 
