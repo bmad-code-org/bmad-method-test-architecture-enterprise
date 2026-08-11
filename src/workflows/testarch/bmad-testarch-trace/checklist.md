@@ -38,7 +38,11 @@ This checklist covers **two sequential phases**:
 ## Test Discovery and Cataloging
 
 - [ ] Tests auto-discovered using multiple strategies (test IDs, describe blocks, file paths)
-- [ ] Tests categorized by level (E2E, API, Component, Unit)
+- [ ] Tests categorized by level (E2E, API, Component, Unit, Live)
+- [ ] Live verification results read from `{live_results_input}` when `live` is in `coverage_levels` or `collection_mode` is `runtime_manifest`
+- [ ] Each live result classified against the commit under trace (only a fresh `pass` counts as coverage)
+- [ ] `stale`, `unverifiable`, `fail`, `contradicted`, `blocked`, `skipped`, `unmatched`, and `invalid` live results raised as blockers with reasons
+- [ ] `live_only` derived from each requirement's active mapped tests, never read from a flag an earlier step was asked to set
 - [ ] Test metadata extracted:
   - [ ] Test IDs (e.g., 1.3-E2E-001)
   - [ ] Describe/context blocks
@@ -53,7 +57,7 @@ This checklist covers **two sequential phases**:
 
 - [ ] Each oracle item mapped to tests (or marked as NONE)
 - [ ] Explicit references found (test IDs, describe blocks mentioning criterion)
-- [ ] Test level documented (E2E, API, Component, Unit)
+- [ ] Test level documented (E2E, API, Component, Unit, Live)
 - [ ] Given-When-Then narrative verified for alignment
 - [ ] Traceability matrix table generated:
   - [ ] Criterion ID
@@ -125,6 +129,7 @@ This checklist covers **two sequential phases**:
   - [ ] API coverage %
   - [ ] Component coverage %
   - [ ] Unit coverage %
+  - [ ] Live coverage %
 
 ---
 
@@ -178,7 +183,8 @@ Knowledge fragments referenced:
 - [ ] `target.type` and `target.id` identify the evaluated story / epic / release / hotfix
 - [ ] `gate_status` populated only when `allow_gate: true` and `collection_status` is `COLLECTED`
 - [ ] `coverage.inventory` includes `covered`, `total`, and `pct`
-- [ ] `coverage.priority_breakdown` includes P0–P3 and `coverage.by_level` includes e2e/api/component/unit/other
+- [ ] `coverage.priority_breakdown` includes P0–P3 and `coverage.by_level` includes e2e/api/component/unit/live/other
+- [ ] `live_evidence` populated (`present`, `results_file`, `freshness`, `recorded_source_sha`, `current_source_sha`, `producer`, disposition counts, `requirements_live_only`)
 - [ ] `tests` counts are deduplicated from unique discovered tests (no per-requirement double counting)
 - [ ] `risk_summary` counts match Phase 1 gap analysis
 - [ ] `heuristics` fields populated (`endpoint_gaps`, `auth_negative_path_status`, `error_path_status`)
@@ -212,7 +218,7 @@ Knowledge fragments referenced:
 
 ### Completeness Checks
 
-- [ ] All test levels considered (E2E, API, Component, Unit)
+- [ ] All test levels considered (E2E, API, Component, Unit, Live)
 - [ ] All priorities considered (P0, P1, P2, P3)
 - [ ] All coverage statuses used appropriately (FULL, PARTIAL, NONE, UNIT-ONLY, INTEGRATION-ONLY)
 - [ ] All gaps have recommendations

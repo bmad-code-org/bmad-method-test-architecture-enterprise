@@ -23,9 +23,10 @@ variables:
   # Directory paths
   test_dir: "{project-root}/tests" # Root test directory
   source_dir: "{project-root}" # Source code directory (customize if needed, e.g., {project-root}/src or {project-root}/lib)
+  live_results_input: "{test_artifacts}/live-verification-results.json" # Optional input: recorded runtime verification consumed as `live` level evidence
 
   # Workflow behavior
-  coverage_levels: "e2e,api,component,unit" # Which test levels to trace
+  coverage_levels: "e2e,api,component,unit,live" # Which test levels to trace; drop `live` to ignore recorded runtime verification, except under collection_mode: runtime_manifest, which implies the live level and reads the results file regardless
   gate_type: "story" # story | epic | release | hotfix - determines gate scope
   decision_mode: "deterministic" # deterministic (rule-based) | manual (team decision)
   collection_mode: "contract_static" # contract_static | inventory_only | runtime_manifest | deferred_shared | waived | restricted | inaccessible
@@ -41,20 +42,37 @@ e2e_trace_summary_output: "{test_artifacts}/e2e-trace-summary.json" # Machine-re
 gate_decision_output: "{test_artifacts}/gate-decision.json" # Optional downstream gate signal for CI/CD enforcement
 
 # e2e-trace-summary.json schema (emitted by step-05 at workflow completion)
-# schema_version: 1
-# generated_at: ISO timestamp
-# workflow: "bmad-testarch-trace"
-# repo / collection_mode / collection_status / coverage_basis / source_sha
-# target: { type, id, label }
+# schema_version: "0.2.0"   (0.2.0 added the live_evidence block and the by_level.live bucket)
+# snapshot_at: ISO timestamp
+# repo / collection_mode / collection_status / inventory_basis / gate_basis / source_sha
+# target: { type, id, label } / decision_mode / evaluator / confidence
+# oracle: { resolution_mode, confidence, sources[], external_pointer_status, synthetic }
 # gate_status: PASS | CONCERNS | FAIL | WAIVED   (only when allow_gate is true and collection_status is COLLECTED)
-# coverage_statistics: { total_requirements, fully_covered, partially_covered, uncovered, overall_coverage_pct, priority_breakdown{P0..P3}, by_level{e2e,api,component,unit} }
+# coverage: { inventory{covered,total,pct}, priority_breakdown{P0..P3}, by_level{e2e,api,component,unit,live,other} }
 # tests: { files, cases, skipped_cases, fixme_cases, pending_cases }
-# gap_analysis: { critical_gaps, high_gaps, medium_gaps, low_gaps }
-# heuristics: { endpoint_gaps, auth_negative_path_status, error_path_status }
+# risk_summary: { critical_open, high_open, medium_open, low_open }
+# heuristics: { endpoint_gaps, auth_negative_path_status, error_path_status, ui_journey_status, ui_state_status }
+# live_evidence: { present, results_file, freshness, recorded_source_sha, current_source_sha, producer,
+#                  counted, stale, unverifiable, failed, contradicted, blocked, skipped, unmatched, invalid, requirements_live_only }
 # gate_criteria: { p0_coverage_required/actual/status, p1_coverage_target/minimum/actual/status, overall_coverage_minimum/actual/status } (gate-eligible runs only)
 # blockers: [ { id, severity, reason, test_file?, test_title? } ]
 # recommendations: [ { priority, action, requirements[] } ]
-# links: { trace_report_path, trace_report_url, artifact_url }
+# links: { trace_report_path, trace_report_url, artifact_url, journey_evidence_url }
+# gate-decision.json carries its own schema_version "0.1.0" and a slim subset of the above.
+
+# live-verification-results.json schema (READ by step-02 from {live_results_input}; this workflow never writes it)
+# Any producer may emit this file: an agent, a shell script, a CI job, or a person recording an outcome by hand.
+# The full contract, including the test-case ID format, is published in docs/reference/live-verification-results.md
+# (in the TEA documentation, not in the installed skill).
+# schema_version: "0.1.0"   (enforced: a differing major version makes the file unreadable)
+# source_sha: git commit the observations were made against (enforced; per-result source_sha overrides it)
+# observed_at: ISO timestamp (recorded, not enforced; per-result observed_at overrides it)
+# producer: free-text name of whatever recorded the run (recorded, not enforced)
+# results: [ { id: "{target}-LIVE-{NNN}", requirement_id, title?, status: pass|fail|blocked|skipped, evidence?, observed_at?, source_sha? } ]
+# Trace counts a result as coverage only when it carries a unique id, a requirement_id the oracle
+# recognizes, status `pass`, and a source_sha matching the commit under trace.
+# Every other outcome (stale, unverifiable, fail, contradicted, blocked, skipped, unmatched, invalid)
+# is recorded as a blocker and counts as no coverage.
 
 # Required tools
 required_tools:

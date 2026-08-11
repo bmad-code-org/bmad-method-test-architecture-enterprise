@@ -101,6 +101,14 @@ Include:
 - tests/e2e/
 ```
 
+#### Requirements Verified by Running the System
+
+Some requirements get verified by driving the app rather than by adding a test file. That evidence leaves nothing in `tests/`, so it used to read as uncovered, and a P0 among them failed the gate.
+
+Record those runs in `{test_artifacts}/live-verification-results.json` and trace counts them at a `live` coverage level. Two limits apply: a result stops counting once the commit it was recorded against is no longer the one under trace, and a requirement covered only by live evidence caps the gate at CONCERNS rather than PASS.
+
+The file format and the test-case ID format are published in [Live Verification Results](/docs/reference/live-verification-results.md). Any producer can emit it: an agent, a script, a CI job, or a person recording an outcome by hand.
+
 ### 5. Specify Focus Areas (Optional)
 
 **Example:**

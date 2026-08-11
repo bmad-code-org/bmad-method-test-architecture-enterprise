@@ -583,6 +583,7 @@ output_folder: _bmad-output
 - `test-review.md` (from `test-review`)
 - `traceability-matrix.md` (from `trace` Phase 1)
 - `gate-decision-{gate_type}-{story_id}.md` (from `trace` Phase 2)
+- `live-verification-results.json` (read by `trace`, written by you; see [Live Verification Results](/docs/reference/live-verification-results.md))
 - `nfr-assessment.md` (from `nfr-assess`)
 - `automation-summary.md` (from `automate`)
 - `atdd-checklist-{story_key}.md` (from `atdd`)

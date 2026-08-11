@@ -17,6 +17,10 @@
 - step-01-assess.md
 - step-02-apply-edit.md
 
+## Inputs
+
+- {test_artifacts}/live-verification-results.json (optional; written by any producer, read at step-02)
+
 ## Outputs
 
 - {test_artifacts}/traceability-matrix.md
