@@ -84,9 +84,10 @@ const liveResultsPath = isUnresolved('{live_results_input}') ? '' : '{live_resul
 // "verified by running it" from "verified once, against code that no longer exists".
 // Resolve from the working tree first. That tree is the code this run actually reads, whereas
 // GITHUB_SHA is the ephemeral merge commit on pull_request events and is also the one input an
-// untrusted producer could set to make a stale result look fresh. `git rev-parse HEAD` is tried
-// before GITHUB_SHA rather than only when the runtime helper is missing entirely.
-const currentSourceSha = runtime.getSourceSha?.() || runtime.exec?.('git rev-parse HEAD')?.trim() || process.env.GITHUB_SHA || '';
+// untrusted producer could set to make a stale result look fresh. `getGitHeadSha` must return
+// `git rev-parse HEAD` from {project-root}, and it is tried before GITHUB_SHA rather than only when
+// the runtime helper is missing entirely.
+const currentSourceSha = runtime.getSourceSha?.() || runtime.getGitHeadSha?.() || process.env.GITHUB_SHA || '';
 
 // Only a well-formed object id is comparable. Without this, `<current sha>ZZZZZ` passes the prefix
 // test below, and a record carrying a value that is not a git object id at all can reach `counted`.
