@@ -21,8 +21,9 @@
 
 - For any user-facing change, documentation change, workflow/CI change, release behavior change, or bug fix, update `CHANGELOG.md` in the same PR.
 - Put unreleased work under the top `## [Unreleased]` section using Keep a Changelog headings such as `Added`, `Changed`, `Fixed`, `Deprecated`, or `Removed`.
-- When preparing or repairing a stable release, convert the relevant `[Unreleased]` notes into an exact version section like `## [1.16.0] - YYYY-MM-DD`.
-- Do not leave release-worthy changes only in GitHub auto-generated notes. The publish workflow can fall back to `[Unreleased]`, but an exact version entry is preferred for stable releases.
+- Stable releases convert `[Unreleased]` into a dated version section on their own. The publish workflow runs `node tools/stamp-changelog.js` after the version bump and commits the result, so do not hand-write a `## [1.16.0] - YYYY-MM-DD` heading in a normal PR. Writing entries under `[Unreleased]` is the whole job.
+- Keep the `## [Unreleased]` heading present. The stamping step targets it and fails the release if it is gone.
+- Repairing history is the one case for editing a version section by hand, for example when an earlier release shipped without notes.
 
 ## PR Notes
 
