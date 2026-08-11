@@ -26,7 +26,7 @@ variables:
   live_results_input: "{test_artifacts}/live-verification-results.json" # Optional input: recorded runtime verification consumed as `live` level evidence
 
   # Workflow behavior
-  coverage_levels: "e2e,api,component,unit,live" # Which test levels to trace; drop `live` to ignore recorded runtime verification entirely
+  coverage_levels: "e2e,api,component,unit,live" # Which test levels to trace; drop `live` to ignore recorded runtime verification, except under collection_mode: runtime_manifest, which implies the live level and reads the results file regardless
   gate_type: "story" # story | epic | release | hotfix - determines gate scope
   decision_mode: "deterministic" # deterministic (rule-based) | manual (team decision)
   collection_mode: "contract_static" # contract_static | inventory_only | runtime_manifest | deferred_shared | waived | restricted | inaccessible

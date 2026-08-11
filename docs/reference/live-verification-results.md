@@ -129,7 +129,9 @@ Remove `live` from `coverage_levels` in the `trace` workflow's `workflow.yaml`:
 coverage_levels: 'e2e,api,component,unit'
 ```
 
-`trace` then ignores the results file entirely, including a stale one. The one exception is `collection_mode: runtime_manifest`, which names the file as the run's only evidence source and therefore reads it regardless; turning the level off under that mode would leave the run with nothing to collect.
+`trace` then ignores the results file entirely, including a stale one.
+
+The one exception is `collection_mode: runtime_manifest`. That mode names the results file as the run's only evidence source, so it implies the `live` level and reads the file whether or not `coverage_levels` lists it. Removing `live` does not turn live evidence off under that mode. To turn it off, change the collection mode as well.
 
 ## Runs with no static suite
 
@@ -177,7 +179,7 @@ Because static discovery never runs, the `auth_negative_path_status` and `error_
 | `unreadable`   | The file exists but could not be parsed or failed its schema check          |
 | `not_present`  | No results file                                                             |
 
-Gate on `freshness === 'fresh'` if you want a clean bill. `mixed` exists so that one counted record among twenty stale ones cannot report as clean.
+`freshness` reports currency, not success. `fresh` means every record was checkable against the commit under trace; a fresh file can still be full of `fail` and `blocked` records. To gate on "current **and** successful", require `freshness === 'fresh'` and every non-counted counter at zero. `mixed` exists so that one counted record among twenty stale ones cannot report as current.
 
 Counted results also appear under `coverage.by_level.live`, so a dashboard can show how much of a release rests on evidence with no re-runnable artifact behind it.
 

@@ -493,7 +493,12 @@ const uiStateGapCount = heuristicCounts.ui_states_missing_coverage;
 // Same resolution order and same value as step-02's freshness check: the working tree is the authority,
 // and `live_evidence.current_source_sha` carries what step-02 actually resolved. Two fields in one file
 // disagreeing about "the commit under trace" would undermine the freshness contract they both describe.
-const sourceSha = liveEvidence.current_source_sha || runtime.getSourceSha?.() || process.env.GITHUB_SHA || '';
+const sourceSha =
+  liveEvidence.current_source_sha ||
+  runtime.getSourceSha?.() ||
+  runtime.exec?.('git rev-parse HEAD')?.trim() ||
+  process.env.GITHUB_SHA ||
+  '';
 const mapOptionalHeuristicStatus = (count, applicable) => {
   if (!applicable) return 'not_applicable';
   if (typeof count !== 'number' || Number.isNaN(count)) return 'unknown';

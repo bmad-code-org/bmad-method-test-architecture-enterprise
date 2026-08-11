@@ -84,19 +84,24 @@ const liveResultsPath = isUnresolved('{live_results_input}') ? '' : '{live_resul
 // "verified by running it" from "verified once, against code that no longer exists".
 // Resolve from the working tree first. That tree is the code this run actually reads, whereas
 // GITHUB_SHA is the ephemeral merge commit on pull_request events and is also the one input an
-// untrusted producer could set to make a stale result look fresh.
-const currentSourceSha = runtime.getSourceSha?.() || process.env.GITHUB_SHA || '';
+// untrusted producer could set to make a stale result look fresh. `git rev-parse HEAD` is tried
+// before GITHUB_SHA rather than only when the runtime helper is missing entirely.
+const currentSourceSha = runtime.getSourceSha?.() || runtime.exec?.('git rev-parse HEAD')?.trim() || process.env.GITHUB_SHA || '';
 
-const normalizeSha = (value) =>
-  String(value ?? '')
-    .trim()
-    .toLowerCase();
+// Only a well-formed object id is comparable. Without this, `<current sha>ZZZZZ` passes the prefix
+// test below, and a record carrying a value that is not a git object id at all can reach `counted`.
+const SHA_PATTERN = /^[0-9a-f]{7,64}$/;
+const normalizeSha = (value) => {
+  if (typeof value !== 'string' && typeof value !== 'number') return '';
+  const normalized = String(value).trim().toLowerCase();
+  return SHA_PATTERN.test(normalized) ? normalized : '';
+};
 const shaMatches = (recorded, current) => {
   const a = normalizeSha(recorded);
   const b = normalizeSha(current);
-  if (!a || !b) return false; // unresolvable on either side is never a match
+  if (!a || !b) return false; // unresolvable or malformed on either side is never a match
   const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
-  return shorter.length >= 7 && longer.startsWith(shorter); // abbreviated shas compare by prefix, as git does
+  return longer.startsWith(shorter); // abbreviated shas compare by prefix, as git does
 };
 
 const SUPPORTED_LIVE_SCHEMA_MAJOR = '0';
@@ -122,16 +127,17 @@ if (liveLevelEnabled && liveResultsPath && fs.existsSync(liveResultsPath)) {
 }
 
 const VALID_LIVE_STATUSES = new Set(['pass', 'fail', 'blocked', 'skipped']);
+// Read producer-supplied values as strings or not at all. Coercing first would let
+// `status: ["pass"]` stringify to "pass" and count as coverage.
+const asString = (value) => (typeof value === 'string' ? value.trim() : '');
 const seenLiveIds = new Set();
 const liveRecords = (liveManifest?.results || []).map((entry) => {
   // A producer can put anything in this array, including null. Anything that is not a plain object
   // has no fields to read, so it is classified rather than dereferenced.
   const result = entry && typeof entry === 'object' && !Array.isArray(entry) ? entry : {};
-  const id = String(result.id ?? '').trim();
-  const requirementId = String(result.requirement_id ?? '').trim();
-  const status = String(result.status ?? '')
-    .trim()
-    .toLowerCase();
+  const id = asString(result.id);
+  const requirementId = asString(result.requirement_id);
+  const status = asString(result.status).toLowerCase();
   const recordedSha = normalizeSha(result.source_sha ?? liveManifest.source_sha);
   const duplicateId = Boolean(id) && seenLiveIds.has(id);
   if (id) seenLiveIds.add(id);
@@ -152,7 +158,7 @@ const liveRecords = (liveManifest?.results || []).map((entry) => {
   return {
     id: id || null,
     requirement_id: requirementId || null,
-    title: result.title || id || 'unnamed live verification',
+    title: asString(result.title) || id || 'unnamed live verification',
     level: 'live',
     status: status || 'unknown',
     disposition: disposition,
@@ -162,10 +168,10 @@ const liveRecords = (liveManifest?.results || []).map((entry) => {
         : duplicateId
           ? `duplicate id "${id}"`
           : !recordedSha
-            ? 'no source_sha recorded on the record or the file'
-            : 'missing id, requirement_id, or a recognized status',
-    evidence: result.evidence || '',
-    observed_at: result.observed_at || liveManifest.observed_at || '',
+            ? 'source_sha is missing or is not a hexadecimal object id of 7-64 characters'
+            : 'missing id, requirement_id, or a recognized status, or one of them is not a string',
+    evidence: asString(result.evidence),
+    observed_at: asString(result.observed_at) || asString(liveManifest.observed_at),
     recorded_source_sha: recordedSha,
   };
 });
@@ -189,14 +195,14 @@ const liveManifestHeader = {
   present: Boolean(liveManifest) || Boolean(liveReadError),
   results_file: liveResultsPath,
   source_sha: normalizeSha(liveManifest?.source_sha),
-  observed_at: liveManifest?.observed_at || '',
-  producer: liveManifest?.producer || '',
+  observed_at: asString(liveManifest?.observed_at),
+  producer: asString(liveManifest?.producer),
   read_error: liveReadError || '',
   current_source_sha: currentSourceSha,
 };
 ```
 
-`runtime.getSourceSha()` must resolve `git rev-parse HEAD` in `{project-root}`. Run that command directly when the helper is unavailable, and fall back to `GITHUB_SHA` only when the working tree is not a git repository. Every live result is `unverifiable` while `currentSourceSha` stays empty, which is deliberate: an unknown current commit cannot establish that a recorded observation is still valid.
+`runtime.getSourceSha()` must resolve `git rev-parse HEAD` in `{project-root}`. Run that command directly when neither helper is available, and reach `GITHUB_SHA` only when the working tree is not a git repository at all. Every live result is `unverifiable` while `currentSourceSha` stays empty, which is deliberate: an unknown current commit cannot establish that a recorded observation is still valid.
 
 **Persist `liveRecords` and `liveManifestHeader` into this step's section of `{outputFile}`** as a fenced ` ```json ` block titled `Live Verification Results`. Steps 3 and 4 read them from there. A run resumed at Step 3 or Step 4 has no in-memory bindings from this step, so a value that lives only in memory is a value the resumed run silently loses.
 

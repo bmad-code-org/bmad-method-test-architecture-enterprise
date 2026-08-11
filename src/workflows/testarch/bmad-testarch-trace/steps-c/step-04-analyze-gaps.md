@@ -264,10 +264,14 @@ const liveEvidence = {
           : countedCount > 0
             ? 'mixed'
             : 'stale',
-  // Per-record `source_sha` overrides the file-level value, so fall back to the sha the records
-  // actually carry. Reporting the file-level sha alone can name a commit nothing was verified at.
+  // Report the sha the counted records were actually classified against. Per-record `source_sha`
+  // overrides the file-level value, so preferring the file-level one can name a commit nothing was
+  // verified at, and step-05 puts this exact string into the gate rationale.
   recorded_source_sha:
-    liveHeader.source_sha || liveRecordsForRollup.find((record) => record.recorded_source_sha)?.recorded_source_sha || '',
+    liveRecordsForRollup.find((record) => record.disposition === 'counted' && record.recorded_source_sha)?.recorded_source_sha ||
+    liveHeader.source_sha ||
+    liveRecordsForRollup.find((record) => record.recorded_source_sha)?.recorded_source_sha ||
+    '',
   current_source_sha: currentSourceSha,
   producer: liveHeader.producer || '',
   counted: countedCount,
