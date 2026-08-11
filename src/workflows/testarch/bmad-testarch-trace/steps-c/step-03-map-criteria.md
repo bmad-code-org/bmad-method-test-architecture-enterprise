@@ -52,6 +52,53 @@ For each resolved oracle item (formal requirement, endpoint/spec item, or synthe
 
 ---
 
+## 1b. Attach Live Evidence
+
+Attach the live records to the oracle items they name.
+
+```javascript
+// Read from this step's inputs when present, else from the `Live Verification Results` JSON block
+// Step 2 wrote into the progress document. A run resumed here has no Step 2 bindings in memory.
+const liveRecords = runtime.getLiveRecords?.() || progressLiveRecords || [];
+const oracleItemIds = new Set(traceabilityMatrix.map((req) => String(req.id).trim()));
+
+// A requirement with a fresh `fail` is a requirement the producer's own file says is broken. Counting
+// a `pass` alongside it would let an appended retry overwrite a recorded failure, so the fail wins and
+// live evidence for that requirement is set aside entirely. Producers replace records, they do not append.
+const requirementsWithLiveFailure = new Set(
+  liveRecords.filter((record) => record.disposition === 'fail').map((record) => record.requirement_id),
+);
+
+// A `counted` record that names an oracle item nobody recognizes is not coverage of anything.
+// Demote rather than drop, so the report can name the id that failed to match.
+const resolvedLiveRecords = liveRecords.map((record) => {
+  if (record.disposition !== 'counted') return record;
+  if (!oracleItemIds.has(record.requirement_id)) return { ...record, disposition: 'unmatched' };
+  if (requirementsWithLiveFailure.has(record.requirement_id)) return { ...record, disposition: 'contradicted' };
+  return record;
+});
+
+const countedLiveByRequirement = new Map();
+resolvedLiveRecords
+  .filter((record) => record.disposition === 'counted')
+  .forEach((record) => {
+    const bucket = countedLiveByRequirement.get(record.requirement_id) || [];
+    bucket.push(record);
+    countedLiveByRequirement.set(record.requirement_id, bucket);
+  });
+```
+
+For each oracle item with counted live records:
+
+- Append them to the item's `tests` array with `level: 'live'`, `status: 'active'`, `file: ''`, and `line: null`. They carry stable `id` values, so the existing deduplication keys work unchanged.
+- Classify coverage on the same evidence rules as any other level. A live record that exercises the item's full behavior yields FULL; one that exercises part of it yields PARTIAL. Live evidence is not weaker per requirement; the gate applies its own cap in Step 5.
+
+Do not set a `live_only` flag by hand. Step 4 derives it from the mapped tests, because a flag an agent has to remember to write is a flag that silently disables the gate cap when it is forgotten.
+
+Records with any other disposition contribute no coverage. Carry `resolvedLiveRecords` forward for Step 4 to raise as blockers, and persist it back into the progress document so a resumed Step 4 can read it.
+
+---
+
 ## 2. Validate Coverage Logic
 
 Ensure:
@@ -62,6 +109,7 @@ Ensure:
 - API items are not marked FULL if endpoint-level checks are missing
 - Auth/authz items include at least one denied/invalid-path test where applicable
 - Synthetic UI journeys are not marked FULL when no E2E or component test asserts the critical path and key failure states
+- Items are not marked covered on the strength of a `stale`, `unverifiable`, `fail`, `blocked`, `skipped`, `invalid`, `unmatched`, or `contradicted` live record
 
 ---
 
