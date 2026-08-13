@@ -1,10 +1,12 @@
 /**
  * Documentation Link Validator
  *
- * Validates site-relative links in markdown files and attempts to fix broken ones.
+ * Validates site-relative and relative links in markdown files and attempts to fix broken ones.
  *
  * What it checks:
  * - All site-relative links (starting with /) point to existing .md files
+ * - All relative links (./file.md, ../dir/file.md, file.md) point to existing files,
+ *   resolved from the directory of the file containing the link
  * - Anchor links (#section) point to valid headings
  *
  * What it fixes:
@@ -21,8 +23,8 @@ const path = require('node:path');
 const DOCS_ROOT = path.resolve(__dirname, '../docs');
 const DRY_RUN = !process.argv.includes('--write');
 
-// Regex to match markdown links with site-relative paths
-const LINK_REGEX = /\[([^\]]*)\]\((\/[^)]+)\)/g;
+// Regex to match markdown links; external links and anchors are filtered out per-match
+const LINK_REGEX = /\[([^\]]*)\]\(([^)]+)\)/g;
 
 // File extensions that are static assets, not markdown docs
 const STATIC_ASSET_EXTENSIONS = ['.zip', '.txt', '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico'];
@@ -139,6 +141,60 @@ function resolveLink(siteRelativePath) {
 }
 
 /**
+ * Links that point outside the docs tree and are never validated here
+ */
+function isExternalLink(href) {
+  return href.includes('://') || href.startsWith('//') || /^(mailto|tel):/i.test(href);
+}
+
+/**
+ * Resolve a relative link against the directory of the file containing it
+ * ./run-atdd.md -> docs/tutorials/run-atdd.md
+ * ../how-to/workflows/ -> docs/how-to/workflows.md or docs/how-to/workflows/index.md
+ */
+function resolveRelativeLink(relativePath, sourceFile) {
+  const resolved = path.resolve(path.dirname(sourceFile), relativePath);
+
+  if (relativePath.endsWith('/')) {
+    // Could be file.md or directory/index.md
+    const asFile = resolved + '.md';
+    const asIndex = path.join(resolved, 'index.md');
+
+    if (fs.existsSync(asFile)) return asFile;
+    if (fs.existsSync(asIndex)) return asIndex;
+    return null;
+  }
+
+  // Direct path (e.g., ./file.md)
+  if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) return resolved;
+
+  // Try with .md extension, then as a directory with index.md
+  const withMd = resolved + '.md';
+  if (fs.existsSync(withMd)) return withMd;
+
+  const asIndex = path.join(resolved, 'index.md');
+  if (fs.existsSync(asIndex)) return asIndex;
+
+  return null;
+}
+
+/**
+ * Convert a relative link to the site-relative form used for candidate lookup
+ * Returns null when the link resolves outside the docs tree
+ */
+function relativeToSiteRelative(relativePath, sourceFile) {
+  const resolved = path.resolve(path.dirname(sourceFile), relativePath);
+  const fromDocsRoot = path.relative(DOCS_ROOT, resolved).split(path.sep).join('/');
+
+  if (fromDocsRoot === '' || fromDocsRoot.startsWith('../')) {
+    return null;
+  }
+
+  const trailingSlash = relativePath.endsWith('/') ? '/' : '';
+  return '/' + fromDocsRoot.replace(/\.md$/, '') + trailingSlash;
+}
+
+/**
  * Search for a file with directory context
  */
 function findFileWithContext(brokenPath) {
@@ -200,12 +256,22 @@ function processFile(filePath) {
 
   while ((match = LINK_REGEX.exec(strippedContent)) !== null) {
     const linkText = match[1];
-    const href = match[2];
+    const href = match[2].trim();
+
+    // Skip external links (http://, https://, mailto:, tel:)
+    if (isExternalLink(href)) {
+      continue;
+    }
 
     // Extract path and anchor
     const hashIndex = href.indexOf('#');
     const linkPath = hashIndex === -1 ? href : href.slice(0, hashIndex);
     const anchor = hashIndex === -1 ? null : href.slice(hashIndex + 1);
+
+    // Skip in-page anchors (#section) - no file to resolve
+    if (linkPath === '') {
+      continue;
+    }
 
     // Skip static asset links (zip, txt, images, etc.)
     const linkLower = linkPath.toLowerCase();
@@ -219,11 +285,14 @@ function processFile(filePath) {
     }
 
     // Validate the link target exists
-    const targetFile = resolveLink(linkPath);
+    const isSiteRelative = linkPath.startsWith('/');
+    const targetFile = isSiteRelative ? resolveLink(linkPath) : resolveRelativeLink(linkPath, filePath);
 
     if (!targetFile) {
       // Link is broken - try to find the file
-      const candidates = findFileWithContext(linkPath);
+      // Relative links that resolve outside /docs have no candidate to suggest
+      const searchPath = isSiteRelative ? linkPath : relativeToSiteRelative(linkPath, filePath);
+      const candidates = searchPath === null ? [] : findFileWithContext(searchPath);
 
       const issue = {
         type: 'broken-link',

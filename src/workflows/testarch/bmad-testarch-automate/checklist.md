@@ -13,7 +13,7 @@ Before starting this workflow, verify:
 **Halt only if:** Framework scaffolding is completely missing (run `framework` workflow first)
 
 **Note:** BMad artifacts (story, tech-spec, PRD) are OPTIONAL - workflow can run without them
-**Note:** `automate` generates tests; it does not run `*atdd` or `*test-review`. If ATDD outputs exist, use them as input and avoid duplicate coverage.
+**Note:** `automate` generates tests; it does not run `/bmad-testarch-atdd` or `/bmad-testarch-test-review`. If ATDD outputs exist, use them as input and avoid duplicate coverage.
 
 ---
 
@@ -519,7 +519,7 @@ All of the following must be true before marking this workflow as complete:
 **Resolution:**
 
 - **HALT workflow** - framework is required
-- Message: "Framework scaffolding required. Run `bmad tea *framework` first."
+- Message: "Framework scaffolding required. Run `/bmad-testarch-framework` first."
 - User must run framework workflow before automate
 
 ### Issue: No automation targets identified

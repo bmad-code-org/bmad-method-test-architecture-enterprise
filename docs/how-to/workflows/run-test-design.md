@@ -3,6 +3,8 @@ title: 'How to Run Test Design with TEA'
 description: How to create comprehensive test plans using TEA's test-design workflow
 ---
 
+# How to Run Test Design with TEA
+
 Use TEA's `test-design` workflow to create comprehensive test plans with risk assessment, NFR planning, and coverage strategies.
 
 ## When to Use This
@@ -21,36 +23,29 @@ Use TEA's `test-design` workflow to create comprehensive test plans with risk as
 - To identify epic-specific testing needs
 - To refine NFR validation when the epic has security, performance, reliability, scalability, compliance, or maintainability requirements
 
-:::note[Prerequisites]
+## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - For system-level: Architecture document complete
 - For epic-level: Epic defined with stories
-  :::
 
 ## Steps
 
-### 1. Load the TEA Agent or Skill
+### 1. Run the Test Design Workflow
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-design` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-testarch-test-design` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `test-design` or `TD`
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-design`
+- **Codex:** `$bmad-testarch-test-design`
+- **Inside a `/bmad-tea` chat:** `TD`
 
-### 2. Run the Test Design Workflow
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
-```bash
-/bmad-testarch-test-design
-```
-
-### 3. Specify the Mode
+### 2. Specify the Mode
 
 TEA will ask if you want:
 
-- **System-level** — For architecture testability review and NFR planning (Phase 3)
-- **Epic-level** — For epic-specific test and NFR planning (Phase 4)
+- **System-level**: For architecture testability review and NFR planning (Phase 3)
+- **Epic-level**: For epic-specific test and NFR planning (Phase 4)
 
-### 4. Provide Context
+### 3. Provide Context
 
 For system-level:
 
@@ -64,7 +59,7 @@ For epic-level:
 - Reference the epic file with stories
 - Mention any NFR-heavy scenarios or inherited system-level NFR plans
 
-### 5. Review the Output
+### 4. Review the Output
 
 TEA generates test design document(s) based on mode.
 
@@ -90,13 +85,6 @@ TEA produces two focused documents for system-level mode:
    - Sprint 0 setup requirements (blockers, infrastructure, environments)
 
 `test-design` does **not** make final NFR PASS/CONCERNS/FAIL decisions. It defines the thresholds and evidence that `nfr-assess` audits later.
-
-**Why Two Documents?**
-
-- **Architecture teams** can scan blockers in <5 min (Quick Guide format)
-- **QA teams** have actionable test recipes (step-by-step with checklists)
-- **No redundancy** between documents (cross-references instead of duplication)
-- **Clear separation** of concerns (what to deliver vs how to test)
 
 **Epic-Level Output (ONE Document):**
 
@@ -133,20 +121,20 @@ TEA produces two focused documents for system-level mode:
 
 ## Tips
 
-- **Run system-level right after architecture** — Early testability review
-- **Shift NFRs left** — Define thresholds and planned evidence before implementation
-- **Run epic-level at the start of each epic** — Targeted test planning
-- **Update if ADRs change** — Keep test design aligned
-- **Use output to guide other workflows** — Feeds into `atdd` and `automate`
-- **Use `nfr-assess` later** — Audit evidence after tests, scans, metrics, or logs exist
-- **Architecture teams review Architecture doc** — Focus on blockers and mitigation plans
-- **QA teams use QA doc as implementation guide** — Follow test scenarios and Sprint 0 checklist
+- **Run system-level right after architecture**: Early testability review
+- **Shift NFRs left**: Define thresholds and planned evidence before implementation
+- **Run epic-level at the start of each epic**: Targeted test planning
+- **Update if ADRs change**: Keep test design aligned
+- **Use output to guide other workflows**: Feeds into `atdd` and `automate`
+- **Use `nfr-assess` later**: Audit evidence after tests, scans, metrics, or logs exist
+- **Architecture teams review Architecture doc**: Focus on blockers and mitigation plans
+- **QA teams use QA doc as implementation guide**: Follow test scenarios and Sprint 0 checklist
 
 ## Next Steps
 
 After test design:
 
-1. **Setup Test Framework** — If not already configured
-2. **Implementation Readiness** — System-level feeds into gate check
-3. **Story Implementation** — Epic-level guides testing during dev
-4. **NFR Evidence Audit** — Run `nfr-assess` after implementation evidence exists
+1. **Setup Test Framework**: If not already configured
+2. **Implementation Readiness**: System-level feeds into gate check
+3. **Story Implementation**: Epic-level guides testing during dev
+4. **NFR Evidence Audit**: Run `nfr-assess` after implementation evidence exists

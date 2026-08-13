@@ -21,8 +21,6 @@ Use TEA's `atdd` workflow to generate red-phase acceptance test scaffolds BEFORE
 
 ## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - Test framework setup complete (run `framework` if needed)
 - Story or feature defined with acceptance criteria
 
@@ -30,19 +28,15 @@ Use TEA's `atdd` workflow to generate red-phase acceptance test scaffolds BEFORE
 
 ## Steps
 
-### 1. Load the TEA Agent or Skill
+### 1. Run the ATDD Workflow
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-atdd` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-testarch-atdd` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `atdd` or `AT`
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-atdd`
+- **Codex:** `$bmad-testarch-atdd`
+- **Inside a `/bmad-tea` chat:** `AT`
 
-### 2. Run the ATDD Workflow
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
-```bash
-/bmad-testarch-atdd
-```
-
-### 3. Provide Context
+### 2. Provide Context
 
 TEA will ask for:
 
@@ -84,7 +78,7 @@ And changes are not saved
 - Reference PRD or tech spec
 - Link to test design (if you ran `test-design` first)
 
-### 4. Specify Test Levels
+### 3. Specify Test Levels
 
 TEA will ask what test levels to generate:
 
@@ -114,7 +108,7 @@ Generate:
 - Focus on P0 and P1 scenarios
 ```
 
-### 5. Review Generated Tests
+### 4. Review Generated Tests
 
 TEA generates **red-phase test scaffolds** in appropriate directories:
 
@@ -283,7 +277,7 @@ TEA also provides an implementation checklist:
 - [ ] Activate and run tests during implementation (should fail before code changes, then pass)
 ```
 
-### 6. Verify Red-Phase Scaffolds
+### 5. Verify Red-Phase Scaffolds
 
 This is the TDD red phase, but TEA keeps generated tests in `test.skip()` until you're ready to work on a task. Review the generated files, then remove `test.skip()` for the current task and confirm that the newly activated test fails before you implement the feature.
 
@@ -301,12 +295,15 @@ npx cypress run
 
 Initial output with scaffolds still skipped:
 
-```
+```text
 Running 6 tests using 1 worker
 
   - tests/api/profile.spec.ts:3:3 › should fetch user profile
   - tests/api/profile.spec.ts:15:3 › should update user profile
-  - tests/e2e/profile.spec.ts:10:3 › should edit and save profile
+  - tests/api/profile.spec.ts:30:3 › should validate email format
+  - tests/e2e/profile.spec.ts:10:3 › should display current profile
+  - tests/e2e/profile.spec.ts:18:3 › should edit and save profile
+  - tests/e2e/profile.spec.ts:35:3 › should show validation error
 
   6 skipped
 ```
@@ -317,7 +314,7 @@ After you remove `test.skip()` from the task you are implementing, that activate
 - Tests will guide implementation
 - You have clear success criteria
 
-### 7. Implement the Feature
+### 6. Implement the Feature
 
 Now implement the feature following the test guidance:
 
@@ -327,7 +324,7 @@ Now implement the feature following the test guidance:
 4. Move to the next API or E2E test and repeat
 5. Refactor with confidence (tests protect you)
 
-### 8. Verify Tests Pass
+### 7. Verify Tests Pass
 
 After implementation, run your test suite.
 
@@ -345,7 +342,7 @@ npx cypress run
 
 Expected output:
 
-```
+```text
 Running 6 tests using 1 worker
 
   ✓ tests/api/profile.spec.ts:3:3 › should fetch user profile (850ms)
@@ -358,7 +355,7 @@ Running 6 tests using 1 worker
   6 passed (9.8s)
 ```
 
-**Green!** You've completed the active red → green → refactor cycle for the generated scaffolds.
+That completes the red → green → refactor cycle for the generated scaffolds.
 
 ## What You Get
 
@@ -387,9 +384,9 @@ Running 6 tests using 1 worker
 
 Run `test-design` before `atdd` for better results:
 
-```
-test-design   # Risk assessment and priorities
-atdd          # Generate tests based on design
+```text
+/bmad-testarch-test-design   # risk assessment and priorities
+/bmad-testarch-atdd          # generate tests based on that design
 ```
 
 ### Browser Automation (Optional)
@@ -435,7 +432,7 @@ TEA generates deterministic tests by default:
 - Network-first patterns (wait for responses)
 - Explicit assertions (no conditionals)
 
-Don't modify these patterns - they prevent flakiness!
+Don't modify these patterns; they prevent flakiness.
 
 ## Related Guides
 
@@ -452,9 +449,5 @@ Don't modify these patterns - they prevent flakiness!
 
 ## Reference
 
-- [Command: \*atdd](/docs/reference/commands.md#atdd) - Full command reference
+- [Command: atdd](/docs/reference/commands.md#atdd) - Full command reference
 - [TEA Configuration](/docs/reference/configuration.md) - MCP and Playwright Utils options
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

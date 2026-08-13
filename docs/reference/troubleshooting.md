@@ -5,833 +5,312 @@ description: Diagnose and resolve common issues when using TEA
 
 # Troubleshooting Guide
 
-This guide helps you diagnose and resolve common issues when using TEA (Test Engineering Architect).
-
-## Table of Contents
-
-- [Installation Issues](#installation-issues)
-- [Agent Loading Issues](#agent-loading-issues)
-- [Workflow Execution Issues](#workflow-execution-issues)
-- [Knowledge Base Issues](#knowledge-base-issues)
-- [Configuration Issues](#configuration-issues)
-- [Output and File Issues](#output-and-file-issues)
-- [Integration Issues](#integration-issues)
-- [Performance Issues](#performance-issues)
-- [Getting Help](#getting-help)
-
----
-
 ## Installation Issues
 
 ### TEA Module Not Found After Installation
 
-**Symptom**: After running `npx bmad-method install`, TEA agent is not available.
+**Symptom**: after `npx bmad-method install`, the TEA agent is not available.
 
-**Causes**:
+**Cause**: TEA was not selected at the module prompt, or the install failed silently and `_bmad/tea/` was never created.
 
-- TEA was not selected during installation
-- Installation process failed silently
-- `_bmad/tea/` directory was not created
-
-**Solutions**:
-
-1. Verify TEA installation:
-
-   ```bash
-   ls -la _bmad/tea/
-   # Should show: agents/, workflows/, testarch/, module.yaml
-   ```
-
-2. If missing, reinstall TEA:
-
-   ```bash
-   npx bmad-method install
-   # Select: Test Architect (TEA)
-   ```
-
-3. Check installation logs for errors:
-   ```bash
-   # Look for error messages during installation
-   npx bmad-method install --verbose
-   ```
-
-### Installing TEA Behind a Corporate Firewall (Local Repo)
-
-If the BMAD installer can run but cannot fetch the Test Architect module from GitHub, point it to a local clone or internal mirror.
-
-**Goal:** Make the installer clone TEA from a local path instead of the public repo.
-
-1. **Clone TEA locally (or use your internal Git mirror):**
-
-   ```bash
-   git clone /path/to/your/internal/mirror/bmad-method-test-architecture-enterprise \
-     /path/to/local/bmad-method-test-architecture-enterprise
-   ```
-
-2. **Edit the BMAD installer module list** in the BMAD repo you are running the installer from:
-
-   `BMAD-METHOD/tools/cli/external-official-modules.yaml`
-
-   Update the TEA entry to point to your local path:
-
-   ```yaml
-   bmad-method-test-architecture-enterprise:
-     url: /path/to/local/bmad-method-test-architecture-enterprise
-     module-definition: src/module.yaml
-     code: tea
-     name: 'Test Architect'
-     description: 'Master Test Architect for quality strategy, test automation, and release gates'
-     defaultSelected: false
-     type: bmad-org
-     npmPackage: bmad-method-test-architecture-enterprise
-   ```
-
-3. **Run the installer:**
-
-   ```bash
-   npx bmad-method install
-   ```
-
-**Notes:**
-
-- `url:` can be a local filesystem path or an internal Git mirror URL.
-- If your environment blocks npm, use an internal npm proxy or allow npm only for the local module cache.
+```bash
+ls -la _bmad/tea/                 # should show agents/, workflows/, config.yaml
+npx bmad-method install           # select "Test Architect (TEA)" at the module prompt
+npx bmad-method install --debug   # if it fails again, this surfaces the installer error
+```
 
 ### Module Installation Hangs
 
-**Symptom**: Installation process hangs or times out.
+**Symptom**: the installer hangs or times out.
 
-**Causes**:
+**Cause**: network connectivity, an npm registry timeout, or no disk space.
 
-- Network connectivity issues
-- NPM registry timeout
-- Disk space issues
+```bash
+ping registry.npmjs.org
+df -h                                              # installs need room for the module tree
+npm cache clean --force && npx bmad-method install # retry on a clean cache
+npm config set registry https://registry.npmjs.org/ # if a proxy rewrote the registry
+```
 
-**Solutions**:
+### Installer Cannot Reach GitHub
 
-1. Check network connectivity:
-
-   ```bash
-   ping registry.npmjs.org
-   ```
-
-2. Check available disk space:
-
-   ```bash
-   df -h
-   ```
-
-3. Clear NPM cache and retry:
-
-   ```bash
-   npm cache clean --force
-   npx bmad-method install
-   ```
-
-4. Use alternative registry:
-   ```bash
-   npm config set registry https://registry.npmjs.org/
-   ```
-
----
+The installer starts but cannot fetch the Test Architect module. See [Install TEA Behind a Corporate Firewall](/how-to/install-behind-firewall/).
 
 ## Agent Loading Issues
 
 ### "Agent Not Found" Error
 
-**Symptom**: Error message: `Error: Agent '_bmad/tea' not found` or `Agent 'tea' could not be loaded`.
+**Symptom**: `Error: Agent '_bmad/tea' not found` or `Agent 'tea' could not be loaded`.
 
-**Causes**:
+**Cause**: TEA is not installed, or the install is incomplete.
 
-- TEA not installed
-- Incorrect agent path
-- Corrupted installation
+```bash
+ls -la _bmad/tea/agents/bmad-tea/SKILL.md   # the agent entrypoint
+```
 
-**Solutions**:
-
-1. Verify TEA agent skill exists:
-
-   ```bash
-   ls -la _bmad/tea/agents/bmad-tea/SKILL.md
-   ```
-
-2. Validate agent schema:
-
-   ```bash
-   # Check for schema errors
-   node tools/validate-agent-schema.js
-   ```
-
-3. Reinstall TEA if corrupted:
-   ```bash
-   rm -rf _bmad/tea/
-   npx bmad-method install
-   ```
+If the file is missing or the tree looks partial, [reset TEA to a fresh state](#reset-tea-to-a-fresh-state).
 
 ### TEA Loads But Commands Don't Work
 
-**Symptom**: TEA agent loads successfully, but workflow triggers (TF, TD, AT, etc.) don't execute.
+**Symptom**: the TEA agent loads, but workflow codes (TF, TD, AT, and the rest) do not execute.
 
-**Causes**:
+**Cause**: workflow directories are missing from the install.
 
-- Workflow files missing
-- Incorrect workflow paths in agent definition
-- YAML syntax errors in workflow files
+```bash
+ls _bmad/tea/workflows/testarch/   # all nine must be present
+# bmad-teach-me-testing   bmad-testarch-framework   bmad-testarch-test-design
+# bmad-testarch-atdd      bmad-testarch-nfr         bmad-testarch-test-review
+# bmad-testarch-automate  bmad-testarch-ci          bmad-testarch-trace
+```
 
-**Solutions**:
+Then invoke the workflow by its skill name instead of the two-letter code:
 
-1. Check workflow directories exist:
+```text
+/bmad-testarch-test-design    # Claude Code, Cursor, Windsurf
+$bmad-testarch-test-design    # Codex
+```
 
-   ```bash
-   ls -la _bmad/tea/workflows/testarch/
-   # Should show: atdd/, automate/, ci/, framework/, nfr-assess/, test-design/, test-review/, trace/
-   ```
-
-2. Validate workflow YAML files:
-
-   ```bash
-   # Check each workflow
-   cat _bmad/tea/workflows/testarch/bmad-testarch-test-design/workflow.yaml
-   ```
-
-3. Test workflow trigger directly:
-
-   ```text
-   # Try full slash command
-   /bmad:tea:test-design
-
-   # Codex skill-mode alternative
-   $bmad-tea-testarch-test-design
-   ```
+If a directory is missing, [reset TEA to a fresh state](#reset-tea-to-a-fresh-state).
 
 ### Custom TEA Workflow Does Not Appear
 
-**Symptom**: A custom workflow used to be available from TEA, but it no longer appears in the `bmad-tea` menu after updates.
+**Symptom**: a custom workflow that used to appear in the `bmad-tea` menu is gone after an update.
 
-**Cause**: TEA is now a standalone module. Custom workflows are not merged into TEA core automatically.
+**Cause**: TEA is a standalone module. Custom workflows are not merged into TEA core automatically.
 
-**Solution**:
-
-1. Package the workflow as custom content or a custom module instead of editing TEA directly.
-2. Attach it to `bmad-tea` using the generated agent customization file under `_bmad/_config/agents/`.
-3. Re-run `npx bmad-method install` so the customization and workflow registration are refreshed.
-
-See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
-
----
+**Fix**: package the workflow as custom content or a custom module, attach it to `bmad-tea` through the generated customization file under `_bmad/_config/agents/`, then re-run `npx bmad-method install` so the customization and workflow registration are refreshed. See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ## Workflow Execution Issues
 
 ### GitHub Copilot Slash Command Fails with "No such file or directory"
 
-**Symptom**: A workflow or custom skill launched through GitHub Copilot in VS Code fails with an error such as:
+**Symptom**: a workflow launched through GitHub Copilot in VS Code fails with an error such as `can't open file 'C:\path\to\workspace\scripts\resolve_customization.py': [Errno 2] No such file or directory`.
 
-```text
-uv run scripts/resolve_customization.py ...
-can't open file 'C:\path\to\workspace\scripts\resolve_customization.py': [Errno 2] No such file or directory
-```
+**Cause**: GitHub Copilot runs skill commands from the workspace root rather than from the installed skill folder under `.github/skills/`, so a path written relative to the skill does not resolve.
 
-**Cause**: GitHub Copilot executes skill commands from the **workspace root**, not from the installed skill folder under `.github/skills/`.
-
-**Fix**:
-
-1. Anchor skill-local files with `{skill-root}`.
-2. Anchor repository files with `{project-root}`.
-3. Update workflow entrypoints so sibling files are loaded from `{skill-root}`, not from implicit relative paths.
-
-**Good examples**:
-
-```md
-Read `{skill-root}/workflow.md`
-Load `{skill-root}/steps-c/step-01-preflight.md`
-Run: `uv run {skill-root}/scripts/resolve_customization.py --key inject`
-Read `{project-root}/_bmad/tea/config.yaml`
-```
-
-**Problematic examples**:
-
-```md
-Read `workflow.md`
-Load `steps-c/step-01-preflight.md`
-Run: `uv run scripts/resolve_customization.py --key inject`
-```
-
-If you are creating a custom TEA workflow, see [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md) and author it with `{skill-root}` / `{project-root}` from the start.
+**Fix**: shipped TEA workflows already anchor every path with `{skill-root}` or `{project-root}`. If you hit this in a workflow you wrote, apply the same anchoring; see [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ### Workflow Starts But Produces No Output
 
-**Symptom**: Workflow executes but doesn't generate expected files (test designs, reports, tests).
+**Symptom**: the workflow runs but generates no test designs, reports, or tests.
 
-**Causes**:
+**Cause**: the output directory is missing or not writable, `test_artifacts` is misconfigured, or the run stopped before its output step.
 
-- Output directory doesn't exist or lacks write permissions
-- Variable `test_artifacts` not configured
-- Workflow completed but didn't reach output generation step
+```bash
+grep test_artifacts _bmad/tea/config.yaml   # default: _bmad-output/test-artifacts
+mkdir -p _bmad-output/test-artifacts
+chmod -R u+w _bmad-output/test-artifacts
+```
 
-**Solutions**:
-
-1. Check output directory configuration:
-
-   ```bash
-   cat _bmad/tea/module.yaml | grep test_artifacts
-   ```
-
-2. Create output directory if missing:
-
-   ```bash
-   mkdir -p test-results
-   ```
-
-3. Check directory permissions:
-
-   ```bash
-   ls -la test-results/
-   # Should be writable
-   ```
-
-4. Verify workflow completed all steps:
-   ```
-   # Check Claude's response for completion message
-   # Look for: "✓ Test design complete" or similar
-   ```
+If the directory is correct and writable, read the agent's final message for a completion line such as `✓ Test design complete`. When a run stops early, the last step it names is where to look.
 
 ### Subagent Fails to Execute
 
-**Symptom**: Workflow reports subagent failure, e.g., "API test generation subagent failed".
+**Symptom**: the workflow reports a subagent failure, for example "API test generation subagent failed".
 
-**Causes**:
+**Cause**: a subagent step file is missing, `/tmp` is not writable, the subagent returned an unparseable payload, or the runtime cannot launch parallel workers.
 
-- Subagent step file missing
-- Temp file write permissions issue
-- Invalid subagent output format
-- Requested execution mode not supported by runtime
+```bash
+# 1. The subagent step files must exist
+ls _bmad/tea/workflows/testarch/bmad-testarch-automate/steps-c/step-03*.md
+# step-03-generate-tests.md plus step-03a-*, step-03b-*, step-03c-aggregate.md
 
-**Solutions**:
+# 2. Workers hand off through one JSON file per suite in /tmp
+ls /tmp | grep '^tea-'
+# e.g. tea-automate-api-tests-1763049600.json, tea-automate-e2e-tests-1763049600.json
 
-1. Verify subagent step files exist:
+# 3. Check which orchestration mode was selected
+grep -E "tea_execution_mode|tea_capability_probe" _bmad/tea/config.yaml
+```
 
-   ```bash
-   # For automate workflow
-   ls -la _bmad/tea/workflows/testarch/bmad-testarch-automate/steps-c/step-03*.md
-   # Should show: step-03a-*.md, step-03b-*.md, step-03c-aggregate.md
-   ```
+If the runtime cannot launch parallel workers, force the deterministic path in `_bmad/tea/config.yaml`:
 
-2. Check temp file directory permissions:
-
-   ```bash
-   ls -la /tmp/ | grep bmad-tea
-   # Should show temp files if workflow ran
-   ```
-
-3. Look for error messages in subagent output:
-
-   ```
-   # Check Claude's response for specific error details
-   ```
-
-4. Check TEA orchestration mode in config:
-
-   ```bash
-   grep -E "tea_execution_mode|tea_capability_probe" _bmad/tea/config.yaml
-   ```
-
-5. If runtime does not support parallel worker launch, use deterministic fallback:
-
-   ```yaml
-   tea_execution_mode: 'sequential'
-   tea_capability_probe: true
-   ```
+```yaml
+tea_execution_mode: 'sequential'
+tea_capability_probe: true
+```
 
 ### Knowledge Fragments Not Loading
 
-**Symptom**: Workflow executes but doesn't reference knowledge base patterns (e.g., no mention of "test-quality", "network-first").
+**Symptom**: the workflow runs but never references knowledge base patterns such as `test-quality` or `network-first`.
 
-**Causes**:
+**Cause**: `tea-index.csv` is missing or truncated, or fragment files are missing.
 
-- `tea-index.csv` missing or corrupted
-- Knowledge fragment files missing
-- Workflow manifest doesn't specify fragments
+```bash
+wc -l < _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 55 (header + 54 fragments)
+ls _bmad/tea/agents/bmad-tea/resources/knowledge/*.md | wc -l   # 54
+head -1 _bmad/tea/agents/bmad-tea/resources/tea-index.csv
+# id,name,description,tags,tier,fragment_file
 
-**Solutions**:
-
-1. Verify tea-index.csv exists:
-
-   ```bash
-   cat _bmad/tea/agents/bmad-tea/resources/tea-index.csv | wc -l
-   # Should show 43 lines (header + 42 fragments)
-   ```
-
-2. Check knowledge fragment files:
-
-   ```bash
-   ls -la _bmad/tea/agents/bmad-tea/resources/knowledge/ | wc -l
-   # Should show 40+ files
-   ```
-
-3. Validate CSV format:
-
-   ```bash
-   head -5 _bmad/tea/agents/bmad-tea/resources/tea-index.csv
-   # Should show: id,name,description,tags,tier,fragment_file
-   ```
-
-4. Check workflow manifest:
-   ```bash
-   # Each workflow.yaml should specify knowledge_fragments
-   grep -A 5 "knowledge_fragments" _bmad/tea/workflows/testarch/bmad-testarch-test-design/workflow.yaml
-   ```
-
----
+# Workflows load knowledge through a `knowledgeIndex` key in step-file frontmatter,
+# so workflow.yaml never mentions fragments
+grep -r knowledgeIndex _bmad/tea/workflows/testarch/bmad-testarch-test-design/steps-c/
+# knowledgeIndex: './resources/tea-index.csv'
+```
 
 ## Configuration Issues
 
 ### Variables Not Prompting During Installation
 
-**Symptom**: Installation completes without asking for TEA configuration (test_artifacts, Playwright Utils, etc.).
+**Symptom**: installation completes without asking for TEA configuration (`test_artifacts`, Playwright Utils, and the rest).
 
-**Causes**:
+**Cause**: the installer ran with `-y`/`--yes`, which accepts defaults and skips prompts.
 
-- Variables marked as `prompt: false` in module.yaml
-- Installation running in non-interactive mode
-- Module.yaml misconfigured
+```bash
+npx bmad-method install                    # prompting is the default; omit --yes
+npx bmad-method install --list-options tea # every key and its allowed values
+npx bmad-method install --set tea.test_artifacts=_bmad-output/test-artifacts
+vi _bmad/tea/config.yaml                   # or edit the installed values directly
+```
 
-**Solutions**:
+### Config Values Ignored
 
-1. Check variable prompt settings:
+**Symptom**: TEA uses defaults instead of the values in `config.yaml`, or keeps using old values after you edited the file.
 
-   ```bash
-   cat _bmad/tea/module.yaml | grep -A 3 "test_artifacts"
-   # Should show prompt: true
-   ```
+**Cause**: the file is in the wrong place, the YAML does not parse, a key is misspelled, or the chat started before the edit. TEA reads config once at workflow start and does not reload mid-chat.
 
-2. Manually edit module.yaml if needed:
+```bash
+ls -la _bmad/tea/config.yaml              # must be at the project root, under _bmad/tea/
+npx --yes js-yaml _bmad/tea/config.yaml   # prints the parsed object, or the syntax error
+```
 
-   ```bash
-   # Update _bmad/tea/module.yaml
-   vi _bmad/tea/module.yaml
-   ```
-
-3. Run installation in interactive mode:
-   ```bash
-   npx bmad-method install --interactive
-   ```
+If it parses and the key name matches [Configuration](/reference/configuration/), save the file, start a fresh chat, and re-run the workflow.
 
 ### Playwright Utils Integration Not Working
 
-**Symptom**: Workflows don't include Playwright Utils references even though `tea_use_playwright_utils` is enabled.
+**Symptom**: workflows produce no Playwright Utils references even though `tea_use_playwright_utils` is enabled.
 
-**Causes**:
+```bash
+grep tea_use_playwright_utils _bmad/tea/config.yaml   # should show: true
+grep -ic playwright-utils _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 18
+```
 
-- Variable set to `false` in module.yaml
-- Playwright Utils knowledge fragments missing
-- Workflow doesn't support Playwright Utils integration
-
-**Solutions**:
-
-1. Verify variable setting:
-
-   ```bash
-   cat _bmad/tea/module.yaml | grep tea_use_playwright_utils
-   # Should show: default: true (if enabled)
-   ```
-
-2. Check Playwright Utils fragments exist:
-
-   ```bash
-   grep -i "playwright-utils" _bmad/tea/agents/bmad-tea/resources/tea-index.csv
-   # Should show 6 fragments
-   ```
-
-3. Note: Only certain workflows integrate Playwright Utils:
-   - ✅ Framework (TF)
-   - ✅ Test Design (TD)
-   - ✅ ATDD (AT)
-   - ✅ Automate (TA)
-   - ✅ Test Review (RV)
-   - ❌ CI, Trace, NFR-Assess (not applicable)
-
----
+Confirm the workflow integrates Playwright Utils at all. Framework (TF), Test Design (TD), ATDD (AT), Automate (TA), and Test Review (RV) do. CI, Trace, and NFR Evidence Audit do not.
 
 ## Output and File Issues
 
 ### Test Files Generated in Wrong Location
 
-**Symptom**: Test files created in unexpected directory.
+**Symptom**: test files are created in an unexpected directory.
 
-**Causes**:
+**Cause**: `test_artifacts` resolves against the project root, so a misconfigured value or a shell sitting in a subdirectory moves the target.
 
-- `test_artifacts` variable misconfigured
-- Relative path confusion
-- Working directory changed
-
-**Solutions**:
-
-1. Check test_artifacts configuration:
-
-   ```bash
-   cat _bmad/tea/module.yaml | grep test_artifacts
-   ```
-
-2. Use absolute paths:
-
-   ```bash
-   # Specify absolute path
-   export TEST_ARTIFACTS=/path/to/project/test-results
-   ```
-
-3. Verify working directory:
-   ```bash
-   pwd
-   # Should be project root
-   ```
+```bash
+grep test_artifacts _bmad/tea/config.yaml   # default: _bmad-output/test-artifacts
+                                            # edit config.yaml to change it
+pwd                                         # must be the project root
+```
 
 ### Generated Tests Have Syntax Errors
 
-**Symptom**: TEA generates tests with JavaScript/TypeScript syntax errors.
+**Symptom**: TEA generates tests with JavaScript or TypeScript syntax errors.
 
-**Causes**:
+**Cause**: a framework mismatch, usually Playwright syntax emitted for a Cypress project or the reverse.
 
-- Framework configuration mismatch (Playwright vs Cypress)
-- Wrong test template loaded
-- Knowledge fragment syntax error
+**Fix**: name the framework and language explicitly in the prompt, for example "Generate Playwright tests using TypeScript", then lint what came back:
 
-**Solutions**:
-
-1. Specify framework explicitly:
-
-   ```
-   # In chat with TEA
-   "Generate Playwright tests using TypeScript"
-   ```
-
-2. Validate generated tests:
-
-   ```bash
-   npx eslint tests/**/*.spec.ts
-   ```
-
-3. Check knowledge fragments for errors:
-   ```bash
-   # Validate markdown syntax
-   markdownlint _bmad/tea/agents/bmad-tea/resources/knowledge/*.md
-   ```
+```bash
+npx eslint tests/**/*.spec.ts
+```
 
 ### File Permission Errors
 
-**Symptom**: Error: `EACCES: permission denied` when writing files.
+**Symptom**: `EACCES: permission denied` when writing files.
 
-**Causes**:
+**Cause**: the target directory is not writable, is owned by another user, or the disk is full.
 
-- Directory not writable
-- File owned by different user
-- Disk full
-
-**Solutions**:
-
-1. Check directory permissions:
-
-   ```bash
-   ls -la test-results/
-   ```
-
-2. Fix permissions:
-
-   ```bash
-   chmod -R u+w test-results/
-   ```
-
-3. Check disk space:
-   ```bash
-   df -h
-   ```
-
----
+```bash
+ls -la _bmad-output/test-artifacts
+chmod -R u+w _bmad-output/test-artifacts
+df -h
+```
 
 ## Integration Issues
 
 ### Playwright Utils Not Found
 
-**Symptom**: Tests reference Playwright Utils but imports fail.
+**Symptom**: tests reference Playwright Utils but the imports fail.
 
-**Causes**:
+```bash
+npm install @seontechnologies/playwright-utils
+npm ls @seontechnologies/playwright-utils   # confirms the resolved version
+```
 
-- Playwright Utils not installed
-- Wrong import path
-- Version mismatch
+Generated tests import each fixture from its own module subpath, and `expect` from Playwright:
 
-**Solutions**:
-
-1. Install Playwright Utils:
-
-   ```bash
-   npm install @muratkeremozcan/playwright-utils
-   ```
-
-2. Verify installation:
-
-   ```bash
-   npm ls @muratkeremozcan/playwright-utils
-   ```
-
-3. Check import paths in generated tests:
-   ```typescript
-   // Should be:
-   import { expect, test } from '@muratkeremozcan/playwright-utils';
-   ```
+```typescript
+import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
+```
 
 ### Browser Automation Not Working
 
-**Symptom**: `tea_browser_automation` set to `"auto"` or `"cli"` or `"mcp"` but no browser features in outputs.
+**Symptom**: `tea_browser_automation` is set to `auto`, `cli`, or `mcp`, but outputs contain no browser features.
 
-**Causes**:
+**Cause**: for `cli` or `auto`, the CLI is not installed globally. For `mcp` or `auto`, the MCP server is not configured in the IDE.
 
-- CLI not installed globally (for `cli` or `auto` mode)
-- MCP server not configured in IDE (for `mcp` or `auto` mode)
-- Variable not read correctly
-- Workflow doesn't support browser automation
+```bash
+playwright-cli --version                          # cli mode; install: npm i -g @playwright/cli@latest
+npx playwright install                            # both modes need the browser binaries
+npx @playwright/mcp@latest --version              # mcp mode; confirms the server is reachable
+grep tea_browser_automation _bmad/tea/config.yaml # confirm the mode you think you set
+```
 
-**Solutions**:
+For MCP mode, add the server to your tool's MCP config, then restart the IDE:
 
-1. For CLI mode, verify CLI is installed:
+```json
+{
+  "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    }
+  }
+}
+```
 
-   ```bash
-   playwright-cli --version
-   # If missing: npm install -g @playwright/cli@latest
-   ```
-
-2. For MCP mode, verify MCP configuration in IDE:
-
-   ```json
-   {
-     "mcpServers": {
-       "playwright": {
-         "type": "stdio",
-         "command": "npx",
-         "args": ["-y", "@playwright/mcp@latest"]
-       }
-     }
-   }
-   ```
-
-   See [Configure Browser Automation — MCP Setup](/docs/how-to/customization/configure-browser-automation.md#for-mcp-mcp-or-auto-mode) for the exact config file path for your tool (Claude Code, Codex, Gemini CLI, Cursor, Windsurf).
-
-3. Check variable setting:
-
-   ```bash
-   cat _bmad/tea/config.yaml | grep tea_browser_automation
-   ```
-
-4. Restart IDE after configuration changes.
-
----
+See [Configure Browser Automation: MCP Setup](/docs/how-to/customization/configure-browser-automation.md#for-mcp-mcp-or-auto-mode) for the exact config file path for your tool (Claude Code, Codex, Gemini CLI, Cursor, Windsurf).
 
 ## Performance Issues
 
 ### Workflows Taking Too Long
 
-**Symptom**: Workflows run for several minutes without completing.
+**Symptom**: a workflow runs for several minutes without completing.
 
-**Causes**:
+**Cause**: a large codebase to explore, many test files to review, or subagent overhead.
 
-- Large codebase exploration
-- Many test files to review
-- Subagent execution overhead
-- Network latency (if using web-based Claude)
+**Fix**: scope the run to a directory instead of the whole suite, for example "Review tests in tests/e2e/checkout/" rather than "review all tests". Use `automate` for targeted generation and `test-review` on specific files. Check `top` for CPU and memory pressure.
 
-**Solutions**:
-
-1. Scope workflows to specific directories:
-
-   ```
-   # Instead of "review all tests"
-   "Review tests in tests/e2e/checkout/"
-   ```
-
-2. Use selective workflows:
-   - Use `automate` for targeted test generation
-   - Use `test-review` on specific files, not entire suite
-
-3. Check system resources:
-   ```bash
-   top
-   # Look for CPU/memory usage
-   ```
-
-### Large Knowledge Base Loading Slowly
-
-**Symptom**: Initial workflow load takes 30+ seconds.
-
-**Causes**:
-
-- Up to 42 fragments loading at once (depends on workflow and enabled integrations)
-- Large fragment file sizes
-- Disk I/O bottleneck
-
-**Solutions**:
-
-1. This is expected behavior - knowledge base loading is one-time per workflow
-2. Use cached knowledge (workflows cache fragments in memory)
-3. For repeated runs, performance should improve
-
----
+The first workflow run in a session loads knowledge fragments from disk and is slower than later runs. That is expected.
 
 ## Getting Help
 
-### Debug Mode
+### Reset TEA to a Fresh State
 
-Enable debug logging for detailed diagnostics:
+This clears a partial or corrupted install and is the fallback for every "missing file" symptom above.
 
 ```bash
-# Set debug environment variable
-export DEBUG=bmad:tea:*
-
-# Run workflow with verbose output
-# (Note: Exact implementation depends on BMAD Method)
+cp _bmad/tea/config.yaml /tmp/tea-config-backup.yaml   # back up your answers first
+rm -rf _bmad/tea/
+npx bmad-method install                                # select "Test Architect (TEA)"
+cp /tmp/tea-config-backup.yaml _bmad/tea/config.yaml   # only if the prompts lost a value
 ```
 
 ### Collecting Diagnostic Information
 
-When reporting issues, include:
+Include all of this when reporting an issue, plus the full error message and the exact commands that trigger it:
 
-1. **TEA Version**:
-
-   ```bash
-   cat _bmad/tea/module.yaml | grep version
-   ```
-
-2. **BMAD Method Version**:
-
-   ```bash
-   bmad --version
-   ```
-
-3. **Node Version**:
-
-   ```bash
-   node --version
-   ```
-
-4. **Operating System**:
-
-   ```bash
-   uname -a
-   ```
-
-5. **Directory Structure**:
-
-   ```bash
-   tree -L 2 _bmad/tea/
-   ```
-
-6. **Error Messages**: Copy full error message and stack trace
-
-7. **Steps to Reproduce**: Exact commands that trigger the issue
+```bash
+npx bmad-method status                                # BMAD and module versions
+grep -A6 'test-architecture' _bmad/_config/manifest.yaml   # TEA channel and sha
+node --version
+uname -a
+tree -L 2 _bmad/tea/
+```
 
 ### Support Channels
 
-1. **Documentation**: [test-architect.bmad-method.org](https://test-architect.bmad-method.org)
-2. **GitHub Issues**: [Report a bug](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/new?template=issue.md)
-3. **GitHub Discussions**: [Ask a question](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/discussions)
-
-### Before Reporting an Issue
-
-Check these first:
-
-- [ ] TEA is installed: `ls -la _bmad/tea/`
-- [ ] Using the correct invocation for your tool: slash namespace `/bmad:tea:*` (not `/bmad:bmm:tea:*`) or Codex skill equivalents (`$bmad-tea-*`)
-- [ ] Module.yaml exists and is valid
-- [ ] Knowledge base files present (42 fragments)
-- [ ] Output directory exists and is writable
-- [ ] No disk space issues: `df -h`
-- [ ] Node version >=20.0.0: `node --version`
-- [ ] Searched existing issues on GitHub
-
----
-
-## Common Error Messages
-
-### "Module 'tea' not found"
-
-**Fix**: Reinstall TEA module via `npx bmad-method install`
-
-### "Knowledge fragment 'test-quality' not found"
-
-**Fix**: Verify `_bmad/tea/agents/bmad-tea/resources/tea-index.csv` exists and lists the fragment
-
-### "Cannot write to test-results/"
-
-**Fix**: Create directory and fix permissions: `mkdir -p test-results && chmod u+w test-results`
-
-### "Workflow 'test-design' failed at step 3"
-
-**Fix**: Check step file exists: `_bmad/tea/workflows/testarch/bmad-testarch-test-design/steps-c/step-03-*`
-
-### "Agent YAML validation failed"
-
-**Fix**: Validate YAML syntax: `node tools/validate-agent-schema.js`
-
-### "Subagent execution timeout"
-
-**Fix**: Large codebases may timeout. Scope workflow to smaller directory.
-
----
-
-## Advanced Troubleshooting
-
-### Manually Validate Installation
-
-Run this validation script:
-
-```bash
-#!/bin/bash
-echo "Validating TEA Installation..."
-
-# Check agent skill directory
-if [ -f "_bmad/tea/agents/bmad-tea/SKILL.md" ]; then
-  echo "✓ Agent skill exists"
-else
-  echo "✗ Agent skill missing"
-fi
-
-# Check workflows
-for workflow in atdd automate ci framework nfr-assess test-design test-review trace; do
-  if [ -f "_bmad/tea/workflows/testarch/$workflow/workflow.yaml" ]; then
-    echo "✓ Workflow: $workflow"
-  else
-    echo "✗ Workflow missing: $workflow"
-  fi
-done
-
-# Check knowledge base
-fragment_count=$(ls _bmad/tea/agents/bmad-tea/resources/knowledge/*.md 2>/dev/null | wc -l)
-echo "Knowledge fragments: $fragment_count (expected: 42)"
-
-# Check tea-index.csv
-csv_lines=$(wc -l < _bmad/tea/agents/bmad-tea/resources/tea-index.csv 2>/dev/null || echo "0")
-echo "TEA index lines: $csv_lines (expected: 43)"
-
-echo "Validation complete!"
-```
-
-### Reset TEA to Fresh State
-
-If all else fails, reset TEA completely:
-
-```bash
-# Backup existing configuration
-cp _bmad/tea/module.yaml /tmp/tea-module-backup.yaml
-
-# Remove TEA
-rm -rf _bmad/tea/
-
-# Reinstall
-npx bmad-method install
-# Select: Test Architect (TEA)
-
-# Restore configuration if needed
-cp /tmp/tea-module-backup.yaml _bmad/tea/module.yaml
-```
-
----
-
-**Still stuck?** Open a [GitHub Issue](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues) with diagnostic information.
+- **Documentation**: [TEA documentation](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/)
+- **Bug reports**: [Open an issue](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/new?template=issue.md)
+- **Questions**: [search existing issues](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues) before filing a new one

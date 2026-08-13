@@ -41,8 +41,6 @@ A production-ready utility library that provides:
 
 ## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - Test framework setup complete (Playwright)
 - Node.js v18 or later
 
@@ -76,10 +74,10 @@ npm list @seontechnologies/playwright-utils
 grep tea_use_playwright_utils _bmad/tea/config.yaml
 ```
 
-Should show:
+Should show (4.4.0 is the current release; yours may be newer):
 
-```
-@seontechnologies/playwright-utils@2.x.x
+```text
+└── @seontechnologies/playwright-utils@4.4.0
 tea_use_playwright_utils: true
 ```
 
@@ -100,21 +98,26 @@ test('api test', async ({ request }) => {
 });
 ```
 
-**With Playwright Utils (Combined Fixtures):**
+**With Playwright Utils (Merged Fixtures):**
 
 ```typescript
-// All utilities available via single import
-import { test } from '@seontechnologies/playwright-utils/fixtures';
-import { expect } from '@playwright/test';
+// Merge the fixtures your project needs into one test object
+import { expect, mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+// Auth fixture built in your project (setAuthProvider + createAuthFixtures)
+import { test as authFixture } from './support/auth/auth-fixture';
 
-test('api test', async ({ apiRequest, authToken, log }) => {
+const test = mergeTests(authFixture, apiRequestFixture);
+
+test('api test', async ({ apiRequest, authToken }) => {
   const { status, body } = await apiRequest({
     method: 'GET',
     path: '/api/users',
     headers: { Authorization: `Bearer ${authToken}` },
   });
 
-  log.info('Fetched users', body);
+  await log.info('Fetched users');
   expect(status).toBe(200);
 });
 ```
@@ -122,15 +125,16 @@ test('api test', async ({ apiRequest, authToken, log }) => {
 **With Playwright Utils (Selective Merge):**
 
 ```typescript
-import { mergeTests } from '@playwright/test';
+import { expect, mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
 import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { test as logFixture } from '@seontechnologies/playwright-utils/log/fixtures';
+import { test as interceptNetworkCallFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
 
-export const test = mergeTests(apiRequestFixture, logFixture);
-export { expect } from '@playwright/test';
+export const test = mergeTests(apiRequestFixture, interceptNetworkCallFixture);
+export { expect, log };
 
-test('api test', async ({ apiRequest, log }) => {
-  log.info('Fetching users');
+test('api test', async ({ apiRequest }) => {
+  await log.info('Fetching users');
   const { status, body } = await apiRequest({
     method: 'GET',
     path: '/api/users',
@@ -266,8 +270,12 @@ Authentication session management with token persistence.
 **Usage:**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/auth-session/fixtures';
-import { expect } from '@playwright/test';
+import { test as base, expect } from '@playwright/test';
+import { createAuthFixtures, setAuthProvider } from '@seontechnologies/playwright-utils/auth-session';
+import myCustomProvider from './support/auth/provider';
+
+setAuthProvider(myCustomProvider); // Register before creating the fixtures
+const test = base.extend(createAuthFixtures());
 
 test('should access protected route', async ({ page, authToken }) => {
   // authToken automatically fetched and persisted
@@ -371,7 +379,8 @@ Spy or stub network requests with automatic JSON parsing.
 **Usage:**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
 
 test('should handle API errors', async ({ page, interceptNetworkCall }) => {
   // Stub API to return error (set up BEFORE navigation)
@@ -420,7 +429,11 @@ Async polling for eventual consistency (Cypress-style).
 **Usage:**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 test('should wait for async job completion', async ({ apiRequest, recurse }) => {
   // Start async job
@@ -635,7 +648,7 @@ Automatically detect HTTP 4xx/5xx errors during tests.
 ```typescript
 import { test } from '@seontechnologies/playwright-utils/network-error-monitor/fixtures';
 
-// That's it! Network monitoring is automatically enabled
+// Network monitoring is enabled from here on
 test('should not have API errors', async ({ page }) => {
   await page.goto('/dashboard');
   await page.click('button');
@@ -679,13 +692,16 @@ test.describe('error handling', { annotation: [{ type: 'skipNetworkMonitoring' }
 
 ## Fixture Composition
 
-**Option 1: Use Package's Combined Fixtures (Simplest)**
+**Option 1: Merge Fixtures Inline (Simplest)**
 
 ```typescript
-// Import all utilities at once
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+// Merge the fixtures this spec needs
+import { expect, mergeTests } from '@playwright/test';
 import { log } from '@seontechnologies/playwright-utils';
-import { expect } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as interceptNetworkCallFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
+
+const test = mergeTests(apiRequestFixture, interceptNetworkCallFixture);
 
 test('api test', async ({ apiRequest, interceptNetworkCall }) => {
   await log.info('Fetching users');
@@ -840,7 +856,3 @@ expect(status).toBe(200);
 - [Knowledge Base Index](/docs/reference/knowledge-base.md) - Playwright Utils fragments
 - [Glossary](/docs/glossary/index.md#test-architect-tea-concepts) - Playwright Utils term
 - [Official PW-Utils Docs](https://seontechnologies.github.io/playwright-utils/) - Complete API reference
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

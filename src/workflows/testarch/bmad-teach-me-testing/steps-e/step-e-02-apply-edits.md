@@ -107,8 +107,8 @@ The teach-me-testing workflow has been updated.
 
 **Recommended next steps:**
 
-1. Run validation: `bmad run teach-me-testing -v`
-2. Test the workflow: `bmad run teach-me-testing`
+1. Run validation: `/bmad-teach-me-testing validate` (Codex: `$bmad-teach-me-testing validate`)
+2. Test the workflow: `/bmad-teach-me-testing` (Codex: `$bmad-teach-me-testing`)
 3. Make additional edits if needed"
 
 **This is the final edit step - workflow ends here.**

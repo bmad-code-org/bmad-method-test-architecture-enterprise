@@ -5,15 +5,35 @@ description: Quick reference for all 9 TEA workflows - inputs, outputs, and link
 
 # TEA Command Reference
 
-Quick reference for all 9 TEA (Test Engineering Architect) workflows. For detailed step-by-step guides, see the how-to documentation.
+## Invoking a TEA Workflow
 
-All workflows listed here are current and supported in TEA, including `nfr-assess`.
+Everything below assumes BMad Method is installed with the TEA module: `npx bmad-method install`.
 
-**Invocation by tool:**
+Three surfaces reach the same workflow. The skill name is identical on every platform; only the sigil differs.
 
-- Claude Code / Cursor / Windsurf: use slash commands (for example, `/bmad:tea:automate`)
-- Codex: use `$` skills from `.agents/skills` (for example, `$bmad-tea-testarch-automate`)
-- Custom TEA extensions: package the workflow as custom content/module and attach it to `bmad-tea` via customization. See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md)
+| Surface                         | Form                           | Example                   |
+| ------------------------------- | ------------------------------ | ------------------------- |
+| Claude Code / Cursor / Windsurf | `/bmad-testarch-<workflow>`    | `/bmad-testarch-automate` |
+| Codex                           | `$bmad-testarch-<workflow>`    | `$bmad-testarch-automate` |
+| Inside a `bmad-tea` chat        | the workflow's two-letter code | `TA`                      |
+
+Load the TEA agent itself with `/bmad-tea` or `$bmad-tea`. That is optional: every workflow runs standalone, and loading the agent first only buys you the two-letter menu and the `GATE` router.
+
+This page uses short workflow names. Two do not map to a command by adding a prefix: `teach-me-testing` carries no `testarch` segment, and `nfr-assess` is `-nfr`.
+
+| Workflow name      | Command                                                     | Menu code |
+| ------------------ | ----------------------------------------------------------- | --------- |
+| `teach-me-testing` | `/bmad-teach-me-testing` · `$bmad-teach-me-testing`         | `TMT`     |
+| `test-design`      | `/bmad-testarch-test-design` · `$bmad-testarch-test-design` | `TD`      |
+| `framework`        | `/bmad-testarch-framework` · `$bmad-testarch-framework`     | `TF`      |
+| `ci`               | `/bmad-testarch-ci` · `$bmad-testarch-ci`                   | `CI`      |
+| `atdd`             | `/bmad-testarch-atdd` · `$bmad-testarch-atdd`               | `AT`      |
+| `automate`         | `/bmad-testarch-automate` · `$bmad-testarch-automate`       | `TA`      |
+| `test-review`      | `/bmad-testarch-test-review` · `$bmad-testarch-test-review` | `RV`      |
+| `nfr-assess`       | `/bmad-testarch-nfr` · `$bmad-testarch-nfr`                 | `NR`      |
+| `trace`            | `/bmad-testarch-trace` · `$bmad-testarch-trace`             | `TR`      |
+
+To ship your own workflow, package it as custom content and attach it to `bmad-tea` via customization. See [Extend TEA with Custom Workflows](../how-to/customization/extend-tea-with-custom-workflows.md).
 
 ## Quick Index
 
@@ -32,7 +52,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 ## teach-me-testing
 
-**Purpose:** Interactive learning companion - teaches testing fundamentals through advanced practices
+**Purpose:** Interactive learning companion. Teaches testing fundamentals through advanced practices
 
 **Phase:** Learning / Onboarding (before all other phases)
 
@@ -46,10 +66,9 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 **Key Outputs:**
 
-- Progress tracking file (`teaching-progress/{user}-tea-progress.yaml`)
-- Session notes for each completed session
-- Completion summary (after all 7 sessions)
-- Learning artifacts (notes, test examples)
+- `{test_artifacts}/teaching-progress/{user_name}-tea-progress.yaml` (progress tracking, resumable)
+- `{test_artifacts}/tea-academy/{user_name}/session-{N}-notes.md` (one per completed session)
+- `{test_artifacts}/tea-academy/{user_name}/tea-completion-summary.md` (after all 7 sessions)
 
 **7 Sessions:**
 
@@ -59,7 +78,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 4. Test Design (60 min) - Risk assessment, coverage planning
 5. ATDD & Automate (60 min) - TDD red-green, test generation
 6. Quality & Trace (45 min) - Test review, traceability, metrics
-7. Advanced Patterns (ongoing) - 42 knowledge fragments exploration
+7. Advanced Patterns (ongoing) - 54 knowledge fragments exploration
 
 **Features:**
 
@@ -89,6 +108,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 **Key Outputs:**
 
+- `tests/README.md` (declared `default_output_file`: setup, running tests, architecture, CI integration)
 - `tests/` directory with `support/fixtures/` and `support/helpers/`
 - `playwright.config.ts` or `cypress.config.ts`
 - `.env.example`, `.nvmrc`
@@ -113,10 +133,10 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 **Key Outputs:**
 
-- Platform-specific CI workflow (`.github/workflows/test.yml`, etc.)
+- Platform-specific CI workflow (`.github/workflows/test.yml` by default, resolved per platform)
 - Parallel execution configuration
 - Burn-in loops for flakiness detection
-- Secrets checklist
+- `docs/ci.md` (pipeline guide) and `docs/ci-secrets-checklist.md` (required secrets)
 
 **How-To Guide:** [Setup CI Pipeline](/docs/how-to/workflows/setup-ci.md)
 
@@ -142,7 +162,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 **Key Outputs:**
 
-**System-Level (TWO Documents):**
+**System-Level (TWO Documents plus a handoff):**
 
 - `test-design-architecture.md` - For Architecture/Dev teams
   - Quick Guide (🚨 BLOCKERS / ⚠️ HIGH PRIORITY / 📋 INFO ONLY)
@@ -155,6 +175,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
   - Coverage plan (P0/P1/P2/P3 with checkboxes)
   - Sprint 0 setup requirements
   - NFR test coverage and evidence plan
+- `test-design/{project_name}-handoff.md` - System-level only. Bridges the test design outputs into epic/story decomposition, for BMAD's `create-epics-and-stories` workflow
 
 **Epic-Level (ONE Document):**
 
@@ -165,12 +186,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
   - NFR planning when NFRs are in scope
   - Mitigation plans
 
-**Why Two Documents for System-Level?**
-
-- Architecture teams scan blockers in <5 min
-- QA teams have actionable test recipes
-- No redundancy (cross-references instead)
-- Clear separation (what to deliver vs how to test)
+Why the system-level split exists: [TEA Overview](/docs/explanation/tea-overview.md) and [Run Test Design](/docs/how-to/workflows/run-test-design.md).
 
 **Browser Automation (CLI/MCP):** Exploratory mode (live browser UI discovery)
 
@@ -196,7 +212,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 - Implementation checklist keyed to `story_key`
 - Story metadata / handoff paths for downstream `dev-story` consumption
 
-**Browser Automation (CLI/MCP):** Recording mode (for skeleton UI only - rare)
+**Browser Automation (CLI/MCP):** Recording mode (for skeleton UI only; rare)
 
 **How-To Guide:** [Run ATDD](/docs/how-to/workflows/run-atdd.md)
 
@@ -218,7 +234,7 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 - Comprehensive test suite (`tests/e2e/`, `tests/api/`)
 - Updated fixtures, README
-- Definition of Done summary
+- `{test_artifacts}/automation-summary.md` (declared `default_output_file`, carries the Definition of Done checklist)
 
 **Browser Automation (CLI/MCP):** Healing + Recording modes (fix tests, verify selectors)
 
@@ -240,18 +256,20 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 **Key Outputs:**
 
-- `test-review.md` with quality score (0-100)
-- Critical issues with fixes
-- Recommendations
-- Category scores (Determinism, Isolation, Maintainability, Performance)
+- `{test_artifacts}/test-review.md` with quality score (0-100) and grade (A-F)
+- Critical issues with fixes, and recommendations
+- A `## Quality Criteria Assessment` table: 14 criteria, each `PASS` / `PASS (n/a)` / `WARN` / `FAIL`
 - Coverage guidance is informational only; coverage scoring and gates are handled by `trace`
 
-**Scoring Categories:**
+**Scoring:** one deduction ledger, never a weighted average. Four parallel subagents (determinism, isolation, maintainability, performance) each report violations; every violation carries the `criteria-registry.md` row that produced it, which pins its severity. Violations are deduplicated by `file:line:row`, then:
 
-- Determinism: 30%
-- Isolation: 30%
-- Maintainability: 25%
-- Performance: 15%
+```text
+score = 100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + bonus
+```
+
+clamped to 0-100. The bonus has exactly six categories, each worth `0` or `5` with no partial credit: Excellent BDD, Comprehensive Fixtures, Data Factories, Network-First, Perfect Isolation, All Test IDs. Award `5` only when the criterion holds across every reviewed file.
+
+**Recommendation is computed from the counts, not chosen:** `Block` when Critical > 0, `Request Changes` when High > 0 or score < 70, `Approve with Comments` when any Medium or Low remain, otherwise `Approve`.
 
 **How-To Guide:** [Run Test Review](/docs/how-to/workflows/run-test-review.md)
 
@@ -267,13 +285,13 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 **Key Inputs:**
 
-- NFR categories (Security, Performance, Reliability, Maintainability)
+- NFR categories (Security, Performance, Reliability, Scalability), plus any `custom_nfr_categories`
 - Thresholds from PRD, architecture, or `test-design`
 - Evidence locations (test reports, scans, metrics, logs, monitoring, CI results)
 
 **Key Outputs:**
 
-- `nfr-assessment.md`
+- `{test_artifacts}/nfr-assessment.md`
 - Category assessments (PASS/CONCERNS/FAIL)
 - Mitigation plans
 - Gate decision inputs
@@ -299,13 +317,13 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 - Coverage oracle items → test mapping
 - Coverage classification (FULL/PARTIAL/NONE)
 - Gap prioritization
-- Output: `traceability-matrix.md`
+- Output: `{test_artifacts}/traceability-matrix.md`
 
 **Phase 2: Gate Decision**
 
 - PASS/CONCERNS/FAIL/WAIVED decision
 - Evidence-based (coverage %, quality scores, NFRs)
-- Output: `gate-decision-{gate_type}-{story_id}.md`
+- Outputs: `{test_artifacts}/e2e-trace-summary.json` (machine-readable summary for CI), and `{test_artifacts}/gate-decision.json` when `allow_gate` is true and collection is gate-eligible
 
 **Gate Rules:**
 
@@ -319,15 +337,15 @@ All workflows listed here are current and supported in TEA, including `nfr-asses
 
 ## GATE (Agent Menu Shortcut)
 
-**Purpose:** Release gate routing helper — not a standalone workflow; produces no artifact of its own.
+**Purpose:** Release gate routing helper. It is not a standalone workflow and produces no artifact of its own.
 
 **Trigger:** Type `GATE` in chat after loading the TEA agent (`bmad-tea`).
 
 **What it does:** Determines which release gate evidence exists and guides you through the correct sequence:
 
-1. (Optional) `test-review` — final test quality audit
-2. (Optional) `nfr-assess` — NFR Evidence Audit
-3. `trace` Phase 2 — PASS/CONCERNS/FAIL/WAIVED gate decision
+1. (Optional) `test-review` for a final test quality audit
+2. (Optional) `nfr-assess` for an NFR Evidence Audit
+3. `trace` Phase 2 for the PASS/CONCERNS/FAIL/WAIVED gate decision
 
 The agent asks which evidence is available and routes to the right workflow. It does not merge these workflows; each workflow is invoked separately in sequence.
 
@@ -374,7 +392,3 @@ The agent asks which evidence is available and routes to the right workflow. It 
 
 - [TEA Configuration](/docs/reference/configuration.md) - Config options
 - [Knowledge Base Index](/docs/reference/knowledge-base.md) - Pattern fragments
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

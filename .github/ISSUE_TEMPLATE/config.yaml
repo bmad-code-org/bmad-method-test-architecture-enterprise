@@ -1,11 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: 📚 Documentation
-    url: https://test-architect.bmad-method.org
-    about: Check the docs first — tutorials, guides, and reference
-  - name: 💬 GitHub Discussions
-    url: https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/discussions
-    about: Ask questions and discuss TEA usage before opening an issue
+    url: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/
+    about: Check the docs first for tutorials, guides, and reference
   - name: 🐛 Troubleshooting Guide
-    url: https://test-architect.bmad-method.org/reference/troubleshooting
+    url: https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/troubleshooting/
     about: Common issues and solutions

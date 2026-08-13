@@ -6,7 +6,7 @@ base_urls:
   github_repo: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise"
   github_knowledge: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge"
 
-# Public Documentation (32 files)
+# Public Documentation (26 entries)
 documentation:
   tutorials:
     - name: "Getting Started with Test Architect"
@@ -103,7 +103,7 @@ documentation:
     - name: "Knowledge Base System"
       local: "/docs/explanation/knowledge-base-system.md"
       online: "/explanation/knowledge-base-system/"
-      topics: ["Fragment management", "42 fragments"]
+      topics: ["Fragment management", "54 fragments"]
 
     - name: "Network-First Patterns"
       local: "/docs/explanation/network-first-patterns.md"
@@ -115,15 +115,10 @@ documentation:
       online: "/explanation/fixture-architecture/"
       topics: ["Composition", "mergeTests pattern"]
 
-    - name: "Step-File Architecture"
+    - name: "Step Files & Orchestration"
       local: "/docs/explanation/step-file-architecture.md"
       online: "/explanation/step-file-architecture/"
-      topics: ["Micro-file design", "JIT loading", "Sequential enforcement"]
-
-    - name: "Subagent Architecture"
-      local: "/docs/explanation/subagent-architecture.md"
-      online: "/explanation/subagent-architecture/"
-      topics: ["Parallel execution", "Context optimization"]
+      topics: ["Micro-file design", "JIT loading", "Sequential enforcement", "Parallel execution", "Context optimization"]
 
   reference:
     - name: "Commands"
@@ -143,7 +138,7 @@ documentation:
       local: "/docs/reference/troubleshooting.md"
       online: "/reference/troubleshooting/"
 
-# Knowledge Fragments (41 files)
+# Knowledge Fragments (54 files)
 knowledge_fragments:
   testing_patterns:
     - name: "fixture-architecture"
@@ -190,6 +185,21 @@ knowledge_fragments:
       path: "/src/agents/bmad-tea/resources/knowledge/timing-debugging.md"
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/timing-debugging.md"
       description: "Race condition fixes"
+
+    - name: "maestro-flows"
+      path: "/src/agents/bmad-tea/resources/knowledge/maestro-flows.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/maestro-flows.md"
+      description: "Declarative mobile flow structure, selector hierarchy (id > text > scoped text), clearState"
+
+    - name: "mobile-test-strategy"
+      path: "/src/agents/bmad-tea/resources/knowledge/mobile-test-strategy.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/mobile-test-strategy.md"
+      description: "Mobile test level framework (unit/component/contract/device flow), what belongs in a device"
+
+    - name: "playwright-cli"
+      path: "/src/agents/bmad-tea/resources/knowledge/playwright-cli.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/playwright-cli.md"
+      description: "Token-efficient CLI for AI coding agents: element refs, sessions, snapshots, trace"
 
   playwright_utils:
     - name: "overview"
@@ -282,6 +292,41 @@ knowledge_fragments:
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/visual-debugging.md"
       description: "Trace viewer workflows and debugging artifacts"
 
+    - name: "webhook-testing-fundamentals"
+      path: "/src/agents/bmad-tea/resources/knowledge/webhook-testing-fundamentals.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/webhook-testing-fundamentals.md"
+      description: "Why webhook delivery is hard: async, parallel pollution, opaque timeouts, cleanup drift"
+
+    - name: "webhook-module-setup"
+      path: "/src/agents/bmad-tea/resources/knowledge/webhook-module-setup.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/webhook-module-setup.md"
+      description: "Fixture wiring for WireMock/MockServer/Mockoon providers, matched-only vs full-reset"
+
+    - name: "webhook-template-matchers"
+      path: "/src/agents/bmad-tea/resources/knowledge/webhook-template-matchers.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/webhook-template-matchers.md"
+      description: "matchField (dot-path exact), matchPartial (deep subset), matchPredicate (arbitrary fn), AND"
+
+    - name: "webhook-waiting-querying"
+      path: "/src/agents/bmad-tea/resources/knowledge/webhook-waiting-querying.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/webhook-waiting-querying.md"
+      description: "waitFor, waitForCount, getReceived, drain pattern for sequential events, parallel worker"
+
+    - name: "webhook-timeout-error"
+      path: "/src/agents/bmad-tea/resources/knowledge/webhook-timeout-error.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/webhook-timeout-error.md"
+      description: "templateName, timeoutMs, totalReceived, receivedWebhooks, matcherDetails, toJSON — inspect"
+
+    - name: "webhook-providers"
+      path: "/src/agents/bmad-tea/resources/knowledge/webhook-providers.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/webhook-providers.md"
+      description: "WireMock (deleteById supported), MockServer (deleteById no-op), Mockoon (deleteById no-op"
+
+    - name: "webhook-risk-guidance"
+      path: "/src/agents/bmad-tea/resources/knowledge/webhook-risk-guidance.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/webhook-risk-guidance.md"
+      description: "When webhook tests are required, P2×I3 default risk score, complete test checklist, failure"
+
   configuration_governance:
     - name: "playwright-config"
       path: "/src/agents/bmad-tea/resources/knowledge/playwright-config.md"
@@ -339,6 +384,11 @@ knowledge_fragments:
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/nfr-criteria.md"
       description: "Non-functional requirements assessment"
 
+    - name: "confidence-gate"
+      path: "/src/agents/bmad-tea/resources/knowledge/confidence-gate.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/confidence-gate.md"
+      description: "1-10 confidence scoring with stop-and-ask rule below threshold for selectors, endpoints"
+
   auth_security:
     - name: "email-auth"
       path: "/src/agents/bmad-tea/resources/knowledge/email-auth.md"
@@ -354,6 +404,16 @@ knowledge_fragments:
       path: "/src/agents/bmad-tea/resources/knowledge/error-handling.md"
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/error-handling.md"
       description: "Exception handling and retry validation"
+
+    - name: "pact-broker-webhooks"
+      path: "/src/agents/bmad-tea/resources/knowledge/pact-broker-webhooks.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pact-broker-webhooks.md"
+      description: "PactFlow → GitHub repository_dispatch auth via dedicated machine user + classic PAT (repo"
+
+    - name: "pactjs-utils-zod-to-pact"
+      path: "/src/agents/bmad-tea/resources/knowledge/pactjs-utils-zod-to-pact.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pactjs-utils-zod-to-pact.md"
+      description: "zodToPactMatchers for consumer-curated schemas, example precedence, Pact V3 matcher"
 
 # Quick Reference Maps
 session_to_resources:
@@ -383,7 +443,7 @@ session_to_resources:
 
   session-07:
     primary_docs: []
-    fragments: [] # All 42 fragments available via menu-driven exploration
+    fragments: [] # All 54 fragments available via menu-driven exploration
 
 # Web-Browsing Fallback Strategy
 fallback_urls:

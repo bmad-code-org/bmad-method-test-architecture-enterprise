@@ -54,7 +54,7 @@ Before submitting, please check:
 
 - [ ] I've read the [Troubleshooting Guide](https://test-architect.bmad-method.org/reference/troubleshooting)
 - [ ] I've verified TEA is installed: `ls -la _bmad/tea/`
-- [ ] I'm using the correct command namespace: `/bmad:tea:*` not `/bmad:bmm:tea:*`
+- [ ] I'm using the current invocation: `/bmad-testarch-*` (Claude Code, Cursor, Windsurf) or `$bmad-testarch-*` (Codex)
 - [ ] I've checked for existing issues on GitHub
 
 **Contribution**

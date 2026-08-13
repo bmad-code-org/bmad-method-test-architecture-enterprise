@@ -52,20 +52,20 @@ Terminology reference for Test Architect (TEA).
 
 ## Agents and Roles
 
-| Term                 | Definition                                                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Analyst**          | Agent that initializes workflows, conducts research, creates product briefs, and tracks progress. Often the entry point for new projects.        |
-| **Architect**        | Agent designing system architecture, creating architecture documents, and validating designs. Primary agent for Phase 3.                         |
-| **BMad Master**      | Meta-level orchestrator from BMad Core facilitating party mode and providing high-level guidance across all modules.                             |
-| **DEV**              | Developer agent implementing stories, writing code, running tests, and performing code reviews. Primary implementer in Phase 4.                  |
-| **Game Architect**   | _BMGD._ Agent designing game system architecture and validating game-specific technical designs.                                                 |
-| **Game Designer**    | _BMGD._ Agent creating game design documents (GDD) and running game-specific workflows.                                                          |
-| **Party Mode**       | Multi-agent collaboration feature where agents discuss challenges together. BMad Master orchestrates, selecting 2-3 relevant agents per message. |
-| **PM**               | Product Manager agent creating PRDs and tech-specs. Primary agent for Phase 2 planning.                                                          |
-| **SM**               | Scrum Master agent managing sprints, creating stories, and coordinating implementation. Primary orchestrator for Phase 4.                        |
-| **TEA**              | Test Architect agent responsible for test strategy, quality gates, NFR planning, and NFR evidence audit. Integrates throughout all phases.       |
-| **Technical Writer** | Agent specialized in creating technical documentation, diagrams, and maintaining documentation standards.                                        |
-| **UX Designer**      | Agent creating UX design documents, interaction patterns, and visual specifications for UI-heavy projects.                                       |
+| Term                 | Definition                                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Analyst**          | Agent that initializes workflows, conducts research, creates product briefs, and tracks progress. Often the entry point for new projects.                           |
+| **Architect**        | Agent designing system architecture, creating architecture documents, and validating designs. Primary agent for Phase 3.                                            |
+| **BMad Master**      | Meta-level orchestrator from BMad Core facilitating party mode and providing high-level guidance across all modules.                                                |
+| **DEV**              | Developer agent implementing stories, writing code, running tests, and performing code reviews. Primary implementer in Phase 4.                                     |
+| **Game Architect**   | _BMGD._ Agent designing game system architecture and validating game-specific technical designs.                                                                    |
+| **Game Designer**    | _BMGD._ Agent creating game design documents (GDD) and running game-specific workflows.                                                                             |
+| **Party Mode**       | Multi-agent collaboration feature where agents discuss challenges together. BMad Master orchestrates, selecting 2-3 relevant agents per message.                    |
+| **PM**               | Product Manager agent creating PRDs and tech-specs. Primary agent for Phase 2 planning.                                                                             |
+| **SM**               | Scrum Master agent managing sprints, creating stories, and coordinating implementation. Primary orchestrator for Phase 4.                                           |
+| **TEA**              | Test Engineering Architect. Agent responsible for test strategy, quality gates, NFR planning, and NFR evidence audit. Spans Phase 3, Phase 4, and the release gate. |
+| **Technical Writer** | Agent specialized in creating technical documentation, diagrams, and maintaining documentation standards.                                                           |
+| **UX Designer**      | Agent creating UX design documents, interaction patterns, and visual specifications for UI-heavy projects.                                                          |
 
 ## Status and Tracking
 
@@ -124,37 +124,37 @@ Terminology reference for Test Architect (TEA).
 
 ## Test Architect (TEA) Concepts
 
-| Term                         | Definition                                                                                                                                                                                                                   |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ATDD**                     | Acceptance Test-Driven Development — Generating failing acceptance tests BEFORE implementation (TDD red phase).                                                                                                              |
-| **Burn-in Testing**          | Running tests multiple times (typically 5-10 iterations) to detect flakiness and intermittent failures.                                                                                                                      |
-| **Component Testing**        | Testing UI components in isolation using framework-specific tools (Cypress Component Testing or Vitest + React Testing Library).                                                                                             |
-| **Coverage Traceability**    | Mapping coverage oracle items such as requirements, contract endpoints, external pointers, or inferred journeys to implemented tests with classification (FULL/PARTIAL/NONE) to identify gaps and measure completeness.      |
-| **Epic-Level Test Design**   | Test planning per epic (Phase 4) focusing on risk assessment, priorities, and coverage strategy for that specific epic.                                                                                                      |
-| **Fixture Architecture**     | Pattern of building pure functions first, then wrapping in framework-specific fixtures for testability, reusability, and composition.                                                                                        |
-| **Gate Decision**            | Go/no-go decision for release with four outcomes: PASS ✅ (ready), CONCERNS ⚠️ (proceed with mitigation), FAIL ❌ (blocked), WAIVED ⏭️ (approved despite issues).                                                            |
-| **Knowledge Fragment**       | Individual markdown file in TEA's knowledge base covering a specific testing pattern or practice (42 fragments total).                                                                                                       |
-| **Browser Automation**       | Playwright CLI and/or MCP servers enabling live browser interaction during test generation. CLI provides token-efficient stateless commands; MCP provides rich stateful automation. Configured via `tea_browser_automation`. |
-| **Network-First Pattern**    | Testing pattern that waits for actual network responses instead of fixed timeouts to avoid race conditions and flakiness.                                                                                                    |
-| **NFR Evidence Audit**       | Validation of non-functional requirement evidence (security, performance, reliability, maintainability) against defined thresholds.                                                                                          |
-| **Playwright Utils**         | Optional package (`@seontechnologies/playwright-utils`) providing production-ready fixtures and utilities for Playwright tests.                                                                                              |
-| **Risk-Based Testing**       | Testing approach where depth scales with business impact using probability × impact scoring (1-9 scale).                                                                                                                     |
-| **System-Level Test Design** | Test planning at architecture level (Phase 3) focusing on testability review, ADR mapping, and test infrastructure needs.                                                                                                    |
-| **tea-index.csv**            | Manifest file tracking all knowledge fragments, their descriptions, tags, and which workflows load them.                                                                                                                     |
-| **TEA Integrated**           | Full BMad Method integration with TEA workflows across all phases (Phase 2, 3, 4, and Release Gate).                                                                                                                         |
-| **TEA Lite**                 | Beginner approach using just `automate` to test existing features (simplest way to use TEA).                                                                                                                                 |
-| **TEA Solo**                 | Standalone engagement model using TEA without full BMad Method integration (bring your own requirements).                                                                                                                    |
-| **Test Priorities**          | Classification system for test importance: P0 (critical path), P1 (high value), P2 (medium value), P3 (low value).                                                                                                           |
+| Term                         | Definition                                                                                                                                                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **ATDD**                     | Acceptance Test-Driven Development. Generating failing acceptance tests BEFORE implementation (TDD red phase).                                                                                                                                                     |
+| **Browser Automation**       | Playwright CLI and/or MCP servers enabling live browser interaction during test generation. CLI provides token-efficient stateless commands; MCP provides rich stateful automation. Configured via `tea_browser_automation`.                                       |
+| **Burn-in Testing**          | Running tests multiple times (typically 5-10 iterations) to detect flakiness and intermittent failures.                                                                                                                                                            |
+| **Component Testing**        | Testing UI components in isolation using framework-specific tools (Cypress Component Testing or Vitest + React Testing Library).                                                                                                                                   |
+| **Coverage Traceability**    | Mapping coverage oracle items such as requirements, contract endpoints, external pointers, or inferred journeys to implemented tests with classification (FULL/PARTIAL/NONE) to identify gaps and measure completeness.                                            |
+| **Engagement Model**         | One of the five ways to use TEA: No TEA, TEA Solo, TEA Lite, TEA Integrated (Greenfield), TEA Integrated (Brownfield). Enterprise is a track layered on the Integrated models, not a sixth model. See [Engagement Models](/docs/explanation/engagement-models.md). |
+| **Epic-Level Test Design**   | Test planning per epic (Phase 4) focusing on risk assessment, priorities, and coverage strategy for that specific epic.                                                                                                                                            |
+| **Fixture Architecture**     | Pattern of building pure functions first, then wrapping in framework-specific fixtures for testability, reusability, and composition.                                                                                                                              |
+| **Gate Decision**            | Go/no-go decision for release with four outcomes: PASS ✅ (ready), CONCERNS ⚠️ (proceed with mitigation), FAIL ❌ (blocked), WAIVED ⏭️ (approved despite issues).                                                                                                  |
+| **Knowledge Fragment**       | Individual markdown file in TEA's knowledge base covering a specific testing pattern or practice (54 fragments total).                                                                                                                                             |
+| **Network-First Pattern**    | Testing pattern that waits for actual network responses instead of fixed timeouts to avoid race conditions and flakiness.                                                                                                                                          |
+| **NFR Evidence Audit**       | Validation of non-functional requirement evidence (security, performance, reliability, maintainability) against defined thresholds.                                                                                                                                |
+| **No TEA**                   | Engagement model 1. Skip all TEA workflows and keep the team's existing testing approach. A valid choice when that approach already works.                                                                                                                         |
+| **Playwright Utils**         | Optional package (`@seontechnologies/playwright-utils`) providing production-ready fixtures and utilities for Playwright tests.                                                                                                                                    |
+| **Risk-Based Testing**       | Testing approach where depth scales with business impact using probability × impact scoring (1-9 scale).                                                                                                                                                           |
+| **System-Level Test Design** | Test planning at architecture level (Phase 3) focusing on testability review, ADR mapping, and test infrastructure needs.                                                                                                                                          |
+| **tea-index.csv**            | Manifest file tracking all knowledge fragments, their descriptions, tags, tier, and fragment path.                                                                                                                                                                 |
+| **TEA Academy**              | Learning path delivered by the `teach-me-testing` workflow (menu code `TMT`): 7 structured sessions, 30-90 minutes each, self-paced over 1-2 weeks, with resumable state and role-adapted examples. A learning path, not an engagement model.                      |
+| **TEA Integrated**           | Engagement models 4 and 5. Full BMad Method integration with TEA workflows across Phase 2, 3, 4, and the release gate. Greenfield starts from scratch; Brownfield adds a Phase 2 coverage baseline and a regression-hotspot focus.                                 |
+| **TEA Lite**                 | Engagement model 3. Beginner approach using `framework` and `automate` to test features that already exist.                                                                                                                                                        |
+| **TEA Solo**                 | Engagement model 2. Standalone use of TEA workflows without BMad Method integration; you bring your own requirements.                                                                                                                                              |
+| **Test Priorities**          | Classification system for test importance: P0 (critical path), P1 (high value), P2 (medium value), P3 (low value).                                                                                                                                                 |
 
 ---
 
 ## See Also
 
-- [TEA Overview](/docs/explanation/tea-overview.md) - Complete TEA capabilities
-- [TEA Knowledge Base](/docs/reference/knowledge-base.md) - Fragment index
-- [TEA Command Reference](/docs/reference/commands.md) - Workflow reference
-- [TEA Configuration](/docs/reference/configuration.md) - Config options
-
----
-
-Generated with [BMad Method](https://bmad-method.org)
+- [TEA Overview](/docs/explanation/tea-overview.md) - the nine workflows and the phase lifecycle
+- [Engagement Models](/docs/explanation/engagement-models.md) - the five models defined above
+- [TEA Knowledge Base](/docs/reference/knowledge-base.md) - fragment index
+- [TEA Command Reference](/docs/reference/commands.md) - workflow reference
+- [TEA Configuration](/docs/reference/configuration.md) - config options

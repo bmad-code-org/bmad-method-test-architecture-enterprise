@@ -1,411 +1,81 @@
 ---
-title: TEA Step-File Architecture
-description: Explanation of step-file architecture for 100% LLM compliance
+title: TEA Step-File and Orchestration Architecture
+description: How TEA splits workflows into granular step files, how those steps dispatch to parallel workers, and how execution mode is resolved
 ---
 
-# TEA Step-File Architecture
+# TEA Step-File and Orchestration Architecture
 
-**Version**: 1.0
-**Date**: 2026-01-27
-**Purpose**: Explain step-file architecture for 100% LLM compliance
+TEA workflows are not one long instruction file. They are a chain of small step files, and some of those steps fan out into isolated workers whose outputs are merged back into a single artifact. This page covers both halves: the step-file format, and the orchestration that runs it.
 
----
+## Why Step Files
 
-## Why Step Files?
+A single 5000-word instruction file produces a predictable set of failures. The model skims it, improvises past the vague parts ("analyze codebase then generate tests" specifies nothing), keeps going because nothing told it where to stop, and returns a different result on the next run.
 
-### The Problem
+Step files break the workflow into self-contained units that each do one thing:
 
-Traditional workflow instructions suffer from "too much context" syndrome:
+- **One step, one action.** Each file contains exactly one task.
+- **Explicit exit conditions.** The step states what "finished" means.
+- **Context injection.** Each step restates what it needs, assuming nothing about what the model still remembers.
+- **Strict boundaries.** Each step lists what it must not do, so out-of-scope work has an explicit prohibition rather than an implicit one.
+- **Just-in-time loading.** The agent reads one step file, executes it, then loads the next. It never loads them all at once.
 
-- **LLM Improvisation**: When given large instruction files, LLMs often improvise or skip steps
-- **Non-Compliance**: Instructions like "analyze codebase then generate tests" are too vague
-- **Context Overload**: 5000-word instruction files overwhelm the 200k context window
-- **Unpredictable Output**: Same workflow produces different results each run
+The result is consistent output for the same input, which is what makes the rest of the architecture possible: you cannot parallelize work whose boundaries are undefined.
 
-### The Solution: Step Files
+Layout in the repository, per workflow skill:
 
-**Step files** break workflows into granular, self-contained instruction units:
-
-- **One Step = One Clear Action**: Each step file contains exactly one task
-- **Explicit Exit Conditions**: LLM knows exactly when to proceed to next step
-- **Context Injection**: Each step repeats necessary information (no assumptions)
-- **Prevents Improvisation**: Strict "ONLY do what this step says" enforcement
-
-**Result**: **100% LLM compliance** - workflows produce consistent, predictable, high-quality output every time.
-
----
-
-## Architecture Overview
-
-### Before Step Files (Monolithic)
-
-```
-workflow/
-├── workflow.yaml          # Metadata
-├── instructions.md        # 5000 words of instructions ⚠️
-├── checklist.md          # Validation checklist
-└── templates/            # Output templates
+```text
+bmad-testarch-automate/
+├── workflow.yaml        # Metadata, config source, variables, output paths
+├── instructions.md      # Entry point
+├── checklist.md         # Validation checklist
+├── resources/           # tea-index.csv + knowledge/ fragments
+├── steps-c/             # Create mode, one file per step
+├── steps-e/             # Edit mode
+└── steps-v/             # Validate mode
 ```
 
-**Problems**:
-
-- Instructions too long → LLM skims or improvises
-- No clear stopping points → LLM keeps going
-- Vague instructions → LLM interprets differently each time
-
-### After Step Files (Granular)
-
-```
-workflow/
-├── workflow.yaml          # Metadata (points to step files)
-├── checklist.md          # Validation checklist
-├── templates/            # Output templates
-└── steps/
-    ├── step-1-setup.md          # 200-500 words, one action
-    ├── step-2-analyze.md        # 200-500 words, one action
-    ├── step-3-generate.md       # 200-500 words, one action
-    └── step-4-validate.md       # 200-500 words, one action
-```
-
-**Benefits**:
-
-- Granular instructions → LLM focuses on one task
-- Clear exit conditions → LLM knows when to stop
-- Repeated context → LLM has all necessary info
-- Subagent support → Parallel execution possible
-
----
-
-## Step File Principles
-
-### 1. Just-In-Time Loading
-
-**Only load the current step file** - never load all steps at once.
-
-```yaml
-# workflow.yaml
-steps:
-  - file: steps/step-1-setup.md
-    next: steps/step-2-analyze.md
-  - file: steps/step-2-analyze.md
-    next: steps/step-3-generate.md
-```
-
-**Enforcement**: Agent reads **one step file**, executes it, then loads **next step file**.
-
-### 2. Context Injection
-
-**Each step repeats necessary context** - no assumptions about what LLM remembers.
-
-Example (step-3-generate.md):
-
-```markdown
-## Context (from previous steps)
-
-You have:
-
-- Analyzed codebase and identified 3 features: Auth, Checkout, Profile
-- Loaded knowledge fragments: fixture-architecture, api-request, network-first
-- Determined test framework: Playwright with TypeScript
-
-## Your Task (Step 3 Only)
-
-Generate API tests for the 3 features identified above...
-```
-
-### 3. Explicit Exit Conditions
-
-**Each step clearly states when to proceed** - no ambiguity.
-
-Example:
-
-```markdown
-## Exit Condition
-
-You may proceed to Step 4 when:
-
-- ✅ All API tests generated and saved to files
-- ✅ Test files use knowledge fragment patterns
-- ✅ All tests have .spec.ts extension
-- ✅ Tests are syntactically valid TypeScript
-
-Do NOT proceed until all conditions met.
-```
-
-### 4. Strict Action Boundaries
-
-**Each step forbids actions outside its scope** - prevents LLM wandering.
-
-Example:
-
-```markdown
-## What You MUST Do
-
-- Generate API tests only (not E2E, not fixtures)
-- Use patterns from loaded knowledge fragments
-- Save to tests/api/ directory
-
-## What You MUST NOT Do
-
-- ❌ Do NOT generate E2E tests (that's Step 4)
-- ❌ Do NOT run tests yet (that's Step 5)
-- ❌ Do NOT refactor existing code
-- ❌ Do NOT add features not requested
-```
-
-### 5. Subagent Support
-
-**Independent steps can run in parallel subagents** - massive performance gain.
-
-Example (automate workflow):
-
-```
-Step 1-2: Sequential (setup)
-Step 3: Subagent A (API tests) + Subagent B (E2E tests) - PARALLEL
-Step 4: Sequential (aggregate)
-```
-
-See [subagent-architecture.md](./subagent-architecture.md) for details.
-
----
-
-## TEA Workflow Step-File Patterns
-
-### Pattern 1: Sequential Steps (Simple Workflows)
-
-**Used by**: framework, ci
-
-```
-Step 1: Setup → Step 2: Configure → Step 3: Generate → Step 4: Validate
-```
-
-**Characteristics**:
-
-- Each step depends on previous step output
-- No parallelization possible
-- Simpler, run-once workflows
-
-### Pattern 2: Parallel Generation (Test Workflows)
-
-**Used by**: automate, atdd
-
-```
-Step 1: Setup
-Step 2: Load knowledge
-Step 3: PARALLEL
-  ├── Subagent A: Generate API tests
-  └── Subagent B: Generate E2E tests
-Step 4: Aggregate + validate
-```
-
-**Characteristics**:
-
-- Independent generation tasks run in parallel
-- 40-50% performance improvement
-- Most frequently used workflows
-
-### Pattern 3: Parallel Validation (Quality Workflows)
-
-**Used by**: test-review, nfr-assess
-
-```
-Step 1: Load context
-Step 2: PARALLEL
-  ├── Subagent A: Check dimension 1
-  ├── Subagent B: Check dimension 2
-  ├── Subagent C: Check dimension 3
-  └── (etc.)
-Step 3: Aggregate scores
-```
-
-**Characteristics**:
-
-- Independent quality checks run in parallel
-- 60-70% performance improvement
-- Complex scoring/aggregation logic
-
-### Pattern 4: Two-Phase Workflow (Dependency Workflows)
-
-**Used by**: trace
-
-```
-Phase 1: Generate coverage matrix → Output to temp file
-Phase 2: Read matrix → Apply decision tree → Generate gate decision
-```
-
-**Characteristics**:
-
-- Phase 2 depends on Phase 1 output
-- Not parallel, but clean separation of concerns
-- Subagent-like phase isolation
-
-### Pattern 5: Risk-Based Planning (Design Workflows)
-
-**Used by**: test-design
-
-```
-Step 1: Load context (story/epic)
-Step 2: Load knowledge fragments
-Step 3: Assess risk (probability × impact)
-Step 4: Generate scenarios
-Step 5: Prioritize (P0-P3)
-Step 6: Output test design document
-```
-
-**Characteristics**:
-
-- Sequential risk assessment workflow
-- Heavy knowledge fragment usage
-- Structured output (test design document)
-
----
-
-## Knowledge Fragment Integration
-
-### Loading Fragments in Step Files
-
-Step files explicitly load knowledge fragments:
-
-```markdown
-## Step 2: Load Knowledge Fragments
-
-Consult `{project-root}/_bmad/tea/agents/bmad-tea/resources/tea-index.csv` and load:
-
-1. **fixture-architecture** - For composable fixture patterns
-2. **api-request** - For API test patterns
-3. **network-first** - For network handling patterns
-
-Read each fragment from `{project-root}/_bmad/tea/agents/bmad-tea/resources/knowledge/`.
-
-These fragments are your quality guidelines - use their patterns in generated tests.
-```
-
-### Fragment Usage Enforcement
-
-Step files enforce fragment patterns:
-
-```markdown
-## Requirements
-
-Generated tests MUST follow patterns from loaded fragments:
-
-✅ Use fixture composition pattern (fixture-architecture)
-✅ Use await apiRequest() helper (api-request)
-✅ Intercept before navigate (network-first)
-
-❌ Do NOT use custom patterns
-❌ Do NOT skip fragment patterns
-```
-
----
-
-## Step File Template
-
-### Standard Structure
-
-Every step file follows this structure:
+## The Step File Template
 
 ```markdown
 # Step N: [Action Name]
 
 ## Context (from previous steps)
 
-- What was accomplished in Steps 1, 2, ..., N-1
-- Key information LLM needs to know
-- Current state of workflow
+- What was accomplished in Steps 1 through N-1
+- Key information the model needs
+- Current state of the workflow
 
 ## Your Task (Step N Only)
 
-[Clear, explicit description of single task]
+[One explicit task]
 
 ## Requirements
 
-- ✅ Requirement 1
-- ✅ Requirement 2
-- ✅ Requirement 3
+- ✅ Requirement 1, 2, 3
 
 ## What You MUST Do
 
-- Action 1
-- Action 2
-- Action 3
+- Action 1, 2, 3
 
 ## What You MUST NOT Do
 
 - ❌ Don't do X (that's Step N+1)
 - ❌ Don't do Y (out of scope)
-- ❌ Don't do Z (unnecessary)
 
 ## Exit Condition
 
 You may proceed to Step N+1 when:
 
-- ✅ Condition 1 met
-- ✅ Condition 2 met
-- ✅ Condition 3 met
+- ✅ Condition 1, 2, 3 met
 
 Do NOT proceed until all conditions met.
 
 ## Next Step
 
-Load `steps/step-[N+1]-[action].md` and execute.
+Load `steps-c/step-[N+1]-[action].md` and execute.
 ```
 
-### Example: Step File for API Test Generation
-
-````markdown
-# Step 3A: Generate API Tests (Subagent)
-
-## Context (from previous steps)
-
-You have:
-
-- Analyzed codebase and identified 3 features: Auth, Checkout, Profile
-- Loaded knowledge fragments: api-request, data-factories, api-testing-patterns
-- Determined test framework: Playwright with TypeScript
-- Config: use_playwright_utils = true
-
-## Your Task (Step 3A Only)
-
-Generate API tests for the 3 features identified above.
-
-## Requirements
-
-- ✅ Generate tests for all 3 features
-- ✅ Use Playwright Utils `apiRequest()` helper (from api-request fragment)
-- ✅ Use data factories for test data (from data-factories fragment)
-- ✅ Follow API testing patterns (from api-testing-patterns fragment)
-- ✅ TypeScript with proper types
-- ✅ Save to tests/api/ directory
-
-## What You MUST Do
-
-1. For each feature (Auth, Checkout, Profile):
-   - Create `tests/api/[feature].spec.ts`
-   - Import necessary Playwright fixtures
-   - Import Playwright Utils helpers (apiRequest)
-   - Generate 3-5 API test cases covering happy path + edge cases
-   - Use data factories for request bodies
-   - Use proper assertions (status codes, response schemas)
-
-2. Follow patterns from knowledge fragments:
-   - Use `apiRequest({ method, url, data })` helper
-   - Use factory functions for test data (not hardcoded)
-   - Test both success and error responses
-
-3. Save all test files to disk
-
-## What You MUST NOT Do
-
-- ❌ Do NOT generate E2E tests (that's Step 3B - parallel subagent)
-- ❌ Do NOT generate fixtures yet (that's Step 4)
-- ❌ Do NOT run tests yet (that's Step 5)
-- ❌ Do NOT use custom fetch/axios (use apiRequest helper)
-- ❌ Do NOT hardcode test data (use factories)
-
-## Output Format
-
-Output JSON to `/tmp/automate-api-tests-{timestamp}.json`:
+A worker step is the same shape with two differences: its exit condition ends the worker rather than advancing the chain, and it writes structured JSON to a temp file for the aggregation step to read:
 
 ```json
 {
@@ -421,121 +91,98 @@ Output JSON to `/tmp/automate-api-tests-{timestamp}.json`:
   "summary": "Generated 5 API test cases for 3 features"
 }
 ```
-````
 
-## Exit Condition
+### Loading knowledge fragments from a step
 
-You may finish this subagent when:
+Step frontmatter declares `knowledgeIndex: './resources/tea-index.csv'`, resolved from the skill root, and the step body names the fragments it wants:
 
-- ✅ All 3 features have API test files
-- ✅ All tests use Playwright Utils helpers
-- ✅ All tests use data factories
-- ✅ JSON output file written to /tmp/
+```markdown
+Use `{knowledgeIndex}` to load:
 
-Subagent complete. Main workflow will read output and proceed.
+1. **fixture-architecture** - composable fixture patterns
+2. **api-request** - API test patterns
+3. **network-first** - network handling patterns
 
-````
+Generated tests MUST follow these patterns:
 
----
+✅ Fixture composition (fixture-architecture)
+✅ `await apiRequest()` (api-request)
+✅ Intercept before navigate (network-first)
 
-## Validation & Quality Assurance
-
-### BMad Builder Validation
-
-All 9 TEA workflows score **100%** on BMad Builder validation. Validation reports are stored in `src/workflows/testarch/*/validation-report-*.md`.
-
-**Validation Criteria**:
-
-- ✅ Clear, granular instructions (not too much context)
-- ✅ Explicit exit conditions (LLM knows when to stop)
-- ✅ Context injection (each step self-contained)
-- ✅ Strict action boundaries (prevents improvisation)
-- ✅ Subagent support (where applicable)
-
-### Real-Project Testing
-
-All 9 workflows tested with real projects:
-
-- ✅ teach-me-testing: Tested multi-session flow with persisted progress
-- ✅ test-design: Tested with real story/epic
-- ✅ automate: Tested extensively with real codebases
-- ✅ atdd: Tested TDD workflow (failing tests confirmed)
-- ✅ test-review: Tested against known good/bad test suites
-- ✅ nfr-assess: Tested with complex system
-- ✅ trace: Tested coverage matrix + gate decision
-- ✅ framework: Tested Playwright/Cypress scaffold
-- ✅ ci: Tested GitHub Actions/GitLab CI generation
-
-**Result**: 100% LLM compliance - no improvisation, consistent output.
-
----
-
-## Maintaining Step Files
-
-### When to Update Step Files
-
-Update step files when:
-
-1. **Knowledge fragments change**: Update fragment loading instructions
-2. **New patterns emerge**: Add new requirements/patterns to steps
-3. **LLM improvises**: Add stricter boundaries to prevent improvisation
-4. **Performance issues**: Split steps further or add subagents
-5. **User feedback**: Clarify ambiguous instructions
-
-### Best Practices
-
-1. **Keep steps granular**: 200-500 words per step (not 2000+)
-2. **Repeat context**: Don't assume LLM remembers previous steps
-3. **Be explicit**: "Generate 3-5 test cases" not "generate some tests"
-4. **Forbid out-of-scope actions**: Explicitly list what NOT to do
-5. **Test after changes**: Re-run BMad Builder validation after edits
-
-### Anti-Patterns to Avoid
-
-❌ **Too much context**: Steps >1000 words defeat the purpose
-❌ **Vague instructions**: "Analyze codebase" - analyze what? how?
-❌ **Missing exit conditions**: LLM doesn't know when to stop
-❌ **Assumed knowledge**: Don't assume LLM remembers previous steps
-❌ **Multiple tasks per step**: One step = one action only
-
----
-
-## Performance Benefits
-
-### Sequential vs Parallel Execution
-
-**Before Step Files (Sequential)**:
-
-- automate: ~10 minutes (API → E2E → fixtures → validate)
-- test-review: ~5 minutes (5 quality checks sequentially)
-- nfr-assess: ~12 minutes (4 NFR domains sequentially)
-
-**After Step Files (Parallel Subagents)**:
-
-- automate: ~5 minutes (API + E2E in parallel) - **50% faster**
-- test-review: ~2 minutes (all checks in parallel) - **60% faster**
-- nfr-assess: ~4 minutes (all domains in parallel) - **67% faster**
-
-**Total time savings**: ~40-60% reduction in workflow execution time.
-
----
-
-## User Experience
-
-### What Users See
-
-Users don't need to understand step-file architecture internals, but they benefit from:
-
-1. **Consistent Output**: Same input → same output, every time
-2. **Faster Workflows**: Parallel execution where possible
-3. **Higher Quality**: Knowledge fragments enforced consistently
-4. **Predictable Behavior**: No LLM improvisation or surprises
-
-### Progress Indicators
-
-When running workflows, users see:
-
+❌ Do NOT substitute custom patterns
 ```
+
+See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how fragments are selected and maintained.
+
+## How Workflows Split Into Workers
+
+Four workflows ship dedicated worker step files. Four resolve execution mode inside a step but run their work in order. `teach-me-testing` does neither; it is a sequential, session-based learning flow.
+
+| Workflow      | Shape               | Workers                                                                   | Aggregation                                                 |
+| ------------- | ------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `automate`    | Parallel generation | API, backend, E2E, mobile test generation                                 | Merges tests, fixtures, and summary stats                   |
+| `atdd`        | Parallel generation | Failing API tests, failing E2E tests                                      | Validates red-phase output, merges artifacts                |
+| `test-review` | Parallel validation | Determinism, isolation, maintainability, performance                      | Computes the combined quality score and report              |
+| `nfr-assess`  | Parallel validation | Security, performance, reliability, scalability                           | Computes overall risk, compliance summary, priority actions |
+| `framework`   | Sequential + probe  | Scaffold work units (structure/config, fixtures, samples)                 | Consolidates the generated framework setup                  |
+| `ci`          | Sequential + probe  | Pipeline generation                                                       | One deterministic pipeline artifact                         |
+| `test-design` | Sequential + probe  | Output generation                                                         | One deterministic design artifact                           |
+| `trace`       | Two-phase, ordered  | Phase 1 builds the coverage matrix; Phase 2 reads it and decides the gate | Merges gap analysis with coverage and gate data             |
+
+Workers are isolated. They exchange nothing directly and communicate only through the structured outputs that the aggregation step validates.
+
+## Execution Modes
+
+`tea_execution_mode` picks the orchestration strategy. Default `auto`.
+
+| Mode         | Behavior                                                          |
+| ------------ | ----------------------------------------------------------------- |
+| `auto`       | Probe capabilities and pick the best supported mode (recommended) |
+| `agent-team` | Prefer team/delegation orchestration when the runtime supports it |
+| `subagent`   | Prefer isolated worker orchestration when the runtime supports it |
+| `sequential` | Run worker steps one at a time                                    |
+
+With `tea_capability_probe: true` (the default), TEA falls back safely: `auto` tries `agent-team`, then `subagent`, then `sequential`; an explicitly requested `agent-team` or `subagent` falls back to the next supported mode; `sequential` always stays sequential. With `tea_capability_probe: false`, TEA honors the requested mode strictly and fails if the runtime cannot execute it.
+
+In `agent-team` and `subagent` modes, the runtime decides concurrency and timing. TEA imposes no parallel worker limit of its own.
+
+Recommended configuration:
+
+```yaml
+tea_execution_mode: 'auto'
+tea_capability_probe: true
+```
+
+Choose `sequential` when you need strict single-threaded execution or debugging clarity. Choose `agent-team` or `subagent` explicitly only when you want that mode specifically and know your runtime supports it.
+
+### Overriding a mode for one run
+
+Explicit phrasing during a run overrides config for that run only. Normalized terms:
+
+- `agent team`, `agent teams`, `agentteam` → `agent-team`
+- `subagent`, `subagents`, `sub agent`, `sub agents` → `subagent`
+- `sequential` → `sequential`
+- `auto` → `auto`
+
+Precedence: explicit run-level request, then `tea_execution_mode` in config, then runtime fallback when probing is enabled.
+
+### What mode never changes
+
+Across every mode TEA holds the same guarantees: the same output schema per workflow, the same validation and aggregation rules, the same deterministic fallback semantics, and the same failure behavior when a worker output is missing or invalid. Mode selection changes orchestration, never artifact contracts.
+
+## Performance
+
+Parallel dispatch is the reason worker splits exist. The figures below are rough development-run estimates, not a published benchmark; treat them as the shape of the effect rather than as measurements.
+
+| Workflow      | Sequential | Parallel workers | Approx. change |
+| ------------- | ---------- | ---------------- | -------------- |
+| `automate`    | ~10 min    | ~5 min           | ~50% faster    |
+| `test-review` | ~5 min     | ~2 min           | ~60% faster    |
+| `nfr-assess`  | ~12 min    | ~4 min           | ~67% faster    |
+
+Users do not need to know any of this to run a workflow. What they see is consistent output for the same input, faster runs where parallelism applies, and progress reporting per step:
+
+```text
 ✓ Step 1: Setup complete
 ✓ Step 2: Knowledge fragments loaded
 ⟳ Step 3: Generating tests (2 subagents running)
@@ -545,55 +192,38 @@ When running workflows, users see:
 ✓ Step 5: Validation complete
 ```
 
----
+## Validation
+
+Eight of the nine TEA workflows carry BMad Builder validation reports at `src/workflows/testarch/<workflow>/validation-report-*.md`, each scoring 100%. `bmad-teach-me-testing` has no validation report.
+
+Validation checks for granular instructions, explicit exit conditions, context injection in every step, strict action boundaries, and subagent support where the workflow supports it.
+
+All nine workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and `ci` for GitHub Actions and GitLab CI generation.
+
+## Maintaining Step Files
+
+Update a step file when knowledge fragments change, a new pattern needs enforcing, the model improvises past an existing boundary, a step is slow enough to warrant splitting or parallelizing, or user feedback says an instruction is ambiguous.
+
+**Practices that hold:** keep each step to 200-500 words; restate context rather than assuming recall; be explicit ("generate 3-5 test cases", not "generate some tests"); list forbidden actions rather than implying them; re-run BMad Builder validation after every edit.
+
+**Anti-patterns:** steps over 1000 words defeat the purpose; vague verbs like "analyze codebase" specify nothing; a missing exit condition leaves no stopping point; assumed knowledge across steps breaks under context pressure; more than one task in a step reintroduces everything step files were built to prevent.
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom                                 | Likely cause                                           | Fix                                                                      |
+| --------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------ |
+| Model still improvising                 | Step instructions too vague                            | Add explicit requirements and forbidden actions                          |
+| Worker output not aggregating           | Temp file path mismatch or malformed JSON              | Check the temp file naming convention and validate the JSON shape        |
+| Knowledge fragments not applied         | Fragment loading instructions unclear                  | Name the fragments and state the patterns they must produce              |
+| Slow despite subagents                  | Not enough parallelization                             | Identify further independent steps to split into workers                 |
+| Workflow ran in an unexpected mode      | Run-level override took precedence over config         | Check the resolved mode in the workflow execution report                 |
+| Requested mode did not run              | Runtime lacked support and fallback changed the mode   | Check the resolved mode; disable probing only if you want a hard failure |
+| Workflow failed instead of falling back | `tea_capability_probe: false` with an unsupported mode | Set the probe to `true`, or pick a mode the runtime supports             |
 
-**Issue**: LLM still improvising despite step files
+## Related
 
-- **Diagnosis**: Step instructions too vague
-- **Fix**: Add more explicit requirements and forbidden actions
-
-**Issue**: Subagent output not aggregating correctly
-
-- **Diagnosis**: Temp file path mismatch or JSON parsing error
-- **Fix**: Check temp file naming convention, verify JSON format
-
-**Issue**: Knowledge fragments not being used
-
-- **Diagnosis**: Fragment loading instructions unclear
-- **Fix**: Make fragment usage requirements more explicit
-
-**Issue**: Workflow too slow despite subagents
-
-- **Diagnosis**: Not enough parallelization
-- **Fix**: Identify more independent steps for subagent pattern
-
----
-
-## References
-
-- **Subagent Architecture**: [subagent-architecture.md](./subagent-architecture.md)
-- **Knowledge Base System**: [knowledge-base-system.md](./knowledge-base-system.md)
-- **BMad Builder Validation Reports**: `src/workflows/testarch/*/validation-report-*.md`
-- **TEA Workflow Examples**: `src/workflows/testarch/*/steps/*.md`
-
----
-
-## Future Enhancements
-
-1. **Dynamic Step Generation**: LLM generates custom step files based on workflow complexity
-2. **Step Caching**: Cache step outputs for identical inputs (idempotent operations)
-3. **Adaptive Granularity**: Automatically split steps if too complex
-4. **Visual Step Editor**: GUI for creating/editing step files
-5. **Step Templates**: Reusable step file templates for common patterns
-
----
-
-**Status**: Production-ready, 100% LLM compliance achieved
-**Validation**: All 9 workflows score 100% on BMad Builder validation
-**Testing**: All 9 workflows tested with real projects, zero improvisation issues
-**Next Steps**: Implement subagent patterns (see subagent-architecture.md)
-````
+- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - how steps select and load fragments
+- [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md) - running one of these workflows headless
+- [TEA Configuration](/docs/reference/configuration.md) - `tea_execution_mode` and `tea_capability_probe`
+- [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md) - authoring your own steps
+- [TEA Overview](/docs/explanation/tea-overview.md) - the nine workflows in the lifecycle

@@ -32,7 +32,7 @@ Use TEA's `teach-me-testing` workflow (TEA Academy) to learn testing progressive
 4. **Test Design (60 min)** - Risk assessment and coverage planning workflow
 5. **ATDD & Automate (60 min)** - TDD red-green approach, test generation
 6. **Quality & Trace (45 min)** - Test review (5 dimensions), coverage traceability
-7. **Advanced Patterns (ongoing)** - Explore 42 knowledge fragments on-demand
+7. **Advanced Patterns (ongoing)** - Explore 54 knowledge fragments on-demand
 
 ### What You'll Gain
 
@@ -44,24 +44,17 @@ Use TEA's `teach-me-testing` workflow (TEA Academy) to learn testing progressive
 
 ## Prerequisites
 
-- BMad Method installed with TEA module
-- Access to TEA documentation and knowledge base
-- 30-90 minutes per session (can pause and resume)
-- Willingness to learn progressively over 1-2 weeks
+- 30-90 minutes per session (you can pause and resume)
 
 ## How It Works
 
 ### Starting Fresh
 
-Load the skill or agent:
+- **Claude Code / Cursor / Windsurf:** `/bmad-teach-me-testing`
+- **Codex:** `$bmad-teach-me-testing`
+- **Inside a `/bmad-tea` chat:** `TMT`
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-teach-me-testing` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-teach-me-testing` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `teach-me-testing` or `TMT`
-
-```bash
-/bmad-teach-me-testing
-```
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
 ### Initial Assessment
 
@@ -82,7 +75,7 @@ After assessment, you'll see a menu of all 7 sessions with:
 - Completion percentage
 - Recommended next session
 
-**Jump to any session** - You're not locked into a linear path!
+**Jump to any session.** The path is not linear.
 
 ### Session Flow
 
@@ -132,7 +125,7 @@ Skip fundamentals, focus on:
 
 - Session 3: TEA architecture patterns
 - Session 4: Test Design workflow
-- Session 7: Advanced patterns (42 knowledge fragments)
+- Session 7: Advanced patterns (54 knowledge fragments)
 
 **Time commitment:** 3-4 hours (highly targeted)
 
@@ -212,12 +205,12 @@ Skip fundamentals, focus on:
 
 **Topics:**
 
-- Menu-driven exploration of 42 knowledge fragments
+- Menu-driven exploration of 54 knowledge fragments
 - 5 categories: Testing Patterns, Playwright Utils, Configuration & Governance, Quality Frameworks, Auth & Security
 - Deep-dive into specific patterns as needed
 - GitHub links for browsing source
 
-**Resources:** All 42 knowledge fragments
+**Resources:** All 54 knowledge fragments
 **GitHub:** [Knowledge Base Repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge)
 
 ## Completion Summary
@@ -235,7 +228,7 @@ Complete all 7 sessions to receive your TEA Academy completion summary with:
 1. **Set aside dedicated time** - Each session requires focus (30-90 min)
 2. **Take your own notes** - Session notes are generated, but add personal insights
 3. **Apply immediately** - Practice concepts on your current project
-4. **Explore fragments** - Session 7 has 42 fragments for deep-dive topics
+4. **Explore fragments** - Session 7 has 54 fragments for deep-dive topics
 5. **Share with team** - Help others learn by sharing your experience
 6. **Don't rush** - Learning takes time, pause and resume as needed
 
@@ -266,22 +259,22 @@ If scoring <70% on quizzes:
 
 ### Want to restart from scratch
 
-Delete your progress file to start fresh:
+Delete your progress file. `{test_artifacts}` is the `test_artifacts` value in `_bmad/tea/config.yaml` (default `docs/test-artifacts`), and `{your-name}` is the name you gave in the initial assessment. With those defaults and the name `alex`:
 
 ```bash
-rm {test_artifacts}/teaching-progress/{your-name}-tea-progress.yaml
+rm docs/test-artifacts/teaching-progress/alex-tea-progress.yaml
 ```
 
 ## Related Workflows
 
 After completing TEA Academy, you're ready to use:
 
-- [Framework](./setup-test-framework.md) - Set up test framework
-- [Test Design](./run-test-design.md) - Plan test coverage
-- [ATDD](./run-atdd.md) - Generate failing tests first
-- [Automate](./run-automate.md) - Expand test coverage
-- [Test Review](./run-test-review.md) - Audit test quality
-- [Trace](./run-trace.md) - Requirements traceability
+- [Framework](/docs/how-to/workflows/setup-test-framework.md) - Set up test framework
+- [Test Design](/docs/how-to/workflows/run-test-design.md) - Plan test coverage
+- [ATDD](/docs/how-to/workflows/run-atdd.md) - Generate failing tests first
+- [Automate](/docs/how-to/workflows/run-automate.md) - Expand test coverage
+- [Test Review](/docs/how-to/workflows/run-test-review.md) - Audit test quality
+- [Trace](/docs/how-to/workflows/run-trace.md) - Requirements traceability
 
 ## Additional Resources
 

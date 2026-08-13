@@ -5,51 +5,36 @@ description: Complete reference for TEA configuration options and file locations
 
 # TEA Configuration Reference
 
-Complete reference for all TEA (Test Engineering Architect) configuration options.
+Every TEA (Test Engineering Architect) configuration key, its default, and the workflows it changes.
 
 ## Configuration File Locations
 
-### User Configuration (Installer-Generated)
+**Your project:** `_bmad/tea/config.yaml`. The BMad installer writes it from your answers. Edit it to change TEA behavior. Typically gitignored, since values are user-specific.
 
-**Location:** `_bmad/tea/config.yaml`
+**The schema:** `src/module.yaml` in the [BMAD TEA repository](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise). It defines the available keys, their defaults, and the installer prompts. It does not ship into your project; reference it only when contributing to BMAD.
 
-**Purpose:** Project-specific configuration values for your repository
+TEA reads `_bmad/tea/config.yaml` once at workflow start. After editing it, start a fresh chat before running a workflow.
 
-**Created By:** BMad installer
-
-**Status:** Typically gitignored (user-specific values)
-
-**Usage:** Edit this file to change TEA behavior in your project
-
-**Example:**
+## Recommended Configuration
 
 ```yaml
 # _bmad/tea/config.yaml
-project_name: my-awesome-app
-user_skill_level: intermediate
+project_name: my-project
 output_folder: _bmad-output
-test_artifacts: _bmad-output/test-artifacts
-tea_use_playwright_utils: true
-tea_use_pactjs_utils: false
-tea_pact_mcp: 'none'
-tea_browser_automation: 'auto'
-tea_execution_mode: 'auto'
-tea_capability_probe: true
+tea_use_playwright_utils: true # production-ready fixtures and utilities
+tea_use_pactjs_utils: false # opt in only for contract testing (see below)
+tea_pact_mcp: 'none' # opt in only if you already run PactFlow or Pact Broker
+tea_browser_automation: 'auto' # smart CLI/MCP selection with fallback
+tea_execution_mode: 'auto' # capability-aware orchestration
+tea_capability_probe: true # fall back safely when a mode is unsupported
 ```
 
-### Canonical Schema (Source of Truth)
+```bash
+npm install -D @seontechnologies/playwright-utils
+npm install -g @playwright/cli@latest  # needed for 'cli' and 'auto' browser modes
+```
 
-**Location:** `src/module.yaml`
-
-**Purpose:** Defines available configuration keys, defaults, and installer prompts
-
-**Created By:** BMAD maintainers (part of BMAD repo)
-
-**Status:** Versioned in BMAD repository
-
-**Usage:** Reference only (do not edit unless contributing to BMAD)
-
-**Note:** The installer reads `module.yaml` to prompt for config values, then writes user choices to `_bmad/tea/config.yaml` in your project.
+**Contract-testing opt-in:** set `tea_use_pactjs_utils: true` for services that already practice consumer-driven contract testing. Add `tea_pact_mcp: 'mcp'` only if you also run PactFlow or a Pact Broker and want TEA to query broker state.
 
 ---
 
@@ -57,67 +42,39 @@ tea_capability_probe: true
 
 ### test_artifacts
 
-Base output folder for TEA-generated artifacts (test designs, reports, traceability, etc).
+Base output folder for TEA-generated artifacts (test designs, reports, traceability).
 
-**Schema Location:** `src/module.yaml` (TEA module config)
+**Type:** `string` · **Default:** `{output_folder}/test-artifacts`
 
-**User Config:** `_bmad/tea/config.yaml`
-
-**Type:** `string`
-
-**Default:** `{output_folder}/test-artifacts`
-
-**Purpose:** Allows TEA outputs to live outside the core BMM output folder.
-
-**Example:**
+Resolves to `{project-root}/{value}`, so it can live outside the core BMM output folder.
 
 ```yaml
 test_artifacts: docs/testing-artifacts
 ```
 
+---
+
 ### tea_use_playwright_utils
 
 Enable Playwright Utils integration for production-ready fixtures and utilities.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
+**Type:** `boolean` · **Default:** `true`
 
-**User Config:** `_bmad/tea/config.yaml`
+**Installer prompt:** `Enable Playwright Utils integration?`
 
-**Type:** `boolean`
+**Affects workflows** (each reads the key and branches on it):
 
-**Default:** `true`
+- `atdd` selects a playwright-utils fragment profile and passes `use_playwright_utils` to generation workers, producing tests that use fixtures like `apiRequest` and `authSession`
+- `automate` same fragment profile and worker flag for test generation
+- `test-design` loads playwright-utils fragments so planning output includes matching code examples
+- `test-review` reviews tests against playwright-utils patterns
 
-**Installer Prompt:**
+- `framework` loads a different fixture-fragment set per branch when the stack is `frontend`, `fullstack`, or `backend`, and only recommends installing the package on the enabled branch
 
-```
-Enable Playwright Utils integration?
-```
-
-**Purpose:** Enables TEA to:
-
-- Include playwright-utils in `framework` scaffold
-- Generate tests using playwright-utils fixtures
-- Review tests against playwright-utils patterns
-- Configure CI with burn-in and selective testing utilities
-
-**Affects Workflows:**
-
-- `framework` - Includes playwright-utils imports and fixture examples
-- `atdd` - Uses fixtures like `apiRequest`, `authSession` in generated tests
-- `automate` - Leverages utilities for test patterns
-- `test-review` - Reviews against playwright-utils best practices
-- `ci` - Includes burn-in utility and selective testing
-
-**Example (Enable):**
+The `ci`, `trace`, and `nfr-assess` workflows do not read this key.
 
 ```yaml
-tea_use_playwright_utils: true
-```
-
-**Example (Disable):**
-
-```yaml
-tea_use_playwright_utils: false
+tea_use_playwright_utils: true # false generates from scratch instead
 ```
 
 **Prerequisites:**
@@ -135,63 +92,40 @@ npm install -D @seontechnologies/playwright-utils
 
 ### tea_use_pactjs_utils
 
-Enable Pact.js Utils integration for production-ready consumer-driven contract testing utilities.
+Enable Pact.js Utils integration for consumer-driven contract testing utilities.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
+**Type:** `boolean` · **Default:** `false`
 
-**User Config:** `_bmad/tea/config.yaml`
+**Installer prompt:** `Enable Pact.js Utils for consumer-driven contract testing?`
 
-**Type:** `boolean`
+**Affects workflows:**
 
-**Default:** `false`
+- `framework` creates pact test folders and pactjs-utils sample patterns
+- `atdd` loads pactjs-utils fragments for contract-aware generation context
+- `automate` loads pactjs-utils fragments and passes pact config to subagents
+- `test-design` loads pactjs-utils fragments for system and epic planning
+- `test-review` uses pactjs-utils provider and review patterns
+- `ci` adds a contract-test stage and quality gates
 
-**Installer Prompt:**
-
-```
-Enable Pact.js Utils for consumer-driven contract testing?
-```
-
-**Purpose:** Enables TEA to:
-
-- Load Pact.js Utils knowledge fragments during context loading
-- Scaffold contract test structure and examples in `framework`
-- Generate contract testing guidance in `atdd` and `automate`
-- Review provider verification patterns in `test-review`
-- Add contract pipeline stage and gates in `ci`
-
-**Affects Workflows:**
-
-- `framework` - Creates pact test folders and pactjs-utils sample patterns
-- `atdd` - Loads pactjs-utils fragments for contract-aware generation context
-- `automate` - Loads pactjs-utils fragments and passes pact config to subagents
-- `test-design` - Loads pactjs-utils fragments for system/epic planning
-- `test-review` - Uses pactjs-utils provider/review patterns
-- `ci` - Adds contract-test stage and quality gates
-
-**Use this when:** your team already practices consumer-driven contract testing or wants TEA to scaffold Pact-aware patterns on purpose. Leave it off for projects that do not use Pact.
-
-**Example (Enable):**
+**Use this when:** your team already practices consumer-driven contract testing, or you want TEA to scaffold Pact-aware patterns on purpose. Leave it off for projects that do not use Pact.
 
 ```yaml
-tea_use_pactjs_utils: true
-```
-
-**Example (Disable):**
-
-```yaml
-tea_use_pactjs_utils: false
+tea_use_pactjs_utils: true # false skips all Pact integration
 ```
 
 **Prerequisites:**
 
 ```bash
 npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
+# peer dependency: @pact-foundation/pact >= 16.2.0
 ```
+
+For the remote flow with a Pact Broker, set `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN`, plus `GITHUB_SHA` (GitHub Actions sets this) and `GITHUB_BRANCH` (you must set it explicitly: `${{ github.head_ref || github.ref_name }}`). The local monorepo flow needs no broker: the consumer generates pacts and the provider verifies them locally.
 
 **Related:**
 
 - [Pact.js Utils docs](https://seontechnologies.github.io/pactjs-utils/)
-- [TEA Overview - Optional Integrations](/docs/explanation/tea-overview.md#optional-integrations)
+- [TEA Overview: Optional Integrations](/docs/explanation/tea-overview.md#optional-integrations)
 
 ---
 
@@ -199,60 +133,31 @@ npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
 
 Pact MCP strategy for broker interaction during contract testing workflows.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
+**Type:** `string` · **Default:** `"none"` · **Options:** `"mcp"` | `"none"`
 
-**User Config:** `_bmad/tea/config.yaml`
+**Installer prompt:** `Enable SmartBear MCP for PactFlow/Pact Broker? Only needed if you already use a broker.`
 
-**Type:** `string`
+Controls whether TEA can use SmartBear MCP tools for provider-state discovery, Pact test review assistance, and can-i-deploy/matrix guidance.
 
-**Default:** `"none"`
+**Affects workflows:** `test-design`, `atdd`, `automate`, `framework`, `test-review`, `ci`.
 
-**Options:** `"mcp"` | `"none"`
+**Use this when:** your project already uses PactFlow or Pact Broker and you want TEA to query broker state during review, generation, or gate guidance. Otherwise leave it at `none`.
 
-**Installer Prompt:**
-
+```yaml
+tea_pact_mcp: 'mcp' # 'none' disables all broker/MCP integration
 ```
-Enable SmartBear MCP for PactFlow/Pact Broker? Only needed if you already use a broker.
-```
-
-**Purpose:** Controls whether TEA can use SmartBear MCP tools for:
-
-- Provider-state discovery in design/generation workflows
-- Pact test review assistance
-- Can-i-deploy and matrix guidance in CI workflows
-
-**Affects Workflows:**
-
-- `test-design` - Broker-aware contract context loading
-- `automate` - Broker-assisted pact generation context
-- `test-review` - MCP-assisted pact review context
-- `ci` - MCP can-i-deploy/matrix guidance references
-
-**Use this when:** your project already uses PactFlow or Pact Broker and you want TEA to query broker state during review, generation, or gate guidance. Otherwise leave it set to `none`.
 
 **Prerequisites:**
 
 ```bash
-npm install -g @smartbear/mcp
-# or: npx -y @smartbear/mcp@latest
+npm install -g @smartbear/mcp    # Node.js 20+ required
+# or run on demand: npx -y @smartbear/mcp@latest
 ```
 
-**Required broker env vars (for Pact features):**
+**Required broker env vars:**
 
-- `PACT_BROKER_BASE_URL`
+- `PACT_BROKER_BASE_URL` (for example `https://{tenant}.pactflow.io`)
 - `PACT_BROKER_TOKEN` (or username/password for basic auth)
-
-**Example (Enable MCP):**
-
-```yaml
-tea_pact_mcp: 'mcp'
-```
-
-**Example (Disable MCP):**
-
-```yaml
-tea_pact_mcp: 'none'
-```
 
 **Related:**
 
@@ -263,72 +168,46 @@ tea_pact_mcp: 'none'
 
 ### tea_browser_automation
 
-Browser automation strategy for TEA workflows. Controls how TEA interacts with live browsers during test generation.
+Browser automation strategy. Controls how TEA interacts with live browsers during test generation.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
+**Type:** `string` · **Default:** `"auto"` · **Options:** `"auto"` | `"cli"` | `"mcp"` | `"none"`
 
-**User Config:** `_bmad/tea/config.yaml`
+**Installer prompt:** `How should TEA interact with browsers during test generation?`
 
-**Type:** `string`
+| Mode   | Behavior                                                                                 |
+| ------ | ---------------------------------------------------------------------------------------- |
+| `auto` | **Recommended.** CLI for stateless tasks, MCP for stateful flows. Falls back gracefully. |
+| `cli`  | CLI only (`@playwright/cli`). MCP ignored.                                               |
+| `mcp`  | MCP only. CLI ignored. Same as the old `tea_use_mcp_enhancements: true`.                 |
+| `none` | No browser interaction. Pure AI generation from docs and code.                           |
 
-**Default:** `"auto"`
+**Affects workflows:**
 
-**Options:** `"auto"` | `"cli"` | `"mcp"` | `"none"`
-
-**Installer Prompt:**
-
-```
-How should TEA interact with browsers during test generation?
-```
-
-**Purpose:** Controls which browser automation tool TEA uses:
-
-| Mode   | Behavior                                                                                                    |
-| ------ | ----------------------------------------------------------------------------------------------------------- |
-| `auto` | Smart selection — CLI for stateless tasks, MCP for stateful flows. Falls back gracefully. **(Recommended)** |
-| `cli`  | CLI only (`@playwright/cli`). MCP ignored.                                                                  |
-| `mcp`  | MCP only. CLI ignored. Same as old `tea_use_mcp_enhancements: true`.                                        |
-| `none` | No browser interaction. Pure AI generation from docs/code.                                                  |
-
-**Affects Workflows:**
-
-- `test-design` - Exploratory mode (CLI snapshots for page discovery)
-- `atdd` - Recording mode (CLI for selector verification, MCP for complex interactions)
-- `automate` - Healing mode (MCP for debugging) + recording mode (CLI for snapshots)
-- `test-review` - Evidence collection (CLI for traces, screenshots)
+- `test-design` exploratory mode (CLI snapshots for page discovery)
+- `atdd` recording mode (CLI for selector verification, MCP for complex interactions)
+- `automate` healing mode (MCP for debugging) plus recording mode (CLI for snapshots)
+- `nfr-assess` browser-based evidence collection when the mode is `cli` or `auto`
+- `test-review` evidence collection (CLI for traces and screenshots)
 
 **Prerequisites:**
 
-- **CLI:** `npm install -g @playwright/cli@latest` then `playwright-cli install --skills`
-- **MCP:** Configure MCP servers in IDE (see [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md))
+```bash
+# CLI mode (and 'auto')
+npm install -g @playwright/cli@latest
+playwright-cli install --skills   # run from project root; Node.js 18+
 
-**Example (Auto — Recommended):**
-
-```yaml
-tea_browser_automation: 'auto'
+# MCP mode (and 'auto') needs two servers configured in your IDE:
+#   playwright        -> npx @playwright/mcp@latest
+#   playwright-test   -> npx playwright run-test-mcp-server
 ```
 
-**Example (CLI only):**
-
 ```yaml
-tea_browser_automation: 'cli'
+tea_browser_automation: 'auto' # 'cli' | 'mcp' | 'none'
 ```
 
-**Example (MCP only — same as old behavior):**
+**Migration from the old flag:**
 
-```yaml
-tea_browser_automation: 'mcp'
-```
-
-**Example (Disable):**
-
-```yaml
-tea_browser_automation: 'none'
-```
-
-**Migration from old flag:**
-
-| Old Setting                       | New Equivalent                   |
+| Old setting                       | New equivalent                   |
 | --------------------------------- | -------------------------------- |
 | `tea_use_mcp_enhancements: true`  | `tea_browser_automation: "auto"` |
 | `tea_use_mcp_enhancements: false` | `tea_browser_automation: "none"` |
@@ -336,7 +215,7 @@ tea_browser_automation: 'none'
 **Related:**
 
 - [Configure Browser Automation Guide](/docs/how-to/customization/configure-browser-automation.md)
-- [TEA Overview - Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli-mcp)
+- [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli-mcp)
 
 ---
 
@@ -344,115 +223,57 @@ tea_browser_automation: 'none'
 
 Execution strategy for orchestration-capable TEA workflows.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
+**Type:** `string` · **Default:** `"auto"` · **Options:** `"auto"` | `"subagent"` | `"agent-team"` | `"sequential"`
 
-**User Config:** `_bmad/tea/config.yaml`
+**Installer prompt:** `How should TEA orchestrate multi-step generation and evaluation?`
 
-**Type:** `string`
+Applies to `automate`, `atdd`, `test-review`, `nfr-assess`, `framework`, `ci`, `test-design`, and `trace`. `teach-me-testing` does not use this setting.
 
-**Default:** `"auto"`
-
-**Options:** `"auto"` | `"subagent"` | `"agent-team"` | `"sequential"`
-
-**Installer Prompt:**
-
-```
-How should TEA orchestrate multi-step generation and evaluation?
-```
-
-**Purpose:** Defines how TEA orchestrates worker-style steps in these workflows:
-
-- `automate`
-- `atdd`
-- `test-review`
-- `nfr-assess`
-- `framework`
-- `ci`
-- `test-design`
-- `trace`
-
-`teach-me-testing` does not use this setting.
-
-**Mode behavior:**
-
-| Mode         | Behavior                                                                                         |
-| ------------ | ------------------------------------------------------------------------------------------------ |
-| `auto`       | Recommended. TEA picks best supported mode using runtime capability checks (if probing enabled). |
-| `agent-team` | Prefer runtime team/delegation orchestration.                                                    |
-| `subagent`   | Prefer isolated subagent-style orchestration.                                                    |
-| `sequential` | Force one-by-one execution. Most deterministic, typically slowest.                               |
-
-**Important:** In `agent-team` and `subagent` modes, runtime decides scheduling and concurrency. TEA does not enforce a separate parallel-worker cap.
+| Mode         | Behavior                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------- |
+| `auto`       | **Recommended.** Picks the best supported mode using runtime capability checks when probing. |
+| `agent-team` | Prefer runtime team/delegation orchestration.                                                |
+| `subagent`   | Prefer isolated subagent-style orchestration.                                                |
+| `sequential` | Force one-by-one execution. Most deterministic, typically slowest.                           |
 
 **Per-workflow effect:**
 
-| Workflow      | Orchestrated unit                              | What mode changes    |
-| ------------- | ---------------------------------------------- | -------------------- |
-| `automate`    | API + E2E/backend generation workers           | Dispatch style only  |
-| `atdd`        | failing API + failing E2E workers              | Dispatch style only  |
-| `test-review` | quality-dimension workers                      | Dispatch style only  |
-| `nfr-assess`  | domain assessment workers                      | Dispatch style only  |
-| `framework`   | scaffold work units                            | Dispatch style only  |
-| `ci`          | orchestration-capable pipeline generation step | Orchestration policy |
-| `test-design` | orchestration-capable output generation step   | Orchestration policy |
-| `trace`       | phase/work-unit separation with dependencies   | Orchestration policy |
+| Workflow      | Orchestrated unit                              | What the mode changes |
+| ------------- | ---------------------------------------------- | --------------------- |
+| `automate`    | API + E2E/backend generation workers           | Dispatch style only   |
+| `atdd`        | failing API + failing E2E workers              | Dispatch style only   |
+| `test-review` | quality-dimension workers                      | Dispatch style only   |
+| `nfr-assess`  | domain assessment workers                      | Dispatch style only   |
+| `framework`   | scaffold work units                            | Dispatch style only   |
+| `ci`          | orchestration-capable pipeline generation step | Orchestration policy  |
+| `test-design` | orchestration-capable output generation step   | Orchestration policy  |
+| `trace`       | phase/work-unit separation with dependencies   | Orchestration policy  |
 
-Output contracts remain the same across modes for a given workflow.
+**Important:** in `agent-team` and `subagent` modes the runtime decides scheduling and concurrency; TEA enforces no separate parallel-worker cap. Output contracts stay the same across modes for a given workflow.
 
 **Resolution order:**
 
-1. Normalize explicit run-level wording (if present):
-   - `agent team` / `agent teams` / `agentteam` -> `agent-team`
-   - `subagent` / `subagents` / `sub agent` / `sub agents` -> `subagent`
-   - `sequential` -> `sequential`
-   - `auto` -> `auto`
-2. If no explicit override exists, use `tea_execution_mode` from `_bmad/tea/config.yaml`.
-3. If `tea_capability_probe: true`, detect runtime support for `agent-team` and `subagent`.
-4. Resolve mode:
-   - `auto` -> `agent-team` -> `subagent` -> `sequential`
-   - explicit `agent-team`/`subagent` -> fallback only when probing is enabled
-   - `sequential` -> always sequential
-
-Default when no explicit run request is given: configured value (typically `auto`).
-
-**Example (Recommended):**
+1. Normalize an explicit run-level request when one is present: `agent team` / `agent teams` / `agentteam` become `agent-team`; `subagent` / `subagents` / `sub agent` / `sub agents` become `subagent`; `sequential` and `auto` pass through.
+2. With no explicit override, use `tea_execution_mode` from `_bmad/tea/config.yaml`.
+3. With `tea_capability_probe: true`, detect runtime support for `agent-team` and `subagent`.
+4. Resolve: `auto` walks `agent-team` then `subagent` then `sequential`; an explicit `agent-team` or `subagent` falls back only when probing is enabled; `sequential` is always sequential.
 
 ```yaml
-tea_execution_mode: 'auto'
-```
-
-**Example (Force Sequential):**
-
-```yaml
-tea_execution_mode: 'sequential'
+tea_execution_mode: 'auto' # 'sequential' forces deterministic single-threaded runs
 ```
 
 ---
 
 ### tea_capability_probe
 
-Whether TEA should probe runtime capabilities before resolving execution mode.
+Whether TEA probes runtime capabilities before resolving the execution mode.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
+**Type:** `boolean` · **Default:** `true`
 
-**User Config:** `_bmad/tea/config.yaml`
-
-**Type:** `boolean`
-
-**Default:** `true`
-
-**Purpose:** When enabled, TEA checks whether `agent-team` or `subagent` execution is actually supported and falls back safely. When disabled, TEA honors configured mode strictly and fails if unsupported.
-
-**Example (Recommended):**
+When enabled, TEA checks whether `agent-team` or `subagent` execution is actually supported and falls back safely. When disabled, TEA honors the configured mode strictly and fails if it is unsupported.
 
 ```yaml
-tea_capability_probe: true
-```
-
-**Example (Strict):**
-
-```yaml
-tea_capability_probe: false
+tea_capability_probe: true # false honors tea_execution_mode strictly
 ```
 
 ---
@@ -461,35 +282,28 @@ tea_capability_probe: false
 
 Detected or configured project stack type. Controls CI pipeline generation and framework selection.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
+**Type:** `string` · **Default:** `"auto"` · **Options:** `"auto"` | `"frontend"` | `"backend"` | `"fullstack"` | `"mobile"`
 
-**User Config:** `_bmad/tea/config.yaml`
+**Installer prompt:** `What type of project is this?`
 
-**Type:** `string`
-
-**Default:** `"auto"`
-
-**Options:** `"auto"` | `"frontend"` | `"backend"` | `"fullstack"` | `"mobile"`
-
-**Purpose:** Determines stack-specific behavior:
-
-| Stack Type  | Behavior                                                                                                                              |
+| Stack type  | Behavior                                                                                                                              |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `auto`      | Auto-detect from project manifests (playwright.config, jest.config, etc.)                                                             |
+| `auto`      | Auto-detect from project manifests (`playwright.config.*`, `jest.config.*`, `pyproject.toml`, `go.mod`, `pubspec.yaml`, and similar)  |
 | `frontend`  | Browser-based tests (Playwright/Cypress), browser install in CI, burn-in enabled                                                      |
-| `backend`   | API/unit tests (pytest, JUnit, Go test, Jest/Vitest, etc.), no browser install, burn-in skipped by default                            |
+| `backend`   | API/unit tests (pytest, JUnit, Go test, Jest/Vitest), no browser install, burn-in skipped by default                                  |
 | `fullstack` | Both frontend and backend tests, full CI pipeline                                                                                     |
 | `mobile`    | Native app: Maestro device flows plus the app's unit/component suite, no browser install, burn-in enabled and scoped to changed flows |
 
-**Affects Workflows:**
-
-- `ci` - Stack-conditional pipeline stages (browser install, burn-in, device/emulator legs)
-- `framework` - Framework scaffold adapts to stack type
-- `automate` - Selects which generation workers launch (`mobile` runs the API worker plus the mobile worker)
-
 Detection checks mobile first: a React Native or Expo project carries `package.json` with react and would otherwise misdetect as `frontend`.
 
-**Example:**
+**Affects workflows:**
+
+- `ci` stack-conditional pipeline stages (browser install, burn-in, device/emulator legs)
+- `framework` scaffold adapts to the stack type
+- `automate` selects which generation workers launch (`mobile` runs the API worker plus the mobile worker)
+- `test-design` scopes the planned test levels to the stack
+- `atdd` picks stack-appropriate failing-test patterns
+- `test-review` applies stack-appropriate review criteria
 
 ```yaml
 test_stack_type: 'fullstack'
@@ -501,25 +315,15 @@ test_stack_type: 'fullstack'
 
 CI/CD platform for pipeline generation.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
-
-**User Config:** `_bmad/tea/config.yaml`
-
-**Type:** `string`
-
-**Default:** `"auto"`
+**Type:** `string` · **Default:** `"auto"`
 
 **Options:** `"auto"` | `"github-actions"` | `"gitlab-ci"` | `"jenkins"` | `"azure-devops"` | `"harness"` | `"circle-ci"` | `"other"`
 
-**Purpose:** Controls which CI template is used for pipeline generation.
+**Installer prompt:** `Which CI/CD platform do you use?`
 
-When set to `"auto"`, TEA detects the platform by scanning for existing CI configuration files (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `azure-pipelines.yml`, `.harness/`, `.circleci/config.yml`) and falls back to inferring from the git remote.
+Controls which CI template the `ci` workflow uses and where it writes. With `"auto"`, TEA scans for `.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, `azure-pipelines.yml`, `.harness/`, and `.circleci/config.yml`, then falls back to inferring from the git remote. Installations predating this key default to `"auto"`.
 
-**Affects Workflows:**
-
-- `ci` - Template selection and output path
-
-**Example:**
+**Affects workflows:** `ci` only.
 
 ```yaml
 ci_platform: 'github-actions'
@@ -531,26 +335,15 @@ ci_platform: 'github-actions'
 
 Detected or configured test framework preference.
 
-**Schema Location:** `src/module.yaml` (TEA module config)
-
-**User Config:** `_bmad/tea/config.yaml`
-
-**Type:** `string`
-
-**Default:** `"auto"`
+**Type:** `string` · **Default:** `"auto"`
 
 **Options:** `"auto"` | `"playwright"` | `"cypress"` | `"jest"` | `"vitest"` | `"pytest"` | `"junit"` | `"go-test"` | `"dotnet-test"` | `"rspec"` | `"maestro"` | `"other"`
 
-**Purpose:** Controls which test framework patterns TEA uses for code generation. When set to `"auto"`, TEA detects from project configuration files and manifests. Supports frontend (Playwright, Cypress, Jest, Vitest), backend (pytest, JUnit, Go test, dotnet test, RSpec), and mobile native (Maestro) frameworks.
+**Installer prompt:** `Which test framework are you using?`
 
-**Affects Workflows:**
+Controls which framework patterns TEA uses for code generation. With `"auto"`, TEA detects from project configuration files and manifests.
 
-- `framework` - Scaffold generation
-- `ci` - Test commands in pipeline
-- `atdd` - Test code generation patterns
-- `automate` - Test code generation patterns
-
-**Example:**
+**Affects workflows:** `framework` (scaffold generation), `ci` (test commands in the pipeline), `atdd` and `automate` (test code generation patterns).
 
 ```yaml
 test_framework: 'playwright'
@@ -560,123 +353,112 @@ test_framework: 'playwright'
 
 ## Core BMM Configuration (Inherited by TEA)
 
-TEA also uses core BMM configuration options from `_bmad/tea/config.yaml`:
+The installer copies these core values into `_bmad/tea/config.yaml`. Every TEA `workflow.yaml` reads `user_name`, `output_folder`, `test_artifacts`, `communication_language`, and `document_output_language` from that file at startup.
 
 ### output_folder
 
-**Type:** `string`
+**Type:** `string` · **Default:** `_bmad-output`
 
-**Default:** `_bmad-output`
-
-**Purpose:** Base output folder for core BMM artifacts. TEA writes test artifacts under `test_artifacts` (defaults to `{output_folder}/test-artifacts`).
-
-**Example:**
+Base output folder for core BMM artifacts. TEA writes its own artifacts under `test_artifacts`, which defaults to `{output_folder}/test-artifacts`.
 
 ```yaml
 output_folder: _bmad-output
 ```
 
-**TEA Output Files (under `{test_artifacts}`):**
-
-- `test-design-architecture.md` + `test-design-qa.md` (from `test-design` system-level - TWO documents)
-- `test-design-epic-N.md` (from `test-design` epic-level)
-- `test-review.md` (from `test-review`)
-- `traceability-matrix.md` (from `trace` Phase 1)
-- `gate-decision-{gate_type}-{story_id}.md` (from `trace` Phase 2)
-- `live-verification-results.json` (read by `trace`, written by you; see [Live Verification Results](/docs/reference/live-verification-results.md))
-- `nfr-assessment.md` (from `nfr-assess`)
-- `automation-summary.md` (from `automate`)
-- `atdd-checklist-{story_key}.md` (from `atdd`)
-
----
-
-### user_skill_level
-
-**Type:** `enum`
-
-**Options:** `beginner` | `intermediate` | `expert`
-
-**Default:** `intermediate`
-
-**Purpose:** Affects how TEA explains concepts in chat responses
-
-**Example:**
+In a monorepo, give each package its own `_bmad/tea/config.yaml` with a relative `output_folder` so artifacts land in one place:
 
 ```yaml
-user_skill_level: beginner
+# apps/api/_bmad/tea/config.yaml
+project_name: api-service
+output_folder: ../../_bmad-output/api
 ```
 
-**Impact on TEA:**
+### user_name
 
-- **Beginner:** More detailed explanations, links to concepts, verbose guidance
-- **Intermediate:** Balanced explanations, assumes basic knowledge
-- **Expert:** Concise, technical, minimal hand-holding
+**Type:** `string` · **Default:** set during installation
 
----
+Your name. Every TEA `workflow.yaml` pulls it from `_bmad/tea/config.yaml`, and `teach-me-testing` uses it to name your progress and session-notes files.
+
+```yaml
+user_name: Jane Doe
+```
 
 ### project_name
 
-**Type:** `string`
+**Type:** `string` · **Default:** directory name
 
-**Default:** Directory name
-
-**Purpose:** Used in TEA-generated documentation and reports
-
-**Example:**
+Used in report headers, documentation titles, CI configuration comments, and the `test-design` handoff filename `{test_artifacts}/test-design/{project_name}-handoff.md`.
 
 ```yaml
 project_name: my-awesome-app
 ```
 
-**Used in:**
-
-- Report headers
-- Documentation titles
-- CI configuration comments
-
----
-
 ### communication_language
 
-**Type:** `string`
+**Type:** `string` · **Default:** `english`
 
-**Default:** `english`
-
-**Purpose:** Language for TEA chat responses
-
-**Example:**
+Language for TEA chat responses. Any language works.
 
 ```yaml
 communication_language: english
 ```
 
-**Supported:** Any language (TEA responds in specified language)
-
----
-
 ### document_output_language
 
-**Type:** `string`
+**Type:** `string` · **Default:** `english`
 
-**Default:** `english`
-
-**Purpose:** Language for TEA-generated documents (test designs, reports)
-
-**Example:**
+Language for TEA-generated documents (test designs, reports). It can differ from `communication_language`: chat in Spanish, generate docs in English.
 
 ```yaml
 document_output_language: english
 ```
 
-**Note:** Can differ from `communication_language` - chat in Spanish, generate docs in English.
+---
+
+## Declared but Not Yet Wired
+
+`src/module.yaml` declares four more keys and marks them FUTURE. The installer prompts for them and writes them to `_bmad/tea/config.yaml`, but no workflow reads them yet. Setting them changes nothing today:
+
+| Key                  | Prompted default | Intended purpose                     |
+| -------------------- | ---------------- | ------------------------------------ |
+| `risk_threshold`     | `p1`             | Risk level requiring mandatory tests |
+| `test_design_output` | `test-design`    | Subfolder for test design documents  |
+| `test_review_output` | `test-reviews`   | Subfolder for test review reports    |
+| `trace_output`       | `traceability`   | Subfolder for traceability reports   |
+
+Outputs currently land directly under `{test_artifacts}` at the paths listed below.
+
+---
+
+## TEA Output Files
+
+Paths are relative to `{test_artifacts}` unless noted. Each is declared in the workflow's `workflow.yaml`.
+
+| Workflow           | Output                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `test-design`      | `test-design-architecture.md` and `test-design-qa.md` (system-level writes both)              |
+| `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`) |
+| `test-design`      | `test-design-epic-{epic_num}.md` (epic-level)                                                 |
+| `framework`        | `{project-root}/tests/README.md`                                                              |
+| `atdd`             | `atdd-checklist-{story_key}.md`                                                               |
+| `automate`         | `automation-summary.md`                                                                       |
+| `test-review`      | `test-review.md` (override per run with the `output_file_override` variable)                  |
+| `nfr-assess`       | `nfr-assessment.md`                                                                           |
+| `trace`            | `traceability-matrix.md`                                                                      |
+| `trace`            | `e2e-trace-summary.json` (machine-readable summary for CI/CD and reporting)                   |
+| `trace`            | `gate-decision.json` (emitted only when the collection is gate-eligible)                      |
+| `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)  |
+| `teach-me-testing` | `teaching-progress/{user_name}-tea-progress.yaml`                                             |
+| `teach-me-testing` | `tea-academy/{user_name}/session-{N}-notes.md`                                                |
+| `teach-me-testing` | `tea-academy/{user_name}/tea-completion-summary.md`                                           |
+
+`trace` also reads an optional input it never writes: `live-verification-results.json`. Any producer may write it (an agent, a shell script, a CI job, or a person recording an outcome by hand). See [Live Verification Results](/docs/reference/live-verification-results.md) for the contract.
 
 ---
 
 ## Environment Variables
 
-TEA workflows may use environment variables for test configuration.
-
-### Test Framework Variables
+TEA workflows use environment variables for test configuration, not for TEA settings themselves.
 
 **Playwright:**
 
@@ -696,9 +478,9 @@ CYPRESS_BASE_URL=https://example.com
 CYPRESS_API_URL=https://api.example.com
 ```
 
-### CI/CD Variables
+Split them per environment (`.env.development`, `.env.staging`, `.env.production`) and keep the production file pointed at read-only tests only. Add `.env` and `.env.local` to `.gitignore`.
 
-Set in CI platform (GitHub Actions secrets, GitLab CI variables):
+**CI/CD:** set the same names as secrets in your CI platform.
 
 ```yaml
 # .github/workflows/test.yml
@@ -710,418 +492,22 @@ env:
 
 ---
 
-## Configuration Patterns
-
-### Development vs Production
-
-**Separate configs for environments:**
-
-```yaml
-# _bmad/tea/config.yaml
-output_folder: _bmad-output
-
-# .env.development
-BASE_URL=http://localhost:3000
-API_BASE_URL=http://localhost:4000
-
-# .env.staging
-BASE_URL=https://staging.example.com
-API_BASE_URL=https://api-staging.example.com
-
-# .env.production (read-only tests only!)
-BASE_URL=https://example.com
-API_BASE_URL=https://api.example.com
-```
-
-### Team vs Individual
-
-**Team config (committed):**
-
-```yaml
-# _bmad/tea/config.yaml.example (committed to repo)
-project_name: team-project
-output_folder: _bmad-output
-tea_use_playwright_utils: true
-tea_browser_automation: 'none'
-tea_execution_mode: 'sequential'
-```
-
-**Individual config (typically gitignored):**
-
-```yaml
-# _bmad/tea/config.yaml (user adds to .gitignore)
-user_name: John Doe
-user_skill_level: expert
-tea_browser_automation: 'auto' # Individual preference
-tea_execution_mode: 'auto' # Capability-aware preference
-```
-
-### Monorepo Configuration
-
-**Root config:**
-
-```yaml
-# _bmad/tea/config.yaml (root)
-project_name: monorepo-parent
-output_folder: _bmad-output
-```
-
-**Package-specific:**
-
-```yaml
-# packages/web-app/_bmad/tea/config.yaml
-project_name: web-app
-output_folder: ../../_bmad-output/web-app
-tea_use_playwright_utils: true
-
-# packages/mobile-app/_bmad/tea/config.yaml
-project_name: mobile-app
-output_folder: ../../_bmad-output/mobile-app
-tea_use_playwright_utils: false
-```
-
----
-
-## Configuration Best Practices
-
-### 1. Use Version Control Wisely
-
-**Commit:**
-
-```
-_bmad/tea/config.yaml.example    # Template for team
-.nvmrc                            # Node version
-package.json                      # Dependencies
-```
-
-**Recommended for .gitignore:**
-
-```
-_bmad/tea/config.yaml            # User-specific values
-.env                              # Secrets
-.env.local                        # Local overrides
-```
-
-### 2. Document Required Setup
-
-**In your README:**
-
-```markdown
-## Setup
-
-1. Install BMad
-
-2. Copy config template:
-   cp \_bmad/tea/config.yaml.example \_bmad/tea/config.yaml
-
-3. Edit config with your values:
-   - Set user_name
-   - Enable tea_use_playwright_utils if using playwright-utils
-   - Set tea_browser_automation mode (auto, cli, mcp, or none)
-   - Set tea_execution_mode (auto, subagent, agent-team, or sequential)
-```
-
-### 3. Validate Configuration
-
-**Check config is valid:**
+## Verify Your Configuration
 
 ```bash
-# Check TEA config is set
-cat _bmad/tea/config.yaml | grep tea_use
+# 1. Confirm the file exists and print the TEA keys you set
+grep -E '^(tea_|test_|ci_platform|project_name|output_folder|user_name)' _bmad/tea/config.yaml
 
-# Verify playwright-utils installed (if enabled)
-npm list @seontechnologies/playwright-utils
+# 2. Confirm the YAML parses (prints the parsed object, or the syntax error)
+npx --yes js-yaml _bmad/tea/config.yaml
 
-# Verify MCP servers configured (if enabled)
-# Check your IDE's MCP settings
+# 3. Confirm playwright-utils is installed when tea_use_playwright_utils is true
+npm ls @seontechnologies/playwright-utils
 ```
 
-### 4. Keep Config Minimal
+A key you set that does not appear in step 1 is misspelled. Compare it against the key list on this page: `_bmad/tea/config.yaml` holds your values, and the schema that names the valid keys lives in the BMAD repository, not in your project.
 
-**Don't over-configure:**
-
-```yaml
-# ❌ Bad - overriding everything unnecessarily
-project_name: my-project
-user_name: John Doe
-user_skill_level: expert
-output_folder: custom/path
-planning_artifacts: custom/planning
-implementation_artifacts: custom/implementation
-project_knowledge: custom/docs
-tea_use_playwright_utils: true
-tea_browser_automation: "auto"
-tea_execution_mode: "auto"
-communication_language: english
-document_output_language: english
-# Overriding 11 config options when most can use defaults
-
-# ✅ Good - only essential overrides
-tea_use_playwright_utils: true
-tea_execution_mode: "auto"
-output_folder: docs/testing
-# Only override what differs from defaults
-```
-
-**Use defaults when possible** - only override what you actually need to change.
-
----
-
-## Troubleshooting
-
-### Configuration Not Loaded
-
-**Problem:** TEA doesn't use my config values.
-
-**Causes:**
-
-1. Config file in wrong location
-2. YAML syntax error
-3. Typo in config key
-
-**Solution:**
-
-```bash
-# Check file exists
-ls -la _bmad/tea/config.yaml
-
-# Validate YAML syntax
-npm install -g js-yaml
-js-yaml _bmad/tea/config.yaml
-
-# Check for typos (compare to module.yaml)
-diff _bmad/tea/config.yaml src/module.yaml
-```
-
-### Playwright Utils Not Working
-
-**Problem:** `tea_use_playwright_utils: true` but TEA doesn't use utilities.
-
-**Causes:**
-
-1. Package not installed
-2. Config file not saved
-3. Workflow run before config update
-
-**Solution:**
-
-```bash
-# Verify package installed
-npm list @seontechnologies/playwright-utils
-
-# Check config value
-grep tea_use_playwright_utils _bmad/tea/config.yaml
-
-# Re-run workflow in fresh chat
-# (TEA loads config at workflow start)
-```
-
-### Browser Automation Not Working
-
-**Problem:** `tea_browser_automation` set to `"auto"` or `"cli"` or `"mcp"` but no browser opens.
-
-**Causes:**
-
-1. CLI not installed globally (for `cli` or `auto` mode)
-2. MCP servers not configured in IDE (for `mcp` or `auto` mode)
-3. Browser binaries missing
-
-**Solution:**
-
-```bash
-# For CLI mode: verify CLI is installed
-playwright-cli --version
-
-# For MCP mode: check MCP package available
-npx @playwright/mcp@latest --version
-
-# Install browsers
-npx playwright install
-
-# Verify IDE MCP config (for MCP mode)
-# Check ~/.cursor/config.json or VS Code settings
-```
-
-### Config Changes Not Applied
-
-**Problem:** Updated config but TEA still uses old values.
-
-**Cause:** TEA loads config at workflow start.
-
-**Solution:**
-
-1. Save `_bmad/tea/config.yaml`
-2. Start fresh chat
-3. Run TEA workflow
-4. Config will be reloaded
-
-**TEA doesn't reload config mid-chat** - always start fresh chat after config changes.
-
----
-
-## Configuration Examples
-
-### Recommended Setup (Full Stack)
-
-```yaml
-# _bmad/tea/config.yaml
-project_name: my-project
-user_skill_level: beginner # or intermediate/expert
-output_folder: _bmad-output
-tea_use_playwright_utils: true # Recommended
-tea_use_pactjs_utils: false # Recommended unless you actively use contract testing
-tea_pact_mcp: 'none' # Recommended unless you already use PactFlow/Broker
-tea_browser_automation: 'auto' # Recommended
-tea_execution_mode: 'auto' # Recommended - capability-aware mode selection
-tea_capability_probe: true # Recommended - fallback safely if mode unsupported
-```
-
-**Why recommended:**
-
-- Playwright Utils: Production-ready fixtures and utilities
-- Pact.js Utils: Leave disabled until the project explicitly needs contract testing
-- Browser automation (auto): Smart CLI/MCP selection with fallback
-- Together: The three-part stack (see [Testing as Engineering](/docs/explanation/testing-as-engineering.md))
-
-**Prerequisites:**
-
-```bash
-npm install -D @seontechnologies/playwright-utils
-# Optional contract-testing stack:
-# npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
-# npm install -g @smartbear/mcp
-npm install -g @playwright/cli@latest  # For CLI mode
-# Configure MCP servers in IDE (see Configure Browser Automation guide)
-```
-
-**Best for:** Everyone (beginners learn good patterns from day one)
-
----
-
-### Minimal Setup (Learning Only)
-
-```yaml
-# _bmad/tea/config.yaml
-project_name: my-project
-output_folder: _bmad-output
-tea_use_playwright_utils: false
-tea_use_pactjs_utils: false
-tea_pact_mcp: 'none'
-tea_browser_automation: 'none'
-tea_execution_mode: 'sequential'
-tea_capability_probe: true
-```
-
-**Best for:**
-
-- First-time TEA users (keep it simple initially)
-- Quick experiments
-- Learning basics before adding integrations
-
-**Note:** Can enable integrations later as you learn
-
----
-
-### Monorepo Setup
-
-**Root config:**
-
-```yaml
-# _bmad/tea/config.yaml (root)
-project_name: monorepo
-output_folder: _bmad-output
-tea_use_playwright_utils: true
-tea_use_pactjs_utils: false
-tea_pact_mcp: 'none'
-tea_execution_mode: 'auto'
-```
-
-**Package configs:**
-
-```yaml
-# apps/web/_bmad/tea/config.yaml
-project_name: web-app
-output_folder: ../../_bmad-output/web
-
-# apps/api/_bmad/tea/config.yaml
-project_name: api-service
-output_folder: ../../_bmad-output/api
-tea_use_playwright_utils: false  # Using vanilla Playwright only
-tea_use_pactjs_utils: true       # API service uses contract testing utilities
-tea_pact_mcp: 'mcp'              # Optional broker interaction via MCP
-tea_execution_mode: 'subagent' # Prefer subagent orchestration in API package
-```
-
----
-
-### Team Template
-
-**Commit this template:**
-
-```yaml
-# _bmad/tea/config.yaml.example
-# Copy to config.yaml and fill in your values
-
-project_name: your-project-name
-user_name: Your Name
-user_skill_level: intermediate # beginner | intermediate | expert
-output_folder: _bmad-output
-planning_artifacts: _bmad-output/planning-artifacts
-implementation_artifacts: _bmad-output/implementation-artifacts
-project_knowledge: docs
-
-# TEA Configuration (Recommended baseline)
-tea_use_playwright_utils: true # Recommended - production-ready utilities
-tea_use_pactjs_utils: false # Opt in only if your service uses contract testing
-tea_pact_mcp: 'none' # Opt in only if your service uses PactFlow/Broker
-tea_browser_automation: 'auto' # Recommended - smart CLI/MCP selection
-tea_execution_mode: 'auto' # Recommended - capability-aware team/subagent fallback
-tea_capability_probe: true # Recommended - safe fallback
-
-# Languages
-communication_language: english
-document_output_language: english
-```
-
-**Team instructions:**
-
-```markdown
-## Setup for New Team Members
-
-1. Clone repo
-2. Copy config template:
-   cp \_bmad/tea/config.yaml.example \_bmad/tea/config.yaml
-3. Edit with your name and preferences
-4. Install dependencies:
-   npm install
-5. (Optional) Enable playwright-utils:
-   npm install -D @seontechnologies/playwright-utils
-   Set tea_use_playwright_utils: true
-6. (Optional) Enable pactjs-utils:
-   npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
-   Set tea_use_pactjs_utils: true
-7. (Optional) Enable Pact MCP:
-   npm install -g @smartbear/mcp
-   Set tea_pact_mcp: 'mcp'
-```
-
----
-
-### Contract Testing Setup (Opt-In)
-
-Use this profile only for services that already use Pact or want TEA to scaffold contract-testing patterns on purpose.
-
-```yaml
-tea_use_pactjs_utils: true
-tea_pact_mcp: 'none' # Use 'mcp' only if you already use PactFlow/Broker
-```
-
-If you also use PactFlow or Pact Broker:
-
-```yaml
-tea_use_pactjs_utils: true
-tea_pact_mcp: 'mcp'
-```
+For anything that stays broken, see the [Troubleshooting guide](/docs/reference/troubleshooting.md).
 
 ---
 
@@ -1137,13 +523,11 @@ tea_pact_mcp: 'mcp'
 
 - [TEA Command Reference](/docs/reference/commands.md)
 - [Knowledge Base Index](/docs/reference/knowledge-base.md)
+- [Live Verification Results](/docs/reference/live-verification-results.md)
+- [Troubleshooting](/docs/reference/troubleshooting.md)
 - [Glossary](/docs/glossary/index.md)
 
 ### Explanation
 
 - [TEA Overview](/docs/explanation/tea-overview.md)
 - [Testing as Engineering](/docs/explanation/testing-as-engineering.md)
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

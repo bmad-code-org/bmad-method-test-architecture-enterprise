@@ -45,7 +45,7 @@ The solution combines three components that work together to enforce quality:
 
 Together, these utility libraries eliminate the need to reinvent core testing primitives across UI, API, web, non-web, and contract testing.
 
-### 2. Process: TEA (Test Architect Agent)
+### 2. Process: TEA (Test Engineering Architect)
 
 A quality operating model packaged as nine workflows spanning learning, test design, CI/CD gates, and release readiness. TEA encodes test architecture expertise into repeatable processes.
 
@@ -62,7 +62,7 @@ A quality operating model packaged as nine workflows spanning learning, test des
 | `trace`            | Coverage traceability and gate decisions      |
 
 :::tip[Key Insight]
-TEA doesn't just generate tests—it provides a complete quality operating model with workflows for planning, execution, and release gates.
+TEA doesn't just generate tests. It provides a complete quality operating model with workflows for planning, execution, and release gates.
 :::
 
 ### 3. Automation Interfaces: Playwright CLI + MCPs
@@ -113,4 +113,12 @@ The three-part stack addresses each gap:
 | No verification | Playwright CLI + Playwright MCP + Pact MCP validate against live systems |
 | No review       | TEA `test-review` audits quality with scoring                            |
 
-This approach is sometimes called _context engineering_—loading domain-specific standards into AI context automatically rather than relying on prompts alone. TEA's `tea-index.csv` manifest loads relevant knowledge fragments so the AI doesn't relearn testing patterns each session.
+This approach is sometimes called _context engineering_: loading domain-specific standards into AI context automatically rather than relying on prompts alone. TEA's `tea-index.csv` manifest loads relevant knowledge fragments so the AI doesn't relearn testing patterns each session. See [Knowledge Base System](/docs/explanation/knowledge-base-system.md) for how the manifest selects fragments per workflow.
+
+## Related
+
+- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - the manifest that loads the standards
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the Definition of Done those standards encode
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - the determinism rule in detail
+- [TEA Overview](/docs/explanation/tea-overview.md) - the nine workflows in the lifecycle
+- [Engagement Models](/docs/explanation/engagement-models.md) - the five ways to adopt TEA

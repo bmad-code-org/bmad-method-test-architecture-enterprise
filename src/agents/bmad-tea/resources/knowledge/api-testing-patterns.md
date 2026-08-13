@@ -120,7 +120,8 @@ test.describe('Users API', () => {
 
 ```typescript
 // tests/api/orders.spec.ts
-import { test, expect } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 import { z } from 'zod';
 
 // Define schema for type safety and validation
@@ -207,7 +208,11 @@ test.describe('Orders API', () => {
 
 ```typescript
 // tests/api/service-integration.spec.ts
-import { test, expect } from '@seontechnologies/playwright-utils/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 test.describe('Service Integration', () => {
   const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
@@ -304,7 +309,8 @@ test.describe('Service Integration', () => {
 
 ```typescript
 // tests/api/graphql.spec.ts
-import { test, expect } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 
 const GRAPHQL_ENDPOINT = '/graphql';
 
@@ -438,7 +444,8 @@ test.describe('GraphQL API', () => {
 
 ```typescript
 // tests/api/with-data-setup.spec.ts
-import { test, expect } from '@seontechnologies/playwright-utils/fixtures';
+import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 
 test.describe('Orders with Data Setup', () => {
   let testUser: { id: string; email: string };
@@ -537,7 +544,11 @@ test.describe('Orders with Data Setup', () => {
 
 ```typescript
 // tests/api/background-jobs.spec.ts
-import { test, expect } from '@seontechnologies/playwright-utils/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 test.describe('Background Jobs', () => {
   test('should process export job', async ({ apiRequest, recurse }) => {
@@ -635,7 +646,8 @@ test.describe('Background Jobs', () => {
 
 ```typescript
 // tests/api/authenticated.spec.ts
-import { test, expect } from '@seontechnologies/playwright-utils/fixtures';
+import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 
 test.describe('Authenticated API Tests', () => {
   let authToken: string;
@@ -722,7 +734,11 @@ test.describe('Authenticated API Tests', () => {
 
 ```typescript
 // tests/api/operations.spec.ts
-import { test, expect } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 test.describe('API Tests with Generated Operations', () => {
   test('should create entity with full type safety', async ({ apiRequest }) => {

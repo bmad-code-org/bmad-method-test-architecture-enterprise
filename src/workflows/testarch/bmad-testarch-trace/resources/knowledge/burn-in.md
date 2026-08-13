@@ -232,7 +232,7 @@ jobs:
 
 ## Integration with CI Workflow
 
-When setting up CI with `*ci` workflow, recommend burn-in for:
+When setting up CI with the `/bmad-testarch-ci` workflow, recommend burn-in for:
 
 - Pull request validation
 - Pre-merge checks

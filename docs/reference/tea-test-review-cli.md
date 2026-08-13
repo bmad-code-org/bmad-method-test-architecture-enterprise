@@ -105,55 +105,59 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 
 ## What the review is judged against
 
-A spec judged with no idea what changed underneath it is a spelling check. So the diff produces two lists, not one:
+The diff produces two lists. There is no flag for either: if the story is in the pull request, it is in the diff, so it gets read.
 
-- **The review set** is every changed file matching the test-file rules. It is scored against the deduction ledger and reported in `## Reviewed Files`.
-- **The context set** is everything else in the diff: the story, the PRD, the test design, the changed source. It is read so the reviewer can tell whether the tests match what changed, and it is never scored.
+| List        | Contents                                                             | Scored | Reported in         |
+| ----------- | -------------------------------------------------------------------- | ------ | ------------------- |
+| Review set  | Every changed file matching the test-file rules                      | Yes    | `## Reviewed Files` |
+| Context set | Everything else in the diff: story, PRD, test design, changed source | No     | `## Review Context` |
 
-There is no flag for any of this. If the story is in the pull request, it is in the diff, so it gets read. The set excludes lockfiles, snapshots, and binary assets, orders documentation ahead of source, and caps at 40 files so a large pull request cannot exhaust the agent.
+The context set excludes lockfiles, snapshots, and binary assets, orders documentation ahead of source, and caps at 40 files so a large pull request cannot exhaust the agent.
 
-The report must publish what it had, as `**Context Basis**: none | pr_diff | pr_diff_truncated` in the Executive Summary, backed by a `## Review Context` manifest whenever the basis is not `none`. `none` is the honest outcome for a tests-only diff or an explicit `--files` list, and it keeps an Approve readable as "these tests are well built" rather than "these tests match the story".
+The Executive Summary must declare `**Context Basis**: none | pr_diff | pr_diff_truncated`, backed by a `## Review Context` manifest whenever the basis is not `none`. `none` is the correct value for a tests-only diff or an explicit `--files` list.
 
 Three rules hold the boundary. The prompt states them and the parser enforces them:
 
-- **The manifests are disjoint.** A path in both `## Reviewed Files` and `## Review Context` is rejected (exit 3). Scoring a story or a controller against a test-quality rubric produces a number that means nothing.
+- **The manifests are disjoint.** A path in both `## Reviewed Files` and `## Review Context` is rejected (exit 3).
 - **The manifests are bound to the run.** Paths are canonicalized before comparison. `## Reviewed Files` must equal the authoritative review set. `## Review Context` can only name supplied context, and it must equal the supplied set when the report claims the supplied basis.
-- **Context raises findings, never waives them.** It can catch a test that contradicts its acceptance criteria or a changed code path with no assertion on it. It can never waive a violation, lower a severity, or move the score. Context is untrusted content in exactly the way reviewed files are, and it is prose from the same author as the change, so a story claiming a bad practice is acceptable here is itself a finding.
+- **Context raises findings, never waives them.** It can catch a test that contradicts its acceptance criteria or a changed code path with no assertion on it. It can never waive a violation, lower a severity, or move the score. A story claiming that a bad practice is acceptable here is itself a finding.
 
-A report claiming more evidence than the run supplied (`pr_diff` when the CLI supplied `none`) is rejected as exit 3. Claiming less is allowed: a reviewer that ignored its context is a quality problem visible in the report. The Executive Summary also declares `**Context Waivers Applied**: 0`; any nonzero value is rejected.
+A report claiming more evidence than the run supplied (`pr_diff` when the CLI supplied `none`) is rejected as exit 3. Claiming less is allowed. The Executive Summary also declares `**Context Waivers Applied**: 0`; any nonzero value is rejected.
+
+Why the two lists are separated, and why context can never waive: [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md).
 
 ## Which model does the reviewing
 
-Vendor-agnostic is not model-agnostic. A score is a judgment, and the thing making the judgment is an input to the gate like any other.
+Each adapter pins a model. `--model` overrides it.
 
-Left unstated, the model is whatever the vendor CLI resolves for itself: `~/.codex/config.toml` or `~/.claude/settings.json` on a developer machine, and the vendor's built-in default on a CI runner, which has neither file. The same pull request would then be reviewed by one model locally and a different one in CI, and the CI one would move whenever the vendor shipped a new default. So each adapter pins a model, and `--model` overrides it:
-
-| `--agent` | Pinned default | Set with          |
+| `--agent` | Pinned default | Override with     |
 | --------- | -------------- | ----------------- |
 | `claude`  | `sonnet`       | `--model <model>` |
 | `codex`   | `gpt-5.6-sol`  | `--model <model>` |
 
-The resolved model travels in the verdict JSON as `model`, alongside `agent`, so a stored verdict says what produced it. A model supplied through `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn. Two scores are only comparable when those two fields match.
-
-`--claude-arg` remains accepted as a deprecated alias for compatibility with workflows created before multi-vendor support. It emits a migration warning and preserves argument order. New workflows should use `--agent-arg`.
-
 The pinned values are aliases: they hold the tier steady, not the exact weights. Pass a fully-qualified slug to `--model` when a run has to be reproducible across model generations.
 
-`--model` is rejected with `--agent none`, which runs no agent. Honoring it there would be a lie, and quietly dropping it is the failure mode `--model` exists to remove.
+The resolved model travels in the verdict JSON as `model`, alongside `agent`. Two scores are only comparable when those two fields match. A model supplied through `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn.
+
+`--model` is rejected with `--agent none`, which runs no agent.
 
 **Codex reasoning effort is a second unstated input, and it is not pinned here.** A local `model_reasoning_effort = "max"` costs about ten extra seconds even on a one-word prompt, and far more on a real review. It is codex-only, so it gets no vendor-agnostic flag; set it per run with `--agent-arg -c --agent-arg model_reasoning_effort=low`.
 
+`--claude-arg` remains accepted as a deprecated alias for workflows created before multi-vendor support. It emits a migration warning and preserves argument order. New workflows should use `--agent-arg`.
+
+Why the model is pinned rather than left to the vendor CLI: [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md).
+
 ## TEA config resolution
 
-Four config keys pick which knowledge fragments load: Playwright Utils profile, `pactjs-utils` set, Pact MCP, and browser evidence (`tea_browser_automation`). The CLI states all four in the prompt: an unstated key is a key the agent decides itself, and identical files could then review against different knowledge.
+Four config keys pick which knowledge fragments load. The CLI states all four in the prompt.
 
-The headless contract fixes browser evidence to `tea_browser_automation=none`, plus a separate execution-mode key to `tea_execution_mode=sequential`. The other three fragment keys resolve by precedence, highest first:
+One of the four is fixed by the headless contract: `tea_browser_automation=none`. So is `tea_execution_mode=sequential`, which governs execution rather than fragment selection. The other three resolve by precedence, highest first:
 
 1. Explicit flag (`--use-pactjs-utils`, `--no-use-playwright-utils`, `--pact-mcp mcp`)
 2. `<project-root>/_bmad/tea/config.yaml` (written by `npx bmad-method install`)
 3. Module default from `src/module.yaml`: `tea_use_playwright_utils: true`, `tea_use_pactjs_utils: false`, `tea_pact_mcp: none`
 
-A missing `config.yaml` is normal: CI installs the skill without running the interactive installer, so no config file is expected. Content that exists but is invalid is an error (exit 2): non-boolean `tea_use_*`, a `tea_pact_mcp` outside the enum, unparseable YAML, or a non-mapping file. Quoted booleans (`'true'`, `'false'`) are coerced.
+A missing `config.yaml` is normal: CI installs the skill without running the interactive installer. Content that exists but is invalid is an error (exit 2): non-boolean `tea_use_*`, a `tea_pact_mcp` outside the enum, unparseable YAML, or a non-mapping file. Quoted booleans (`'true'`, `'false'`) are coerced.
 
 **In CI, state what you need.** A contract-testing repo gets `tea_use_pactjs_utils: false` by default, loads `contract-testing.md` instead of the `pactjs-utils-*`/`pact-*` fragments, and won't flag a missing determinism gate. Commit `_bmad/tea/config.yaml` or pass `--use-pactjs-utils`.
 
@@ -205,7 +209,11 @@ A passing review (also written to `--json <file>` when given):
 
 `contextWaiversApplied` is strict and always `0`. `keyStrengths` and `keyWeaknesses` are best-effort, pulled from the report's Executive Summary bullet lists for PR-comment display; they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
 
-`conventionBaseline` is the CLI's own deterministic measurement of step-02-discover-tests.md §2b's convention baseline — never the agent's — carried into the verdict alongside `agent`/`model` so a stored score also says what house convention it was judged against and how that was actually established. `sampledFiles` and per-key `mechanicalSignal` are computed by [`cli/lib/convention-baseline.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/convention-baseline.js) by reading the real sampled files' content, not by asking the agent; the report's own `Convention: <key> (<adopted> of <sampled> sampled)` citations are rejected (exit 3) when they disagree with it — most pointedly, a citation claiming nonzero adoption for a key this scan found zero real occurrences of anywhere in the sampled corpus. The field is absent only when no baseline was computed for this run (e.g. a bare `parseReport` call in a unit test with no CLI around it).
+`conventionBaseline` is the CLI's own deterministic measurement of step-02-discover-tests.md §2b's convention baseline, never the agent's. It travels in the verdict alongside `agent` and `model`, so a stored score also says what house convention it was judged against and how that was established.
+
+[`cli/lib/convention-baseline.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/convention-baseline.js) computes `sampledFiles` and per-key `mechanicalSignal` by reading the sampled files' content, never by asking the agent. The report's own `Convention: <key> (<adopted> of <sampled> sampled)` citations are rejected (exit 3) when they disagree with that scan. The sharpest case: a citation claiming nonzero adoption for a key the scan found zero real occurrences of anywhere in the sampled corpus.
+
+The field is absent only when no baseline was computed for this run, such as a bare `parseReport` call in a unit test with no CLI around it.
 
 A failing verdict adds `gateFailures` (machine-readable reasons, e.g. `"insufficient evidence: 1 files reviewed (3 required)"`); a waived failure adds `waived`, `waiveReason`, `waiveUntil`.
 
@@ -249,7 +257,9 @@ The bonus is read from the template's `Total Bonus:             +N` line, and a 
 
 A report declaring Critical violations alongside an approve-type recommendation is rejected as an inconsistent verdict (exit 3): Critical means Must Fix. Stale artifacts are never parsed, output files are deleted before the run and must be freshly written by it.
 
-The `**Total Violations**` summary line is not trusted either: the CLI counts the finding blocks actually documented under `## Critical Issues (Must Fix)` and the P1 (High) ones under `## Recommendations (Should Fix)`, and rejects a report whose summary disagrees with what it wrote (exit 3) — this closes a real defect where a report documented a genuine Critical finding in prose while its summary line claimed zero, and the CLI computed Approve at 100/100 from the summary alone. Scoped to Critical and High only, the two severities `deriveRecommendation` actually acts on ([`cli/lib/registry-rows.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/registry-rows.js) reads the row→severity map straight from the skill's own `criteria-registry.md`, so this never drifts from the shipped rubric); Medium/Low counts are not cross-checked.
+The `**Total Violations**` summary line is not trusted either. The CLI counts the finding blocks actually documented under `## Critical Issues (Must Fix)` and the P1 (High) ones under `## Recommendations (Should Fix)`, then rejects a report whose summary disagrees with what it wrote (exit 3). This closes a real defect: a report documented a genuine Critical finding in prose while its summary line claimed zero, and the CLI computed Approve at 100/100 from the summary alone.
+
+The cross-check is scoped to Critical and High, the two severities `deriveRecommendation` acts on; Medium and Low counts are not cross-checked. [`cli/lib/registry-rows.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/registry-rows.js) reads the row→severity map straight from the skill's own `criteria-registry.md`, so the mapping never drifts from the shipped rubric.
 
 ## Example workflow
 
@@ -262,7 +272,7 @@ The comment carries the score/recommendation/violations digest plus up to three 
 ## Security model
 
 - **Stdin prompt delivery**: the prompt travels to the agent on stdin, never argv, so it can't leak through process lists.
-- **Safe-mode agent execution**: `--safe-mode` (repo customizations stripped), a restricted tool set (`Read,Write,Edit,Glob,Grep`), a minimal child environment; only `--env-pass` variables are added.
+- **Safe-mode agent execution**: the `claude` adapter spawns the vendor CLI with `--safe-mode` (repo customizations stripped) and `--tools`/`--allowedTools` held to `Read,Write,Edit,Glob,Grep`. Both are arguments to the `claude` CLI, not `tea-test-review` flags; the `codex` adapter has no equivalent and confines its run with `--sandbox workspace-write` instead. Every adapter gets a minimal child environment; only `--env-pass` variables are added.
 - **Filesystem isolation**: with `--isolate` (default on in CI) the agent may read the project but can't modify the tree under review; it writes only the report, verdict, and the temp files the workflow's own subagent steps declare (sandbox-exec on macOS, bwrap on Linux, chmod fallback).
 - **Control-plane guard**: a PR diff that modifies the vendored skill fails the run closed (exit 2) unless `--files` was explicit. An explicit `--skill-root` outside the checkout is untouchable by the diff.
 - **Untrusted-content contract**: reviewed-file and context-file content is data: instructions inside either are defects to report, never commands. Context can raise a finding but never waive one, so a story cannot argue a violation away. Hostile paths (newlines, NUL bytes, delimiter literals) are rejected before they reach the prompt; both lists travel as JSON arrays in their own delimited blocks.

@@ -42,7 +42,7 @@ Collect evidence for:
 - **Performance**: load tests, metrics, response time data
 - **Security**: scans, auth tests, vuln reports
 - **Reliability**: error rates, burn-in runs, failover tests
-- **Maintainability**: test quality, code health signals
+- **Scalability**: load-balancer and auto-scaling config, replica and partition setup
 - **Other categories**: logs, monitoring, DR drills, deployability checks
 
 ---

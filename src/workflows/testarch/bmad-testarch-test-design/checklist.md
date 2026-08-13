@@ -187,8 +187,8 @@
 
 ### Workflow Dependencies
 
-- [ ] Can proceed to `*atdd` workflow with P0 scenarios
-- [ ] `*atdd` is a separate workflow and must be run explicitly (not auto-run)
+- [ ] Can proceed to `/bmad-testarch-atdd` workflow with P0 scenarios
+- [ ] `/bmad-testarch-atdd` is a separate workflow and must be run explicitly (not auto-run)
 - [ ] Can proceed to `automate` workflow with full coverage plan
 - [ ] Risk assessment informs `gate` workflow criteria
 - [ ] Integrates with `ci` workflow execution order
@@ -413,7 +413,7 @@
 1. [ ] Review risk assessment with team
 2. [ ] Prioritize mitigation for high-priority risks (score ≥6)
 3. [ ] Allocate resources per estimates
-4. [ ] Run `*atdd` workflow to generate P0 tests (separate workflow; not auto-run)
+4. [ ] Run `/bmad-testarch-atdd` workflow to generate P0 tests (separate workflow; not auto-run)
 5. [ ] Set up test data factories and fixtures
 6. [ ] Schedule team review of test design document
 
