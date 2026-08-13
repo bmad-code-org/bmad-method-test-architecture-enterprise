@@ -28,18 +28,16 @@ Coverage scoring is intentionally excluded from `test-review`. Use `trace` for r
 
 ## Steps
 
-### 1. Load TEA Agent
+### 1. Load the TEA Agent or Skill
 
-Start a fresh chat and load TEA:
-
-```
-tea
-```
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-review` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-testarch-test-review` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `test-review` or `RV`
 
 ### 2. Run the Test Review Workflow
 
-```
-test-review
+```bash
+/bmad-testarch-test-review
 ```
 
 ### 3. Specify Review Scope

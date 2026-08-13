@@ -31,14 +31,16 @@ Use TEA's `test-design` workflow to create comprehensive test plans with risk as
 
 ## Steps
 
-### 1. Load the TEA Agent
+### 1. Load the TEA Agent or Skill
 
-Start a fresh chat and load the TEA (Test Engineering Architect) agent.
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-design` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-testarch-test-design` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `test-design` or `TD`
 
 ### 2. Run the Test Design Workflow
 
-```
-test-design
+```bash
+/bmad-testarch-test-design
 ```
 
 ### 3. Specify the Mode

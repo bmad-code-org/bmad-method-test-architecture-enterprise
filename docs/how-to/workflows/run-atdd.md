@@ -30,18 +30,16 @@ Use TEA's `atdd` workflow to generate red-phase acceptance test scaffolds BEFORE
 
 ## Steps
 
-### 1. Load TEA Agent
+### 1. Load the TEA Agent or Skill
 
-Start a fresh chat and load TEA:
-
-```
-tea
-```
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-atdd` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-testarch-atdd` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `atdd` or `AT`
 
 ### 2. Run the ATDD Workflow
 
-```
-atdd
+```bash
+/bmad-testarch-atdd
 ```
 
 ### 3. Provide Context

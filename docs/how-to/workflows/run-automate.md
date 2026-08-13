@@ -31,18 +31,16 @@ Use TEA's `automate` workflow to generate comprehensive tests for existing featu
 
 ## Steps
 
-### 1. Load TEA Agent
+### 1. Load the TEA Agent or Skill
 
-Start a fresh chat and load TEA:
-
-```
-tea
-```
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-automate` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-testarch-automate` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `automate` or `TA`
 
 ### 2. Run the Automate Workflow
 
-```
-automate
+```bash
+/bmad-testarch-automate
 ```
 
 ### 3. Provide Context

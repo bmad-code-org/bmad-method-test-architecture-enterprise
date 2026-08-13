@@ -28,9 +28,13 @@ npx bmad-method install
 
 Then trigger workflows via chat:
 
-```
-bmad-tea    # Load TEA agent/menu
-test-design # Run Test Design workflow
+- **Claude Code / Cursor / Windsurf:** `/bmad-tea` (load agent) or `/bmad-testarch-test-design`
+- **Codex:** `$bmad-tea` (load agent) or `$bmad-tea-testarch-test-design`
+- **In TEA Agent Chat:** `test-design` or `TD`
+
+```bash
+/bmad-tea                  # Load TEA agent/menu
+/bmad-testarch-test-design # Run Test Design workflow
 ```
 
 ## Getting Started

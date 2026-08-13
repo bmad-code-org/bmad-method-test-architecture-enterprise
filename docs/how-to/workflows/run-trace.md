@@ -35,10 +35,14 @@ The workflow resolves the best available coverage oracle automatically: formal r
 
 ## Steps
 
-### 1. Run the Trace Workflow
+### 1. Load the TEA Agent or Skill
 
-```
-trace
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-trace` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-testarch-trace` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `trace` or `TR`
+
+```bash
+/bmad-testarch-trace
 ```
 
 ### 2. Specify Phase

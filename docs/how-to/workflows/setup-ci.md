@@ -28,16 +28,16 @@ Use TEA's `ci` workflow to scaffold production-ready CI/CD configuration for aut
 
 ### 1. Load TEA Agent
 
-Start a fresh chat and load TEA:
+### 1. Load the TEA Agent or Skill
 
-```
-tea
-```
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-ci` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-testarch-ci` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `ci` or `CI`
 
 ### 2. Run the CI Workflow
 
-```
-ci
+```bash
+/bmad-testarch-ci
 ```
 
 ### 3. Select CI/CD Platform

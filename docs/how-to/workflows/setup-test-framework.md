@@ -21,14 +21,16 @@ Use TEA's `framework` workflow to scaffold a production-ready test framework for
 
 ## Steps
 
-### 1. Load the TEA Agent
+### 1. Load the TEA Agent or Skill
 
-Start a fresh chat and load the TEA (Test Engineering Architect) agent.
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-framework` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-testarch-framework` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `framework` or `TF`
 
 ### 2. Run the Framework Workflow
 
-```
-framework
+```bash
+/bmad-testarch-framework
 ```
 
 ### 3. Answer TEA's Questions

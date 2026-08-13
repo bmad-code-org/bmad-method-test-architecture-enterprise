@@ -36,15 +36,15 @@ Use `test-design` before implementation to define NFR thresholds, planned valida
 
 ## Steps
 
-### 1. Run the NFR Evidence Audit Workflow
+### 1. Load the TEA Agent or Skill
 
-Start a fresh chat and run:
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-nfr` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-testarch-nfr` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `nfr-assess` or `NR`
 
+```bash
+/bmad-testarch-nfr
 ```
-nfr-assess
-```
-
-This loads TEA and starts the NFR Evidence Audit workflow.
 
 ### 2. Specify NFR Categories
 

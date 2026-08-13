@@ -21,22 +21,14 @@ TEA Academy is an interactive learning companion that teaches testing through 7 
 
 ## Quick Start
 
-### 1. Load TEA Agent
+### 1. Load TEA Agent / Skill
+
+- **Claude Code / Cursor / Windsurf:** `/bmad-teach-me-testing` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-teach-me-testing` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `TMT` or `teach-me-testing`
 
 ```bash
-tea
-```
-
-### 2. Start TEA Academy
-
-```bash
-TMT
-```
-
-Or type:
-
-```bash
-teach-me-testing
+/bmad-teach-me-testing
 ```
 
 ### 3. Complete Assessment

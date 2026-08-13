@@ -53,22 +53,14 @@ Use TEA's `teach-me-testing` workflow (TEA Academy) to learn testing progressive
 
 ### Starting Fresh
 
-Start a fresh chat and load TEA:
+Load the skill or agent:
 
-```
-tea
-```
+- **Claude Code / Cursor / Windsurf:** `/bmad-teach-me-testing` (or `/bmad-tea`)
+- **Codex:** `$bmad-tea-teach-me-testing` (or `$bmad-tea`)
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `teach-me-testing` or `TMT`
 
-Then select Teach Me Testing:
-
-```
-TMT
-```
-
-Or directly:
-
-```
-teach-me-testing
+```bash
+/bmad-teach-me-testing
 ```
 
 ### Initial Assessment

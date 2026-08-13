@@ -3,7 +3,7 @@ title: 'Getting Started with Test Architect'
 description: Learn Test Architect fundamentals by generating and running tests for an existing demo app in 30 minutes
 ---
 
-Welcome! **Test Architect (TEA) Lite** is the simplest way to get started with TEA - just use the `automate` workflow (e.g., `/automate` in Claude Code) to generate tests for existing features. Perfect for beginners who want to learn TEA fundamentals quickly.
+Welcome! **Test Architect (TEA) Lite** is the simplest way to get started with TEA - just use the `automate` workflow (e.g., `/bmad-testarch-automate` or `$bmad-tea-testarch-automate`) to generate tests for existing features. Perfect for beginners who want to learn TEA fundamentals quickly.
 
 ## What You'll Build
 
@@ -21,7 +21,7 @@ By the end of this 30-minute tutorial, you'll have:
   :::
 
 :::tip[Quick Path]
-Load TEA (`tea`) → scaffold framework (`framework`) → create test plan (`test-design`) → generate tests (`automate`) → run with `npx playwright test`.
+Load TEA (`/bmad-tea` or `$bmad-tea`) → scaffold framework (`/bmad-testarch-framework`) → create test plan (`/bmad-testarch-test-design`) → generate tests (`/bmad-testarch-automate`) → run with `npx playwright test`.
 :::
 
 ## TEA Approaches Explained
@@ -69,20 +69,27 @@ BMad is now installed! You'll see a `_bmad/` folder in your project.
 
 ### Load TEA Agent
 
-Start a new chat with your AI assistant (Claude, etc.) and type:
+Start a new chat with your AI assistant and load the agent:
 
-```
-tea
+- **Claude Code / Cursor / Windsurf:** `/bmad-tea`
+- **Codex:** `$bmad-tea`
+
+```bash
+/bmad-tea
 ```
 
-This loads the Test Architect agent. You'll see TEA's menu with available workflows.
+This loads the Test Architect agent and displays TEA's menu with available workflows.
 
 ### Scaffold Test Framework
 
-In your chat, run:
+Run the framework setup workflow using any of these methods:
 
-```
-framework
+- **Slash Command (Claude Code / Cursor / Windsurf):** `/bmad-testarch-framework`
+- **Codex:** `$bmad-tea-testarch-framework`
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `framework` or `TF`
+
+```bash
+/bmad-testarch-framework
 ```
 
 TEA will ask you questions:
@@ -122,10 +129,14 @@ Test design is where TEA shines - risk-based planning before writing tests.
 
 ### Run Test Design
 
-In your chat with TEA, run:
+Run the test design workflow:
 
-```
-test-design
+- **Slash Command (Claude Code / Cursor / Windsurf):** `/bmad-testarch-test-design`
+- **Codex:** `$bmad-tea-testarch-test-design`
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `test-design` or `TD`
+
+```bash
+/bmad-testarch-test-design
 ```
 
 **Q: System-level or epic-level?**
@@ -163,10 +174,14 @@ Now the magic happens - TEA generates tests based on your test design.
 
 ### Run Automate
 
-In your chat with TEA, run:
+Run the automation workflow:
 
-```
-automate
+- **Slash Command (Claude Code / Cursor / Windsurf):** `/bmad-testarch-automate`
+- **Codex:** `$bmad-tea-testarch-automate`
+- **Agent Menu Trigger (inside `/bmad-tea` chat):** `automate` or `TA`
+
+```bash
+/bmad-testarch-automate
 ```
 
 **Q: What are you testing?**
@@ -332,9 +347,9 @@ Opens a beautiful HTML report showing:
 
 You used **TEA Lite** to:
 
-1. Scaffold a production-ready test framework (`framework`)
-2. Create a risk-based test plan (`test-design`)
-3. Generate comprehensive tests (`automate`)
+1. Scaffold a production-ready test framework (`/bmad-testarch-framework`)
+2. Create a risk-based test plan (`/bmad-testarch-test-design`)
+3. Generate comprehensive tests (`/bmad-testarch-automate`)
 4. Run tests against an existing application
 
 All in 30 minutes!
@@ -345,12 +360,12 @@ Congratulations! You've completed the TEA Lite tutorial. You learned:
 
 ### Quick Reference
 
-| Command       | Purpose                              |
-| ------------- | ------------------------------------ |
-| `tea`         | Load the TEA agent                   |
-| `framework`   | Scaffold test infrastructure         |
-| `test-design` | Risk-based test planning             |
-| `automate`    | Generate tests for existing features |
+| Action / Workflow         | Slash Command (Claude/Cursor) | Codex Skill                      | Agent Menu Trigger   |
+| ------------------------- | ----------------------------- | -------------------------------- | -------------------- |
+| Load TEA Agent            | `/bmad-tea`                   | `$bmad-tea`                      | —                    |
+| Scaffold Framework        | `/bmad-testarch-framework`    | `$bmad-tea-testarch-framework`   | `framework` / `TF`   |
+| Test Design               | `/bmad-testarch-test-design`  | `$bmad-tea-testarch-test-design` | `test-design` / `TD` |
+| Automate (Generate Tests) | `/bmad-testarch-automate`     | `$bmad-tea-testarch-automate`    | `automate` / `TA`    |
 
 ### TEA Principles
 
