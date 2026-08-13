@@ -50,7 +50,7 @@ npm install -D @seontechnologies/playwright-utils
 | **intercept-network-call** | Network spy/stub with auto JSON parsing                                       | UI only            |
 | **network-error-monitor**  | Automatic HTTP 4xx/5xx detection                                              | UI only            |
 
-**Note**: 6 of 9 utilities work without a browser. Only 3 are UI-specific (network-recorder, intercept-network-call, network-error-monitor).
+**Note**: 7 of 10 utilities work without a browser. Only 3 are UI-specific (network-recorder, intercept-network-call, network-error-monitor).
 
 ## Design Patterns
 
