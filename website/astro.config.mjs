@@ -118,6 +118,7 @@ export default defineConfig({
               label: 'Brownfield Projects',
               autogenerate: { directory: 'how-to/brownfield' },
             },
+            { label: 'Install Behind a Firewall', slug: 'how-to/install-behind-firewall' },
           ],
         },
         {
@@ -132,8 +133,7 @@ export default defineConfig({
             { label: 'Knowledge Base System', slug: 'explanation/knowledge-base-system' },
             { label: 'Network-First Patterns', slug: 'explanation/network-first-patterns' },
             { label: 'Fixture Architecture', slug: 'explanation/fixture-architecture' },
-            { label: 'Step-File Architecture', slug: 'explanation/step-file-architecture' },
-            { label: 'Subagent Architecture', slug: 'explanation/subagent-architecture' },
+            { label: 'Step Files & Orchestration', slug: 'explanation/step-file-architecture' },
             { label: 'Test Review CLI Architecture', slug: 'explanation/test-review-cli-architecture' },
           ],
         },

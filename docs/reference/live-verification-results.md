@@ -5,9 +5,12 @@ description: The JSON contract trace reads when a requirement was verified by ru
 
 # Live Verification Results
 
-`trace` classifies a requirement as covered when it can find evidence for it. Until now the only evidence shape it could see was a file in `test_dir`. That made verification-by-running invisible: you could drive the whole story by hand, confirm every acceptance criterion, and trace would still report the requirement uncovered. If it was a P0, the gate failed. Verifying a story scored worse than not verifying it.
+This file records verification performed by running the system rather than by adding a test file. `trace` reads it under the `live` coverage level and counts a record as coverage alongside static tests.
 
-The `live` coverage level closes that. `trace` reads recorded runtime verification from a JSON file and counts it as evidence, subject to two limits stated below: it must be recorded against the commit under trace, and it can never produce a PASS gate on its own.
+Two limits apply, and both are enforced:
+
+- **A record must be recorded against the commit under trace.** A `source_sha` that does not match makes the record `stale`, and stale contributes no coverage.
+- **Live-only evidence can never produce a PASS gate.** A requirement whose only evidence is a live record caps the gate at CONCERNS.
 
 ## What this contract is for
 
@@ -21,7 +24,7 @@ Any producer can emit it. An agent that drove the app, a shell script wrapping a
 live_results_input: '{test_artifacts}/live-verification-results.json'
 ```
 
-Set a different path in the `trace` workflow's `workflow.yaml` if you produce the file elsewhere. When the file is absent, `trace` behaves exactly as it did before: static test discovery only.
+Set a different path in the `trace` workflow's `workflow.yaml` if you produce the file elsewhere. When the file is absent, `trace` uses static test discovery only.
 
 ## File schema
 

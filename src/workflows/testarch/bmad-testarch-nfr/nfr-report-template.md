@@ -60,14 +60,6 @@ Note: This audit summarizes existing implementation evidence; it does not run te
   - **Actual:** {ACTUAL_VALUE}
   - **Evidence:** {EVIDENCE_SOURCE}
 
-### Scalability
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION}
-- **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
-- **Findings:** {FINDINGS_DESCRIPTION}
-
 ---
 
 ## Security Assessment
@@ -173,46 +165,38 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 
 ---
 
-## Maintainability Assessment
+## Scalability Assessment
 
-### Test Coverage
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., ">=80%")
-- **Actual:** {ACTUAL_VALUE} (e.g., "87%")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Coverage report - coverage/lcov-report/index.html")
-- **Findings:** {FINDINGS_DESCRIPTION}
-
-### Code Quality
+### Horizontal Scaling
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., ">=85/100")
-- **Actual:** {ACTUAL_VALUE} (e.g., "92/100")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "SonarQube analysis - sonarqube-report-2025-10-14.pdf")
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "stateless services, auto-scale to 20 replicas")
+- **Actual:** {ACTUAL_DESCRIPTION}
+- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Kubernetes HPA manifest - k8s/hpa.yaml")
 - **Findings:** {FINDINGS_DESCRIPTION}
 
-### Technical Debt
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., "<5% debt ratio")
-- **Actual:** {ACTUAL_VALUE} (e.g., "3.2% debt ratio")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "CodeClimate analysis - codeclimate-2025-10-14.json")
-- **Findings:** {FINDINGS_DESCRIPTION}
-
-### Documentation Completeness
-
-- **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., ">=90%")
-- **Actual:** {ACTUAL_VALUE} (e.g., "95%")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Documentation audit - docs-audit-2025-10-14.md")
-- **Findings:** {FINDINGS_DESCRIPTION}
-
-### Test Quality (from test-review, if available)
+### Vertical Scaling
 
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Test review report - test-review-2025-10-14.md")
+- **Evidence:** {EVIDENCE_SOURCE}
+- **Findings:** {FINDINGS_DESCRIPTION}
+
+### Data Scaling
+
+- **Status:** {STATUS} {STATUS_ICON}
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "read replicas plus partitioning above 100M rows")
+- **Actual:** {ACTUAL_DESCRIPTION}
+- **Evidence:** {EVIDENCE_SOURCE}
+- **Findings:** {FINDINGS_DESCRIPTION}
+
+### Traffic Handling
+
+- **Status:** {STATUS} {STATUS_ICON}
+- **Threshold:** {THRESHOLD_DESCRIPTION}
+- **Actual:** {ACTUAL_DESCRIPTION}
+- **Evidence:** {EVIDENCE_SOURCE}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ---
@@ -335,9 +319,9 @@ Note: This audit summarizes existing implementation evidence; it does not run te
   - **Owner:** {OWNER}
   - **Estimated Effort:** {EFFORT}
 
-### Smoke Tests (Maintainability)
+### Auto-Scaling Triggers (Scalability)
 
-- [ ] {SMOKE_TEST_DESCRIPTION}
+- [ ] {AUTO_SCALING_TRIGGER_DESCRIPTION}
   - **Owner:** {OWNER}
   - **Estimated Effort:** {EFFORT}
 
@@ -458,9 +442,9 @@ nfr_assessment:
 
 **Next Actions:**
 
-- If PASS ✅: Proceed to `*gate` workflow or release
-- If CONCERNS ⚠️: Address HIGH/CRITICAL issues, re-run `*nfr-assess`
-- If FAIL ❌: Resolve FAIL status NFRs, re-run `*nfr-assess`
+- If PASS ✅: Run `/bmad-testarch-trace` Phase 2 for the release gate decision, or release
+- If CONCERNS ⚠️: Address HIGH/CRITICAL issues, re-run `/bmad-testarch-nfr`
+- If FAIL ❌: Resolve FAIL status NFRs, re-run `/bmad-testarch-nfr`
 
 **Generated:** {DATE}
 **Workflow:** testarch-nfr v5.0

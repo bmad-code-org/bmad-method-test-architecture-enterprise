@@ -24,7 +24,11 @@ The `recurse` utility provides:
 ## Quick Start
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/recurse/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 test('wait for job completion', async ({ recurse, apiRequest }) => {
   const { body } = await apiRequest({
@@ -53,7 +57,11 @@ test('wait for job completion', async ({ recurse, apiRequest }) => {
 **Implementation**:
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/recurse/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 test('should wait for job completion', async ({ recurse, apiRequest }) => {
   // Start job
@@ -289,7 +297,11 @@ test('kafka event processed', async ({ recurse, apiRequest }) => {
 **Implementation**:
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 test('end-to-end polling', async ({ apiRequest, recurse }) => {
   // Trigger async operation
@@ -321,7 +333,7 @@ test('end-to-end polling', async ({ apiRequest, recurse }) => {
 **Key Points**:
 
 - Combine `apiRequest` + `recurse` for API polling
-- Both from `@seontechnologies/playwright-utils/fixtures`
+- Compose both with `mergeTests`: `apiRequest` from `@seontechnologies/playwright-utils/api-request/fixtures`, `recurse` from `@seontechnologies/playwright-utils/recurse/fixtures`
 - Complex predicates with multiple conditions
 - Logging shows polling progress in test reports
 

@@ -11,7 +11,7 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 
 - [ ] Implementation is deployed and accessible for evaluation
 - [ ] Evidence sources are available (test results, metrics, logs, CI results)
-- [ ] NFR categories are determined (performance, security, reliability, maintainability, custom)
+- [ ] NFR categories are determined (performance, security, reliability, scalability, custom)
 - [ ] Evidence directories exist and are accessible (`test_results_dir`, `metrics_dir`, `logs_dir`)
 - [ ] Knowledge base is loaded (nfr-criteria, ci-burn-in, test-quality)
 
@@ -37,7 +37,6 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] Response time threshold defined or marked as UNKNOWN
 - [ ] Throughput threshold defined or marked as UNKNOWN
 - [ ] Resource usage thresholds defined or marked as UNKNOWN
-- [ ] Scalability requirements defined or marked as UNKNOWN
 
 ### Security
 
@@ -55,12 +54,12 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] Fault tolerance requirements defined or marked as UNKNOWN
 - [ ] Disaster recovery requirements defined (RTO, RPO) or marked as UNKNOWN
 
-### Maintainability
+### Scalability
 
-- [ ] Test coverage threshold defined or marked as UNKNOWN
-- [ ] Code quality threshold defined or marked as UNKNOWN
-- [ ] Technical debt threshold defined or marked as UNKNOWN
-- [ ] Documentation completeness threshold defined or marked as UNKNOWN
+- [ ] Horizontal scaling requirements defined or marked as UNKNOWN
+- [ ] Vertical scaling limits defined or marked as UNKNOWN
+- [ ] Data scaling strategy defined or marked as UNKNOWN
+- [ ] Traffic handling thresholds defined or marked as UNKNOWN
 
 ### Custom NFR Categories (if applicable)
 
@@ -99,14 +98,13 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] Failover/recovery test results collected (if available)
 - [ ] Incident reports and postmortems collected (if applicable)
 
-### Maintainability Evidence
+### Scalability Evidence
 
-- [ ] Code coverage reports collected (Istanbul, NYC, c8, JaCoCo)
-- [ ] Static analysis results collected (ESLint, SonarQube, CodeClimate)
-- [ ] Technical debt metrics collected
-- [ ] Documentation audit results collected
-- [ ] Test review report collected (from test-review workflow, if available)
-- [ ] Git metrics collected (code churn, commit frequency, etc.)
+- [ ] Load balancer and auto-scaling policy configuration collected
+- [ ] Container orchestration manifests collected (if applicable)
+- [ ] Database partitioning/sharding and read-replica configuration collected
+- [ ] Caching layer and CDN configuration collected
+- [ ] Queue and async worker configuration collected
 
 ---
 
@@ -117,7 +115,6 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] Response time assessed against threshold
 - [ ] Throughput assessed against threshold
 - [ ] Resource usage assessed against threshold
-- [ ] Scalability assessed against requirements
 - [ ] Status classified (PASS/CONCERNS/FAIL) with justification
 - [ ] Evidence source documented (file path, metric name)
 
@@ -142,15 +139,14 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] Status classified (PASS/CONCERNS/FAIL) with justification
 - [ ] Evidence source documented (file path, monitoring data)
 
-### Maintainability Assessment
+### Scalability Assessment
 
-- [ ] Test coverage assessed against threshold
-- [ ] Code quality assessed against threshold
-- [ ] Technical debt assessed against threshold
-- [ ] Documentation completeness assessed against threshold
-- [ ] Test quality assessed (from test-review, if available)
+- [ ] Horizontal scaling assessed against requirements
+- [ ] Vertical scaling assessed against requirements
+- [ ] Data scaling assessed against requirements
+- [ ] Traffic handling assessed against requirements
 - [ ] Status classified (PASS/CONCERNS/FAIL) with justification
-- [ ] Evidence source documented (file path, coverage report)
+- [ ] Evidence source documented (file path, configuration)
 
 ### Custom NFR Evidence Audit (if applicable)
 
@@ -219,7 +215,7 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] Circuit breakers suggested for reliability
 - [ ] Rate limiting suggested for performance
 - [ ] Validation gates suggested for security
-- [ ] Smoke tests suggested for maintainability
+- [ ] Auto-scaling triggers suggested for scalability
 
 ---
 
@@ -230,7 +226,7 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] File created at `{test_artifacts}/nfr-assessment.md`
 - [ ] Template from `nfr-report-template.md` used
 - [ ] Executive summary included (overall status, critical issues)
-- [ ] Assessment by category included (performance, security, reliability, maintainability)
+- [ ] Assessment by category included (performance, security, reliability, scalability)
 - [ ] Evidence for each NFR documented
 - [ ] Status classifications documented (PASS/CONCERNS/FAIL)
 - [ ] Findings summary included (PASS count, CONCERNS count, FAIL count)
@@ -242,7 +238,7 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 
 - [ ] YAML snippet generated
 - [ ] Date included
-- [ ] Categories status included (performance, security, reliability, maintainability)
+- [ ] Categories status included (performance, security, reliability, scalability)
 - [ ] Overall status included (PASS/CONCERNS/FAIL)
 - [ ] Issue counts included (critical, high, medium, concerns)
 - [ ] Blockers flag included (true/false)
@@ -277,7 +273,7 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 
 ### Completeness Checks
 
-- [ ] All NFR categories covered (performance, security, reliability, maintainability, custom)
+- [ ] All NFR categories covered (performance, security, reliability, scalability, custom)
 - [ ] All evidence sources checked (test results, metrics, logs, CI results)
 - [ ] All status types used appropriately (PASS, CONCERNS, FAIL)
 - [ ] All NFRs with CONCERNS/FAIL have recommendations
@@ -394,9 +390,9 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 
 **Next Actions:**
 
-- If PASS ✅: Proceed to `*gate` workflow or release
-- If CONCERNS ⚠️: Address HIGH/CRITICAL issues, re-run `*nfr-assess`
-- If FAIL ❌: Resolve FAIL status NFRs, re-run `*nfr-assess`
+- If PASS ✅: Run `/bmad-testarch-trace` Phase 2 for the release gate decision, or release
+- If CONCERNS ⚠️: Address HIGH/CRITICAL issues, re-run `/bmad-testarch-nfr`
+- If FAIL ❌: Resolve FAIL status NFRs, re-run `/bmad-testarch-nfr`
 
 **Critical Issues:** {COUNT}
 **High Priority Issues:** {COUNT}

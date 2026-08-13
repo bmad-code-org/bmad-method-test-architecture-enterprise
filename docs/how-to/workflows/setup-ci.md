@@ -18,29 +18,21 @@ Use TEA's `ci` workflow to scaffold production-ready CI/CD configuration for aut
 
 ## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - Test framework configured (run `framework` first)
 - Tests written (have something to run in CI)
 - CI/CD platform access (GitHub Actions, GitLab CI, etc.)
 
 ## Steps
 
-### 1. Load TEA Agent
+### 1. Run the CI Workflow
 
-### 1. Load the TEA Agent or Skill
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-ci`
+- **Codex:** `$bmad-testarch-ci`
+- **Inside a `/bmad-tea` chat:** `CI`
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-ci` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-testarch-ci` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `ci` or `CI`
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
-### 2. Run the CI Workflow
-
-```bash
-/bmad-testarch-ci
-```
-
-### 3. Select CI/CD Platform
+### 2. Select CI/CD Platform
 
 TEA will ask which platform you're using.
 
@@ -48,9 +40,9 @@ TEA will ask which platform you're using.
 
 - **GitHub Actions** (most common)
 - **GitLab CI**
-- **Jenkins** — Generates `Jenkinsfile` with parallel stages, artifact archiving, and post-failure handling
-- **Azure DevOps** — Generates `azure-pipelines.yml` with matrix strategy for sharding and Azure-specific caching
-- **Harness** — Generates `.harness/pipeline.yaml` with Kubernetes-based execution and parallel steps
+- **Jenkins**: Generates `Jenkinsfile` with parallel stages, artifact archiving, and post-failure handling
+- **Azure DevOps**: Generates `azure-pipelines.yml` with matrix strategy for sharding and Azure-specific caching
+- **Harness**: Generates `.harness/pipeline.yaml` with Kubernetes-based execution and parallel steps
 - **Circle CI**
 - **Other** (TEA provides generic template)
 
@@ -60,7 +52,7 @@ TEA will ask which platform you're using.
 GitHub Actions
 ```
 
-### 4. Configure Test Strategy
+### 3. Configure Test Strategy
 
 TEA will ask about your test execution strategy.
 
@@ -88,20 +80,14 @@ Need selective testing for changed packages only
 **Options:**
 
 - **No sharding** - Run tests sequentially
-- **Shard by workers** - Split across N workers
+- **Shard by workers** - Split across N workers; 4 workers take a 20-minute suite to 5 minutes
 - **Shard by file** - Each file runs in parallel
 
 **Example:**
 
-```
+```text
 Yes, shard across 4 workers for faster execution
 ```
-
-**Why Shard?**
-
-- **4 workers:** 20-minute suite → 5 minutes
-- **Better resource usage:** Utilize CI runners efficiently
-- **Faster feedback:** Developers wait less
 
 #### Burn-In Loops
 
@@ -110,22 +96,16 @@ Yes, shard across 4 workers for faster execution
 **Options:**
 
 - **No burn-in** - Run tests once
-- **PR burn-in** - Run tests multiple times on PRs
+- **PR burn-in** - Run tests multiple times on PRs; catches flaky tests before they merge
 - **Nightly burn-in** - Dedicated flakiness detection job
 
 **Example:**
 
-```
+```text
 Yes, run tests 5 times on PRs to catch flaky tests early
 ```
 
-**Why Burn-In?**
-
-- Catches flaky tests before they merge
-- Prevents intermittent CI failures
-- Builds confidence in test suite
-
-### 5. Review Generated CI Configuration
+### 4. Review Generated CI Configuration
 
 TEA generates platform-specific workflow files.
 
@@ -386,7 +366,7 @@ export default config;
 
 **Recommendation:** Start with classic (simple), upgrade to smart (faster) when suite grows.
 
-### 6. Configure Secrets
+### 5. Configure Secrets
 
 TEA provides a secrets checklist.
 
@@ -424,7 +404,7 @@ Repository Settings → Secrets and variables → Actions
 2. Add variable name and value
 3. Use in workflow: `$TEST_USER_EMAIL`
 
-### 7. Test the CI Pipeline
+### 6. Test the CI Pipeline
 
 #### Push and Verify
 
@@ -695,10 +675,12 @@ Speed up CI with caching:
   with:
     node-version-file: '.nvmrc'
 
-# Pin browser versions
-- run: npx playwright install --with-deps chromium@1.40.0
+# Pin the browser by pinning @playwright/test in package-lock.json. `playwright install`
+# takes no version suffix: `chromium@1.40.0` fails with "Invalid installation targets".
+- run: npx playwright install --with-deps chromium
 
-  # Set timezone
+# Set the timezone on the step that runs the tests, not on the browser-install step.
+- run: npx playwright test
   env:
     TZ: 'America/New_York'
 ```
@@ -755,9 +737,5 @@ npm run test:burn-in tests/flaky.spec.ts
 
 ## Reference
 
-- [Command: \*ci](/docs/reference/commands.md#ci) - Full command reference
+- [Command: ci](/docs/reference/commands.md#ci) - Full command reference
 - [TEA Configuration](/docs/reference/configuration.md) - CI-related config options
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

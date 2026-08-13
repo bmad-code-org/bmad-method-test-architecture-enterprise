@@ -5,9 +5,7 @@ description: Set up Playwright CLI and MCP for browser automation in TEA workflo
 
 # Configure Browser Automation
 
-TEA can interact with live browsers during test generation — to verify selectors, explore UIs, capture evidence, and debug failures. Two complementary tools are available:
-
-**CLI and MCP are complementary tools, not competitors.** Auto mode uses each where it shines — CLI for token-efficient stateless snapshots, MCP for rich stateful automation — while giving users full control to override when they know better.
+TEA can interact with live browsers during test generation: verify selectors, explore UIs, capture evidence, and debug failures. Two tools do this, and `auto` mode combines them.
 
 ## The Four Modes
 
@@ -17,12 +15,12 @@ TEA's browser automation is controlled by `tea_browser_automation` in `_bmad/tea
 tea_browser_automation: 'auto' # auto | cli | mcp | none
 ```
 
-| Mode   | Behavior                                                                                                                                                   |
-| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auto` | TEA picks the right tool per action — CLI for quick lookups, MCP for complex flows. Falls back gracefully if only one tool is installed. **(Recommended)** |
-| `cli`  | CLI only. MCP ignored even if configured.                                                                                                                  |
-| `mcp`  | MCP only. CLI ignored even if installed. Same as the old `tea_use_mcp_enhancements: true`.                                                                 |
-| `none` | No browser interaction. TEA generates from docs and code analysis only.                                                                                    |
+| Mode   | Behavior                                                                                                                                                  |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auto` | TEA picks the right tool per action: CLI for quick lookups, MCP for complex flows. Falls back gracefully if only one tool is installed. **(Recommended)** |
+| `cli`  | CLI only. MCP ignored even if configured.                                                                                                                 |
+| `mcp`  | MCP only. CLI ignored even if installed. Same as the old `tea_use_mcp_enhancements: true`.                                                                |
+| `none` | No browser interaction. TEA generates from docs and code analysis only.                                                                                   |
 
 ## Prerequisites
 
@@ -33,7 +31,7 @@ npm install -g @playwright/cli@latest    # Install globally (Node.js 18+)
 playwright-cli install --skills          # Register as an agent skill
 ```
 
-The global npm install is one-time. The skills install (`playwright-cli install --skills`) should be run from your project root — it registers skills in your active tool's project skills directory (for example, Claude Code uses `.claude/skills/` and Codex uses `.agents/skills/`). Agents without skills support can still use the CLI directly via `playwright-cli --help`.
+The global npm install is one-time. The skills install (`playwright-cli install --skills`) should be run from your project root; it registers skills in your active tool's project skills directory (for example, Claude Code uses `.claude/skills/` and Codex uses `.agents/skills/`). Agents without skills support can still use the CLI directly via `playwright-cli --help`.
 
 ### For MCP (`mcp` or `auto` mode)
 
@@ -65,7 +63,7 @@ Add these MCP server entries to your tool's configuration file:
 }
 ```
 
-The `smartbear` server is optional — only needed if you use the [Pact MCP integration](/docs/reference/configuration.md#tea_pact_mcp) for contract testing workflows. See the [pact-mcp knowledge fragment](/docs/reference/knowledge-base.md#pact-contract-testing-integration) for details.
+The `smartbear` server is optional. Add it only if you use the [Pact MCP integration](/docs/reference/configuration.md#tea_pact_mcp) for contract testing workflows. See the [pact-mcp knowledge fragment](/docs/reference/knowledge-base.md#pact-contract-testing-integration) for details.
 
 #### Where to put the config
 
@@ -78,26 +76,26 @@ The `smartbear` server is optional — only needed if you use the [Pact MCP inte
 | Windsurf          | `~/.codeium/windsurf/mcp_config.json` | JSON (`mcpServers`)    |
 | VS Code (Copilot) | `.vscode/mcp.json`                    | JSON (`servers`)       |
 
-> **Claude Code tip**: Prefer the `claude mcp add` CLI over manual JSON editing — it sets the correct `type` field and validates the config. Use `-s user` for global (all projects) or omit for per-project (default).
+> **Claude Code tip**: Prefer the `claude mcp add` CLI over manual JSON editing; it sets the correct `type` field and validates the config. Use `-s user` for global (all projects) or omit for per-project (default).
 
 #### CLI shortcuts
 
 Claude Code and Codex support adding MCP servers from the command line:
 
 ```bash
-# Claude Code — Playwright (use -s user for global, omit for per-project)
+# Claude Code: Playwright (use -s user for global, omit for per-project)
 claude mcp add -s user --transport stdio playwright -- npx -y @playwright/mcp@latest
 claude mcp add -s user --transport stdio playwright-test -- npx playwright run-test-mcp-server
 
-# Claude Code — SmartBear (Pact) — use add-json for servers with env vars
+# Claude Code: SmartBear (Pact). Use add-json for servers with env vars
 claude mcp add-json -s user smartbear \
   '{"type":"stdio","command":"npx","args":["-y","@smartbear/mcp@latest"],"env":{"PACT_BROKER_BASE_URL":"https://{tenant}.pactflow.io","PACT_BROKER_TOKEN":"<your-token>"}}'
 
-# Codex — Playwright
+# Codex: Playwright
 codex mcp add playwright -- npx -y @playwright/mcp@latest
 codex mcp add playwright-test -- npx playwright run-test-mcp-server
 
-# Codex — SmartBear (Pact)
+# Codex: SmartBear (Pact)
 codex mcp add smartbear -- npx -y @smartbear/mcp@latest
 ```
 
@@ -127,43 +125,19 @@ Note the key is `mcp_servers` (underscored), not `mcpServers`.
 
 ## How Auto Mode Works
 
-When `tea_browser_automation: "auto"`, TEA picks the right tool per action:
+An explicit request in your prompt wins ("use the CLI to explore this page"). Otherwise TEA takes the CLI for stateless work (snapshots, locator verification, evidence capture) and MCP for stateful flows (multi-tab, file uploads, repeated edits, self-healing). If only one tool is installed it uses that one; with neither it behaves as `none`.
 
-### Priority 1: User Override
-
-If you explicitly request CLI or MCP in your prompt (e.g., "use the CLI to explore this page"), TEA honors that.
-
-### Priority 2: Auto Heuristic
-
-**CLI preferred for quick, stateless tasks:**
-
-- Open page, take snapshot, list elements
-- One-shot data capture (selectors, labels, page structure)
-- Locator verification (checking if a locator exists on a page)
-- Capturing screenshots/traces for evidence
-
-**MCP preferred for stateful, multi-step flows:**
-
-- Long sequences where state must carry across many steps
-- Multi-tab flows, file uploads, repeated edits
-- Complex interaction patterns (drag/drop, multi-step wizards)
-- Self-healing mode (analyzing failures with full DOM access)
-
-### Priority 3: Fallback
-
-- If CLI returns "command not found" -> fall back to MCP
-- If MCP is unavailable -> fall back to CLI
-- If neither is available -> fall back to `none` mode
+Full selection rules: [TEA Overview: Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli-mcp).
 
 ## Which Workflows Benefit
 
 | Workflow      | Default Tool (auto) | Use Case                                               |
 | ------------- | ------------------- | ------------------------------------------------------ |
-| `test-design` | CLI                 | Page discovery, snapshots — stateless                  |
+| `test-design` | CLI                 | Page discovery, snapshots (stateless)                  |
 | `atdd`        | CLI + MCP           | CLI for baseline capture, MCP for complex interactions |
 | `automate`    | CLI + MCP           | CLI for selector verification, MCP for healing         |
-| `test-review` | CLI                 | Traces, screenshots, network — stateless evidence      |
-| `nfr-assess`  | CLI                 | Network monitoring, timing — stateless                 |
+| `test-review` | CLI                 | Traces, screenshots, network (stateless evidence)      |
+| `nfr-assess`  | CLI                 | Network monitoring, timing (stateless)                 |
 
 ## Overriding Per Request
 
@@ -237,7 +211,3 @@ playwright-cli close-all
 - [TEA Overview -- Browser Automation](/docs/explanation/tea-overview.md#browser-automation-playwright-cli-mcp)
 - [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md)
 - [TEA Configuration Reference](/docs/reference/configuration.md)
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

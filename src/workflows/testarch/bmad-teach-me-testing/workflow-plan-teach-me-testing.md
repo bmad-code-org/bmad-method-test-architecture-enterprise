@@ -939,8 +939,8 @@ cp -r {external-project-root}/_bmad-output/bmb-creations/workflows/teach-me-test
 **After deployment:**
 
 1. Update TEA agent menu to add [TMT] Teach Me Testing
-2. Test the workflow: `bmad run teach-me-testing`
-3. Validate: `bmad run teach-me-testing -v`
+2. Test the workflow: `/bmad-teach-me-testing`
+3. Validate: `/bmad-teach-me-testing validate`
 4. Document in TEA module README
 
 ---

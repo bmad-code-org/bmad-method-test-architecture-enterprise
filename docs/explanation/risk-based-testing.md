@@ -5,502 +5,29 @@ description: Understanding how TEA uses probability × impact scoring to priorit
 
 # Risk-Based Testing Explained
 
-Risk-based testing is TEA's core principle: testing depth scales with business impact. Instead of testing everything equally, focus effort where failures hurt most.
+Risk-based testing is TEA's core principle: testing depth scales with business impact. Rather than testing everything equally, put the effort where failure hurts most.
 
-## Overview
+Testing every feature to the same depth means user login and export-to-PDF get ten tests each, the same review scrutiny, and the same development time. That over-tests the trivial and under-tests the critical. The alternative to a number is a conversation that ends in "when it feels safe", which is a political debate with no data in it.
 
-Traditional testing approaches treat all features equally:
+Risk-based testing asks three questions instead: how likely is this to fail, how bad is it if it does, and how much testing does that combination justify?
 
-- Every feature gets same test coverage
-- Same level of scrutiny regardless of impact
-- No systematic prioritization
-- Testing becomes checkbox exercise
+## Probability × Impact
 
-**Risk-based testing asks:**
+**Probability** (how likely to fail?)
 
-- What's the probability this will fail?
-- What's the impact if it does fail?
-- How much testing is appropriate for this risk level?
+- **1 (Low):** stable, well-tested, simple logic
+- **2 (Medium):** moderate complexity, some unknowns
+- **3 (High):** complex, untested, many edge cases
 
-**Result:** Testing effort matches business criticality.
+**Impact** (how bad if it fails?)
 
-## The Problem
+- **1 (Low):** minor inconvenience, few users affected
+- **2 (Medium):** degraded experience, workarounds exist
+- **3 (High):** critical path broken, business impact
 
-### Equal Testing for Unequal Risk
+The product is the risk score, from 1 to 9:
 
-```markdown
-Feature A: User login (critical path, millions of users)
-Feature B: Export to PDF (nice-to-have, rarely used)
-
-Traditional approach:
-
-- Both get 10 tests
-- Both get same review scrutiny
-- Both take same development time
-
-Problem: Wasting effort on low-impact features while under-testing critical paths.
-```
-
-### No Objective Prioritization
-
-```markdown
-PM: "We need more tests for checkout"
-QA: "How many tests?"
-PM: "I don't know... a lot?"
-QA: "How do we know when we have enough?"
-PM: "When it feels safe?"
-
-Problem: Subjective decisions, no data, political debates.
-```
-
-## The Solution: Probability × Impact Scoring
-
-### Risk Score = Probability × Impact
-
-**Probability** (How likely to fail?)
-
-- **1 (Low):** Stable, well-tested, simple logic
-- **2 (Medium):** Moderate complexity, some unknowns
-- **3 (High):** Complex, untested, many edge cases
-
-**Impact** (How bad if it fails?)
-
-- **1 (Low):** Minor inconvenience, few users affected
-- **2 (Medium):** Degraded experience, workarounds exist
-- **3 (High):** Critical path broken, business impact
-
-**Score Range:** 1-9
-
-#### Risk Scoring Matrix
-
-```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'14px'}}}%%
-graph TD
-    subgraph Matrix[" "]
-        direction TB
-        subgraph Impact3["Impact: HIGH (3)"]
-            P1I3["Score: 3<br/>Low Risk"]
-            P2I3["Score: 6<br/>HIGH RISK<br/>Mitigation Required"]
-            P3I3["Score: 9<br/>CRITICAL<br/>Blocks Release"]
-        end
-        subgraph Impact2["Impact: MEDIUM (2)"]
-            P1I2["Score: 2<br/>Low Risk"]
-            P2I2["Score: 4<br/>Medium Risk"]
-            P3I2["Score: 6<br/>HIGH RISK<br/>Mitigation Required"]
-        end
-        subgraph Impact1["Impact: LOW (1)"]
-            P1I1["Score: 1<br/>Low Risk"]
-            P2I1["Score: 2<br/>Low Risk"]
-            P3I1["Score: 3<br/>Low Risk"]
-        end
-    end
-
-    Prob1["Probability: LOW (1)"] -.-> P1I1
-    Prob1 -.-> P1I2
-    Prob1 -.-> P1I3
-
-    Prob2["Probability: MEDIUM (2)"] -.-> P2I1
-    Prob2 -.-> P2I2
-    Prob2 -.-> P2I3
-
-    Prob3["Probability: HIGH (3)"] -.-> P3I1
-    Prob3 -.-> P3I2
-    Prob3 -.-> P3I3
-
-    style P3I3 fill:#f44336,stroke:#b71c1c,stroke-width:3px,color:#fff
-    style P2I3 fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#000
-    style P3I2 fill:#ff9800,stroke:#e65100,stroke-width:2px,color:#000
-    style P2I2 fill:#fff9c4,stroke:#f57f17,stroke-width:1px,color:#000
-    style P1I1 fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px,color:#000
-    style P2I1 fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px,color:#000
-    style P3I1 fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px,color:#000
-    style P1I2 fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px,color:#000
-    style P1I3 fill:#c8e6c9,stroke:#2e7d32,stroke-width:1px,color:#000
-```
-
-**Legend:**
-
-- 🔴 Red (Score 9): CRITICAL - Blocks release
-- 🟠 Orange (Score 6-8): HIGH RISK - Mitigation required
-- 🟡 Yellow (Score 4-5): MEDIUM - Mitigation recommended
-- 🟢 Green (Score 1-3): LOW - Optional mitigation
-
-### Scoring Examples
-
-**Score 9 (Critical):**
-
-```
-Feature: Payment processing
-Probability: 3 (complex third-party integration)
-Impact: 3 (broken payments = lost revenue)
-Score: 3 × 3 = 9
-
-Action: Extensive testing required
-- E2E tests for all payment flows
-- API tests for all payment scenarios
-- Error handling for all failure modes
-- Security testing for payment data
-- Load testing for high traffic
-- Monitoring and alerts
-```
-
-**Score 1 (Low):**
-
-```
-Feature: Change profile theme color
-Probability: 1 (simple UI toggle)
-Impact: 1 (cosmetic only)
-Score: 1 × 1 = 1
-
-Action: Minimal testing
-- One E2E smoke test
-- Skip edge cases
-- No API tests needed
-```
-
-**Score 6 (Medium-High):**
-
-```
-Feature: User profile editing
-Probability: 2 (moderate complexity)
-Impact: 3 (users can't update info)
-Score: 2 × 3 = 6
-
-Action: Focused testing
-- E2E test for happy path
-- API tests for CRUD operations
-- Validation testing
-- Skip low-value edge cases
-```
-
-## How It Works in TEA
-
-### 1. Risk Categories
-
-TEA assesses risk across 6 categories:
-
-**TECH** - Technical debt, architecture fragility
-
-```
-Example: Migrating from REST to GraphQL
-Probability: 3 (major architectural change)
-Impact: 3 (affects all API consumers)
-Score: 9 - Extensive integration testing required
-```
-
-**SEC** - Security vulnerabilities
-
-```
-Example: Adding OAuth integration
-Probability: 2 (third-party dependency)
-Impact: 3 (auth breach = data exposure)
-Score: 6 - Security testing mandatory
-```
-
-**PERF** - Performance degradation
-
-```
-Example: Adding real-time notifications
-Probability: 2 (WebSocket complexity)
-Impact: 2 (slower experience)
-Score: 4 - Load testing recommended
-```
-
-**DATA** - Data integrity, corruption
-
-```
-Example: Database migration
-Probability: 2 (schema changes)
-Impact: 3 (data loss unacceptable)
-Score: 6 - Data validation tests required
-```
-
-**BUS** - Business logic errors
-
-```
-Example: Discount calculation
-Probability: 2 (business rules complex)
-Impact: 3 (wrong prices = revenue loss)
-Score: 6 - Business logic tests mandatory
-```
-
-**OPS** - Operational issues
-
-```
-Example: Logging system update
-Probability: 1 (straightforward)
-Impact: 2 (debugging harder without logs)
-Score: 2 - Basic smoke test sufficient
-```
-
-### 2. Test Priorities (P0-P3)
-
-Risk scores inform test priorities (but aren't the only factor):
-
-**P0 - Critical Path**
-
-- **Risk Scores:** Typically 6-9 (high risk)
-- **Other Factors:** Revenue impact, security-critical, regulatory compliance, frequent usage
-- **Coverage Target:** 100%
-- **Test Levels:** E2E + API
-- **Example:** Login, checkout, payment processing
-
-**P1 - High Value**
-
-- **Risk Scores:** Typically 4-6 (medium-high risk)
-- **Other Factors:** Core user journeys, complex logic, integration points
-- **Coverage Target:** 90%
-- **Test Levels:** API + selective E2E
-- **Example:** Profile editing, search, filters
-
-**P2 - Medium Value**
-
-- **Risk Scores:** Typically 2-4 (medium risk)
-- **Other Factors:** Secondary features, admin functionality, reporting
-- **Coverage Target:** 50%
-- **Test Levels:** API happy path only
-- **Example:** Export features, advanced settings
-
-**P3 - Low Value**
-
-- **Risk Scores:** Typically 1-2 (low risk)
-- **Other Factors:** Rarely used, nice-to-have, cosmetic
-- **Coverage Target:** 20% (smoke test)
-- **Test Levels:** E2E smoke test only
-- **Example:** Theme customization, experimental features
-
-**Note:** Priorities consider risk scores plus business context (usage frequency, user impact, etc.). See [Test Priorities Matrix](/docs/reference/knowledge-base.md#quality-standards) for complete criteria.
-
-### 3. Mitigation Plans
-
-**Scores ≥6 require documented mitigation:**
-
-```markdown
-## Risk Mitigation
-
-**Risk:** Payment integration failure (Score: 9)
-
-**Mitigation Plan:**
-
-- Create comprehensive test suite (20+ tests)
-- Add payment sandbox environment
-- Implement retry logic with idempotency
-- Add monitoring and alerts
-- Document rollback procedure
-
-**Owner:** Backend team lead
-**Deadline:** Before production deployment
-**Status:** In progress
-```
-
-**Gate Rules:**
-
-- **Score = 9** (Critical): Mandatory FAIL - blocks release without mitigation
-- **Score 6-8** (High): Requires mitigation plan, becomes CONCERNS if incomplete
-- **Score 4-5** (Medium): Mitigation recommended but not required
-- **Score 1-3** (Low): No mitigation needed
-
-## Comparison: Traditional vs Risk-Based
-
-### Traditional Approach
-
-```typescript
-// Test everything equally
-describe('User profile', () => {
-  test('should display name');
-  test('should display email');
-  test('should display phone');
-  test('should display address');
-  test('should display bio');
-  test('should display avatar');
-  test('should display join date');
-  test('should display last login');
-  test('should display theme preference');
-  test('should display language preference');
-  // 10 tests for profile display (all equal priority)
-});
-```
-
-**Problems:**
-
-- Same effort for critical (name) vs trivial (theme)
-- No guidance on what matters
-- Wastes time on low-value tests
-
-### Risk-Based Approach
-
-```typescript
-// Test based on risk
-
-describe('User profile - Critical (P0)', () => {
-  test('should display name and email'); // Score: 9 (identity critical)
-  test('should allow editing name and email');
-  test('should validate email format');
-  test('should prevent unauthorized edits');
-  // 4 focused tests on high-risk areas
-});
-
-describe('User profile - High Value (P1)', () => {
-  test('should upload avatar'); // Score: 6 (users care about this)
-  test('should update bio');
-  // 2 tests for high-value features
-});
-
-// P2: Theme preference - single smoke test
-// P3: Last login display - skip (read-only, low value)
-```
-
-**Benefits:**
-
-- 6 focused tests vs 10 unfocused tests
-- Effort matches business impact
-- Clear priorities guide development
-- No wasted effort on trivial features
-
-## When to Use Risk-Based Testing
-
-### Always Use For:
-
-**Enterprise projects:**
-
-- High stakes (revenue, compliance, security)
-- Many features competing for test effort
-- Need objective prioritization
-
-**Large codebases:**
-
-- Can't test everything exhaustively
-- Need to focus limited QA resources
-- Want data-driven decisions
-
-**Regulated industries:**
-
-- Must justify testing decisions
-- Auditors want risk assessments
-- Compliance requires evidence
-
-### Consider Skipping For:
-
-**Tiny projects:**
-
-- 5 features total
-- Can test everything thoroughly
-- Risk scoring is overhead
-
-**Prototypes:**
-
-- Throw-away code
-- Speed over quality
-- Learning experiments
-
-## Real-World Example
-
-### Scenario: E-Commerce Checkout Redesign
-
-**Feature:** Redesigning checkout flow from 5 steps to 3 steps
-
-**Risk Assessment:**
-
-| Component                 | Probability | Impact | Score | Priority | Testing               |
-| ------------------------- | ----------- | ------ | ----- | -------- | --------------------- |
-| **Payment processing**    | 3           | 3      | 9     | P0       | 15 E2E + 20 API tests |
-| **Order validation**      | 2           | 3      | 6     | P1       | 5 E2E + 10 API tests  |
-| **Shipping calculation**  | 2           | 2      | 4     | P1       | 3 E2E + 8 API tests   |
-| **Promo code validation** | 2           | 2      | 4     | P1       | 2 E2E + 5 API tests   |
-| **Gift message**          | 1           | 1      | 1     | P3       | 1 E2E smoke test      |
-
-**Test Budget:** 40 hours
-
-**Allocation:**
-
-- Payment (Score 9): 20 hours (50%)
-- Order validation (Score 6): 8 hours (20%)
-- Shipping (Score 4): 6 hours (15%)
-- Promo codes (Score 4): 4 hours (10%)
-- Gift message (Score 1): 2 hours (5%)
-
-**Result:** 50% of effort on highest-risk feature (payment), proportional allocation for others.
-
-### Without Risk-Based Testing:
-
-**Equal allocation:** 8 hours per component = wasted effort on gift message, under-testing payment.
-
-**Result:** Payment bugs slip through (critical), perfect testing of gift message (trivial).
-
-## Mitigation Strategies by Risk Level
-
-### Score 9: Mandatory Mitigation (Blocks Release)
-
-```markdown
-**Gate Impact:** FAIL - Cannot deploy without mitigation
-
-**Actions:**
-
-- Comprehensive test suite (E2E, API, security)
-- Multiple test environments (dev, staging, prod-mirror)
-- Load testing and performance validation
-- Security audit and penetration testing
-- Monitoring and alerting
-- Rollback plan documented
-- On-call rotation assigned
-
-**Cannot deploy until score is mitigated below 9.**
-```
-
-### Score 6-8: Required Mitigation (Gate: CONCERNS)
-
-```markdown
-**Gate Impact:** CONCERNS - Can deploy with documented mitigation plan
-
-**Actions:**
-
-- Targeted test suite (happy path + critical errors)
-- Test environment setup
-- Monitoring plan
-- Document mitigation and owners
-
-**Can deploy with approved mitigation plan.**
-```
-
-### Score 4-5: Recommended Mitigation
-
-```markdown
-**Gate Impact:** Advisory - Does not affect gate decision
-
-**Actions:**
-
-- Basic test coverage
-- Standard monitoring
-- Document known limitations
-
-**Can deploy, mitigation recommended but not required.**
-```
-
-### Score 1-3: Optional Mitigation
-
-```markdown
-**Gate Impact:** None
-
-**Actions:**
-
-- Smoke test if desired
-- Feature flag for easy disable (optional)
-
-**Can deploy without mitigation.**
-```
-
-## Technical Implementation
-
-For detailed risk governance patterns, see the knowledge base:
-
-- [Knowledge Base Index - Risk & Gates](/docs/reference/knowledge-base.md)
-- [TEA Command Reference - `test-design`](/docs/reference/commands.md#test-design)
-
-### Risk Scoring Matrix
-
-TEA uses this framework in `test-design`:
-
-```
+```text
            Impact
            1    2    3
       ┌────┬────┬────┐
@@ -511,16 +38,16 @@ o     └────┴────┴────┘
 b      Low  Med  High
 ```
 
-### Gate Decision Rules
+TEA applies this in `test-design`.
 
-| Score   | Mitigation Required       | Gate Impact            |
-| ------- | ------------------------- | ---------------------- |
-| **9**   | Mandatory, blocks release | FAIL if no mitigation  |
-| **6-8** | Required, documented plan | CONCERNS if incomplete |
-| **4-5** | Recommended               | Advisory only          |
-| **1-3** | Optional                  | No impact              |
+### What each band buys
 
-#### Gate Decision Flow
+| Score   | Level    | Mitigation                | Gate impact             | Actions                                                                                                                                                                                                                                                                                        |
+| ------- | -------- | ------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **9**   | Critical | Mandatory, blocks release | FAIL without mitigation | Comprehensive suite (E2E, API, security); multiple environments including a prod mirror; load and performance validation; security audit and penetration testing; monitoring and alerting; documented rollback; on-call rotation assigned. Cannot deploy until the score is mitigated below 9. |
+| **6-8** | High     | Required, documented plan | CONCERNS if incomplete  | Targeted suite covering happy path plus critical errors; test environment set up; monitoring plan; mitigation and owners documented. Deploys with an approved plan.                                                                                                                            |
+| **4-5** | Medium   | Recommended               | Advisory only           | Basic coverage; standard monitoring; known limitations documented.                                                                                                                                                                                                                             |
+| **1-3** | Low      | Optional                  | None                    | Smoke test if desired; feature flag for easy disable.                                                                                                                                                                                                                                          |
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': { 'fontSize':'14px'}}}%%
@@ -555,74 +82,108 @@ flowchart TD
     style NoAction fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px,color:#000
 ```
 
-## Common Misconceptions
+A score of 9 with a documented mitigation plan lands on CONCERNS rather than FAIL. That branch is the whole reason the plan is worth writing.
 
-### "Risk-based = Less Testing"
+Every score at 6 or above needs a written mitigation with an owner and a date:
 
-**Wrong:** Risk-based testing often means MORE testing where it matters.
+```markdown
+## Risk Mitigation
 
-**Example:**
+**Risk:** Payment integration failure (Score: 9)
 
-- Traditional: 50 tests spread equally
-- Risk-based: 70 tests focused on P0/P1 (more total, better allocated)
+**Mitigation Plan:**
 
-### "Low Priority = Skip Testing"
+- Create comprehensive test suite (20+ tests)
+- Add payment sandbox environment
+- Implement retry logic with idempotency
+- Add monitoring and alerts
+- Document rollback procedure
 
-**Wrong:** P3 still gets smoke tests.
+**Owner:** Backend team lead
+**Deadline:** Before production deployment
+**Status:** In progress
+```
 
-**Correct:**
+## The Six Risk Categories
 
-- P3: Smoke test (feature works at all)
-- P2: Happy path (feature works correctly)
-- P1: Happy path + errors
-- P0: Comprehensive (all scenarios)
+TEA scores across six categories, so a feature can be low-risk technically and high-risk on data integrity at the same time.
 
-### "Risk Scores Are Permanent"
+| Category | Covers                                 | Example                        | P   | I   | Score | Consequence                            |
+| -------- | -------------------------------------- | ------------------------------ | --- | --- | ----- | -------------------------------------- |
+| **TECH** | Technical debt, architecture fragility | Migrating REST to GraphQL      | 3   | 3   | 9     | Extensive integration testing required |
+| **SEC**  | Security vulnerabilities               | Adding OAuth integration       | 2   | 3   | 6     | Security testing mandatory             |
+| **PERF** | Performance degradation                | Adding real-time notifications | 2   | 2   | 4     | Load testing recommended               |
+| **DATA** | Data integrity and corruption          | Database migration             | 2   | 3   | 6     | Data validation tests required         |
+| **BUS**  | Business logic errors                  | Discount calculation           | 2   | 3   | 6     | Business logic tests mandatory         |
+| **OPS**  | Operational issues                     | Logging system update          | 1   | 2   | 2     | Basic smoke test sufficient            |
 
-**Wrong:** Risk changes over time.
+Reading a score in context: payment processing scores 3 × 3 = 9, so it gets E2E coverage of every payment flow, API tests for every scenario, error handling for every failure mode, security testing on payment data, load testing, and production monitoring. A profile theme colour toggle scores 1 × 1 = 1, so it gets one E2E smoke test, no edge cases, and no API tests. Profile editing at 2 × 3 = 6 sits between: E2E for the happy path, API tests for CRUD, validation testing, and no low-value edge cases.
 
-**Correct:**
+## Test Priorities (P0-P3)
 
-- Initial launch: Payment is Score 9 (untested integration)
-- After 6 months: Payment is Score 6 (proven in production)
-- Re-assess risk quarterly
+Risk scores inform priority; they are not the only input. Usage frequency, revenue exposure, and regulatory obligation also move a feature up.
 
-## Related Concepts
+| Priority | Typical score | Other factors                                                            | Coverage target  | Test levels         | Example                            |
+| -------- | ------------- | ------------------------------------------------------------------------ | ---------------- | ------------------- | ---------------------------------- |
+| **P0**   | 6-9           | Revenue impact, security-critical, regulatory compliance, frequent usage | 100%             | E2E + API           | Login, checkout, payment           |
+| **P1**   | 4-6           | Core user journeys, complex logic, integration points                    | 90%              | API + selective E2E | Profile editing, search, filters   |
+| **P2**   | 2-4           | Secondary features, admin functionality, reporting                       | 50%              | API happy path only | Export features, advanced settings |
+| **P3**   | 1-2           | Rarely used, nice-to-have, cosmetic                                      | 20% (smoke test) | E2E smoke test only | Theme customization, experiments   |
 
-**Core TEA Concepts:**
+See [Test Priorities Matrix](/docs/reference/knowledge-base.md#quality-standards) for the complete criteria.
 
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - Quality complements risk assessment
-- [Engagement Models](/docs/explanation/engagement-models.md) - When risk-based testing matters most
-- [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - How risk patterns are loaded
+## What It Changes
 
-**Technical Patterns:**
+Ten equally-weighted profile tests become six weighted ones:
 
-- [Fixture Architecture](/docs/explanation/fixture-architecture.md) - Building risk-appropriate test infrastructure
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - Quality patterns for high-risk features
+```typescript
+describe('User profile - Critical (P0)', () => {
+  test('should display name and email'); // Score 9: identity is critical
+  test('should allow editing name and email');
+  test('should validate email format');
+  test('should prevent unauthorized edits');
+});
 
-**Overview:**
+describe('User profile - High Value (P1)', () => {
+  test('should upload avatar'); // Score 6
+  test('should update bio');
+});
 
-- [TEA Overview](/docs/explanation/tea-overview.md) - Risk assessment in TEA lifecycle
-- [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - Design philosophy
+// P2 theme preference: one smoke test
+// P3 last-login display: skipped, read-only and low value
+```
 
-## Practical Guides
+Worked at project scale, on a checkout redesign from five steps to three with a 40-hour test budget:
 
-**Workflow Guides:**
+| Component                 | P   | I   | Score | Priority | Testing               | Budget    |
+| ------------------------- | --- | --- | ----- | -------- | --------------------- | --------- |
+| **Payment processing**    | 3   | 3   | 9     | P0       | 15 E2E + 20 API tests | 20h (50%) |
+| **Order validation**      | 2   | 3   | 6     | P1       | 5 E2E + 10 API tests  | 8h (20%)  |
+| **Shipping calculation**  | 2   | 2   | 4     | P1       | 3 E2E + 8 API tests   | 6h (15%)  |
+| **Promo code validation** | 2   | 2   | 4     | P1       | 2 E2E + 5 API tests   | 4h (10%)  |
+| **Gift message**          | 1   | 1   | 1     | P3       | 1 E2E smoke test      | 2h (5%)   |
 
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - Apply risk scoring
-- [How to Run Trace](/docs/how-to/workflows/run-trace.md) - Gate decisions based on risk
-- [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md) - NFR evidence status for gate decisions
+Splitting the same 40 hours evenly would give the gift message eight hours and payment eight hours, which is how payment bugs reach production alongside an immaculately tested gift message.
 
-**Use-Case Guides:**
+## When to Use It
 
-- [Running TEA for Enterprise](/docs/how-to/brownfield/use-tea-for-enterprise.md) - Enterprise risk management
+Use it on enterprise projects (high stakes, many features competing for effort), large codebases (exhaustive testing is off the table, resources are finite), and regulated industries (auditors want the risk assessment, and decisions must be justifiable).
 
-## Reference
+Skip it on tiny projects with five features you can test exhaustively, and on throwaway prototypes. The scoring is overhead when there is nothing to prioritize.
 
-- [TEA Command Reference](/docs/reference/commands.md) - `test-design`, `nfr-assess`, `trace`
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - Risk governance fragments
-- [Glossary](/docs/glossary/index.md#test-architect-tea-concepts) - Risk-based testing term
+## Three Misconceptions
 
----
+**"Risk-based means less testing."** It usually means more testing, differently placed: 50 evenly spread tests become 70 concentrated on P0 and P1.
 
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)
+**"Low priority means no testing."** P3 still gets a smoke test proving the feature works at all. P2 adds the happy path, P1 adds error cases, P0 covers everything.
+
+**"Risk scores are permanent."** An untested payment integration scores 9 at launch and 6 after six months in production. Re-assess quarterly.
+
+## Related
+
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the rubric each generated test is held to
+- [Verification Architecture](/docs/explanation/verification-architecture.md) - where the risk model sits in TEA Core
+- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - applying the scoring
+- [How to Run Trace](/docs/how-to/workflows/run-trace.md) - gate decisions built on these scores
+- [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md) - NFR evidence status at the gate
+- [Knowledge Base Index](/docs/reference/knowledge-base.md) - risk governance and probability-impact fragments

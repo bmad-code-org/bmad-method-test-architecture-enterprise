@@ -486,7 +486,12 @@ export default myCustomProvider;
 ## Integration with API Request
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+// Auth fixture from Step 2 above (setAuthProvider + createAuthFixtures)
+import { test as authFixture } from './support/auth/auth-fixture';
+
+const test = mergeTests(authFixture, apiRequestFixture);
 
 test('authenticated API call', async ({ apiRequest, authToken }) => {
   const { status, body } = await apiRequest({

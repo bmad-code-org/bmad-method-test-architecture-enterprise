@@ -26,50 +26,41 @@ npx bmad-method install
 # Select: Test Architect (TEA)
 ```
 
-Then trigger workflows via chat:
+Then run a workflow. Each one has a command you can type in a fresh session:
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-tea` (load agent) or `/bmad-testarch-test-design`
-- **Codex:** `$bmad-tea` (load agent) or `$bmad-tea-testarch-test-design`
-- **In TEA Agent Chat:** `test-design` or `TD`
-
-```bash
-/bmad-tea                  # Load TEA agent/menu
-/bmad-testarch-test-design # Run Test Design workflow
-```
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-design`
+- **Codex:** `$bmad-testarch-test-design`
+- **Agent menu:** load `/bmad-tea` (or `$bmad-tea`) first, then type the two-letter code `TD`
 
 ## Getting Started
+
+The sidebar follows Diátaxis: tutorials teach, how-to guides solve one task, explanation covers concepts and architecture, reference is for lookup, and the glossary defines terms.
 
 Pick a path:
 
 - **New to Testing?** Start with [TEA Academy](/tutorials/learn-testing-tea-academy) - Learn testing from fundamentals to advanced practices (7 sessions, 1-2 weeks)
-- **TEA Lite**: Start with [Test Automation](/how-to/workflows/run-automate) only (30 minutes)
+- **TEA Lite**: Start with [Getting Started with Test Architect](/tutorials/tea-lite-quickstart) (30 minutes)
 - **Full TEA**: Start with the [TEA Overview](/explanation/tea-overview) for the complete workflow map
 - **Enterprise**: Choose [Greenfield](/how-to/brownfield/use-tea-for-enterprise) or [Brownfield](/how-to/brownfield/use-tea-with-existing-tests)
 - **Custom Extensions**: See [Extend TEA with Custom Workflows](/how-to/customization/extend-tea-with-custom-workflows)
 
 ## Core Workflows
 
-| Workflow                                                  | Trigger | Purpose                               |
-| --------------------------------------------------------- | ------- | ------------------------------------- |
-| [Teach Me Testing](/how-to/workflows/teach-me-testing)    | TMT     | Learn testing (7 sessions, 1-2 weeks) |
-| [Test Design](/how-to/workflows/run-test-design)          | TD      | Risk-based planning + NFR planning    |
-| [Framework Setup](/how-to/workflows/setup-test-framework) | TF      | Scaffold test framework               |
-| [CI/CD Integration](/how-to/workflows/setup-ci)           | CI      | Set up quality pipeline               |
-| [ATDD](/how-to/workflows/run-atdd)                        | AT      | Failing acceptance tests (TDD)        |
-| [Test Automation](/how-to/workflows/run-automate)         | TA      | Expand automation coverage            |
-| [Test Review](/how-to/workflows/run-test-review)          | RV      | Quality audit with scoring            |
-| [NFR Evidence Audit](/how-to/workflows/run-nfr-assess)    | NR      | Non-functional evidence evaluation    |
-| [Requirements Tracing](/how-to/workflows/run-trace)       | TR      | Coverage mapping + gate decision      |
+The Command column works in a fresh session. The Menu code works only after `/bmad-tea` is loaded. On Codex, swap the leading `/` for `$`.
 
-> **Agent menu shortcut:** The TEA agent menu also provides a `GATE` intent (trigger: `GATE` in chat after loading `bmad-tea`). It is a routing helper — not a standalone workflow — that guides you through the release gate sequence: optional test-review → optional nfr-assess → trace Phase 2 gate decision. It produces no artifact of its own.
+| Workflow                                                  | Command                      | Menu code | Purpose                               |
+| --------------------------------------------------------- | ---------------------------- | --------- | ------------------------------------- |
+| [Teach Me Testing](/how-to/workflows/teach-me-testing)    | `/bmad-teach-me-testing`     | `TMT`     | Learn testing (7 sessions, 1-2 weeks) |
+| [Test Design](/how-to/workflows/run-test-design)          | `/bmad-testarch-test-design` | `TD`      | Risk-based planning + NFR planning    |
+| [Framework Setup](/how-to/workflows/setup-test-framework) | `/bmad-testarch-framework`   | `TF`      | Scaffold test framework               |
+| [CI/CD Integration](/how-to/workflows/setup-ci)           | `/bmad-testarch-ci`          | `CI`      | Set up quality pipeline               |
+| [ATDD](/how-to/workflows/run-atdd)                        | `/bmad-testarch-atdd`        | `AT`      | Failing acceptance tests (TDD)        |
+| [Test Automation](/how-to/workflows/run-automate)         | `/bmad-testarch-automate`    | `TA`      | Expand automation coverage            |
+| [Test Review](/how-to/workflows/run-test-review)          | `/bmad-testarch-test-review` | `RV`      | Quality audit with scoring            |
+| [NFR Evidence Audit](/how-to/workflows/run-nfr-assess)    | `/bmad-testarch-nfr`         | `NR`      | Non-functional evidence evaluation    |
+| [Requirements Tracing](/how-to/workflows/run-trace)       | `/bmad-testarch-trace`       | `TR`      | Coverage mapping + gate decision      |
 
-## Documentation Structure
-
-- **[Tutorial](/tutorials/tea-lite-quickstart/)**: Learn TEA step-by-step
-- **[How-To Guides](/how-to/workflows/run-test-design)**: Task-focused instructions
-- **[Explanation](/explanation/testing-as-engineering/)**: Understand concepts and architecture
-- **[Reference](/reference/commands)**: Commands, configuration, knowledge base
-- **[Glossary](/glossary)**: Terminology and definitions
+> **Agent menu shortcut:** The TEA agent menu also provides a `GATE` intent, typed in chat after loading `bmad-tea`. It has no command of its own because it is a routing helper rather than a workflow: it walks you through the release gate sequence (optional test-review → optional nfr-assess → trace Phase 2 gate decision) and produces no artifact.
 
 ## Support
 

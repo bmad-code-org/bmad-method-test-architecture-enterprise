@@ -21,26 +21,20 @@ Coverage scoring is intentionally excluded from `test-review`. Use `trace` for r
 
 ## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - Tests written (to review)
 - Test framework configured
 
 ## Steps
 
-### 1. Load the TEA Agent or Skill
+### 1. Run the Test Review Workflow
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-review` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-testarch-test-review` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `test-review` or `RV`
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-test-review`
+- **Codex:** `$bmad-testarch-test-review`
+- **Inside a `/bmad-tea` chat:** `RV`
 
-### 2. Run the Test Review Workflow
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
-```bash
-/bmad-testarch-test-review
-```
-
-### 3. Specify Review Scope
+### 2. Specify Review Scope
 
 TEA will ask what to review.
 
@@ -86,7 +80,7 @@ tests/
 - Comprehensive audit
 - Establishing baseline metrics
 
-### 4. Review the Quality Report
+### 3. Review the Quality Report
 
 TEA generates a comprehensive quality report with scoring.
 
@@ -624,9 +618,5 @@ Don't try to fix everything at once.
 
 ## Reference
 
-- [Command: \*test-review](/docs/reference/commands.md#test-review) - Full command reference
+- [Command: test-review](/docs/reference/commands.md#test-review) - Full command reference
 - [Knowledge Base Index](/docs/reference/knowledge-base.md) - Patterns TEA reviews against
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

@@ -3,6 +3,8 @@ title: 'How to Set Up a Test Framework with TEA'
 description: How to set up a production-ready test framework using TEA
 ---
 
+# How to Set Up a Test Framework with TEA
+
 Use TEA's `framework` workflow to scaffold a production-ready test framework for your project.
 
 ## When to Use This
@@ -12,28 +14,21 @@ Use TEA's `framework` workflow to scaffold a production-ready test framework for
 - Starting a new project that needs testing infrastructure
 - Phase 3 (Solutioning) after architecture is complete
 
-:::note[Prerequisites]
+## Prerequisites
 
-- BMad Method installed
 - Architecture completed (or at least tech stack decided)
-- TEA agent available
-  :::
 
 ## Steps
 
-### 1. Load the TEA Agent or Skill
+### 1. Run the Framework Workflow
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-framework` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-testarch-framework` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `framework` or `TF`
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-framework`
+- **Codex:** `$bmad-testarch-framework`
+- **Inside a `/bmad-tea` chat:** `TF`
 
-### 2. Run the Framework Workflow
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
-```bash
-/bmad-testarch-framework
-```
-
-### 3. Answer TEA's Questions
+### 2. Answer TEA's Questions
 
 TEA will ask about:
 
@@ -49,15 +44,15 @@ TEA will ask about:
 - Testing scope (E2E, integration, unit, API)
 - CI/CD platform (GitHub Actions, GitLab CI, Jenkins, Azure DevOps, Harness, etc.)
 
-### 4. Review Generated Output
+### 3. Review Generated Output
 
 TEA generates:
 
-- **Test scaffold** — Directory structure and config files (language-idiomatic)
-- **Sample specs** — Example tests following best practices for your framework
-- **`.env.example`** — Environment variable template
-- **Version file** — `.nvmrc` (Node.js), `.python-version` (Python), `global.json` (.NET), etc.
-- **README updates** — Testing documentation
+- **Test scaffold**: Directory structure and config files (language-idiomatic)
+- **Sample specs**: Example tests following best practices for your framework
+- **`.env.example`**: Environment variable template
+- **Version file**: `.nvmrc` (Node.js), `.python-version` (Python), `global.json` (.NET), etc.
+- **README updates**: Testing documentation
 
 ## What You Get
 
@@ -86,7 +81,7 @@ tests/
 └── README.md
 ```
 
-> **Note:** Playwright has official bindings for Python, Java, and .NET — making it viable for API testing across languages, not just Node.js.
+> **Note:** Playwright has official bindings for Python, Java, and .NET, so it is viable for API testing across those languages too.
 
 ## Optional: Playwright Utils Integration
 
@@ -104,21 +99,21 @@ Enable during BMad installation or set `tea_use_playwright_utils: true` in confi
 
 TEA can use Playwright MCP servers for enhanced capabilities:
 
-- `playwright` — Browser automation
-- `playwright-test` — Test runner with failure analysis
+- `playwright`: Browser automation
+- `playwright-test`: Test runner with failure analysis
 
 Configure in your IDE's MCP settings.
 
 ## Tips
 
-- **Run only once per repository** — Framework setup is a one-time operation
-- **Run after architecture is complete** — Framework aligns with tech stack
-- **Follow up with CI setup** — Run `ci` to configure CI/CD pipeline
+- **Run only once per repository**: Framework setup is a one-time operation
+- **Run after architecture is complete**: Framework aligns with tech stack
+- **Follow up with CI setup**: Run `ci` to configure CI/CD pipeline
 
 ## Next Steps
 
 After test framework setup:
 
-1. **Test Design** — Create test plans for system or epics
-2. **CI Configuration** — Set up automated test runs
-3. **Story Implementation** — Tests are ready for development
+1. **Test Design**: Create test plans for system or epics
+2. **CI Configuration**: Set up automated test runs
+3. **Story Implementation**: Tests are ready for development

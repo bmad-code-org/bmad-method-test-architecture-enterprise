@@ -27,8 +27,6 @@ Use `test-design` before implementation to define NFR thresholds, planned valida
 
 ## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - NFRs defined in PRD, requirements doc, architecture, or `test-design`
 - Evidence sources available or explicitly missing (test results, security scans, performance metrics, logs, dashboards, CI reports)
 
@@ -36,15 +34,13 @@ Use `test-design` before implementation to define NFR thresholds, planned valida
 
 ## Steps
 
-### 1. Load the TEA Agent or Skill
+### 1. Run the NFR Evidence Audit Workflow
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-nfr` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-testarch-nfr` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `nfr-assess` or `NR`
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-nfr`
+- **Codex:** `$bmad-testarch-nfr`
+- **Inside a `/bmad-tea` chat:** `NR`
 
-```bash
-/bmad-testarch-nfr
-```
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
 ### 2. Specify NFR Categories
 
@@ -136,18 +132,18 @@ TEA will ask where to find evidence for each requirement.
 
 **Evidence Sources:**
 
-| Category        | Evidence Type         | Location                           |
-| --------------- | --------------------- | ---------------------------------- |
-| Security        | Security scan reports | `/reports/security-scan.pdf`       |
-| Security        | Vulnerability scan    | `npm audit`, `snyk test` results   |
-| Security        | Auth test results     | Test reports showing auth coverage |
-| Performance     | Load test results     | `/reports/k6-load-test.json`       |
-| Performance     | APM data              | Datadog, New Relic dashboards      |
-| Performance     | Lighthouse scores     | `/reports/lighthouse.json`         |
-| Reliability     | Error rate metrics    | Production monitoring dashboards   |
-| Reliability     | Uptime data           | StatusPage, PagerDuty logs         |
-| Maintainability | Coverage reports      | `/reports/coverage/index.html`     |
-| Maintainability | Code quality          | SonarQube dashboard                |
+| Category        | Evidence Type         | Location                                     |
+| --------------- | --------------------- | -------------------------------------------- |
+| Security        | Security scan reports | `/reports/security-scan.pdf`                 |
+| Security        | Vulnerability scan    | `npm audit` output, or your scanner's report |
+| Security        | Auth test results     | Test reports showing auth coverage           |
+| Performance     | Load test results     | `/reports/k6-load-test.json`                 |
+| Performance     | APM data              | Datadog, New Relic dashboards                |
+| Performance     | Lighthouse scores     | `/reports/lighthouse.json`                   |
+| Reliability     | Error rate metrics    | Production monitoring dashboards             |
+| Reliability     | Uptime data           | StatusPage, PagerDuty logs                   |
+| Maintainability | Coverage reports      | `/reports/coverage/index.html`               |
+| Maintainability | Code quality          | SonarQube dashboard                          |
 
 **Example Response:**
 
@@ -212,7 +208,6 @@ Performance metrics below target (P99 latency, throughput). Mitigation plan in p
 $ npm audit
 found 0 vulnerabilities
 ```
-````
 
 **Authentication Tests:**
 
@@ -415,7 +410,7 @@ Lines        : 85.2% ( 1205/1414 )
    - Validate throughput > 1000 rps
 
 3. **Update this audit** (TEA, 1 hour)
-   - Re-run `*nfr-assess` with new evidence
+   - Re-run `nfr-assess` with new evidence
    - Confirm PASS status
 
 ### Waiver Option (If Business Approves)
@@ -465,29 +460,32 @@ If business decides to deploy with current performance:
 - Daily: Check performance dashboards
 - Weekly: Review alert trends
 - Monthly: Re-audit NFR evidence
-
-```
+````
 
 ## What You Get
 
 ### NFR Evidence Audit Report
+
 - Category-by-category analysis (Security, Performance, Reliability, Maintainability)
 - Requirements status (target vs actual)
 - Evidence for each requirement
 - Issues identified with root cause analysis
 
 ### Gate Decision
+
 - **PASS** ✅ - All NFRs met, ready to release
 - **CONCERNS** ⚠️ - Some NFRs not met, mitigation plan exists
 - **FAIL** ❌ - Critical NFRs not met, blocks release
 - **WAIVED** ⏭️ - Business-approved waiver with documented risk
 
 ### Mitigation Plans
+
 - Specific actions to address concerns
 - Owners and deadlines
 - Re-audit criteria
 
 ### Monitoring Plan
+
 - Post-release monitoring strategy
 - Alert thresholds
 - Review cadence
@@ -498,6 +496,7 @@ If business decides to deploy with current performance:
 
 **Phase 2 (Enterprise):**
 Define NFR requirements in the PRD so `test-design` can:
+
 - Identify NFR requirements early
 - Plan for performance testing
 - Budget for security audits
@@ -514,52 +513,43 @@ Run `nfr-assess` before release to audit the evidence.
 If you don't know the NFR target:
 
 **Don't:**
-```
 
+```text
 API response time should probably be under 500ms
-
 ```
 
 **Do:**
-```
 
+```text
 Mark as CONCERNS - Request threshold from stakeholders
 "What is the acceptable API response time?"
-
-````
+```
 
 ### Collect Evidence Beforehand
 
-Before running `*nfr-assess`, gather:
+Gather evidence before you run `nfr-assess`. TEA's `framework` workflow generates no security, load, or coverage scripts, so the list below describes evidence shapes to locate rather than commands to paste.
 
-**Security:**
-```bash
-npm audit                    # Vulnerability scan
-snyk test                    # Alternative security scan
-npm run test:security        # Security test suite
-````
-
-**Performance:**
+Two commands need no setup in an npm project:
 
 ```bash
-npm run test:load            # k6 or artillery load tests
-npm run test:lighthouse      # Frontend performance
-npm run test:db-performance  # Database query analysis
+npm audit      # dependency vulnerabilities
+npm outdated   # dependency freshness
 ```
 
-**Reliability:**
+Everything else depends on your stack:
 
-- Production error rate (last 30 days)
-- Uptime data (StatusPage, PagerDuty)
-- Incident response times
+| Category        | Evidence shape                      | Typical source                                        |
+| --------------- | ----------------------------------- | ----------------------------------------------------- |
+| Security        | Vulnerability scan output           | `npm audit`, or the scanner your org already runs     |
+| Security        | Auth and authorization test results | Your existing suite, filtered to auth specs           |
+| Performance     | Load test report                    | k6, Artillery, or JMeter run against a staging deploy |
+| Performance     | Frontend performance scores         | A Lighthouse run, manual or in CI                     |
+| Performance     | Database query timings              | Slow-query log, `EXPLAIN ANALYZE`, or APM traces      |
+| Reliability     | Error rate, uptime, incident MTTR   | Production monitoring over the last 30 days           |
+| Maintainability | Coverage report                     | Your test runner's coverage flag                      |
+| Maintainability | Lint or code-quality report         | Your linter, or SonarQube                             |
 
-**Maintainability:**
-
-```bash
-npm run test:coverage        # Test coverage report
-npm run lint                 # Code quality check
-npm outdated                 # Dependency freshness
-```
+Give TEA the path to each artifact. For anything you cannot produce, say so: TEA marks that category CONCERNS and records what is missing rather than guessing a value.
 
 ### Use Real Data, Not Assumptions
 
@@ -729,9 +719,5 @@ Assess categories incrementally, not all at once.
 
 ## Reference
 
-- [Command: \*nfr-assess](/docs/reference/commands.md#nfr-assess) - Full command reference
+- [Command: nfr-assess](/docs/reference/commands.md#nfr-assess) - Full command reference
 - [TEA Configuration](/docs/reference/configuration.md) - Enterprise config options
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

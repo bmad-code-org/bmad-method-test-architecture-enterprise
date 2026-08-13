@@ -5,128 +5,26 @@ description: Understanding how TEA uses tea-index.csv for context engineering an
 
 # Knowledge Base System Explained
 
-TEA's knowledge base system is how context engineering works - automatically loading domain-specific standards into AI context so tests are consistently high-quality regardless of prompt variation.
+TEA's knowledge base is how context engineering works in practice: domain standards load into AI context automatically, so test quality stops depending on how well the prompt was written.
 
-## Overview
+Without it, quality is a function of prompt engineering skill. "Write tests for login" produces hard waits one session and network-first patterns the next, and two teams on the same codebase drift into two pattern sets with no single source of truth. With it, `atdd` loads the same fragments every run and generates tests that look like the same expert wrote them. [Testing as Engineering](/docs/explanation/testing-as-engineering.md) covers why this matters; this page covers the mechanism.
 
-**The Problem:** AI without context produces inconsistent results.
+## The `tea-index.csv` Manifest
 
-**Traditional approach:**
-
-```
-User: "Write tests for login"
-AI: [Generates tests with random quality]
-- Sometimes uses hard waits
-- Sometimes uses good patterns
-- Inconsistent across sessions
-- Quality depends on prompt
-```
-
-**TEA with knowledge base:**
-
-```
-User: "Write tests for login"
-TEA: [Loads test-quality.md, network-first.md, auth-session.md]
-TEA: [Generates tests following established patterns]
-- Always uses network-first patterns
-- Always uses proper fixtures
-- Consistent across all sessions
-- Quality independent of prompt
-```
-
-**Result:** Systematic quality, not random chance.
-
-## The Problem
-
-### Prompt-Driven Testing = Inconsistency
-
-**Session 1:**
-
-```
-User: "Write tests for profile editing"
-
-AI: [No context loaded]
-// Generates test with hard waits
-await page.waitForTimeout(3000);
-```
-
-**Session 2:**
-
-```
-User: "Write comprehensive tests for profile editing with best practices"
-
-AI: [Still no systematic context]
-// Generates test with some improvements, but still issues
-await page.waitForSelector('.success', { timeout: 10000 });
-```
-
-**Session 3:**
-
-```
-User: "Write tests using network-first patterns and proper fixtures"
-
-AI: [Better prompt, but still reinventing patterns]
-// Generates test with network-first, but inconsistent with other tests
-```
-
-**Problem:** Quality depends on prompt engineering skill, no consistency.
-
-### Knowledge Drift
-
-Without a knowledge base:
-
-- Team A uses pattern X
-- Team B uses pattern Y
-- Both work, but inconsistent
-- No single source of truth
-- Patterns drift over time
-
-## The Solution: tea-index.csv Manifest
-
-### How It Works
-
-**1. Manifest Defines Fragments**
-
-`src/agents/bmad-tea/resources/tea-index.csv`:
+`src/agents/bmad-tea/resources/tea-index.csv` is the manifest. One row per fragment:
 
 ```csv
 id,name,description,tags,tier,fragment_file
-test-quality,Test Quality,Execution limits and isolation rules,"quality,standards",knowledge/test-quality.md
-network-first,Network-First Safeguards,Intercept-before-navigate workflow,"network,stability",knowledge/network-first.md
-fixture-architecture,Fixture Architecture,Composable fixture patterns,"fixtures,architecture",knowledge/fixture-architecture.md
+fixture-architecture,Fixture Architecture,"Composable fixture patterns (pure function → fixture → merge) and reuse rules","fixtures,architecture,playwright,cypress",core,knowledge/fixture-architecture.md
+network-first,Network-First Safeguards,"Intercept-before-navigate workflow, HAR capture, deterministic waits, edge mocking","network,stability,playwright,cypress,ui",core,knowledge/network-first.md
+test-quality,Test Quality Definition of Done,"Execution limits, isolation rules, green criteria","quality,definition-of-done,tests",core,knowledge/test-quality.md
 ```
 
-The agent-level `resources/` directory is the reference catalog for Murat. Workflow skills also carry their own `resources/tea-index.csv` and `resources/knowledge/` directories. That duplication is intentional: workflow step frontmatter resolves `knowledgeIndex: './resources/tea-index.csv'` from `{skill-root}`, keeping each workflow skill modular and self-contained.
+`tier` is one of `core`, `extended`, or `specialized`. The 54 fragments split 20 / 19 / 15 across those tiers.
 
-**2. Workflow Loads Relevant Fragments**
+The agent-level `resources/` directory is the reference catalog. Workflow skills also carry their own `resources/tea-index.csv` and `resources/knowledge/` directories. That duplication is intentional: workflow step frontmatter resolves `knowledgeIndex: './resources/tea-index.csv'` from `{skill-root}`, which keeps each workflow skill modular and self-contained.
 
-When user runs `atdd`:
-
-```
-TEA reads tea-index.csv
-Identifies fragments needed for ATDD:
-- test-quality.md (quality standards)
-- network-first.md (avoid flakiness)
-- component-tdd.md (TDD patterns)
-- fixture-architecture.md (reusable fixtures)
-- data-factories.md (test data)
-
-Loads only these 5 fragments (not all 42)
-Generates tests following these patterns
-```
-
-**3. Consistent Output**
-
-Every time `atdd` runs:
-
-- Same fragments loaded
-- Same patterns applied
-- Same quality standards
-- Consistent test structure
-
-**Result:** Tests look like they were written by the same expert, every time.
-
-### Knowledge Base Loading Diagram
+A workflow reads the manifest, selects the fragments its task needs, and loads only those. Running `atdd` on an authentication feature pulls `test-quality.md`, `auth-session.md`, `network-first.md`, `data-factories.md`, and `email-auth.md` if the auth is email-based, and skips the other 49 including `contract-testing.md`, `feature-flags.md`, and `file-utils.md`. Focused context produces better results at lower token cost, and it produces the _same_ results next session.
 
 ```mermaid
 %%{init: {'theme':'base', 'themeVariables': { 'fontSize':'14px'}}}%%
@@ -144,7 +42,7 @@ flowchart TD
 
     Identify -.->|Skip| S1[✗ contract-testing.md]
     Identify -.->|Skip| S2[✗ burn-in.md]
-    Identify -.->|Skip| S3[+ 26 other fragments]
+    Identify -.->|Skip| S3[+ 47 other fragments]
 
     L1 --> Context[AI Context<br/>5 fragments loaded]
     L2 --> Context
@@ -169,377 +67,64 @@ flowchart TD
     style Out fill:#4caf50,stroke:#1b5e20,stroke-width:3px,color:#fff
 ```
 
-## Fragment Structure
+| Workflow      | Fragments loaded                                              | Purpose                  |
+| ------------- | ------------------------------------------------------------- | ------------------------ |
+| `framework`   | fixture-architecture, playwright-config, fixtures-composition | Infrastructure patterns  |
+| `test-design` | test-quality, test-priorities-matrix, risk-governance         | Planning standards       |
+| `atdd`        | test-quality, component-tdd, network-first, data-factories    | TDD patterns             |
+| `automate`    | test-quality, test-levels-framework, selector-resilience      | Comprehensive generation |
+| `test-review` | All quality, resilience, and debugging fragments              | Full audit patterns      |
+| `ci`          | ci-burn-in, burn-in, selective-testing                        | CI/CD optimization       |
 
-For a deeper look at the actual fragments, see [Fragment Categories](/reference/knowledge-base/#fragment-categories).
+## Anatomy of a Fragment
 
-### Anatomy of a Fragment
+Every fragment follows the same shape:
 
-Each fragment follows this structure:
+- **Principle.** One sentence: what is this pattern?
+- **Rationale.** Why this instead of the alternatives, what problems it solves.
+- **Pattern examples.** Runnable code, basic through advanced, each with a short explanation.
+- **Anti-patterns.** The bad version, what breaks, and why.
+- **Related patterns.** Links to neighbouring fragments.
 
-````markdown
-# Fragment Name
+## What the Fragments Buy You
 
-## Principle
-
-[One sentence - what is this pattern?]
-
-## Rationale
-
-[Why use this instead of alternatives?]
-Why this pattern exists
-Problems it solves
-Benefits it provides
-
-## Pattern Examples
-
-### Example 1: Basic Usage
-
-```text
-[Runnable code example]
-```
-````
-
-[Explanation of example]
-
-### Example 2: Advanced Pattern
-
-```text
-[More complex example]
-```
-
-[Explanation]
-
-## Anti-Patterns
-
-### Don't Do This
-
-```text
-[Bad code example]
-```
-
-[Why it's bad]
-[What breaks]
-
-## Related Patterns
-
-- [Link to related fragment]
-
-````
-
-<!-- markdownlint-disable MD024 -->
-### Example: test-quality.md Fragment
-
-```markdown
-# Test Quality
-
-## Principle
-Tests must be deterministic, isolated, explicit, focused, and fast.
-
-## Rationale
-Tests that fail randomly, depend on each other, or take too long lose team trust.
-[... detailed explanation ...]
-
-## Pattern Examples
-
-### Example 1: Deterministic Test
-```typescript
-// ✅ Wait for actual response, not timeout
-const promise = page.waitForResponse(matcher);
-await page.click('button');
-await promise;
-````
-
-### Example 2: Isolated Test
+**Consistent generation.** Without the knowledge base, `atdd` guesses from general model knowledge, so one session emits a hard wait inside an API test and the next emits a cleaner version that still does not match the first. With it, both sessions load `test-quality.md`, `network-first.md`, and `api-request.md`, and both emit:
 
 ```typescript
-// ✅ Self-cleaning test
-test('test', async ({ page }) => {
-  const userId = await createTestUser();
-  // ... test logic ...
-  await deleteTestUser(userId); // Cleanup
-});
-```
-
-## Anti-Patterns
-
-### Hard Waits
-
-```typescript
-// ❌ Non-deterministic
-await page.waitForTimeout(3000);
-```
-
-[Why this causes flakiness]
-
-```
-
-**Total:** 24.5 KB, 12 code examples
-<!-- markdownlint-enable MD024 -->
-
-## How TEA Uses the Knowledge Base
-
-### Workflow-Specific Loading
-
-**Different workflows load different fragments:**
-
-| Workflow | Fragments Loaded | Purpose |
-|----------|-----------------|---------|
-| `framework` | fixture-architecture, playwright-config, fixtures-composition | Infrastructure patterns |
-| `test-design` | test-quality, test-priorities-matrix, risk-governance | Planning standards |
-| `atdd` | test-quality, component-tdd, network-first, data-factories | TDD patterns |
-| `automate` | test-quality, test-levels-framework, selector-resilience | Comprehensive generation |
-| `test-review` | All quality/resilience/debugging fragments | Full audit patterns |
-| `ci` | ci-burn-in, burn-in, selective-testing | CI/CD optimization |
-
-**Benefit:** Only load what's needed (focused context, no bloat).
-
-### Dynamic Fragment Selection
-
-TEA doesn't load all 42 fragments at once:
-
-```
-
-User runs: atdd for authentication feature
-
-TEA analyzes context:
-
-- Feature type: Authentication
-- Relevant fragments:
-  - test-quality.md (always loaded)
-  - auth-session.md (auth patterns)
-  - network-first.md (avoid flakiness)
-  - email-auth.md (if email-based auth)
-  - data-factories.md (test users)
-
-Skips:
-
-- contract-testing.md (not relevant)
-- feature-flags.md (not relevant)
-- file-utils.md (not relevant)
-
-Result: 5 relevant fragments loaded, 37 skipped
-
-```
-
-**Benefit:** Focused context = better results, lower token usage.
-
-## Context Engineering in Practice
-
-### Example: Consistent Test Generation
-
-**Without Knowledge Base (Vanilla Playwright, Random Quality):**
-```
-
-Session 1: User runs atdd
-AI: [Guesses patterns from general knowledge]
-
-Generated:
-test('api test', async ({ request }) => {
-const response = await request.get('/api/users');
-await page.waitForTimeout(2000); // Hard wait
-const users = await response.json();
-// Random quality
-});
-
-Session 2: User runs atdd (different day)
-AI: [Different random patterns]
-
-Generated:
-test('api test', async ({ request }) => {
-const response = await request.get('/api/users');
-const users = await response.json();
-// Better but inconsistent
-});
-
-Result: Inconsistent quality, random patterns
-
-```
-
-**With Knowledge Base (TEA + Playwright Utils):**
-```
-
-Session 1: User runs atdd
-TEA: [Loads test-quality.md, network-first.md, api-request.md from tea-index.csv]
-
-Generated:
 import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 
 test('should fetch users', async ({ apiRequest }) => {
-const { status, body } = await apiRequest({
-method: 'GET',
-path: '/api/users'
-}).validateSchema(UsersSchema); // Chained validation
+  const { status, body } = await apiRequest({
+    method: 'GET',
+    path: '/api/users',
+  }).validateSchema(UsersSchema); // chained validation
 
-expect(status).toBe(200);
-expect(body).toBeInstanceOf(Array);
+  expect(status).toBe(200);
+  expect(body).toBeInstanceOf(Array);
 });
-
-Session 2: User runs atdd (different day)
-TEA: [Loads same fragments from tea-index.csv]
-
-Generated: Identical pattern, same quality
-
-Result: Systematic quality, established patterns (ALWAYS uses apiRequest utility when playwright-utils enabled)
-
 ```
 
-**Key Difference:**
-- **Without KB:** Random patterns, inconsistent APIs
-- **With KB:** Always uses `apiRequest` utility, always validates schemas, always returns `{ status, body }`
+Always `apiRequest` when playwright-utils is enabled, always schema-validated, always `{ status, body }`.
 
-### Example: Test Review Consistency
-
-**Without Knowledge Base:**
-```
-
-test-review session 1:
-"This test looks okay" [50 issues missed]
-
-test-review session 2:
-"This test has some issues" [Different issues flagged]
-
-Result: Inconsistent feedback
-
-```
-
-**With Knowledge Base:**
-```
-
-test-review session 1:
-[Loads all quality fragments]
-Flags: 12 hard waits, 5 conditionals (based on test-quality.md)
-
-test-review session 2:
-[Loads same fragments]
-Flags: Same issues with same explanations
-
-Result: Consistent, reliable feedback
-
-````
-
-## Maintaining the Knowledge Base
-
-### When to Add a Fragment
-
-**Good reasons:**
-- Pattern is used across multiple workflows
-- Standard is non-obvious (needs documentation)
-- Team asks "how should we handle X?" repeatedly
-- New tool integration (e.g., new testing library)
-
-**Bad reasons:**
-- One-off pattern (document in test file instead)
-- Obvious pattern (everyone knows this)
-- Experimental (not proven yet)
-
-### Fragment Quality Standards
-
-**Good fragment:**
-- Principle stated in one sentence
-- Rationale explains why clearly
-- 3+ pattern examples with code
-- Anti-patterns shown (what not to do)
-- Self-contained (minimal dependencies)
-
-**Example size:** 10-30 KB optimal
-
-### Updating Existing Fragments
-
-**When to update:**
-- Pattern evolved (better approach discovered)
-- Tool updated (new Playwright API)
-- Team feedback (pattern unclear)
-- Bug in example code
-
-**How to update:**
-1. Edit fragment markdown file
-2. Update examples
-3. Test with affected workflows
-4. Ensure no breaking changes
-
-**No need to update tea-index.csv** unless description/tags change.
-
-## Benefits of Knowledge Base System
-
-### 1. Consistency
-
-**Before:** Test quality varies by who wrote it
-**After:** All tests follow same patterns (TEA-generated or reviewed)
-
-### 2. Onboarding
-
-**Before:** New team member reads 20 documents, asks 50 questions
-**After:** New team member runs `atdd`, sees patterns in generated code, learns by example
-
-### 3. Quality Gates
-
-**Before:** "Is this test good?" → subjective opinion
-**After:** `test-review` → objective score against knowledge base
-
-### 4. Pattern Evolution
-
-**Before:** Update tests manually across 100 files
-**After:** Update fragment once, all new tests use new pattern
-
-### 5. Cross-Project Reuse
-
-**Before:** Reinvent patterns for each project
-**After:** Same fragments across all BMad projects (consistency at scale)
-
-## Comparison: With vs Without Knowledge Base
-
-### Scenario: Testing Async Background Job
-
-**Without Knowledge Base:**
-
-Developer 1:
-```typescript
-// Uses hard wait
-await page.click('button');
-await page.waitForTimeout(10000);  // Hope job finishes
-````
-
-Developer 2:
+**One correct answer instead of three plausible ones.** Testing an async background job, three developers with no shared reference produce a hard wait, a hand-rolled polling loop, and a `waitForSelector` with a 30-second ceiling. All three are suboptimal in different ways. The `recurse.md` fragment gives everyone the same one:
 
 ```typescript
-// Uses polling
-await page.click('button');
-for (let i = 0; i < 10; i++) {
-  const status = await page.locator('.status').textContent();
-  if (status === 'complete') break;
-  await page.waitForTimeout(1000);
-}
-```
+import { mergeTests } from '@playwright/test';
+import { test as apiRequestTest } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseTest } from '@seontechnologies/playwright-utils/recurse/fixtures';
 
-Developer 3:
-
-```typescript
-// Uses waitForSelector
-await page.click('button');
-await page.waitForSelector('.success', { timeout: 30000 });
-```
-
-**Result:** 3 different patterns, all suboptimal.
-
-**With Knowledge Base (recurse.md fragment):**
-
-All developers:
-
-```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+const test = mergeTests(apiRequestTest, recurseTest);
 
 test('job completion', async ({ apiRequest, recurse }) => {
-  // Start async job
   const { body: job } = await apiRequest({
     method: 'POST',
     path: '/api/jobs',
   });
 
-  // Poll until complete (correct API: command, predicate, options)
+  // recurse(command, predicate, options)
   const result = await recurse(
     () => apiRequest({ method: 'GET', path: `/api/jobs/${job.id}` }),
-    (response) => response.body.status === 'completed', // response.body from apiRequest
+    (response) => response.body.status === 'completed', // response.body comes from apiRequest
     {
       timeout: 30000,
       interval: 2000,
@@ -551,53 +136,23 @@ test('job completion', async ({ apiRequest, recurse }) => {
 });
 ```
 
-**Result:** Consistent pattern using correct playwright-utils API (command, predicate, options).
+**Objective review.** `test-review` scores against the fragments rather than against an opinion, so the same suite gets the same findings with the same explanations on every run.
 
-## Technical Implementation
+**Cheap evolution and onboarding.** A pattern change is one fragment edit that every subsequent generation picks up, instead of a manual sweep across a hundred test files. A new team member runs `atdd` and reads the generated code rather than reading twenty documents.
 
-For details on the knowledge base index, see:
+## Maintaining the Knowledge Base
 
-- [Knowledge Base Index](/docs/reference/knowledge-base.md)
-- [TEA Configuration](/docs/reference/configuration.md)
+**Add a fragment when** the pattern spans multiple workflows, the standard is non-obvious, the same question keeps getting asked, or you are integrating a new tool. **Do not add one** for a one-off pattern (document it in the test file), something everyone already knows, or something still experimental.
 
-## Related Concepts
+**A good fragment** states its principle in one sentence, explains the rationale clearly, carries three or more code examples, shows the anti-patterns, and stands alone with minimal dependencies. Optimal size is 10-30 KB.
 
-**Core TEA Concepts:**
+**Update a fragment when** the pattern evolves, the tool ships a new API, feedback says it is unclear, or an example has a bug. Edit the markdown, update the examples, test against the affected workflows, and check nothing downstream breaks. `tea-index.csv` only needs touching when the description or tags change.
 
-- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - Standards in knowledge base
-- [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - Risk patterns in knowledge base
-- [Engagement Models](/docs/explanation/engagement-models.md) - Knowledge base across all models
+## Related
 
-**Technical Patterns:**
-
-- [Fixture Architecture](/docs/explanation/fixture-architecture.md) - Fixture patterns in knowledge base
-- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - Network patterns in knowledge base
-
-**Overview:**
-
-- [TEA Overview](/docs/explanation/tea-overview.md) - Knowledge base in workflows
-- [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - **Foundation: Context engineering philosophy** (why knowledge base solves AI test problems)
-
-## Practical Guides
-
-**All Workflow Guides Use Knowledge Base:**
-
-- [How to Run Test Design](/docs/how-to/workflows/run-test-design.md)
-- [How to Run ATDD](/docs/how-to/workflows/run-atdd.md)
-- [How to Run Automate](/docs/how-to/workflows/run-automate.md)
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md)
-
-**Integration:**
-
-- [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md) - PW-Utils in knowledge base
-
-## Reference
-
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - Complete fragment index
-- [TEA Command Reference](/docs/reference/commands.md) - Which workflows load which fragments
-- [TEA Configuration](/docs/reference/configuration.md) - Config affects fragment loading
-- [Glossary](/docs/glossary/index.md#test-architect-tea-concepts) - Context engineering, knowledge fragment terms
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)
+- [Knowledge Base Index](/docs/reference/knowledge-base.md) - all 54 fragments, categorized
+- [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - the context engineering argument
+- [Test Quality Standards](/docs/explanation/test-quality-standards.md) - what `test-quality.md` encodes
+- [Network-First Patterns](/docs/explanation/network-first-patterns.md) - what `network-first.md` encodes
+- [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md) - adding fragments for your own stack
+- [TEA Configuration](/docs/reference/configuration.md) - config keys that affect fragment loading

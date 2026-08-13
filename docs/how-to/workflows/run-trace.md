@@ -27,23 +27,19 @@ The workflow resolves the best available coverage oracle automatically: formal r
 
 ## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - Formal requirements, specs, or an analyzable source tree available
 - Tests implemented
 - For brownfield: Existing codebase with tests
 
 ## Steps
 
-### 1. Load the TEA Agent or Skill
+### 1. Run the Trace Workflow
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-trace` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-testarch-trace` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `trace` or `TR`
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-trace`
+- **Codex:** `$bmad-testarch-trace`
+- **Inside a `/bmad-tea` chat:** `TR`
 
-```bash
-/bmad-testarch-trace
-```
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
 ### 2. Specify Phase
 
@@ -392,8 +388,6 @@ After reviewing traceability:
 2. **Run `test-review`** - Ensure new tests meet quality standards
 3. **Run Phase 2** - Make gate decision after gaps addressed
 
-```
-
 ---
 
 ## Phase 2: Quality Gate Decision
@@ -401,6 +395,7 @@ After reviewing traceability:
 After Phase 1 coverage analysis is complete, run Phase 2 for the gate decision.
 
 **Prerequisites:**
+
 - Phase 1 traceability matrix complete
 - Test execution results available (must have test results)
 
@@ -408,10 +403,10 @@ After Phase 1 coverage analysis is complete, run Phase 2 for the gate decision.
 
 ### 7. Run Phase 2
 
-```
+Invoke the workflow again with the same command as step 1:
 
-trace
-
+```text
+/bmad-testarch-trace
 ```
 
 Select "Phase 2: Quality Gate Decision"
@@ -421,21 +416,22 @@ Select "Phase 2: Quality Gate Decision"
 TEA will ask for:
 
 **Gate Type:**
+
 - Story gate (small release)
 - Epic gate (larger release)
 - Release gate (production deployment)
 - Hotfix gate (emergency fix)
 
 **Decision Mode:**
+
 - **Deterministic** - Rule-based (coverage %, quality scores)
 - **Manual** - Team decision with TEA guidance
 
 **Example:**
-```
 
+```text
 Gate type: Epic gate
 Decision mode: Deterministic
-
 ```
 
 ### 9. Provide Supporting Evidence
@@ -443,25 +439,22 @@ Decision mode: Deterministic
 TEA will request:
 
 **Phase 1 Results:**
-```
 
+```text
 traceability-matrix.md (from Phase 1)
-
 ```
 
 **Test Quality (Optional):**
-```
 
+```text
 test-review.md (from test-review)
-
 ```
 
 **NFR Evidence Audit (Optional):**
-```
 
+```text
 nfr-assessment.md (from nfr-assess)
-
-````
+```
 
 ### 10. Review Gate Decision
 
@@ -484,6 +477,7 @@ TEA makes evidence-based gate decision and writes to separate file.
 **Verdict:** Ready to release
 
 **Evidence:**
+
 - P0 coverage: 100% (5/5 requirements)
 - P1 coverage: 100% (6/6 requirements)
 - P2 coverage: 33% (1/3 requirements) - acceptable
@@ -492,31 +486,33 @@ TEA makes evidence-based gate decision and writes to separate file.
 
 ## Coverage Analysis
 
-| Priority | Required Coverage | Actual Coverage | Status                |
-| -------- | ----------------- | --------------- | --------------------- |
+| Priority | Required Coverage | Actual Coverage | Status                 |
+| -------- | ----------------- | --------------- | ---------------------- |
 | **P0**   | 100%              | 100%            | ✅ PASS                |
 | **P1**   | 90%               | 100%            | ✅ PASS                |
 | **P2**   | 50%               | 33%             | ⚠️ Below (acceptable)  |
 | **P3**   | 20%               | 0%              | ✅ PASS (low priority) |
 
 **Rationale:**
+
 - All critical path (P0) requirements fully tested
 - All high-value (P1) requirements fully tested
 - P2 gap (profile export) is low risk and deferred to next release
 
 ## Quality Metrics
 
-| Metric             | Threshold | Actual | Status |
-| ------------------ | --------- | ------ | ------ |
-| P0/P1 Coverage     | P0=100%, P1>=90% | 100% / 100% | ✅      |
-| Test Quality Score | >80       | 84     | ✅      |
-| NFR Status         | PASS      | PASS   | ✅      |
+| Metric             | Threshold        | Actual      | Status |
+| ------------------ | ---------------- | ----------- | ------ |
+| P0/P1 Coverage     | P0=100%, P1>=90% | 100% / 100% | ✅     |
+| Test Quality Score | >80              | 84          | ✅     |
+| NFR Status         | PASS             | PASS        | ✅     |
 
 ## Risks and Mitigations
 
 ### Accepted Risks
 
 **Risk 1: Profile export not tested (P2)**
+
 - **Impact:** Medium (users can't export profile)
 - **Mitigation:** Feature flag disabled by default
 - **Plan:** Add tests in v1.3 release (February)
@@ -531,6 +527,7 @@ TEA makes evidence-based gate decision and writes to separate file.
 ## Next Steps
 
 ### Deployment
+
 1. Merge to main branch
 2. Deploy to staging
 3. Run smoke tests in staging
@@ -538,14 +535,16 @@ TEA makes evidence-based gate decision and writes to separate file.
 5. Monitor for 24 hours
 
 ### Monitoring
+
 - Set alerts for profile endpoint (P99 > 200ms)
 - Track error rates (target: <0.1%)
 - Monitor profile export feature flag usage
 
 ### Future Work
+
 - Add profile export tests (v1.3)
 - Expand P2 coverage to 50%
-````
+```
 
 ### Gate Decision Rules
 
@@ -757,7 +756,7 @@ Track improvement over time:
 | 2026-01-01 | Baseline | 45%            | -             | Starting point |
 | 2026-01-08 | Epic 1   | 78%            | 72            | Improving      |
 | 2026-01-15 | Epic 2   | 92%            | 84            | Near target    |
-| 2026-01-20 | Epic 3   | 100%           | 88            | Ready!         |
+| 2026-01-20 | Epic 3   | 100%           | 88            | Ready          |
 ```
 
 ### Set Coverage Targets by Priority
@@ -970,9 +969,5 @@ Result: PARTIAL coverage (3/4 criteria)
 
 ## Reference
 
-- [Command: \*trace](/docs/reference/commands.md#trace) - Full command reference
+- [Command: trace](/docs/reference/commands.md#trace) - Full command reference
 - [TEA Configuration](/docs/reference/configuration.md) - Config options
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

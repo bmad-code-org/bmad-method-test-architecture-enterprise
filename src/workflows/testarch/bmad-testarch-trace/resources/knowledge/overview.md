@@ -50,7 +50,7 @@ npm install -D @seontechnologies/playwright-utils
 | **intercept-network-call** | Network spy/stub with auto JSON parsing                                       | UI only            |
 | **network-error-monitor**  | Automatic HTTP 4xx/5xx detection                                              | UI only            |
 
-**Note**: 6 of 9 utilities work without a browser. Only 3 are UI-specific (network-recorder, intercept-network-call, network-error-monitor).
+**Note**: 7 of 10 utilities work without a browser. Only 3 are UI-specific (network-recorder, intercept-network-call, network-error-monitor).
 
 ## Design Patterns
 
@@ -73,7 +73,7 @@ test('direct usage', async ({ request }) => {
 });
 
 // Fixture import (context injected automatically)
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 
 test('fixture usage', async ({ apiRequest }) => {
   const { status, body } = await apiRequest({
@@ -122,22 +122,24 @@ import { apiRequest, recurse, log } from '@seontechnologies/playwright-utils';
 ```typescript
 // playwright/support/merged-fixtures.ts
 import { mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
 import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
-import { test as authFixture } from '@seontechnologies/playwright-utils/auth-session/fixtures';
 import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
-import { test as logFixture } from '@seontechnologies/playwright-utils/log/fixtures';
+// Auth fixture built in your project (setAuthProvider + createAuthFixtures)
+import { test as authFixture } from './auth-fixture';
 
 // Merge all fixtures into one test object
-export const test = mergeTests(apiRequestFixture, authFixture, recurseFixture, logFixture);
+export const test = mergeTests(apiRequestFixture, authFixture, recurseFixture);
 
 export { expect } from '@playwright/test';
+export { log };
 ```
 
 ```typescript
 // In your tests
-import { test, expect } from '../support/merged-fixtures';
+import { test, expect, log } from '../support/merged-fixtures';
 
-test('all utilities available', async ({ apiRequest, authToken, recurse, log }) => {
+test('all utilities available', async ({ apiRequest, authToken, recurse }) => {
   await log.step('Making authenticated API request');
 
   const { body } = await apiRequest({
@@ -194,7 +196,8 @@ test('API test', async ({ apiRequest }) => {
 **3. Expand to network utilities** (for UI tests):
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
 
 test('UI with network control', async ({ page, interceptNetworkCall }) => {
   const usersCall = interceptNetworkCall({
@@ -229,7 +232,8 @@ Create merged-fixtures.ts and use across all tests.
 
 ```typescript
 import { apiRequest } from '@seontechnologies/playwright-utils';
-import { test } from '@seontechnologies/playwright-utils/auth-session/fixtures';
+// Auth fixture built in your project (setAuthProvider + createAuthFixtures)
+import { test } from './support/auth/auth-fixture';
 
 test('bad', async ({ request, authToken }) => {
   // Confusing - mixing direct (needs request) and fixture (has authToken)

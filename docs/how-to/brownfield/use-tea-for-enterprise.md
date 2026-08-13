@@ -17,31 +17,23 @@ Use TEA on enterprise projects with compliance, security, audit, and regulatory 
 
 ## Prerequisites
 
-- BMad Method installed (Enterprise track selected)
-- TEA agent available
+- BMad installed with the Enterprise track selected
 - Compliance requirements documented
 - Stakeholders identified (who approves gates)
 
+Every command below is a TEA workflow. On Codex, swap the leading `/` for `$`. Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
+
 ## Enterprise-Specific TEA Workflows
 
-### NFR Evidence Audit (`nfr-assess`)
+### NFR Evidence Audit (`/bmad-testarch-nfr`)
 
-**Purpose:** Audit implemented non-functional requirement evidence against defined thresholds.
+**Purpose:** Audit implemented non-functional requirement evidence against defined thresholds. Compliance mandates the thresholds, certification needs the audit trail, and performance SLAs are contractual, so this workflow carries more weight on enterprise projects than elsewhere.
 
 **When:** Release Gate, or earlier only when implementation evidence already exists. Use `test-design` in Phase 3 to plan NFR thresholds and evidence.
 
-**Why Enterprise Needs This:**
+**What you give it:**
 
-- Compliance mandates specific thresholds
-- Audit trails required for certification
-- Security requirements are non-negotiable
-- Performance SLAs are contractual
-
-**Example:**
-
-```
-nfr-assess
-
+```text
 Categories: Security, Performance, Reliability, Maintainability
 
 Security thresholds:
@@ -58,237 +50,86 @@ Evidence:
 
 **Output:** NFR evidence audit with PASS/CONCERNS/FAIL for each category.
 
-### Trace with Audit Evidence (`trace`)
+### Trace with Audit Evidence (`/bmad-testarch-trace`)
 
-**Purpose:** Requirements traceability with audit trail.
+**Purpose:** Requirements traceability with an audit trail. Auditors, certification bodies, and regulators all ask for requirements-to-test mapping in a form they can read.
 
 **When:** Phase 2 (baseline), Phase 4 (refresh), Release Gate
 
-**Why Enterprise Needs This:**
+**What you give Phase 1:**
 
-- Auditors require requirements-to-test mapping
-- Compliance certifications need traceability
-- Regulatory bodies want evidence
-
-**Example:**
-
-```
-trace Phase 1
-
+```text
 Requirements: PRD.md (with compliance requirements)
 Test location: tests/
-
-Output: traceability-matrix.md with:
-- Requirement-to-test mapping
-- Compliance requirement coverage
-- Gap prioritization
-- Recommendations
 ```
 
-**For Release Gate:**
+Phase 1 produces `traceability-matrix.md` with the requirement-to-test mapping, compliance requirement coverage, gap prioritization, and recommendations.
 
-```
-trace Phase 2
+Phase 2 produces `gate-decision-{gate_type}-{story_id}.md` with evidence references, approver signatures, a compliance checklist, and the decision rationale.
 
-Generate gate-decision-{gate_type}-{story_id}.md with:
-- Evidence references
-- Approver signatures
-- Compliance checklist
-- Decision rationale
-```
+### Test Design with Compliance Focus (`/bmad-testarch-test-design`)
 
-### Test Design with Compliance Focus (`test-design`)
-
-**Purpose:** Risk assessment with compliance and security focus.
+**Purpose:** Risk assessment with compliance and security focus. Security architecture has to line up, compliance requirements have to be testable, and performance requirements are contractual.
 
 **When:** Phase 3 (system-level), Phase 4 (epic-level)
 
-**Why Enterprise Needs This:**
+**What you give it:**
 
-- Security architecture alignment required
-- Compliance requirements must be testable
-- Performance requirements are contractual
-
-**Example:**
-
-```
-test-design
-
+```text
 Mode: System-level
 
 Focus areas:
 - Security architecture (authentication, authorization, encryption)
 - Performance requirements (SLA: P99 <200ms)
 - Compliance (HIPAA PHI handling, audit logging)
-
-Output: TWO documents (system-level):
-- `test-design-architecture.md`: Security gaps, compliance requirements, performance SLOs for Architecture team
-- `test-design-qa.md`: Security testing strategy, compliance test mapping, performance testing plan for QA team
-- Audit logging validation
 ```
+
+System-level mode produces two documents: `test-design-architecture.md` (security gaps, compliance requirements, performance SLOs, audit logging validation) for the Architecture team, and `test-design-qa.md` (security testing strategy, compliance test mapping, performance testing plan) for QA.
 
 ## Enterprise TEA Lifecycle
 
+`research`, `prd`, and `architecture` are BMM workflows that ship with the BMad Method module, not with TEA. The `/bmad-testarch-*` commands are TEA.
+
 ### Phase 1: Discovery (Optional but Recommended)
 
-**Research compliance requirements:**
-
-```
-Analyst: research
-
-Topics:
-- Industry compliance (SOC 2, HIPAA, GDPR)
-- Security standards (OWASP Top 10)
-- Performance benchmarks (industry P99)
-```
+Run the BMM `research` workflow on industry compliance (SOC 2, HIPAA, GDPR), security standards (OWASP Top 10), and performance benchmarks (industry P99).
 
 ### Phase 2: Planning (Required)
 
-**1. Define NFRs early:**
+**1. Define NFRs early.** Run the BMM `prd` workflow and include security requirements (authentication, encryption), performance SLAs (response time, throughput), reliability targets (uptime, RTO, RPO), and compliance mandates (data retention, audit logs).
 
-```
-PM: prd
+**2. Plan NFR evidence.** Run `/bmad-testarch-test-design` at system-level scope, focused on NFR thresholds, planned validation, and required evidence. It produces `test-design-architecture.md` and `test-design-qa.md` with thresholds and unknowns documented, planned evidence sources defined, and NFR coverage planned.
 
-Include in PRD:
-- Security requirements (authentication, encryption)
-- Performance SLAs (response time, throughput)
-- Reliability targets (uptime, RTO, RPO)
-- Compliance mandates (data retention, audit logs)
-```
-
-**2. Plan NFR evidence with test-design:**
-
-```
-TEA: test-design
-
-Scope: system-level
-Focus: NFR thresholds, planned validation, required evidence
-
-Output: test-design-architecture.md + test-design-qa.md
-- NFR thresholds and unknowns documented
-- Planned evidence sources defined
-- Test strategy and NFR coverage planned
-```
-
-**3. Baseline (brownfield only):**
-
-```
-TEA: trace Phase 1
-
-Establish baseline coverage before new work
-```
+**3. Baseline (brownfield only).** Run `/bmad-testarch-trace` Phase 1 to establish baseline coverage before new work.
 
 ### Phase 3: Solutioning (Required)
 
-**1. Architecture with testability review:**
+**1. Architecture with testability review.** Run the BMM `architecture` workflow, then `/bmad-testarch-test-design` at system-level scope, focused on security architecture testability, performance testing strategy, and compliance requirement mapping.
 
-```
-Architect: architecture
+**2. Test infrastructure.** Run `/bmad-testarch-framework`. Tell it you need separate test environments (dev, staging, prod-mirror), secure test data handling for PHI and PII, and audit logging in tests.
 
-TEA: test-design (system-level)
-
-Focus:
-- Security architecture testability
-- Performance testing strategy
-- Compliance requirement mapping
-```
-
-**2. Test infrastructure:**
-
-```
-TEA: framework
-
-Requirements:
-- Separate test environments (dev, staging, prod-mirror)
-- Secure test data handling (PHI, PII)
-- Audit logging in tests
-```
-
-**3. CI/CD with compliance:**
-
-```
-TEA: ci
-
-Requirements:
-- Secrets management (Vault, AWS Secrets Manager)
-- Test isolation (no cross-contamination)
-- Artifact retention (compliance audit trail)
-- Access controls (who can run production tests)
-```
+**3. CI/CD with compliance.** Run `/bmad-testarch-ci`. Tell it you need secrets management (Vault, AWS Secrets Manager), test isolation, artifact retention for the compliance audit trail, and access controls over who can run production tests.
 
 ### Phase 4: Implementation (Required)
 
-**Per epic:**
+Per epic:
 
-```
-1. TEA: test-design (epic-level)
-   Focus: Compliance, security, performance for THIS epic
-
-2. TEA: atdd (optional)
-   Generate tests including security/compliance scenarios
-
-3. DEV: Implement story
-
-4. TEA: automate
-   Expand coverage including compliance edge cases
-
-5. TEA: test-review
-   Audit quality (score >80 per epic, rises to >85 at release)
-
-6. TEA: trace Phase 1
-   Refresh coverage, verify compliance requirements tested
-```
+1. `/bmad-testarch-test-design` at epic level, focused on compliance, security, and performance for this epic
+2. `/bmad-testarch-atdd` (optional) to generate tests including security and compliance scenarios
+3. A developer implements the story
+4. `/bmad-testarch-automate` to expand coverage, including compliance edge cases
+5. `/bmad-testarch-test-review` to audit quality (target above 80 per epic, rising to above 85 at release)
+6. `/bmad-testarch-trace` Phase 1 to refresh coverage and verify compliance requirements are tested
 
 ### Release Gate (Required)
 
-**1. Final NFR Evidence Audit:**
+**1. Final NFR evidence audit.** Run `/bmad-testarch-nfr` across all categories that have evidence, using the latest performance tests and security scans.
 
-```
-TEA: nfr-assess
+**2. Final quality audit.** Run `/bmad-testarch-test-review` over the full suite, answering `tests/` for scope. Enterprise quality target: above 85.
 
-All categories with available evidence
-Latest evidence (performance tests, security scans)
-```
+**3. Gate decision.** Run `/bmad-testarch-trace` Phase 2. It needs `traceability-matrix.md` from Phase 1, `test-review.md` from the quality audit, `nfr-assessment.md` from the NFR evidence audit, and actual test execution results. Without execution results, Phase 2 is skipped. The decision is PASS, CONCERNS, FAIL, or WAIVED.
 
-**2. Final quality audit:**
-
-```
-TEA: test-review tests/
-
-Full suite review
-Quality target: >85 for enterprise
-```
-
-**3. Gate decision:**
-
-```
-TEA: trace Phase 2
-
-Evidence required:
-- traceability-matrix.md (from Phase 1)
-- test-review.md (from quality audit)
-- nfr-assessment.md (from NFR Evidence Audit)
-- Test execution results (must have test results available)
-
-Decision: PASS/CONCERNS/FAIL/WAIVED
-
-Archive all artifacts for compliance audit
-```
-
-**Note:** Phase 2 requires test execution results. If results aren't available, Phase 2 will be skipped.
-
-**4. Archive for audit:**
-
-```
-Archive:
-- All test results
-- Coverage reports
-- NFR evidence audits
-- Gate decisions
-- Approver signatures
-
-Retention: Per compliance requirements (7 years for HIPAA)
-```
+**4. Archive for audit.** Keep all test results, coverage reports, NFR evidence audits, gate decisions, and approver signatures for as long as your compliance regime requires (7 years for HIPAA).
 
 ## Enterprise-Specific Requirements
 
@@ -306,7 +147,7 @@ Retention: Per compliance requirements (7 years for HIPAA)
 
 **Storage:**
 
-```
+```text
 compliance/
 ├── 2026-Q1/
 │   ├── release-1.2.0/
@@ -405,16 +246,12 @@ compliance/
 
 ### Start with Security
 
-**Priority 1:** Security requirements
+Security failures block everything else in enterprise, so make security requirements Priority 1:
 
-```
 1. Document all security requirements
-2. Generate security tests with `atdd`
-3. Run security test suite
-4. Pass security audit BEFORE moving forward
-```
-
-**Why:** Security failures block everything in enterprise.
+2. Generate security tests with `/bmad-testarch-atdd`
+3. Run the security test suite
+4. Pass the security audit before moving forward
 
 **Example: RBAC Testing**
 
@@ -510,20 +347,9 @@ testWithAuth('admin can access admin endpoint', async ({ apiRequest, authToken, 
 - Evidence is referenced
 - Audit trail is automatic
 
-### Budget for Compliance Testing
+### Schedule Compliance Testing Early
 
-**Enterprise testing costs more:**
-
-- Penetration testing: $10k-50k
-- Security audits: $5k-20k
-- Performance testing tools: $500-5k/month
-- Compliance consulting: $200-500/hour
-
-**Plan accordingly:**
-
-- Budget in project cost
-- Schedule early (3+ months for SOC 2)
-- Don't skip (non-negotiable for compliance)
+Penetration testing, security audits, and certification all have lead times measured in months (3 or more for SOC 2). Book them at the start of the project, not at the release gate.
 
 ### Use External Validators
 
@@ -566,7 +392,3 @@ testWithAuth('admin can access admin endpoint', async ({ apiRequest, authToken, 
 - [TEA Configuration](/docs/reference/configuration.md) - Enterprise config options
 - [Knowledge Base Index](/docs/reference/knowledge-base.md) - Testing patterns
 - [Glossary](/docs/glossary/index.md#test-architect-tea-concepts) - TEA terminology
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

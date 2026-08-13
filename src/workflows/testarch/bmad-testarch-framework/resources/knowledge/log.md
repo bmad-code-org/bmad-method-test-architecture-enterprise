@@ -63,7 +63,7 @@ test('logging demo', async ({ page }) => {
   try {
     await page.click('#nonexistent');
   } catch (error) {
-    await log.error('Click failed', false); // false = no console output
+    await log.error('Click failed', { console: false }); // suppress console output
     throw error;
   }
 });
@@ -259,7 +259,13 @@ export const test = base.extend({
 **Implementation**:
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+// Auth fixture built in your project (see auth-session.md: setAuthProvider + createAuthFixtures)
+import { test as authFixture } from './support/auth/auth-fixture';
+
+const test = mergeTests(authFixture, apiRequestFixture);
 
 // Helper to create safe token preview
 function createTokenPreview(token: string): string {

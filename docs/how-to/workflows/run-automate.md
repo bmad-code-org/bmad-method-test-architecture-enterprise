@@ -5,7 +5,7 @@ description: Expand test automation coverage after implementation using TEA's au
 
 # How to Run Automate with TEA
 
-Use TEA's `automate` workflow to generate comprehensive tests for existing features. Unlike `*atdd`, these tests pass immediately because the feature already exists.
+Use TEA's `automate` workflow to generate comprehensive tests for existing features. Unlike `atdd`, these tests pass immediately because the feature already exists.
 
 ## When to Use This
 
@@ -22,8 +22,6 @@ Use TEA's `automate` workflow to generate comprehensive tests for existing featu
 
 ## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - Test framework setup complete (run `framework` if needed)
 - Feature implemented and working
 
@@ -31,19 +29,15 @@ Use TEA's `automate` workflow to generate comprehensive tests for existing featu
 
 ## Steps
 
-### 1. Load the TEA Agent or Skill
+### 1. Run the Automate Workflow
 
-- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-automate` (or `/bmad-tea`)
-- **Codex:** `$bmad-tea-testarch-automate` (or `$bmad-tea`)
-- **Agent Menu Trigger (inside `/bmad-tea` chat):** `automate` or `TA`
+- **Claude Code / Cursor / Windsurf:** `/bmad-testarch-automate`
+- **Codex:** `$bmad-testarch-automate`
+- **Inside a `/bmad-tea` chat:** `TA`
 
-### 2. Run the Automate Workflow
+Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#invoking-a-tea-workflow).
 
-```bash
-/bmad-testarch-automate
-```
-
-### 3. Provide Context
+### 2. Provide Context
 
 TEA will ask for context about what you're testing.
 
@@ -103,7 +97,7 @@ Features: Create todos, mark as complete, filter by status, delete todos
 
 TEA will analyze the application and generate tests based on your description.
 
-### 4. Specify Test Levels
+### 3. Specify Test Levels
 
 TEA will ask which test levels to generate:
 
@@ -124,7 +118,7 @@ Generate:
 - Skip P3 (low priority edge cases)
 ```
 
-### 5. Review Generated Tests
+### 4. Review Generated Tests
 
 TEA generates a comprehensive test suite with multiple test levels.
 
@@ -382,7 +376,7 @@ test('should update profile', async ({ page, authToken, testProfile }) => {
 - Fixture composition with mergeTests
 - Reusable across test files
 
-### 6. Review Additional Artifacts
+### 5. Review Additional Artifacts
 
 TEA also generates:
 
@@ -440,7 +434,7 @@ Follow the patterns in existing tests:
 ✅ Test files ≤ 1000 lines
 ```
 
-### 7. Run the Tests
+### 6. Run the Tests
 
 All tests should pass immediately since the feature exists:
 
@@ -458,28 +452,26 @@ npx cypress run
 
 Expected output:
 
-```
-Running 15 tests using 4 workers
+```text
+Running 6 tests using 4 workers
 
   ✓ tests/api/profile.spec.ts (4 tests) - 2.1s
   ✓ tests/e2e/profile-workflow.spec.ts (2 tests) - 5.3s
 
-  15 passed (7.4s)
+  6 passed (7.4s)
 ```
 
-**All green!** Tests pass because feature already exists.
+Tests pass because the feature already exists.
 
-### 8. Review Test Coverage
+### 7. Review Test Coverage
 
 Check which scenarios are covered:
 
 ```bash
-# View test report
 npx playwright show-report
-
-# Check coverage (if configured)
-npm run test:coverage
 ```
+
+For code coverage, use whatever your project already has. TEA's `framework` workflow does not add a coverage script.
 
 Compare against:
 
@@ -529,9 +521,9 @@ TEA supports component testing using framework-appropriate tools:
 
 Run `test-design` before `automate` for better results:
 
-```
-test-design   # Risk assessment, priorities
-automate      # Generate tests based on priorities
+```text
+/bmad-testarch-test-design   # risk assessment, priorities
+/bmad-testarch-automate      # generate tests based on those priorities
 ```
 
 TEA will focus on P0/P1 scenarios and skip low-value tests.
@@ -542,18 +534,12 @@ Not everything needs E2E tests:
 
 **Good strategy:**
 
-```
-- P0 scenarios: API + E2E tests
-- P1 scenarios: API tests only
+```text
+- P0 scenarios: API + E2E tests      # reserve E2E for critical user journeys
+- P1 scenarios: API tests only       # API tests run ~10x faster, no browser flakiness
 - P2 scenarios: API tests (happy path)
 - P3 scenarios: Skip or add later
 ```
-
-**Why?**
-
-- API tests are 10x faster than E2E
-- API tests are more reliable (no browser flakiness)
-- E2E tests reserved for critical user journeys
 
 ### Avoid Duplicate Coverage
 
@@ -577,7 +563,7 @@ If browser automation is configured (`tea_browser_automation: "auto"` or `"cli"`
 - **Recording mode:** Verify selectors with CLI snapshots or MCP browser, capture network requests
 - **Evidence capture:** CLI traces and screenshots for test validation
 
-No prompts — TEA uses browser tools automatically when available and appropriate.
+TEA uses browser tools automatically when available and appropriate; it does not prompt.
 
 See [Configure Browser Automation](/docs/how-to/customization/configure-browser-automation.md) for setup.
 
@@ -683,9 +669,5 @@ Setup: Set `tea_browser_automation: "auto"` in config + install CLI and/or confi
 
 ## Reference
 
-- [Command: \*automate](/docs/reference/commands.md#automate) - Full command reference
+- [Command: automate](/docs/reference/commands.md#automate) - Full command reference
 - [TEA Configuration](/docs/reference/configuration.md) - MCP and Playwright Utils options
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

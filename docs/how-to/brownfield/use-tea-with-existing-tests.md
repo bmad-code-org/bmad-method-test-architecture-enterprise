@@ -17,12 +17,10 @@ Use TEA on brownfield projects (existing codebases with legacy tests) to establi
 
 ## Prerequisites
 
-- BMad Method installed
-- TEA agent available
 - Existing codebase with tests (even if incomplete or low quality)
 - Tests run successfully (or at least can be executed)
 
-**Note:** If your codebase is completely undocumented, run `document-project` first to create baseline documentation.
+**Note:** If your codebase is completely undocumented, run `document-project` first to create baseline documentation. It is a BMM workflow that ships with the BMad Method module, not with TEA.
 
 ## Brownfield Strategy
 
@@ -32,13 +30,11 @@ Understand what you have before changing anything.
 
 #### Step 1: Baseline Coverage with `trace`
 
-Run `trace` Phase 1 to map existing tests to requirements:
+Run the trace workflow and select Phase 1 (Requirements Traceability):
 
+```text
+/bmad-testarch-trace
 ```
-trace
-```
-
-**Select:** Phase 1 (Requirements Traceability)
 
 **Provide:**
 
@@ -74,10 +70,10 @@ This baseline becomes your improvement target.
 
 #### Step 2: Quality Audit with `test-review`
 
-Run `test-review` on existing tests:
+Run the test review workflow and answer `tests/` when it asks for scope:
 
-```
-test-review tests/
+```text
+/bmad-testarch-test-review
 ```
 
 **Output:** `test-review.md` with quality score and issues.
@@ -115,27 +111,17 @@ Don't try to fix everything at once.
 
 #### Focus on Critical Path First
 
-**Priority 1: P0 Requirements**
+**Priority 1: P0 Requirements.** Goal: P0 coverage at 100%.
 
-```
-Goal: Get P0 coverage to 100%
+1. Identify P0 requirements with no tests (from the trace matrix)
+2. Run `/bmad-testarch-automate` to generate tests for the missing P0 scenarios
+3. Fix the critical quality issues those tests carry (from the test-review report)
 
-Actions:
-1. Identify P0 requirements with no tests (from trace)
-2. Run `automate` to generate tests for missing P0 scenarios
-3. Fix critical quality issues in P0 tests (from test-review)
-```
+**Priority 2: Fix Flaky Tests.** Goal: eliminate flakiness.
 
-**Priority 2: Fix Flaky Tests**
-
-```
-Goal: Eliminate flakiness
-
-Actions:
-1. Identify tests with hard waits (from test-review)
-2. Replace with network-first patterns
+1. Identify tests with hard waits (from the test-review report)
+2. Replace them with network-first patterns
 3. Run burn-in loops to verify stability
-```
 
 **Example Modernization:**
 
@@ -163,7 +149,7 @@ test('checkout completes', async ({ page }) => {
 **After (With Playwright Utils - Cleaner API):**
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { test } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
 import { expect } from '@playwright/test';
 
 test('checkout completes', async ({ page, interceptNetworkCall }) => {
@@ -197,15 +183,10 @@ test('checkout completes', async ({ page, interceptNetworkCall }) => {
 
 **For automatic error detection,** use `network-error-monitor` fixture separately. See [Integrate Playwright Utils](/docs/how-to/customization/integrate-playwright-utils.md#network-error-monitor).
 
-**Priority 3: P1 Requirements**
+**Priority 3: P1 Requirements.** Goal: P1 coverage at 80% or above.
 
-```
-Goal: Get P1 coverage to 80%+
-
-Actions:
-1. Generate tests for highest-risk P1 gaps
+1. Generate tests for the highest-risk P1 gaps
 2. Improve test quality incrementally
-```
 
 #### Create Improvement Roadmap
 
@@ -243,15 +224,13 @@ Apply TEA workflows to new work while improving legacy tests.
 
 #### For New Features (Greenfield Within Brownfield)
 
-**Use full TEA workflow:**
+**Use the full TEA workflow:**
 
-```
-1. `test-design` (epic-level) - Plan tests for new feature
-2. `atdd` - Generate failing tests first (TDD)
-3. Implement feature
-4. `automate` - Expand coverage
-5. `test-review` - Ensure quality
-```
+1. `/bmad-testarch-test-design` (epic-level) to plan tests for the new feature
+2. `/bmad-testarch-atdd` to generate failing tests first
+3. Implement the feature
+4. `/bmad-testarch-automate` to expand coverage
+5. `/bmad-testarch-test-review` to check quality
 
 **Benefits:**
 
@@ -263,25 +242,19 @@ Apply TEA workflows to new work while improving legacy tests.
 
 **Add regression tests:**
 
-```
-1. Reproduce bug with failing test
-2. Fix bug
-3. Verify test passes
-4. Run `test-review` on regression test
-5. Add to regression test suite
-```
+1. Reproduce the bug with a failing test
+2. Fix the bug
+3. Verify the test passes
+4. Run `/bmad-testarch-test-review` on the regression test
+5. Add it to the regression suite
 
 #### For Refactoring (Regression Safety)
 
 **Before refactoring:**
 
-```
-1. Run `trace` - Baseline coverage
-2. Note current coverage %
-3. Refactor code
-4. Run `trace` - Verify coverage maintained
-5. No coverage should decrease
-```
+1. Run `/bmad-testarch-trace` for a baseline and note the coverage percentage
+2. Refactor the code
+3. Run `/bmad-testarch-trace` again; no priority's coverage should have decreased
 
 ### Phase 4: Continuous Improvement
 
@@ -289,64 +262,25 @@ Track improvement over time.
 
 #### Quarterly Quality Audits
 
-**Q1 Baseline:**
-
-```
-Coverage: 30%
-Quality Score: 55/100
-Flakiness: 15% fail rate
-```
-
-**Q2 Target:**
-
-```
-Coverage: 50% (focus on P0)
-Quality Score: 65/100
-Flakiness: 5%
-```
-
-**Q3 Target:**
-
-```
-Coverage: 70%
-Quality Score: 75/100
-Flakiness: 1%
-```
-
-**Q4 Target:**
-
-```
-Coverage: 85%
-Quality Score: 85/100
-Flakiness: <0.5%
-```
+| Quarter       | Coverage          | Quality score | Flakiness     |
+| ------------- | ----------------- | ------------- | ------------- |
+| Q1 (baseline) | 30%               | 55/100        | 15% fail rate |
+| Q2 target     | 50% (focus on P0) | 65/100        | 5%            |
+| Q3 target     | 70%               | 75/100        | 1%            |
+| Q4 target     | 85%               | 85/100        | <0.5%         |
 
 ## Brownfield-Specific Tips
 
 ### Don't Rewrite Everything
 
-**Common mistake:**
+**Common mistake:** "Our tests are bad, let's delete them all and start over."
 
-```
-"Our tests are bad, let's delete them all and start over!"
-```
+**Better approach:** a rewrite risks losing coverage you already have. Instead:
 
-**Better approach:**
-
-```
-"Our tests are bad, let's:
-1. Keep tests that work (even if not perfect)
+1. Keep tests that work, even imperfect ones
 2. Fix critical quality issues incrementally
-3. Add tests for gaps
-4. Gradually improve over time"
-```
-
-**Why:**
-
-- Rewriting is risky (might lose coverage)
-- Incremental improvement is safer
-- Team learns gradually
-- Business value delivered continuously
+3. Add tests for the gaps
+4. Improve gradually
 
 ### Use Regression Hotspots
 
@@ -407,26 +341,12 @@ test.skip('flaky test - needs fixing', async ({ page }) => {
 
 **Large test suite?** Improve incrementally:
 
-**Week 1:** `tests/auth/`
+Take one directory per week (`tests/auth/`, then `tests/api/`, then `tests/e2e/`), running the same loop on each:
 
-```
-1. Run `test-review` on auth tests
-2. Fix critical issues
+1. Run `/bmad-testarch-test-review` and give that directory as the scope
+2. Fix the critical issues
 3. Re-review
-4. Mark directory as "modernized"
-```
-
-**Week 2:** `tests/api/`
-
-```
-Same process
-```
-
-**Week 3:** `tests/e2e/`
-
-```
-Same process
-```
+4. Mark the directory as "modernized"
 
 **Benefits:**
 
@@ -464,12 +384,10 @@ Same process
 
 **Solution:**
 
-```
-1. Run `trace` - TEA analyzes tests and maps to requirements
-2. Review traceability matrix
-3. Document findings
-4. Use as baseline for improvement
-```
+1. Run `/bmad-testarch-trace`; TEA analyzes the tests and maps them to requirements
+2. Review the traceability matrix
+3. Document the findings
+4. Use it as your improvement baseline
 
 TEA reverse-engineers test coverage even without documentation.
 
@@ -477,17 +395,12 @@ TEA reverse-engineers test coverage even without documentation.
 
 **Problem:** Afraid to modify tests (might break them).
 
-**Solution:**
+**Solution:** small changes carry small risk.
 
-```
-1. Run tests, capture current behavior (baseline)
-2. Make small improvement (fix one hard wait)
-3. Run tests again
-4. If still pass, continue
-5. If fail, investigate why
-
-Incremental changes = lower risk
-```
+1. Run the tests and capture current behavior as the baseline
+2. Make one small improvement, such as removing a single hard wait
+3. Run the tests again
+4. If they still pass, continue; if they fail, investigate before going further
 
 ### "No One Knows How to Run Tests"
 
@@ -495,33 +408,22 @@ Incremental changes = lower risk
 
 **Solution:**
 
-```
-1. Document manually or ask TEA to help analyze test structure
-2. Create tests/README.md with:
-   - How to install dependencies
-   - How to run tests (npx playwright test, npm test, etc.)
-   - What each test directory contains
-   - Common issues and troubleshooting
-3. Commit documentation for team
-```
+1. Document manually, or ask TEA to analyze the test structure for you
+2. Create `tests/README.md` covering how to install dependencies, how to run the tests (`npx playwright test`, `npm test`, or whatever your runner is), what each test directory contains, and common troubleshooting
+3. Commit it for the team
 
-**Note:** `framework` is for new test setup, not existing tests. For brownfield, document what you have.
+**Note:** `framework` scaffolds a new test setup. For brownfield, document what you already have instead.
 
 ### "Tests Take Hours to Run"
 
 **Problem:** Full test suite takes 4+ hours.
 
-**Solution:**
+**Solution:** sharding plus selective testing takes a 4-hour sequential suite to about 15 minutes.
 
-```
 1. Configure parallel execution (shard tests across workers)
-2. Add selective testing (run only affected tests on PR)
-3. Run full suite nightly only
-4. Optimize slow tests (remove hard waits, improve selectors)
-
-Before: 4 hours sequential
-After: 15 minutes with sharding + selective testing
-```
+2. Add selective testing so PRs run only affected tests
+3. Run the full suite nightly only
+4. Optimize slow tests by removing hard waits and improving selectors
 
 **How `ci` helps:**
 
@@ -542,62 +444,32 @@ After: 15 minutes with sharding + selective testing
 
 **Solution:**
 
-```
-1. Run `test-review` to identify flakiness patterns
-2. Fix top 5 flaky tests (biggest impact)
-3. Quarantine remaining flaky tests
-4. Re-enable as you fix them
-
-Don't let perfect be the enemy of good
-```
+1. Run `/bmad-testarch-test-review` to identify the flakiness patterns
+2. Fix the top 5 flaky tests, which carry most of the impact
+3. Quarantine the rest
+4. Re-enable them as you fix them
 
 ## Brownfield TEA Workflow
 
 ### Recommended Sequence
 
-**1. Documentation (if needed):**
+`document-project`, `prd`, and `architecture` are BMM workflows that ship with the BMad Method module, not with TEA. Every `/bmad-testarch-*` command below is TEA. On Codex, swap the leading `/` for `$`.
 
-```
-document-project
-```
-
-**2. Baseline (Phase 2):**
-
-```
-trace Phase 1 - Establish coverage baseline
-test-review - Establish quality baseline
-```
-
-**3. Planning (Phase 2-3):**
-
-```
-prd - Document requirements (if missing)
-architecture - Document architecture (if missing)
-test-design (system-level) - Testability review
-```
-
-**4. Infrastructure (Phase 3):**
-
-```
-framework - Modernize test framework (if needed)
-ci - Setup or improve CI/CD
-```
-
-**5. Per Epic (Phase 4):**
-
-```
-test-design (epic-level) - Focus on regression hotspots
-automate - Add missing tests
-test-review - Ensure quality
-trace Phase 1 - Refresh coverage
-```
-
-**6. Release Gate:**
-
-```
-nfr-assess - Audit NFR evidence (if enterprise and evidence exists)
-trace Phase 2 - Gate decision
-```
+| Stage                        | Command                                    | Purpose                                           |
+| ---------------------------- | ------------------------------------------ | ------------------------------------------------- |
+| 1. Documentation (if needed) | `document-project` (BMM)                   | Baseline docs for an undocumented codebase        |
+| 2. Baseline (Phase 2)        | `/bmad-testarch-trace`, Phase 1            | Coverage baseline                                 |
+| 2. Baseline (Phase 2)        | `/bmad-testarch-test-review`               | Quality baseline                                  |
+| 3. Planning (Phase 2-3)      | `prd`, `architecture` (BMM)                | Document requirements and architecture if missing |
+| 3. Planning (Phase 2-3)      | `/bmad-testarch-test-design`, system-level | Testability review                                |
+| 4. Infrastructure (Phase 3)  | `/bmad-testarch-framework`                 | Modernize the test framework, if needed           |
+| 4. Infrastructure (Phase 3)  | `/bmad-testarch-ci`                        | Set up or improve CI/CD                           |
+| 5. Per epic (Phase 4)        | `/bmad-testarch-test-design`, epic-level   | Focus on regression hotspots                      |
+| 5. Per epic (Phase 4)        | `/bmad-testarch-automate`                  | Add the missing tests                             |
+| 5. Per epic (Phase 4)        | `/bmad-testarch-test-review`               | Check quality                                     |
+| 5. Per epic (Phase 4)        | `/bmad-testarch-trace`, Phase 1            | Refresh coverage                                  |
+| 6. Release gate              | `/bmad-testarch-nfr`                       | Audit NFR evidence, where evidence exists         |
+| 6. Release gate              | `/bmad-testarch-trace`, Phase 2            | Gate decision                                     |
 
 ## Related Guides
 
@@ -625,7 +497,3 @@ trace Phase 2 - Gate decision
 - [TEA Configuration](/docs/reference/configuration.md) - Config options
 - [Knowledge Base Index](/docs/reference/knowledge-base.md) - Testing patterns
 - [Glossary](/docs/glossary/index.md#test-architect-tea-concepts) - TEA terminology
-
----
-
-Generated with [BMad Method](https://bmad-method.org) - TEA (Test Engineering Architect)

@@ -348,7 +348,7 @@ const recommendations = [];
 if (criticalGaps.length > 0) {
   recommendations.push({
     priority: 'URGENT',
-    action: `Run /bmad:tea:atdd for ${criticalGaps.length} P0 requirements`,
+    action: `Run /bmad-testarch-atdd for ${criticalGaps.length} P0 requirements`,
     requirements: criticalGaps.map((r) => r.id),
   });
 }
@@ -357,7 +357,7 @@ if (criticalGaps.length > 0) {
 if (highGaps.length > 0) {
   recommendations.push({
     priority: 'HIGH',
-    action: `Run /bmad:tea:automate to expand coverage for ${highGaps.length} P1 requirements`,
+    action: `Run /bmad-testarch-automate to expand coverage for ${highGaps.length} P1 requirements`,
     requirements: highGaps.map((r) => r.id),
   });
 }
@@ -432,7 +432,7 @@ if (liveOnlyRequirements.length > 0) {
 // Quality issues
 recommendations.push({
   priority: 'LOW',
-  action: 'Run /bmad:tea:test-review to assess test quality',
+  action: 'Run /bmad-testarch-test-review to assess test quality',
   requirements: [],
 });
 

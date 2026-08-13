@@ -16,7 +16,7 @@ This checklist covers **two sequential phases**:
 
 - [ ] A coverage oracle is available or inferred (formal requirements, spec, resolvable external pointer, or synthetic journeys)
 - [ ] Test suite exists (or gaps are acknowledged and documented)
-- [ ] If tests are missing, recommend `*atdd` (trace does not run it automatically)
+- [ ] If tests are missing, recommend `/bmad-testarch-atdd` (trace does not run it automatically)
 - [ ] Test directory path is correct (`test_dir` variable)
 - [ ] Story file is accessible (if using BMad mode)
 - [ ] Knowledge base is loaded (test-priorities, traceability, risk-governance)
@@ -369,7 +369,7 @@ Knowledge fragments referenced:
 
 - [ ] Test results summary complete (total, passed, failed, pass rates)
 - [ ] Coverage summary complete (P0/P1 criteria, code coverage)
-- [ ] NFR validation summary complete (security, performance, reliability, maintainability)
+- [ ] NFR validation summary complete (security, performance, reliability, scalability)
 - [ ] Flakiness summary complete (burn-in iterations, flaky test count)
 
 **Rationale Documented:**
@@ -657,7 +657,7 @@ Knowledge fragments referenced:
 
 - If PASS (both phases): Proceed to deployment
 - If WARN/CONCERNS: Address gaps/issues, proceed with monitoring
-- If FAIL (either phase): Run `*atdd` for missing tests, fix issues, re-run `*trace`
+- If FAIL (either phase): Run `/bmad-testarch-atdd` for missing tests, fix issues, re-run `/bmad-testarch-trace`
 - If WAIVED: Deploy with approved waiver, schedule remediation
 
 ---

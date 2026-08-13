@@ -212,7 +212,11 @@ await apiRequest({
 **Implementation**:
 
 ```typescript
-import { test } from '@seontechnologies/playwright-utils/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 test('should poll until job completes', async ({ apiRequest, recurse }) => {
   // Create job
@@ -248,7 +252,8 @@ test('should poll until job completes', async ({ apiRequest, recurse }) => {
 **Implementation**:
 
 ```typescript
-import { test, expect } from '@seontechnologies/playwright-utils/fixtures';
+import { expect } from '@playwright/test';
+import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 
 const USER_SERVICE = process.env.USER_SERVICE_URL || 'http://localhost:3001';
 const ORDER_SERVICE = process.env.ORDER_SERVICE_URL || 'http://localhost:3002';
@@ -381,7 +386,11 @@ test.describe('GraphQL API', () => {
 // Generated operation definition — structural typing, no import from playwright-utils needed
 // type OperationShape = { path: string; method: 'POST'|'GET'|'PUT'|'DELETE'|'PATCH'|'HEAD'; response: unknown; request: unknown; query?: unknown }
 
-import { test, expect } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { expect, mergeTests } from '@playwright/test';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+const test = mergeTests(apiRequestFixture, recurseFixture);
 
 // --- Basic usage: operation replaces method + path ---
 test('should upsert person via operation overload', async ({ apiRequest }) => {
