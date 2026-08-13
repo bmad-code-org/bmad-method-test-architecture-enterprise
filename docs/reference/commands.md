@@ -339,7 +339,7 @@ The agent asks which evidence is available and routes to the right workflow. It 
 
 | Command            | Phase      | Frequency                 | Primary Output             |
 | ------------------ | ---------- | ------------------------- | -------------------------- |
-| `teach-me-testing` | Learning   | Once per learner          | Progress + notes + cert    |
+| `teach-me-testing` | Learning   | Once per learner          | Progress + notes + summary |
 | `test-design`      | 3, 4       | System + per epic         | Test design + NFR plan     |
 | `framework`        | 3          | Once                      | Test infrastructure        |
 | `ci`               | 3          | Once                      | CI/CD pipeline             |

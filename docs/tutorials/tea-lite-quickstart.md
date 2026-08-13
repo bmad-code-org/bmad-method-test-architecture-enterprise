@@ -438,7 +438,7 @@ Want the complete quality operating model? Try TEA Integrated with BMad Method:
 - Phase 4: Per-epic test design → `atdd` → `automate`
 - Release Gate: Coverage traceability and gate decisions
 
-See [BMad Method Documentation](/) for the full workflow.
+See [BMad Method Documentation](https://test-architect.bmad-method.org) for the full workflow.
 
 ## Common Questions
 
@@ -475,6 +475,6 @@ use: {
 
 ## Getting Help
 
-- **Documentation:** <https://docs.bmad-method.org>
-- **GitHub Issues:** <https://github.com/bmad-code-org/bmad-method/issues>
+- **Documentation:** <https://test-architect.bmad-method.org>
+- **GitHub Issues:** <https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues>
 - **Discord:** Join the BMAD community
