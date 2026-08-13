@@ -56,7 +56,7 @@ Install BMad (see installation guide for latest command).
 
 When prompted:
 
-- **Select modules:** Choose "BMM: BMad Method" (press Space, then Enter)
+- **Select modules:** Choose "BMM: BMad Method" and "TEA: BMad Test Architect" (press Space on each, then Enter)
 - **Project name:** Keep default or enter your project name
 - **Experience level:** Choose "beginner" for this tutorial
 - **Planning artifacts folder:** Keep default
