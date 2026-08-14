@@ -75,6 +75,8 @@ Pick the matrix from risk, not from availability. A defensible minimum:
 
 Run the full matrix nightly and on release candidates. Run the primary target only on PRs, because a PR gate that boots six emulators stops being a gate people wait for.
 
+**The PR-gate profile and the local profile must be the same one.** A different screen height moves content below the fold, and `assertVisible` means inside the viewport, so a shorter runner device fails UI assertions that pass on every developer machine and reads as a product defect. Compare on density-independent height rather than pixel resolution: two profiles can share `1080x` and differ by 100dp. The matrix exists to find fragmentation defects, and it can only do that from a gate that is not producing them by accident. See `mobile-ci-device-lab.md`.
+
 ## CI Shape
 
 - **Build artifact first**: decide what the flows run against before writing any of them. A release-shaped build (unsigned APK, simulator IPA) is the default; a prebuilt development shell such as Expo Go is not a CI artifact, because the native modules the flows need are absent and the launch path exists only in CI. This decision sets the failure surface of the whole suite; see `mobile-ci-device-lab.md`.
@@ -106,6 +108,7 @@ Run the full matrix nightly and on release candidates. Run the primary target on
 - [ ] **Duplicate coverage checked**: no device flow proving something a cheaper level already proves
 - [ ] **Mobile risk categories scored**: permissions, lifecycle, connectivity, fragmentation, upgrade
 - [ ] **Device matrix justified**: primary, floor, and form factor chosen from usage data
+- [ ] **PR-gate profile matches the local profile**, compared on density-independent height
 - [ ] **PR gate bounded**: P0 flows on the primary target only
 - [ ] **NFR evidence separated**: cold start, frame rate, memory, binary size instrumented rather than asserted in flows
 - [ ] **No live third-party flag or experiment service in the run path**: remote evaluation disabled, values seeded as test data

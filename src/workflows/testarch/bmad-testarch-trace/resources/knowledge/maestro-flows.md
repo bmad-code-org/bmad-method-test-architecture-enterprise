@@ -362,7 +362,9 @@ tags:
 
 **Context**: A checkbox in a virtualized list. Maestro reported the tap COMPLETED and the app never saw it.
 
-Measured in isolation: the tap completed in 2.4 seconds, the target was present at `[45,1807][1035,1924]` with `clickable=true`, nothing sat above it in the hierarchy at the point tapped, and the count label still read `0 of 10` ten seconds later. Not a scroll, not an overlay, not the keyboard. `tapOn` reports COMPLETED once it has resolved the element and dispatched a touch, so its status describes the driver's action and not the app's response. One passing run recorded five taps for two selections, which makes the loss frequent rather than exotic.
+Measured in isolation: the tap completed in 2.4 seconds, the target was present at `[45,1807][1035,1924]` with `clickable=true`, nothing sat above it in the hierarchy at the point tapped, and the count label still read `0 of 10` ten seconds later. `tapOn` reports COMPLETED once it has resolved the element and dispatched a touch, so its status describes the driver's action and not the app's response. One passing run recorded five taps for two selections, which makes the loss frequent rather than exotic.
+
+**The mechanism is not established.** Those measurements rule out a missing element and an occluding overlay; they do not say where between the driver and the app's handler the touch went. Gesture-responder interaction with a list that has visually stopped moving is a plausible candidate and has not been tested. Treat that as an open question rather than a cause, and treat the pattern below as what it is: a countermeasure that keeps the flow honest while the cause is unknown, per the `evidence-integrity.md` rule that a stated mechanism is a claim needing a source.
 
 **Implementation**:
 
@@ -401,26 +403,56 @@ Measured in isolation: the tap completed in 2.4 seconds, the target was present 
 - The retry does not weaken the check. The assertion inside it has to pass on its own, so what the retry absorbs is a lost touch, which is a property of the driver rather than of the app.
 - If a step routinely needs its retry to land, that is a finding about the driver or the list, not an ordinary step. Record it rather than letting the retry hide it.
 
+### Example 9: Visible Means Inside the Viewport, Not Present in the Hierarchy
+
+**Context**: An element that is rendered, correct, and below the fold. `assertVisible` fails on it.
+
+`assertVisible` and `extendedWaitUntil: visible` require the element to be **on screen**, not merely present in the view tree. An element in a scrolling section that has not been scrolled to is present, correct, and not visible, and the failure reads as "the feature is broken" rather than "the flow never scrolled".
+
+**Implementation**:
+
+```yaml
+# ❌ Latent screen-height dependency: passes on a tall device, fails on a short one
+- extendedWaitUntil:
+    visible:
+      id: 'premium_unavailable'
+    timeout: 20000
+
+# ✅ Scroll to what you assert on
+- scrollUntilVisible:
+    element:
+      id: 'premium_unavailable'
+- assertVisible:
+    id: 'premium_unavailable'
+```
+
+**Key points**:
+
+- **The diagnostic tell is cheap and decisive.** Dump the failing step's `screen-hierarchy` entry and look for the id. Present with bounds outside the screen is a scroll problem; absent is a different bug entirely. Checking this first is worth more than any hypothesis about the feature, and one investigation built three separate plausible mechanisms for such a failure (a remote flag answer, an unresolved dynamic import, a stuck initialization call) before two measurements killed all three and left the viewport.
+- **Any `assertVisible` on an element inside a scrolling section is a screen-height dependency** until the flow scrolls to it. It will pass wherever it was written and fail on the first shorter device.
+- This is the failure mode most likely to reproduce only in CI, because the runner's device profile is rarely the one the flow was written against. `mobile-ci-device-lab.md` carries the profile-parity rule.
+
 ## Anti-Patterns
 
-| Anti-pattern                                                       | Why it fails                                                                              | Fix                                                                     |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Flow with no `assertVisible`/`assertTrue`                          | Passes as long as taps land; proves nothing about behavior                                | Assert the destination state of every flow                              |
-| `sleep` used as synchronization                                    | Flaky under load, slow when not                                                           | `extendedWaitUntil` on the real condition                               |
-| `tapOn: index:` on a list                                          | Breaks when the list reorders or the backend returns a different order                    | Scope by `text` with `below`/`containsChild`                            |
-| `tapOn: point:` coordinates                                        | Breaks on a different screen size or density                                              | Address the element by `id`                                             |
-| No `clearState`                                                    | Flow depends on whatever ran before it; unreproducible in isolation                       | `clearState` before `launchApp`                                         |
-| Hardcoded credential or PII                                        | Leaks in the repo and in CI logs                                                          | `${ENV_VAR}` sourced from the CI secret store                           |
-| One flow covering six user journeys                                | A failure names the flow, not the behavior; slow to diagnose                              | One journey per flow, composed from subflows                            |
-| Required assertion inside `when:`                                  | Turns a real failure into a silent pass                                                   | Guard only genuinely optional UI (permission dialogs, upsells)          |
-| `back` used as a cross-platform step                               | Documented for Android and Web only; on iOS it does nothing and reports COMPLETED         | Split with `runFlow: when: platform:`; tap the app's own control on iOS |
-| `hideKeyboard` with a modal open                                   | The Android implementation is the system back key, which dismisses a React Native modal   | Tap a non-interactive element to drop the keyboard                      |
-| `optional: true` on the assertion that carries the outcome         | The step cannot fail, so the flow reports coverage it does not have                       | Assert hard; reserve `optional` for genuinely optional UI               |
-| `waitForAnimationToEnd` used as a wait-for-content                 | It succeeds when its cap is reached, so it cannot fail                                    | `extendedWaitUntil` on the content that must appear                     |
-| Unescaped regex characters in a `text:` selector                   | The value is a regex matched against the element's entire text, so it can never pass      | Escape literal `(`, `)`, `[`, `]`, `.`; pad partial matches with `.*`   |
-| Tap status treated as proof the app handled the tap                | `tapOn` reports COMPLETED once the touch is dispatched, and touches do get lost           | Pair each state-changing tap with its own assertion inside a `retry`    |
-| One assertion at the end of a tap sequence                         | Cannot name which tap was lost, so the first hypothesis is a guess                        | Assert after every action that changes state                            |
-| `scrollUntilVisible` reused after an earlier search moved the list | It travels only in the direction given, so the second search scrolls away from the target | Name the opposite `direction`, or return to a known position first      |
+| Anti-pattern                                                             | Why it fails                                                                              | Fix                                                                     |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Flow with no `assertVisible`/`assertTrue`                                | Passes as long as taps land; proves nothing about behavior                                | Assert the destination state of every flow                              |
+| `sleep` used as synchronization                                          | Flaky under load, slow when not                                                           | `extendedWaitUntil` on the real condition                               |
+| `tapOn: index:` on a list                                                | Breaks when the list reorders or the backend returns a different order                    | Scope by `text` with `below`/`containsChild`                            |
+| `tapOn: point:` coordinates                                              | Breaks on a different screen size or density                                              | Address the element by `id`                                             |
+| No `clearState`                                                          | Flow depends on whatever ran before it; unreproducible in isolation                       | `clearState` before `launchApp`                                         |
+| Hardcoded credential or PII                                              | Leaks in the repo and in CI logs                                                          | `${ENV_VAR}` sourced from the CI secret store                           |
+| One flow covering six user journeys                                      | A failure names the flow, not the behavior; slow to diagnose                              | One journey per flow, composed from subflows                            |
+| Required assertion inside `when:`                                        | Turns a real failure into a silent pass                                                   | Guard only genuinely optional UI (permission dialogs, upsells)          |
+| `back` used as a cross-platform step                                     | Documented for Android and Web only; on iOS it does nothing and reports COMPLETED         | Split with `runFlow: when: platform:`; tap the app's own control on iOS |
+| `hideKeyboard` with a modal open                                         | The Android implementation is the system back key, which dismisses a React Native modal   | Tap a non-interactive element to drop the keyboard                      |
+| `optional: true` on the assertion that carries the outcome               | The step cannot fail, so the flow reports coverage it does not have                       | Assert hard; reserve `optional` for genuinely optional UI               |
+| `waitForAnimationToEnd` used as a wait-for-content                       | It succeeds when its cap is reached, so it cannot fail                                    | `extendedWaitUntil` on the content that must appear                     |
+| Unescaped regex characters in a `text:` selector                         | The value is a regex matched against the element's entire text, so it can never pass      | Escape literal `(`, `)`, `[`, `]`, `.`; pad partial matches with `.*`   |
+| Tap status treated as proof the app handled the tap                      | `tapOn` reports COMPLETED once the touch is dispatched, and touches do get lost           | Pair each state-changing tap with its own assertion inside a `retry`    |
+| One assertion at the end of a tap sequence                               | Cannot name which tap was lost, so the first hypothesis is a guess                        | Assert after every action that changes state                            |
+| `scrollUntilVisible` reused after an earlier search moved the list       | It travels only in the direction given, so the second search scrolls away from the target | Name the opposite `direction`, or return to a known position first      |
+| `assertVisible` on an element inside a scrolling section, with no scroll | Visible means inside the viewport; the element is present, correct, and below the fold    | `scrollUntilVisible` first, then assert                                 |
 
 ## Maestro Flow Checklist
 
@@ -440,6 +472,7 @@ Before merging a flow:
 - [ ] **`text:` selectors read as regex**: literal `(`, `)`, `[`, `]`, `.` escaped, and whole-element matching accounted for
 - [ ] **Every state-changing tap has its own assertion**, rather than one assertion covering a sequence
 - [ ] **`retry` scoped to a single step**, with `maxRetries` inside the documented 0-3 range
+- [ ] **Nothing asserted below the fold**: every assertion on an element inside a scrolling section is preceded by a scroll to it
 
 ## Integration Points
 

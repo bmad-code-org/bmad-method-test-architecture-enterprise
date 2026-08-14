@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `maestro-flows.md`: visible means inside the viewport, not present in the view hierarchy. `assertVisible` and `extendedWaitUntil: visible` fail on an element that is rendered, correct, and below the fold, and the failure reads as a broken feature rather than a flow that never scrolled. Carries the cheap diagnostic tell (find the id in the failing step's `screen-hierarchy`: present with out-of-bounds coordinates is a scroll problem, absent is a different bug) and the rule that any assertion inside a scrolling section is a latent screen-height dependency.
+- `mobile-ci-device-lab.md`: local and CI must run the same device profile. Measured, a runner on a roughly 807dp-tall profile against a local 914dp one failed four unrelated flows with "not visible" while every developer machine stayed green, each looking like a product defect. Names the trap that the comparison is density-independent height rather than pixel resolution, since two profiles can share `1080x` and differ by 100dp.
+- `mobile-ci-device-lab.md`: a native module in a development shell does not always fail loudly. Some SDKs detect the shell and degrade to a fallback path (one logs `Expo Go app detected. Using RevenueCat in Browser Mode.`), so nothing errors and the suite proves a code path users never run. A hard `undefined` announces itself; a silent degradation produces a green flow covering the wrong implementation.
+- `mobile-ci-device-lab.md`: check present-but-off-screen before anything else when a step fails on "not visible". One hierarchy lookup separates a flow-level scroll problem from an application defect.
+- `evidence-integrity.md`: screen geometry and accumulated local credentials as environment-asymmetry axes. Both read as trivia and are not: viewport height decides what "visible" means, and a session file or cached certificate on a developer machine makes a whole code path invisible locally.
+- `evidence-integrity.md`: rank hypotheses by the cost of the measurement that would kill them. One investigation produced three plausible mechanisms, all wrong, before two cheap observations eliminated the set; the tell is a session holding several explanations and no new measurements. The corollary is that the discriminating measurement should already be in the captured artifacts, so "the artifacts could not tell us" is a finding about the harness.
+- `mobile-test-strategy.md`: the PR-gate device profile must match the local one, so the matrix can find fragmentation defects instead of manufacturing them at the gate.
+
+### Changed
+
+- `maestro-flows.md`: withdrew the mechanism claim about lost taps. The measurements rule out a missing element and an occluding overlay; they do not establish where the touch is lost, and the earlier text ("not a scroll, not an overlay, not the keyboard") asserted more than the evidence supports. The gesture-responder explanation is now labelled an untested hypothesis and the retry-with-assertion pattern is labelled a countermeasure rather than a fix, per the fragment's own rule that a stated mechanism is a claim needing a source.
+
 ## [1.22.4] - 2026-08-14
 
 ### Added
