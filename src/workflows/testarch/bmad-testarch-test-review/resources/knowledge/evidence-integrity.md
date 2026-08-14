@@ -119,6 +119,8 @@ fi
 
 **Rule**: a probe must observe the thing it claims to observe, never a proxy that merely correlates with it. Ask what else could make this check pass. Here the fix is the same as Example 4: open a throwaway listener inside the test process and assert that the process itself accepted a socket.
 
+**A probe must also send the same request the real client sends.** A harness health-checked its development server's manifest endpoint and reported "manifest served, HTTP 200, multipart/mixed" through five consecutive red runs. It omitted one request header the app under test always sends, and that header selects a different branch through the server's middleware. Both results were correct at the same time: the endpoint the probe asked for was healthy, and the endpoint the app asked for was failing. Copy the client's method, headers, and body shape into the probe, or derive the probe from the client's own code path, and log which request was actually sent so the next reader can check the correspondence instead of assuming it.
+
 **Key points**:
 
 - A non-zero exit means "the command failed," which is not the same claim as "the condition is false"
@@ -165,20 +167,39 @@ A local pass proves the application path. It proves nothing about acceleration, 
 
 The probe would have reported the right answer and changed nothing, and the app would have loaded over one route while its API calls went over another. Order of operations is part of correctness in a harness: resolve every environment-dependent value first, then derive. If a value is discovered after its consumers are built, the discovery is telemetry rather than configuration.
 
+### Example 7: Verifying the Act Is Not Verifying the Outcome
+
+**Context**: A setting written to a running device, read back, and reported as being in effect.
+
+A harness set `hide_error_dialogs=1` on an emulator, read the value back, confirmed it matched, and logged "system crash dialogs suppressed". The write had happened. The dialog appeared anyway: that setting is latched into the framework at boot and on configuration change, so writing it to an already-running device does not necessarily take effect. Reading a value back proves the write, and the write was never the claim.
+
+**Rule**: name the observable the claim is about, and check that one. For a suppressed dialog it is the absence of the dialog in the view hierarchy, not the presence of the flag in the settings store. This is the same substitution as a proxy probe, moved one step earlier: the act stands in for the outcome instead of a correlate standing in for the condition. Configuration that a platform reads once, at a moment you do not control, is where it hides.
+
+### Example 8: Record What a Change Did, Not What It Was For
+
+**Context**: A fix introduced for one failure and kept after it turned out not to fix it.
+
+One investigation removed a live feature-flag service from an end-to-end run, so a per-user flag that had been evaluated remotely fell back to a seeded database row. **It did not fix the flow it was introduced for.** It was kept anyway, because removing a remote dependency from an E2E run is correct on its own terms, and the write-up says all three things: what it was for, that it did not do that, and why it stayed.
+
+A change described by its intent after its effect is known is a landmine for the next investigation, because the next reader takes the commit message as evidence that the cause was found and stops looking. State the outcome separately from the intent. "Kept for a different reason, and labelled as such" costs one sentence and saves someone a re-derivation.
+
 ## Anti-Patterns
 
-| Anti-pattern                                            | Why it fails                                                                 | Fix                                                                     |
-| ------------------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Assertion with a soft or optional modifier as default   | Cannot go red; reports coverage that does not exist                          | Reserve softness for genuinely optional UI, and assert the outcome hard |
-| `continue-on-error` on the test step                    | The suite cannot fail the build                                              | Put it on artifact collection only; use `if: always()` for uploads      |
-| Runner manifest listing a subset of the suite           | Files silently never run; the count is the only clue                         | Include by pattern; assert the executed count against the file count    |
-| Missing tool reported as a failed condition             | Sends the investigation at the wrong subsystem                               | Three-state probes; distinct exit code for could-not-measure            |
-| Probe observing a proxy that correlates with the target | Passes for a reason unrelated to the claim, and a green is never re-examined | Ask what else could make this pass; observe the thing itself            |
-| Verdict emitted by the side that cannot observe it      | Proves the wrong namespace                                                   | Move the assertion to the party whose route or state is in question     |
-| Comment asserting a mechanism with no source read       | Propagates into other files and into other people's reasoning                | Cite the doc or source line, or omit the mechanism                      |
-| Local result used as a CI argument, asymmetry unstated  | Hides the axes that actually differ                                          | Tabulate the differing axes with the claim                              |
-| Environment probe running after its consumers           | The answer arrives too late to configure anything                            | Resolve environment-dependent values first, then derive                 |
-| Reverting a newly-red check as a regression             | Restores the hollow green and loses the finding                              | Treat the red as the pre-existing defect it exposed                     |
+| Anti-pattern                                            | Why it fails                                                                          | Fix                                                                                   |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Assertion with a soft or optional modifier as default   | Cannot go red; reports coverage that does not exist                                   | Reserve softness for genuinely optional UI, and assert the outcome hard               |
+| `continue-on-error` on the test step                    | The suite cannot fail the build                                                       | Put it on artifact collection only; use `if: always()` for uploads                    |
+| Runner manifest listing a subset of the suite           | Files silently never run; the count is the only clue                                  | Include by pattern; assert the executed count against the file count                  |
+| Missing tool reported as a failed condition             | Sends the investigation at the wrong subsystem                                        | Three-state probes; distinct exit code for could-not-measure                          |
+| Probe observing a proxy that correlates with the target | Passes for a reason unrelated to the claim, and a green is never re-examined          | Ask what else could make this pass; observe the thing itself                          |
+| Probe sending a different request than the client       | Takes a different branch through the server: healthy probe, failing app, both correct | Copy the client's method, headers, and body into the probe, and log what was sent     |
+| Written setting read back and reported as effect        | Proves the write; some configuration latches at boot and never applies live           | Assert the observable the claim is about, not the act that was supposed to produce it |
+| Change described by its intent once its effect is known | Reads as a found root cause and stops the next investigation looking                  | Record what it actually did, and why it was kept                                      |
+| Verdict emitted by the side that cannot observe it      | Proves the wrong namespace                                                            | Move the assertion to the party whose route or state is in question                   |
+| Comment asserting a mechanism with no source read       | Propagates into other files and into other people's reasoning                         | Cite the doc or source line, or omit the mechanism                                    |
+| Local result used as a CI argument, asymmetry unstated  | Hides the axes that actually differ                                                   | Tabulate the differing axes with the claim                                            |
+| Environment probe running after its consumers           | The answer arrives too late to configure anything                                     | Resolve environment-dependent values first, then derive                               |
+| Reverting a newly-red check as a regression             | Restores the hollow green and loses the finding                                       | Treat the red as the pre-existing defect it exposed                                   |
 
 ## Evidence Integrity Checklist
 
@@ -189,12 +210,15 @@ The probe would have reported the right answer and changed nothing, and the app 
 - [ ] **Platform-divergent assertions split**: no single assertion whose meaning depends on how a platform composes its view tree
 - [ ] **Probes are three-state**: pass, fail, and could-not-measure, with distinct exit codes
 - [ ] **Probes observe their own claim**: no proxy that merely correlates with the condition being reported
+- [ ] **Probes issue the client's request**: same method, headers, and body shape as the code path they stand in for
+- [ ] **Outcomes verified, not acts**: a write, a set flag, or a dispatched action is not evidence that behavior changed
 - [ ] **Instruments verified before readings**: the probe confirms its tool exists before interpreting its result
 - [ ] **Framework properties verified**: every key, flag, and command confirmed against the pinned version's docs or artifact
 - [ ] **Mechanism comments cited**: any comment claiming why something works names its source
 - [ ] **Verdicts emitted by the proving party**: cross-boundary claims asserted on the side that can observe them
 - [ ] **Environment asymmetry stated**: local-versus-CI arguments list the differing axes
 - [ ] **Resolution precedes derivation**: environment-dependent values resolved before any consumer is built
+- [ ] **Effects recorded separately from intent**: a change kept for a reason other than the one it was made for says so
 
 ## Integration Points
 
