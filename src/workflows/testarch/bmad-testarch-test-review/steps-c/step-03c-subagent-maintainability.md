@@ -34,19 +34,50 @@ Evaluate exactly these registry rows and no others. Load
 `{skill-root}/steps-c/criteria-registry.md` for each row's firing predicate, its
 pinned severity, and its gate.
 
-| Row | Criterion                        | Severity | Gate                         |
-| --- | -------------------------------- | -------: | ---------------------------- |
-| M2  | Repeated literal payload         |   MEDIUM | Applicability                |
-| M3  | Multi-concern test               |   MEDIUM | Absolute                     |
-| M4  | Ungrouped suite                  |   MEDIUM | Absolute                     |
-| M5  | Low-level event dispatch         |   MEDIUM | Applicability                |
-| M7  | Excessive nesting                |   MEDIUM | Absolute                     |
-| H5  | Oversize test file (>1000 lines) |     HIGH | Absolute                     |
-| L1  | Fragile selector                 |      LOW | Applicability                |
-| L3  | Missing stable test id           |      LOW | Convention: `testIds`        |
-| L5  | Implementation-shaped name       |      LOW | Convention: `bddNaming`      |
-| L6  | Magic value                      |      LOW | Absolute                     |
-| L7  | Inconsistent assertion style     |      LOW | Convention: `assertionStyle` |
+| Row | Criterion                            | Severity | Gate                          |
+| --- | ------------------------------------ | -------: | ----------------------------- |
+| M2  | Repeated literal payload             |   MEDIUM | Applicability                 |
+| M3  | Multi-concern test                   |   MEDIUM | Absolute                      |
+| M4  | Ungrouped suite                      |   MEDIUM | Absolute                      |
+| M5  | Low-level event dispatch             |   MEDIUM | Applicability                 |
+| M7  | Excessive nesting                    |   MEDIUM | Absolute                      |
+| M9  | Configured utility bypassed          |   MEDIUM | Applicability                 |
+| M10 | Configured contract utility bypassed |   MEDIUM | Applicability                 |
+| H5  | Oversize test file (>1000 lines)     |     HIGH | Absolute                      |
+| L1  | Fragile selector                     |      LOW | Applicability                 |
+| L3  | Missing stable test id               |      LOW | Convention: `testIds`         |
+| L5  | Implementation-shaped name           |      LOW | Convention: `bddNaming`       |
+| L6  | Magic value                          |      LOW | Absolute                      |
+| L7  | Inconsistent assertion style         |      LOW | Convention: `assertionStyle`  |
+| L9  | Spec bypasses merged fixtures        |      LOW | Convention: `playwrightUtils` |
+
+**M9, M10 and L9 need two facts before any of them can fire**, both carried in
+`subagentContext`. For M9 and L9: `tea_use_playwright_utils` is `true`, and
+`@seontechnologies/playwright-utils` is a dependency in the project's
+`package.json`. For M10: `tea_use_pactjs_utils` is `true`, and
+`@seontechnologies/pactjs-utils` is a dependency. A flag with no package installed closes the M9 gate — you cannot
+deduct for not using a library the repo does not have. Say so as `PASS (n/a)` and
+let the report recommend the framework workflow instead.
+
+Load `pactjs-utils-mandate.md` before scoring M10: it holds the REQUIRED
+substitution list M10 fires on (`createProviderState`, `buildVerifierOptions`,
+`createRequestFilter`, `setJsonContent`), the constructs it must not fire on
+(`MatchersV3` used directly), and the RECOMMENDED items that never deduct
+(`zodToPactMatchers`, the DI injection). The determinism and FFI rows (H6, H7, H8,
+L4) are scored by the determinism worker and outrank M10: a contract suite that
+flakes matters more than one that is verbose.
+
+Load `playwright-utils-mandate.md` before scoring M9 or L9: it holds the
+REQUIRED substitution list M9 fires on, the legitimate exceptions it must not fire
+on (`page.route` against analytics, fonts, or third-party scripts), and the
+RECOMMENDED utilities that never deduct because they need project wiring the file
+cannot supply.
+
+When M9 fires, name the substitution in the recommendation (`page.route` on
+`**/api/users` becomes `interceptNetworkCall({ url: '**/api/users' })`), and quote
+the mandate row rather than describing the utility in your own words. A finding
+that says "consider playwright-utils" is not actionable; one that says which call
+replaces which line is.
 
 Three rules this dimension used to get wrong, now fixed by the registry:
 

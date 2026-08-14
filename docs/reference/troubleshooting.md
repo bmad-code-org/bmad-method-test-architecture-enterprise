@@ -137,8 +137,8 @@ tea_capability_probe: true
 **Cause**: `tea-index.csv` is missing or truncated, or fragment files are missing.
 
 ```bash
-wc -l < _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 57 (header + 56 fragments)
-ls _bmad/tea/agents/bmad-tea/resources/knowledge/*.md | wc -l   # 56
+wc -l < _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 60 (header + 59 fragments)
+ls _bmad/tea/agents/bmad-tea/resources/knowledge/*.md | wc -l   # 59
 head -1 _bmad/tea/agents/bmad-tea/resources/tea-index.csv
 # id,name,description,tags,tier,fragment_file
 
@@ -182,10 +182,28 @@ If it parses and the key name matches [Configuration](/reference/configuration/)
 
 ```bash
 grep tea_use_playwright_utils _bmad/tea/config.yaml   # should show: true
-grep -ic playwright-utils _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 18
+grep -ic playwright-utils _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 21
+npm ls @seontechnologies/playwright-utils              # the package must actually be installed
 ```
 
-Confirm the workflow integrates Playwright Utils at all. Framework (TF), Test Design (TD), ATDD (AT), Automate (TA), and Test Review (RV) do. CI, Trace, and NFR Evidence Audit do not.
+Confirm the workflow integrates Playwright Utils at all. Framework (TF), Test Design (TD), ATDD (AT), Automate (TA), Test Review (RV), and CI all do. Trace and NFR Evidence Audit do not.
+
+The same three checks apply to Pact.js Utils, which is also on by default: `grep tea_use_pactjs_utils _bmad/tea/config.yaml`, `npm ls @seontechnologies/pactjs-utils`, and `ls _bmad/tea/agents/bmad-tea/resources/knowledge/pactjs-utils-mandate.md`.
+
+**If the flag is `true` and the package is missing**, that is the usual cause. Generation will not scaffold imports against a package the project does not have, and Test Review closes the `M9` gate rather than deducting. Run the Framework (TF) workflow, or install it directly:
+
+```bash
+npm install -D @seontechnologies/playwright-utils
+```
+
+**If the package is installed and output is still vanilla**, the mandate fragment did not load. Check that `playwright-utils-mandate.md` is present next to the other fragments and indexed in `tea-index.csv`:
+
+```bash
+ls _bmad/tea/agents/bmad-tea/resources/knowledge/playwright-utils-mandate.md
+grep playwright-utils-mandate _bmad/tea/agents/bmad-tea/resources/tea-index.csv
+```
+
+Then start a fresh chat: fragment selection happens at step 01, so a run that already loaded the vanilla profile keeps it for the rest of the run.
 
 ## Output and File Issues
 
@@ -242,6 +260,28 @@ Generated tests import each fixture from its own module subpath, and `expect` fr
 import { expect } from '@playwright/test';
 import { test } from '@seontechnologies/playwright-utils/api-request/fixtures';
 ```
+
+### Pact MCP Reports the Broker as Unreachable
+
+**Symptom**: a workflow says the broker was unreachable and fell back to provider source or an OpenAPI spec.
+
+**Cause**: `tea_pact_mcp` defaults to `"mcp"`, so TEA probes for the SmartBear MCP tools on any contract-testing step. Without a broker, that probe fails and the workflow degrades on purpose.
+
+**This is not an error.** The run completed; it just used a lower-authority source for provider states. To silence the probe entirely:
+
+```yaml
+tea_pact_mcp: 'none'
+```
+
+To make the probe succeed instead, configure the server and its credentials:
+
+```bash
+npm install -g @smartbear/mcp    # Node.js 20+ required
+export PACT_BROKER_BASE_URL=https://{tenant}.pactflow.io
+export PACT_BROKER_TOKEN=<your-api-token>
+```
+
+TEA never blocks on the broker and never presents inferred provider states as broker data, so a failed probe cannot silently corrupt a contract.
 
 ### Browser Automation Not Working
 

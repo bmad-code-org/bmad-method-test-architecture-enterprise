@@ -149,7 +149,16 @@ Create the idiomatic test directory for the detected language:
 
 Keep `{maestro_root}/subflows/` separate from the flow root so a flow count never counts shared setup as a test.
 
-**If `config.tea_use_pactjs_utils` is enabled and runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
+**If `config.tea_use_pactjs_utils` is enabled AND contract testing is relevant to this project AND runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
+
+**Relevance gate — check this before creating anything.** `tea_use_pactjs_utils` defaults to `true`, which means "use these utilities when contract tests are written", not "every project gets a Pact suite". Per `pactjs-utils-mandate.md`, scaffold only when the project has a real consumer-provider boundary. Evidence, any one of:
+
+- An outbound call to a service this repo does not deploy with (an HTTP client pointed at another team's service, a generated API client, a service URL in `.env.example`)
+- An existing `pact/` or `tests/contract/` directory, `@pact-foundation/pact` in `package.json`, or `PACT_BROKER_*` in the environment
+- A microservices layout: multiple deployable services in the repo that call each other
+- The user asked for contract testing
+
+**If none of these hold, create no Pact artifacts.** Say in the setup summary that contract scaffolding was skipped because no consumer-provider boundary was found, and note that the `framework` workflow can add it later. A dead contract suite that fails CI for a boundary the project does not have is worse than no suite.
 
 Create Node.js/TypeScript contract testing directory structure per `pact-consumer-framework-setup.md`:
 
@@ -240,19 +249,33 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
 **If `{detected_stack}` is `frontend`, `fullstack`, or `backend`:**
 
 - **If Playwright Utils enabled:**
+  - `playwright-utils-mandate.md` (load first — it is the binding rule for everything this workflow scaffolds)
   - `overview.md`, `fixtures-composition.md`, `auth-session.md`, `api-request.md`, `recurse.md`, `log.md`, `burn-in.md`, `network-error-monitor.md`, `data-factories.md`
   - If `{detected_stack}` is `frontend` or `fullstack`, also load `intercept-network-call.md`
-  - Recommend installing `@seontechnologies/playwright-utils`
+  - **Install `@seontechnologies/playwright-utils` as a dev dependency and add it to `package.json`.** This is scaffolding, not a suggestion: the framework this workflow produces is the playwright-utils framework, and every downstream workflow generates against it. Note the peer dependency `@playwright/test >= 1.54.1`, plus optional `ajv >= 8.0.0` and `zod >= 3.0.0` for schema validation.
+
+    ```bash
+    npm install -D @seontechnologies/playwright-utils
+    ```
+
+  - If the user declines the install, record it and fall through to the disabled branch for the rest of the scaffold. Do not scaffold imports against a package the project does not have.
 
 - **If disabled:**
   - `fixture-architecture.md`, `data-factories.md`, `network-first.md`, `playwright-config.md`, `test-quality.md`
 
-**If Pact.js Utils enabled** (`config.tea_use_pactjs_utils`):
+**If Pact.js Utils enabled** (`config.tea_use_pactjs_utils`) **and the relevance gate in section 1 opened**:
 
+- `pactjs-utils-mandate.md` (load first - it is the binding rule for every Pact artifact this workflow scaffolds, and it carries the relevance gate itself)
 - `pact-consumer-framework-setup.md` (CRITICAL: load this for directory structure, scripts, CI workflow, and PactV4 patterns — includes `fileParallelism: false` + `pool: 'forks'` + `singleFork: true`, determinism gate, and `jq` publish normalization)
-- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md` (one-interaction-per-`it()` rule), `pactjs-utils-provider-verifier.md` (same `pool: 'forks'` + `singleFork` rule applies to consumer AND provider), `pactjs-utils-request-filter.md`, `contract-testing.md`
+- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md` (one-interaction-per-`it()` rule), `pactjs-utils-provider-verifier.md` (same `pool: 'forks'` + `singleFork` rule applies to consumer AND provider), `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md`, `contract-testing.md`
 - `pact-broker-webhooks.md` — when scaffolding the provider repo and any CI step that depends on `can-i-deploy`
-- Recommend installing `@seontechnologies/pactjs-utils` and `@pact-foundation/pact`
+- **Install `@seontechnologies/pactjs-utils` and its peer `@pact-foundation/pact` as dev dependencies and add them to `package.json`.** Same rule as Playwright Utils: this is scaffolding, not a suggestion, because every Pact artifact generated downstream imports from it.
+
+  ```bash
+  npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
+  ```
+
+- If the user declines the install, fall through to the disabled branch for the whole contract scaffold. Do not scaffold imports against a package the project does not have.
 - Ensure `jq` is available on CI runners (default on `ubuntu-latest`; document `brew install jq` for macOS dev machines) — required by `scripts/check-pact-determinism.sh` and `scripts/publish-pact.sh`
 
 **If Pact.js Utils disabled but contract testing relevant:**
@@ -263,11 +286,38 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
 
 - `pact-mcp.md`
 
+**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Load the fragment, then probe once whether the SmartBear MCP tools are actually reachable in this session. When they are not — no broker configured, no credentials, a headless run without the server — degrade per `pact-mcp.md`: fall back to provider source or an OpenAPI spec, say in the output that the broker was unreachable, and continue. Never block the workflow on it, never retry in a loop, and never present inferred provider states as broker data.
+
 Implement:
 
 - Fixture index with `mergeTests`
 - Auto-cleanup hooks
 - Faker-based data factories with overrides
+
+**If Playwright Utils enabled, the fixture index is `{test_dir}/support/merged-fixtures.ts` and it is the only entry point tests import `test` from:**
+
+```typescript
+import { mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+// Browser suites only:
+import { test as interceptFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
+import { test as networkErrorFixture } from '@seontechnologies/playwright-utils/network-error-monitor/fixtures';
+// Project-owned:
+import { test as authFixture } from './auth-fixture';
+
+export const test = mergeTests(apiRequestFixture, recurseFixture, interceptFixture, networkErrorFixture, authFixture);
+
+export { expect } from '@playwright/test';
+export { log };
+```
+
+Also scaffold `{test_dir}/support/auth-fixture.ts` from `auth-session.md`: `setAuthProvider` with a project-specific `getToken`, then `base.extend(createAuthFixtures())`. Leave `getToken` as a marked `TODO` when the auth endpoint is unknown, and list it in the setup summary. Do not scaffold a form-driven login fixture in its place.
+
+Wire `authStorageInit()` and `configureAuthSession()` into `global-setup.ts`, and add the token storage directory to `.gitignore`.
+
+Skip this whole block for Maestro, Cypress, and non-Playwright backend stacks.
 
 ---
 
@@ -281,6 +331,15 @@ Create example tests in `{test_dir}/e2e/` demonstrating:
 - data-testid selector strategy
 - Factory usage
 - Network interception pattern (if applicable)
+
+**If Playwright Utils enabled**, the samples are the reference every later workflow copies from, so they must be exemplary rather than merely runnable. Each sample:
+
+- Imports `test` from `../support/merged-fixtures`, never from `@playwright/test`
+- Declares `interceptNetworkCall({ url })` before `page.goto`, and awaits it after, so the network-first principle is visible in the shape of the code
+- Uses `apiRequest` for setup and teardown, `recurse` for anything eventually consistent, `log.step` for milestones
+- Takes `authToken` from the auth fixture rather than driving a login form
+
+Ship at least one API sample and, for `frontend`/`fullstack`, one UI sample. A sample suite that demonstrates only vanilla Playwright while the config says otherwise teaches the wrong pattern to every workflow that reads it later.
 
 **If {detected_stack} is `backend` or `fullstack`:**
 
@@ -312,9 +371,9 @@ Create helpers for:
 - Auth helpers
 - Test data factories (language-idiomatic patterns)
 
-**If `config.tea_use_pactjs_utils` is enabled and runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
+**If `config.tea_use_pactjs_utils` is enabled, the relevance gate in section 1 opened, and runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
 
-Create Node.js/TypeScript contract test samples per `pact-consumer-framework-setup.md`:
+Create Node.js/TypeScript contract test samples per `pact-consumer-framework-setup.md`. Every sample follows `pactjs-utils-mandate.md`: `createProviderState` rather than a hand-cast `.given()`, `buildVerifierOptions` rather than a literal options object, `createRequestFilter` rather than bespoke auth middleware, and the `pact-consumer-di.md` injection so the sample exercises the real client instead of raw `fetch`. These samples are the reference every later workflow copies, so a raw-Pact sample teaches the wrong pattern permanently.
 
 - **Consumer test**: Example using PactV4 `addInteraction()` builder + `createProviderState` + real consumer code with URL injection (`.pacttest.ts` extension). **One `addInteraction()` per `it()` block** — never chain multiple interactions in a single test (PactV4 FFI drops them non-deterministically; see `pactjs-utils-consumer-helpers.md` Example 6).
 - **Support files**: Pact config factory (`pact-config.ts`), provider state factories (`provider-states.ts`), local consumer-helpers shim (`consumer-helpers.ts`)

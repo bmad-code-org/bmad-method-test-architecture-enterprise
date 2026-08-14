@@ -43,6 +43,22 @@ Use `{knowledgeIndex}` to load `ci-burn-in.md` guidance:
 - Run N-iteration burn-in for flaky detection
 - Gate promotion based on burn-in stability
 
+**If `tea_use_playwright_utils` is true and the stack is Playwright**, also load `burn-in.md` and `playwright-utils-mandate.md`, and drive selection with the utility instead of `--only-changed`:
+
+```typescript
+// playwright/scripts/burn-in-changed.ts
+import { runBurnIn } from '@seontechnologies/playwright-utils/burn-in';
+
+await runBurnIn({
+  configPath: 'playwright/config/.burn-in.config.ts',
+  baseBranch: 'main',
+});
+```
+
+The pipeline step then calls that script rather than composing a `--grep` by hand. `--only-changed` treats a config or type-definition edit as a reason to run the whole suite; the utility's skip patterns and percentage control are the reason the flag exists. This is a RECOMMENDED-level utility per the mandate: it needs a config file and a script, so scaffold both. If the user declines, keep the plain `npx playwright test` loop and say in the summary that burn-in selection stayed unfiltered.
+
+Skip this for Cypress, Maestro, and non-Playwright backend suites; those keep the `ci-burn-in.md` shape.
+
 **Stack-conditional burn-in:**
 
 - **Frontend or Fullstack** (`test_stack_type` is `frontend` or `fullstack`): Enable burn-in by default. Burn-in targets UI flakiness (race conditions, selector instability, timing issues).

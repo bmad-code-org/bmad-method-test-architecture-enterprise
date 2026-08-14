@@ -4047,8 +4047,8 @@ async function runTests() {
     assert(
       noConfig.configPresent === false &&
         noConfig.values.tea_use_playwright_utils === true &&
-        noConfig.values.tea_use_pactjs_utils === false &&
-        noConfig.values.tea_pact_mcp === 'none',
+        noConfig.values.tea_use_pactjs_utils === true &&
+        noConfig.values.tea_pact_mcp === 'mcp',
       'no config.yaml: every key falls back to the module default',
       JSON.stringify(noConfig),
     );
@@ -4103,7 +4103,7 @@ async function runTests() {
 
     const emptyFile = resolveTeaConfig({ projectRoot: configRoot('empty', '') });
     assert(
-      emptyFile.configPresent === true && emptyFile.values.tea_use_pactjs_utils === false,
+      emptyFile.configPresent === true && emptyFile.values.tea_use_pactjs_utils === true,
       'an empty config.yaml is present but contributes nothing',
       JSON.stringify(emptyFile),
     );
@@ -4139,8 +4139,8 @@ async function runTests() {
     });
     assert(
       defaultConfigPrompt.includes('tea_use_playwright_utils=true') &&
-        defaultConfigPrompt.includes('tea_use_pactjs_utils=false') &&
-        defaultConfigPrompt.includes('tea_pact_mcp=none'),
+        defaultConfigPrompt.includes('tea_use_pactjs_utils=true') &&
+        defaultConfigPrompt.includes('tea_pact_mcp=mcp'),
       'build-prompt states all three config keys even when no teaConfig is passed',
     );
     const resolvedConfigPrompt = buildPrompt({
@@ -4202,12 +4202,12 @@ async function runTests() {
     console.log(`${colors.yellow}Test Suite 11: convention-baseline${colors.reset}\n`);
 
     assert(
-      CONVENTION_KEYS.length === 7 &&
-        MECHANICAL_CONVENTION_KEYS.length === 5 &&
+      CONVENTION_KEYS.length === 8 &&
+        MECHANICAL_CONVENTION_KEYS.length === 6 &&
         JUDGMENT_ONLY_CONVENTION_KEYS.length === 2 &&
         MECHANICAL_CONVENTION_KEYS.every((key) => CONVENTION_KEYS.includes(key)) &&
         JUDGMENT_ONLY_CONVENTION_KEYS.every((key) => CONVENTION_KEYS.includes(key)),
-      'the seven step-02 §2b convention keys split into five mechanically-detectable and two judgment-only, covering every key exactly once',
+      'the eight step-02 §2b convention keys split into six mechanically-detectable and two judgment-only, covering every key exactly once',
       JSON.stringify({ CONVENTION_KEYS, MECHANICAL_CONVENTION_KEYS, JUDGMENT_ONLY_CONVENTION_KEYS }),
     );
 
@@ -4299,7 +4299,7 @@ async function runTests() {
     );
     assert(
       CONVENTION_KEYS.every((key) => Object.prototype.hasOwnProperty.call(rankedBaseline.conventions, key)),
-      'every one of the seven keys is present in the returned conventions object, mechanical or not',
+      'every one of the eight keys is present in the returned conventions object, mechanical or not',
       JSON.stringify(Object.keys(rankedBaseline.conventions)),
     );
 
@@ -4330,8 +4330,8 @@ async function runTests() {
     const registrySkillRoot = path.join(repoRoot, 'src', 'workflows', 'testarch', 'bmad-testarch-test-review');
     const registryRowSeverities = loadRegistryRowSeverities(registrySkillRoot);
     assert(
-      registryRowSeverities !== null && Object.keys(registryRowSeverities).length === 32,
-      'loadRegistryRowSeverities reads all 32 real rows (C1-C7, H1-H9, M1-M8, L1-L8) from criteria-registry.md',
+      registryRowSeverities !== null && Object.keys(registryRowSeverities).length === 35,
+      'loadRegistryRowSeverities reads all 35 real rows (C1-C7, H1-H9, M1-M10, L1-L9) from criteria-registry.md',
       JSON.stringify(registryRowSeverities ? Object.keys(registryRowSeverities).length : null),
     );
     assert(

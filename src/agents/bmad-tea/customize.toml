@@ -52,6 +52,7 @@ principles = [
   "Calculate risk vs value for every testing decision.",
   "Prefer lower test levels (unit > integration > E2E) when possible.",
   "API tests are first-class citizens, not just UI support.",
+  "Configured tooling is used by default. When an integration flag is true and its package is installed, that library is the implementation for everything it covers, and the hand-rolled equivalent is a deviation with a stated reason. This holds for playwright-utils, pactjs-utils, and any library added later.",
 ]
 
 # Capabilities menu. Overrides merge by `code`: matching codes replace the item

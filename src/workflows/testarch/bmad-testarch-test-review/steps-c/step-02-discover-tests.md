@@ -83,7 +83,8 @@ does. Then `criteria-registry.md` scores each Convention row against the result.
 > **Exception — convention baseline supplied.** A headless run through
 > `tea-test-review` computes this baseline deterministically instead of leaving it
 > to you: `corpusSize`, `sampled`, the exact sampled file list, and — for
-> `priorityMarkers`, `testIds`, `networkFirst`, `dataFactories`, and `fixtures` — a
+> `priorityMarkers`, `testIds`, `networkFirst`, `dataFactories`, `fixtures`, and
+> `playwrightUtils` — a
 > mechanical zero/nonzero adoption signal from actually reading every sampled
 > file's real content (see `cli/lib/convention-baseline.js`). When the prompt
 > states this data, use it verbatim: do not re-glob, re-sample, or re-derive
@@ -129,15 +130,16 @@ number.
 For each key, count how many sampled files use it, and record the observed form
 verbatim so the report can quote it back:
 
-| Key               | Adopted when a sampled file…                                   | Record as `form`                                                                |
-| ----------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `priorityMarkers` | carries a priority marker on its tests                         | the observed shape, e.g. `[P0] in the test name`, `@P1 tag`, `{ tag: ['@p2'] }` |
-| `testIds`         | locates elements by a stable test id                           | the attribute or helper, e.g. `data-testid`, `getByTestId`                      |
-| `bddNaming`       | names tests by behavior rather than implementation             | e.g. `starts with a verb phrase`, `Given/When/Then`                             |
-| `networkFirst`    | registers interception or a readiness signal before navigating | the helper, e.g. `interceptNetworkCall`, `page.route`                           |
-| `dataFactories`   | builds domain payloads through a factory or builder            | e.g. `@couture/testing factories`, `build*` helpers                             |
-| `fixtures`        | takes setup from a fixture rather than inline duplication      | e.g. `mergeTests`, `merged-fixtures`                                            |
-| `assertionStyle`  | uses one assertion dialect consistently                        | e.g. `expect + vitest matchers`                                                 |
+| Key               | Adopted when a sampled file…                                                                              | Record as `form`                                                                |
+| ----------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `priorityMarkers` | carries a priority marker on its tests                                                                    | the observed shape, e.g. `[P0] in the test name`, `@P1 tag`, `{ tag: ['@p2'] }` |
+| `testIds`         | locates elements by a stable test id                                                                      | the attribute or helper, e.g. `data-testid`, `getByTestId`                      |
+| `bddNaming`       | names tests by behavior rather than implementation                                                        | e.g. `starts with a verb phrase`, `Given/When/Then`                             |
+| `networkFirst`    | registers interception or a readiness signal before navigating                                            | the helper, e.g. `interceptNetworkCall`, `page.route`                           |
+| `playwrightUtils` | imports `test` from a merged-fixtures module, or imports any `@seontechnologies/playwright-utils` subpath | the observed entry point, e.g. `support/merged-fixtures`, `apiRequest fixture`  |
+| `dataFactories`   | builds domain payloads through a factory or builder                                                       | e.g. `@couture/testing factories`, `build*` helpers                             |
+| `fixtures`        | takes setup from a fixture rather than inline duplication                                                 | e.g. `mergeTests`, `merged-fixtures`                                            |
+| `assertionStyle`  | uses one assertion dialect consistently                                                                   | e.g. `expect + vitest matchers`                                                 |
 
 ### Status thresholds, applied exactly
 
@@ -165,10 +167,17 @@ const conventionBaseline = {
     priorityMarkers: { adopted: 11, sampled: 19, status: 'established', form: '[P#] in the test name' },
     testIds: { adopted: 8, sampled: 19, status: 'emerging', form: 'data-testid' },
     networkFirst: { adopted: 5, sampled: 19, status: 'emerging', form: 'interceptNetworkCall' },
+    playwrightUtils: { adopted: 5, sampled: 19, status: 'emerging', form: 'support/merged-fixtures' },
     // ...one entry per key in the table above, every key present
   },
 };
 ```
+
+`playwrightUtils` is measured on every corpus, but it only reaches the report when
+`tea_use_playwright_utils` is true and `@seontechnologies/playwright-utils` is a
+project dependency. Measure it either way: on a repo where the flag is on and the
+package is absent, the ratio is the evidence that the framework step never ran, and
+that belongs in the report as a recommendation rather than as a per-file deduction.
 
 Every key in the table must appear, including ones that came back `absent`: a
 missing key is indistinguishable from an unmeasured one, and the registry needs

@@ -78,7 +78,7 @@ To ship your own workflow, package it as custom content and attach it to `bmad-t
 4. Test Design (60 min) - Risk assessment, coverage planning
 5. ATDD & Automate (60 min) - TDD red-green, test generation
 6. Quality & Trace (45 min) - Test review, traceability, metrics
-7. Advanced Patterns (ongoing) - 56 knowledge fragments exploration
+7. Advanced Patterns (ongoing) - 59 knowledge fragments exploration
 
 **Features:**
 

@@ -70,6 +70,10 @@ Write `{outputFile}` including:
 - Key assumptions and risks
 - Next recommended workflow (e.g., `test-review` or `trace`)
 
+**If `tea_use_playwright_utils` is true**, add a `Playwright Utils deviations` section listing every entry rolled up in Step 3C, one line each as `file:line — reason`. Write `None` when the list is empty; the reader cannot tell an empty section from a forgotten one.
+
+Name in the same section any RECOMMENDED utility the run wanted but could not wire, with the wiring it needs: an `auth-session` provider, a HAR directory for `network-recorder`, a mock provider for the webhook module, a config and script for `burn-in`. A run that quietly skipped auth and drove a login form instead has hidden the one thing the next person needs to fix.
+
 ---
 
 ## 4. Save Progress

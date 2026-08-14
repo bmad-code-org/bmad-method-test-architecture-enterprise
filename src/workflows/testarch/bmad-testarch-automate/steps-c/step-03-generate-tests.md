@@ -71,6 +71,7 @@ const subagentContext = {
     use_pactjs_utils: config.tea_use_pactjs_utils,
     pact_mcp: config.tea_pact_mcp,  // "mcp" | "none"
     browser_automation: config.tea_browser_automation,  // "auto" | "cli" | "mcp" | "none"
+    playwright_utils_mandate: config.tea_use_playwright_utils === true,  // when true, workers MUST follow playwright-utils-mandate.md
     detected_stack: '{detected_stack}',  // "frontend" | "backend" | "fullstack"
     execution_mode: config.tea_execution_mode || 'auto',  // "auto" | "subagent" | "agent-team" | "sequential"
     capability_probe: parseBooleanFlag(config.tea_capability_probe, true),  // supports booleans and "false"/"true" strings
@@ -185,6 +186,28 @@ generates only device flows has misread the level framework.
 ### 3A. Runtime-Managed Parallelism
 
 When `resolvedMode` is `agent-team` or `subagent`, let the runtime decide concurrency and scheduling. TEA does not impose an additional worker ceiling.
+
+---
+
+### Playwright Utils Generation Contract
+
+When `use_playwright_utils` is `true`, every JavaScript/TypeScript worker dispatched below (3A API, 3B E2E, and 3B-backend when the service is Node/TypeScript on the Playwright runner) generates in the playwright-utils style by default. `playwright-utils-mandate.md` is the binding rule; pass it in `knowledge_fragments_loaded` and restate it in each worker's dispatch context.
+
+The non-negotiable substitutions:
+
+| Vanilla                                                  | Required instead                                    |
+| -------------------------------------------------------- | --------------------------------------------------- |
+| `page.route` / `page.waitForResponse` on an app endpoint | `interceptNetworkCall`                              |
+| `request.get/post/put/patch/delete`                      | `apiRequest`                                        |
+| `page.waitForTimeout`, bare `expect.poll`                | `recurse`                                           |
+| `console.log`                                            | `log.info` / `log.step`                             |
+| `import { test } from '@playwright/test'` in a spec      | `import { test } from '../support/merged-fixtures'` |
+
+`auth-session`, `network-recorder`, `webhook`, and `burn-in` are recommended rather than required: they need project wiring. Propose them and name the wiring; never silently emit the vanilla equivalent instead.
+
+This contract does not apply to Maestro flows (3B-mobile), Cypress suites, or backend suites in pytest, JUnit, Go test, xUnit, or RSpec.
+
+When `use_playwright_utils` is `false`, workers follow `fixture-architecture.md` and `network-first.md` for both principle and mechanism.
 
 ---
 

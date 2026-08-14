@@ -127,12 +127,12 @@ Before starting this workflow, verify:
 
 - [ ] Existing fixtures checked in `tests/support/fixtures/`
 - [ ] Fixture architecture created/enhanced (if `{generate_fixtures}` true)
-- [ ] All fixtures use Playwright's `test.extend()` pattern
+- [ ] All fixtures use Playwright's `test.extend()` pattern, composed with `mergeTests`
 - [ ] All fixtures have auto-cleanup in teardown
 - [ ] Common fixtures created/enhanced:
-  - [ ] authenticatedUser (with auto-delete)
-  - [ ] apiRequest (authenticated client)
-  - [ ] mockNetwork (external service mocking)
+  - [ ] `authToken` — from `createAuthFixtures()` when `tea_use_playwright_utils` is true, otherwise a project fixture
+  - [ ] `apiRequest` — the playwright-utils fixture when the flag is true, otherwise an authenticated client fixture
+  - [ ] `interceptNetworkCall` — the playwright-utils fixture (browser suites); no bespoke `mockNetwork` module when the flag is true
   - [ ] testDatabase (with auto-cleanup)
 
 ### Data Factories
@@ -255,9 +255,43 @@ Before starting this workflow, verify:
 
 ### Network-First Pattern Applied
 
-- [ ] Route interception set up BEFORE navigation (E2E tests with network requests)
-- [ ] `page.route()` called before `page.goto()` to prevent race conditions
+- [ ] Interception set up BEFORE navigation (E2E tests with network requests)
+- [ ] Interception declared before `page.goto()` to prevent race conditions — via `interceptNetworkCall` when `tea_use_playwright_utils` is true, via `page.route()` when it is false
 - [ ] Network-first pattern verified in all E2E tests that make API calls
+
+### Playwright Utils Mandate (if `tea_use_playwright_utils` is true)
+
+Per `playwright-utils-mandate.md`. Skip this section entirely when the flag is false, and for Maestro, Cypress, and non-Playwright backend suites.
+
+- [ ] Every spec imports `test` from the project's merged fixtures, not from `@playwright/test`
+- [ ] `tests/support/merged-fixtures.ts` exists and composes with `mergeTests`
+- [ ] Application API calls in UI tests use `interceptNetworkCall`, not `page.route` or `page.waitForResponse`
+- [ ] API tests and in-test setup/teardown use `apiRequest`, not the raw `request` fixture
+- [ ] Async waits use `recurse`, not `page.waitForTimeout` or a hand-written poll loop
+- [ ] Report output uses `log`, not `console.log`
+- [ ] File-download assertions use `handleDownload` plus the matching `read*` helper
+- [ ] Authenticated state comes from the `authToken` fixture, or the missing auth wiring is named in the summary
+- [ ] `network-error-monitor` is in the merge for browser suites, with opt-outs only on tests that expect an error response
+- [ ] Package name is `@seontechnologies/playwright-utils` everywhere (never `@playwright-utils/*`)
+- [ ] Every remaining vanilla call carries a `// playwright-utils deviation: <reason>` comment and appears in the summary's deviation list
+
+### Pact.js Utils Mandate (if `tea_use_pactjs_utils` is true and contract tests are in scope)
+
+Per `pactjs-utils-mandate.md`. Skip entirely when the flag is false, when `@seontechnologies/pactjs-utils` is not installed, or when the project has no consumer-provider boundary — the flag never means a project should have contract tests.
+
+- [ ] Contract artifacts generated only against a real consumer-provider boundary, with the reason stated when skipped
+- [ ] `@seontechnologies/pactjs-utils` and `@pact-foundation/pact` present in `package.json`
+- [ ] Provider states built with `createProviderState`, never a hand-cast `.given('name', obj as JsonMap)`
+- [ ] Verifier options built with `buildVerifierOptions` / `buildMessageVerifierOptions`, never a literal options object
+- [ ] Auth injection uses `createRequestFilter` or `noOpRequestFilter`, never bespoke middleware
+- [ ] PactV4 builder callbacks use `setJsonContent` / `setJsonBody` rather than repeated inline lambdas
+- [ ] `zodToPactMatchers` used where the project already has a Zod schema
+- [ ] `executeTest` exercises the real consumer client via the `pact-consumer-di.md` injection, or the reason it cannot is stated
+- [ ] Exactly one `addInteraction()` per `it()` block
+- [ ] Consumer Vitest config carries `fileParallelism: false` AND `pool: 'forks'` AND `singleFork: true`; provider config carries the pool pair
+- [ ] Every interaction carries its `// Provider endpoint:` comment and provider-scrutiny evidence
+- [ ] Package name is `@seontechnologies/pactjs-utils` everywhere
+- [ ] Every remaining raw-Pact construct carries a `// pactjs-utils deviation: <reason>` comment and appears in the summary's deviation list
 
 ---
 

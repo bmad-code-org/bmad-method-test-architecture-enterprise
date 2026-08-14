@@ -33,6 +33,8 @@ test_artifacts:
 
 # ✅ ACTIVELY USED - Playwright Utils integration (referenced in 6 workflows: automate, atdd, framework, test-design, test-review, ci)
 # CRITICAL: Must be boolean (true/false) not string - workflows check "if config.tea_use_playwright_utils: true"
+# When true, playwright-utils-mandate.md binds generation and review: the package is the default
+# implementation for what it covers, not an option the user has to ask for by name.
 tea_use_playwright_utils:
   prompt: "Enable Playwright Utils integration?"
   default: true
@@ -45,28 +47,32 @@ tea_use_playwright_utils:
 
 # ✅ ACTIVELY USED - Pact.js Utils integration for contract testing (referenced in workflows: automate, atdd, framework, test-design, test-review, ci)
 # CRITICAL: Must be boolean (true/false) not string - workflows check "if config.tea_use_pactjs_utils: true"
+# When true, pactjs-utils-mandate.md binds any Pact suite TEA writes. It does NOT mean every project
+# gets contract tests: the mandate's relevance gate still requires a real consumer-provider boundary.
 tea_use_pactjs_utils:
   prompt: "Enable Pact.js Utils for consumer-driven contract testing?"
-  default: false
+  default: true
   result: "{value}"
   single-select:
     - value: true
-      label: "Yes - Enable optional contract-testing utilities"
+      label: "Yes - Use production utilities when contract tests are written (Recommended)"
     - value: false
-      label: "No - Skip Pact integration"
+      label: "No - Generate raw Pact from scratch"
 
 # ✅ ACTIVELY USED - Pact MCP integration for broker interaction during contract testing
 # Controls how TEA interacts with PactFlow/Pact Broker during test generation and review
 # CRITICAL: Must be a string value: "mcp" | "none"
+# Default "mcp" is safe without a broker: every broker-dependent step degrades per pact-mcp.md when the
+# MCP tools are unreachable (falls back to provider source or OpenAPI, reports it, and continues).
 tea_pact_mcp:
-  prompt: "Enable SmartBear MCP for PactFlow/Pact Broker? Only needed if you already use a broker."
-  default: "none"
+  prompt: "Enable SmartBear MCP for PactFlow/Pact Broker? Used when a broker is reachable; skipped automatically when it is not."
+  default: "mcp"
   result: "{value}"
   single-select:
     - value: "mcp"
-      label: "Yes - Enable optional broker integration"
+      label: "Yes - Use the broker when it is reachable (Recommended)"
     - value: "none"
-      label: "No - No broker/MCP integration"
+      label: "No - Never attempt broker/MCP integration"
 
 # ✅ ACTIVELY USED - Browser automation strategy for TEA workflows
 # Controls how TEA interacts with live browsers during test generation

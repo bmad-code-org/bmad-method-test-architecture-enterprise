@@ -125,17 +125,20 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 
 ### Playwright Utils Loading Profiles
 
-**If `tea_use_playwright_utils` is enabled**, select the appropriate loading profile:
+**If `tea_use_playwright_utils` is enabled**, load `playwright-utils-mandate.md` FIRST, before any profile below. It is the binding rule for this run: playwright-utils is the default implementation for every capability it covers, and a vanilla Playwright equivalent is a deviation that must be justified in the output. Every worker step dispatched from this workflow inherits that rule.
+
+Then select the appropriate loading profile:
 
 - **API-only profile** (when `{detected_stack}` is `backend` or no `page.goto`/`page.locator` found in test files):
-  Load: `overview`, `api-request`, `auth-session`, `recurse` (~1,800 lines)
+  Load: `playwright-utils-mandate`, `overview`, `api-request`, `auth-session`, `recurse` (~2,100 lines)
 
 - **Full UI+API profile** (when `{detected_stack}` is `frontend`/`fullstack` or browser tests detected):
-  Load: all Playwright Utils core fragments (~4,500 lines)
+  Load: `playwright-utils-mandate` plus all Playwright Utils core fragments (~4,800 lines)
 
 - **Mobile profile** (when `{detected_stack}` is `mobile`):
-  Load: `mobile-test-strategy`, `maestro-flows`, `mobile-ci-device-lab`, `test-levels-framework`, `test-priorities-matrix`, `test-quality`, plus `overview`, `api-request`, `auth-session`, `recurse` for the app's HTTP boundary.
+  Load: `mobile-test-strategy`, `maestro-flows`, `mobile-ci-device-lab`, `test-levels-framework`, `test-priorities-matrix`, `test-quality`, plus `playwright-utils-mandate`, `overview`, `api-request`, `auth-session`, `recurse` for the app's HTTP boundary.
   Do NOT load the browser fragments (`network-first`, `playwright-config`, `intercept-network-call`, `selector-resilience`): a device flow has no DOM and no request interceptor, and loading them invites browser patterns into a Maestro flow.
+  The mandate is loaded here for the HTTP-boundary tests only. It has no bearing on a Maestro flow, and its own scope section says so.
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile. A `maestro/` or `.maestro/` directory selects the mobile profile regardless of what `{test_dir}` holds.
 
@@ -143,7 +146,9 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 
 **If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`, or microservices indicators detected):
 
-Load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md` (~800 lines)
+Load `pactjs-utils-mandate.md` FIRST. It is the binding rule for any Pact artifact this run produces, and it carries the relevance gate: the flag defaults to `true` and means "use these utilities when contract tests are written", never "add contract tests to this project".
+
+Then load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md` (~1,100 lines)
 
 **If `tea_use_pactjs_utils` is disabled** but contract testing is relevant (microservices architecture detected, existing Pact config found):
 
@@ -156,6 +161,8 @@ Load: `contract-testing.md` (~960 lines)
 **If `tea_pact_mcp` is `"mcp"`:**
 
 Load: `pact-mcp.md` (~150 lines) — enables agent to use SmartBear MCP tools for fetching provider states and generating pact tests during automation.
+
+**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Load the fragment, then probe once whether the SmartBear MCP tools are actually reachable in this session. When they are not — no broker configured, no credentials, a headless run without the server — degrade per `pact-mcp.md`: fall back to provider source or an OpenAPI spec, say in the output that the broker was unreachable, and continue. Never block the workflow on it, never retry in a loop, and never present inferred provider states as broker data.
 
 ## 4. Load Knowledge Base Fragments
 
@@ -172,16 +179,19 @@ Use `{knowledgeIndex}` and load only what is required.
 
 **Playwright Utils (if enabled):**
 
+- `playwright-utils-mandate.md` (load first — it governs how the fragments below are applied)
 - `overview.md`, `api-request.md`, `network-recorder.md`, `auth-session.md`, `intercept-network-call.md`, `recurse.md`, `log.md`, `file-utils.md`, `burn-in.md`, `network-error-monitor.md`, `fixtures-composition.md`
+- `fixture-architecture.md` and `network-first.md` for their principles only. Under the mandate the mechanism comes from the playwright-utils fragments: interception is `interceptNetworkCall` declared before `page.goto`, and composition is `mergeTests`.
 
 **Traditional Patterns (if Playwright Utils disabled):**
 
 - `fixture-architecture.md`
 - `network-first.md`
 
-**Pact.js Utils (if enabled):**
+**Pact.js Utils (if enabled and contract testing is relevant):**
 
-- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`
+- `pactjs-utils-mandate.md` (load first — it governs how the fragments below are applied)
+- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md`
 
 **Contract Testing (if pactjs-utils disabled but relevant):**
 

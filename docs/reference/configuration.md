@@ -22,8 +22,8 @@ TEA reads `_bmad/tea/config.yaml` once at workflow start. After editing it, star
 project_name: my-project
 output_folder: _bmad-output
 tea_use_playwright_utils: true # production-ready fixtures and utilities
-tea_use_pactjs_utils: false # opt in only for contract testing (see below)
-tea_pact_mcp: 'none' # opt in only if you already run PactFlow or Pact Broker
+tea_use_pactjs_utils: true # pactjs-utils is the implementation whenever contract tests are written
+tea_pact_mcp: 'mcp' # use a broker when one is reachable; skipped automatically when it is not
 tea_browser_automation: 'auto' # smart CLI/MCP selection with fallback
 tea_execution_mode: 'auto' # capability-aware orchestration
 tea_capability_probe: true # fall back safely when a mode is unsupported
@@ -34,7 +34,7 @@ npm install -D @seontechnologies/playwright-utils
 npm install -g @playwright/cli@latest  # needed for 'cli' and 'auto' browser modes
 ```
 
-**Contract-testing opt-in:** set `tea_use_pactjs_utils: true` for services that already practice consumer-driven contract testing. Add `tea_pact_mcp: 'mcp'` only if you also run PactFlow or a Pact Broker and want TEA to query broker state.
+**Contract testing:** `tea_use_pactjs_utils` is on by default, and it decides _how_ Pact suites are written, not _whether_ a project gets one. TEA still requires a real consumer-provider boundary before scaffolding any contract test. Set it to `false` to have TEA write raw `@pact-foundation/pact` instead. `tea_pact_mcp` is likewise on by default and costs nothing without a broker: every broker-dependent step degrades to provider source or an OpenAPI spec and reports that the broker was unreachable.
 
 ---
 
@@ -62,16 +62,22 @@ Enable Playwright Utils integration for production-ready fixtures and utilities.
 
 **Installer prompt:** `Enable Playwright Utils integration?`
 
+**What `true` means.** Not "the library is available if you ask for it." It makes `@seontechnologies/playwright-utils` the default implementation for every capability it covers, in generation and in review, without the user naming a utility. The binding rule is the `playwright-utils-mandate` knowledge fragment: `interceptNetworkCall` instead of `page.route`, `apiRequest` instead of the raw `request` fixture, `recurse` instead of `page.waitForTimeout`, `log` instead of `console.log`, and `test` imported from the project's merged fixtures rather than from `@playwright/test`. A vanilla Playwright equivalent still ships when the utility genuinely does not cover the case, but it carries a `// playwright-utils deviation: <reason>` comment and appears in the workflow's output summary.
+
+`auth-session`, `network-recorder`, the webhook module, and `burn-in` sit one level down as recommended rather than required, because they need project-side wiring. Workflows propose them and name the wiring; they never silently fall back to the vanilla equivalent without saying so.
+
+The mandate applies only to JavaScript/TypeScript suites on the Playwright runner. Cypress, Maestro flows, Pact/Vitest contract suites, and backend suites in pytest, JUnit, Go test, xUnit, or RSpec are unaffected.
+
 **Affects workflows** (each reads the key and branches on it):
 
-- `atdd` selects a playwright-utils fragment profile and passes `use_playwright_utils` to generation workers, producing tests that use fixtures like `apiRequest` and `authSession`
-- `automate` same fragment profile and worker flag for test generation
-- `test-design` loads playwright-utils fragments so planning output includes matching code examples
-- `test-review` reviews tests against playwright-utils patterns
+- `atdd` loads the mandate, selects a playwright-utils fragment profile, and passes `use_playwright_utils` to generation workers. Red-phase scaffolds are generated in playwright-utils style, since the scaffold is the file the developer un-skips and keeps
+- `automate` same fragment profile and worker flag, plus a `merged-fixtures.ts` entry point and an auth fixture built on `auth-session` during aggregation
+- `test-design` loads the mandate so every code example in the design document matches what `automate` will generate
+- `test-review` scores registry rows `M9` (a configured utility bypassed with no stated deviation, MEDIUM) and `L9` (a spec importing `test` from `@playwright/test` against a merged-fixtures convention, LOW). `M9` also requires the package to be a project dependency: the flag alone never produces a deduction
+- `framework` installs the package, scaffolds `merged-fixtures.ts` and the auth fixture, and generates samples in the mandated style
+- `ci` drives burn-in selection through `runBurnIn` instead of `--only-changed` when the stack is Playwright
 
-- `framework` loads a different fixture-fragment set per branch when the stack is `frontend`, `fullstack`, or `backend`, and only recommends installing the package on the enabled branch
-
-The `ci`, `trace`, and `nfr-assess` workflows do not read this key.
+The `trace` and `nfr-assess` workflows do not read this key.
 
 ```yaml
 tea_use_playwright_utils: true # false generates from scratch instead
@@ -94,23 +100,31 @@ npm install -D @seontechnologies/playwright-utils
 
 Enable Pact.js Utils integration for consumer-driven contract testing utilities.
 
-**Type:** `boolean` · **Default:** `false`
+**Type:** `boolean` · **Default:** `true`
 
 **Installer prompt:** `Enable Pact.js Utils for consumer-driven contract testing?`
 
+**What `true` means, and what it does not.** It makes `@seontechnologies/pactjs-utils` the default implementation for every Pact artifact TEA writes, the same way `tea_use_playwright_utils` does for Playwright. The binding rule is the `pactjs-utils-mandate` knowledge fragment: `createProviderState` instead of a hand-cast `.given()`, `buildVerifierOptions` instead of a literal `VerifierOptions` object, `createRequestFilter` instead of bespoke auth middleware, `setJsonContent` / `setJsonBody` instead of repeated PactV4 builder lambdas. Raw Pact still ships where the utilities do not reach, with a `// pactjs-utils deviation: <reason>` comment and an entry in the workflow's summary.
+
+**It is not an instruction to add contract testing.** The mandate carries a relevance gate that TEA applies before scaffolding anything: an outbound call to a service this repo does not deploy with, an existing `pact/` directory or `@pact-foundation/pact` dependency, `PACT_BROKER_*` in the environment, a microservices layout, or the user asking. With none of those, TEA creates no Pact artifacts and says why. A dead contract suite failing CI for a boundary that does not exist is worse than no suite.
+
+`zodToPactMatchers` and the `pact-consumer-di.md` injection sit one level down as recommended rather than required: one needs a Zod schema, the other a two-line production-code change. TEA proposes them and names what is missing rather than silently hand-rolling the alternative.
+
+The determinism rules never relax under the mandate: one `addInteraction()` per `it()`, `fileParallelism: false` plus `pool: 'forks'` plus `singleFork: true` on the consumer config, the pool pair on the provider config, and provider scrutiny before any response matcher.
+
 **Affects workflows:**
 
-- `framework` creates pact test folders and pactjs-utils sample patterns
-- `atdd` loads pactjs-utils fragments for contract-aware generation context
-- `automate` loads pactjs-utils fragments and passes pact config to subagents
-- `test-design` loads pactjs-utils fragments for system and epic planning
-- `test-review` uses pactjs-utils provider and review patterns
+- `framework` installs the packages, then creates pact folders and mandated sample patterns — only when the relevance gate opens
+- `atdd` loads the mandate and generates contract scaffolds in that style
+- `automate` loads the mandate and passes pact config to subagents
+- `test-design` loads the mandate so Pact code examples in design documents match what `automate` generates
+- `test-review` scores registry row `M10` (a configured contract utility bypassed with no stated deviation, MEDIUM), gated on the flag plus the package being installed
 - `ci` adds a contract-test stage and quality gates
 
-**Use this when:** your team already practices consumer-driven contract testing, or you want TEA to scaffold Pact-aware patterns on purpose. Leave it off for projects that do not use Pact.
+**Use this when:** you want TEA to write Pact well. Set it to `false` only if you deliberately want raw `@pact-foundation/pact` output.
 
 ```yaml
-tea_use_pactjs_utils: true # false skips all Pact integration
+tea_use_pactjs_utils: true # false generates raw Pact from scratch instead
 ```
 
 **Prerequisites:**
@@ -124,8 +138,9 @@ For the remote flow with a Pact Broker, set `PACT_BROKER_BASE_URL` and `PACT_BRO
 
 **Related:**
 
+- [Integrate Pact.js Utils Guide](/docs/how-to/customization/integrate-pactjs-utils.md)
 - [Pact.js Utils docs](https://seontechnologies.github.io/pactjs-utils/)
-- [TEA Overview: Optional Integrations](/docs/explanation/tea-overview.md#optional-integrations)
+- [TEA Overview: Library Integrations](/docs/explanation/tea-overview.md#library-integrations)
 
 ---
 
@@ -133,15 +148,17 @@ For the remote flow with a Pact Broker, set `PACT_BROKER_BASE_URL` and `PACT_BRO
 
 Pact MCP strategy for broker interaction during contract testing workflows.
 
-**Type:** `string` · **Default:** `"none"` · **Options:** `"mcp"` | `"none"`
+**Type:** `string` · **Default:** `"mcp"` · **Options:** `"mcp"` | `"none"`
 
-**Installer prompt:** `Enable SmartBear MCP for PactFlow/Pact Broker? Only needed if you already use a broker.`
+**Installer prompt:** `Enable SmartBear MCP for PactFlow/Pact Broker? Used when a broker is reachable; skipped automatically when it is not.`
 
 Controls whether TEA can use SmartBear MCP tools for provider-state discovery, Pact test review assistance, and can-i-deploy/matrix guidance.
 
+**Why the default is `"mcp"` and why that is safe without a broker.** Unlike the two library flags, this one gates a runtime capability rather than a project dependency, so its second gate is "are the MCP tools actually reachable in this session". Every broker-dependent step probes once and degrades per the `pact-mcp` fragment when they are not: it falls back to provider source or an OpenAPI spec, states in the output that the broker was unreachable, and continues. No workflow blocks on it, nothing retries in a loop, and inferred provider states are never presented as broker data. Real broker data beats a guess when it is there, and its absence costs a sentence in the report.
+
 **Affects workflows:** `test-design`, `atdd`, `automate`, `framework`, `test-review`, `ci`.
 
-**Use this when:** your project already uses PactFlow or Pact Broker and you want TEA to query broker state during review, generation, or gate guidance. Otherwise leave it at `none`.
+**Set it to `none` when:** you want TEA never to attempt a broker call at all — an air-gapped environment, or a policy against outbound calls from the agent's session.
 
 ```yaml
 tea_pact_mcp: 'mcp' # 'none' disables all broker/MCP integration

@@ -20,7 +20,7 @@ network-first,Network-First Safeguards,"Intercept-before-navigate workflow, HAR 
 test-quality,Test Quality Definition of Done,"Execution limits, isolation rules, green criteria","quality,definition-of-done,tests",core,knowledge/test-quality.md
 ```
 
-`tier` is one of `core`, `extended`, or `specialized`. The 56 fragments split 21 / 19 / 16 across those tiers.
+`tier` is one of `core`, `extended`, or `specialized`. The 59 fragments split 24 / 19 / 16 across those tiers.
 
 The agent-level `resources/` directory is the reference catalog. Workflow skills also carry their own `resources/tea-index.csv` and `resources/knowledge/` directories. That duplication is intentional: workflow step frontmatter resolves `knowledgeIndex: './resources/tea-index.csv'` from `{skill-root}`, which keeps each workflow skill modular and self-contained.
 
@@ -150,7 +150,7 @@ test('job completion', async ({ apiRequest, recurse }) => {
 
 ## Related
 
-- [Knowledge Base Index](/docs/reference/knowledge-base.md) - all 56 fragments, categorized
+- [Knowledge Base Index](/docs/reference/knowledge-base.md) - all 59 fragments, categorized
 - [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - the context engineering argument
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md) - what `test-quality.md` encodes
 - [Network-First Patterns](/docs/explanation/network-first-patterns.md) - what `network-first.md` encodes

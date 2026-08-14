@@ -292,8 +292,9 @@
   - [ ] Backend/Architecture dependencies listed (what QA needs from other teams)
   - [ ] QA infrastructure setup listed (factories, fixtures, environments)
   - [ ] Code example with playwright-utils if config.tea_use_playwright_utils is true
-  - [ ] Test from '@seontechnologies/playwright-utils/api-request/fixtures'
+  - [ ] Test from '@seontechnologies/playwright-utils/api-request/fixtures', or from the project's merged-fixtures module
   - [ ] Expect from '@playwright/test' (playwright-utils does not re-export expect)
+  - [ ] No vanilla equivalent in any example when the flag is true: no raw `request.<method>`, no `page.route` on an application endpoint, no `page.waitForTimeout`, no `console.log` (per `playwright-utils-mandate.md`)
   - [ ] Code examples include assertions (no unused imports)
 - [ ] **Risk Assessment** section (brief, references Architecture doc)
   - [ ] High-priority risks table

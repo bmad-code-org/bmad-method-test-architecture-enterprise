@@ -24,8 +24,8 @@ const CONFIG_RELATIVE_PATH = path.join('_bmad', 'tea', 'config.yaml');
 
 const MODULE_DEFAULTS = {
   tea_use_playwright_utils: true,
-  tea_use_pactjs_utils: false,
-  tea_pact_mcp: 'none',
+  tea_use_pactjs_utils: true,
+  tea_pact_mcp: 'mcp',
 };
 
 const PACT_MCP_VALUES = ['mcp', 'none'];

@@ -159,7 +159,11 @@ Codex users run `$bmad-testarch-test-design` with the same scope-setting prompt.
 
 TEA spans Phase 3, Phase 4, and the release gate, where most BMM agents operate in a single phase. That multi-phase role is paired with a dedicated testing knowledge base so standards stay consistent across projects: extensive domain knowledge (test patterns, CI/CD, fixtures, quality practices), cross-cutting standards that apply to every BMad project rather than to one document type, and optional integrations for Playwright Utils, the Playwright CLI, and MCP servers. See [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
 
-## Optional Integrations
+## Library Integrations
+
+"Optional" describes the choice, not the effect. Each library has a config flag, and while a flag is `true` and its package is installed, that library is the implementation TEA reaches for on everything it covers — you never name a utility in a prompt to get it. The contract behind that is the `library-integration-mandate` knowledge fragment, and each library has its own mandate carrying the substitutions. Turning a flag off is what makes TEA hand-roll the equivalent instead.
+
+The same fragment holds the checklist for adding the next library, so a new integration lands in generation, aggregation, review, and docs rather than only in a fragment nobody applies.
 
 ### Playwright Utils (`@seontechnologies/playwright-utils`)
 
@@ -175,7 +179,7 @@ Production-ready fixtures and utilities that enhance TEA workflows.
 Contract testing utilities that reduce raw Pact.js boilerplate and standardize provider verification.
 
 - Install: `npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact`
-- Config: `tea_use_pactjs_utils: true` (default `false`; opt in only when you want Pact-aware workflows)
+- Config: `tea_use_pactjs_utils: true` (the default). It decides _how_ Pact suites are written, never _whether_ a project gets one: TEA still requires a real consumer-provider boundary before scaffolding any contract test. Set `false` to have TEA write raw `@pact-foundation/pact`.
 - Impacts: `framework`, `atdd`, `automate`, `test-design`, `test-review`, `ci`
 - Utilities: createProviderState, toJsonMap, setJsonBody, setJsonContent, buildVerifierOptions, buildMessageVerifierOptions, createRequestFilter, noOpRequestFilter, handlePactBrokerUrlAndSelectors, getProviderVersionTags
 - Supports the local monorepo flow (`pactUrls`) and the remote broker flow (`PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`)
@@ -213,7 +217,7 @@ Optional design-time broker interaction for contract testing workflows.
 
 **Configuration** (`_bmad/tea/config.yaml`):
 
-    tea_pact_mcp: "none"  # none | mcp
+    tea_pact_mcp: "mcp"  # none | mcp (default "mcp")
 
 | Mode   | What happens                                                                                                        |
 | ------ | ------------------------------------------------------------------------------------------------------------------- |
