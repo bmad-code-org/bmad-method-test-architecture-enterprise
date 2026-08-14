@@ -20,3 +20,4 @@
 
 - {test_artifacts}/test-design-qa.md (system-level)
 - {test_artifacts}/test-design-epic-{epic_num}.md (epic-level)
+- {test_artifacts}/test-design-progress-{run_key}.md (resume checkpoint; run_key is `system` or `epic-{epic_num}`)

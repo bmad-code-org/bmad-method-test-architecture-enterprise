@@ -55,7 +55,7 @@ Load, read completely, and execute:
 If the user selects **Resume** mode, load, read completely, and execute:
 `{skill-root}/steps-c/step-01b-resume.md`
 
-This checks the output document for progress tracking frontmatter and routes to the next incomplete step.
+This selects the progress checkpoint belonging to the run being resumed, reads its progress tracking frontmatter, and routes to the next incomplete step. Checkpoints are named `test-design-progress-{run_key}.md` under `{test_artifacts}`, so each epic and the system-level run keep their own.
 
 ---
 

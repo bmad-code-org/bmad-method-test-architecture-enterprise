@@ -63,6 +63,21 @@ For epic-level:
 
 TEA generates test design document(s) based on mode.
 
+## Interrupting and Resuming a Run
+
+Each run saves its progress to its own checkpoint under `{test_artifacts}`:
+
+| Run          | Checkpoint                         |
+| ------------ | ---------------------------------- |
+| System-level | `test-design-progress-system.md`   |
+| Epic-level   | `test-design-progress-epic-{N}.md` |
+
+The workflow resolves that name in its first step, from the mode and the epic you named. Interrupting a run for one epic and then running test design for another epic leaves the first epic's checkpoint untouched, so you can come back to it.
+
+Pick **[R] Resume** to continue. Name the scope you want (for example "resume epic 3") when checkpoints exist for more than one run; without a scope TEA lists the candidates and asks. TEA refuses to resume a checkpoint that belongs to a different run rather than continuing into it.
+
+Checkpoints written before this behavior existed use the old fixed name `test-design-progress.md`. Resume picks that file up, asks you to confirm which run it belongs to, and migrates it to the new name.
+
 ## What You Get
 
 **System-Level Output (TWO Documents):**

@@ -2,7 +2,7 @@
 name: 'step-04-coverage-plan'
 description: 'Design test coverage, priorities, execution strategy, and estimates'
 nextStepFile: '{skill-root}/steps-c/step-05-generate-output.md'
-outputFile: '{test_artifacts}/test-design-progress.md'
+outputFile: '{test_artifacts}/test-design-progress-{run_key}.md'
 ---
 
 # Step 4: Coverage Plan & Execution Strategy
@@ -111,6 +111,8 @@ Define thresholds:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
   workflowStatus: 'in-progress'
   totalSteps: 5
   stepsCompleted: ['step-04-coverage-plan']
@@ -123,6 +125,7 @@ Define thresholds:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
   - Set `workflowStatus: 'in-progress'`
   - Set `totalSteps: 5`
   - Add `'step-04-coverage-plan'` to `stepsCompleted` array (only if not already present)

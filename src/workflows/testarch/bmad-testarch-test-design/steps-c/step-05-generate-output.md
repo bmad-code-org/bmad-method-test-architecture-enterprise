@@ -2,7 +2,7 @@
 name: 'step-05-generate-output'
 description: 'Generate output documents with adaptive orchestration (agent-team, subagent, or sequential)'
 outputFile: '{test_artifacts}/test-design-epic-{epic_num}.md'
-progressFile: '{test_artifacts}/test-design-progress.md'
+progressFile: '{test_artifacts}/test-design-progress-{run_key}.md'
 ---
 
 # Step 5: Generate Outputs & Validate
@@ -119,7 +119,7 @@ If `resolvedMode` is `agent-team` or `subagent`, these two documents can be gene
 Generate **one** document:
 
 - `{outputFile}` using `test-design-template.md`
-- If `epic_num` is unclear, ask the user
+- Use the `epic_num` resolved in step 1. It is the value that named this run's progress checkpoint, so the plan and its checkpoint always identify the same run. Do not re-derive it and do not ask the user again.
 
 Epic-level mode remains single-worker by default (one output artifact).
 
@@ -198,6 +198,8 @@ Summarize:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
   workflowStatus: 'completed'
   totalSteps: 5
   stepsCompleted: ['step-05-generate-output']
@@ -210,6 +212,7 @@ Summarize:
   Then write this step's output below the frontmatter.
 
 - **If `{progressFile}` already exists**, update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
   - Set `workflowStatus: 'completed'`
   - Set `totalSteps: 5`
   - Add `'step-05-generate-output'` to `stepsCompleted` array (only if not already present)
