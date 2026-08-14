@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.22.6] - 2026-08-14
+
 ### Fixed
 
 - `mobile-ci-device-lab.md` and `mobile-test-strategy.md`: corrected the claim, shipped in 1.22.4, that deep links cannot be exercised in a prebuilt development shell. A shell does not register the app's custom scheme, so a `myapp://` URL fails there, but it routes its own URL form (`exp://<host>/--/<path>?<query>`) into the app with path and query intact. Link parsing, routing, and the resulting state changes are therefore all testable in a shell; only the OS-level handoff needs the registered scheme, which means a cold start from a real widget or notification tap. The originating suite had recorded a deep-link flow as impossible for this reason, and it passed on the first attempt once the URL was built the shell's way. The related bullet no longer lists deep links among the surfaces a shell can only assert absent.
