@@ -167,8 +167,7 @@ describe('User API Contract', () => {
 ```json
 {
   "scripts": {
-    "test:pact:consumer": "./scripts/check-pact-determinism.sh 'npm run test:pact:consumer:run' 3 ./pacts",
-    "test:pact:consumer:run": "vitest run --config vitest.config.pact.ts",
+    "test:pact:consumer": "vitest run --config vitest.config.pact.ts",
     "publish:pact": ". ./scripts/env-setup.sh && ./scripts/publish-pact.sh"
   }
 }
@@ -1034,19 +1033,20 @@ Before implementing contract testing, verify:
 
 When `tea_use_pactjs_utils` is enabled, the following utilities replace manual boilerplate:
 
-| Manual Pattern (raw Pact.js)                             | Pact.js Utils Equivalent                                                          | Benefit                                                               |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| Manual `JsonMap` casting for `.given()` params           | `createProviderState({ name, params })`                                           | Type-safe, auto-conversion of Date/null/nested objects                |
-| Repeated builder callbacks for query/header/body         | `setJsonContent({ query, headers, body })`                                        | Reusable callback for `.withRequest(...)` and `.willRespondWith(...)` |
-| Inline body lambda `(builder) => builder.jsonBody(body)` | `setJsonBody(body)`                                                               | Body-only shorthand for cleaner response builders                     |
-| 30+ lines of `VerifierOptions` assembly                  | `buildVerifierOptions({ provider, port, includeMainAndDeployed, stateHandlers })` | One-call setup, env-aware, flow auto-detection                        |
-| Manual broker URL + selector logic from env vars         | `handlePactBrokerUrlAndSelectors({ ..., options })`                               | Mutates options in-place with broker URL and selectors                |
-| DIY Express middleware for auth injection                | `createRequestFilter({ tokenGenerator })`                                         | Bearer prefix contract prevents double-prefix bugs                    |
-| Manual CI branch/tag extraction                          | `getProviderVersionTags()`                                                        | CI-aware (GitHub Actions, GitLab CI, etc.)                            |
-| Message verifier config assembly                         | `buildMessageVerifierOptions({ provider, messageProviders })`                     | Same one-call pattern for Kafka/async contracts                       |
-| Inline no-op filter `(req, res, next) => next()`         | `noOpRequestFilter`                                                               | Pre-built pass-through for no-auth providers                          |
+| Manual Pattern (raw Pact.js)                             | Pact.js Utils Equivalent                                                          | Benefit                                                                                                    |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Manual `JsonMap` casting for `.given()` params           | `createProviderState({ name, params })`                                           | Type-safe, auto-conversion of Date/null/nested objects                                                     |
+| Repeated builder callbacks for query/header/body         | `setJsonContent({ query, headers, body })`                                        | Reusable callback for `.withRequest(...)` and `.willRespondWith(...)`                                      |
+| Inline body lambda `(builder) => builder.jsonBody(body)` | `setJsonBody(body)`                                                               | Body-only shorthand for cleaner response builders                                                          |
+| 30+ lines of `VerifierOptions` assembly                  | `buildVerifierOptions({ provider, port, includeMainAndDeployed, stateHandlers })` | One-call setup, env-aware, flow auto-detection                                                             |
+| Manual broker URL + selector logic from env vars         | `handlePactBrokerUrlAndSelectors({ ..., options })`                               | Mutates options in-place with broker URL and selectors                                                     |
+| DIY Express middleware for auth injection                | `createRequestFilter({ tokenGenerator })`                                         | Bearer prefix contract prevents double-prefix bugs                                                         |
+| Manual CI branch/tag extraction                          | `getProviderVersionTags()`                                                        | CI-aware (GitHub Actions, GitLab CI, etc.)                                                                 |
+| Message verifier config assembly                         | `buildMessageVerifierOptions({ provider, messageProviders })`                     | Same one-call pattern for Kafka/async contracts                                                            |
+| Inline no-op filter `(req, res, next) => next()`         | `noOpRequestFilter`                                                               | Pre-built pass-through for no-auth providers                                                               |
+| Hand-written matcher helper duplicating a Zod/TS type    | `zodToPactMatchers(ConsumerMovieSchema, example)`                                 | Single source of truth for response shape; consumer-curated scope keeps contracts lean and consumer-driven |
 
-See the `pactjs-utils-*.md` knowledge fragments for complete examples and anti-patterns.
+See the `pactjs-utils-*.md` knowledge fragments for complete examples and anti-patterns (`pactjs-utils-zod-to-pact.md` covers the consumer-curated schema pattern).
 
 ### PactV4 Determinism & FFI Safety (Mandatory)
 
@@ -1055,7 +1055,7 @@ Four rules that together prevent both (a) non-deterministic pact generation fail
 1. **Consumer Vitest `fileParallelism: false`** in `vitest.config.pact.ts` — prevents parallel workers from racing on the shared pact JSON. See `pact-consumer-framework-setup.md` Example 2.
 2. **Consumer Vitest `pool: 'forks'` + `poolOptions.forks.singleFork: true`** in `vitest.config.pact.ts` — same config as the provider side (`pactjs-utils-provider-verifier.md` Example 7). Best current understanding: the `@pact-foundation/pact` napi-rs binding is not robust across Vitest worker threads sharing a process; serialization alone (via `fileParallelism: false`) is insufficient on the default threads pool in Vitest v1. Forks + `singleFork: true` runs every pact file in one subprocess with a coherent FFI handle and eliminated a reproducible Linux-CI flake across multiple repos. Single-file consumer suites have not been observed to flake; this rule is still recommended as a future-proof. See `pact-consumer-framework-setup.md` Example 2.
 3. **One `addInteraction()` per `it()` block** — see `pactjs-utils-consumer-helpers.md` Example 6.
-4. **Determinism gate** runs the consumer suite N times and fails on byte-different pact JSON before publish — see `pact-consumer-framework-setup.md` Example 10 (`scripts/check-pact-determinism.sh`).
+4. **`publish-pact.sh` jq normalization** sorts interactions before publish — ensures byte-stable payload to PactFlow regardless of generator ordering quirks. See `pact-consumer-framework-setup.md` Example 4.
 
 Provider suites require the same `pool: 'forks'` + `singleFork: true` combination — see `pactjs-utils-provider-verifier.md` Example 7.
 

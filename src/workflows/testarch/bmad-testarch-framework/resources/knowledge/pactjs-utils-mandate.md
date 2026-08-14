@@ -24,7 +24,24 @@ This fragment instantiates `library-integration-mandate.md`. Read that one for t
 
 `tea_use_pactjs_utils` defaults to `true`, which means "use these utilities when you write contract tests", not "write contract tests everywhere".
 
-Scaffold a Pact suite only when the project actually has a consumer-provider boundary worth a contract: a service calling another service it does not deploy with, an existing `pact/` directory or `@pact-foundation/pact` dependency, `PACT_BROKER_*` in the environment, or the user asking for it. A single-service repo with no outbound service calls gets no Pact scaffolding regardless of the flag, and the summary says why.
+This is the one gate for the decision. Every workflow defers to it rather than restating its own list.
+
+**Sufficient on its own.** Any one of these settles it:
+
+- An existing `pact/` or `tests/contract/` directory
+- `@pact-foundation/pact` already in `package.json`
+- `PACT_BROKER_BASE_URL` or another `PACT_BROKER_*` variable in the environment or `.env.example`
+- A microservices layout: two or more independently deployable services in this repo that call each other
+- The user asked for contract testing
+
+**Not sufficient on its own.** An outbound HTTP call, a generated API client, or a service URL in `.env.example` is weak evidence: most frontends have all three and call a backend that ships in the same deploy. Treat these as evidence only when **both** hold:
+
+1. The called service has **no source in this repo**, and is not started by this repo's compose file, dev script, or CI, and
+2. A second signal is present — another item from this list, or one of the sufficient signals above.
+
+The disqualifier in (1) is the whole test, so check it rather than assume it. A repo whose frontend calls its own backend has no consumer-provider boundary in the Pact sense: both sides deploy together, so a contract adds ceremony and no safety.
+
+**With none of that, create no Pact artifacts.** Say in the summary that contract scaffolding was skipped because no consumer-provider boundary was found, and that the `framework` workflow can add it later. When the evidence is ambiguous, apply `confidence-gate.md` and ask rather than scaffolding on a guess.
 
 Getting this wrong is worse than a missing utility: it leaves a dead contract suite that fails CI for a boundary the project does not have.
 
@@ -82,24 +99,29 @@ These are not violations and need no deviation note:
 
 ### Consumer test
 
+PactV4 `addInteraction()`, one per `it()`, with `setJsonContent` on the request and
+`setJsonBody` on the response. That is four of the REQUIRED substitutions in one
+shape, which is the point: a worker copies this, so it has to demonstrate the rules
+rather than describe them.
+
 ```typescript
-import { PactV3, MatchersV3 } from '@pact-foundation/pact';
-import { createProviderState } from '@seontechnologies/pactjs-utils';
+import { PactV4, MatchersV3 } from '@pact-foundation/pact';
+import { createProviderState, setJsonBody, setJsonContent } from '@seontechnologies/pactjs-utils';
 import { getMovieById } from '../../src/api/movies-client';
 
-const provider = new PactV3({ consumer: 'movie-web', provider: 'SampleMoviesAPI', dir: './pacts' });
+const { integer, string } = MatchersV3;
+
+const pact = new PactV4({ consumer: 'movie-web', provider: 'SampleMoviesAPI', dir: './pacts' });
 
 describe('Movie API Contract', () => {
   it('returns a movie by id', async () => {
     // Provider endpoint: server/src/routes/movies.ts -> GET /movies/:id
-    await provider
+    await pact
+      .addInteraction()
       .given(...createProviderState({ name: 'movie with id 1 exists', params: { id: 1 } }))
       .uponReceiving('a request for movie 1')
-      .withRequest({ method: 'GET', path: '/movies/1' })
-      .willRespondWith({
-        status: 200,
-        body: MatchersV3.like({ id: 1, name: 'Inception', year: 2010 }),
-      })
+      .withRequest('GET', '/movies/1', setJsonContent({ headers: { Accept: 'application/json' } }))
+      .willRespondWith(200, setJsonBody({ id: integer(1), name: string('Inception') }))
       .executeTest(async (mockServer) => {
         // DI: the real client, pointed at the mock server
         const movie = await getMovieById(1, { baseUrl: mockServer.url });
@@ -108,6 +130,15 @@ describe('Movie API Contract', () => {
   });
 });
 ```
+
+Exactly one `addInteraction()` in that `it()`. A second scenario is a second `it()`,
+or `it.each` — never a second chain in the same block. See
+`pactjs-utils-consumer-helpers.md` Example 6 for what the FFI does otherwise.
+
+Where the project already has a Zod schema for the response, replace the inline
+`MatchersV3` tree with `zodToPactMatchers(MovieSchema)` and keep the schema as the
+single source of the shape. `MatchersV3` written by hand is correct only where no
+schema exists.
 
 ### Provider verification
 

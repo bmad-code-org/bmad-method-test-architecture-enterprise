@@ -4045,6 +4045,11 @@ async function runTests() {
 
     const noConfig = resolveTeaConfig({ projectRoot: configRoot('absent', null) });
     assert(
+      noConfig.installed.playwright_utils_installed === false && noConfig.installed.pactjs_utils_installed === false,
+      'a project with no package.json reports both library gates as not installed',
+      JSON.stringify(noConfig.installed),
+    );
+    assert(
       noConfig.configPresent === false &&
         noConfig.values.tea_use_playwright_utils === true &&
         noConfig.values.tea_use_pactjs_utils === true &&
@@ -4142,6 +4147,20 @@ async function runTests() {
         defaultConfigPrompt.includes('tea_use_pactjs_utils=true') &&
         defaultConfigPrompt.includes('tea_pact_mcp=mcp'),
       'build-prompt states all three config keys even when no teaConfig is passed',
+    );
+    assert(
+      defaultConfigPrompt.includes('playwright_utils_installed=false') && defaultConfigPrompt.includes('pactjs_utils_installed=false'),
+      'build-prompt states both install gates, defaulting to false when none are passed',
+    );
+    const installedPrompt = buildPrompt({
+      skillRoot,
+      files: ['tests/checkout.spec.ts'],
+      outputPath: path.join(fixtureProject, 'test-review.md'),
+      installedPackages: { playwright_utils_installed: true, pactjs_utils_installed: false },
+    });
+    assert(
+      installedPrompt.includes('playwright_utils_installed=true') && installedPrompt.includes('pactjs_utils_installed=false'),
+      'build-prompt states the resolved install gates, so the agent never reads package.json to decide them',
     );
     const resolvedConfigPrompt = buildPrompt({
       skillRoot,

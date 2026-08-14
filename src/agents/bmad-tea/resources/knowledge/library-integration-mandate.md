@@ -65,7 +65,7 @@ When TEA takes on another integration library, these are the places it has to la
 
 1. **Config flag** in `src/module.yaml`, with the default and a `post-install-notes` entry carrying the install command and any prerequisites.
 2. **CLI defaults** in `cli/lib/resolve-tea-config.js` (`MODULE_DEFAULTS`), which the test suite asserts stays equal to `module.yaml`.
-3. **Knowledge fragments**: the per-utility reference fragments, plus a `<library>-mandate.md` following the shape of the two that exist. Index every one of them in `tea-index.csv`, and copy them into every workflow's `resources/knowledge/` — the counts are asserted.
+3. **Knowledge fragments**: the per-utility reference fragments, plus a `<library>-mandate.md` following the shape of the two that exist. Index every one of them in `tea-index.csv`, and copy them into every workflow's `resources/knowledge/`.
 4. **A row in the registry table above.**
 5. **Loading**: each consuming workflow's context step loads the mandate FIRST, before the per-utility fragments, and states that it binds the run.
 6. **Generation**: every worker step that emits code in that library's scope carries the mandated template as the primary shape, the vanilla template as the flag-off branch, and the substitutions in its success and failure metrics.
@@ -73,6 +73,7 @@ When TEA takes on another integration library, these are the places it has to la
 8. **Review**: a `criteria-registry.md` row for "configured utility bypassed", gated on flag plus install, plus a published criterion row in `test-review-template.md`. Where partial migration is expected, a convention key in `step-02-discover-tests.md` and `cli/lib/convention-baseline.js` so adoption reads as a ratio rather than a pass or fail.
 9. **Docs**: `docs/reference/configuration.md` (what `true` actually means), `docs/reference/knowledge-base.md` (the fragment rows and the used-in line), and a how-to under `docs/how-to/customization/`.
 10. **Changelog** under `[Unreleased]`.
+11. **Verify the copies.** `test/test-knowledge-base.js` asserts, per workflow, that the fragment set matches the agent's and that every shared file is byte-identical. Run `npm run test:knowledge` after copying. This step exists because it is the one that was missing: a mandate edited only at the agent level ships one rule to the reviewer and a different one to the generator, and the workflows load their own copy.
 
 ## Relationship to Principle Fragments
 

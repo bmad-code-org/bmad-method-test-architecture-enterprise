@@ -127,13 +127,63 @@ function readTeaConfigFile(projectRoot) {
 }
 
 /**
+ * Whether a package appears in the consuming project's dependency manifest.
+ *
+ * Half of a library mandate's gate is the flag, resolved above. The other half is
+ * whether the package is actually installed, and leaving that to the agent means a
+ * headless run decides it by reading package.json — an unlisted extra read the
+ * prompt otherwise discourages, and a judgment call where a lookup will do. Both
+ * halves resolve here so the gate closes the same way on every run.
+ *
+ * Absent, unreadable, or unparseable manifest reads as "not installed": the
+ * conservative answer, since the consequence is that a mandate row does not fire.
+ *
+ * @param {string} projectRoot
+ * @param {string} packageName
+ * @returns {boolean}
+ */
+function isPackageInstalled(projectRoot, packageName) {
+  const manifestPath = path.join(projectRoot, 'package.json');
+  if (!fs.existsSync(manifestPath)) {
+    return false;
+  }
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  } catch {
+    return false;
+  }
+  if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) {
+    return false;
+  }
+  return ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'].some((section) => {
+    const deps = manifest[section];
+    return Boolean(deps) && typeof deps === 'object' && !Array.isArray(deps) && packageName in deps;
+  });
+}
+
+/** Config key to the npm package whose presence completes its gate. */
+const KEY_TO_PACKAGE = {
+  tea_use_playwright_utils: '@seontechnologies/playwright-utils',
+  tea_use_pactjs_utils: '@seontechnologies/pactjs-utils',
+};
+
+/** The `installed` field each gate reports under. */
+const KEY_TO_INSTALLED_FIELD = {
+  tea_use_playwright_utils: 'playwright_utils_installed',
+  tea_use_pactjs_utils: 'pactjs_utils_installed',
+};
+
+/**
  * Resolve every key through the precedence chain.
  *
  * @param {object} options
  * @param {string} options.projectRoot - Consuming project root.
  * @param {object} [options.flags] - Parsed CLI options; only the keys in
  *   FLAG_TO_KEY are read, and only when not undefined.
- * @returns {{values: object, sources: object, configPath: string, configPresent: boolean}}
+ * @returns {{values: object, sources: object, installed: object, configPath: string, configPresent: boolean}}
+ *   `installed` carries one boolean per library gate, read from the project
+ *   manifest rather than left to the agent.
  * @throws {Error} With code TEA_CONFIG_INVALID on unusable config content.
  */
 function resolveTeaConfig({ projectRoot, flags = {} }) {
@@ -158,12 +208,20 @@ function resolveTeaConfig({ projectRoot, flags = {} }) {
     sources[key] = 'default';
   }
 
-  return { values, sources, configPath: file.path, configPresent: file.present };
+  const installed = {};
+  for (const [key, packageName] of Object.entries(KEY_TO_PACKAGE)) {
+    installed[KEY_TO_INSTALLED_FIELD[key]] = isPackageInstalled(projectRoot, packageName);
+  }
+
+  return { values, sources, installed, configPath: file.path, configPresent: file.present };
 }
 
 module.exports = {
   resolveTeaConfig,
   readTeaConfigFile,
+  isPackageInstalled,
+  KEY_TO_PACKAGE,
+  KEY_TO_INSTALLED_FIELD,
   MODULE_DEFAULTS,
   PACT_MCP_VALUES,
   CONFIG_RELATIVE_PATH,

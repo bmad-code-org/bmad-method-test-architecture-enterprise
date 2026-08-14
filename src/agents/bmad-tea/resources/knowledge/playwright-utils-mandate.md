@@ -86,8 +86,12 @@ When `tea_use_playwright_utils` is `true`, load these two fragments for the prin
 
 ### Merged fixtures — one per project
 
+There is exactly one, and it lives under the project's configured `test_dir`. A workflow that hardcodes a different directory creates a second entry point, which is the one outcome this file exists to prevent.
+
+**The other fragments show `playwright/support/merged-fixtures.ts`.** That is the upstream playwright-utils repository's own layout in its examples, not a path to copy. `fixtures-composition.md`, `overview.md`, `network-error-monitor.md`, and `webhook-module-setup.md` all use it, and they are read for API shape rather than for where files go. In a TEA-scaffolded project the file is at `{test_dir}/support/merged-fixtures.ts`, and `{test_dir}` is whatever the project configured — `tests/`, `e2e/`, `playwright/`. Resolve it; do not assume it.
+
 ```typescript
-// playwright/support/merged-fixtures.ts
+// <test_dir>/support/merged-fixtures.ts  (playwright/, tests/, or e2e/ — whatever the project's test_dir is)
 import { mergeTests } from '@playwright/test';
 import { log } from '@seontechnologies/playwright-utils';
 import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';

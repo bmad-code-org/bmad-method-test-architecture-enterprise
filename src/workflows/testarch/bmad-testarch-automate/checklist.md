@@ -264,7 +264,7 @@ Before starting this workflow, verify:
 Per `playwright-utils-mandate.md`. Skip this section entirely when the flag is false, and for Maestro, Cypress, and non-Playwright backend suites.
 
 - [ ] Every spec imports `test` from the project's merged fixtures, not from `@playwright/test`
-- [ ] `tests/support/merged-fixtures.ts` exists and composes with `mergeTests`
+- [ ] `{test_dir}/support/merged-fixtures.ts` exists and composes with `mergeTests`
 - [ ] Application API calls in UI tests use `interceptNetworkCall`, not `page.route` or `page.waitForResponse`
 - [ ] API tests and in-test setup/teardown use `apiRequest`, not the raw `request` fixture
 - [ ] Async waits use `recurse`, not `page.waitForTimeout` or a hand-written poll loop

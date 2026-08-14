@@ -26,12 +26,17 @@ A flag with no install is an intention, not a capability. TEA will not scaffold 
 
 Separately from the two gates above, TEA decides whether a Pact suite belongs in your project at all. It scaffolds one only with evidence of a real consumer-provider boundary:
 
-- An outbound call to a service this repo does not deploy with
-- An existing `pact/` or `tests/contract/` directory, `@pact-foundation/pact` in `package.json`, or `PACT_BROKER_*` in the environment
-- A microservices layout where multiple deployable services call each other
+**Any one of these settles it:**
+
+- An existing `pact/` or `tests/contract/` directory
+- `@pact-foundation/pact` already in `package.json`
+- `PACT_BROKER_*` in the environment or `.env.example`
+- A microservices layout: two or more independently deployable services in the repo that call each other
 - You asked for contract testing
 
-With none of those, TEA creates no Pact artifacts and says why in the summary. A dead contract suite that fails CI for a boundary the project does not have is worse than no suite, so the default-on flag never turns into unwanted scaffolding.
+**These are weak on their own** and need corroboration: an outbound HTTP call, a generated API client, a service URL in `.env.example`. Most frontends have all three and call a backend that ships in the same deploy. They count only when the called service has no source in this repo and is not started by this repo's compose file, dev script, or CI — **and** a second signal is present.
+
+With none of that, TEA creates no Pact artifacts and says why in the summary. A dead contract suite that fails CI for a boundary the project does not have is worse than no suite, so the default-on flag never turns into unwanted scaffolding.
 
 ## Substitutions
 
@@ -72,20 +77,23 @@ The mandate does not soften the correctness rules from the per-utility fragments
 ### Consumer test
 
 ```typescript
-import { PactV3, MatchersV3 } from '@pact-foundation/pact';
-import { createProviderState } from '@seontechnologies/pactjs-utils';
+import { PactV4, MatchersV3 } from '@pact-foundation/pact';
+import { createProviderState, setJsonBody, setJsonContent } from '@seontechnologies/pactjs-utils';
 import { getMovieById } from '../../src/api/movies-client';
 
-const provider = new PactV3({ consumer: 'movie-web', provider: 'SampleMoviesAPI', dir: './pacts' });
+const { integer, string } = MatchersV3;
+
+const pact = new PactV4({ consumer: 'movie-web', provider: 'SampleMoviesAPI', dir: './pacts' });
 
 describe('Movie API Contract', () => {
   it('returns a movie by id', async () => {
     // Provider endpoint: server/src/routes/movies.ts -> GET /movies/:id
-    await provider
+    await pact
+      .addInteraction()
       .given(...createProviderState({ name: 'movie with id 1 exists', params: { id: 1 } }))
       .uponReceiving('a request for movie 1')
-      .withRequest({ method: 'GET', path: '/movies/1' })
-      .willRespondWith({ status: 200, body: MatchersV3.like({ id: 1, name: 'Inception' }) })
+      .withRequest('GET', '/movies/1', setJsonContent({ headers: { Accept: 'application/json' } }))
+      .willRespondWith(200, setJsonBody({ id: integer(1), name: string('Inception') }))
       .executeTest(async (mockServer) => {
         // The real client, pointed at the mock server
         const movie = await getMovieById(1, { baseUrl: mockServer.url });
@@ -94,6 +102,10 @@ describe('Movie API Contract', () => {
   });
 });
 ```
+
+One `addInteraction()` per `it()`. A second scenario is a second `it()`, or `it.each` — never a second chain in the same block.
+
+Where a Zod schema for the response already exists, `zodToPactMatchers(MovieSchema)` replaces the inline `MatchersV3` tree so the schema stays the single source of the shape.
 
 ### Provider verification
 

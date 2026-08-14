@@ -151,14 +151,11 @@ Keep `{maestro_root}/subflows/` separate from the flow root so a flow count neve
 
 **If `config.tea_use_pactjs_utils` is enabled AND contract testing is relevant to this project AND runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
 
-**Relevance gate — check this before creating anything.** `tea_use_pactjs_utils` defaults to `true`, which means "use these utilities when contract tests are written", not "every project gets a Pact suite". Per `pactjs-utils-mandate.md`, scaffold only when the project has a real consumer-provider boundary. Evidence, any one of:
+**Relevance gate — check this before creating anything.** `tea_use_pactjs_utils` defaults to `true`, which means "use these utilities when contract tests are written", not "every project gets a Pact suite".
 
-- An outbound call to a service this repo does not deploy with (an HTTP client pointed at another team's service, a generated API client, a service URL in `.env.example`)
-- An existing `pact/` or `tests/contract/` directory, `@pact-foundation/pact` in `package.json`, or `PACT_BROKER_*` in the environment
-- A microservices layout: multiple deployable services in the repo that call each other
-- The user asked for contract testing
+Apply the gate in `pactjs-utils-mandate.md` § _Relevance Before Scaffolding_ exactly as written. It is the single source for this decision: sufficient signals, the weak signals that need corroboration, and the "no source in this repo and not started by this repo" disqualifier that separates a real boundary from a frontend calling its own backend. Do not restate or relax it here.
 
-**If none of these hold, create no Pact artifacts.** Say in the setup summary that contract scaffolding was skipped because no consumer-provider boundary was found, and note that the `framework` workflow can add it later. A dead contract suite that fails CI for a boundary the project does not have is worse than no suite.
+**If the gate does not open, create no Pact artifacts.** Say in the setup summary that contract scaffolding was skipped because no consumer-provider boundary was found, and note that the `framework` workflow can add it later. A dead contract suite that fails CI for a boundary the project does not have is worse than no suite.
 
 Create Node.js/TypeScript contract testing directory structure per `pact-consumer-framework-setup.md`:
 
@@ -252,13 +249,17 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
   - `playwright-utils-mandate.md` (load first — it is the binding rule for everything this workflow scaffolds)
   - `overview.md`, `fixtures-composition.md`, `auth-session.md`, `api-request.md`, `recurse.md`, `log.md`, `burn-in.md`, `network-error-monitor.md`, `data-factories.md`
   - If `{detected_stack}` is `frontend` or `fullstack`, also load `intercept-network-call.md`
-  - **Install `@seontechnologies/playwright-utils` as a dev dependency and add it to `package.json`.** This is scaffolding, not a suggestion: the framework this workflow produces is the playwright-utils framework, and every downstream workflow generates against it. Note the peer dependency `@playwright/test >= 1.54.1`, plus optional `ajv >= 8.0.0` and `zod >= 3.0.0` for schema validation.
+  - **Ask before installing, then install.** This step is the only place the workflow writes outside the test directory, so name what it will add and get a yes before touching `package.json`:
+
+    > `framework` will add `@seontechnologies/playwright-utils` as a dev dependency. Peer: `@playwright/test >= 1.54.1`. Optional, for schema validation: `ajv >= 8.0.0`, `zod >= 3.0.0`. Install it?
 
     ```bash
     npm install -D @seontechnologies/playwright-utils
     ```
 
-  - If the user declines the install, record it and fall through to the disabled branch for the rest of the scaffold. Do not scaffold imports against a package the project does not have.
+    Skip the ask only when the package is already in `package.json`, or when the user asked for playwright-utils by name in this run.
+
+  - The install is not optional decoration once accepted: the framework this workflow produces is the playwright-utils framework, and every downstream workflow generates against it. **If the user declines, record it and fall through to the disabled branch for the whole scaffold.** Do not scaffold imports against a package the project does not have.
 
 - **If disabled:**
   - `fixture-architecture.md`, `data-factories.md`, `network-first.md`, `playwright-config.md`, `test-quality.md`
@@ -269,13 +270,17 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
 - `pact-consumer-framework-setup.md` (CRITICAL: load this for directory structure, scripts, CI workflow, and PactV4 patterns — includes `fileParallelism: false` + `pool: 'forks'` + `singleFork: true`, determinism gate, and `jq` publish normalization)
 - `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md` (one-interaction-per-`it()` rule), `pactjs-utils-provider-verifier.md` (same `pool: 'forks'` + `singleFork` rule applies to consumer AND provider), `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md`, `contract-testing.md`
 - `pact-broker-webhooks.md` — when scaffolding the provider repo and any CI step that depends on `can-i-deploy`
-- **Install `@seontechnologies/pactjs-utils` and its peer `@pact-foundation/pact` as dev dependencies and add them to `package.json`.** Same rule as Playwright Utils: this is scaffolding, not a suggestion, because every Pact artifact generated downstream imports from it.
+- **Ask before installing, then install.** Same rule as Playwright Utils, and the same reason: this writes to `package.json`.
+
+  > `framework` will add `@seontechnologies/pactjs-utils` and its peer `@pact-foundation/pact` as dev dependencies (`@pact-foundation/pact >= 16.2.0`). Install them?
 
   ```bash
   npm install -D @seontechnologies/pactjs-utils @pact-foundation/pact
   ```
 
-- If the user declines the install, fall through to the disabled branch for the whole contract scaffold. Do not scaffold imports against a package the project does not have.
+  Skip the ask only when they are already in `package.json`, or when the user asked for contract testing by name in this run.
+
+- Every Pact artifact generated downstream imports from the package, so a declined install means the whole contract scaffold falls through to the disabled branch. Do not scaffold imports against a package the project does not have.
 - Ensure `jq` is available on CI runners (default on `ubuntu-latest`; document `brew install jq` for macOS dev machines) — required by `scripts/check-pact-determinism.sh` and `scripts/publish-pact.sh`
 
 **If Pact.js Utils disabled but contract testing relevant:**
@@ -286,7 +291,7 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
 
 - `pact-mcp.md`
 
-**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Load the fragment, then probe once whether the SmartBear MCP tools are actually reachable in this session. When they are not — no broker configured, no credentials, a headless run without the server — degrade per `pact-mcp.md`: fall back to provider source or an OpenAPI spec, say in the output that the broker was unreachable, and continue. Never block the workflow on it, never retry in a loop, and never present inferred provider states as broker data.
+**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Follow `pact-mcp.md` § _When the Tools Are Not Reachable_: the probe is a tool-list check and never a broker call, its result is recorded once per run as `pact_mcp_reachable`, and the fallback order is provider source, then an OpenAPI spec, then `confidence-gate.md`. Report the outcome once and continue; never block, never retry, never present inferred provider states as broker data.
 
 Implement:
 

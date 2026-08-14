@@ -9,6 +9,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { parse } = require('csv-parse/sync');
 
 // ANSI colors
@@ -188,6 +189,104 @@ function runTests() {
     assert(linkCount > 0, 'cross-fragment links detected (at least one)');
   }
   assert(brokenLinks === 0, 'no broken cross-fragment links');
+
+  console.log('');
+
+  // ============================================================
+  // Test 5: Workflow knowledge copies match the agent's
+  // ============================================================
+  // Every workflow ships its own copy of the knowledge base so a skill stays
+  // self-contained. Nothing checked that the copies still MATCH the agent's,
+  // and a copy can drift silently: the workflows load their own copy, so a
+  // fragment edited only at the agent level ships one rule to the reviewer and
+  // a different one to the generator. That is not a hypothetical — it is the
+  // failure this suite was added to catch.
+  console.log(`${colors.yellow}Test Suite 5: Workflow Fragment Parity${colors.reset}\n`);
+
+  const sha1 = (filePath) => crypto.createHash('sha1').update(fs.readFileSync(filePath)).digest('hex');
+
+  const agentKnowledgeDir = path.join(kbRoot, 'knowledge');
+  const workflowsRoot = path.join(projectRoot, 'src', 'workflows', 'testarch');
+
+  // Present at the agent level only, by design: the agent reads them directly
+  // and no workflow step references them.
+  const AGENT_ONLY_FRAGMENTS = new Set(['confidence-gate.md', 'pactjs-utils-zod-to-pact.md']);
+
+  if (!fs.existsSync(agentKnowledgeDir) || !fs.existsSync(workflowsRoot)) {
+    warn('agent knowledge dir or workflows root missing - skipping parity checks');
+  } else {
+    const agentFragments = fs.readdirSync(agentKnowledgeDir).filter((name) => name.endsWith('.md'));
+    const agentShas = new Map(agentFragments.map((name) => [name, sha1(path.join(agentKnowledgeDir, name))]));
+
+    const workflowDirs = fs
+      .readdirSync(workflowsRoot)
+      .map((name) => path.join(workflowsRoot, name, 'resources', 'knowledge'))
+      .filter((dir) => fs.existsSync(dir));
+
+    assert(workflowDirs.length > 0, 'at least one workflow ships a knowledge directory');
+
+    for (const dir of workflowDirs) {
+      const workflowName = path.basename(path.dirname(path.dirname(dir)));
+      const copies = fs.readdirSync(dir).filter((name) => name.endsWith('.md'));
+      const copySet = new Set(copies);
+
+      const missing = agentFragments.filter((name) => !AGENT_ONLY_FRAGMENTS.has(name) && !copySet.has(name));
+      assert(missing.length === 0, `${workflowName} carries every shared agent fragment`, `missing: ${missing.join(', ')}`);
+
+      const extra = copies.filter((name) => !agentShas.has(name));
+      assert(extra.length === 0, `${workflowName} carries no fragment the agent does not have`, `extra: ${extra.join(', ')}`);
+
+      const drifted = copies.filter((name) => agentShas.has(name) && sha1(path.join(dir, name)) !== agentShas.get(name));
+      assert(
+        drifted.length === 0,
+        `${workflowName} fragment contents match the agent copies`,
+        `drifted: ${drifted.join(', ')} - re-copy from src/agents/bmad-tea/resources/knowledge/`,
+      );
+
+      // The other half of "ship the fragment": a file on disk with no row in the
+      // workflow's own index is never selected, so it is unreachable while looking
+      // present. The reverse - a row naming a file that is not there - fails just as
+      // quietly. test-installation-components.js checks a CSV against its directory
+      // for the FIRST workflow it encounters and then sets a flag, so the other seven
+      // indexes are unvalidated there. Assert set equality here, for every workflow.
+      const indexPath = path.join(path.dirname(dir), 'tea-index.csv');
+      if (!fs.existsSync(indexPath)) {
+        assert(false, `${workflowName} ships a tea-index.csv beside its knowledge directory`);
+        continue;
+      }
+
+      let indexRows = [];
+      try {
+        indexRows = parse(fs.readFileSync(indexPath, 'utf8'), { columns: true, skip_empty_lines: true });
+      } catch (error) {
+        assert(false, `${workflowName}/resources/tea-index.csv parses`, error.message);
+        continue;
+      }
+
+      const indexed = indexRows.map((row) => (row.fragment_file || '').replace(/^knowledge\//, '')).filter(Boolean);
+      const indexedSet = new Set(indexed);
+
+      assert(
+        indexed.length === indexedSet.size,
+        `${workflowName}/resources/tea-index.csv lists each fragment once`,
+        `duplicates: ${indexed.filter((name, i) => indexed.indexOf(name) !== i).join(', ')}`,
+      );
+
+      const unindexed = copies.filter((name) => !indexedSet.has(name));
+      assert(
+        unindexed.length === 0,
+        `${workflowName} indexes every fragment it ships`,
+        `on disk but absent from tea-index.csv, so never selected: ${unindexed.join(', ')}`,
+      );
+
+      const danglingRows = [...indexedSet].filter((name) => !copySet.has(name));
+      assert(
+        danglingRows.length === 0,
+        `${workflowName} indexes no fragment it does not ship`,
+        `in tea-index.csv but missing from knowledge/: ${danglingRows.join(', ')}`,
+      );
+    }
+  }
 
   console.log('');
 

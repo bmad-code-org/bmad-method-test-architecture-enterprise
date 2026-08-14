@@ -230,7 +230,7 @@ Before starting this workflow, verify:
 
 Per `playwright-utils-mandate.md`. Skip this section entirely when the flag is false, and for Cypress and non-Playwright suites. A red-phase scaffold is held to the same standard as a green test.
 
-- [ ] `tests/support/merged-fixtures.ts` exists and composes with `mergeTests`
+- [ ] `{test_dir}/support/merged-fixtures.ts` exists and composes with `mergeTests`
 - [ ] Every scaffold imports `test` from the merged fixtures, not from `@playwright/test`
 - [ ] Application API calls use `interceptNetworkCall`, not `page.route` or `page.waitForResponse`
 - [ ] API scaffolds use `apiRequest`, not the raw `request` fixture

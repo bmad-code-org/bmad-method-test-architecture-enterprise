@@ -103,6 +103,10 @@ function conventionBaselinePromptLines(conventionBaseline) {
  * @param {string} [options.scope] - review_scope override (single|directory|suite).
  *   Default derives from the review set: single for one file, directory otherwise.
  * @param {string} [options.testDir] - test_dir hint for the workflow.
+ * @param {object} [options.installedPackages] - Resolved library-install booleans
+ *   from resolve-tea-config (`playwright_utils_installed`, `pactjs_utils_installed`).
+ *   The second half of each mandate gate, read from the project manifest so a
+ *   headless run never leaves it to the agent.
  * @param {object} [options.teaConfig] - Resolved TEA config keys from
  *   resolve-tea-config. Defaults to the module defaults so the prompt always
  *   states them and the agent never has to infer them.
@@ -138,6 +142,7 @@ function buildPrompt({
   scope,
   testDir = 'tests',
   teaConfig = MODULE_DEFAULTS,
+  installedPackages = { playwright_utils_installed: false, pactjs_utils_installed: false },
   contextFiles = [],
   contextBasis = 'none',
   focus = '',
@@ -185,14 +190,18 @@ function buildPrompt({
     `tea_use_playwright_utils=${teaConfig.tea_use_playwright_utils}`,
     `tea_use_pactjs_utils=${teaConfig.tea_use_pactjs_utils}`,
     `tea_pact_mcp=${teaConfig.tea_pact_mcp}`,
+    `playwright_utils_installed=${installedPackages.playwright_utils_installed}`,
+    `pactjs_utils_installed=${installedPackages.pactjs_utils_installed}`,
     'The values above are the resolved configuration for this run and take precedence over anything read from',
     'config.yaml. Use them for the step-01 fragment selection (Playwright Utils loading profile, pactjs-utils',
     'fragment set, Pact MCP) instead of inferring the flags.',
-    'When tea_use_playwright_utils is true, load playwright-utils-mandate.md and score registry rows M9 and L9.',
-    'When tea_use_pactjs_utils is true, load pactjs-utils-mandate.md and score registry row M10.',
-    'Both gates also require the matching package (@seontechnologies/playwright-utils, @seontechnologies/pactjs-utils)',
-    "to be a dependency in the project's package.json: check each, and when a flag is true but its package is absent,",
-    'close that gate as PASS (n/a) and say so once in the report rather than deducting per file.',
+    'The two *_installed values above were read from the project manifest by the CLI. Do not re-derive them, and do',
+    'not open package.json: they are the second half of each mandate gate, stated here for the same reason the flags are.',
+    'playwrightUtilsActive = tea_use_playwright_utils AND playwright_utils_installed; when true, load',
+    'playwright-utils-mandate.md and score registry rows M9 and L9. pactjsUtilsActive = tea_use_pactjs_utils AND',
+    'pactjs_utils_installed; when true, load pactjs-utils-mandate.md and score registry row M10.',
+    'A false precondition means those rows DO NOT EXIST for this run (criteria-registry.md § RUN-LEVEL PRECONDITIONS):',
+    'emit no violations and no per-file PASS (n/a) for them, and state the reason once, naming which half was missing.',
     'library-integration-mandate.md carries the general contract behind both rows.',
     '',
     'The file list below IS the complete and authoritative review set: skip the discovery glob in',

@@ -167,7 +167,7 @@ const uniqueFixtures = [...new Set(allFixtureNeeds)];
 **If `use_playwright_utils` is `true` (the default), the merged-fixtures file is not optional.** Per `playwright-utils-mandate.md`. Both workers generated specs importing `test` from `../support/merged-fixtures`. If that file does not exist, every scaffold fails to resolve at green time. Create it here.
 
 ```typescript
-// tests/support/merged-fixtures.ts
+// {test_dir}/support/merged-fixtures.ts
 import { mergeTests } from '@playwright/test';
 import { log } from '@seontechnologies/playwright-utils';
 import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
@@ -183,12 +183,12 @@ export { log };
 
 Merge in the project's auth fixture (`setAuthProvider` + `createAuthFixtures()`, per `auth-session.md`) when the story's criteria describe authenticated behavior. If the project has no auth endpoint to point at, leave the auth fixture out and list the missing wiring in the ATDD checklist so it lands before green phase, rather than emitting a form-driven login fixture.
 
-If `tests/support/merged-fixtures.ts` already exists, extend the existing `mergeTests` call instead of replacing the file.
+If `{test_dir}/support/merged-fixtures.ts` already exists, extend the existing `mergeTests` call instead of replacing the file.
 
 **Minimal data fixtures for TDD red phase:**
 
 ```typescript
-// tests/support/factories.ts
+// {test_dir}/support/factories.ts
 import { faker } from '@faker-js/faker';
 
 export const registrationPayload = (overrides = {}) => ({

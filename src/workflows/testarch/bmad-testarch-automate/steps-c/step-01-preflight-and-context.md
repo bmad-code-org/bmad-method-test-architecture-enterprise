@@ -162,7 +162,7 @@ Load: `contract-testing.md` (~960 lines)
 
 Load: `pact-mcp.md` (~150 lines) — enables agent to use SmartBear MCP tools for fetching provider states and generating pact tests during automation.
 
-**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Load the fragment, then probe once whether the SmartBear MCP tools are actually reachable in this session. When they are not — no broker configured, no credentials, a headless run without the server — degrade per `pact-mcp.md`: fall back to provider source or an OpenAPI spec, say in the output that the broker was unreachable, and continue. Never block the workflow on it, never retry in a loop, and never present inferred provider states as broker data.
+**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Follow `pact-mcp.md` § _When the Tools Are Not Reachable_: the probe is a tool-list check and never a broker call, its result is recorded once per run as `pact_mcp_reachable`, and the fallback order is provider source, then an OpenAPI spec, then `confidence-gate.md`. Report the outcome once and continue; never block, never retry, never present inferred provider states as broker data.
 
 ## 4. Load Knowledge Base Fragments
 

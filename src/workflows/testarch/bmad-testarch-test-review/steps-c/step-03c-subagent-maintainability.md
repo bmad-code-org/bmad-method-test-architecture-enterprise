@@ -41,7 +41,7 @@ pinned severity, and its gate.
 | M4  | Ungrouped suite                      |   MEDIUM | Absolute                      |
 | M5  | Low-level event dispatch             |   MEDIUM | Applicability                 |
 | M7  | Excessive nesting                    |   MEDIUM | Absolute                      |
-| M9  | Configured utility bypassed          |   MEDIUM | Applicability                 |
+| M9  | Configured utility bypassed          |   MEDIUM | Convention: `playwrightUtils` |
 | M10 | Configured contract utility bypassed |   MEDIUM | Applicability                 |
 | H5  | Oversize test file (>1000 lines)     |     HIGH | Absolute                      |
 | L1  | Fragile selector                     |      LOW | Applicability                 |
@@ -51,13 +51,30 @@ pinned severity, and its gate.
 | L7  | Inconsistent assertion style         |      LOW | Convention: `assertionStyle`  |
 | L9  | Spec bypasses merged fixtures        |      LOW | Convention: `playwrightUtils` |
 
-**M9, M10 and L9 need two facts before any of them can fire**, both carried in
-`subagentContext`. For M9 and L9: `tea_use_playwright_utils` is `true`, and
-`@seontechnologies/playwright-utils` is a dependency in the project's
-`package.json`. For M10: `tea_use_pactjs_utils` is `true`, and
-`@seontechnologies/pactjs-utils` is a dependency. A flag with no package installed closes the M9 gate — you cannot
-deduct for not using a library the repo does not have. Say so as `PASS (n/a)` and
-let the report recommend the framework workflow instead.
+**M9, M10 and L9 sit behind a run-level precondition**, not a per-file gate. See
+`criteria-registry.md` § RUN-LEVEL PRECONDITIONS. `playwrightUtilsActive` (the flag
+plus the install) enables M9 and L9; `pactjsUtilsActive` enables M10. Both halves
+arrive in `subagentContext` as `use_playwright_utils` / `playwright_utils_installed`
+and `use_pactjs_utils` / `pactjs_utils_installed`.
+
+When a precondition is false those rows **do not exist for this run**. Emit no
+violations for them and no per-file `PASS (n/a)`; the report states the reason once,
+naming which half was missing. Deducting for not using a library the repo does not
+have produces findings nobody can act on file by file, and the one actionable
+finding is the single line about the missing install.
+
+**M9 and L9 are Convention rows**, scored against the `playwrightUtils` baseline
+from step-02 through the registry's deduction schedule. That is deliberate: a
+brownfield repo mid-migration scores `emerging`, which steps M9 from MEDIUM down to
+LOW and cites the adoption count, and a repo at zero adoption scores `absent` and
+deducts nothing. A full MEDIUM on every legacy file would be the exact noise the
+Convention class exists to remove, and it would contradict
+`playwright-utils-mandate.md`, which asks for adoption as a ratio rather than a
+single red mark.
+
+**M10 stays Applicability at MEDIUM.** Pact suites are small and adoption there is
+close to all-or-nothing, so there is no `pactjsUtils` convention key to score
+against and no partial-migration case to protect.
 
 Load `pactjs-utils-mandate.md` before scoring M10: it holds the REQUIRED
 substitution list M10 fires on (`createProviderState`, `buildVerifierOptions`,
@@ -73,7 +90,7 @@ on (`page.route` against analytics, fonts, or third-party scripts), and the
 RECOMMENDED utilities that never deduct because they need project wiring the file
 cannot supply.
 
-When M9 fires, name the substitution in the recommendation (`page.route` on
+When M9 or M10 fires, name the substitution in the recommendation (`page.route` on
 `**/api/users` becomes `interceptNetworkCall({ url: '**/api/users' })`), and quote
 the mandate row rather than describing the utility in your own words. A finding
 that says "consider playwright-utils" is not actionable; one that says which call

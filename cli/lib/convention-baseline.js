@@ -66,8 +66,9 @@ const MIN_CORPUS_TO_ATTEMPT = 1; // 0 eligible files outside the review set: not
 // content (case-insensitive, no /g flag so repeated .test() calls carry no state).
 // Deliberately high-recall: a false positive here only ever makes the zero-signal
 // floor check more permissive (it stops treating a convention as unattested), never
-// less — see the module doc comment. The literal forms mirror the "Record as `form`"
-// examples in step-02-discover-tests.md's table.
+// less — see the module doc comment. Each detector must match what the "Adopted when
+// a sampled file..." column in step-02-discover-tests.md's table says, so a headless
+// run and an interactive run count the same corpus. Changing one means changing both.
 const MECHANICAL_DETECTORS = {
   priorityMarkers: /(\[P[0-3]\]|@P[0-3]\b|['"`]@?P[0-3]['"`]|\bpriority\s*:\s*['"`]?P[0-3]\b)/i,
   testIds: /(data-testid|data-test-id|getByTestId|test-id\s*=|testid\s*=)/i,
@@ -75,7 +76,10 @@ const MECHANICAL_DETECTORS = {
     /(interceptNetworkCall\s*\(|page\.route\s*\(|cy\.intercept\s*\(|waitForResponse\s*\(|waitForRequest\s*\(|route\.fulfill\s*\()/i,
   dataFactories: /(\bbuild[A-Z]\w*\s*\(|\bFactory\s*\(|from\s+['"][^'"]*factories|\bfactories\/)/i,
   fixtures: /(mergeTests\s*\(|test\.extend\s*\(|from\s+['"][^'"]*fixtures|merged-fixtures)/i,
-  playwrightUtils: /(@seontechnologies\/playwright-utils|from\s+['"][^'"]*merged-fixtures)/i,
+  // Only the package literal. `merged-fixtures` is already the `fixtures` key's
+  // signal, and a hand-rolled merged-fixtures.ts with no playwright-utils anywhere
+  // would otherwise register adoption for a package the repo never installed.
+  playwrightUtils: /@seontechnologies\/playwright-utils/i,
 };
 
 const MECHANICAL_CONVENTION_KEYS = Object.keys(MECHANICAL_DETECTORS);

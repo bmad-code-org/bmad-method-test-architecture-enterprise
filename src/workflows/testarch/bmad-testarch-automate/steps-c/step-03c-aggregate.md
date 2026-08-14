@@ -166,7 +166,7 @@ const uniqueFixtures = [...new Set(allFixtureNeeds)];
 
 Per `playwright-utils-mandate.md`.
 
-**A) Merged fixtures — the single entry point** (`tests/support/merged-fixtures.ts`):
+**A) Merged fixtures — the single entry point** (`{test_dir}/support/merged-fixtures.ts`):
 
 Every spec imports `test` from here. Include only the utility fixtures the generated suite actually uses, plus the project's own.
 
@@ -187,7 +187,9 @@ export { log };
 
 If the suite has no browser tests, drop `interceptFixture` and `networkErrorFixture` from the merge.
 
-**B) Auth fixture** (`tests/support/auth-fixture.ts`):
+**If `{test_dir}/support/merged-fixtures.ts` already exists, extend its `mergeTests` call instead of replacing the file.** `automate` runs repeatedly over a suite that already exists, so overwriting the entry point drops whatever fixtures the project added by hand since the last run.
+
+**B) Auth fixture** (`{test_dir}/support/auth-fixture.ts`):
 
 Built on `auth-session`, not on a login form walk. The provider is the one project-specific piece; everything else is the utility.
 
@@ -212,14 +214,14 @@ Tests then take `authToken` from the fixture. Tokens persist to disk and are reu
 
 If the project has no auth endpoint to wire, do not fall back to a form-driven login fixture. Emit the file with a `TODO` on `getToken`, and list "auth provider not wired" in the summary's `Playwright Utils deviations`.
 
-**C) Data factories** (`tests/support/factories.ts`): same as 4-V section B below.
+**C) Data factories** (`{test_dir}/support/factories.ts`): same as 4-V section B below.
 
 **D) Network stubs:**
 
 Do not create a network-mock helper module. A stub belongs in the test that needs it, as `interceptNetworkCall({ url, fulfillResponse })`, so the mock and the assertion stay side by side. Extract a shared factory only when three or more specs stub the same endpoint with the same payload, and even then export the `fulfillResponse` payload, not a `page.route` wrapper.
 
 ```typescript
-// tests/support/payloads.ts
+// {test_dir}/support/payloads.ts
 export const paymentSuccess = { success: true, transactionId: '12345' };
 ```
 

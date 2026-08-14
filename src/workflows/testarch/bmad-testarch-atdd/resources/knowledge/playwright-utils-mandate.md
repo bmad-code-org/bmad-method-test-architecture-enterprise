@@ -4,13 +4,14 @@
 
 When `tea_use_playwright_utils` is `true`, `@seontechnologies/playwright-utils` is the **default implementation** for every capability it covers. Vanilla Playwright equivalents are a documented deviation, never a default. The flag is not a hint that the library exists; it is an instruction to write the suite in that style without being asked.
 
-This fragment is the normative rule. The per-utility fragments (`api-request.md`, `intercept-network-call.md`, `auth-session.md`, and the rest) are the reference for how each utility is called.
+This fragment instantiates `library-integration-mandate.md`. Read that one for the two gates, the enforcement levels, and the deviation protocol; this one carries the substitutions. The per-utility fragments (`api-request.md`, `intercept-network-call.md`, `auth-session.md`, and the rest) are the reference for how each utility is called.
 
 ## Scope
 
 **Applies when all of these hold:**
 
 - `tea_use_playwright_utils` is `true` in `{config_source}`
+- `@seontechnologies/playwright-utils` is a dependency in the project's `package.json`
 - The suite runs on the Playwright test runner (`@playwright/test`)
 - The language is JavaScript or TypeScript
 
@@ -19,7 +20,7 @@ This fragment is the normative rule. The per-utility fragments (`api-request.md`
 - Cypress suites
 - Backend suites in pytest, JUnit, Go test, xUnit, or RSpec
 - Maestro mobile flows (no DOM, no request interceptor)
-- Pact consumer/provider suites running under Vitest (see the `pactjs-utils-*` fragments)
+- Pact consumer/provider suites running under Vitest (see `pactjs-utils-mandate.md`)
 
 A Node.js/TypeScript backend service tested through the Playwright runner **is** in scope: seven of the ten utilities work without a browser.
 
@@ -85,8 +86,12 @@ When `tea_use_playwright_utils` is `true`, load these two fragments for the prin
 
 ### Merged fixtures — one per project
 
+There is exactly one, and it lives under the project's configured `test_dir`. A workflow that hardcodes a different directory creates a second entry point, which is the one outcome this file exists to prevent.
+
+**The other fragments show `playwright/support/merged-fixtures.ts`.** That is the upstream playwright-utils repository's own layout in its examples, not a path to copy. `fixtures-composition.md`, `overview.md`, `network-error-monitor.md`, and `webhook-module-setup.md` all use it, and they are read for API shape rather than for where files go. In a TEA-scaffolded project the file is at `{test_dir}/support/merged-fixtures.ts`, and `{test_dir}` is whatever the project configured — `tests/`, `e2e/`, `playwright/`. Resolve it; do not assume it.
+
 ```typescript
-// playwright/support/merged-fixtures.ts
+// <test_dir>/support/merged-fixtures.ts  (playwright/, tests/, or e2e/ — whatever the project's test_dir is)
 import { mergeTests } from '@playwright/test';
 import { log } from '@seontechnologies/playwright-utils';
 import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
@@ -170,6 +175,7 @@ Under `test-review`, with the flag `true`, each of the Banned Patterns above is 
 
 ## Related Fragments
 
+- `library-integration-mandate.md` — the general contract this instantiates
 - `overview.md` — installation, design principles, the full utility table
 - `api-request.md`, `intercept-network-call.md`, `auth-session.md`, `recurse.md`, `log.md`, `file-utils.md`, `network-recorder.md`, `network-error-monitor.md`, `burn-in.md`
 - `fixtures-composition.md` — `mergeTests` patterns
