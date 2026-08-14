@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.22.2] - 2026-08-14
+
 ### Added
 
 - `evidence-integrity.md` knowledge fragment (core tier). Covers the two ways a suite reports a result it did not earn: a check that cannot fail (soft assertions carrying an outcome, `continue-on-error` on the test step, a runner manifest naming a subset of the suite, an assertion whose meaning differs per platform) and a diagnostic with no could-not-measure state, where a missing tool is reported as a failed condition. Also covers verifying a framework property exists and behaves before relying on it, emitting cross-boundary verdicts from the side that can observe them, stating local-versus-CI environment asymmetry, and resolving environment-dependent values before anything derives from them.
