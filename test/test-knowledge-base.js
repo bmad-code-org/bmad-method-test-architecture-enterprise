@@ -206,12 +206,20 @@ function runTests() {
   const sha1 = (filePath) => crypto.createHash('sha1').update(fs.readFileSync(filePath)).digest('hex');
 
   // Suite 4's cross-fragment link check runs against the agent directory only. It
-  // does not need a per-workflow twin: set equality plus byte equality, asserted
-  // below, means a link that resolves at the agent level resolves in every copy.
-  // Break either assertion and the link guarantee goes with it, which is the other
-  // reason they are not optional.
+  // does not need a per-workflow twin, but the reason is narrower than it looks:
+  // set equality plus byte equality carries the link guarantee ONLY while every
+  // link resolves inside the knowledge directory. The two locations sit at
+  // different depths - src/agents/bmad-tea/resources/knowledge is five segments,
+  // src/workflows/testarch/<workflow>/resources/knowledge is six - so a link that
+  // escapes with `../` resolves to different targets from the two while the bytes
+  // stay identical. Set equality, byte equality, and Suite 4 would all still pass
+  // with all eight copies pointing at nothing. That third condition is asserted
+  // below rather than assumed, because a fragment gaining one `../` link is a
+  // small and reviewable-looking diff.
   // Known limit, shared with Suite 4: a fragment named inside backticks rather than
-  // as a markdown link is not resolved by either check.
+  // as a markdown link is not resolved by either check. Closing it wants a way to
+  // tell a fragment reference from a step-file reference, and the obvious mechanism
+  // is the exemption list this suite deliberately does not have.
 
   const agentKnowledgeDir = path.join(kbRoot, 'knowledge');
   const workflowsRoot = path.join(projectRoot, 'src', 'workflows', 'testarch');
@@ -227,6 +235,16 @@ function runTests() {
     warn('agent knowledge dir or workflows root missing - skipping parity checks');
   } else {
     const agentFragments = fs.readdirSync(agentKnowledgeDir).filter((name) => name.endsWith('.md'));
+
+    // The condition the transitivity argument above rests on.
+    const escapingLink = /\]\((?:\.\.\/)+[^)]*\)/;
+    const escapers = agentFragments.filter((name) => escapingLink.test(fs.readFileSync(path.join(agentKnowledgeDir, name), 'utf8')));
+    assert(
+      escapers.length === 0,
+      'no fragment links outside its own knowledge directory',
+      `${escapers.join(', ')} use a ../ link, which resolves differently from the agent and workflow copies ` +
+        'even though the bytes match - inline the content or reference the fragment by name instead',
+    );
     const agentShas = new Map(agentFragments.map((name) => [name, sha1(path.join(agentKnowledgeDir, name))]));
 
     const workflowDirs = fs
