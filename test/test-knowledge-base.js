@@ -236,14 +236,31 @@ function runTests() {
   } else {
     const agentFragments = fs.readdirSync(agentKnowledgeDir).filter((name) => name.endsWith('.md'));
 
-    // The condition the transitivity argument above rests on.
-    const escapingLink = /\]\((?:\.\.\/)+[^)]*\)/;
-    const escapers = agentFragments.filter((name) => escapingLink.test(fs.readFileSync(path.join(agentKnowledgeDir, name), 'utf8')));
+    // The condition the transitivity argument above rests on. Resolve each link and
+    // check where it lands, rather than pattern-matching the spellings that usually
+    // escape: `](./../x.md)` and a root-relative `](/src/...)` both leave the
+    // directory without starting `../`, and a prefix pattern standing in for a
+    // resolution property is the same substitution this suite exists to avoid.
+    const escapers = [];
+    for (const name of agentFragments) {
+      const content = fs.readFileSync(path.join(agentKnowledgeDir, name), 'utf8');
+      for (const match of content.matchAll(/\]\(([^)]+)\)/g)) {
+        const href = match[1].trim();
+        if (!href.endsWith('.md') || isExternalLink(href)) continue;
+        const resolved = resolveFragmentLink(kbRoot, href);
+        if (resolved === null) continue;
+        const relative = path.relative(agentKnowledgeDir, path.resolve(resolved));
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+          escapers.push(`${name} -> ${href}`);
+        }
+      }
+    }
     assert(
       escapers.length === 0,
       'no fragment links outside its own knowledge directory',
-      `${escapers.join(', ')} use a ../ link, which resolves differently from the agent and workflow copies ` +
-        'even though the bytes match - inline the content or reference the fragment by name instead',
+      `${escapers.join(', ')} - the agent copy sits one path segment shallower than every workflow copy, so a link ` +
+        'leaving the directory resolves elsewhere from each while the bytes match. Inline the content, or name the ' +
+        'fragment without linking it.',
     );
     const agentShas = new Map(agentFragments.map((name) => [name, sha1(path.join(agentKnowledgeDir, name))]));
 
