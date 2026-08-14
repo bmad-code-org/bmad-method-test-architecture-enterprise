@@ -432,27 +432,81 @@ Measured in isolation: the tap completed in 2.4 seconds, the target was present 
 - **Any `assertVisible` on an element inside a scrolling section is a screen-height dependency** until the flow scrolls to it. It will pass wherever it was written and fail on the first shorter device.
 - This is the failure mode most likely to reproduce only in CI, because the runner's device profile is rarely the one the flow was written against. `mobile-ci-device-lab.md` carries the profile-parity rule.
 
+### Example 10: Assert the Change, Not a State That May Already Hold
+
+**Context**: A deep-link flow named "Widget Deep Link Hydration" that opened a link and asserted the home screen's own container was visible. The container was there before the link, so the assertion held whether or not the link did anything. On one platform it did nothing, and the suite reported 18 of 18.
+
+Two shapes are stacked here, and the second one catches people who have already fixed the first.
+
+**Shape one: the assertion targets something that predates the action.** A container, a screen root, or a nav bar that was on screen before the step cannot be evidence that the step worked. The tell is that the flow's name describes an effect the assertions never mention.
+
+**Shape two: the assertion targets the right thing, in a state the app might already be in.** Asserting "morning is selected" after a link that selects morning passes whenever morning is the default. The check is about the action but still cannot fail.
+
+**Implementation**:
+
+```yaml
+# ❌ Both shapes. The container predates the link, and even a corrected
+# assertion on the default scenario would pass without the link doing anything.
+- openLink: ${WIDGET_URL_AM}
+- assertVisible:
+    id: 'scenario-toggles' # already on screen before the link
+
+# ✅ Assert the transition. State the precondition, act, then assert both that
+# the new state holds and that the old one no longer does. Every link in the
+# flow has to earn its own pass this way, including the first.
+- assertVisible:
+    id: 'scenario-toggle-morning'
+    selected: true # PRECONDITION, not the outcome: names the state moved FROM
+
+- openLink: ${WIDGET_URL_EVENING}
+- assertVisible:
+    id: 'scenario-toggle-evening'
+    selected: true
+- assertNotVisible:
+    id: 'scenario-toggle-morning'
+    selected: true # the move is what proves this link was applied
+
+- openLink: ${WIDGET_URL_AM}
+- assertVisible:
+    id: 'scenario-toggle-morning'
+    selected: true
+- assertNotVisible:
+    id: 'scenario-toggle-evening'
+    selected: true # and the second link proves itself the same way
+```
+
+**Key points**:
+
+- **Prefer asserting a change over asserting a state.** Where a single state is all you have, pick an input whose expected result differs from the app's default, so agreement with the default cannot carry the pass.
+- **A precondition assertion is legitimate, and it is not the outcome.** Naming the state being moved from is what makes the following change meaningful, so mark it as a precondition and never let it stand in for proof that the action worked. Ordering the links so the first one also moves the selection is what stops the first step passing on the default, which is the trap the corrected block above is arranged to avoid.
+- **Choose a deterministic input.** The same flow had link variants resolving from the current time and the day's forecast, which cannot be asserted without freezing the clock. Two other variants mapped fixed values straight through the same parse-route-apply path. Reach for the deterministic input rather than reaching for a clock stub: it exercises the identical code path and needs no test-only seam.
+- `selected`, `checked`, `enabled`, and `focused` are documented state selectors and compose with `id` and `text` on `tapOn`, `assertVisible`, and `assertNotVisible`. `assertNotVisible` with a state selector is how "no longer selected" is expressed.
+- **Check the syntax before the run.** `maestro check-syntax` validates flow files without a device, which is the cheap way to confirm a selector or field exists on the version you pin rather than discovering it in a red run.
+
 ## Anti-Patterns
 
-| Anti-pattern                                                             | Why it fails                                                                              | Fix                                                                     |
-| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Flow with no `assertVisible`/`assertTrue`                                | Passes as long as taps land; proves nothing about behavior                                | Assert the destination state of every flow                              |
-| `sleep` used as synchronization                                          | Flaky under load, slow when not                                                           | `extendedWaitUntil` on the real condition                               |
-| `tapOn: index:` on a list                                                | Breaks when the list reorders or the backend returns a different order                    | Scope by `text` with `below`/`containsChild`                            |
-| `tapOn: point:` coordinates                                              | Breaks on a different screen size or density                                              | Address the element by `id`                                             |
-| No `clearState`                                                          | Flow depends on whatever ran before it; unreproducible in isolation                       | `clearState` before `launchApp`                                         |
-| Hardcoded credential or PII                                              | Leaks in the repo and in CI logs                                                          | `${ENV_VAR}` sourced from the CI secret store                           |
-| One flow covering six user journeys                                      | A failure names the flow, not the behavior; slow to diagnose                              | One journey per flow, composed from subflows                            |
-| Required assertion inside `when:`                                        | Turns a real failure into a silent pass                                                   | Guard only genuinely optional UI (permission dialogs, upsells)          |
-| `back` used as a cross-platform step                                     | Documented for Android and Web only; on iOS it does nothing and reports COMPLETED         | Split with `runFlow: when: platform:`; tap the app's own control on iOS |
-| `hideKeyboard` with a modal open                                         | The Android implementation is the system back key, which dismisses a React Native modal   | Tap a non-interactive element to drop the keyboard                      |
-| `optional: true` on the assertion that carries the outcome               | The step cannot fail, so the flow reports coverage it does not have                       | Assert hard; reserve `optional` for genuinely optional UI               |
-| `waitForAnimationToEnd` used as a wait-for-content                       | It succeeds when its cap is reached, so it cannot fail                                    | `extendedWaitUntil` on the content that must appear                     |
-| Unescaped regex characters in a `text:` selector                         | The value is a regex matched against the element's entire text, so it can never pass      | Escape literal `(`, `)`, `[`, `]`, `.`; pad partial matches with `.*`   |
-| Tap status treated as proof the app handled the tap                      | `tapOn` reports COMPLETED once the touch is dispatched, and touches do get lost           | Pair each state-changing tap with its own assertion inside a `retry`    |
-| One assertion at the end of a tap sequence                               | Cannot name which tap was lost, so the first hypothesis is a guess                        | Assert after every action that changes state                            |
-| `scrollUntilVisible` reused after an earlier search moved the list       | It travels only in the direction given, so the second search scrolls away from the target | Name the opposite `direction`, or return to a known position first      |
-| `assertVisible` on an element inside a scrolling section, with no scroll | Visible means inside the viewport; the element is present, correct, and below the fold    | `scrollUntilVisible` first, then assert                                 |
+| Anti-pattern                                                             | Why it fails                                                                              | Fix                                                                                   |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Flow with no `assertVisible`/`assertTrue`                                | Passes as long as taps land; proves nothing about behavior                                | Assert the destination state of every flow                                            |
+| `sleep` used as synchronization                                          | Flaky under load, slow when not                                                           | `extendedWaitUntil` on the real condition                                             |
+| `tapOn: index:` on a list                                                | Breaks when the list reorders or the backend returns a different order                    | Scope by `text` with `below`/`containsChild`                                          |
+| `tapOn: point:` coordinates                                              | Breaks on a different screen size or density                                              | Address the element by `id`                                                           |
+| No `clearState`                                                          | Flow depends on whatever ran before it; unreproducible in isolation                       | `clearState` before `launchApp`                                                       |
+| Hardcoded credential or PII                                              | Leaks in the repo and in CI logs                                                          | `${ENV_VAR}` sourced from the CI secret store                                         |
+| One flow covering six user journeys                                      | A failure names the flow, not the behavior; slow to diagnose                              | One journey per flow, composed from subflows                                          |
+| Required assertion inside `when:`                                        | Turns a real failure into a silent pass                                                   | Guard only genuinely optional UI (permission dialogs, upsells)                        |
+| `back` used as a cross-platform step                                     | Documented for Android and Web only; on iOS it does nothing and reports COMPLETED         | Split with `runFlow: when: platform:`; tap the app's own control on iOS               |
+| `hideKeyboard` with a modal open                                         | The Android implementation is the system back key, which dismisses a React Native modal   | Tap a non-interactive element to drop the keyboard                                    |
+| `optional: true` on the assertion that carries the outcome               | The step cannot fail, so the flow reports coverage it does not have                       | Assert hard; reserve `optional` for genuinely optional UI                             |
+| `waitForAnimationToEnd` used as a wait-for-content                       | It succeeds when its cap is reached, so it cannot fail                                    | `extendedWaitUntil` on the content that must appear                                   |
+| Unescaped regex characters in a `text:` selector                         | The value is a regex matched against the element's entire text, so it can never pass      | Escape literal `(`, `)`, `[`, `]`, `.`; pad partial matches with `.*`                 |
+| Tap status treated as proof the app handled the tap                      | `tapOn` reports COMPLETED once the touch is dispatched, and touches do get lost           | Pair each state-changing tap with its own assertion inside a `retry`                  |
+| One assertion at the end of a tap sequence                               | Cannot name which tap was lost, so the first hypothesis is a guess                        | Assert after every action that changes state                                          |
+| `scrollUntilVisible` reused after an earlier search moved the list       | It travels only in the direction given, so the second search scrolls away from the target | Name the opposite `direction`, or return to a known position first                    |
+| `assertVisible` on an element inside a scrolling section, with no scroll | Visible means inside the viewport; the element is present, correct, and below the fold    | `scrollUntilVisible` first, then assert                                               |
+| Assertion targets a container that predates the action                   | It was on screen before the step, so it cannot be evidence the step worked                | Assert the action's own effect; the flow's name should name what it asserts           |
+| Assertion on a state the app may already be in                           | Passes whenever the expected value is the default, so the action is not under test        | Assert the transition, or pick an input whose expected state differs from the default |
+| Time- or forecast-dependent input in a flow assertion                    | The expected value cannot be stated without freezing the clock                            | Pick a deterministic input through the same code path                                 |
 
 ## Maestro Flow Checklist
 
@@ -473,6 +527,9 @@ Before merging a flow:
 - [ ] **Every state-changing tap has its own assertion**, rather than one assertion covering a sequence
 - [ ] **`retry` scoped to a single step**, with `maxRetries` inside the documented 0-3 range
 - [ ] **Nothing asserted below the fold**: every assertion on an element inside a scrolling section is preceded by a scroll to it
+- [ ] **The assertion carrying the outcome post-dates its action**: a precondition assertion is allowed when it is labelled as one, and nothing already true before the step is presented as proof of it
+- [ ] **Transitions asserted where possible**: a single-state assertion is justified only when the expected value differs from the default
+- [ ] **Syntax checked**: `maestro check-syntax` run against the pinned version before the flow reaches a device
 
 ## Integration Points
 

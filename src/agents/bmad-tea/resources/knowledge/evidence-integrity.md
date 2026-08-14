@@ -21,7 +21,7 @@ A suite lies in two ways. A test that **cannot fail** reports coverage it does n
 
 ### Example 1: The Check That Cannot Fail
 
-**Context**: Four shapes found live in one suite that reported success on every run.
+**Context**: Five shapes found live in one suite that reported success on every run.
 
 **Implementation**:
 
@@ -81,10 +81,20 @@ flows:
 
 **Shape 4** has no snippet, because the step looks correct: an assertion passes on iOS because the element is still in the hierarchy behind a presented modal, and fails on Android where the modal replaces the hierarchy. Same assertion, different meaning per platform. Any assertion whose truth depends on how a platform composes its view tree needs its own per-platform expectation, not one shared line.
 
+**Shape 5: the assertion is about something that was already true before the action.** A flow opened a deep link and then asserted that a container belonging to the screen it was already on was visible. The container predated the link, so the check held whether or not the link did anything, and on one platform it did nothing. The suite reported all flows green with this one included, and the green was stable rather than intermittent.
+
+Two tells for it, both cheap:
+
+- **The name promises an effect the assertions never mention.** "Widget Deep Link Hydration" asserted the presence of a container, not that anything had hydrated. Read the flow's name as a claim and check that some assertion carries it. A name is the only place many suites record what a test was for, which makes disagreement between name and assertion a reliable smell.
+- **The result differs across environments for reasons unrelated to what it asserts.** The identical vacuous flow was green in CI and red locally, because on one API level the unresolvable link errored and on another it resolved somewhere and the open step completed. When a flow's outcome tracks an environment difference that its assertions never mention, suspect that the assertions are not what is deciding the result.
+
+The fix generalizes past this shape: **assert the transition rather than the state.** Where only a single state is available, choose an input whose expected value differs from the application's default, so agreement with the default cannot carry the pass. Asserting "the morning option is selected" after an action that selects morning proves nothing in an app that starts on morning; asserting that a second action **moved** the selection, and that the first option is no longer selected, cannot pass without the action working.
+
 **Key points**:
 
 - Name the input that would turn each check red. If none exists, the check is decoration.
-- `optional: true`, `continue-on-error`, a partial manifest, and a soft assertion are the four common ways a result stops being falsifiable.
+- `optional: true`, `continue-on-error`, a partial manifest, and a soft assertion are four common ways a result stops being falsifiable.
+- A fifth, and the hardest to see in review: the assertion is true before the action runs. Nothing about the step looks wrong, and the green is stable.
 - **When you make a hollow check falsifiable and it goes red, the red is the finding.** It is a defect that was always there and is now visible. Reporting it as a regression you introduced is the wrong read and usually gets the fix reverted.
 
 ### Example 2: Diagnostics Need a Could-Not-Measure State
@@ -202,27 +212,34 @@ The corollary for a suite: that cheap discriminating measurement should already 
 
 ## Anti-Patterns
 
-| Anti-pattern                                                   | Why it fails                                                                          | Fix                                                                                   |
-| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Assertion with a soft or optional modifier as default          | Cannot go red; reports coverage that does not exist                                   | Reserve softness for genuinely optional UI, and assert the outcome hard               |
-| `continue-on-error` on the test step                           | The suite cannot fail the build                                                       | Put it on artifact collection only; use `if: always()` for uploads                    |
-| Runner manifest listing a subset of the suite                  | Files silently never run; the count is the only clue                                  | Include by pattern; assert the executed count against the file count                  |
-| Missing tool reported as a failed condition                    | Sends the investigation at the wrong subsystem                                        | Three-state probes; distinct exit code for could-not-measure                          |
-| Probe observing a proxy that correlates with the target        | Passes for a reason unrelated to the claim, and a green is never re-examined          | Ask what else could make this pass; observe the thing itself                          |
-| Probe sending a different request than the client              | Takes a different branch through the server: healthy probe, failing app, both correct | Copy the client's method, headers, and body into the probe, and log what was sent     |
-| Written setting read back and reported as effect               | Proves the write; some configuration latches at boot and never applies live           | Assert the observable the claim is about, not the act that was supposed to produce it |
-| Change described by its intent once its effect is known        | Reads as a found root cause and stops the next investigation looking                  | Record what it actually did, and why it was kept                                      |
-| Mechanisms elaborated while the cheap measurement goes untaken | Plausibility feels like progress; several explanations, no new evidence               | Rank hypotheses by the cost of the observation that would kill them                   |
-| Verdict emitted by the side that cannot observe it             | Proves the wrong namespace                                                            | Move the assertion to the party whose route or state is in question                   |
-| Comment asserting a mechanism with no source read              | Propagates into other files and into other people's reasoning                         | Cite the doc or source line, or omit the mechanism                                    |
-| Local result used as a CI argument, asymmetry unstated         | Hides the axes that actually differ                                                   | Tabulate the differing axes with the claim                                            |
-| Environment probe running after its consumers                  | The answer arrives too late to configure anything                                     | Resolve environment-dependent values first, then derive                               |
-| Reverting a newly-red check as a regression                    | Restores the hollow green and loses the finding                                       | Treat the red as the pre-existing defect it exposed                                   |
+| Anti-pattern                                                            | Why it fails                                                                          | Fix                                                                                   |
+| ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Assertion with a soft or optional modifier as default                   | Cannot go red; reports coverage that does not exist                                   | Reserve softness for genuinely optional UI, and assert the outcome hard               |
+| Assertion that was already true before the action                       | Cannot distinguish the action working from the action doing nothing                   | Assert the transition, or an input whose expected state differs from the default      |
+| Flow name promising an effect no assertion mentions                     | The name records the intent and nothing checks it                                     | Read the name as a claim; make some assertion carry it                                |
+| Outcome tracking an environment difference the assertions never mention | Something other than the assertions is deciding the result                            | Suspect a vacuous check before investigating the environment                          |
+| A surface declared untestable without a test of the claim               | Coverage is dropped on an assumption, and the assumption is often wrong               | Try it; then name precisely which part is out of reach and why                        |
+| `continue-on-error` on the test step                                    | The suite cannot fail the build                                                       | Put it on artifact collection only; use `if: always()` for uploads                    |
+| Runner manifest listing a subset of the suite                           | Files silently never run; the count is the only clue                                  | Include by pattern; assert the executed count against the file count                  |
+| Missing tool reported as a failed condition                             | Sends the investigation at the wrong subsystem                                        | Three-state probes; distinct exit code for could-not-measure                          |
+| Probe observing a proxy that correlates with the target                 | Passes for a reason unrelated to the claim, and a green is never re-examined          | Ask what else could make this pass; observe the thing itself                          |
+| Probe sending a different request than the client                       | Takes a different branch through the server: healthy probe, failing app, both correct | Copy the client's method, headers, and body into the probe, and log what was sent     |
+| Written setting read back and reported as effect                        | Proves the write; some configuration latches at boot and never applies live           | Assert the observable the claim is about, not the act that was supposed to produce it |
+| Change described by its intent once its effect is known                 | Reads as a found root cause and stops the next investigation looking                  | Record what it actually did, and why it was kept                                      |
+| Mechanisms elaborated while the cheap measurement goes untaken          | Plausibility feels like progress; several explanations, no new evidence               | Rank hypotheses by the cost of the observation that would kill them                   |
+| Verdict emitted by the side that cannot observe it                      | Proves the wrong namespace                                                            | Move the assertion to the party whose route or state is in question                   |
+| Comment asserting a mechanism with no source read                       | Propagates into other files and into other people's reasoning                         | Cite the doc or source line, or omit the mechanism                                    |
+| Local result used as a CI argument, asymmetry unstated                  | Hides the axes that actually differ                                                   | Tabulate the differing axes with the claim                                            |
+| Environment probe running after its consumers                           | The answer arrives too late to configure anything                                     | Resolve environment-dependent values first, then derive                               |
+| Reverting a newly-red check as a regression                             | Restores the hollow green and loses the finding                                       | Treat the red as the pre-existing defect it exposed                                   |
 
 ## Evidence Integrity Checklist
 
 - [ ] **Every check is falsifiable**: for each assertion, the input that turns it red is nameable
 - [ ] **No soft assertion by default**: optional modifiers only on genuinely optional UI, with a comment
+- [ ] **The assertion carrying the outcome post-dates its action**: a precondition assertion is allowed when it is labelled as one, and nothing already true before the step is presented as proof of it
+- [ ] **Names reconciled with assertions**: what a test is called is carried by something that can fail
+- [ ] **Untestable claims tested**: a surface is dropped from coverage only after the claim itself has been checked
 - [ ] **No `continue-on-error` on a test step**: only on artifact collection
 - [ ] **Executed count reconciled**: the number of tests that ran matches the number of test files discovered
 - [ ] **Platform-divergent assertions split**: no single assertion whose meaning depends on how a platform composes its view tree
