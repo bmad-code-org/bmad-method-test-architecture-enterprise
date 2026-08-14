@@ -151,15 +151,22 @@ The host and the device are different network namespaces. A host that resolves a
 
 Write the asymmetry down whenever a local result enters a CI argument:
 
-| Axis          | Local                                      | CI                                 |
-| ------------- | ------------------------------------------ | ---------------------------------- |
-| OS / arch     | macOS, arm64                               | Linux, x86_64                      |
-| Platform ver. | newest API level                           | two levels older                   |
-| Image variant | vendor image with store services signed in | plain AOSP-style image, no account |
-| Acceleration  | native hypervisor                          | KVM, may be unavailable            |
-| Provisioning  | long-lived machine                         | fresh runner every job             |
+| Axis            | Local                                      | CI                                 |
+| --------------- | ------------------------------------------ | ---------------------------------- |
+| OS / arch       | macOS, arm64                               | Linux, x86_64                      |
+| Platform ver.   | newest API level                           | two levels older                   |
+| Image variant   | vendor image with store services signed in | plain AOSP-style image, no account |
+| Acceleration    | native hypervisor                          | KVM, may be unavailable            |
+| Provisioning    | long-lived machine                         | fresh runner every job             |
+| Screen geometry | 914dp tall (1080x2400 at 420dpi)           | 807dp tall (1080x2220 at 440dpi)   |
+| Credentials     | a developer session already on disk        | whatever the secret store supplies |
 
 A local pass proves the application path. It proves nothing about acceleration, snapshot restore, `PATH` handling, or an image variant the local machine never runs. Naming the axes converts "it works on my machine" from an argument into a scoped fact.
+
+Two of those axes are worth calling out because they read as trivia and are not:
+
+- **Screen geometry decides what is on screen, and "visible" usually means on screen.** The row above is a real pair: a 12% shorter viewport pushed content below the fold and failed four unrelated UI assertions on the runner while every developer machine stayed green. Compare the density-independent height, not the pixel resolution; the two profiles in that row share `1080x` and are different screens.
+- **A developer machine accumulates credentials that a fresh runner has never had.** A cached session file or a fetched certificate sitting in a home directory makes a whole code path invisible locally. When a failure exists only in CI and nothing about the code explains it, ask what the local machine has lying around that the runner does not.
 
 ### Example 6: Resolve Environment-Dependent Values Before Anything Derives From Them
 
@@ -183,23 +190,34 @@ One investigation removed a live feature-flag service from an end-to-end run, so
 
 A change described by its intent after its effect is known is a landmine for the next investigation, because the next reader takes the commit message as evidence that the cause was found and stops looking. State the outcome separately from the intent. "Kept for a different reason, and labelled as such" costs one sentence and saves someone a re-derivation.
 
+### Example 9: Order Hypotheses by the Cost of the Measurement That Kills Them
+
+**Context**: A UI assertion failing on "not visible". Three plausible mechanisms, all wrong.
+
+One investigation built three separate explanations for the same failure, each with a real code path behind it: a remote flag service answering false, an unresolved dynamic import leaving state null, and a stuck initialization call. Each was written up with its reasoning. Two measurements ended all three at once: a device log line showing the module had loaded, and a direct API query showing the flag was true. The actual cause was that the element sat below the fold, which one lookup in the captured view hierarchy would have shown at the start.
+
+**Rule**: before elaborating a mechanism, list the measurements available and what each would eliminate, then take the cheapest one that kills a whole class of hypothesis. A plausible mechanism is not evidence, and producing more of them feels like progress while the discriminating observation goes untaken. The tell is a session holding several explanations and no new measurements.
+
+The corollary for a suite: that cheap discriminating measurement should already be sitting in the artifacts. This is why capturing state at failure earns its storage cost, and why "the artifacts could not tell us" is a finding about the harness rather than an inconvenience.
+
 ## Anti-Patterns
 
-| Anti-pattern                                            | Why it fails                                                                          | Fix                                                                                   |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| Assertion with a soft or optional modifier as default   | Cannot go red; reports coverage that does not exist                                   | Reserve softness for genuinely optional UI, and assert the outcome hard               |
-| `continue-on-error` on the test step                    | The suite cannot fail the build                                                       | Put it on artifact collection only; use `if: always()` for uploads                    |
-| Runner manifest listing a subset of the suite           | Files silently never run; the count is the only clue                                  | Include by pattern; assert the executed count against the file count                  |
-| Missing tool reported as a failed condition             | Sends the investigation at the wrong subsystem                                        | Three-state probes; distinct exit code for could-not-measure                          |
-| Probe observing a proxy that correlates with the target | Passes for a reason unrelated to the claim, and a green is never re-examined          | Ask what else could make this pass; observe the thing itself                          |
-| Probe sending a different request than the client       | Takes a different branch through the server: healthy probe, failing app, both correct | Copy the client's method, headers, and body into the probe, and log what was sent     |
-| Written setting read back and reported as effect        | Proves the write; some configuration latches at boot and never applies live           | Assert the observable the claim is about, not the act that was supposed to produce it |
-| Change described by its intent once its effect is known | Reads as a found root cause and stops the next investigation looking                  | Record what it actually did, and why it was kept                                      |
-| Verdict emitted by the side that cannot observe it      | Proves the wrong namespace                                                            | Move the assertion to the party whose route or state is in question                   |
-| Comment asserting a mechanism with no source read       | Propagates into other files and into other people's reasoning                         | Cite the doc or source line, or omit the mechanism                                    |
-| Local result used as a CI argument, asymmetry unstated  | Hides the axes that actually differ                                                   | Tabulate the differing axes with the claim                                            |
-| Environment probe running after its consumers           | The answer arrives too late to configure anything                                     | Resolve environment-dependent values first, then derive                               |
-| Reverting a newly-red check as a regression             | Restores the hollow green and loses the finding                                       | Treat the red as the pre-existing defect it exposed                                   |
+| Anti-pattern                                                   | Why it fails                                                                          | Fix                                                                                   |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Assertion with a soft or optional modifier as default          | Cannot go red; reports coverage that does not exist                                   | Reserve softness for genuinely optional UI, and assert the outcome hard               |
+| `continue-on-error` on the test step                           | The suite cannot fail the build                                                       | Put it on artifact collection only; use `if: always()` for uploads                    |
+| Runner manifest listing a subset of the suite                  | Files silently never run; the count is the only clue                                  | Include by pattern; assert the executed count against the file count                  |
+| Missing tool reported as a failed condition                    | Sends the investigation at the wrong subsystem                                        | Three-state probes; distinct exit code for could-not-measure                          |
+| Probe observing a proxy that correlates with the target        | Passes for a reason unrelated to the claim, and a green is never re-examined          | Ask what else could make this pass; observe the thing itself                          |
+| Probe sending a different request than the client              | Takes a different branch through the server: healthy probe, failing app, both correct | Copy the client's method, headers, and body into the probe, and log what was sent     |
+| Written setting read back and reported as effect               | Proves the write; some configuration latches at boot and never applies live           | Assert the observable the claim is about, not the act that was supposed to produce it |
+| Change described by its intent once its effect is known        | Reads as a found root cause and stops the next investigation looking                  | Record what it actually did, and why it was kept                                      |
+| Mechanisms elaborated while the cheap measurement goes untaken | Plausibility feels like progress; several explanations, no new evidence               | Rank hypotheses by the cost of the observation that would kill them                   |
+| Verdict emitted by the side that cannot observe it             | Proves the wrong namespace                                                            | Move the assertion to the party whose route or state is in question                   |
+| Comment asserting a mechanism with no source read              | Propagates into other files and into other people's reasoning                         | Cite the doc or source line, or omit the mechanism                                    |
+| Local result used as a CI argument, asymmetry unstated         | Hides the axes that actually differ                                                   | Tabulate the differing axes with the claim                                            |
+| Environment probe running after its consumers                  | The answer arrives too late to configure anything                                     | Resolve environment-dependent values first, then derive                               |
+| Reverting a newly-red check as a regression                    | Restores the hollow green and loses the finding                                       | Treat the red as the pre-existing defect it exposed                                   |
 
 ## Evidence Integrity Checklist
 
@@ -219,6 +237,7 @@ A change described by its intent after its effect is known is a landmine for the
 - [ ] **Environment asymmetry stated**: local-versus-CI arguments list the differing axes
 - [ ] **Resolution precedes derivation**: environment-dependent values resolved before any consumer is built
 - [ ] **Effects recorded separately from intent**: a change kept for a reason other than the one it was made for says so
+- [ ] **Cheapest discriminating measurement taken first**: no mechanism elaborated while an available observation would eliminate a class of hypothesis
 
 ## Integration Points
 
