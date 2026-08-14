@@ -432,25 +432,26 @@ Outputs currently land directly under `{test_artifacts}` at the paths listed bel
 
 ## TEA Output Files
 
-Paths are relative to `{test_artifacts}` unless noted. Each is declared in the workflow's `workflow.yaml`.
+Paths are relative to `{test_artifacts}` unless noted. Deliverables are declared in the workflow's `workflow.yaml`; resume checkpoints are declared in the step files that write them.
 
-| Workflow           | Output                                                                                        |
-| ------------------ | --------------------------------------------------------------------------------------------- |
-| `test-design`      | `test-design-architecture.md` and `test-design-qa.md` (system-level writes both)              |
-| `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`) |
-| `test-design`      | `test-design-epic-{epic_num}.md` (epic-level)                                                 |
-| `framework`        | `{project-root}/tests/README.md`                                                              |
-| `atdd`             | `atdd-checklist-{story_key}.md`                                                               |
-| `automate`         | `automation-summary.md`                                                                       |
-| `test-review`      | `test-review.md` (override per run with the `output_file_override` variable)                  |
-| `nfr-assess`       | `nfr-assessment.md`                                                                           |
-| `trace`            | `traceability-matrix.md`                                                                      |
-| `trace`            | `e2e-trace-summary.json` (machine-readable summary for CI/CD and reporting)                   |
-| `trace`            | `gate-decision.json` (emitted only when the collection is gate-eligible)                      |
-| `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)  |
-| `teach-me-testing` | `teaching-progress/{user_name}-tea-progress.yaml`                                             |
-| `teach-me-testing` | `tea-academy/{user_name}/session-{N}-notes.md`                                                |
-| `teach-me-testing` | `tea-academy/{user_name}/tea-completion-summary.md`                                           |
+| Workflow           | Output                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `test-design`      | `test-design-architecture.md` and `test-design-qa.md` (system-level writes both)                    |
+| `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)       |
+| `test-design`      | `test-design-epic-{epic_num}.md` (epic-level)                                                       |
+| `test-design`      | `test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`) |
+| `framework`        | `{project-root}/tests/README.md`                                                                    |
+| `atdd`             | `atdd-checklist-{story_key}.md`                                                                     |
+| `automate`         | `automation-summary.md`                                                                             |
+| `test-review`      | `test-review.md` (override per run with the `output_file_override` variable)                        |
+| `nfr-assess`       | `nfr-assessment.md`                                                                                 |
+| `trace`            | `traceability-matrix.md`                                                                            |
+| `trace`            | `e2e-trace-summary.json` (machine-readable summary for CI/CD and reporting)                         |
+| `trace`            | `gate-decision.json` (emitted only when the collection is gate-eligible)                            |
+| `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)        |
+| `teach-me-testing` | `teaching-progress/{user_name}-tea-progress.yaml`                                                   |
+| `teach-me-testing` | `tea-academy/{user_name}/session-{N}-notes.md`                                                      |
+| `teach-me-testing` | `tea-academy/{user_name}/tea-completion-summary.md`                                                 |
 
 `trace` also reads an optional input it never writes: `live-verification-results.json`. Any producer may write it (an agent, a shell script, a CI job, or a person recording an outcome by hand). See [Live Verification Results](/docs/reference/live-verification-results.md) for the contract.
 

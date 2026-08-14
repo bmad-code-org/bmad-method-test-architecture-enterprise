@@ -2,7 +2,7 @@
 name: 'step-03-risk-and-testability'
 description: 'Perform testability review (system-level) and risk assessment'
 nextStepFile: '{skill-root}/steps-c/step-04-coverage-plan.md'
-outputFile: '{test_artifacts}/test-design-progress.md'
+outputFile: '{test_artifacts}/test-design-progress-{run_key}.md'
 ---
 
 # Step 3: Testability & Risk Assessment
@@ -96,6 +96,8 @@ Summarize the highest risks and their mitigation priorities.
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
   workflowStatus: 'in-progress'
   totalSteps: 5
   stepsCompleted: ['step-03-risk-and-testability']
@@ -108,6 +110,7 @@ Summarize the highest risks and their mitigation priorities.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
   - Set `workflowStatus: 'in-progress'`
   - Set `totalSteps: 5`
   - Add `'step-03-risk-and-testability'` to `stepsCompleted` array (only if not already present)

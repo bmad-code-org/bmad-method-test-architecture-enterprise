@@ -3,7 +3,7 @@ name: 'step-02-load-context'
 description: 'Load documents, configuration, and knowledge fragments for the chosen mode'
 nextStepFile: '{skill-root}/steps-c/step-03-risk-and-testability.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/test-design-progress.md'
+outputFile: '{test_artifacts}/test-design-progress-{run_key}.md'
 ---
 
 # Step 2: Load Context & Knowledge Base
@@ -80,6 +80,8 @@ Extract:
 - NFR thresholds and missing threshold questions
 
 ### Epic-Level Mode (Phase 4)
+
+Load documents for the epic identified by the `epic_num` resolved in step 1. Do not widen the scope to other epics and do not re-derive `epic_num`.
 
 Load:
 
@@ -221,6 +223,8 @@ Summarize what was loaded and confirm with the user if anything is missing.
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
   workflowStatus: 'in-progress'
   totalSteps: 5
   stepsCompleted: ['step-02-load-context']
@@ -233,6 +237,7 @@ Summarize what was loaded and confirm with the user if anything is missing.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
   - Set `workflowStatus: 'in-progress'`
   - Set `totalSteps: 5`
   - Add `'step-02-load-context'` to `stepsCompleted` array (only if not already present)

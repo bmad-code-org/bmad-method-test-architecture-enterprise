@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `test-design` progress checkpoints now carry run identity, so a run for one epic no longer clobbers an interrupted run for another ([#128](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/issues/128)). Every create-mode step wrote to a single fixed `{test_artifacts}/test-design-progress.md`, and each step's save appended to whatever was already there, so a second epic's run merged its content and its `stepsCompleted` into the first epic's checkpoint; resuming the first epic afterwards read the second epic's state. `step-01-detect-mode.md` now resolves `run_scope` and `run_key` (`system`, or `epic-{epic_num}`) before the first save, checkpoints are written to `{test_artifacts}/test-design-progress-{run_key}.md`, and the frontmatter carries `runScope` and `runKey`. Resolving `epic_num` in step 1 also removes the late "if `epic_num` is unclear, ask the user" prompt in `step-05-generate-output.md`, so a plan and its checkpoint always name the same run.
+- `test-design` create mode no longer merges two runs into one checkpoint. When a checkpoint already exists for the same scope, step 1 reports its `lastStep` and `lastSaved` and asks whether to resume or start over, and starting over replaces the file instead of appending to it.
+- `test-design` resume mode selects the checkpoint belonging to the run being resumed, asks which run to continue when several checkpoints exist and no scope was named, and refuses a checkpoint whose `runKey` does not match. Checkpoints written under the old fixed name are detected, confirmed with the user, and migrated.
+
 ## [1.22.2] - 2026-08-14
 
 ### Added
