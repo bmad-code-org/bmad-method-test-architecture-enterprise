@@ -49,6 +49,7 @@ pinned severity, and its gate. This worker owns every `CRITICAL` row except C5.
 | C3  | Tautological assertion                    | CRITICAL | Absolute      |
 | C4  | No assertion                              | CRITICAL | Absolute      |
 | C6  | Assertion unreachable                     | CRITICAL | Absolute      |
+| C7  | Flow outcome cannot fail (Maestro)        | CRITICAL | Applicability |
 | H1  | Hard wait                                 |     HIGH | Absolute      |
 | H2  | Wall-clock fixture                        |     HIGH | Applicability |
 | H3  | Conditional assertion                     |     HIGH | Absolute      |

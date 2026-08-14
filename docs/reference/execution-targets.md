@@ -93,8 +93,8 @@ All shipped templates are written around a Node and browser toolchain and are ad
 
 Published deliberately, so an evaluation does not have to discover them:
 
-- **No knowledge fragments exist for any backend test framework.** 38 of 54 fragments name Playwright or Cypress and 2 cover mobile; zero cover pytest, JUnit, Go test, xUnit, or RSpec. Generation for those stacks relies on inline workflow conventions rather than a curated pattern library.
-- **Review criteria are still mostly JavaScript-shaped.** The registry carries 31 rows: 7 are portable across languages, 3 are mobile-specific, and the rest key on browser, Testing Library, Vitest, or Pact constructs. Scores on non-JavaScript, non-Maestro suites are directionally useful and not comparable to scores on a JavaScript suite.
+- **No knowledge fragments exist for any backend test framework.** 38 of 56 fragments name Playwright or Cypress and 3 cover mobile; zero cover pytest, JUnit, Go test, xUnit, or RSpec. Generation for those stacks relies on inline workflow conventions rather than a curated pattern library.
+- **Review criteria are still mostly JavaScript-shaped.** The registry carries 32 rows: 7 are portable across languages, 4 are mobile-specific, and the rest key on browser, Testing Library, Vitest, or Pact constructs. Scores on non-JavaScript, non-Maestro suites are directionally useful and not comparable to scores on a JavaScript suite.
 - **Rust is declared but incomplete.** See the generation table above.
 - **CI templates are Node-first.** See the CI section above.
 

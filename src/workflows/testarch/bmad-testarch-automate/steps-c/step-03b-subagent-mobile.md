@@ -14,7 +14,7 @@ This is an **isolated subagent** running in parallel with API test generation.
 **What you have from parent workflow:**
 
 - Target features/journeys identified in Step 2
-- Knowledge fragments loaded: `mobile-test-strategy`, `maestro-flows`, `test-levels-framework`, `test-priorities-matrix`, `test-quality`
+- Knowledge fragments loaded: `mobile-test-strategy`, `maestro-flows`, `mobile-ci-device-lab`, `test-levels-framework`, `test-priorities-matrix`, `test-quality`
 - Config: test framework, detected stack type (`mobile`)
 - Coverage plan: which journeys need coverage and at which level
 
@@ -77,7 +77,8 @@ Every generated flow must satisfy the `maestro-flows.md` checklist:
 - Accessibility-id selectors first; `text` only when no id exists; scoped relations for repeated labels
 - No bare `index:` and no `point:` coordinates
 - `extendedWaitUntil` on a named condition with an explicit timeout, never `sleep`
-- At least one `assertVisible` / `assertNotVisible` / `assertTrue` on the destination state
+- At least one `assertVisible` / `assertNotVisible` / `assertTrue` on the destination state, and it must be able to fail: never put `optional: true` on the assertion that carries the flow's outcome (registry row C7)
+- Every command used on both platforms is documented for both, or split by `runFlow: when: platform:`. `back` is Android and Web only and no-ops on iOS while reporting success, and `hideKeyboard` on Android is the system back key, which dismisses an open React Native modal
 - `${ENV_VAR}` for every credential, never a literal
 - One user journey per file, shared setup extracted to `{maestro_root}/subflows/` (where `{maestro_root}` is the resolved Maestro root: `maestro/` or `.maestro/`)
 - A `P0`-`P3` tag matching the priority the coverage plan assigned

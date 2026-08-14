@@ -1,11 +1,11 @@
 ---
 title: 'TEA Knowledge Base Index'
-description: Complete index of TEA's 54 knowledge fragments for context engineering
+description: Complete index of TEA's 56 knowledge fragments for context engineering
 ---
 
 # TEA Knowledge Base Index
 
-TEA loads domain standards into context from 54 knowledge fragments, selected per workflow by the `tea-index.csv` manifest. Why that beats prompting, and how loading is wired: [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
+TEA loads domain standards into context from 56 knowledge fragments, selected per workflow by the `tea-index.csv` manifest. Why that beats prompting, and how loading is wired: [Knowledge Base System](/docs/explanation/knowledge-base-system.md).
 
 This page indexes every row of that manifest. Each entry is named by its manifest `id`, which differs from the file name for a few fragments; the link resolves to the file. The `Tier` column is the manifest's own `tier` value and decides when the fragment loads (see [Loading tiers](#loading-tiers)).
 
@@ -73,18 +73,21 @@ CI/CD patterns, burn-in testing, and selective test execution.
 
 Test quality standards, test level selection, TDD patterns, and the generation-safety gate.
 
-| Fragment                                                                                                                                                                      | Tier     | Description                                                                                                                | Key Topics                           |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| [test-quality](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-quality.md)                   | core     | Execution limits, isolation rules, green criteria                                                                          | DoD, best practices, anti-patterns   |
-| [test-levels](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-levels-framework.md)           | core     | Guidelines for choosing unit, integration, or end-to-end coverage                                                          | Test pyramid, level selection        |
-| [test-priorities](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-priorities-matrix.md)      | core     | P0–P3 criteria, coverage targets, execution ordering                                                                       | Prioritization, risk-based testing   |
-| [test-healing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-healing-patterns.md) | core     | Common failure patterns and automated fixes                                                                                | Debugging, healing, fixes            |
-| [confidence-gate](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/confidence-gate.md)             | core     | 1-10 confidence score with a stop-and-ask rule below threshold, so the agent declares unknowns instead of fabricating them | Agent safety, generation, governance |
-| [component-tdd](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/component-tdd.md)                 | extended | Red→green→refactor workflow, provider isolation                                                                            | TDD, component testing               |
+| Fragment                                                                                                                                                                      | Tier     | Description                                                                                                                    | Key Topics                                |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- |
+| [test-quality](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-quality.md)                   | core     | Execution limits, isolation rules, green criteria                                                                              | DoD, best practices, anti-patterns        |
+| [test-levels](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-levels-framework.md)           | core     | Guidelines for choosing unit, integration, or end-to-end coverage                                                              | Test pyramid, level selection             |
+| [test-priorities](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-priorities-matrix.md)      | core     | P0–P3 criteria, coverage targets, execution ordering                                                                           | Prioritization, risk-based testing        |
+| [test-healing-patterns](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/test-healing-patterns.md) | core     | Common failure patterns and automated fixes                                                                                    | Debugging, healing, fixes                 |
+| [confidence-gate](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/confidence-gate.md)             | core     | 1-10 confidence score with a stop-and-ask rule below threshold, so the agent declares unknowns instead of fabricating them     | Agent safety, generation, governance      |
+| [evidence-integrity](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/evidence-integrity.md)       | core     | Checks that cannot fail, three-state diagnostics, verifying framework properties before use, and stating environment asymmetry | Falsifiability, hollow green, diagnostics |
+| [component-tdd](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/component-tdd.md)                 | extended | Red→green→refactor workflow, provider isolation                                                                                | TDD, component testing                    |
 
 **Used in:** `test-design`, `atdd`, `automate`, `test-review`, `trace`
 
 `confidence-gate` covers selectors, endpoints, risk classification, fixtures, schemas, and data factories. Any generation step that cannot establish a value from the repo records it as an unknown rather than inventing it.
+
+`evidence-integrity` covers the other half of the same problem: a check that cannot go red, and a diagnostic that reports a verdict it could not measure. Both produce green with nothing behind it, which is why the review registry's CRITICAL rows exist.
 
 ---
 
@@ -175,10 +178,11 @@ Delivery-side testing for asynchronous, eventually-consistent webhook flows usin
 
 Maestro device flows and the level discipline that decides what becomes a flow at all. Loaded when `test_stack_type` is `mobile` or when the review set contains a Maestro flow (`.yaml`/`.yml` under `maestro/` or `.maestro/`, or `*.flow.yaml` or `*.flow.yml`).
 
-| Fragment                                                                                                                                                                    | Tier        | Description                                                                                                     | Key Topics                                          |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
-| [mobile-test-strategy](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/mobile-test-strategy.md) | specialized | Mobile test level framework, what belongs in a device flow, mobile risk categories, device matrix, CI shape     | Levels, risk, device matrix, permissions, lifecycle |
-| [maestro-flows](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/maestro-flows.md)               | specialized | Flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition | Maestro, selectors, isolation, anti-patterns        |
+| Fragment                                                                                                                                                                    | Tier        | Description                                                                                                                                                | Key Topics                                            |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| [mobile-test-strategy](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/mobile-test-strategy.md) | specialized | Mobile test level framework, what belongs in a device flow, mobile risk categories, device matrix, CI shape                                                | Levels, risk, device matrix, permissions, lifecycle   |
+| [maestro-flows](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/maestro-flows.md)               | specialized | Flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition, command semantics that differ by platform | Maestro, selectors, isolation, anti-patterns          |
+| [mobile-ci-device-lab](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/mobile-ci-device-lab.md) | specialized | Build artifact selection, emulator snapshot caching, runner version pinning, dev-server reachability, artifact layout and failure diagnosis, sharding      | Build artifact, emulator, caching, pinning, artifacts |
 
 **Used in:** `framework`, `automate`, `atdd`, `test-design`, `test-review`, `ci` (when `test_stack_type` is `mobile` or a Maestro flow is present)
 
@@ -222,7 +226,7 @@ The package's remaining fragments are indexed under the category that matches wh
 
 **Location:** `src/agents/bmad-tea/resources/tea-index.csv`
 
-**Fragment location:** `src/agents/bmad-tea/resources/knowledge/` (all 54 fragments in a single directory)
+**Fragment location:** `src/agents/bmad-tea/resources/knowledge/` (all 56 fragments in a single directory)
 
 **Structure:**
 

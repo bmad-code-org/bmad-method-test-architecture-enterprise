@@ -77,26 +77,29 @@ Run the full matrix nightly and on release candidates. Run the primary target on
 
 ## CI Shape
 
+- **Build artifact first**: decide what the flows run against before writing any of them. A release-shaped build (unsigned APK, simulator IPA) is the default; a prebuilt development shell such as Expo Go is not a CI artifact, because the native modules the flows need are absent and the launch path exists only in CI. This decision sets the failure surface of the whole suite; see `mobile-ci-device-lab.md`.
 - **PR gate**: unit + component + contract on every push. P0-tagged Maestro flows on the primary target only.
 - **Nightly**: full Maestro suite across the device matrix.
 - **Release candidate**: full suite plus the upgrade-path flow from the previous production build.
-- **Artifacts**: Maestro writes a video, a screenshot, and a hierarchy dump per failed flow. Upload all three; the hierarchy dump is what identifies a selector break, and it is the one people forget.
+- **Artifacts**: Maestro writes per-step statuses, a hierarchy dump, screenshots, a video, and device logs per run. Upload all of them, and diagnose from the per-step status and the hierarchy dump captured at failure. The failure screenshot is taken after teardown and often shows the launcher rather than the failing screen, so leading with it produces confident wrong answers.
 - **Burn-in**: applies to mobile the same way it applies to browser E2E. New or changed flows run repeatedly before merge, because device flows are the most flake-prone level in the suite.
 - **Sharding**: shard by flow file across parallel emulators. Emulator boot dominates a short run, so keep shard count low enough that boot time does not exceed test time.
 
 ## Anti-Patterns
 
-| Anti-pattern                                     | Why it fails                                                   | Fix                                                                       |
-| ------------------------------------------------ | -------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Every acceptance criterion becomes a device flow | Suite runtime explodes; failures are slow to diagnose          | Apply the level framework and the duplicate-coverage guard                |
-| Full device matrix on every PR                   | Gate becomes too slow to block on, so people bypass it         | Primary target on PRs, matrix nightly                                     |
-| Performance asserted inside a Maestro flow       | Measures the harness, not the app                              | Platform instrumentation as NFR evidence                                  |
-| Flows depend on a shared logged-in account       | Parallel runs collide; failures are not reproducible           | Per-run accounts/data or explicit backend reset when server state changes |
-| No offline or permission-denied coverage         | The paths users actually hit in the wild are the untested ones | Score them as risks; they are usually P0 or P1                            |
-| Testing against a production backend             | Non-deterministic data, and a test order can mutate real state | Dedicated environment or a stubbed backend                                |
+| Anti-pattern                                          | Why it fails                                                                                                                   | Fix                                                                        |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| Every acceptance criterion becomes a device flow      | Suite runtime explodes; failures are slow to diagnose                                                                          | Apply the level framework and the duplicate-coverage guard                 |
+| Full device matrix on every PR                        | Gate becomes too slow to block on, so people bypass it                                                                         | Primary target on PRs, matrix nightly                                      |
+| Performance asserted inside a Maestro flow            | Measures the harness, not the app                                                                                              | Platform instrumentation as NFR evidence                                   |
+| Flows depend on a shared logged-in account            | Parallel runs collide; failures are not reproducible                                                                           | Per-run accounts/data or explicit backend reset when server state changes  |
+| No offline or permission-denied coverage              | The paths users actually hit in the wild are the untested ones                                                                 | Score them as risks; they are usually P0 or P1                             |
+| Testing against a production backend                  | Non-deterministic data, and a test order can mutate real state                                                                 | Dedicated environment or a stubbed backend                                 |
+| Device flows run through a prebuilt development shell | Native modules are absent, so deep links, notifications, and payments can only be asserted missing; the launch path is CI-only | Build a release-shaped artifact and install it (`mobile-ci-device-lab.md`) |
 
 ## Mobile Strategy Checklist
 
+- [ ] **Build artifact decided**: flows run against a release-shaped or development build, never a prebuilt development shell
 - [ ] **Levels assigned**: each acceptance criterion mapped to unit, component, contract, or device flow
 - [ ] **Duplicate coverage checked**: no device flow proving something a cheaper level already proves
 - [ ] **Mobile risk categories scored**: permissions, lifecycle, connectivity, fragmentation, upgrade
@@ -109,7 +112,7 @@ Run the full matrix nightly and on release candidates. Run the primary target on
 ## Integration Points
 
 - **Used in workflows**: `*test-design` (risk and level assignment for mobile), `*framework` (scaffold the suite), `*automate` (generate flows at the right level), `*ci` (device pipeline shape), `*nfr-assess` (mobile NFR evidence), `*trace` (map criteria to flows)
-- **Related fragments**: `maestro-flows.md` (flow syntax and quality), `test-levels-framework.md` (the general level model this specializes), `probability-impact.md` (the scoring scale), `test-priorities-matrix.md` (P0-P3), `ci-burn-in.md` (burn-in and sharding mechanics)
+- **Related fragments**: `maestro-flows.md` (flow syntax and quality), `mobile-ci-device-lab.md` (build artifact selection, emulator caching, version pinning, failure diagnosis), `test-levels-framework.md` (the general level model this specializes), `probability-impact.md` (the scoring scale), `test-priorities-matrix.md` (P0-P3), `ci-burn-in.md` (burn-in and sharding mechanics)
 - **Tools**: `maestro test`, `maestro studio`, platform instrumentation (Xcode Instruments, Android Profiler, Firebase Performance)
 
 _Source: TEA test-levels framework applied to mobile constraints, Maestro CI practice, mobile risk categories from permissions/lifecycle/connectivity/fragmentation failure modes_

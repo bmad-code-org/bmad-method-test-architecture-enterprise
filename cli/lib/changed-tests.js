@@ -98,7 +98,7 @@ function resetExtraTestPatterns() {
  *
  * Code extensions are the general gate, so docs/example.spec.md is documentation,
  * not a test. Maestro is the one deliberate exception: the criteria registry
- * carries mobile rows (C4, H1, H3, H4, H9, M8, L8), so a declarative YAML flow is
+ * carries mobile rows (C4, C7, H1, H3, H4, H9, M8, L8), so a declarative YAML flow is
  * a format the ledger CAN score and it is recognized natively rather than needing
  * --test-glob. The exception is scoped to YAML under a Maestro directory (or a
  * *.flow.yaml anywhere) and excludes Maestro's own workspace config, which is

@@ -117,7 +117,7 @@ Read `{config_source}` and check `tea_use_playwright_utils`, `tea_use_pactjs_uti
 
 **If `{detected_stack}` is `mobile`, or the review set contains a Maestro flow (`.yaml`/`.yml` under `maestro/` or `.maestro/`, or `*.flow.yaml` or `*.flow.yml`):**
 
-- `maestro-flows.md`: required to score rows M8, H9, L8 and to judge C4, H1, H3, H4 against flow syntax
+- `maestro-flows.md`: required to score rows C7, M8, H9, L8 and to judge C4, H1, H3, H4 against flow syntax
 - `mobile-test-strategy.md`: required to judge whether a flow belongs at the device level at all
 
 Without these, a flow is reviewed against browser predicates that cannot match it, which is how a flow used to score 100 by matching nothing.

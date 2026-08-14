@@ -87,7 +87,7 @@ TEA's execution coverage is uneven, and the uneven part is deliberate to state r
 
 ### The self-audit
 
-Of TEA's 54 knowledge fragments, 38 name Playwright or Cypress. Two cover mobile. None covers a backend test framework, and the knowledge index has no row tagged for pytest, JUnit, Go test, xUnit, or RSpec.
+Of TEA's 56 knowledge fragments, 38 name Playwright or Cypress. Three cover mobile. None covers a backend test framework, and the knowledge index has no row tagged for pytest, JUnit, Go test, xUnit, or RSpec.
 
 That is the real shape of the gap, and it is uneven in a specific way. Web and mobile are knowledge-backed: TEA carries curated patterns for both, so what it generates follows a pattern library rather than the model's improvisation. Backend languages are not. TEA can decide to scaffold pytest, and does, but it works from the conventions named inline in the workflow step and from the project it can see. The reasoning that selects pytest is as rigorous for a Python service as for a React Native app. The execution guidance behind it is not yet equivalent.
 

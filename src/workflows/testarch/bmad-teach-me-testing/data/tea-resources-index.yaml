@@ -196,6 +196,11 @@ knowledge_fragments:
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/mobile-test-strategy.md"
       description: "Mobile test level framework (unit/component/contract/device flow), what belongs in a device"
 
+    - name: "mobile-ci-device-lab"
+      path: "/src/agents/bmad-tea/resources/knowledge/mobile-ci-device-lab.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/mobile-ci-device-lab.md"
+      description: "Build artifact selection, emulator snapshot caching, runner version pinning, failure diagnosis"
+
     - name: "playwright-cli"
       path: "/src/agents/bmad-tea/resources/knowledge/playwright-cli.md"
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/playwright-cli.md"
@@ -389,6 +394,11 @@ knowledge_fragments:
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/confidence-gate.md"
       description: "1-10 confidence scoring with stop-and-ask rule below threshold for selectors, endpoints"
 
+    - name: "evidence-integrity"
+      path: "/src/agents/bmad-tea/resources/knowledge/evidence-integrity.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/evidence-integrity.md"
+      description: "Checks that cannot fail, three-state diagnostics, and verdicts a probe did not earn"
+
   auth_security:
     - name: "email-auth"
       path: "/src/agents/bmad-tea/resources/knowledge/email-auth.md"
@@ -443,7 +453,7 @@ session_to_resources:
 
   session-07:
     primary_docs: []
-    fragments: [] # All 54 fragments available via menu-driven exploration
+    fragments: [] # All 56 fragments available via menu-driven exploration
 
 # Web-Browsing Fallback Strategy
 fallback_urls:
