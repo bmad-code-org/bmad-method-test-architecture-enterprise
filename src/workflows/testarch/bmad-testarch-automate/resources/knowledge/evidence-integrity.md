@@ -237,7 +237,7 @@ The corollary for a suite: that cheap discriminating measurement should already 
 
 - [ ] **Every check is falsifiable**: for each assertion, the input that turns it red is nameable
 - [ ] **No soft assertion by default**: optional modifiers only on genuinely optional UI, with a comment
-- [ ] **Every assertion post-dates its action**: nothing asserted was already true before the step it is meant to prove
+- [ ] **The assertion carrying the outcome post-dates its action**: a precondition assertion is allowed when it is labelled as one, and nothing already true before the step is presented as proof of it
 - [ ] **Names reconciled with assertions**: what a test is called is carried by something that can fail
 - [ ] **Untestable claims tested**: a surface is dropped from coverage only after the claim itself has been checked
 - [ ] **No `continue-on-error` on a test step**: only on artifact collection

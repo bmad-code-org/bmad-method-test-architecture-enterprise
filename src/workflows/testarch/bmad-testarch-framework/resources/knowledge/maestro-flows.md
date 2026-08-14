@@ -451,12 +451,12 @@ Two shapes are stacked here, and the second one catches people who have already 
 - assertVisible:
     id: 'scenario-toggles' # already on screen before the link
 
-# ✅ Assert the transition. Establish the starting state, act, then assert both
-# that the new state holds and that the old one no longer does.
-- openLink: ${WIDGET_URL_AM}
+# ✅ Assert the transition. State the precondition, act, then assert both that
+# the new state holds and that the old one no longer does. Every link in the
+# flow has to earn its own pass this way, including the first.
 - assertVisible:
     id: 'scenario-toggle-morning'
-    selected: true
+    selected: true # PRECONDITION, not the outcome: names the state moved FROM
 
 - openLink: ${WIDGET_URL_EVENING}
 - assertVisible:
@@ -464,12 +464,21 @@ Two shapes are stacked here, and the second one catches people who have already 
     selected: true
 - assertNotVisible:
     id: 'scenario-toggle-morning'
-    selected: true # the move is what proves the link was applied
+    selected: true # the move is what proves this link was applied
+
+- openLink: ${WIDGET_URL_AM}
+- assertVisible:
+    id: 'scenario-toggle-morning'
+    selected: true
+- assertNotVisible:
+    id: 'scenario-toggle-evening'
+    selected: true # and the second link proves itself the same way
 ```
 
 **Key points**:
 
 - **Prefer asserting a change over asserting a state.** Where a single state is all you have, pick an input whose expected result differs from the app's default, so agreement with the default cannot carry the pass.
+- **A precondition assertion is legitimate, and it is not the outcome.** Naming the state being moved from is what makes the following change meaningful, so mark it as a precondition and never let it stand in for proof that the action worked. Ordering the links so the first one also moves the selection is what stops the first step passing on the default, which is the trap the corrected block above is arranged to avoid.
 - **Choose a deterministic input.** The same flow had link variants resolving from the current time and the day's forecast, which cannot be asserted without freezing the clock. Two other variants mapped fixed values straight through the same parse-route-apply path. Reach for the deterministic input rather than reaching for a clock stub: it exercises the identical code path and needs no test-only seam.
 - `selected`, `checked`, `enabled`, and `focused` are documented state selectors and compose with `id` and `text` on `tapOn`, `assertVisible`, and `assertNotVisible`. `assertNotVisible` with a state selector is how "no longer selected" is expressed.
 - **Check the syntax before the run.** `maestro check-syntax` validates flow files without a device, which is the cheap way to confirm a selector or field exists on the version you pin rather than discovering it in a red run.
@@ -518,7 +527,7 @@ Before merging a flow:
 - [ ] **Every state-changing tap has its own assertion**, rather than one assertion covering a sequence
 - [ ] **`retry` scoped to a single step**, with `maxRetries` inside the documented 0-3 range
 - [ ] **Nothing asserted below the fold**: every assertion on an element inside a scrolling section is preceded by a scroll to it
-- [ ] **Every assertion post-dates its action**: nothing asserted was already on screen before the step it is meant to prove
+- [ ] **The assertion carrying the outcome post-dates its action**: a precondition assertion is allowed when it is labelled as one, and nothing already true before the step is presented as proof of it
 - [ ] **Transitions asserted where possible**: a single-state assertion is justified only when the expected value differs from the default
 - [ ] **Syntax checked**: `maestro check-syntax` run against the pinned version before the flow reaches a device
 

@@ -35,7 +35,8 @@ Promote to a Maestro flow when the risk is in the **integration**, not the logic
 
 - P0 revenue or access journeys end to end (sign in, purchase, submit claim)
 - OS permission grants and denials, including the denied path
-- Deep link and universal link entry into a specific screen (the app's own parsing and routing is testable even in a development shell, through the shell's routed URL form; only the OS-level handoff from a real widget or notification tap needs the registered scheme)
+- Deep link entry into a specific screen. The app's own parsing and routing is testable even in a development shell, through the shell's routed URL form; the OS-level handoff needs the app's custom scheme registered, which a shell does not do.
+- Universal Links and Android App Links are a **separate** surface from custom-scheme deep links, and the same shell trick does not cover them. A verified HTTPS link depends on the platform's domain association (`apple-app-site-association`, `assetlinks.json`) being served and accepted, so a shell-routed URL exercises the in-app routing while proving nothing about whether the OS would have handed the link over at all. Score and cover the association separately from the routing.
 - Background, foreground, and process-death restoration
 - Offline and reconnect behavior
 - Push notification tap-through
