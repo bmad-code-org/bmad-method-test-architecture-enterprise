@@ -120,24 +120,29 @@ test.describe('[Story Name] E2E User Journey (ATDD)', () => {
     await page.waitForURL('/dashboard');
   });
 
-  test.skip('[P1] should show error if email exists', async ({ page, interceptNetworkCall }) => {
-    // THIS TEST WILL FAIL - UI not implemented yet
-    // Stub the conflict instead of depending on backend state.
-    const conflictCall = interceptNetworkCall({
-      url: '**/api/users/register',
-      method: 'POST',
-      fulfillResponse: { status: 409, body: { message: 'Email already exists' } },
-    });
+  // Stubs a 409 on purpose, so it opts out of network monitoring.
+  test.skip(
+    '[P1] should show error if email exists',
+    { annotation: [{ type: 'skipNetworkMonitoring' }] },
+    async ({ page, interceptNetworkCall }) => {
+      // THIS TEST WILL FAIL - UI not implemented yet
+      // Stub the conflict instead of depending on backend state.
+      const conflictCall = interceptNetworkCall({
+        url: '**/api/users/register',
+        method: 'POST',
+        fulfillResponse: { status: 409, body: { message: 'Email already exists' } },
+      });
 
-    await page.goto('/register');
+      await page.goto('/register');
 
-    await page.getByLabel('Email').fill('existing@example.com');
-    await page.getByLabel('Password').fill('SecurePass123!');
-    await page.getByRole('button', { name: 'Register' }).click();
+      await page.getByLabel('Email').fill('existing@example.com');
+      await page.getByLabel('Password').fill('SecurePass123!');
+      await page.getByRole('button', { name: 'Register' }).click();
 
-    await conflictCall;
-    await expect(page.getByText('Email already exists')).toBeVisible();
-  });
+      await conflictCall;
+      await expect(page.getByText('Email already exists')).toBeVisible();
+    },
+  );
 });
 ```
 
@@ -171,6 +176,7 @@ Follow `playwright-utils-mandate.md`. The red phase does not relax it.
 - ✅ `apiRequest` for API-driven setup and teardown inside the journey. Never the raw `request` fixture.
 - ✅ `authToken` from the auth-session fixture for journeys that start logged in.
 - ✅ `log.step` for journey milestones.
+- ✅ `skipNetworkMonitoring` on any scaffold that deliberately stubs a 4xx or 5xx. The merged fixtures include `network-error-monitor`, which fails a test on a backend error, so an error-path scaffold that omits the annotation fails for the wrong reason once the feature lands. Add it only where the error is the subject of the test.
 - ❌ `page.route` or `page.waitForResponse` on an application API endpoint, `page.waitForTimeout`, `console.log`, `import { test } from '@playwright/test'` in a spec.
 - ⚠️ `page.route` remains correct for blocking third-party scripts, analytics, fonts, and images.
 

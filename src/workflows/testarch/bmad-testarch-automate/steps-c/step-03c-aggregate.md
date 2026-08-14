@@ -197,10 +197,20 @@ Built on `auth-session`, not on a login form walk. The provider is the one proje
 import { test as base } from '@playwright/test';
 import { createAuthFixtures, setAuthProvider, type AuthProvider } from '@seontechnologies/playwright-utils/auth-session';
 
+// The AuthProvider contract, per auth-session.md. These six members are the
+// interface; do not invent a shorter one.
 const provider: AuthProvider = {
-  // Call the real auth endpoint and return the token plus its expiry.
-  // This is the only place a raw request context is correct: it runs before fixtures exist.
-  async getToken({ identifier }) {
+  getEnvironment: (options) => options.environment || 'local',
+  getUserIdentifier: (options) => options.userIdentifier || 'default-user',
+  extractToken: (storageState) => storageState.cookies.find((c) => c.name === 'auth_token')?.value,
+  extractCookies: (tokenData) => [{ name: 'auth_token', value: tokenData, domain: '<domain>', path: '/', httpOnly: true, secure: true }],
+  isTokenExpired: (storageState) => {
+    const expiresAt = storageState.cookies.find((c) => c.name === 'expires_at');
+    return Date.now() > Number.parseInt(expiresAt?.value || '0', 10);
+  },
+  // Acquires the token and returns the storage state. The only place a raw
+  // request context is correct: it runs before the fixtures exist.
+  manageAuthToken: async (request, options) => {
     /* project-specific */
   },
 };
@@ -212,7 +222,7 @@ export const test = base.extend(createAuthFixtures());
 
 Tests then take `authToken` from the fixture. Tokens persist to disk and are reused across runs.
 
-If the project has no auth endpoint to wire, do not fall back to a form-driven login fixture. Emit the file with a `TODO` on `getToken`, and list "auth provider not wired" in the summary's `Playwright Utils deviations`.
+If the project has no auth endpoint to wire, do not fall back to a form-driven login fixture. Emit the file with a `TODO` on `manageAuthToken` and on the cookie names, and list "auth provider not wired" in the summary's `Playwright Utils deviations`. Read `auth-session.md` § _Custom Auth Provider Pattern_ before filling any of it in: the storage shape the six members agree on is project-specific and guessing it produces a fixture that silently returns no token.
 
 **C) Data factories** (`{test_dir}/support/factories.ts`): same as 4-V section B below.
 
@@ -300,11 +310,13 @@ export const mockPaymentSuccess = async (page: Page) => {
 
 ---
 
-### 4b. Playwright Utils Deviation Roll-Up
+### 4b. Mandate Deviation Roll-Up
 
-Collect `playwright_utils_deviations` from every worker output. If the combined list is non-empty, carry it into the summary in Step 6 under a `Playwright Utils deviations` heading with file, line, and reason.
+Collect `playwright_utils_deviations` and `pactjs_utils_deviations` from every worker output. Carry each non-empty list into the summary in Step 6 under its own heading (`Playwright Utils deviations`, `Pact.js Utils deviations`) with file, line, and reason. The two roll up separately: a run can be clean on one mandate and not the other, and merging them hides which.
 
-If `use_playwright_utils` is `true` and any written file still contains an unexplained `page.route` on an application endpoint, a raw `request.<method>`, a `page.waitForTimeout`, a `console.log`, or a spec-level `import { test } from '@playwright/test'`, fix it here before writing to disk. Aggregation is the last gate before the code lands.
+If `use_playwright_utils` is `true` and any written file still contains an unexplained `page.route` on an application endpoint, a raw `request.<method>`, a `page.waitForTimeout`, a `console.log`, or a spec-level `import { test } from '@playwright/test'`, fix it here before writing to disk.
+
+Apply the same pass to Pact artifacts when `use_pactjs_utils` is `true`: a hand-cast `.given()`, a literal `VerifierOptions`, or bespoke auth middleware with no stated reason gets fixed or recorded. Aggregation is the last gate before the code lands.
 
 ---
 

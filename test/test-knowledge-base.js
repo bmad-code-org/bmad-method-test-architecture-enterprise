@@ -210,7 +210,7 @@ function runTests() {
 
   // Present at the agent level only, by design: the agent reads them directly
   // and no workflow step references them.
-  const AGENT_ONLY_FRAGMENTS = new Set(['confidence-gate.md', 'pactjs-utils-zod-to-pact.md']);
+  const AGENT_ONLY_FRAGMENTS = new Set(['confidence-gate.md']);
 
   if (!fs.existsSync(agentKnowledgeDir) || !fs.existsSync(workflowsRoot)) {
     warn('agent knowledge dir or workflows root missing - skipping parity checks');

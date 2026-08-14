@@ -85,7 +85,9 @@ tests/
 
 ## Playwright Utils Integration (on by default)
 
-`tea_use_playwright_utils` defaults to `true`, so unless you turned it off at install this workflow installs `@seontechnologies/playwright-utils` and scaffolds against it:
+**Applies to JavaScript/TypeScript projects on the Playwright runner only.** A Cypress project, a Maestro mobile suite, or a backend suite in pytest, JUnit, Go test, xUnit, or RSpec is scaffolded from its own conventions and this section does not apply, whatever the flag says.
+
+`tea_use_playwright_utils` defaults to `true`, so unless you turned it off at install this workflow asks to install `@seontechnologies/playwright-utils` and then scaffolds against it:
 
 ```bash
 npm install -D @seontechnologies/playwright-utils

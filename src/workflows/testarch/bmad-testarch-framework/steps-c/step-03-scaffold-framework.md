@@ -318,7 +318,9 @@ export { expect } from '@playwright/test';
 export { log };
 ```
 
-Also scaffold `{test_dir}/support/auth-fixture.ts` from `auth-session.md`: `setAuthProvider` with a project-specific `getToken`, then `base.extend(createAuthFixtures())`. Leave `getToken` as a marked `TODO` when the auth endpoint is unknown, and list it in the setup summary. Do not scaffold a form-driven login fixture in its place.
+`interceptFixture` and `networkErrorFixture` are browser-only: include them when `{detected_stack}` is `frontend` or `fullstack`, and drop both from the merge and the imports for a `backend` stack. Merging a browser fixture into an API-only suite pulls in a `page` dependency the suite never uses.
+
+Also scaffold `{test_dir}/support/auth-fixture.ts` from `auth-session.md` § _Custom Auth Provider Pattern_: an `AuthProvider` implementing all six members (`getEnvironment`, `getUserIdentifier`, `extractToken`, `extractCookies`, `isTokenExpired`, `manageAuthToken`), passed to `setAuthProvider`, then `base.extend(createAuthFixtures())`. Do not invent a shorter interface. Leave `manageAuthToken` and the cookie names as marked `TODO`s when the auth endpoint is unknown, and list them in the setup summary. Do not scaffold a form-driven login fixture in its place.
 
 Wire `authStorageInit()` and `configureAuthSession()` into `global-setup.ts`, and add the token storage directory to `.gitignore`.
 

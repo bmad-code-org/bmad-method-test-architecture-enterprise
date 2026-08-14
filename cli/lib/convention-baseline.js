@@ -79,7 +79,10 @@ const MECHANICAL_DETECTORS = {
   // Only the package literal. `merged-fixtures` is already the `fixtures` key's
   // signal, and a hand-rolled merged-fixtures.ts with no playwright-utils anywhere
   // would otherwise register adoption for a package the repo never installed.
-  playwrightUtils: /@seontechnologies\/playwright-utils/i,
+  // Import-shaped only. The bare package literal also matches a prose mention in a
+  // comment ("// TODO: migrate to @seontechnologies/playwright-utils"), which would
+  // register adoption for a file that uses none of it.
+  playwrightUtils: /(?:from|require\s*\(|import\s*\()\s*['"`]@seontechnologies\/playwright-utils/i,
 };
 
 const MECHANICAL_CONVENTION_KEYS = Object.keys(MECHANICAL_DETECTORS);

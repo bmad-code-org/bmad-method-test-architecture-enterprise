@@ -4221,12 +4221,23 @@ async function runTests() {
     console.log(`${colors.yellow}Test Suite 11: convention-baseline${colors.reset}\n`);
 
     assert(
-      CONVENTION_KEYS.length === 8 &&
-        MECHANICAL_CONVENTION_KEYS.length === 6 &&
-        JUDGMENT_ONLY_CONVENTION_KEYS.length === 2 &&
-        MECHANICAL_CONVENTION_KEYS.every((key) => CONVENTION_KEYS.includes(key)) &&
-        JUDGMENT_ONLY_CONVENTION_KEYS.every((key) => CONVENTION_KEYS.includes(key)),
-      'the eight step-02 §2b convention keys split into six mechanically-detectable and two judgment-only, covering every key exactly once',
+      JSON.stringify([...CONVENTION_KEYS].sort()) ===
+        JSON.stringify(
+          [
+            'assertionStyle',
+            'bddNaming',
+            'dataFactories',
+            'fixtures',
+            'networkFirst',
+            'playwrightUtils',
+            'priorityMarkers',
+            'testIds',
+          ].sort(),
+        ) &&
+        JSON.stringify([...MECHANICAL_CONVENTION_KEYS].sort()) ===
+          JSON.stringify(['dataFactories', 'fixtures', 'networkFirst', 'playwrightUtils', 'priorityMarkers', 'testIds'].sort()) &&
+        JSON.stringify([...JUDGMENT_ONLY_CONVENTION_KEYS].sort()) === JSON.stringify(['assertionStyle', 'bddNaming'].sort()),
+      'the step-02 §2b convention keys are exactly the expected set, split into the expected mechanical and judgment-only halves',
       JSON.stringify({ CONVENTION_KEYS, MECHANICAL_CONVENTION_KEYS, JUDGMENT_ONLY_CONVENTION_KEYS }),
     );
 
@@ -4349,8 +4360,13 @@ async function runTests() {
     const registrySkillRoot = path.join(repoRoot, 'src', 'workflows', 'testarch', 'bmad-testarch-test-review');
     const registryRowSeverities = loadRegistryRowSeverities(registrySkillRoot);
     assert(
-      registryRowSeverities !== null && Object.keys(registryRowSeverities).length === 35,
-      'loadRegistryRowSeverities reads all 35 real rows (C1-C7, H1-H9, M1-M10, L1-L9) from criteria-registry.md',
+      registryRowSeverities !== null &&
+        Object.keys(registryRowSeverities).length === 35 &&
+        ['M9', 'M10', 'L9'].every((row) => registryRowSeverities[row] !== undefined) &&
+        registryRowSeverities.M9 === 'Medium' &&
+        registryRowSeverities.M10 === 'Medium' &&
+        registryRowSeverities.L9 === 'Low',
+      'loadRegistryRowSeverities reads all 35 real rows from criteria-registry.md, including the mandate rows M9/M10 at Medium and L9 at Low',
       JSON.stringify(registryRowSeverities ? Object.keys(registryRowSeverities).length : null),
     );
     assert(

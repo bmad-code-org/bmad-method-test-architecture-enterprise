@@ -190,7 +190,7 @@ Confirm the workflow integrates Playwright Utils at all. Framework (TF), Test De
 
 The same three checks apply to Pact.js Utils, which is also on by default: `grep tea_use_pactjs_utils _bmad/tea/config.yaml`, `npm ls @seontechnologies/pactjs-utils`, and `ls _bmad/tea/agents/bmad-tea/resources/knowledge/pactjs-utils-mandate.md`.
 
-**If the flag is `true` and the package is missing**, that is the usual cause. Generation will not scaffold imports against a package the project does not have, and Test Review closes the `M9` gate rather than deducting. Run the Framework (TF) workflow, or install it directly:
+**If a flag is `true` and its package is missing**, that is the usual cause, and it applies to both integrations independently: `tea_use_playwright_utils` needs `@seontechnologies/playwright-utils`, `tea_use_pactjs_utils` needs `@seontechnologies/pactjs-utils`. Either one can be active while the other is not. Generation will not scaffold imports against a package the project does not have, and Test Review closes the `M9` gate rather than deducting. Run the Framework (TF) workflow, or install it directly:
 
 ```bash
 npm install -D @seontechnologies/playwright-utils
@@ -277,9 +277,15 @@ To make the probe succeed instead, configure the server and its credentials:
 
 ```bash
 npm install -g @smartbear/mcp    # Node.js 20+ required
-export PACT_BROKER_BASE_URL=https://{tenant}.pactflow.io
-export PACT_BROKER_TOKEN=<your-api-token>
 ```
+
+Installing the server is not enough: the MCP client has to be told about it, since the probe checks the session's tool list. For Claude Code:
+
+```bash
+claude mcp add-json -s user smartbear '{"type":"stdio","command":"npx","args":["-y","@smartbear/mcp@latest"],"env":{"PACT_BROKER_BASE_URL":"https://{tenant}.pactflow.io","PACT_BROKER_TOKEN":"<your-api-token>"}}'
+```
+
+Other clients take the same server in their own MCP settings file. Restart the session afterwards; the tool list is read at startup.
 
 TEA never blocks on the broker and never presents inferred provider states as broker data, so a failed probe cannot silently corrupt a contract.
 

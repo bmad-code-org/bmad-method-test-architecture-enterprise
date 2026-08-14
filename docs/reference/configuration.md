@@ -66,6 +66,8 @@ Enable Playwright Utils integration for production-ready fixtures and utilities.
 
 `auth-session`, `network-recorder`, the webhook module, and `burn-in` sit one level down as recommended rather than required, because they need project-side wiring. Workflows propose them and name the wiring; they never silently fall back to the vanilla equivalent without saying so.
 
+**The flag alone does not activate it.** The mandate binds only when `tea_use_playwright_utils` is `true` **and** `@seontechnologies/playwright-utils` is in the project's `package.json`. With the flag on and the package absent, TEA generates the vanilla path, `test-review` produces no per-file findings, and you get one recommendation to run the `framework` workflow. `tea_use_pactjs_utils` works the same way against `@seontechnologies/pactjs-utils`.
+
 The mandate applies only to JavaScript/TypeScript suites on the Playwright runner. Cypress, Maestro flows, Pact/Vitest contract suites, and backend suites in pytest, JUnit, Go test, xUnit, or RSpec are unaffected.
 
 **Affects workflows** (each reads the key and branches on it):

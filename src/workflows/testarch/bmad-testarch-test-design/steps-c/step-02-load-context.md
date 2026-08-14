@@ -151,7 +151,7 @@ Then select the appropriate loading profile:
 
 ### Pact.js Utils Loading
 
-**If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`, or microservices indicators detected):
+**If `tea_use_pactjs_utils` is enabled** and contract testing is relevant. Relevance is not a stack question: the consumer side of a contract is most often a `frontend`, and gating on `backend`/`fullstack` alone skips exactly the case Pact exists for. Load when `{detected_stack}` is `backend` or `fullstack`, **or** when Pact artifacts are present on any stack (a `pact/` or `tests/contract/` directory, `.pacttest.ts` files, `@pact-foundation/pact` in `package.json`, `PACT_BROKER_*` in the environment), **or** when microservices indicators are detected:
 
 Load `pactjs-utils-mandate.md` FIRST. Every Pact code example this workflow puts into a design document is a pattern a developer will copy, so the examples follow the mandate: `createProviderState` rather than a hand-cast `.given()`, `buildVerifierOptions` rather than a literal options object. The mandate also carries the relevance gate: the flag defaults to `true` and never means "add contract tests to this project".
 

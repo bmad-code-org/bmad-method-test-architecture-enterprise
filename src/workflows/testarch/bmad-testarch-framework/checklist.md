@@ -186,7 +186,7 @@ Per `playwright-utils-mandate.md`. Skip for Maestro, Cypress, and non-Playwright
 
 - [ ] `@seontechnologies/playwright-utils` installed and present in `package.json` devDependencies
 - [ ] `{test_dir}/support/merged-fixtures.ts` created, composing with `mergeTests` and re-exporting `expect` and `log`
-- [ ] `{test_dir}/support/auth-fixture.ts` created from `setAuthProvider` + `createAuthFixtures()`, with any unknown `getToken` left as a marked TODO and reported
+- [ ] `{test_dir}/support/auth-fixture.ts` created from `setAuthProvider` + `createAuthFixtures()`, implementing all six `AuthProvider` members, with any unknown `manageAuthToken` or cookie name left as a marked TODO and reported
 - [ ] `authStorageInit()` / `configureAuthSession()` wired into `global-setup.ts`, token storage directory gitignored
 - [ ] `network-error-monitor` included in the merge for browser suites
 - [ ] Sample API test uses `apiRequest`, not the raw `request` fixture

@@ -74,6 +74,8 @@ const subagentContext = {
     playwright_utils_mandate: config.tea_use_playwright_utils === true,  // when true, workers MUST follow playwright-utils-mandate.md
     use_pactjs_utils: config.tea_use_pactjs_utils,
     pact_mcp: config.tea_pact_mcp,  // "mcp" | "none"
+    pact_mcp_reachable: /* from Step 1: the probe result, not the mode. `mcp` alone does not mean the tools are there */,
+    pact_fallback_source: /* from Step 1: 'broker' | 'provider-source' | 'openapi' | 'none' */,
     browser_automation: config.tea_browser_automation,
     execution_mode: config.tea_execution_mode || 'auto',  // "auto" | "subagent" | "agent-team" | "sequential"
     capability_probe: parseBooleanFlag(config.tea_capability_probe, true),  // supports booleans and "false"/"true" strings

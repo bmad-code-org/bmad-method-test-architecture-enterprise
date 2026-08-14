@@ -85,6 +85,8 @@ Then select the appropriate loading profile:
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile.
 
+The profiles above assume a JavaScript/TypeScript suite on the Playwright runner. For a Cypress project, a Maestro flow set, or a backend suite in pytest, JUnit, Go test, xUnit, or RSpec, skip them entirely whatever the flag says: the mandate does not bind those runners, so loading its fragments only spends context and invites rows that cannot fire. Decide by the runner the reviewed files execute under, not by the language of the code they test.
+
 **Also record whether `@seontechnologies/playwright-utils` is in the project's `package.json`.** Carry it into `subagentContext` as `playwright_utils_installed`. The M9 gate needs both the flag and the package: the flag alone is an intention, and deducting against an uninstalled library produces findings nobody can act on file by file. When the flag is true and the package is missing, say so once in the report and recommend the `framework` workflow.
 
 ### Pact.js Utils Loading

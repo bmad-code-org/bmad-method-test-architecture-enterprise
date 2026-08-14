@@ -85,7 +85,7 @@ When this mandate is active, these are defects in generated or reviewed code:
 - A bespoke `requestFilter` middleware that prefixes a bearer token by hand.
 - Repeated inline PactV4 builder lambdas that `setJsonContent` or `setJsonBody` would replace.
 - Raw `fetch` inside `executeTest` in a project whose consumer client is importable, with no note saying why.
-- Importing from a package name other than `@seontechnologies/pactjs-utils`.
+- Importing a **pactjs-utils symbol** from anywhere other than `@seontechnologies/pactjs-utils`. `@pact-foundation/pact` remains the correct and required import for Pact's own API — `PactV3`, `PactV4`, `MatchersV3`, `Verifier`, `V3MockServer`, and the types. The two packages are used side by side in every example here; only the helper layer is mandated.
 
 ### Legitimate exceptions
 

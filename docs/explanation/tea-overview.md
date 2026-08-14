@@ -219,10 +219,10 @@ Optional design-time broker interaction for contract testing workflows.
 
     tea_pact_mcp: "mcp"  # none | mcp (default "mcp")
 
-| Mode   | What happens                                                                                                        |
-| ------ | ------------------------------------------------------------------------------------------------------------------- |
-| `mcp`  | TEA can use SmartBear MCP tools for provider-state discovery, test review support, can-i-deploy, and matrix checks. |
-| `none` | Default. TEA skips broker/MCP integration entirely unless you explicitly enable it.                                 |
+| Mode   | What happens                                                                                                                                                                                                            |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mcp`  | Default. TEA uses SmartBear MCP tools for provider-state discovery, test review support, can-i-deploy, and matrix checks when they are reachable, and degrades to provider source or an OpenAPI spec when they are not. |
+| `none` | TEA never attempts a broker call, and skips the reachability probe entirely.                                                                                                                                            |
 
 **Setup:**
 

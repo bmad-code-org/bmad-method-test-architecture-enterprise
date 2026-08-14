@@ -32,7 +32,7 @@ Apply pactjs-utils conventions from the loaded fragments (`pactjs-utils-overview
 - **Consumer `package.json`**: generate both `test:pact:consumer` (determinism gate calling `scripts/check-pact-determinism.sh`) and `test:pact:consumer:run` (inner vitest invocation).
 - **Publish script**: `scripts/publish-pact.sh` normalizes interactions with `jq -S '.interactions |= sort_by(...)'` before `pact-broker publish`.
 
-If `pact_mcp` is `"mcp"`, use SmartBear MCP tools (Fetch Provider States, Generate Pact Tests) to inform test generation.
+Gate broker calls on `pact_mcp_reachable`, not on `pact_mcp`. The mode says the user allows a broker; the probe result says whether one answered. When `pact_mcp_reachable` is `true`, use the SmartBear MCP tools (Fetch Provider States, Generate Pact Tests) to inform generation. When it is `false`, take provider states from `pact_fallback_source` and say so in the output. Do not probe again: Step 1 already did, once.
 
 ---
 

@@ -293,6 +293,17 @@ post-install-notes:
         TEA disables parallel orchestration and runs worker steps one by one.
         Useful for deterministic debugging and constrained environments.
 
+  tea_use_playwright_utils:
+    true: |
+      Playwright Utils Setup:
+        npm install -D @seontechnologies/playwright-utils
+        Peer dependency: @playwright/test >= 1.54.1
+        Optional, for schema validation: ajv >= 8.0.0, zod >= 3.0.0
+        The flag is binding once set: TEA generates against these utilities by default
+        and flags a hand-rolled equivalent that carries no stated reason. The mandate
+        only applies once the package is installed, so run the framework workflow (TF)
+        or the install above before expecting it to take effect.
+        Docs: https://seontechnologies.github.io/playwright-utils/
   tea_use_pactjs_utils:
     true: |
       Pact.js Utils Setup:
