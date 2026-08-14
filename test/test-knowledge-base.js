@@ -9,6 +9,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { parse } = require('csv-parse/sync');
 
 // ANSI colors
@@ -188,6 +189,155 @@ function runTests() {
     assert(linkCount > 0, 'cross-fragment links detected (at least one)');
   }
   assert(brokenLinks === 0, 'no broken cross-fragment links');
+
+  console.log('');
+
+  // ============================================================
+  // Test 5: Workflow knowledge copies match the agent's
+  // ============================================================
+  // Every workflow ships its own copy of the knowledge base so a skill stays
+  // self-contained. Nothing checked that the copies still MATCH the agent's,
+  // and a copy can drift silently: the workflows load their own copy, so a
+  // fragment edited only at the agent level ships one rule to the reviewer and
+  // a different one to the generator. That is not a hypothetical — it is the
+  // failure this suite was added to catch.
+  console.log(`${colors.yellow}Test Suite 5: Workflow Fragment Parity${colors.reset}\n`);
+
+  const sha1 = (filePath) => crypto.createHash('sha1').update(fs.readFileSync(filePath)).digest('hex');
+
+  // Suite 4's cross-fragment link check runs against the agent directory only. It
+  // does not need a per-workflow twin, but the reason is narrower than it looks:
+  // set equality plus byte equality carries the link guarantee ONLY while every
+  // link resolves inside the knowledge directory. The two locations sit at
+  // different depths - src/agents/bmad-tea/resources/knowledge is five segments,
+  // src/workflows/testarch/<workflow>/resources/knowledge is six - so a link that
+  // escapes with `../` resolves to different targets from the two while the bytes
+  // stay identical. Set equality, byte equality, and Suite 4 would all still pass
+  // with all eight copies pointing at nothing. That third condition is asserted
+  // below rather than assumed, because a fragment gaining one `../` link is a
+  // small and reviewable-looking diff.
+  // Known limit, shared with Suite 4: a fragment named inside backticks rather than
+  // as a markdown link is not resolved by either check. Closing it wants a way to
+  // tell a fragment reference from a step-file reference, and the obvious mechanism
+  // is the exemption list this suite deliberately does not have.
+
+  const agentKnowledgeDir = path.join(kbRoot, 'knowledge');
+  const workflowsRoot = path.join(projectRoot, 'src', 'workflows', 'testarch');
+
+  // No agent-only allowlist. There was one, and both entries were wrong: nine step
+  // files referenced `confidence-gate.md` and five referenced
+  // `pactjs-utils-zod-to-pact.md` while neither shipped to a workflow, and the
+  // exemption is what kept this suite green through it. An allowlist entry asserts
+  // intent instead of measuring anything, so a future agent-only fragment should
+  // have to argue for itself in a diff rather than inherit an empty slot here.
+
+  if (!fs.existsSync(agentKnowledgeDir) || !fs.existsSync(workflowsRoot)) {
+    warn('agent knowledge dir or workflows root missing - skipping parity checks');
+  } else {
+    const agentFragments = fs.readdirSync(agentKnowledgeDir).filter((name) => name.endsWith('.md'));
+
+    // The condition the transitivity argument above rests on. Resolve each link and
+    // check where it lands, rather than pattern-matching the spellings that usually
+    // escape: `](./../x.md)` and a root-relative `](/src/...)` both leave the
+    // directory without starting `../`, and a prefix pattern standing in for a
+    // resolution property is the same substitution this suite exists to avoid.
+    const escapers = [];
+    for (const name of agentFragments) {
+      const content = fs.readFileSync(path.join(agentKnowledgeDir, name), 'utf8');
+      for (const match of content.matchAll(/\]\(([^)]+)\)/g)) {
+        const raw = match[1].trim();
+        // Strip an anchor before the .md test. Suite 4 filters on the raw href and so
+        // skips `](../foo.md#section)`; that boundary is pre-existing and shared, but
+        // an anchored link escapes the directory exactly like an unanchored one, and
+        // containment is what this assertion is about.
+        const href = raw.split('#')[0];
+        if (!href.endsWith('.md') || isExternalLink(href)) continue;
+        const resolved = resolveFragmentLink(kbRoot, href);
+        if (resolved === null) continue;
+        const relative = path.relative(agentKnowledgeDir, path.resolve(resolved));
+        if (relative.startsWith('..') || path.isAbsolute(relative)) {
+          escapers.push(`${name} -> ${raw}`);
+        }
+      }
+    }
+    assert(
+      escapers.length === 0,
+      'no fragment links outside its own knowledge directory',
+      `${escapers.join(', ')} - the agent copy sits one path segment shallower than every workflow copy, so a link ` +
+        'leaving the directory resolves elsewhere from each while the bytes match. Inline the content, or name the ' +
+        'fragment without linking it.',
+    );
+    const agentShas = new Map(agentFragments.map((name) => [name, sha1(path.join(agentKnowledgeDir, name))]));
+
+    const workflowDirs = fs
+      .readdirSync(workflowsRoot)
+      .map((name) => path.join(workflowsRoot, name, 'resources', 'knowledge'))
+      .filter((dir) => fs.existsSync(dir));
+
+    assert(workflowDirs.length > 0, 'at least one workflow ships a knowledge directory');
+
+    for (const dir of workflowDirs) {
+      const workflowName = path.basename(path.dirname(path.dirname(dir)));
+      const copies = fs.readdirSync(dir).filter((name) => name.endsWith('.md'));
+      const copySet = new Set(copies);
+
+      const missing = agentFragments.filter((name) => !copySet.has(name));
+      assert(missing.length === 0, `${workflowName} carries every agent fragment`, `missing: ${missing.join(', ')}`);
+
+      const extra = copies.filter((name) => !agentShas.has(name));
+      assert(extra.length === 0, `${workflowName} carries no fragment the agent does not have`, `extra: ${extra.join(', ')}`);
+
+      const drifted = copies.filter((name) => agentShas.has(name) && sha1(path.join(dir, name)) !== agentShas.get(name));
+      assert(
+        drifted.length === 0,
+        `${workflowName} fragment contents match the agent copies`,
+        `drifted: ${drifted.join(', ')} - re-copy from src/agents/bmad-tea/resources/knowledge/`,
+      );
+
+      // The other half of "ship the fragment": a file on disk with no row in the
+      // workflow's own index is never selected, so it is unreachable while looking
+      // present. The reverse - a row naming a file that is not there - fails just as
+      // quietly. test-installation-components.js checks a CSV against its directory
+      // for the FIRST workflow it encounters and then sets a flag, so the other seven
+      // indexes are unvalidated there. Assert set equality here, for every workflow.
+      const indexPath = path.join(path.dirname(dir), 'tea-index.csv');
+      if (!fs.existsSync(indexPath)) {
+        assert(false, `${workflowName} ships a tea-index.csv beside its knowledge directory`);
+        continue;
+      }
+
+      let indexRows = [];
+      try {
+        indexRows = parse(fs.readFileSync(indexPath, 'utf8'), { columns: true, skip_empty_lines: true });
+      } catch (error) {
+        assert(false, `${workflowName}/resources/tea-index.csv parses`, error.message);
+        continue;
+      }
+
+      const indexed = indexRows.map((row) => (row.fragment_file || '').replace(/^knowledge\//, '')).filter(Boolean);
+      const indexedSet = new Set(indexed);
+
+      assert(
+        indexed.length === indexedSet.size,
+        `${workflowName}/resources/tea-index.csv lists each fragment once`,
+        `duplicates: ${indexed.filter((name, i) => indexed.indexOf(name) !== i).join(', ')}`,
+      );
+
+      const unindexed = copies.filter((name) => !indexedSet.has(name));
+      assert(
+        unindexed.length === 0,
+        `${workflowName} indexes every fragment it ships`,
+        `on disk but absent from tea-index.csv, so never selected: ${unindexed.join(', ')}`,
+      );
+
+      const danglingRows = [...indexedSet].filter((name) => !copySet.has(name));
+      assert(
+        danglingRows.length === 0,
+        `${workflowName} indexes no fragment it does not ship`,
+        `in tea-index.csv but missing from knowledge/: ${danglingRows.join(', ')}`,
+      );
+    }
+  }
 
   console.log('');
 

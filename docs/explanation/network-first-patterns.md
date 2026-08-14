@@ -135,7 +135,9 @@ Both forms wait exactly as long as needed, whether that is 100 ms or 5 seconds, 
 
 ## What Playwright Utils Adds
 
-`@seontechnologies/playwright-utils` is optional. When `tea_use_playwright_utils` is enabled, TEA generates the second form above instead of the first. Seven things it changes:
+`@seontechnologies/playwright-utils` is optional as a choice, and binding once chosen. `tea_use_playwright_utils` defaults to `true`, and while it is `true` **and the package is installed** the second form above is what TEA generates and what `test-review` expects. Both halves are required: a flag with no install generates the vanilla form and produces one setup recommendation rather than findings. `page.route` on an application endpoint becomes a finding unless the code says why. It stays correct for what it is genuinely for: blocking analytics, fonts, and third-party scripts, and that needs no justification. Where the utility genuinely does not cover a case, the vanilla call ships with a `// playwright-utils deviation: <reason>` comment on the line and an entry in the workflow's summary, which is what separates a decision from an oversight. The full rule is the `playwright-utils-mandate` knowledge fragment.
+
+Seven things the utility changes:
 
 1. **Automatic JSON parsing.** No `await response.json()` anywhere.
 2. **Different result shapes for different utilities**, and the distinction matters. `interceptNetworkCall` resolves to `{ status, responseJson, requestJson }` because it observes a browser round trip and can see both directions. `apiRequest` resolves to `{ status, body }` because it issues the request itself.

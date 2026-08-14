@@ -80,6 +80,13 @@ const subagentContext = {
   config: {
     execution_mode: config.tea_execution_mode || 'auto',  // "auto" | "subagent" | "agent-team" | "sequential"
     capability_probe: parseBooleanFlag(config.tea_capability_probe, true),  // supports booleans and "false"/"true" strings
+    // Rows M9, M10 and L9 need BOTH: the flag says the project intends the utilities,
+    // the install says it can actually use them. Flag alone never deducts.
+    use_playwright_utils: parseBooleanFlag(config.tea_use_playwright_utils, true),
+    playwright_utils_installed: /* from Step 1: @seontechnologies/playwright-utils in package.json */,
+    use_pactjs_utils: parseBooleanFlag(config.tea_use_pactjs_utils, true),
+    pactjs_utils_installed: /* from Step 1: @seontechnologies/pactjs-utils in package.json */,
+    pact_mcp: config.tea_pact_mcp || 'mcp',  // "mcp" | "none"; broker steps degrade when the tools are unreachable
   },
   timestamp: timestamp
 };

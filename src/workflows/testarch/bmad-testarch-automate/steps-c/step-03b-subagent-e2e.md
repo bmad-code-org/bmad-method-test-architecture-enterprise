@@ -14,9 +14,11 @@ This is an **isolated subagent** running in parallel with API test generation.
 **What you have from parent workflow:**
 
 - Target features/user journeys identified in Step 2
-- Knowledge fragments loaded: fixture-architecture, network-first, selector-resilience, playwright-cli
-- Config: test framework, Playwright Utils enabled/disabled
+- Knowledge fragments loaded: playwright-utils-mandate, overview, intercept-network-call, network-error-monitor, fixtures-composition, log, auth-session, network-recorder, fixture-architecture, network-first, selector-resilience, playwright-cli
+- Config: test framework, `use_playwright_utils` (default `true`)
 - Coverage plan: which user journeys need E2E testing
+
+**When `use_playwright_utils` is `true`, `playwright-utils-mandate.md` binds this worker.** Generate in the playwright-utils style without being asked. `network-first.md` and `fixture-architecture.md` still supply the principles — intercept before you navigate, compose fixtures once — but the mechanism is `interceptNetworkCall` and `mergeTests`, not `page.route` and per-spec `base.extend`.
 
 **Your task:** Generate E2E tests ONLY (not API, not fixtures, not other test types).
 
@@ -81,34 +83,89 @@ If `none`:
 
 For each user journey, create test file in `tests/e2e/[feature].spec.ts`:
 
-**Test Structure:**
+**Test Structure — when `use_playwright_utils` is `true` (the default). This is the shape you emit:**
+
+```typescript
+import { test, expect, log } from '../support/merged-fixtures';
+
+test.describe('[Feature] E2E User Journey', () => {
+  test('[P0] should complete [user journey]', async ({ page, interceptNetworkCall }) => {
+    // Declare the interception BEFORE navigating — this is network-first,
+    // expressed through the utility instead of page.route.
+    const featureCall = interceptNetworkCall({ url: '**/api/feature' });
+
+    await page.goto('/feature');
+
+    const { responseJson, status } = await featureCall;
+    expect(status).toBe(200);
+
+    await log.step('Submit the form');
+    await page.getByRole('button', { name: 'Submit' }).click();
+
+    await expect(page.getByText('Success')).toBeVisible();
+    expect(responseJson.items).toHaveLength(3);
+  });
+
+  // This test stubs a 5xx on purpose, so it opts out of network monitoring.
+  test(
+    '[P1] should handle [error scenario]',
+    { annotation: [{ type: 'skipNetworkMonitoring' }] },
+    async ({ page, interceptNetworkCall }) => {
+      // Stub the failure instead of waiting for the backend to produce one.
+      const failingCall = interceptNetworkCall({
+        url: '**/api/feature',
+        fulfillResponse: { status: 500, body: { message: 'Internal error' } },
+      });
+
+      await page.goto('/feature');
+      await failingCall;
+
+      await expect(page.getByRole('alert')).toContainText('Something went wrong');
+    },
+  );
+});
+```
+
+Note what the merged fixtures give you for free: `network-error-monitor` is in the merge, so a silent backend 4xx/5xx fails the test even when the UI assertions pass. That is why the second test carries `skipNetworkMonitoring` — a test that deliberately drives an error response opts out per `network-error-monitor.md` rather than being dropped from the merge. Add the annotation only where the error is the subject of the test.
+
+**Test Structure — when `use_playwright_utils` is `false`:**
 
 ```typescript
 import { test, expect } from '@playwright/test';
 
 test.describe('[Feature] E2E User Journey', () => {
   test('[P0] should complete [user journey]', async ({ page }) => {
-    // Navigate to starting point
+    await page.route('**/api/feature', (route) => route.continue());
     await page.goto('/feature');
-
-    // Interact with UI
     await page.getByRole('button', { name: 'Submit' }).click();
-
-    // Assert expected state
     await expect(page.getByText('Success')).toBeVisible();
-  });
-
-  test('[P1] should handle [edge case]', async ({ page }) => {
-    // Test edge case scenario
   });
 });
 ```
 
+**Playwright Utils Mandate (when `use_playwright_utils` is `true`):**
+
+Follow `playwright-utils-mandate.md`. In an E2E worker that means:
+
+- ✅ `interceptNetworkCall({ url })` to observe a call, `interceptNetworkCall({ url, fulfillResponse })` to stub one. Declared before `page.goto`, awaited after.
+- ✅ `test` imported from the project's merged fixtures, so `interceptNetworkCall`, `networkErrorMonitor`, `apiRequest`, and `authToken` are all in the signature. `expect` comes from the same module, which re-exports Playwright's — playwright-utils does not export one of its own.
+- ✅ `apiRequest` for API-driven setup and teardown inside a UI test — seeding a record, cleaning one up. Never the raw `request` fixture.
+- ✅ `authToken` from the auth-session fixture for a logged-in starting state, rather than driving the login form in every test. If no auth provider is wired, say so in the summary and name the wiring needed; do not inline a login as if it were the intended pattern.
+- ✅ `recurse` for a UI condition that genuinely needs polling beyond what `expect().toBeVisible()` covers.
+- ✅ `log.step` for journey milestones, so the HTML report reads as a narrative.
+- ✅ `networkRecorder` when the coverage plan calls for offline or backend-free runs (recommended; needs a HAR directory).
+- ❌ `page.route` or `page.waitForResponse` on an application API endpoint, `page.waitForTimeout`, `console.log`, `import { test } from '@playwright/test'` in a spec.
+- ⚠️ `page.route` is still correct for blocking third-party scripts, analytics, fonts, and images. That is not a deviation.
+
+Package and subpaths are exactly `@seontechnologies/playwright-utils` and its documented subpaths. No other package name is valid.
+
+Before writing each file, run the self-check in `playwright-utils-mandate.md`. If a vanilla call survives, either fix it or mark it `// playwright-utils deviation: <reason>` and list it in the output `summary`.
+
 **Requirements:**
 
-- ✅ Follow fixture architecture patterns (from fixture-architecture fragment)
-- ✅ Use network-first patterns: intercept before navigate (from network-first fragment)
-- ✅ Use resilient selectors: getByRole, getByText, getByLabel (from selector-resilience fragment)
+- ✅ Follow fixture architecture principles (from fixture-architecture fragment; mechanism per the mandate when enabled)
+- ✅ Network-first: interception declared before navigation (from network-first fragment; mechanism per the mandate when enabled)
+- ✅ Use resilient selectors: getByRole, getByText, getByLabel (from selector-resilience fragment). Never CSS attribute selectors such as `[name="email"]` or `button:has-text(...)`
 - ✅ Include priority tags [P0], [P1], [P2], [P3]
 - ✅ Test complete user journeys (not isolated clicks)
 - ✅ Use proper TypeScript types
@@ -160,7 +217,15 @@ Write JSON to temp file: `/tmp/tea-automate-e2e-tests-{{timestamp}}.json`
     }
   ],
   "fixture_needs": ["authenticatedUserFixture", "paymentMockFixture", "checkoutDataFixture"],
-  "knowledge_fragments_used": ["fixture-architecture", "network-first", "selector-resilience", "playwright-cli"],
+  "knowledge_fragments_used": [
+    "playwright-utils-mandate",
+    "intercept-network-call",
+    "network-error-monitor",
+    "fixtures-composition",
+    "selector-resilience",
+    "playwright-cli"
+  ],
+  "playwright_utils_deviations": [],
   "test_count": 15,
   "summary": "Generated 15 E2E test cases covering 5 user journeys"
 }
@@ -203,6 +268,7 @@ Subagent completes when:
 - No API/component/unit tests included (out of scope)
 - Resilient selectors used (getByRole, getByText)
 - Network-first patterns applied (intercept before navigate)
+- Playwright Utils mandate satisfied (if enabled): `interceptNetworkCall` for every application endpoint the test observes or stubs, `test` imported from merged fixtures, `apiRequest` for setup/teardown, and every remaining vanilla call listed in `playwright_utils_deviations` with a reason
 
 ### ❌ FAILURE:
 
@@ -210,4 +276,7 @@ Subagent completes when:
 - Did not follow knowledge fragment patterns
 - Invalid or missing JSON output
 - Ran tests (not subagent responsibility)
-- Used brittle selectors (CSS classes, XPath)
+- Used brittle selectors (CSS classes, XPath, `[name="..."]`, `:has-text(...)`)
+- Emitted `page.route` or `page.waitForResponse` against an application API endpoint while `use_playwright_utils` was `true`, with no deviation entry
+- Imported `test` from `@playwright/test` in a spec while `use_playwright_utils` was `true`
+- Used a package name other than `@seontechnologies/playwright-utils`

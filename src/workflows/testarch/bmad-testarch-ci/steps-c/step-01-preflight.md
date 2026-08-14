@@ -125,6 +125,18 @@ Record detected `ci_platform` in step output.
 
 ---
 
+## 6b. Read TEA Config Flags
+
+From `{config_source}` read:
+
+- `tea_use_playwright_utils` — when true and the stack is Playwright, Step 3 drives burn-in selection through `runBurnIn` from `@seontechnologies/playwright-utils/burn-in` instead of `--only-changed`
+- `tea_use_pactjs_utils` — when true, Step 2 adds the contract-testing jobs, **but only if the repo actually has contract tests to run**. Check for a `pact/` or `tests/contract/` directory, `.pacttest.ts` files, or pact scripts in `package.json`, and check that `@seontechnologies/pactjs-utils` and `@pact-foundation/pact` are dependencies. A contract job wired into a pipeline with no contract tests fails every build on a missing script. When the flag is on and the artifacts are absent, skip the jobs and say so in the summary.
+- `ci_platform` — when set to anything other than `auto`, it overrides the detection in Step 5
+
+Also record whether `@seontechnologies/playwright-utils` is in `package.json`. If `tea_use_playwright_utils` is true and the package is absent, the pipeline cannot call the burn-in runner: note it and recommend the `framework` workflow rather than scaffolding a script that will not resolve.
+
+---
+
 ### 7. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**

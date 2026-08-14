@@ -72,6 +72,8 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 | Fixture Patterns                     | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
 | Data Factories                       | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
 | Network-First Pattern                | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Playwright Utils Adoption            | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
+| Pact.js Utils Adoption               | {✅ PASS \| ✅ PASS (n/a) \| ⚠️ WARN \| ❌ FAIL} | {count}    | {basis}  | {brief_note} |
 | Explicit Assertions                  | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {count}    | Absolute | {brief_note} |
 | Test Length (≤1000 lines)            | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {lines}    | Absolute | {brief_note} |
 | Test Duration (≤1.5 min)             | {✅ PASS \| ⚠️ WARN \| ❌ FAIL}                  | {duration} | Absolute | {brief_note} |

@@ -83,17 +83,28 @@ tests/
 
 > **Note:** Playwright has official bindings for Python, Java, and .NET, so it is viable for API testing across those languages too.
 
-## Optional: Playwright Utils Integration
+## Playwright Utils Integration (on by default)
 
-TEA can integrate with `@seontechnologies/playwright-utils` for advanced fixtures:
+**Applies to JavaScript/TypeScript projects on the Playwright runner only.** A Cypress project, a Maestro mobile suite, or a backend suite in pytest, JUnit, Go test, xUnit, or RSpec is scaffolded from its own conventions and this section does not apply, whatever the flag says.
+
+`tea_use_playwright_utils` defaults to `true`, so unless you turned it off at install this workflow asks to install `@seontechnologies/playwright-utils` and then scaffolds against it:
 
 ```bash
 npm install -D @seontechnologies/playwright-utils
 ```
 
-Enable during BMad installation or set `tea_use_playwright_utils: true` in config.
+What gets created on the enabled branch:
+
+- `{test_dir}/support/merged-fixtures.ts` — the single entry point every spec imports `test` from, composed with `mergeTests`
+- `{test_dir}/support/auth-fixture.ts` — `setAuthProvider` plus `createAuthFixtures()`. When the project's auth endpoint is unknown, `getToken` ships as a marked `TODO` and the summary names it, rather than a form-driven login fixture standing in
+- `global-setup.ts` wiring for `authStorageInit()` and `configureAuthSession()`, with the token storage directory gitignored
+- Sample tests written in the same style, since every later workflow reads them as the reference
+
+Declining the install falls the whole scaffold through to the vanilla branch. A half-scaffold that imports a package the project does not have is worse than either.
 
 **Utilities available:** api-request, network-recorder, auth-session, intercept-network-call, recurse, log, file-utils, burn-in, network-error-monitor
+
+Set `tea_use_playwright_utils: false` in config to scaffold plain Playwright fixtures instead.
 
 ## Optional: MCP Enhancements
 

@@ -117,13 +117,15 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 
 ### Playwright Utils Loading Profiles
 
-**If `tea_use_playwright_utils` is enabled**, select the appropriate loading profile:
+**If `tea_use_playwright_utils` is enabled**, load `playwright-utils-mandate.md` FIRST, before any profile below. It is the binding rule for this run: playwright-utils is the default implementation for every capability it covers, and a vanilla Playwright equivalent is a deviation that must be justified in the output. Red-phase scaffolds are still real test code, so the mandate applies to them exactly as it applies to green tests.
+
+Then select the appropriate loading profile:
 
 - **API-only profile** (when `{detected_stack}` is `backend` or no `page.goto`/`page.locator` found in test files):
-  Load: `overview`, `api-request`, `auth-session`, `recurse` (~1,800 lines)
+  Load: `playwright-utils-mandate`, `overview`, `api-request`, `auth-session`, `recurse` (~2,100 lines)
 
 - **Full UI+API profile** (when `{detected_stack}` is `frontend`/`fullstack` or browser tests detected):
-  Load: all Playwright Utils core fragments (~4,500 lines)
+  Load: `playwright-utils-mandate` plus all Playwright Utils core fragments (~4,800 lines)
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile.
 
@@ -131,7 +133,9 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 
 **If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`, or microservices indicators detected):
 
-Load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `pact-consumer-di.md`, `pact-consumer-framework-setup.md`, `pact-broker-webhooks.md`
+Load `pactjs-utils-mandate.md` FIRST. It is the binding rule for any Pact artifact this run produces, and it carries the relevance gate: the flag defaults to `true` and means "use these utilities when contract tests are written", never "add contract tests to this project".
+
+Then load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md`, `pact-consumer-di.md`, `pact-consumer-framework-setup.md`, `pact-broker-webhooks.md`
 
 **If `tea_use_pactjs_utils` is disabled** but contract testing is relevant:
 
@@ -142,6 +146,8 @@ Load: `contract-testing.md`
 **If `tea_pact_mcp` is `"mcp"`:**
 
 Load: `pact-mcp.md`
+
+**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Follow `pact-mcp.md` § _When the Tools Are Not Reachable_: the probe is a tool-list check and never a broker call, its result is recorded once per run as `pact_mcp_reachable`, and the fallback order is provider source, then an OpenAPI spec, then `confidence-gate.md`. Report the outcome once and continue; never block, never retry, never present inferred provider states as broker data.
 
 ## 5. Load Knowledge Base Fragments
 
@@ -161,7 +167,9 @@ Use `{knowledgeIndex}` to load:
 
 **Playwright Utils (if enabled and {detected_stack} is `frontend` or `fullstack`):**
 
+- `playwright-utils-mandate.md` (load first — it governs how the fragments below are applied)
 - `overview.md`, `api-request.md`, `network-recorder.md`, `auth-session.md`, `intercept-network-call.md`, `recurse.md`, `log.md`, `file-utils.md`, `network-error-monitor.md`, `fixtures-composition.md`
+- `fixture-architecture.md` and `network-first.md` for their principles only. Under the mandate the mechanism comes from the playwright-utils fragments.
 
 **Playwright CLI (if tea_browser_automation is "cli" or "auto" and {detected_stack} is `frontend` or `fullstack`):**
 
@@ -182,9 +190,10 @@ Use `{knowledgeIndex}` to load:
 - `test-priorities-matrix.md`
 - `ci-burn-in.md`
 
-**Pact.js Utils (if enabled):**
+**Pact.js Utils (if enabled and contract testing is relevant):**
 
-- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `pact-consumer-di.md`, `pact-consumer-framework-setup.md`, `pact-broker-webhooks.md`
+- `pactjs-utils-mandate.md` (load first — it governs how the fragments below are applied)
+- `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md`, `pact-consumer-di.md`, `pact-consumer-framework-setup.md`, `pact-broker-webhooks.md`
 
 **Contract Testing (if pactjs-utils disabled but relevant):**
 

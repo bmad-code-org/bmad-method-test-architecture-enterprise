@@ -23,8 +23,8 @@
  *   sampling rules, just executed by code instead of described in prose. A report
  *   that cites a different sampled count, or a different corpus, is provably wrong
  *   and rejected outright.
- * - adopted counts for the five keys with a concrete, literal recognized form
- *   (priorityMarkers, testIds, networkFirst, dataFactories, fixtures): a generous,
+ * - adopted counts for the six keys with a concrete, literal recognized form
+ *   (priorityMarkers, testIds, networkFirst, dataFactories, fixtures, playwrightUtils): a generous,
  *   high-recall regex scan over the real sampled files' real content. This is not
  *   claimed to be a precise semantic judgment — a regex cannot know intent — but it
  *   gives a safe one-directional floor: when the scan finds ZERO occurrences of any
@@ -47,8 +47,17 @@ const { isTestFile } = require('./changed-tests');
 
 // Same order as step-02-discover-tests.md §2b's "Conventions to measure" table and
 // criteria-registry.md's mapping table. Every consumer of this list (build-prompt,
-// parse-report, the tests) shares this one array so the seven keys cannot drift.
-const CONVENTION_KEYS = ['priorityMarkers', 'testIds', 'bddNaming', 'networkFirst', 'dataFactories', 'fixtures', 'assertionStyle'];
+// parse-report, the tests) shares this one array so the eight keys cannot drift.
+const CONVENTION_KEYS = [
+  'priorityMarkers',
+  'testIds',
+  'bddNaming',
+  'networkFirst',
+  'dataFactories',
+  'fixtures',
+  'assertionStyle',
+  'playwrightUtils',
+];
 
 const MAX_SAMPLED_FILES = 40;
 const MIN_CORPUS_TO_ATTEMPT = 1; // 0 eligible files outside the review set: nothing to sample at all.
@@ -57,8 +66,9 @@ const MIN_CORPUS_TO_ATTEMPT = 1; // 0 eligible files outside the review set: not
 // content (case-insensitive, no /g flag so repeated .test() calls carry no state).
 // Deliberately high-recall: a false positive here only ever makes the zero-signal
 // floor check more permissive (it stops treating a convention as unattested), never
-// less — see the module doc comment. The literal forms mirror the "Record as `form`"
-// examples in step-02-discover-tests.md's table.
+// less — see the module doc comment. Each detector must match what the "Adopted when
+// a sampled file..." column in step-02-discover-tests.md's table says, so a headless
+// run and an interactive run count the same corpus. Changing one means changing both.
 const MECHANICAL_DETECTORS = {
   priorityMarkers: /(\[P[0-3]\]|@P[0-3]\b|['"`]@?P[0-3]['"`]|\bpriority\s*:\s*['"`]?P[0-3]\b)/i,
   testIds: /(data-testid|data-test-id|getByTestId|test-id\s*=|testid\s*=)/i,
@@ -66,6 +76,13 @@ const MECHANICAL_DETECTORS = {
     /(interceptNetworkCall\s*\(|page\.route\s*\(|cy\.intercept\s*\(|waitForResponse\s*\(|waitForRequest\s*\(|route\.fulfill\s*\()/i,
   dataFactories: /(\bbuild[A-Z]\w*\s*\(|\bFactory\s*\(|from\s+['"][^'"]*factories|\bfactories\/)/i,
   fixtures: /(mergeTests\s*\(|test\.extend\s*\(|from\s+['"][^'"]*fixtures|merged-fixtures)/i,
+  // Only the package literal. `merged-fixtures` is already the `fixtures` key's
+  // signal, and a hand-rolled merged-fixtures.ts with no playwright-utils anywhere
+  // would otherwise register adoption for a package the repo never installed.
+  // Import-shaped only. The bare package literal also matches a prose mention in a
+  // comment ("// TODO: migrate to @seontechnologies/playwright-utils"), which would
+  // register adoption for a file that uses none of it.
+  playwrightUtils: /(?:from|require\s*\(|import\s*\()\s*['"`]@seontechnologies\/playwright-utils/i,
 };
 
 const MECHANICAL_CONVENTION_KEYS = Object.keys(MECHANICAL_DETECTORS);

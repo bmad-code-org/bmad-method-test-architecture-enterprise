@@ -6,7 +6,7 @@ base_urls:
   github_repo: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise"
   github_knowledge: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge"
 
-# Public Documentation (26 entries)
+# Public Documentation (27 entries)
 documentation:
   tutorials:
     - name: "Getting Started with Test Architect"
@@ -65,6 +65,10 @@ documentation:
         local: "/docs/how-to/customization/integrate-playwright-utils.md"
         online: "/how-to/customization/integrate-playwright-utils/"
 
+      - name: "Integrate Pact.js Utils with TEA"
+        local: "/docs/how-to/customization/integrate-pactjs-utils.md"
+        online: "/how-to/customization/integrate-pactjs-utils/"
+
     brownfield:
       - name: "Running TEA for Enterprise Projects"
         local: "/docs/how-to/brownfield/use-tea-for-enterprise.md"
@@ -103,7 +107,7 @@ documentation:
     - name: "Knowledge Base System"
       local: "/docs/explanation/knowledge-base-system.md"
       online: "/explanation/knowledge-base-system/"
-      topics: ["Fragment management", "54 fragments"]
+      topics: ["Fragment management", "59 fragments"]
 
     - name: "Network-First Patterns"
       local: "/docs/explanation/network-first-patterns.md"
@@ -138,7 +142,7 @@ documentation:
       local: "/docs/reference/troubleshooting.md"
       online: "/reference/troubleshooting/"
 
-# Knowledge Fragments (54 files)
+# Knowledge Fragments (59 files)
 knowledge_fragments:
   testing_patterns:
     - name: "fixture-architecture"
@@ -212,6 +216,16 @@ knowledge_fragments:
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/overview.md"
       description: "Playwright Utils overview and installation"
 
+    - name: "library-integration-mandate"
+      path: "/src/agents/bmad-tea/resources/knowledge/library-integration-mandate.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/library-integration-mandate.md"
+      description: "The general rule behind every integration flag, and how to add the next library"
+
+    - name: "playwright-utils-mandate"
+      path: "/src/agents/bmad-tea/resources/knowledge/playwright-utils-mandate.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/playwright-utils-mandate.md"
+      description: "When the flag is on: what replaces what, and what is a real exception"
+
     - name: "api-request"
       path: "/src/agents/bmad-tea/resources/knowledge/api-request.md"
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/api-request.md"
@@ -261,6 +275,11 @@ knowledge_fragments:
       path: "/src/agents/bmad-tea/resources/knowledge/pactjs-utils-overview.md"
       github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pactjs-utils-overview.md"
       description: "Pact.js Utils installation and contract testing flows"
+
+    - name: "pactjs-utils-mandate"
+      path: "/src/agents/bmad-tea/resources/knowledge/pactjs-utils-mandate.md"
+      github: "https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/src/agents/bmad-tea/resources/knowledge/pactjs-utils-mandate.md"
+      description: "When the flag is on: what replaces raw Pact, and when a Pact suite belongs at all"
 
     - name: "pactjs-utils-consumer-helpers"
       path: "/src/agents/bmad-tea/resources/knowledge/pactjs-utils-consumer-helpers.md"

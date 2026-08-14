@@ -141,11 +141,37 @@ Coverage criteria are intentionally excluded from this checklist.
 
 #### Network-First (if `check_network_first: true`)
 
-- [ ] page.route() before page.goto() validated
-- [ ] Race conditions detected (route after navigate)
-- [ ] Network wait patterns checked (`interceptNetworkCall` preferred over ad hoc `waitForResponse`)
+- [ ] Interception registered before navigation validated (M1)
+- [ ] Race conditions detected (interception after navigate)
+- [ ] Network wait patterns checked (`interceptNetworkCall` when `tea_use_playwright_utils` is true, `page.route` when it is false)
 - [ ] Status assigned (PASS/WARN/FAIL)
 - [ ] Violations recorded with recommended fixes
+
+#### Playwright Utils Adoption (if `tea_use_playwright_utils` is true and the package is installed)
+
+Rows M9 and L9. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seontechnologies/playwright-utils` is not a project dependency, or when the file is not a JS/TS Playwright spec.
+
+- [ ] `playwright_utils_installed` recorded from `package.json` and carried in `subagentContext`
+- [ ] `playwrightUtils` convention measured in the step-02 baseline, with adoption ratio and observed form
+- [ ] M9 evaluated per file against the REQUIRED substitutions in `playwright-utils-mandate.md`
+- [ ] Lines carrying `// playwright-utils deviation: <reason>` excluded from M9
+- [ ] `page.route` on third-party scripts, analytics, fonts, or images excluded from M9
+- [ ] RECOMMENDED utilities (`auth-session`, `network-recorder`, `webhook`, `burn-in`) not deducted
+- [ ] L9 scored against the `playwrightUtils` convention baseline, not against an absolute standard
+- [ ] Each finding names the exact substitution, not a generic suggestion
+- [ ] Flag-on-but-package-missing reported once as a recommendation, never as per-file deductions
+
+#### Pact.js Utils Adoption (if `tea_use_pactjs_utils` is true and the package is installed)
+
+Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seontechnologies/pactjs-utils` is not a project dependency, or when the file is not a JS/TS Pact artifact.
+
+- [ ] `pactjs_utils_installed` recorded from `package.json` and carried in `subagentContext`
+- [ ] M10 evaluated per file against the REQUIRED substitutions in `pactjs-utils-mandate.md`
+- [ ] Lines carrying `// pactjs-utils deviation: <reason>` excluded from M10
+- [ ] `MatchersV3` used directly not treated as a violation
+- [ ] RECOMMENDED items (`zodToPactMatchers`, the `pact-consumer-di.md` injection) not deducted
+- [ ] Determinism and FFI rows (H6, H7, H8, L4) scored independently and reported ahead of M10
+- [ ] Each finding names the exact substitution, not a generic suggestion
 
 #### Assertions (if `check_assertions: true`)
 

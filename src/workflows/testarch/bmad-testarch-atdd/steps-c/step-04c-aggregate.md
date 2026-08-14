@@ -164,7 +164,41 @@ const uniqueFixtures = [...new Set(allFixtureNeeds)];
 **Create fixtures needed by ATDD tests:**
 (Similar to automate workflow, but may be simpler for ATDD since feature not implemented)
 
-**Minimal fixtures for TDD red phase:**
+**If `use_playwright_utils` is `true` (the default), the merged-fixtures file is not optional.** Per `playwright-utils-mandate.md`. Both workers generated specs importing `test` from `../support/merged-fixtures`. If that file does not exist, every scaffold fails to resolve at green time. Create it here.
+
+```typescript
+// {test_dir}/support/merged-fixtures.ts
+import { mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as interceptFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
+import { test as networkErrorFixture } from '@seontechnologies/playwright-utils/network-error-monitor/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+
+export const test = mergeTests(apiRequestFixture, interceptFixture, networkErrorFixture, recurseFixture);
+
+export { expect } from '@playwright/test';
+export { log };
+```
+
+Merge in the project's auth fixture (`setAuthProvider` + `createAuthFixtures()`, per `auth-session.md`) when the story's criteria describe authenticated behavior. If the project has no auth endpoint to point at, leave the auth fixture out and list the missing wiring in the ATDD checklist so it lands before green phase, rather than emitting a form-driven login fixture.
+
+If `{test_dir}/support/merged-fixtures.ts` already exists, extend the existing `mergeTests` call instead of replacing the file.
+
+**Minimal data fixtures for TDD red phase:**
+
+```typescript
+// {test_dir}/support/factories.ts
+import { faker } from '@faker-js/faker';
+
+export const registrationPayload = (overrides = {}) => ({
+  email: faker.internet.email(),
+  password: 'SecurePass123!',
+  ...overrides,
+});
+```
+
+**When `use_playwright_utils` is `false`**, generate the simpler vanilla shape:
 
 ```typescript
 // tests/fixtures/test-data.ts
@@ -175,6 +209,8 @@ export const testUserData = {
 ```
 
 Note: More complete fixtures will be needed when moving to green phase.
+
+**Playwright Utils deviation roll-up:** collect `playwright_utils_deviations` from both worker outputs. Carry any entries into the ATDD checklist under a `Playwright Utils deviations` heading with file, line, and reason, so the developer sees them before un-skipping.
 
 ---
 

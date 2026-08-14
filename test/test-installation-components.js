@@ -81,15 +81,16 @@ async function runTests() {
     assert(moduleYaml.name === 'Test Architect', 'module.yaml has correct name');
     assert(typeof moduleYaml.description === 'string' && moduleYaml.description.length > 0, 'module.yaml has description');
     assert(typeof moduleYaml.default_selected === 'boolean', 'module.yaml has boolean default_selected');
-    assert(moduleYaml.tea_use_pactjs_utils.default === false, 'module.yaml defaults Pact.js Utils to false');
-    assert(moduleYaml.tea_pact_mcp.default === 'none', 'module.yaml defaults Pact MCP to none');
+    assert(moduleYaml.tea_use_playwright_utils.default === true, 'module.yaml defaults Playwright Utils to true');
+    assert(moduleYaml.tea_use_pactjs_utils.default === true, 'module.yaml defaults Pact.js Utils to true');
+    assert(moduleYaml.tea_pact_mcp.default === 'mcp', 'module.yaml defaults Pact MCP to mcp');
     assert(
       moduleYaml.tea_use_pactjs_utils.prompt.includes('consumer-driven contract testing'),
       'module.yaml Pact.js Utils prompt explains CDC intent',
     );
     assert(
-      moduleYaml.tea_pact_mcp.prompt.includes('Only needed if you already use a broker'),
-      'module.yaml Pact MCP prompt explains broker prerequisite',
+      moduleYaml.tea_pact_mcp.prompt.includes('skipped automatically when it is not'),
+      'module.yaml Pact MCP prompt states the no-broker degradation',
     );
   } catch (error) {
     assert(false, 'module.yaml loads and validates', error.message);

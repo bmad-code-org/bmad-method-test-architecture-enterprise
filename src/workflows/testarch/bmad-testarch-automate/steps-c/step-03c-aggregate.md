@@ -156,7 +156,95 @@ const uniqueFixtures = [...new Set(allFixtureNeeds)];
 
 ### 4. Generate Fixture Infrastructure
 
-**Create or update fixture files based on needs:**
+**Create or update fixture files based on needs.**
+
+**If `use_playwright_utils` is `true` (the default), generate section 4-PU and skip 4-V. Otherwise generate 4-V.**
+
+---
+
+#### 4-PU. Playwright Utils Fixture Infrastructure
+
+Per `playwright-utils-mandate.md`.
+
+**A) Merged fixtures — the single entry point** (`{test_dir}/support/merged-fixtures.ts`):
+
+Every spec imports `test` from here. Include only the utility fixtures the generated suite actually uses, plus the project's own.
+
+```typescript
+import { mergeTests } from '@playwright/test';
+import { log } from '@seontechnologies/playwright-utils';
+import { test as apiRequestFixture } from '@seontechnologies/playwright-utils/api-request/fixtures';
+import { test as interceptFixture } from '@seontechnologies/playwright-utils/intercept-network-call/fixtures';
+import { test as networkErrorFixture } from '@seontechnologies/playwright-utils/network-error-monitor/fixtures';
+import { test as recurseFixture } from '@seontechnologies/playwright-utils/recurse/fixtures';
+import { test as authFixture } from './auth-fixture';
+
+export const test = mergeTests(apiRequestFixture, interceptFixture, networkErrorFixture, recurseFixture, authFixture);
+
+export { expect } from '@playwright/test';
+export { log };
+```
+
+If the suite has no browser tests, drop `interceptFixture` and `networkErrorFixture` from the merge.
+
+**If `{test_dir}/support/merged-fixtures.ts` already exists, extend its `mergeTests` call instead of replacing the file.** `automate` runs repeatedly over a suite that already exists, so overwriting the entry point drops whatever fixtures the project added by hand since the last run.
+
+**B) Auth fixture** (`{test_dir}/support/auth-fixture.ts`):
+
+Built on `auth-session`, not on a login form walk. The provider is the one project-specific piece; everything else is the utility.
+
+```typescript
+import { test as base } from '@playwright/test';
+import { createAuthFixtures, setAuthProvider, type AuthProvider } from '@seontechnologies/playwright-utils/auth-session';
+
+// The AuthProvider contract, per auth-session.md. These six members are the
+// interface; do not invent a shorter one.
+const provider: AuthProvider = {
+  getEnvironment: (options) => options.environment || 'local',
+  getUserIdentifier: (options) => options.userIdentifier || 'default-user',
+  extractToken: (storageState) => storageState.cookies.find((c) => c.name === 'auth_token')?.value,
+  extractCookies: (tokenData) => [{ name: 'auth_token', value: tokenData, domain: '<domain>', path: '/', httpOnly: true, secure: true }],
+  isTokenExpired: (storageState) => {
+    const expiresAt = storageState.cookies.find((c) => c.name === 'expires_at');
+    return Date.now() > Number.parseInt(expiresAt?.value || '0', 10);
+  },
+  // Acquires the token and returns the storage state. The only place a raw
+  // request context is correct: it runs before the fixtures exist.
+  manageAuthToken: async (request, options) => {
+    /* project-specific */
+  },
+};
+
+setAuthProvider(provider);
+
+export const test = base.extend(createAuthFixtures());
+```
+
+Tests then take `authToken` from the fixture. Tokens persist to disk and are reused across runs.
+
+If the project has no auth endpoint to wire, do not fall back to a form-driven login fixture. Emit the file with a `TODO` on `manageAuthToken` and on the cookie names, and list "auth provider not wired" in the summary's `Playwright Utils deviations`. Read `auth-session.md` § _Custom Auth Provider Pattern_ before filling any of it in: the storage shape the six members agree on is project-specific and guessing it produces a fixture that silently returns no token.
+
+**C) Data factories** (`{test_dir}/support/factories.ts`): same as 4-V section B below.
+
+**D) Network stubs:**
+
+Do not create a network-mock helper module. A stub belongs in the test that needs it, as `interceptNetworkCall({ url, fulfillResponse })`, so the mock and the assertion stay side by side. Extract a shared factory only when three or more specs stub the same endpoint with the same payload, and even then export the `fulfillResponse` payload, not a `page.route` wrapper.
+
+```typescript
+// {test_dir}/support/payloads.ts
+export const paymentSuccess = { success: true, transactionId: '12345' };
+```
+
+```typescript
+// in the spec
+const payment = interceptNetworkCall({ url: '**/api/payment/**', fulfillResponse: { status: 200, body: paymentSuccess } });
+```
+
+**E) Helper utilities:** create these only for genuinely project-specific logic. A wrapper whose body is one `interceptNetworkCall` or one `apiRequest` call adds indirection without adding meaning; call the utility directly.
+
+---
+
+#### 4-V. Vanilla Fixture Infrastructure (only when `use_playwright_utils` is `false`)
 
 **A) Authentication Fixtures** (`tests/fixtures/auth.ts`):
 
@@ -165,18 +253,16 @@ import { test as base } from '@playwright/test';
 
 export const test = base.extend({
   authenticatedUser: async ({ page }, use) => {
-    // Login logic
     await page.goto('/login');
-    await page.fill('[name="email"]', 'test@example.com');
-    await page.fill('[name="password"]', 'password');
-    await page.click('button[type="submit"]');
+    await page.getByLabel('Email').fill('test@example.com');
+    await page.getByLabel('Password').fill('password');
+    await page.getByRole('button', { name: 'Sign in' }).click();
     await page.waitForURL('/dashboard');
 
     await use(page);
   },
 
   authToken: async ({ request }, use) => {
-    // Get auth token for API tests
     const response = await request.post('/api/auth/login', {
       data: { email: 'test@example.com', password: 'password' },
     });
@@ -220,20 +306,17 @@ export const mockPaymentSuccess = async (page: Page) => {
 };
 ```
 
-**D) Helper Utilities** (`tests/fixtures/helpers.ts`):
+**D) Helper Utilities** (`tests/fixtures/helpers.ts`): project-specific wait, retry, and assertion helpers only.
 
-```typescript
-import { Page } from '@playwright/test';
-import { interceptNetworkCall } from '@seontechnologies/playwright-utils/intercept-network-call';
+---
 
-export const observeApiCall = (page: Page, urlPattern: string, method: string = 'GET') => {
-  return interceptNetworkCall({
-    page,
-    method,
-    url: urlPattern,
-  });
-};
-```
+### 4b. Mandate Deviation Roll-Up
+
+Collect `playwright_utils_deviations` and `pactjs_utils_deviations` from every worker output. Carry each non-empty list into the summary in Step 6 under its own heading (`Playwright Utils deviations`, `Pact.js Utils deviations`) with file, line, and reason. The two roll up separately: a run can be clean on one mandate and not the other, and merging them hides which.
+
+If `use_playwright_utils` is `true` and any written file still contains an unexplained `page.route` on an application endpoint, a raw `request.<method>`, a `page.waitForTimeout`, a `console.log`, or a spec-level `import { test } from '@playwright/test'`, fix it here before writing to disk.
+
+Apply the same pass to Pact artifacts when `use_pactjs_utils` is `true`: a hand-cast `.given()`, a literal `VerifierOptions`, or bespoke auth middleware with no stated reason gets fixed or recorded. Aggregation is the last gate before the code lands.
 
 ---
 

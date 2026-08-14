@@ -73,21 +73,31 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
 
 ### Playwright Utils Loading Profiles
 
-**If `tea_use_playwright_utils` is enabled**, select the appropriate loading profile:
+**If `tea_use_playwright_utils` is enabled**, load `playwright-utils-mandate.md` FIRST, before any profile below. It supplies the firing predicate for registry rows M9 and L9: which vanilla calls have a required substitution, which are legitimate exceptions, and which utilities are recommended rather than required and therefore never deduct.
+
+Then select the appropriate loading profile:
 
 - **API-only profile** (when `{detected_stack}` is `backend` or no `page.goto`/`page.locator` found in test files):
-  Load: `overview`, `api-request`, `auth-session`, `recurse` (~1,800 lines)
+  Load: `playwright-utils-mandate`, `overview`, `api-request`, `auth-session`, `recurse` (~2,100 lines)
 
 - **Full UI+API profile** (when `{detected_stack}` is `frontend`/`fullstack` or browser tests detected):
-  Load: all Playwright Utils core fragments (~4,500 lines)
+  Load: `playwright-utils-mandate` plus all Playwright Utils core fragments (~4,800 lines)
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile.
+
+The profiles above assume a JavaScript/TypeScript suite on the Playwright runner. For a Cypress project, a Maestro flow set, or a backend suite in pytest, JUnit, Go test, xUnit, or RSpec, skip them entirely whatever the flag says: the mandate does not bind those runners, so loading its fragments only spends context and invites rows that cannot fire. Decide by the runner the reviewed files execute under, not by the language of the code they test.
+
+**Also record whether `@seontechnologies/playwright-utils` is in the project's `package.json`.** Carry it into `subagentContext` as `playwright_utils_installed`. The M9 gate needs both the flag and the package: the flag alone is an intention, and deducting against an uninstalled library produces findings nobody can act on file by file. When the flag is true and the package is missing, say so once in the report and recommend the `framework` workflow.
 
 ### Pact.js Utils Loading
 
 **If `tea_use_pactjs_utils` is enabled** (and contract tests detected in review scope):
 
-Load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md` (one-interaction-per-`it()` determinism rule), `pactjs-utils-provider-verifier.md` (vitest `pool: 'forks'` + `singleFork` — applies to BOTH consumer and provider), `pactjs-utils-request-filter.md`, `pact-consumer-framework-setup.md` (consumer Vitest `fileParallelism: false` + `pool: 'forks'` + `singleFork: true`, determinism gate, `jq` publish normalization), `pact-broker-webhooks.md` (webhook auth, PAT rotation, staleness monitoring — relevant if CI failure patterns include `can-i-deploy` timeouts with no verification).
+Load `pactjs-utils-mandate.md` FIRST. It supplies the firing predicate for registry row M10: which raw-Pact constructs have a required substitution, which are legitimate exceptions, and which utilities are recommended rather than required and therefore never deduct.
+
+**Also record whether `@seontechnologies/pactjs-utils` is in the project's `package.json`.** Carry it into `subagentContext` as `pactjs_utils_installed`. The M10 gate needs both the flag and the package, for the same reason M9 does.
+
+Then load: `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md` (one-interaction-per-`it()` determinism rule), `pactjs-utils-provider-verifier.md` (vitest `pool: 'forks'` + `singleFork` — applies to BOTH consumer and provider), `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md`, `pact-consumer-framework-setup.md` (consumer Vitest `fileParallelism: false` + `pool: 'forks'` + `singleFork: true`, determinism gate, `jq` publish normalization), `pact-broker-webhooks.md` (webhook auth, PAT rotation, staleness monitoring — relevant if CI failure patterns include `can-i-deploy` timeouts with no verification).
 
 **If `tea_use_pactjs_utils` is disabled** but contract tests are in review scope:
 
@@ -98,6 +108,8 @@ Load: `contract-testing.md`
 **If `tea_pact_mcp` is `"mcp"`:**
 
 Load: `pact-mcp.md` — enables agent to use SmartBear MCP "Review Pact Tests" tool for automated best-practice feedback during test review.
+
+**`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Follow `pact-mcp.md` § _When the Tools Are Not Reachable_: the probe is a tool-list check and never a broker call, its result is recorded once per run as `pact_mcp_reachable`, and the fallback order is provider source, then an OpenAPI spec, then `confidence-gate.md`. Report the outcome once and continue; never block, never retry, never present inferred provider states as broker data.
 
 ## 2. Load Knowledge Base
 
@@ -124,6 +136,7 @@ Without these, a flow is reviewed against browser predicates that cannot match i
 
 **If Playwright Utils enabled:**
 
+- `playwright-utils-mandate.md`: required to score rows M9 and L9
 - `overview.md`, `api-request.md`, `network-recorder.md`, `auth-session.md`, `intercept-network-call.md`, `recurse.md`, `log.md`, `file-utils.md`, `burn-in.md`, `network-error-monitor.md`, `fixtures-composition.md`
 
 **If disabled:**

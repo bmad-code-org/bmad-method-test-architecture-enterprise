@@ -226,8 +226,41 @@ Before starting this workflow, verify:
 - [ ] Tests are atomic (one assertion per test)
 - [ ] Tests are fast (no unnecessary waits or delays)
 
+### Playwright Utils Mandate (if `tea_use_playwright_utils` is true)
+
+Per `playwright-utils-mandate.md`. Skip this section entirely when the flag is false, and for Cypress and non-Playwright suites. A red-phase scaffold is held to the same standard as a green test.
+
+- [ ] `{test_dir}/support/merged-fixtures.ts` exists and composes with `mergeTests`
+- [ ] Every scaffold imports `test` from the merged fixtures, not from `@playwright/test`
+- [ ] Application API calls use `interceptNetworkCall`, not `page.route` or `page.waitForResponse`
+- [ ] API scaffolds use `apiRequest`, not the raw `request` fixture
+- [ ] Async waits use `recurse`, not `page.waitForTimeout`
+- [ ] Report output uses `log`, not `console.log`
+- [ ] Authenticated journeys take `authToken` from the auth-session fixture, or the missing auth wiring is listed in the ATDD checklist
+- [ ] Package name is `@seontechnologies/playwright-utils` everywhere (never `@playwright-utils/*`)
+- [ ] Every remaining vanilla call carries a `// playwright-utils deviation: <reason>` comment and appears in the checklist's deviation list
+
+### Pact.js Utils Mandate (if `tea_use_pactjs_utils` is true and contract tests are in scope)
+
+Per `pactjs-utils-mandate.md`. Skip entirely when the flag is false, when `@seontechnologies/pactjs-utils` is not installed, or when the project has no consumer-provider boundary — the flag never means a project should have contract tests.
+
+- [ ] Contract artifacts generated only against a real consumer-provider boundary, with the reason stated when skipped
+- [ ] `@seontechnologies/pactjs-utils` and `@pact-foundation/pact` present in `package.json`
+- [ ] Provider states built with `createProviderState`, never a hand-cast `.given('name', obj as JsonMap)`
+- [ ] Verifier options built with `buildVerifierOptions` / `buildMessageVerifierOptions`, never a literal options object
+- [ ] Auth injection uses `createRequestFilter` or `noOpRequestFilter`, never bespoke middleware
+- [ ] PactV4 builder callbacks use `setJsonContent` / `setJsonBody` rather than repeated inline lambdas
+- [ ] `zodToPactMatchers` used where the project already has a Zod schema
+- [ ] `executeTest` exercises the real consumer client via the `pact-consumer-di.md` injection, or the reason it cannot is stated
+- [ ] Exactly one `addInteraction()` per `it()` block
+- [ ] Consumer Vitest config carries `fileParallelism: false` AND `pool: 'forks'` AND `singleFork: true`; provider config carries the pool pair
+- [ ] Every interaction carries its `// Provider endpoint:` comment and provider-scrutiny evidence
+- [ ] Package name is `@seontechnologies/pactjs-utils` everywhere
+- [ ] Every remaining raw-Pact construct carries a `// pactjs-utils deviation: <reason>` comment and appears in the summary's deviation list
+
 ### Knowledge Base Integration
 
+- [ ] playwright-utils-mandate.md applied to all generated specs (if `tea_use_playwright_utils` is true)
 - [ ] fixture-architecture.md patterns applied to all fixtures
 - [ ] data-factories.md patterns applied to all factories
 - [ ] network-first.md patterns applied to E2E tests with network requests
@@ -317,8 +350,8 @@ All of the following must be true before marking this workflow as complete:
 
 **Resolution:**
 
-- Move `await page.route()` calls BEFORE `await page.goto()`
-- Review `network-first.md` knowledge fragment
+- Move the interception BEFORE `await page.goto()`. With `tea_use_playwright_utils` true that means declaring `const call = interceptNetworkCall({ url })` above the navigation and awaiting it after; with the flag false it means moving `await page.route()` above the navigation.
+- Review `network-first.md` for the principle and `intercept-network-call.md` for the mechanism
 - Update all E2E tests to follow network-first pattern
 
 ### Issue: Hardcoded test data in tests

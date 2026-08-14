@@ -20,6 +20,8 @@ This is an **isolated subagent** running in parallel with API test generation (a
 
 **Your task:** Generate backend tests ONLY (unit, integration, contract - not API endpoint tests, not E2E).
 
+**Playwright Utils scope note.** `playwright-utils-mandate.md` does not apply here for pytest, JUnit, Go test, xUnit, RSpec, Jest, or Vitest: those runners have their own idioms and the package is not available to them. It does apply to the one case where a Node/TypeScript service's integration tests run on the Playwright test runner and `use_playwright_utils` is `true` — there, use `apiRequest` over the raw `request` fixture, `recurse` over a hand-written poll, and `log` over `console.log`, exactly as the API worker does. Decide by the runner the file executes under, not by the fact that the code under test is backend code.
+
 ---
 
 ## MANDATORY EXECUTION RULES

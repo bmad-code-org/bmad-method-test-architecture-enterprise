@@ -412,8 +412,11 @@ function main() {
   // project's config.yaml, then the module default) and stated in the prompt.
   // An unstated key is one the agent decides per run.
   let teaConfig;
+  let installedPackages;
   try {
-    teaConfig = resolveTeaConfig({ projectRoot, flags: options }).values;
+    const resolvedTeaConfig = resolveTeaConfig({ projectRoot, flags: options });
+    teaConfig = resolvedTeaConfig.values;
+    installedPackages = resolvedTeaConfig.installed;
   } catch (error) {
     if (error.code === 'TEA_CONFIG_INVALID') {
       fail(EXIT.ENV_ERROR, error.message);
@@ -576,6 +579,7 @@ function main() {
       scope: options.scope,
       testDir: options.testDir,
       teaConfig,
+      installedPackages,
       contextFiles,
       contextBasis,
       focus: options.focus,
@@ -684,6 +688,7 @@ function main() {
     scope: options.scope,
     testDir: options.testDir,
     teaConfig,
+    installedPackages,
     contextFiles,
     contextBasis,
     focus: options.focus,

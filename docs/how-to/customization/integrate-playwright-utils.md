@@ -83,6 +83,32 @@ tea_use_playwright_utils: true
 
 ## What Changes When Enabled
 
+### The Short Version: It Becomes the Default, Not an Option
+
+`tea_use_playwright_utils: true` does not mean "the library is available if you ask for it." It makes `@seontechnologies/playwright-utils` the implementation TEA reaches for on every capability the package covers, without you naming a utility in your prompt. The rule lives in the `playwright-utils-mandate` knowledge fragment, which every generating and reviewing workflow loads first.
+
+Two enforcement levels:
+
+**REQUIRED** — drop-in, nothing to wire. Generating the vanilla equivalent instead is a defect:
+
+| You need                                     | TEA emits                                           | Not                                                       |
+| -------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
+| Observe or stub an app API call in a UI test | `interceptNetworkCall({ url, fulfillResponse? })`   | `page.route`, `page.waitForResponse`                      |
+| An HTTP call from a test                     | `apiRequest({ method, path, body? })`               | `request.get/post/...`, `await response.json()`           |
+| Wait for an eventually consistent condition  | `recurse(fn, predicate, { timeout })`               | `page.waitForTimeout`, a `while` loop, bare `expect.poll` |
+| Output the report should show                | `log.step` / `log.info`                             | `console.log`                                             |
+| A test's entry point (spec files)            | `import { test } from '../support/merged-fixtures'` | `import { test } from '@playwright/test'`                 |
+| Reading a downloaded CSV/XLSX/PDF/ZIP        | `handleDownload` plus `readCSV` / `readXLSX` / …    | a parser per format                                       |
+| Catching a 4xx/5xx a green UI hides          | the `network-error-monitor` fixture                 | per-spec `page.on('response')` handlers                   |
+
+**RECOMMENDED** — needs project-side wiring, so TEA proposes it and scaffolds the wiring when the workflow's scope covers setup: `auth-session` (an auth provider), `network-recorder` (a HAR directory), the webhook module (a mock provider), `burn-in` (a config file and a script). TEA never silently drops to the vanilla equivalent without saying so in the output.
+
+**Real exceptions still ship.** `page.route` blocking analytics, fonts, or third-party scripts is correct and is not a deviation. Where a genuine gap exists, the generated code carries `// playwright-utils deviation: <reason>` and the workflow's summary lists it, so nothing slips through unexplained.
+
+The entry-point rule is about **spec files**. The merged-fixtures module itself imports `mergeTests` and re-exports `expect` from `@playwright/test`, and the examples below show exactly that; it is the one file that must reach for Playwright directly.
+
+**Scope.** The mandate covers JavaScript/TypeScript suites on the Playwright runner, browser and API alike. Cypress, Maestro flows, Pact/Vitest contract suites, and backend suites in pytest, JUnit, Go test, xUnit, or RSpec are untouched by it.
+
 ### `framework` Workflow
 
 **Vanilla Playwright:**
@@ -827,6 +853,8 @@ expect(status).toBe(200);
 ## Migration Guide
 
 ## Related Guides
+
+- [Integrate Pact.js Utils](/docs/how-to/customization/integrate-pactjs-utils.md) — the same mandate shape for contract testing
 
 **Getting Started:**
 

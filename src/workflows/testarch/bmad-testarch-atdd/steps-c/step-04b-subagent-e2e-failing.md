@@ -15,8 +15,10 @@ This is an **isolated subagent** running in parallel with API red-phase test gen
 
 - Story acceptance criteria from Step 1
 - Test strategy and user journey scenarios from Step 3
-- Knowledge fragments loaded: fixture-architecture, network-first, selector-resilience
-- Config: test framework, Playwright Utils enabled/disabled
+- Knowledge fragments loaded: playwright-utils-mandate, overview, intercept-network-call, network-error-monitor, fixtures-composition, log, auth-session, fixture-architecture, network-first, selector-resilience
+- Config: test framework, `use_playwright_utils` (default `true`)
+
+**When `use_playwright_utils` is `true`, `playwright-utils-mandate.md` binds this worker.** A red-phase scaffold is real test code; generate it in the playwright-utils style without being asked. `network-first.md` and `fixture-architecture.md` still supply the principles; the mechanism is `interceptNetworkCall` and `mergeTests`.
 
 **Your task:** Generate E2E test scaffolds for the feature's expected UI behavior. They stay in `test.skip()` until the developer activates them for the current task (TDD RED PHASE).
 
@@ -93,46 +95,101 @@ If `none`:
 
 For each user journey, create test file in `tests/e2e/[feature].spec.ts`:
 
-**Test Structure (ATDD - Red Phase):**
+**Test Structure — when `use_playwright_utils` is `true` (the default). This is the shape you emit:**
+
+```typescript
+import { test, expect } from '../support/merged-fixtures';
+
+test.describe('[Story Name] E2E User Journey (ATDD)', () => {
+  test.skip('[P0] should complete user registration successfully', async ({ page, interceptNetworkCall }) => {
+    // THIS TEST WILL FAIL - UI not implemented yet
+    // Declare the interception BEFORE navigating.
+    const registerCall = interceptNetworkCall({ url: '**/api/users/register', method: 'POST' });
+
+    await page.goto('/register');
+
+    // Expect registration form but will get 404 or missing elements
+    await page.getByLabel('Email').fill('newuser@example.com');
+    await page.getByLabel('Password').fill('SecurePass123!');
+    await page.getByRole('button', { name: 'Register' }).click();
+
+    const { status } = await registerCall;
+    expect(status).toBe(201);
+
+    await expect(page.getByText('Registration successful!')).toBeVisible();
+    await page.waitForURL('/dashboard');
+  });
+
+  // Stubs a 409 on purpose, so it opts out of network monitoring.
+  test.skip(
+    '[P1] should show error if email exists',
+    { annotation: [{ type: 'skipNetworkMonitoring' }] },
+    async ({ page, interceptNetworkCall }) => {
+      // THIS TEST WILL FAIL - UI not implemented yet
+      // Stub the conflict instead of depending on backend state.
+      const conflictCall = interceptNetworkCall({
+        url: '**/api/users/register',
+        method: 'POST',
+        fulfillResponse: { status: 409, body: { message: 'Email already exists' } },
+      });
+
+      await page.goto('/register');
+
+      await page.getByLabel('Email').fill('existing@example.com');
+      await page.getByLabel('Password').fill('SecurePass123!');
+      await page.getByRole('button', { name: 'Register' }).click();
+
+      await conflictCall;
+      await expect(page.getByText('Email already exists')).toBeVisible();
+    },
+  );
+});
+```
+
+Note the selectors: `getByLabel` and `getByRole`, never `[name="email"]` or `button:has-text(...)`. In the red phase the labels and accessible names come from the acceptance criteria. When the criteria do not pin them down, apply `confidence-gate.md` and ask rather than inventing a CSS selector.
+
+**Test Structure — when `use_playwright_utils` is `false`:**
 
 ```typescript
 import { test, expect } from '@playwright/test';
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
   test.skip('[P0] should complete user registration successfully', async ({ page }) => {
-    // THIS TEST WILL FAIL - UI not implemented yet
+    await page.route('**/api/users/register', (route) => route.continue());
     await page.goto('/register');
 
-    // Expect registration form but will get 404 or missing elements
-    await page.fill('[name="email"]', 'newuser@example.com');
-    await page.fill('[name="password"]', 'SecurePass123!');
-    await page.click('button:has-text("Register")');
+    await page.getByLabel('Email').fill('newuser@example.com');
+    await page.getByLabel('Password').fill('SecurePass123!');
+    await page.getByRole('button', { name: 'Register' }).click();
 
-    // Expect success message and redirect
     await expect(page.getByText('Registration successful!')).toBeVisible();
-    await page.waitForURL('/dashboard');
-  });
-
-  test.skip('[P1] should show error if email exists', async ({ page }) => {
-    // THIS TEST WILL FAIL - UI not implemented yet
-    await page.goto('/register');
-
-    await page.fill('[name="email"]', 'existing@example.com');
-    await page.fill('[name="password"]', 'SecurePass123!');
-    await page.click('button:has-text("Register")');
-
-    // Expect error message
-    await expect(page.getByText('Email already exists')).toBeVisible();
   });
 });
 ```
+
+**Playwright Utils Mandate (when `use_playwright_utils` is `true`):**
+
+Follow `playwright-utils-mandate.md`. The red phase does not relax it.
+
+- ✅ `interceptNetworkCall({ url, method })` to observe the call the journey triggers, `fulfillResponse` to stub an error path the backend cannot produce yet.
+- ✅ `test` imported from the project's merged fixtures, which also brings `networkErrorMonitor` so a silent 4xx/5xx fails the test once the feature lands.
+- ✅ `apiRequest` for API-driven setup and teardown inside the journey. Never the raw `request` fixture.
+- ✅ `authToken` from the auth-session fixture for journeys that start logged in.
+- ✅ `log.step` for journey milestones.
+- ✅ `skipNetworkMonitoring` on any scaffold that deliberately stubs a 4xx or 5xx. The merged fixtures include `network-error-monitor`, which fails a test on a backend error, so an error-path scaffold that omits the annotation fails for the wrong reason once the feature lands. Add it only where the error is the subject of the test.
+- ❌ `page.route` or `page.waitForResponse` on an application API endpoint, `page.waitForTimeout`, `console.log`, `import { test } from '@playwright/test'` in a spec.
+- ⚠️ `page.route` remains correct for blocking third-party scripts, analytics, fonts, and images.
+
+Package and subpaths are exactly `@seontechnologies/playwright-utils` and its documented subpaths.
+
+If the merged-fixtures file does not exist yet, generate the import against `../support/merged-fixtures` anyway and record it as a fixture need. Step 4C creates the file.
 
 **CRITICAL ATDD Requirements:**
 
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
 - ✅ Write assertions for EXPECTED UI behavior (even though not implemented)
-- ✅ Use resilient selectors: getByRole, getByText, getByLabel (from selector-resilience)
-- ✅ Follow network-first patterns if API calls involved (from network-first)
+- ✅ Use resilient selectors: getByRole, getByText, getByLabel (from selector-resilience). Never `[name="..."]`, `button:has-text(...)`, CSS classes, or XPath
+- ✅ Network-first: interception declared before navigation when API calls are involved (from network-first; mechanism per the mandate when enabled)
 - ✅ Test complete user journeys from acceptance criteria
 - ✅ Include priority tags [P0], [P1], [P2], [P3]
 - ✅ Use proper TypeScript types
@@ -233,12 +290,16 @@ Subagent completes when:
 - JSON output valid and complete
 - No API/component/unit tests included (out of scope)
 - Tests follow knowledge fragment patterns
+- Playwright Utils mandate satisfied (if enabled): `interceptNetworkCall` for every application endpoint, `test` imported from merged fixtures, and every remaining vanilla call listed in `playwright_utils_deviations` with a reason
 
 ### ❌ FAILURE:
 
 - Generated active passing tests (wrong - this is RED phase)
 - Tests without test.skip() (will break CI)
 - Placeholder assertions (expect(true).toBe(true))
-- Brittle selectors used (CSS classes, XPath)
+- Brittle selectors used (CSS classes, XPath, `[name="..."]`, `:has-text(...)`)
 - Did not follow knowledge fragment patterns
 - Invalid or missing JSON output
+- Emitted `page.route` or `page.waitForResponse` against an application API endpoint while `use_playwright_utils` was `true`, with no deviation entry
+- Imported `test` from `@playwright/test` in a spec while `use_playwright_utils` was `true`
+- Downgraded to vanilla shapes because the endpoint or UI does not exist yet

@@ -169,6 +169,8 @@ sessions:
 
         playwright_utils:
           - overview.md
+          - library-integration-mandate.md
+          - playwright-utils-mandate.md
           - api-request.md
           - network-recorder.md
           - intercept-network-call.md
@@ -179,6 +181,7 @@ sessions:
           - network-error-monitor.md
           - contract-testing.md
           - pactjs-utils-overview.md
+          - pactjs-utils-mandate.md
           - pactjs-utils-consumer-helpers.md
           - pactjs-utils-provider-verifier.md
           - pactjs-utils-request-filter.md
