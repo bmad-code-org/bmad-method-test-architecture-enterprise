@@ -245,13 +245,18 @@ function runTests() {
     for (const name of agentFragments) {
       const content = fs.readFileSync(path.join(agentKnowledgeDir, name), 'utf8');
       for (const match of content.matchAll(/\]\(([^)]+)\)/g)) {
-        const href = match[1].trim();
+        const raw = match[1].trim();
+        // Strip an anchor before the .md test. Suite 4 filters on the raw href and so
+        // skips `](../foo.md#section)`; that boundary is pre-existing and shared, but
+        // an anchored link escapes the directory exactly like an unanchored one, and
+        // containment is what this assertion is about.
+        const href = raw.split('#')[0];
         if (!href.endsWith('.md') || isExternalLink(href)) continue;
         const resolved = resolveFragmentLink(kbRoot, href);
         if (resolved === null) continue;
         const relative = path.relative(agentKnowledgeDir, path.resolve(resolved));
         if (relative.startsWith('..') || path.isAbsolute(relative)) {
-          escapers.push(`${name} -> ${href}`);
+          escapers.push(`${name} -> ${raw}`);
         }
       }
     }
