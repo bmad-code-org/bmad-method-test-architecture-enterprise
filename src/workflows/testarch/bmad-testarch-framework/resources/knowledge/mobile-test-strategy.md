@@ -35,7 +35,7 @@ Promote to a Maestro flow when the risk is in the **integration**, not the logic
 
 - P0 revenue or access journeys end to end (sign in, purchase, submit claim)
 - OS permission grants and denials, including the denied path
-- Deep link and universal link entry into a specific screen
+- Deep link and universal link entry into a specific screen (the app's own parsing and routing is testable even in a development shell, through the shell's routed URL form; only the OS-level handoff from a real widget or notification tap needs the registered scheme)
 - Background, foreground, and process-death restoration
 - Offline and reconnect behavior
 - Push notification tap-through
@@ -90,16 +90,17 @@ Run the full matrix nightly and on release candidates. Run the primary target on
 
 ## Anti-Patterns
 
-| Anti-pattern                                           | Why it fails                                                                                                                   | Fix                                                                                      |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Every acceptance criterion becomes a device flow       | Suite runtime explodes; failures are slow to diagnose                                                                          | Apply the level framework and the duplicate-coverage guard                               |
-| Full device matrix on every PR                         | Gate becomes too slow to block on, so people bypass it                                                                         | Primary target on PRs, matrix nightly                                                    |
-| Performance asserted inside a Maestro flow             | Measures the harness, not the app                                                                                              | Platform instrumentation as NFR evidence                                                 |
-| Flows depend on a shared logged-in account             | Parallel runs collide; failures are not reproducible                                                                           | Per-run accounts/data or explicit backend reset when server state changes                |
-| No offline or permission-denied coverage               | The paths users actually hit in the wild are the untested ones                                                                 | Score them as risks; they are usually P0 or P1                                           |
-| Testing against a production backend                   | Non-deterministic data, and a test order can mutate real state                                                                 | Dedicated environment or a stubbed backend                                               |
-| Device flows run through a prebuilt development shell  | Native modules are absent, so deep links, notifications, and payments can only be asserted missing; the launch path is CI-only | Build a release-shaped artifact and install it (`mobile-ci-device-lab.md`)               |
-| Flow asserts behavior behind a remotely evaluated flag | A third-party service decides the outcome, for a user created seconds earlier                                                  | Unconfigure the remote provider so the seeded local value wins, and seed it as test data |
+| Anti-pattern                                           | Why it fails                                                                                                           | Fix                                                                                      |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Every acceptance criterion becomes a device flow       | Suite runtime explodes; failures are slow to diagnose                                                                  | Apply the level framework and the duplicate-coverage guard                               |
+| Full device matrix on every PR                         | Gate becomes too slow to block on, so people bypass it                                                                 | Primary target on PRs, matrix nightly                                                    |
+| Performance asserted inside a Maestro flow             | Measures the harness, not the app                                                                                      | Platform instrumentation as NFR evidence                                                 |
+| Flows depend on a shared logged-in account             | Parallel runs collide; failures are not reproducible                                                                   | Per-run accounts/data or explicit backend reset when server state changes                |
+| No offline or permission-denied coverage               | The paths users actually hit in the wild are the untested ones                                                         | Score them as risks; they are usually P0 or P1                                           |
+| Testing against a production backend                   | Non-deterministic data, and a test order can mutate real state                                                         | Dedicated environment or a stubbed backend                                               |
+| Device flows run through a prebuilt development shell  | Native modules are absent, so notifications and payments can only be asserted missing; the launch path is CI-only      | Build a release-shaped artifact and install it (`mobile-ci-device-lab.md`)               |
+| A surface written off as untestable without a check    | The coarse claim is often wrong: a shell routes its own deep-link URL form into the app, so link handling is reachable | Test the claim before dropping coverage; name the part that is genuinely out of reach    |
+| Flow asserts behavior behind a remotely evaluated flag | A third-party service decides the outcome, for a user created seconds earlier                                          | Unconfigure the remote provider so the seeded local value wins, and seed it as test data |
 
 ## Mobile Strategy Checklist
 

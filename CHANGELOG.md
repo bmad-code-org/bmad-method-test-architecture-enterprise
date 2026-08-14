@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `mobile-ci-device-lab.md` and `mobile-test-strategy.md`: corrected the claim, shipped in 1.22.4, that deep links cannot be exercised in a prebuilt development shell. A shell does not register the app's custom scheme, so a `myapp://` URL fails there, but it routes its own URL form (`exp://<host>/--/<path>?<query>`) into the app with path and query intact. Link parsing, routing, and the resulting state changes are therefore all testable in a shell; only the OS-level handoff needs the registered scheme, which means a cold start from a real widget or notification tap. The originating suite had recorded a deep-link flow as impossible for this reason, and it passed on the first attempt once the URL was built the shell's way. The related bullet no longer lists deep links among the surfaces a shell can only assert absent.
+
+### Added
+
+- `evidence-integrity.md`: a fifth shape of check that cannot fail, and the hardest of the five to catch in review: the assertion is already true before the action runs. A flow opened a deep link and asserted a container belonging to the screen it was already on, so it passed whether or not the link did anything, and the suite reported every flow green with it included. Carries two tells, both cheap: the test's name promises an effect no assertion mentions, and the result tracks an environment difference the assertions never mention (the identical vacuous flow was green in CI and red locally, because the unresolvable link errored on one API level and resolved on another).
+- `evidence-integrity.md` and `maestro-flows.md`: assert the transition rather than the state. Asserting that an action produced a state passes whenever that state is the application's default, which is the same hollow shape one level up. Where only a single state is available, choose an input whose expected value differs from the default. `maestro-flows.md` carries the worked example with state selectors, and the related preference for a deterministic input over stubbing a clock, since the deterministic input exercises the identical code path with no test-only seam.
+- `maestro-flows.md`: `selected`, `checked`, `enabled`, and `focused` are documented state selectors that compose with `id` and `text` on `tapOn`, `assertVisible`, and `assertNotVisible`, and `assertNotVisible` with a state selector is how "no longer selected" is expressed. Also adds `maestro check-syntax` as the device-free way to confirm a selector or field exists on the pinned version before a run.
+- `mobile-test-strategy.md` and `evidence-integrity.md`: a surface declared untestable is a claim needing evidence like any other. Dropping coverage on an unchecked assumption costs real coverage, and the fix is to test the claim and then name precisely which part is out of reach.
+
 ## [1.22.5] - 2026-08-14
 
 ### Added
