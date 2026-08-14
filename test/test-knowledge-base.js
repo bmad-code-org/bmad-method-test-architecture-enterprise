@@ -205,12 +205,23 @@ function runTests() {
 
   const sha1 = (filePath) => crypto.createHash('sha1').update(fs.readFileSync(filePath)).digest('hex');
 
+  // Suite 4's cross-fragment link check runs against the agent directory only. It
+  // does not need a per-workflow twin: set equality plus byte equality, asserted
+  // below, means a link that resolves at the agent level resolves in every copy.
+  // Break either assertion and the link guarantee goes with it, which is the other
+  // reason they are not optional.
+  // Known limit, shared with Suite 4: a fragment named inside backticks rather than
+  // as a markdown link is not resolved by either check.
+
   const agentKnowledgeDir = path.join(kbRoot, 'knowledge');
   const workflowsRoot = path.join(projectRoot, 'src', 'workflows', 'testarch');
 
-  // Present at the agent level only, by design: the agent reads them directly
-  // and no workflow step references them.
-  const AGENT_ONLY_FRAGMENTS = new Set(['confidence-gate.md']);
+  // No agent-only allowlist. There was one, and both entries were wrong: nine step
+  // files referenced `confidence-gate.md` and five referenced
+  // `pactjs-utils-zod-to-pact.md` while neither shipped to a workflow, and the
+  // exemption is what kept this suite green through it. An allowlist entry asserts
+  // intent instead of measuring anything, so a future agent-only fragment should
+  // have to argue for itself in a diff rather than inherit an empty slot here.
 
   if (!fs.existsSync(agentKnowledgeDir) || !fs.existsSync(workflowsRoot)) {
     warn('agent knowledge dir or workflows root missing - skipping parity checks');
@@ -230,8 +241,8 @@ function runTests() {
       const copies = fs.readdirSync(dir).filter((name) => name.endsWith('.md'));
       const copySet = new Set(copies);
 
-      const missing = agentFragments.filter((name) => !AGENT_ONLY_FRAGMENTS.has(name) && !copySet.has(name));
-      assert(missing.length === 0, `${workflowName} carries every shared agent fragment`, `missing: ${missing.join(', ')}`);
+      const missing = agentFragments.filter((name) => !copySet.has(name));
+      assert(missing.length === 0, `${workflowName} carries every agent fragment`, `missing: ${missing.join(', ')}`);
 
       const extra = copies.filter((name) => !agentShas.has(name));
       assert(extra.length === 0, `${workflowName} carries no fragment the agent does not have`, `extra: ${extra.join(', ')}`);

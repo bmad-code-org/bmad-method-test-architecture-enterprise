@@ -15,6 +15,7 @@ visual-debugging,Visual Debugging Toolkit,"Trace viewer usage, artifact expectat
 risk-governance,Risk Governance,"Scoring matrix, category ownership, gate decision rules","risk,governance,gates",core,knowledge/risk-governance.md
 probability-impact,Probability and Impact Scale,"Shared definitions for scoring matrix and gate thresholds","risk,scoring,scale",core,knowledge/probability-impact.md
 test-quality,Test Quality Definition of Done,"Execution limits, isolation rules, green criteria","quality,definition-of-done,tests",core,knowledge/test-quality.md
+confidence-gate,Confidence Gate,"1-10 confidence scoring with stop-and-ask rule below threshold for selectors, endpoints, risk classification, fixtures, schemas, and data factories — prevents agent fabrication","reliability,agent-safety,generation,quality,governance",core,knowledge/confidence-gate.md
 nfr-criteria,NFR Review Criteria,"Security, performance, reliability, maintainability status definitions","nfr,assessment,quality",extended,knowledge/nfr-criteria.md
 test-levels,Test Levels Framework,"Guidelines for choosing unit, integration, or end-to-end coverage","testing,levels,selection,api,backend,ui",core,knowledge/test-levels-framework.md
 test-priorities,Test Priorities Matrix,"P0–P3 criteria, coverage targets, execution ordering","testing,prioritization,risk",core,knowledge/test-priorities-matrix.md

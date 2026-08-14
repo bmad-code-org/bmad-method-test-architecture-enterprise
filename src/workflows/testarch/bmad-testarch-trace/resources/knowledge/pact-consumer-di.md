@@ -298,7 +298,7 @@ expect(result.transactions).toBeDefined();
 - `pactjs-utils-consumer-helpers.md` — `createProviderState()`, `setJsonContent()`, and `setJsonBody()` helpers used alongside this pattern
 - `pactjs-utils-provider-verifier.md` — Provider-side verification configuration
 - `fixture-architecture.md` — Composable fixture patterns (`createTestContext` follows pure-function-first)
-- `api-testing-foundations.md` — API testing best practices
+- `api-testing-patterns.md` — API testing best practices
 
 Used in workflows:
 
