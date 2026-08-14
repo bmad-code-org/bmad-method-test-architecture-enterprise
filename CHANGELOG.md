@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.22.4] - 2026-08-14
+
 ### Added
 
 - `mobile-ci-device-lab.md`: why a development build is frequently not the fix for a development shell. `developmentClient: true` sets the Gradle task to `:app:assembleDebug`, and a debug variant does not embed the JS bundle, so the app still needs a live packager and a manifest exchange at launch. Only a release variant embeds it, and SDK 54's `debugOptimized` is a debug variant that optimizes C++ only. Adds the release-APK path that composes with CI caching (`expo prebuild` plus `./gradlew :app:assembleRelease`, since `eas build --local` documents "Caching is not supported" and still needs an account), the note that a locally prebuilt release APK is debug-signed and therefore installs with no credentials, the `__DEV__`-is-false-in-release trap and the `EXPO_PUBLIC_` replacement, and that `scheme` has no effect in a shell so deep links cannot be tested there at all.
