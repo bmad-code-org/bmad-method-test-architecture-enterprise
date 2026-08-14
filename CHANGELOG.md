@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.22.3] - 2026-08-14
+
 ### Added
 
 - `playwright-utils-mandate.md` knowledge fragment (core tier). Makes `tea_use_playwright_utils: true` binding rather than advisory: when the flag is on, `@seontechnologies/playwright-utils` is the default implementation for every capability it covers. Carries the substitution table (`page.route`/`page.waitForResponse` to `interceptNetworkCall`, raw `request.<method>` to `apiRequest`, `page.waitForTimeout` and hand-written polls to `recurse`, `console.log` to `log`, per-spec `base.extend` to `mergeTests`), a REQUIRED versus RECOMMENDED split so utilities needing project wiring are proposed rather than silently skipped, the legitimate exceptions (`page.route` on analytics, fonts, and third-party scripts), a pre-emit self-check, and a deviation protocol that puts a stated reason on any surviving vanilla call. Scoped to JS/TS suites on the Playwright runner; Cypress, Maestro, Pact/Vitest, and non-Playwright backend suites are explicitly out of scope.
