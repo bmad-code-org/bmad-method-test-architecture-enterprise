@@ -134,7 +134,7 @@ Load fragments based on their `tier` classification in `tea-index.csv`:
   Load: all Playwright Utils core fragments (~4,500 lines)
 
 - **Mobile profile** (when `{detected_stack}` is `mobile`):
-  Load: `mobile-test-strategy`, `maestro-flows`, `test-levels-framework`, `test-priorities-matrix`, `test-quality`, plus `overview`, `api-request`, `auth-session`, `recurse` for the app's HTTP boundary.
+  Load: `mobile-test-strategy`, `maestro-flows`, `mobile-ci-device-lab`, `test-levels-framework`, `test-priorities-matrix`, `test-quality`, plus `overview`, `api-request`, `auth-session`, `recurse` for the app's HTTP boundary.
   Do NOT load the browser fragments (`network-first`, `playwright-config`, `intercept-network-call`, `selector-resilience`): a device flow has no DOM and no request interceptor, and loading them invites browser patterns into a Maestro flow.
 
 **Detection**: Scan `{test_dir}` for files containing `page.goto` or `page.locator`. If none found, use API-only profile. A `maestro/` or `.maestro/` directory selects the mobile profile regardless of what `{test_dir}` holds.

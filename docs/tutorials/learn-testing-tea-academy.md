@@ -60,8 +60,8 @@ Run the workflow again at any time. It detects the progress file, shows your das
 
 ## Next Steps
 
-You have completed one session of seven. The rest cover core concepts, architecture patterns, test design, ATDD and automate, quality and trace, and a menu-driven tour of the 54 knowledge fragments.
+You have completed one session of seven. The rest cover core concepts, architecture patterns, test design, ATDD and automate, quality and trace, and a menu-driven tour of the 56 knowledge fragments.
 
 - [How to Learn Testing with TEA Academy](/docs/how-to/workflows/teach-me-testing.md) for the full session list, learning paths by experience, role customization, and troubleshooting
 - [Getting Started with Test Architect](/docs/tutorials/tea-lite-quickstart.md) to generate and run real tests in 30 minutes
-- [Knowledge Base](/docs/reference/knowledge-base.md) for the 54 fragments
+- [Knowledge Base](/docs/reference/knowledge-base.md) for the 56 fragments

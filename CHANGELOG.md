@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `evidence-integrity.md` knowledge fragment (core tier). Covers the two ways a suite reports a result it did not earn: a check that cannot fail (soft assertions carrying an outcome, `continue-on-error` on the test step, a runner manifest naming a subset of the suite, an assertion whose meaning differs per platform) and a diagnostic with no could-not-measure state, where a missing tool is reported as a failed condition. Also covers verifying a framework property exists and behaves before relying on it, emitting cross-boundary verdicts from the side that can observe them, stating local-versus-CI environment asymmetry, and resolving environment-dependent values before anything derives from them.
+- `mobile-ci-device-lab.md` knowledge fragment (specialized tier). Leads with the build-artifact decision: device flows run against a release-shaped or development build, never a prebuilt development shell such as Expo Go, whose absent native modules make deep links, notifications, and payments unassertable and whose launch path exists only in CI. Also covers `reactivecircus/android-emulator-runner` behavior that breaks jobs silently (the `script:` input is split on newlines and each line runs as its own `sh -c`; hardware inputs are appended to `config.ini` on every invocation, outside the AVD-creation guard, which makes the emulator reject the cached snapshot at boot), AVD snapshot cache keying, runner version pinning with a resolved-version assertion, dev-server reachability over `adb reverse` with a manifest health check that sends the client's own headers, the run-directory artifact layout, and driver-port collisions under sharding.
+- Criteria registry row `C7` (CRITICAL, applicability-gated to Maestro flows): a flow whose only assertion about its destination state carries `optional: true`, or whose sole outcome assertion follows a command the target platform does not implement, so nothing in the flow could have changed the screen. The registry now carries 32 rows, 4 of them mobile-specific.
+
+### Changed
+
+- `maestro-flows.md` gains a section on commands whose behavior does not match their name: `back` is documented for Android and Web only and the iOS driver's implementation is empty, so it no-ops while reporting COMPLETED; `hideKeyboard` on Android is documented as identical to `back`, which dismisses an open React Native modal; `index:` counts currently-rendered matches rather than list items, so it drifts under virtualization; `point:` is a sanctioned escape hatch only for elements absent from the accessibility tree. Adds the waiting facts that decide flow design (default assertion timeout, no wait-for-app-ready command, `waitForAnimationToEnd` succeeding on timeout, `retry` around a journey being an anti-pattern), plus matching anti-pattern and checklist rows.
+- `mobile-test-strategy.md` now makes the build artifact the first CI decision, and corrects the failure-diagnosis order: read per-step statuses and the hierarchy dump captured at failure, and treat the failure screenshot with suspicion because it is taken after teardown.
+- `*ci` mobile pipeline guidance now specifies the build artifact, the one-line emulator `script:` form, split AVD cache restore/save, hardware inputs on the creation step only, an asserted runner version, and run-directory artifact resolution.
+- `*automate` mobile generation requires every outcome assertion to be able to fail and every cross-platform command to be documented for both platforms or split by `runFlow: when: platform:`.
+
 ## [1.22.1] - 2026-08-13
 
 ### Removed

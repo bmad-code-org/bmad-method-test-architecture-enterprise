@@ -1372,7 +1372,7 @@ async function runTests() {
     );
 
     // Maestro is a scorable format now that the criteria registry carries mobile
-    // rows (C4, H1, H3, H4, H9, M8, L8). The couture-cast case that used to be
+    // rows (C4, C7, H1, H3, H4, H9, M8, L8). The couture-cast case that used to be
     // disclosed-but-unscored, maestro/garment-capture-flow.yaml, is reviewed.
     assert(
       isNativeTestFile('maestro/garment-capture-flow.yaml') && isNativeTestFile('.maestro/login.yaml'),
@@ -4330,8 +4330,8 @@ async function runTests() {
     const registrySkillRoot = path.join(repoRoot, 'src', 'workflows', 'testarch', 'bmad-testarch-test-review');
     const registryRowSeverities = loadRegistryRowSeverities(registrySkillRoot);
     assert(
-      registryRowSeverities !== null && Object.keys(registryRowSeverities).length === 31,
-      'loadRegistryRowSeverities reads all 31 real rows (C1-C6, H1-H9, M1-M8, L1-L8) from criteria-registry.md',
+      registryRowSeverities !== null && Object.keys(registryRowSeverities).length === 32,
+      'loadRegistryRowSeverities reads all 32 real rows (C1-C7, H1-H9, M1-M8, L1-L8) from criteria-registry.md',
       JSON.stringify(registryRowSeverities ? Object.keys(registryRowSeverities).length : null),
     );
     assert(

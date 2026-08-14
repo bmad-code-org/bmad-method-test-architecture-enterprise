@@ -232,7 +232,8 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
 **If `{detected_stack}` is `mobile`:**
 
 - `mobile-test-strategy.md` (CRITICAL: load this first — it decides which behaviors become device flows at all, and most should not)
-- `maestro-flows.md` (flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition)
+- `maestro-flows.md` (flow structure, selector hierarchy, `clearState` isolation, synchronization without sleeps, subflow composition, commands whose behavior differs by platform)
+- `mobile-ci-device-lab.md` (which build artifact the flows run against, and the CI mechanics around it)
 - `test-levels-framework.md`, `test-priorities-matrix.md`, `test-quality.md`
 - Do NOT load browser fragments: `network-first.md`, `playwright-config.md`, and `intercept-network-call.md` describe a DOM and a request interceptor a device flow does not have
 

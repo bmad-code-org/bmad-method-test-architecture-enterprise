@@ -221,18 +221,110 @@ tags:
 - `runFlow: when:` is the supported way to express "only if present"
 - Do not wrap a genuinely required assertion in a `when:` guard; that converts a real failure into a silent skip
 
+### Example 6: Commands Whose Behavior Is Not What the Name Suggests
+
+**Context**: Four commands that read as cross-platform and are not, each of which has produced a flow that passed while proving nothing.
+
+**Implementation**:
+
+```yaml
+# ❌ `back` is documented for Android and Web only. The iOS driver's back
+# implementation is an empty method: it does nothing and still reports COMPLETED,
+# so a flow that pops a screen this way silently no-ops on one platform.
+- back
+- assertVisible:
+    id: 'previous_screen_root'
+
+# ✅ Split it. Android gets the system gesture; iOS gets the app's own control.
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - back
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: 'nav_back_button'
+- assertVisible:
+    id: 'previous_screen_root'
+```
+
+```yaml
+# ❌ On Android `hideKeyboard` is documented as identical to `back`, implemented
+# as the system back key event. In React Native that also fires a Modal's
+# onRequestClose, so this closes the dialog the flow is trying to fill in.
+- inputText: 'user@example.com'
+- hideKeyboard
+- tapOn:
+    id: 'dialog_submit_button' # gone; the modal was dismissed
+
+# ✅ The documented workaround, and it happens to be cross-platform: dismiss the
+# keyboard by tapping something that does not respond to taps.
+- inputText: 'user@example.com'
+- tapOn:
+    id: 'dialog_title' # non-interactive element
+- tapOn:
+    id: 'dialog_submit_button'
+```
+
+```yaml
+# ❌ `index` counts CURRENTLY-RENDERED matches, not items in the underlying list.
+# Under React Native list virtualization the mapping drifts with scroll position
+# and viewport, so this taps a different row on a different device.
+- tapOn:
+    text: 'Order .*'
+    index: 3
+
+# ✅ Address the item by what makes it that item
+- tapOn:
+    id: 'order_row_${ORDER_ID}'
+# or scope relationally when no id exists
+- tapOn:
+    text: 'View'
+    below:
+      text: 'Order #10432'
+```
+
+```yaml
+# `point` is a sanctioned escape hatch for an element that is genuinely not in the
+# accessibility tree (a canvas, a map overlay, a video surface). The docs warn it
+# is device-dependent, and percentage coordinates rot as soon as the device
+# profile changes. Use it only with the reason written down.
+- tapOn:
+    point: '50%,73%' # map canvas: no accessibility node exists for the pin
+```
+
+**Waiting, precisely**:
+
+- Assertions carry a **default timeout of about 7 seconds**. `extendedWaitUntil` is the sanctioned way to ask for longer, and it names the condition while doing so.
+- **There is no "wait until the app is ready" command.** The documented idiom is to wait on the first piece of the app's own chrome that paints. A flow that waits on a launch marker the app never renders will wait for the full timeout and then fail somewhere unrelated.
+- `waitForAnimationToEnd` defaults to a 15-second cap and **succeeds when that cap is reached**, so a bare use of it cannot fail the flow. That makes it safe as a settle step and useless as an assertion.
+- Wrapping a large part of a flow in `retry` is an anti-pattern in the documentation's own words, and the retry count is capped at a small number. Retry a genuinely nondeterministic step, never a journey.
+
+**Key points**:
+
+- Before relying on a command across platforms, check its documented platform support; "runs without error" is not the same claim as "did something"
+- A command that reports COMPLETED while doing nothing turns every assertion downstream of it into decoration
+- Prefer commands whose failure is observable over commands whose success is unconditional
+
 ## Anti-Patterns
 
-| Anti-pattern                              | Why it fails                                                           | Fix                                                            |
-| ----------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Flow with no `assertVisible`/`assertTrue` | Passes as long as taps land; proves nothing about behavior             | Assert the destination state of every flow                     |
-| `sleep` used as synchronization           | Flaky under load, slow when not                                        | `extendedWaitUntil` on the real condition                      |
-| `tapOn: index:` on a list                 | Breaks when the list reorders or the backend returns a different order | Scope by `text` with `below`/`containsChild`                   |
-| `tapOn: point:` coordinates               | Breaks on a different screen size or density                           | Address the element by `id`                                    |
-| No `clearState`                           | Flow depends on whatever ran before it; unreproducible in isolation    | `clearState` before `launchApp`                                |
-| Hardcoded credential or PII               | Leaks in the repo and in CI logs                                       | `${ENV_VAR}` sourced from the CI secret store                  |
-| One flow covering six user journeys       | A failure names the flow, not the behavior; slow to diagnose           | One journey per flow, composed from subflows                   |
-| Required assertion inside `when:`         | Turns a real failure into a silent pass                                | Guard only genuinely optional UI (permission dialogs, upsells) |
+| Anti-pattern                                               | Why it fails                                                                            | Fix                                                                     |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Flow with no `assertVisible`/`assertTrue`                  | Passes as long as taps land; proves nothing about behavior                              | Assert the destination state of every flow                              |
+| `sleep` used as synchronization                            | Flaky under load, slow when not                                                         | `extendedWaitUntil` on the real condition                               |
+| `tapOn: index:` on a list                                  | Breaks when the list reorders or the backend returns a different order                  | Scope by `text` with `below`/`containsChild`                            |
+| `tapOn: point:` coordinates                                | Breaks on a different screen size or density                                            | Address the element by `id`                                             |
+| No `clearState`                                            | Flow depends on whatever ran before it; unreproducible in isolation                     | `clearState` before `launchApp`                                         |
+| Hardcoded credential or PII                                | Leaks in the repo and in CI logs                                                        | `${ENV_VAR}` sourced from the CI secret store                           |
+| One flow covering six user journeys                        | A failure names the flow, not the behavior; slow to diagnose                            | One journey per flow, composed from subflows                            |
+| Required assertion inside `when:`                          | Turns a real failure into a silent pass                                                 | Guard only genuinely optional UI (permission dialogs, upsells)          |
+| `back` used as a cross-platform step                       | Documented for Android and Web only; on iOS it does nothing and reports COMPLETED       | Split with `runFlow: when: platform:`; tap the app's own control on iOS |
+| `hideKeyboard` with a modal open                           | The Android implementation is the system back key, which dismisses a React Native modal | Tap a non-interactive element to drop the keyboard                      |
+| `optional: true` on the assertion that carries the outcome | The step cannot fail, so the flow reports coverage it does not have                     | Assert hard; reserve `optional` for genuinely optional UI               |
+| `waitForAnimationToEnd` used as a wait-for-content         | It succeeds when its cap is reached, so it cannot fail                                  | `extendedWaitUntil` on the content that must appear                     |
 
 ## Maestro Flow Checklist
 
@@ -247,11 +339,13 @@ Before merging a flow:
 - [ ] **Single journey**: one user-visible outcome per flow, shared setup extracted to a subflow
 - [ ] **Tagged by priority**: `P0`-`P3` tag present so CI can run the risk-appropriate subset
 - [ ] **Runs on both target platforms**, or declares its platform branch explicitly
+- [ ] **Cross-platform commands verified**: every command used on both platforms is documented for both, or split by `runFlow: when: platform:`
+- [ ] **Every assertion can fail**: no `optional: true` on the assertion that carries the flow's outcome, and no assertion sitting downstream of a command that no-ops on that platform
 
 ## Integration Points
 
 - **Used in workflows**: `*framework` (scaffold a Maestro suite), `*automate` (generate flows), `*atdd` (red-phase mobile acceptance flows), `*test-review` (score flow quality), `*ci` (device pipeline)
-- **Related fragments**: `mobile-test-strategy.md` (what belongs in a flow at all), `test-priorities-matrix.md` (P0-P3 tagging), `test-quality.md` (determinism and isolation standards), `selector-resilience.md` (the browser analogue of the selector hierarchy)
+- **Related fragments**: `mobile-test-strategy.md` (what belongs in a flow at all), `mobile-ci-device-lab.md` (the build artifact the flows run against, and the CI mechanics around them), `evidence-integrity.md` (why a step that cannot fail is the most expensive defect in a suite), `test-priorities-matrix.md` (P0-P3 tagging), `test-quality.md` (determinism and isolation standards), `selector-resilience.md` (the browser analogue of the selector hierarchy)
 - **Tools**: `maestro test`, `maestro studio` (interactive flow authoring and element inspection), `maestro record`
 
 _Source: Maestro flow syntax and command reference, mobile test-isolation practice, TEA test-quality standards applied to declarative flows_

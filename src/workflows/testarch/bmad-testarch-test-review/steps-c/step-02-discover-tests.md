@@ -41,7 +41,7 @@ Collect test files in scope and parse structure/metadata.
 >
 > - `path does not exist` — a `review_files` entry that is not on disk.
 > - `file could not be parsed` — a discovered file the read or the parse failed on.
-> - `format not scorable by the ledger` — a changed test artifact the registry has no criteria for (a `.feature` file, a `.robot` suite, an `.http` collection). Maestro flows are **not** in this set: the registry carries mobile rows (C4, H1, H3, H4, H9, M8, L8), so a `.yaml` flow under a Maestro directory is discovered and scored like any other test file.
+> - `format not scorable by the ledger` — a changed test artifact the registry has no criteria for (a `.feature` file, a `.robot` suite, an `.http` collection). Maestro flows are **not** in this set: the registry carries mobile rows (C4, C7, H1, H3, H4, H9, M8, L8), so a `.yaml` flow under a Maestro directory is discovered and scored like any other test file.
 >
 > The third reason is the only one the runner can supply. When the run supplies an `---BEGIN UNSCORABLE---` block, reproduce every path in it verbatim with that exact reason, dropping none; the CLI rejects a report that dropped one. The first two you discover yourself, so add them to the same section with their own reason. No path may appear both here and in `## Reviewed Files`. A reviewed-files manifest that quietly omits a changed test artifact reads as "the diff held nothing else to review", which is a false statement the report makes on your behalf.
 

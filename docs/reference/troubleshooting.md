@@ -137,8 +137,8 @@ tea_capability_probe: true
 **Cause**: `tea-index.csv` is missing or truncated, or fragment files are missing.
 
 ```bash
-wc -l < _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 55 (header + 54 fragments)
-ls _bmad/tea/agents/bmad-tea/resources/knowledge/*.md | wc -l   # 54
+wc -l < _bmad/tea/agents/bmad-tea/resources/tea-index.csv   # 57 (header + 56 fragments)
+ls _bmad/tea/agents/bmad-tea/resources/knowledge/*.md | wc -l   # 56
 head -1 _bmad/tea/agents/bmad-tea/resources/tea-index.csv
 # id,name,description,tags,tier,fragment_file
 
