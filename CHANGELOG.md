@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.22.5] - 2026-08-14
+
 ### Added
 
 - `maestro-flows.md`: visible means inside the viewport, not present in the view hierarchy. `assertVisible` and `extendedWaitUntil: visible` fail on an element that is rendered, correct, and below the fold, and the failure reads as a broken feature rather than a flow that never scrolled. Carries the cheap diagnostic tell (find the id in the failing step's `screen-hierarchy`: present with out-of-bounds coordinates is a scroll problem, absent is a different bug) and the rule that any assertion inside a scrolling section is a latent screen-height dependency.
