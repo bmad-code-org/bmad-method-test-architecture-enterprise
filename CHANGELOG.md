@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `quality.yaml` did not run the full test suite. `test:knowledge`, `test:changelog`, and `test:tea-workflow-descriptions` ran only from `.husky/pre-commit`, which `git commit --no-verify` skips and which no GitHub web-UI edit ever reaches. `test:knowledge` is the suite carrying the nine-copy knowledge-base parity check, so until now nothing in CI stopped the workflow copies from silently diverging from the agent's. All three now run in the `validate` job, alongside the three new checks above. `test:cli` moved to its own job: it takes 12m21s measured, and leaving it in line made every fast check behind it report twelve minutes late. It stays out of `npm test` for the same reason, since `npm test` runs on every commit.
+- `quality.yaml` did not run the full test suite. `test:knowledge`, `test:changelog`, and `test:tea-workflow-descriptions` ran only from `.husky/pre-commit`, which `git commit --no-verify` skips and which no GitHub web-UI edit ever reaches. `test:knowledge` is the suite carrying the knowledge-base parity check across the eight workflow copies, so until now nothing in CI stopped the workflow copies from silently diverging from the agent's. All three now run in the `validate` job, alongside the three new checks above. `test:cli` moved to its own job: it takes 12m21s measured, and leaving it in line made every fast check behind it report twelve minutes late. It stays out of `npm test` for the same reason, since `npm test` runs on every commit.
 
 ## [1.22.6] - 2026-08-14
 

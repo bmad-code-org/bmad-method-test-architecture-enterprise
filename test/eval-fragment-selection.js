@@ -53,6 +53,7 @@ const { spawnSync } = require('node:child_process');
 const { parse } = require('csv-parse/sync');
 
 const { runAgent } = require('../cli/lib/run-agent');
+const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { missingCredential } = require('./eval-test-review');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -322,6 +323,13 @@ function scoreCase(item, selected) {
 function preflight(agents) {
   const problems = [];
   for (const agent of agents) {
+    // Check the name against the adapter registry BEFORE spawning it. runAgent
+    // would reject an unknown vendor too, but only after preflight had already
+    // handed the string to spawnSync as a command.
+    if (!Object.prototype.hasOwnProperty.call(AGENT_ADAPTERS, agent)) {
+      problems.push(`unknown agent "${agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
+      continue;
+    }
     const probe = spawnSync(agent, ['--version'], { encoding: 'utf8' });
     if (probe.error) problems.push(`vendor CLI "${agent}" is not on PATH (${probe.error.code})`);
     const credential = missingCredential(agent);
@@ -413,14 +421,18 @@ function main() {
         forbiddenHits += caseScores.reduce((sum, score) => sum + score.forbidden.length, 0);
         forbiddenOpportunities += caseScores.reduce((sum, score) => sum + score.forbiddenTotal, 0);
 
-        const stable = signatures.size === 1;
+        // Stability is a claim about repeated runs, so it needs every run to have
+        // been measured. With one of two runs failing, a single signature is one
+        // observation, not agreement, and reporting it as `stable` would launder a
+        // failed run into a pass.
+        const stable = signatures.size === 1 && caseScores.length === runs;
         const status =
           first.missing.length === 0 && first.forbidden.length === 0
             ? `${colors.green}✓${colors.reset}`
             : `${colors.yellow}•${colors.reset}`;
         console.log(
           `    ${status} ${item.id}: ${first.hits}/${first.required} required, ${first.forbidden.length} forbidden, ` +
-            `${stable ? 'stable' : `${colors.red}${signatures.size} different sets on identical input${colors.reset}`}`,
+            `${stable ? 'stable' : caseScores.length < runs ? `${colors.red}only ${caseScores.length}/${runs} runs measured${colors.reset}` : `${colors.red}${signatures.size} different sets on identical input${colors.reset}`}`,
         );
         if (first.missing.length > 0) console.log(`        ${colors.yellow}missed:${colors.reset} ${first.missing.join(', ')}`);
         if (first.forbidden.length > 0) console.log(`        ${colors.red}loaded anyway:${colors.reset} ${first.forbidden.join(', ')}`);

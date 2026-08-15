@@ -12,7 +12,7 @@ name: Quality & Validation
 # suites used to run ONLY from .husky/pre-commit — test:knowledge, test:changelog,
 # and test:tea-workflow-descriptions — and `git commit --no-verify` skips that
 # hook, as does every edit made through the GitHub web UI. test:knowledge is the
-# one carrying the nine-copy knowledge parity check, so for as long as it was
+# one carrying the knowledge-copy parity check across the eight bmad-testarch workflows, so for as long as it was
 # absent here nothing in CI stopped the workflow copies of the knowledge base from
 # silently diverging from the agent's.
 #
@@ -128,7 +128,7 @@ jobs:
       - name: Test agent compilation components
         run: npm run test:install
 
-      - name: Test knowledge base (index sync, link resolution, nine-copy parity)
+      - name: Test knowledge base (index sync, link resolution, workflow-copy parity)
         run: npm run test:knowledge
 
       - name: Validate criteria-registry to fragment traceability
@@ -153,6 +153,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # This job only reads. actions/checkout persists the job token in
+          # .git/config by default, where any step or test process could read it.
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@v6

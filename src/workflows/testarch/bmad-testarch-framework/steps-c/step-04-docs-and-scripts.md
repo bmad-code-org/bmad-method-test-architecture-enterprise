@@ -174,7 +174,7 @@ Add a short section to `{outputFile}` naming the installed rules, the fact that 
 
 ---
 
-### 4. Save Progress
+## 4. Save Progress
 
 **Save this step's accumulated work to `{progressFile}`.**
 

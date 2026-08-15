@@ -643,7 +643,7 @@ test('admin action', async ({ page }) => {
 
 **Context**: A suite reports green. Two of the ways it does that have nothing to do with the code being correct: a test that was turned off, and a test that turned every one of its siblings off.
 
-A skip is not automatically a defect. A skip whose reason nobody can read is. The reason belongs on the line or the line directly above it, it has to name the condition that will make the test runnable again, and it has to still be true — a `FIXME` pointing at a bug closed six months ago is a deleted test with extra steps. If you cannot write that reason, delete the test; a deleted test is honest about the coverage you no longer have, and a permanently skipped one is not.
+A skip is not automatically a defect. A skip whose reason nobody can read is. The reason belongs on the line or the line directly above it, it has to name the condition that will make the test runnable again, and it has to still be true. A `FIXME` pointing at a bug closed six months ago is a deleted test with extra steps. If you cannot write that reason, delete the test; a deleted test is honest about the coverage you no longer have, and a permanently skipped one is not.
 
 Focus is different, and worse. `.only` is a debugging tool that changes what the whole file runs. Committed, the file still passes, still reports as a passing file, and covers one test. Nothing in the output says the other nineteen did not run.
 
@@ -693,7 +693,7 @@ void settlementRetriesWithBackoff() { }
 
 - A skip with a documented, still-true reason is acceptable; a bare one is not
 - Prefer deleting over skipping indefinitely: coverage you admit losing beats coverage you pretend to have
-- `.only`, `fdescribe`, and `fit` must never be committed — they disable siblings silently
+- `.only`, `fdescribe`, and `fit` must never be committed: they disable siblings silently
 - Guard both in CI, not only in review: a grep in the pipeline costs nothing and a committed `.only` costs a release
 
 ### Example 7: Assertions That Cannot Fail
@@ -740,8 +740,10 @@ try {
   expect(error.code).toBe('EXPIRED');
 }
 
-// ✅ GOOD: assert on the rejection itself
-await expect(authorize(expiredToken)).rejects.toThrow('EXPIRED');
+// ✅ GOOD: assert on the rejection itself, against the same property the
+// catch block was checking. `rejects.toThrow('EXPIRED')` matches the error
+// MESSAGE, so swapping it in here would quietly assert something else.
+await expect(authorize(expiredToken)).rejects.toMatchObject({ code: 'EXPIRED' });
 ```
 
 ```python
@@ -763,7 +765,7 @@ assert total == Decimal("42.00")
 
 **Context**: These do not make a test wrong. They make a failure expensive to read, which is the same cost paid every time the suite goes red for the next several years.
 
-A test that asserts against three unrelated subjects does not localize: the failure says the test broke, not which behavior broke. Count subjects, not `expect` calls — three assertions about one response is one concern, and one assertion each about a response, a database row, and an email is three. An ungrouped file prints failures with no subject line. Nesting past three levels means the reader reconstructs the setup from four `beforeEach` blocks before they can read the test. A name that states the implementation goes stale the moment the implementation changes and tells the reader nothing when it fails. And a file that mixes assertion dialects makes every reader translate between two styles for no benefit.
+A test that asserts against three unrelated subjects does not localize: the failure says the test broke, not which behavior broke. Count subjects, not `expect` calls: three assertions about one response is one concern, and one assertion each about a response, a database row, and an email is three. An ungrouped file prints failures with no subject line. Nesting past three levels means the reader reconstructs the setup from four `beforeEach` blocks before they can read the test. A name that states the implementation goes stale the moment the implementation changes and tells the reader nothing when it fails. And a file that mixes assertion dialects makes every reader translate between two styles for no benefit.
 
 **Implementation**:
 

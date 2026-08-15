@@ -854,7 +854,9 @@ function targetsFromPayload(payload, config, projectRoot) {
     // A Bash write names its target somewhere in the command line far more often
     // than not: `cat > x.spec.ts`, `sed -i '' s/a/b/ x.spec.ts`, `tee x.spec.ts`,
     // `cp fixture.ts x.spec.ts`. Take every token that looks like a path into a
-    // gated file and exists on disk. A codegen script that writes files it never
+    // gated file. Existence is not checked here on purpose: `scanFile` stats the
+    // path and returns nothing for a path that is not a readable file, so a second
+    // check would only be a slower way to reach the same answer. A codegen script that writes files it never
     // names is NOT caught here; --stop is what covers that.
     for (const rawToken of input.command.split(/[\s;|&()<>"']+/)) {
       const token = rawToken.replaceAll(/^['"]|['"]$/g, '');
@@ -904,9 +906,14 @@ function scanRoots(globs) {
       roots.add(directory || '.');
     }
   }
-  // A root that contains another root makes the inner one redundant.
+  // A root that contains another root makes the inner one redundant. `.` contains
+  // everything, so when it is present it is the only root worth walking. Keeping
+  // the others alongside it would walk `.maestro` and `maestro` a second time and
+  // report every finding in them twice, since `'.maestro'.startsWith('./')` is
+  // false and a prefix test alone never catches this case.
   const list = [...roots];
-  return list.filter((root) => !list.some((other) => other !== root && (root === '.' ? other === '.' : root.startsWith(`${other}/`))));
+  if (list.includes('.')) return ['.'];
+  return list.filter((root) => !list.some((other) => other !== root && root.startsWith(`${other}/`)));
 }
 
 function walkRecentFiles(projectRoot, config) {

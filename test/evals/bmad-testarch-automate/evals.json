@@ -36,8 +36,8 @@
       },
       "assertions": [
         {
-          "id": "mandate-first",
-          "text": "playwright-utils-mandate.md is loaded, and named first, because it governs how every other playwright-utils fragment is applied."
+          "id": "mandate-loaded",
+          "text": "playwright-utils-mandate.md is among the loaded fragments. The step file also says to load it first, because it governs how every other playwright-utils fragment is applied, but the harness scores set membership rather than order, so only its presence is measured here."
         },
         {
           "id": "no-mobile-bleed",

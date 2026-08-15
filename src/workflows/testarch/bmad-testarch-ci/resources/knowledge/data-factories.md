@@ -448,25 +448,23 @@ The fix is a name, not a comment, and not a constant file. A named constant besi
 **Implementation**:
 
 ```typescript
-// ❌ BAD: three unexplained literals. Which are requirements, which are arbitrary?
+// ❌ BAD: two unexplained literals. Which is a requirement, which is arbitrary?
 test('applies the processing fee', async () => {
   const order = createOrder({ subtotal: 100 });
   expect(feeFor(order)).toBe(2.9);
-  expect(order.items.length).toBeLessThanOrEqual(50);
 });
 
 // ✅ GOOD: each number states what it is
 const STRIPE_PERCENT_FEE = 0.029; // per the payments contract, section 4
-const MAX_ITEMS_PER_ORDER = 50; // enforced by the order service
 
 test('applies the processing fee', async () => {
   const subtotal = 100;
   const order = createOrder({ subtotal });
   expect(feeFor(order)).toBe(subtotal * STRIPE_PERCENT_FEE);
-  expect(order.items.length).toBeLessThanOrEqual(MAX_ITEMS_PER_ORDER);
 });
 
-// ✅ ALSO GOOD: the factory carries the domain fact, so the test reads as behavior
+// ✅ ALSO GOOD: the factory carries the domain fact, so the test reads as
+// behavior and the limit needs no name at the call site at all
 const order = createOrderAtItemLimit();
 await expect(addItem(order)).rejects.toThrow('order is full');
 ```
@@ -476,7 +474,7 @@ await expect(addItem(order)).rejects.toThrow('order is full');
 - Generate data that only needs to be unique; name data that carries meaning
 - The test is where the requirement gets encoded, so the number needs to say which requirement
 - Name at the point of use; a shared constants file moves the meaning away from the reader again
-- A value used once, whose meaning the test name already states, does not need a second name — this is about unexplained literals, not about every number
+- A value used once, whose meaning the test name already states, does not need a second name; this is about unexplained literals, not about every number
 
 ## Integration Points
 

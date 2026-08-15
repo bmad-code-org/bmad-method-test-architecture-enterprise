@@ -457,9 +457,9 @@ export default defineConfig({
 
 ### Example 5: User-Level Interaction, Not Raw Event Dispatch
 
-**Context**: A component test exists to prove the component behaves the way a person driving it would experience. `fireEvent` dispatches one synthetic event straight at the node. A real interaction is a sequence: pointer down, focus, key events, input events, pointer up, blur. Dispatching only the middle one skips everything the component might legitimately depend on, so the test can pass against a component no user can operate — a button that never receives focus, a field whose `onKeyDown` handler is never exercised, an input that ignores paste.
+**Context**: A component test exists to prove the component behaves the way a person driving it would experience. `fireEvent` dispatches one synthetic event straight at the node. A real interaction is a sequence: pointer down, focus, key events, input events, pointer up, blur. Dispatching only the middle one skips everything the component might legitimately depend on, so the test can pass against a component no user can operate: a button that never receives focus, a field whose `onKeyDown` handler is never exercised, an input that ignores paste.
 
-This is gated on the project already depending on a user-level API. Where `userEvent` (or its equivalent) is a project dependency, it is the interaction API and `fireEvent` is the deviation. Where it is not installed, `fireEvent` is what the project has and this row does not fire — adding a dependency is a project decision, not a review finding.
+This is gated on the project already depending on a user-level API. Where `userEvent` (or its equivalent) is a project dependency, it is the interaction API and `fireEvent` is the deviation. Where it is not installed, `fireEvent` is what the project has and this row does not fire. Adding a dependency is a project decision, not a review finding.
 
 `fireEvent` remains the right tool for the events a user cannot produce directly: a synthetic `error` on an image, a `transitionend`, a scroll event from an observer.
 

@@ -53,37 +53,11 @@ function assert(condition, testName, errorMessage = '') {
   }
 }
 
-const REGISTRY = path.join(__dirname, '..', 'src', 'workflows', 'testarch', 'bmad-testarch-test-review', 'steps-c', 'criteria-registry.md');
-
-/**
- * Every criterion row in the registry, as `{ id, criterion, severity, gate }`.
- *
- * Rows are matched on the shape of the first cell rather than on which table they
- * sit in, so a new severity table is picked up without editing this parser. The
- * mapping table at the bottom is excluded by the same test: its first column is a
- * report criterion name, not a row id.
- */
-function parseRegistryRows() {
-  const rows = [];
-  for (const line of fs.readFileSync(REGISTRY, 'utf8').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('|')) continue;
-    const cells = trimmed
-      .replace(/^\|/, '')
-      .replace(/\|$/, '')
-      .split('|')
-      .map((cell) => cell.trim());
-    if (cells.length < 5) continue;
-    if (!/^[CHML]\d+$/.test(cells[0])) continue;
-    rows.push({
-      id: cells[0],
-      criterion: cells[1],
-      severity: cells.at(-2),
-      gate: cells.at(-1),
-    });
-  }
-  return rows;
-}
+// The registry table contract has one parser, in tools/validate-criteria-fragments.js.
+// It was duplicated here, and two copies of the cell-count and id-shape rules can
+// drift: a registry format change would then be caught by one tool and silently
+// mis-parsed by the other, which is the failure both tools exist to prevent.
+const { parseRegistryRows } = require('../tools/validate-criteria-fragments');
 
 function run() {
   console.log(`${colors.cyan}========================================`);

@@ -306,14 +306,22 @@ const token = issueToken({ expiresAt: Date.now() + 3600_000 });
 await sleep(1000);
 expect(isExpired(token)).toBe(false); // proves nothing about expiry
 
-// ✅ GOOD: freeze, then step across the boundary on purpose
-vi.useFakeTimers();
-vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
-const token = issueToken({ ttlSeconds: 3600 });
-expect(isExpired(token)).toBe(false);
-vi.advanceTimersByTime(3601_000);
-expect(isExpired(token)).toBe(true); // the boundary is what is under test
-vi.useRealTimers();
+// ✅ GOOD: freeze, then step across the boundary on purpose.
+// Restore in afterEach, never as the last line of the test: an assertion that
+// throws would skip that line and leave every later test on a fake clock, which
+// is the unreset-shared-state defect wearing a different hat.
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+test('the token expires at its TTL', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+  const token = issueToken({ ttlSeconds: 3600 });
+  expect(isExpired(token)).toBe(false);
+  vi.advanceTimersByTime(3601_000);
+  expect(isExpired(token)).toBe(true); // the boundary is what is under test
+});
 ```
 
 ```python
@@ -332,7 +340,8 @@ with freeze_time("2026-01-01T00:00:00Z") as frozen:
 
 - A time-bounded value built from the live clock is not a fixture, it is a variable
 - Freeze the clock and advance it deliberately; the boundary is the behavior under test
-- Where the production code takes an injectable clock, pass one — no test-only seam beats a test-only seam
+- Restore real timers in `afterEach`, so a failing assertion cannot leave a later test on a fake clock
+- Where the production code already takes an injectable clock, pass one. A production seam the application itself uses beats a test-only seam that only the suite knows about
 - A timestamp merely stamped into a record and never asserted against is not this defect; the row is about values that govern an expiry, a lifetime, a TTL, or a schedule
 
 ### Example 5: Promises Nobody Awaited

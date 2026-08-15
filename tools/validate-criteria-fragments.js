@@ -9,7 +9,7 @@
  * severity teaches one number while the gate acts on another.
  *
  * `test-knowledge-base.js` already covers a different axis: index-to-disk sync,
- * copy parity across the nine workflows, and link resolution. It has nothing to
+ * copy parity across the eight workflow copies, and link resolution. It has nothing to
  * say about whether a registry ROW is taught anywhere, which is this file's axis.
  *
  * WHAT IT FAILS ON
@@ -24,12 +24,13 @@
  *
  * WHAT IT REPORTS BUT DOES NOT FAIL ON
  *
- * GAPS. Fourteen registry rows currently have no fragment teaching them. Failing
- * the build on a known, itemized gap would only get the tool deleted. Failing on
- * an UNDECLARED one is the part that matters: a new registry row cannot land
- * without someone either pointing at the fragment that teaches it or writing down
- * that nothing does. The gap list is printed on every run so it stays visible
- * rather than becoming a silent allowlist.
+ * GAPS. A row can be declared as taught by nothing, with a stated reason, instead
+ * of failing the build: failing on a known, itemized gap would only get the tool
+ * deleted. Failing on an UNDECLARED one is the part that matters, and a new
+ * registry row cannot land until someone either points at the fragment that
+ * teaches it or writes down that nothing does. GAPS is empty today (coverage is
+ * 35/35), so `main` feeds the classifier a synthetic unmapped row on every run to
+ * prove that path is still live.
  *
  * Usage: node tools/validate-criteria-fragments.js
  */
@@ -192,7 +193,10 @@ const MANIFEST = {
   },
   H9: {
     severity: 'HIGH',
-    teaches: [{ fragment: 'maestro-flows.md', anchor: 'ENV_VAR' }],
+    teaches: [
+      { fragment: 'maestro-flows.md', anchor: '${ENV_VAR}` sourced from the CI secret store' },
+      { fragment: 'maestro-flows.md', anchor: 'Hardcoded credential or PII' },
+    ],
   },
   M1: {
     severity: 'MEDIUM',
@@ -200,7 +204,13 @@ const MANIFEST = {
   },
   M2: {
     severity: 'MEDIUM',
-    teaches: [{ fragment: 'data-factories.md', anchor: 'faker' }],
+    // Not `faker`: it appears twenty-one times in this fragment and would survive
+    // the repeated-payload teaching being deleted entirely, which is the one thing
+    // an anchor exists to prevent.
+    teaches: [
+      { fragment: 'data-factories.md', anchor: 'Factory Function with Overrides' },
+      { fragment: 'data-factories.md', anchor: 'Override shows test intent' },
+    ],
   },
   M8: {
     severity: 'MEDIUM',
@@ -425,4 +435,12 @@ function main() {
   process.exit(0);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+// The registry table contract lives here and is exported rather than reimplemented.
+// `test/test-enforce-hook.js` parses the same tables for a different purpose, and
+// two copies of the cell-count and id-shape rules would let a registry format
+// change be caught by one and silently mis-parsed by the other.
+module.exports = { parseRegistryRows, unclassifiedRows, MANIFEST, GAPS, REGISTRY_PATH };
