@@ -1,0 +1,78 @@
+{
+  "workflow": "bmad-testarch-nfr",
+  "about": "Fragment selection for the nfr workflow. Its required set in step-01 is unconditional, and one member of it (playwright-config.md) is named with no stack gate at all, so the backend case below asserts the step file as written rather than what the fragment name suggests.",
+  "contextFiles": ["steps-c/step-01-load-context.md"],
+  "cases": [
+    {
+      "id": "nfr-backend-junit-no-browser",
+      "name": "NFR assessment for a JVM service with no browser anywhere",
+      "stack": "junit",
+      "prompt": "Assess the settlement service against our reliability and performance NFRs and tell me what evidence is missing.",
+      "repoFacts": [
+        "Gradle project with JUnit 5 and Testcontainers; there is no package.json in the repo",
+        "no browser automation of any kind, no .maestro directory, no pact artifacts",
+        "docs/nfr.md states a 99.9% availability target and a p95 latency budget"
+      ],
+      "config": {
+        "test_stack_type": "backend",
+        "tea_browser_automation": "none",
+        "tea_use_playwright_utils": true,
+        "tea_use_pactjs_utils": true
+      },
+      "expect": {
+        "mustLoad": ["adr-quality-readiness-checklist.md", "ci-burn-in.md", "test-quality.md", "playwright-config.md", "error-handling.md"],
+        "mustNotLoad": [
+          "playwright-utils-mandate.md",
+          "pactjs-utils-mandate.md",
+          "maestro-flows.md",
+          "network-first.md",
+          "selector-resilience.md"
+        ]
+      },
+      "assertions": [
+        {
+          "id": "required-set-is-unconditional",
+          "text": "The step file names all five as required with no stack condition, including playwright-config.md. Ground truth here is the step file as written, not what the fragment name implies; if that unconditional include is wrong it is a bug in the workflow, and this case is what would make it visible rather than something the eval should quietly correct."
+        },
+        {
+          "id": "both-mandates-stay-closed",
+          "text": "Both library flags default true and neither package can be present in a Gradle repo with no JavaScript manifest, so both mandates stay closed. The flag alone is never sufficient."
+        }
+      ]
+    },
+    {
+      "id": "nfr-browser-automation-cli",
+      "name": "NFR assessment where browser automation is set to cli",
+      "stack": "playwright",
+      "prompt": "Assess the checkout experience against our performance and accessibility NFRs and list the evidence gaps.",
+      "repoFacts": [
+        "package.json depends on @playwright/test",
+        "tests/ contains browser specs",
+        "no pact artifacts, no .maestro directory"
+      ],
+      "config": {
+        "test_stack_type": "frontend",
+        "tea_browser_automation": "cli",
+        "tea_use_playwright_utils": false,
+        "tea_use_pactjs_utils": false
+      },
+      "expect": {
+        "mustLoad": [
+          "adr-quality-readiness-checklist.md",
+          "ci-burn-in.md",
+          "test-quality.md",
+          "playwright-config.md",
+          "error-handling.md",
+          "playwright-cli.md"
+        ],
+        "mustNotLoad": ["maestro-flows.md", "contract-testing.md"]
+      },
+      "assertions": [
+        {
+          "id": "cli-branch-fires-on-the-config-value",
+          "text": "playwright-cli.md is gated on tea_browser_automation being cli or auto, which is a config value rather than a property of the repository. This is the pair to the backend case, where the same key is none and the fragment must not load."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "workflow": "bmad-testarch-atdd",
+  "about": "Fragment selection for the atdd workflow. Ground truth is section 5 of step-01, whose branches are keyed on detected_stack rather than on framework, which is what makes the backend cases worth running.",
+  "contextFiles": ["steps-c/step-01-preflight-and-context.md"],
+  "cases": [
+    {
+      "id": "atdd-frontend-playwright",
+      "name": "Acceptance tests for a browser feature with playwright-utils",
+      "stack": "playwright",
+      "prompt": "Write the failing acceptance tests for the saved-search feature before we implement it: save a search, see it in the sidebar, rename it, delete it.",
+      "repoFacts": [
+        "package.json depends on @playwright/test and @seontechnologies/playwright-utils",
+        "tests/ contains browser specs using page.goto",
+        "no pact artifacts, no .maestro directory"
+      ],
+      "config": { "test_stack_type": "frontend", "tea_use_playwright_utils": true, "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": [
+          "data-factories.md",
+          "component-tdd.md",
+          "test-quality.md",
+          "test-healing-patterns.md",
+          "selector-resilience.md",
+          "timing-debugging.md",
+          "playwright-utils-mandate.md"
+        ],
+        "mustNotLoad": ["maestro-flows.md", "mobile-test-strategy.md", "contract-testing.md"]
+      },
+      "assertions": [
+        {
+          "id": "stack-branch-adds-not-replaces",
+          "text": "The four core fragments load regardless of stack, and the frontend branch adds selector-resilience and timing-debugging on top rather than replacing the core set."
+        }
+      ]
+    },
+    {
+      "id": "atdd-backend-pytest",
+      "name": "Acceptance tests for a Python service",
+      "stack": "pytest",
+      "prompt": "Write the failing acceptance tests for the refund endpoint before we build it: full refund, partial refund, and a refund larger than the original charge.",
+      "repoFacts": [
+        "pyproject.toml with pytest; there is no package.json in the repo",
+        "tests/ contains test_*.py",
+        "no browser automation, no pact artifacts"
+      ],
+      "config": { "test_stack_type": "backend", "tea_use_playwright_utils": true, "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": [
+          "data-factories.md",
+          "component-tdd.md",
+          "test-quality.md",
+          "test-healing-patterns.md",
+          "test-levels-framework.md",
+          "test-priorities-matrix.md",
+          "ci-burn-in.md"
+        ],
+        "mustNotLoad": ["selector-resilience.md", "playwright-utils-mandate.md", "network-first.md", "maestro-flows.md"]
+      },
+      "assertions": [
+        {
+          "id": "backend-branch-excludes-dom-fragments",
+          "text": "selector-resilience and timing-debugging are gated on frontend or fullstack. A backend run loads neither, and the playwright-utils mandate needs the package as well as the flag, which a repo with no package.json cannot have."
+        }
+      ]
+    },
+    {
+      "id": "atdd-fullstack-pact",
+      "name": "Acceptance tests spanning a consumer and its provider",
+      "stack": "pact",
+      "prompt": "Write failing acceptance tests for the notifications epic. The web app is the consumer of the notifications service and the contract does not exist yet.",
+      "repoFacts": [
+        "monorepo with a React app and a Node service in one package.json workspace",
+        "@seontechnologies/pactjs-utils and @pact-foundation/pact are dependencies",
+        "tests/contract/ exists but is empty"
+      ],
+      "config": { "test_stack_type": "fullstack", "tea_use_playwright_utils": false, "tea_use_pactjs_utils": true },
+      "expect": {
+        "mustLoad": [
+          "data-factories.md",
+          "component-tdd.md",
+          "test-quality.md",
+          "test-healing-patterns.md",
+          "test-levels-framework.md",
+          "test-priorities-matrix.md",
+          "ci-burn-in.md",
+          "pactjs-utils-mandate.md"
+        ],
+        "mustNotLoad": ["contract-testing.md", "maestro-flows.md"]
+      },
+      "assertions": [
+        {
+          "id": "fullstack-takes-both-branches",
+          "text": "fullstack satisfies both the frontend condition and the backend condition, so both branches fire. Treating them as mutually exclusive is the likely wrong reading and would drop the backend level fragments from a run that needs them."
+        }
+      ]
+    }
+  ]
+}

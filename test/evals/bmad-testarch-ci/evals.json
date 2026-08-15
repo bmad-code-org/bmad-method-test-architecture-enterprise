@@ -1,0 +1,78 @@
+{
+  "workflow": "bmad-testarch-ci",
+  "about": "Fragment selection for the ci workflow. Unlike the others it has no single loading section: step-02 loads the Pact set when contract testing is in play, step-03 loads the burn-in set and the Pact gate set. Both step files are supplied as ground truth. The ci_platform axis is deliberately exercised, because a pipeline generator is the workflow most likely to be written and tested against GitHub Actions alone.",
+  "contextFiles": ["steps-c/step-02-generate-pipeline.md", "steps-c/step-03-configure-quality-gates.md"],
+  "cases": [
+    {
+      "id": "ci-gitlab-python",
+      "name": "GitLab CI for a Python service",
+      "stack": "pytest",
+      "prompt": "Generate our GitLab CI pipeline for the invoices service, with quality gates on the test suite.",
+      "repoFacts": [
+        ".gitlab-ci.yml already exists and is the project's pipeline; there is no .github/ directory",
+        "pyproject.toml with pytest; there is no package.json in the repo",
+        "no pact artifacts, no browser automation, no .maestro directory"
+      ],
+      "config": { "ci_platform": "gitlab", "test_stack_type": "backend", "tea_use_playwright_utils": true, "tea_use_pactjs_utils": true },
+      "expect": {
+        "mustLoad": ["ci-burn-in.md"],
+        "mustNotLoad": [
+          "burn-in.md",
+          "playwright-utils-mandate.md",
+          "pactjs-utils-mandate.md",
+          "pact-consumer-framework-setup.md",
+          "pact-broker-webhooks.md",
+          "maestro-flows.md"
+        ]
+      },
+      "assertions": [
+        {
+          "id": "platform-does-not-change-the-fragments",
+          "text": "ci-burn-in.md is the burn-in guidance for every platform. GitLab rather than GitHub Actions changes the template that gets written, not which knowledge the run needs, and treating the two as linked is how a workflow ends up implicitly GitHub-only."
+        },
+        {
+          "id": "burn-in-utility-needs-the-package",
+          "text": "burn-in.md and playwright-utils-mandate.md load only when the flag is on AND the stack is Playwright. A Python repo with no package.json satisfies neither half, so the utility-driven selection path stays closed and ci-burn-in.md is the whole answer."
+        }
+      ]
+    },
+    {
+      "id": "ci-pact-consumer-pipeline",
+      "name": "Pipeline for a consumer with contract tests",
+      "stack": "pact",
+      "prompt": "Generate the CI pipeline and the quality gates for the billing web client, including publishing pacts and gating deploys on can-i-deploy.",
+      "repoFacts": [
+        "package.json depends on @pact-foundation/pact and @seontechnologies/pactjs-utils",
+        "tests/contract/ contains .pacttest.ts files and vitest.config.pact.ts exists",
+        "PACT_BROKER_BASE_URL is set in the environment",
+        "no .maestro directory"
+      ],
+      "config": {
+        "ci_platform": "github-actions",
+        "test_stack_type": "frontend",
+        "tea_use_playwright_utils": false,
+        "tea_use_pactjs_utils": true
+      },
+      "expect": {
+        "mustLoad": [
+          "ci-burn-in.md",
+          "pact-consumer-framework-setup.md",
+          "pactjs-utils-consumer-helpers.md",
+          "pactjs-utils-provider-verifier.md",
+          "pact-broker-webhooks.md"
+        ],
+        "mustNotLoad": ["contract-testing.md", "maestro-flows.md", "mobile-ci-device-lab.md"]
+      },
+      "assertions": [
+        {
+          "id": "provider-verifier-loads-for-a-consumer-pipeline",
+          "text": "pactjs-utils-provider-verifier.md is required even on a consumer-only pipeline, because the vitest pool and singleFork rule it carries applies to consumer and provider alike. Skipping it as provider-side reading is the plausible wrong call."
+        },
+        {
+          "id": "webhooks-are-part-of-the-gate",
+          "text": "pact-broker-webhooks.md is loaded because a webhook failure silently breaks can-i-deploy, which is the gate this pipeline is being asked to build."
+        }
+      ]
+    }
+  ]
+}
