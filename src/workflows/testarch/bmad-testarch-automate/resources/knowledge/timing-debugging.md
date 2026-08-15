@@ -290,6 +290,98 @@ test.describe('Timing Anti-Patterns to Avoid', () => {
 
 ---
 
+### Example 4: Fixtures Derived From the Live Clock
+
+**Context**: A hard wait makes a test slow and flaky. Reading the live clock makes it flaky on a schedule nobody can reproduce. The test that builds an expiry, a token lifetime, a TTL, or a scheduling boundary from `Date.now()` passes all day and fails at a month boundary, at midnight UTC, on the last day of February, or on the CI runner whose clock drifted four seconds.
+
+This is a HIGH rather than a MEDIUM because of what these values usually govern. A token lifetime computed from the wall clock is a security boundary tested against a moving target: the test cannot distinguish "the expiry logic is correct" from "the expiry has not happened yet."
+
+The fix is to control time rather than to read it. Freeze it, then move it deliberately to the boundary the behavior is about.
+
+**Implementation**:
+
+```typescript
+// ❌ BAD: the boundary moves with the clock, and the failure lands on a Tuesday
+const token = issueToken({ expiresAt: Date.now() + 3600_000 });
+await sleep(1000);
+expect(isExpired(token)).toBe(false); // proves nothing about expiry
+
+// ✅ GOOD: freeze, then step across the boundary on purpose.
+// Restore in afterEach, never as the last line of the test: an assertion that
+// throws would skip that line and leave every later test on a fake clock, which
+// is the unreset-shared-state defect wearing a different hat.
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+test('the token expires at its TTL', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-01-01T00:00:00Z'));
+  const token = issueToken({ ttlSeconds: 3600 });
+  expect(isExpired(token)).toBe(false);
+  vi.advanceTimersByTime(3601_000);
+  expect(isExpired(token)).toBe(true); // the boundary is what is under test
+});
+```
+
+```python
+# ❌ BAD: the fixture is different on every run
+expires_at = time.time() + 3600
+
+# ✅ GOOD: pin the clock, then move it
+with freeze_time("2026-01-01T00:00:00Z") as frozen:
+    token = issue_token(ttl_seconds=3600)
+    assert not is_expired(token)
+    frozen.tick(3601)
+    assert is_expired(token)
+```
+
+**Key Points**:
+
+- A time-bounded value built from the live clock is not a fixture, it is a variable
+- Freeze the clock and advance it deliberately; the boundary is the behavior under test
+- Restore real timers in `afterEach`, so a failing assertion cannot leave a later test on a fake clock
+- Where the production code already takes an injectable clock, pass one. A production seam the application itself uses beats a test-only seam that only the suite knows about
+- A timestamp merely stamped into a record and never asserted against is not this defect; the row is about values that govern an expiry, a lifetime, a TTL, or a schedule
+
+### Example 5: Promises Nobody Awaited
+
+**Context**: The most common way for a race condition to be in the test rather than in the application. A promise-returning call that is neither awaited nor returned starts its work and hands control straight to the next line, so the assertion runs against the state from before the effect. Usually it still passes, because the effect is fast. It fails on the loaded CI runner, which is the one machine where the failure is least reproducible.
+
+An unawaited rejection is the second half: it surfaces as an unhandled rejection attributed to whichever test happened to be running when it settled, so the reported test and the broken test are different tests.
+
+**Implementation**:
+
+```typescript
+// ❌ BAD: the click may not have landed when the assertion runs
+test('adds the item to the cart', async ({ page }) => {
+  page.getByRole('button', { name: 'Add to cart' }).click();
+  await expect(page.getByTestId('cart-count')).toHaveText('1');
+});
+
+// ❌ BAD: the setup promise is still in flight
+test('shows the seeded order', async ({ page, request }) => {
+  seedOrder(request, { id: 'ord-1' });
+  await page.goto('/orders/ord-1');
+  await expect(page.getByText('ord-1')).toBeVisible();
+});
+
+// ✅ GOOD: await the effect before asserting on it
+test('adds the item to the cart', async ({ page }) => {
+  await page.getByRole('button', { name: 'Add to cart' }).click();
+  await expect(page.getByTestId('cart-count')).toHaveText('1');
+});
+```
+
+**Key Points**:
+
+- Every promise-returning call in a test body is awaited or explicitly returned
+- The symptom is a test that passes locally and fails on a loaded runner, which reads as flake rather than as a missing `await`
+- An unhandled rejection is usually attributed to the wrong test, so treat one as a signal to audit `await` coverage across the file, not only in the named test
+- `no-floating-promises` in the linter catches this class before the suite ever runs; prefer that to catching it in review
+
+---
+
 ## Async Debugging Techniques
 
 ### Technique 1: Promise Chain Analysis

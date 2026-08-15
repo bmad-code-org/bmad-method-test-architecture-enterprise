@@ -1,0 +1,62 @@
+{
+  "workflow": "bmad-testarch-trace",
+  "about": "Fragment selection for the trace workflow. Its required set in step-01 is short and stack-neutral, which makes over-loading the interesting failure here rather than under-loading.",
+  "contextFiles": ["steps-c/step-01-load-context.md"],
+  "cases": [
+    {
+      "id": "trace-go-service-no-js",
+      "name": "Traceability for a Go service with no JavaScript anywhere",
+      "stack": "go",
+      "prompt": "Map the acceptance criteria for the settlement epic onto the existing tests and tell me which criteria have no coverage.",
+      "repoFacts": [
+        "Go module with *_test.go files; there is no package.json anywhere in the repo",
+        "docs/epics/settlement.md lists nine acceptance criteria",
+        "no browser automation, no pact artifacts, no .maestro directory"
+      ],
+      "config": { "test_stack_type": "backend", "tea_use_playwright_utils": true, "tea_use_pactjs_utils": true },
+      "expect": {
+        "mustLoad": ["test-priorities-matrix.md", "risk-governance.md", "probability-impact.md", "test-quality.md", "selective-testing.md"],
+        "mustNotLoad": [
+          "playwright-utils-mandate.md",
+          "pactjs-utils-mandate.md",
+          "selector-resilience.md",
+          "network-first.md",
+          "maestro-flows.md",
+          "intercept-network-call.md"
+        ]
+      },
+      "assertions": [
+        {
+          "id": "both-mandates-stay-closed",
+          "text": "Both library flags are true and neither package can be installed in a repo with no JavaScript manifest, so both mandates stay closed. A Go repo is where a flag-only reading of the run-level preconditions does the most damage, because there is no manifest the agent could even inspect."
+        },
+        {
+          "id": "trace-is-stack-neutral",
+          "text": "Traceability is a mapping problem, not a framework problem. The required set is the same five fragments whatever the stack, and pulling in browser or contract fragments because the epic mentions an API is over-loading."
+        }
+      ]
+    },
+    {
+      "id": "trace-mobile-epic",
+      "name": "Traceability for a mobile epic with Maestro flows present",
+      "stack": "maestro",
+      "prompt": "Map the onboarding epic's acceptance criteria onto our device flows and unit tests, and produce the gate decision.",
+      "repoFacts": [
+        "Expo app; .maestro/ contains eight flow files",
+        "jest unit tests alongside the app source",
+        "docs/epics/onboarding.md lists six acceptance criteria"
+      ],
+      "config": { "test_stack_type": "mobile", "tea_use_playwright_utils": false, "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": ["test-priorities-matrix.md", "risk-governance.md", "probability-impact.md", "test-quality.md", "selective-testing.md"],
+        "mustNotLoad": ["playwright-config.md", "intercept-network-call.md", "network-first.md"]
+      },
+      "assertions": [
+        {
+          "id": "presence-of-flows-does-not-change-the-set",
+          "text": "The presence of Maestro flows changes what is being traced, not which fragments the trace workflow needs. Its step file names no mobile branch, so adding maestro-flows here would be inventing a rule the workflow does not have."
+        }
+      ]
+    }
+  ]
+}

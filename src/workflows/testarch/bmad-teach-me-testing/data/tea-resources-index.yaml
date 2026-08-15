@@ -472,7 +472,7 @@ session_to_resources:
 
   session-07:
     primary_docs: []
-    fragments: [] # All 56 fragments available via menu-driven exploration
+    fragments: [] # All 59 fragments available via menu-driven exploration
 
 # Web-Browsing Fallback Strategy
 fallback_urls:

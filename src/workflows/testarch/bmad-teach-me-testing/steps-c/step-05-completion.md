@@ -206,7 +206,7 @@ All session notes and progress tracking available at:
 1. **Apply TEA to your project:** Start with Framework setup workflow
 2. **Run TEA workflows:** Test Design → ATDD/Automate → Test Review
 3. **Share knowledge:** Help team members through TEA Academy
-4. **Explore knowledge fragments:** 42 fragments for just-in-time learning
+4. **Explore knowledge fragments:** 59 fragments for just-in-time learning
 5. **Contribute improvements:** Share feedback on TEA methodology
 
 **TEA Resources:**
@@ -287,7 +287,7 @@ You've successfully completed the entire TEA Academy curriculum!
 - Apply risk-based testing (P0-P3 prioritization)
 - Implement architecture patterns (fixtures, network-first)
 - Maintain quality through Test Review and Trace
-- Explore 42 knowledge fragments as needed
+- Explore 59 knowledge fragments as needed
 
 **Next Steps:**
 

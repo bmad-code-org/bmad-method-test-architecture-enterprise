@@ -437,6 +437,45 @@ test('free accounts cannot access analytics', async ({ page, apiRequest }) => {
 - Still allow overrides: `createProAccount({ maxUsers: 50 })` works
 - Test intent clear: `createProAccount()` vs `createAccount({ plan: 'pro', features: [...] })`
 
+### Example 6: Naming the Literals You Do Hardcode
+
+**Context**: Everything above is about generating data so tests stay parallel-safe and unique. This is the other half, and the factories do not cover it: the literals a test writes on purpose because the assertion is about that exact value. A boundary, a rate, a limit, a status code, a currency scale.
+
+Those are correct to hardcode. Leaving them anonymous is what costs. `expect(fee).toBe(2.9)` tells the next reader that the fee is 2.9 and nothing about why, so when the number changes nobody can tell whether the test encodes a requirement or someone's old guess. The reader has to go find the pricing document, and usually does not.
+
+The fix is a name, not a comment, and not a constant file. A named constant beside the test, or a factory override that reads as the domain fact, puts the meaning at the point of use.
+
+**Implementation**:
+
+```typescript
+// ❌ BAD: two unexplained literals. Which is a requirement, which is arbitrary?
+test('applies the processing fee', async () => {
+  const order = createOrder({ subtotal: 100 });
+  expect(feeFor(order)).toBe(2.9);
+});
+
+// ✅ GOOD: each number states what it is
+const STRIPE_PERCENT_FEE = 0.029; // per the payments contract, section 4
+
+test('applies the processing fee', async () => {
+  const subtotal = 100;
+  const order = createOrder({ subtotal });
+  expect(feeFor(order)).toBe(subtotal * STRIPE_PERCENT_FEE);
+});
+
+// ✅ ALSO GOOD: the factory carries the domain fact, so the test reads as
+// behavior and the limit needs no name at the call site at all
+const order = createOrderAtItemLimit();
+await expect(addItem(order)).rejects.toThrow('order is full');
+```
+
+**Key Points**:
+
+- Generate data that only needs to be unique; name data that carries meaning
+- The test is where the requirement gets encoded, so the number needs to say which requirement
+- Name at the point of use; a shared constants file moves the meaning away from the reader again
+- A value used once, whose meaning the test name already states, does not need a second name; this is about unexplained literals, not about every number
+
 ## Integration Points
 
 - **Used in workflows**: `*atdd` (test generation), `*automate` (test expansion), `*framework` (factory setup)

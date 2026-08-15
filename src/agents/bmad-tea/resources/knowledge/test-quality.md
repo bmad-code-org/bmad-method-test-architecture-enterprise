@@ -639,6 +639,183 @@ test('admin action', async ({ page }) => {
 - Reuse auth sessions via `storageState` (Playwright) or `setCookie` (Cypress)
 - Skip unnecessary flows (email verification, multi-step signups)
 
+### Example 6: Committed Skips and Committed Focus
+
+**Context**: A suite reports green. Two of the ways it does that have nothing to do with the code being correct: a test that was turned off, and a test that turned every one of its siblings off.
+
+A skip is not automatically a defect. A skip whose reason nobody can read is. The reason belongs on the line or the line directly above it, it has to name the condition that will make the test runnable again, and it has to still be true. A `FIXME` pointing at a bug closed six months ago is a deleted test with extra steps. If you cannot write that reason, delete the test; a deleted test is honest about the coverage you no longer have, and a permanently skipped one is not.
+
+Focus is different, and worse. `.only` is a debugging tool that changes what the whole file runs. Committed, the file still passes, still reports as a passing file, and covers one test. Nothing in the output says the other nineteen did not run.
+
+**Implementation**:
+
+```typescript
+// ❌ BAD: the reason is gone, so nobody can tell whether this is still needed
+test.skip('checkout applies the promo code', async ({ page }) => {
+  /* ... */
+});
+
+// ✅ GOOD: the condition to remove the skip is on the line
+// FIXME(TEA-412): promo service returns 500 in staging; re-enable when TEA-412 lands
+test.skip('checkout applies the promo code', async ({ page }) => {
+  /* ... */
+});
+
+// ❌ BAD: the other tests in this file no longer run, and nothing says so
+test.only('checkout applies the promo code', async ({ page }) => {
+  /* ... */
+});
+```
+
+```python
+# ❌ BAD: skipped with no reason anyone can act on
+@pytest.mark.skip
+def test_invoice_voids_after_payment():
+    ...
+
+# ✅ GOOD: pytest carries the reason in the marker itself
+@pytest.mark.skip(reason="void endpoint returns 500 upstream, see TEA-412")
+def test_invoice_voids_after_payment():
+    ...
+```
+
+```java
+// ❌ BAD: JUnit's bare form records nothing
+@Disabled
+void settlementRetriesWithBackoff() { }
+
+// ✅ GOOD: the annotation takes the reason
+@Disabled("flaky against the shared broker; unblocked by TEA-412")
+void settlementRetriesWithBackoff() { }
+```
+
+**Key Points**:
+
+- A skip with a documented, still-true reason is acceptable; a bare one is not
+- Prefer deleting over skipping indefinitely: coverage you admit losing beats coverage you pretend to have
+- `.only`, `fdescribe`, and `fit` must never be committed: they disable siblings silently
+- Guard both in CI, not only in review: a grep in the pipeline costs nothing and a committed `.only` costs a release
+
+### Example 7: Assertions That Cannot Fail
+
+**Context**: Example 3 keeps assertions visible. Visible is not the same as meaningful. Three shapes execute, look like assertions in the diff, and prove nothing: one compares a value to itself, one checks the mock instead of the system, and one never runs at all. All three are worse than having no test, because the suite reports green and the coverage number goes up.
+
+**Implementation**:
+
+```typescript
+// ❌ BAD: compares a value to itself; passes no matter what the app does
+expect(true).toBe(true);
+expect(user.id).toBe(user.id);
+
+// ✅ GOOD: the expectation could differ from the actual
+expect(response.status()).toBe(201);
+expect(user.email).toBe(userData.email);
+
+// ❌ BAD: the only assertion is against the mock this test configured.
+// Nothing called into the system between setting it up and checking it,
+// so this proves the mocking library works.
+const repo = { save: vi.fn().mockResolvedValue({ id: 1 }) };
+repo.save({ name: 'Ada' });
+expect(repo.save).toHaveBeenCalledWith({ name: 'Ada' });
+
+// ✅ GOOD: the system under test is what calls the mock, and the assertion
+// is about what the system returned
+const repo = { save: vi.fn().mockResolvedValue({ id: 1 }) };
+const created = await createAccount(repo, { name: 'Ada' });
+expect(created.id).toBe(1);
+expect(repo.save).toHaveBeenCalledWith({ name: 'Ada' });
+
+// ❌ BAD: unreachable. The return happens first.
+test('rejects an expired token', async () => {
+  const result = await authorize(expiredToken);
+  return;
+  expect(result.ok).toBe(false);
+});
+
+// ❌ BAD: unreachable. The happy path never enters the catch, so a passing
+// run asserts nothing and a broken run is swallowed.
+try {
+  await authorize(expiredToken);
+} catch (error) {
+  expect(error.code).toBe('EXPIRED');
+}
+
+// ✅ GOOD: assert on the rejection itself, against the same property the
+// catch block was checking. `rejects.toThrow('EXPIRED')` matches the error
+// MESSAGE, so swapping it in here would quietly assert something else.
+await expect(authorize(expiredToken)).rejects.toMatchObject({ code: 'EXPIRED' });
+```
+
+```python
+# ❌ BAD: tautological; true for every possible value of total
+assert total == total
+
+# ✅ GOOD
+assert total == Decimal("42.00")
+```
+
+**Key Points**:
+
+- If the assertion would pass against a completely broken implementation, it is not an assertion
+- Configuring a mock and then asserting on that same mock, with no call into the system between, tests the mocking library
+- An assertion after an unconditional `return`, or inside a `catch` the happy path never enters, or inside a callback the test never awaits, does not run
+- Prefer `rejects`/`raises` forms over `try`/`catch` around the thing you expect to throw: they fail when nothing throws
+
+### Example 8: Suite Structure, Naming, and One Dialect
+
+**Context**: These do not make a test wrong. They make a failure expensive to read, which is the same cost paid every time the suite goes red for the next several years.
+
+A test that asserts against three unrelated subjects does not localize: the failure says the test broke, not which behavior broke. Count subjects, not `expect` calls: three assertions about one response is one concern, and one assertion each about a response, a database row, and an email is three. An ungrouped file prints failures with no subject line. Nesting past three levels means the reader reconstructs the setup from four `beforeEach` blocks before they can read the test. A name that states the implementation goes stale the moment the implementation changes and tells the reader nothing when it fails. And a file that mixes assertion dialects makes every reader translate between two styles for no benefit.
+
+**Implementation**:
+
+```typescript
+// ❌ BAD: three unrelated subjects; a failure does not say which one broke
+test('checkout works correctly', async ({ page, request }) => {
+  await checkout(page);
+  expect(await orderCount(request)).toBe(1); // subject: the order API
+  expect(await inventoryFor(request, 'sku-1')).toBe(9); // subject: inventory
+  expect(await lastEmail()).toContain('Order confirmed'); // subject: email
+});
+
+// ✅ GOOD: one subject per test, grouped, named for the behavior
+describe('checkout', () => {
+  test('records the order', async ({ request }) => {
+    /* one subject */
+  });
+  test('decrements inventory for the purchased sku', async ({ request }) => {
+    /* one subject */
+  });
+  test('sends the confirmation email', async () => {
+    /* one subject */
+  });
+});
+
+// ❌ BAD: names the implementation, or nothing at all
+test('calls handleSubmit()', ...);
+test('getUserById works correctly', ...);
+
+// ✅ GOOD: names the behavior, so the failure line is the bug report
+test('rejects a submission with no email', ...);
+test('returns 404 for an unknown user id', ...);
+
+// ❌ BAD: two dialects in one file
+expect(response.status()).toBe(200);
+assert.equal(body.role, 'admin');
+
+// ✅ GOOD: pick the house dialect and keep it
+expect(response.status()).toBe(200);
+expect(body.role).toBe('admin');
+```
+
+**Key Points**:
+
+- One concern per test, counted by subject rather than by `expect` call
+- Group with `describe`/`context` once a file has three or more tests, so failures print with a subject
+- Keep `describe` nesting and block nesting at three levels or fewer
+- Name the behavior, not the method, the selector, or "works correctly"
+- One assertion dialect per file, matching whatever the repo already uses
+
 ## Integration Points
 
 - **Used in workflows**: `*atdd` (test generation quality), `*automate` (test expansion quality), `*test-review` (quality validation)
@@ -661,5 +838,11 @@ Every test must pass these criteria:
 - [ ] **Explicit Assertions** - Keep `expect()` calls in test bodies, not hidden in helpers
 - [ ] **Unique Data** - Use `faker` for dynamic data; never hardcode IDs or emails
 - [ ] **Parallel-Safe** - Tests don't share state; run successfully with `--workers=4`
+- [ ] **No Committed Focus** - No `.only`, `fdescribe`, or `fit` reaches the branch
+- [ ] **Skips Documented** - Every skip carries a still-true reason naming what would re-enable it
+- [ ] **Assertions Can Fail** - No self-comparison, no assertion against only the mock the test configured, nothing after an unconditional `return`
+- [ ] **One Concern** - Counted by subject, not by `expect` call
+- [ ] **Grouped and Shallow** - `describe`/`context` once a file has three tests; nesting three levels or fewer
+- [ ] **Behavioral Names, One Dialect** - Names state the behavior; the file uses a single assertion style
 
 _Source: Murat quality checklist, Definition of Done requirements (lines 370-381, 406-422)._

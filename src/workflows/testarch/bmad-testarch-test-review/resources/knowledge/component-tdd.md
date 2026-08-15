@@ -455,6 +455,42 @@ export default defineConfig({
 - Update snapshots when visual changes are intentional
 - Visual tests catch unintended CSS/layout regressions
 
+### Example 5: User-Level Interaction, Not Raw Event Dispatch
+
+**Context**: A component test exists to prove the component behaves the way a person driving it would experience. `fireEvent` dispatches one synthetic event straight at the node. A real interaction is a sequence: pointer down, focus, key events, input events, pointer up, blur. Dispatching only the middle one skips everything the component might legitimately depend on, so the test can pass against a component no user can operate: a button that never receives focus, a field whose `onKeyDown` handler is never exercised, an input that ignores paste.
+
+This is gated on the project already depending on a user-level API. Where `userEvent` (or its equivalent) is a project dependency, it is the interaction API and `fireEvent` is the deviation. Where it is not installed, `fireEvent` is what the project has and this row does not fire. Adding a dependency is a project decision, not a review finding.
+
+`fireEvent` remains the right tool for the events a user cannot produce directly: a synthetic `error` on an image, a `transitionend`, a scroll event from an observer.
+
+**Implementation**:
+
+```typescript
+// ❌ BAD: dispatches change directly. Focus, key events, and input events never
+// happen, so a component that validates on keystroke is never exercised.
+fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'ada@example.com' } });
+fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+expect(onSubmit).toHaveBeenCalled();
+
+// ✅ GOOD: the full interaction sequence a person produces
+const user = userEvent.setup();
+await user.type(screen.getByLabelText('Email'), 'ada@example.com');
+await user.click(screen.getByRole('button', { name: 'Submit' }));
+expect(onSubmit).toHaveBeenCalledWith({ email: 'ada@example.com' });
+
+// ✅ ACCEPTABLE: an event no user can dispatch by hand
+fireEvent.error(screen.getByRole('img', { name: 'Avatar' }));
+expect(screen.getByTestId('avatar-fallback')).toBeVisible();
+```
+
+**Key Points**:
+
+- Where a user-level API is already a project dependency, it is the interaction API
+- The failure mode is a passing test for a component a real user cannot operate
+- `userEvent` is asynchronous: its calls are awaited, which also removes a class of unawaited-promise flake
+- `fireEvent` stays correct for events users cannot produce (`error`, `transitionend`, observer-driven scroll)
+- If the project has no user-level API installed, this is not a violation
+
 ## Integration Points
 
 - **Used in workflows**: `*atdd` (component test generation), `*automate` (component test expansion), `*framework` (component testing setup)

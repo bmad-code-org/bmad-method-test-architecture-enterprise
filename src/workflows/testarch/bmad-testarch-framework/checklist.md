@@ -123,6 +123,16 @@ Before starting the workflow:
 - [ ] Type definitions added (if TypeScript)
 - [ ] Users can extend with additional scripts as needed
 
+### Step 12: Write-Time Enforcement Hook
+
+- [ ] `.claude/hooks/tea-enforce.cjs` copied byte for byte from the workflow resource (or the section skipped, with the platform named, on an agent without tool hooks)
+- [ ] `.tea/enforce-config.json` written with globs for the **detected** stacks only, never a Playwright default
+- [ ] `pactConfigGlobs` populated only when a pact vitest config exists
+- [ ] `excludeGlobs` covers the k6 script paths when k6 is present
+- [ ] `hookSha256` set to the sha256 of the copied hook, so a locally edited copy announces itself
+- [ ] All three hooks registered in `.claude/settings.json` (`--pre`, `--post`, `--stop`), merged into any existing file rather than overwriting it
+- [ ] `tests/README.md` explains where the rules come from and how to disable one
+
 ---
 
 ## Output Validation

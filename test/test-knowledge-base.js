@@ -342,6 +342,88 @@ function runTests() {
   console.log('');
 
   // ============================================================
+  // Test 6: The teaching menu reaches every fragment
+  // ============================================================
+  // `teach-me-testing` session 7 is a hand-maintained menu of the knowledge base,
+  // grouped into categories. It is the only place a learner can browse fragments,
+  // and it drifted: 17 of 59 fragments were unreachable through it, including
+  // every mobile fragment and the entire webhook family, while the surrounding
+  // prose still advertised a number that matched the menu rather than the base.
+  // A fragment nobody can navigate to is shipped and invisible, which is the same
+  // failure as an unindexed one, so it is asserted the same way.
+  console.log(`${colors.yellow}Test Suite 6: Teaching Menu Coverage${colors.reset}\n`);
+
+  const menuPath = path.join(workflowsRoot, 'bmad-teach-me-testing', 'steps-c', 'step-04-session-07.md');
+  if (fs.existsSync(menuPath)) {
+    const menu = fs.readFileSync(menuPath, 'utf8');
+    const listed = [...menu.matchAll(/^- ([a-z0-9-]+\.md) -/gm)].map((match) => match[1]);
+    const listedSet = new Set(listed);
+    const allFragments = fs.readdirSync(path.join(kbRoot, 'knowledge')).filter((name) => name.endsWith('.md'));
+
+    const unreachable = allFragments.filter((name) => !listedSet.has(name));
+    assert(
+      unreachable.length === 0,
+      'the teaching menu lists every knowledge fragment',
+      `unreachable from session 7: ${unreachable.join(', ')} - add each to a category in step-04-session-07.md`,
+    );
+
+    const phantom = listed.filter((name) => !allFragments.includes(name));
+    assert(phantom.length === 0, 'the teaching menu lists no fragment that does not exist', phantom.join(', '));
+
+    const duplicates = listed.filter((name, index) => listed.indexOf(name) !== index);
+    assert(duplicates.length === 0, 'the teaching menu lists each fragment once', duplicates.join(', '));
+
+    // Two kinds of stated count, checked separately because a heuristic that tries
+    // to tell them apart by magnitude gets it wrong the moment a category grows.
+    //
+    // Category subtotals: `**2. Playwright & Pact Utils (23 fragments)**` must match
+    // the bullets that follow it.
+    const lines = menu.split('\n');
+    const subtotalErrors = [];
+    let subtotalSum = 0;
+    for (const [index, line] of lines.entries()) {
+      const heading = /^\*\*(\d+)\.\s+(.+?)\s+\((\d+)\s+fragments\)\*\*$/.exec(line.trim());
+      if (!heading) continue;
+      subtotalSum += Number(heading[3]);
+      let counted = 0;
+      for (let scan = index + 1; scan < lines.length; scan += 1) {
+        if (/^\*\*\d+\.\s/.test(lines[scan].trim())) break;
+        if (/^- [a-z0-9-]+\.md -/.test(lines[scan].trim())) counted += 1;
+      }
+      if (counted !== Number(heading[3])) {
+        subtotalErrors.push(`"${heading[2]}" says ${heading[3]}, lists ${counted}`);
+      }
+    }
+    assert(subtotalErrors.length === 0, 'every teaching-menu category subtotal matches its own list', subtotalErrors.join('; '));
+
+    // The arithmetic has to close as well. Each subtotal agreeing with its own
+    // bullets does not make the categories add up to the base: moving a fragment
+    // between two categories and correcting only one heading leaves every
+    // assertion above satisfied while the sum quietly stops matching.
+    assert(
+      subtotalSum === allFragments.length,
+      `teaching-menu category subtotals sum to the fragment count (${allFragments.length})`,
+      `they sum to ${subtotalSum}`,
+    );
+
+    // Prose totals: every other stated count refers to the whole base, and prose
+    // drifts silently. This is the drift that hid the 17 unreachable fragments:
+    // the number matched the menu, so nobody noticed the menu was short.
+    const withoutHeadings = lines.filter((line) => !/^\*\*\d+\.\s.*\(\d+\s+fragments\)\*\*$/.test(line.trim())).join('\n');
+    const advertised = [...withoutHeadings.matchAll(/(\d+)\s+(?:TEA\s+)?(?:knowledge\s+)?fragments/g)].map((match) => Number(match[1]));
+    const wrongTotals = [...new Set(advertised.filter((value) => value !== allFragments.length))];
+    assert(
+      wrongTotals.length === 0,
+      `the teaching menu advertises the real fragment count (${allFragments.length})`,
+      `states ${wrongTotals.join(', ')} instead`,
+    );
+  } else {
+    warn('teach-me-testing session 7 not found - skipping menu coverage check');
+  }
+
+  console.log('');
+
+  // ============================================================
   // Summary
   // ============================================================
   console.log(`${colors.cyan}========================================`);

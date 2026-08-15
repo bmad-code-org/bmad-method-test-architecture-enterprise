@@ -1,0 +1,111 @@
+{
+  "workflow": "bmad-testarch-framework",
+  "about": "Fragment selection for the framework workflow. Ground truth is the loading section of step-03, which is where every fragment this workflow reads is named. step-04 gained the write-time enforcement hook in this same change and loads no knowledge fragments, so it is not a context file here; its inputs are the criteria registry and the detected stack, neither of which is a fragment.",
+  "contextFiles": ["steps-c/step-03-scaffold-framework.md"],
+  "cases": [
+    {
+      "id": "framework-mobile-scaffold",
+      "name": "Scaffolding a mobile test framework",
+      "stack": "maestro",
+      "prompt": "Set up the test framework for this app. It is a React Native app and we have no tests at all yet.",
+      "repoFacts": [
+        "app.json declares expo; package.json depends on react-native",
+        "no tests directory, no .maestro directory yet",
+        "no pact artifacts, no @playwright/test"
+      ],
+      "config": { "test_stack_type": "mobile", "tea_use_playwright_utils": false, "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": [
+          "mobile-test-strategy.md",
+          "maestro-flows.md",
+          "mobile-ci-device-lab.md",
+          "test-levels-framework.md",
+          "test-priorities-matrix.md",
+          "test-quality.md"
+        ],
+        "mustNotLoad": ["network-first.md", "playwright-config.md", "intercept-network-call.md"]
+      },
+      "assertions": [
+        {
+          "id": "strategy-before-flows",
+          "text": "mobile-test-strategy.md is marked CRITICAL and load-first because it decides which behaviors become device flows at all, and the step file says most should not. Scaffolding flows without it produces a device suite for work that belonged below the device level."
+        },
+        {
+          "id": "browser-fragments-excluded-by-name",
+          "text": "The three browser fragments are excluded by name: a device flow has no DOM and no request interceptor. This is the same exclusion the automate workflow makes, and the two agreeing is what keeps a scaffolded mobile project from acquiring browser patterns at setup time."
+        }
+      ]
+    },
+    {
+      "id": "framework-greenfield-playwright-utils",
+      "name": "Scaffolding a browser framework with playwright-utils enabled",
+      "stack": "playwright",
+      "prompt": "Set up the test framework for this web app. Nothing exists yet.",
+      "repoFacts": [
+        "package.json depends on react and vite; @seontechnologies/playwright-utils is installed",
+        "no tests directory yet",
+        "no pact artifacts, no .maestro directory"
+      ],
+      "config": { "test_stack_type": "frontend", "tea_use_playwright_utils": true, "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": [
+          "playwright-utils-mandate.md",
+          "overview.md",
+          "fixtures-composition.md",
+          "auth-session.md",
+          "api-request.md",
+          "recurse.md",
+          "log.md",
+          "burn-in.md",
+          "network-error-monitor.md",
+          "data-factories.md",
+          "intercept-network-call.md"
+        ],
+        "mustNotLoad": ["maestro-flows.md", "mobile-test-strategy.md", "contract-testing.md", "pactjs-utils-mandate.md"]
+      },
+      "assertions": [
+        {
+          "id": "intercept-is-conditional-on-stack",
+          "text": "intercept-network-call.md is added only when the detected stack is frontend or fullstack, on top of the utils set that loads regardless. A backend run with the same flag gets the utils set without it."
+        },
+        {
+          "id": "scaffolded-samples-are-copied-forever",
+          "text": "The samples this workflow writes are the reference every later workflow copies, so a mandate fragment missing here does not just affect setup: it teaches the wrong pattern permanently."
+        }
+      ]
+    },
+    {
+      "id": "framework-python-backend",
+      "name": "Scaffolding for a Python service with no JavaScript",
+      "stack": "pytest",
+      "prompt": "Set up the test framework for this FastAPI service. There are no tests yet.",
+      "repoFacts": [
+        "pyproject.toml with FastAPI and httpx; there is no package.json in the repo",
+        "no tests directory yet",
+        "no pact artifacts, no browser automation, no .maestro directory"
+      ],
+      "config": { "test_stack_type": "backend", "tea_use_playwright_utils": true, "tea_use_pactjs_utils": true },
+      "expect": {
+        "mustLoad": ["test-quality.md", "data-factories.md"],
+        "mustNotLoad": [
+          "playwright-utils-mandate.md",
+          "pactjs-utils-mandate.md",
+          "pact-consumer-framework-setup.md",
+          "maestro-flows.md",
+          "intercept-network-call.md",
+          "playwright-config.md"
+        ]
+      },
+      "assertions": [
+        {
+          "id": "both-mandates-stay-closed",
+          "text": "Both library flags default true and a repo with no package.json can have neither package installed, so both mandates stay closed. Scaffolding is the worst place to get this wrong, because a mandate loaded here writes sample files a Python project cannot use."
+        },
+        {
+          "id": "pact-relevance-is-not-the-flag",
+          "text": "The Pact relevance gate is a property of the repository, not of tea_use_pactjs_utils. No Pact artifacts, no broker variables, and no separate provider mean nothing Pact-related loads and nothing Pact-related gets scaffolded."
+        }
+      ]
+    }
+  ]
+}

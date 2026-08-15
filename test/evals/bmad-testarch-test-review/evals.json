@@ -1,0 +1,76 @@
+{
+  "workflow": "bmad-testarch-test-review",
+  "about": "Fragment selection for the test-review workflow, which is a different question from the one eval-test-review.js answers. That harness measures review OUTPUT quality (recall, precision, score variance) against a seeded fixture corpus. This one measures only which fragments a run selects before any reviewing happens, and deliberately asserts nothing about findings or scores, so a regression in one cannot show up as a failure in the other.",
+  "contextFiles": ["steps-c/step-01-load-context.md"],
+  "cases": [
+    {
+      "id": "test-review-maestro-flow-set",
+      "name": "Reviewing a Maestro flow",
+      "stack": "maestro",
+      "prompt": "Review the four flows under .maestro/ and give me the quality score and the gate decision.",
+      "repoFacts": [
+        "Expo app; the review set is four .yaml flows under .maestro/",
+        "package.json depends on react-native; no @playwright/test",
+        "no pact artifacts"
+      ],
+      "config": { "test_stack_type": "mobile", "tea_use_playwright_utils": false, "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": [
+          "test-quality.md",
+          "data-factories.md",
+          "test-levels-framework.md",
+          "selective-testing.md",
+          "test-healing-patterns.md",
+          "timing-debugging.md",
+          "maestro-flows.md",
+          "mobile-test-strategy.md"
+        ],
+        "mustNotLoad": ["selector-resilience.md", "playwright-utils-mandate.md", "network-first.md", "intercept-network-call.md"]
+      },
+      "assertions": [
+        {
+          "id": "mobile-drops-selector-resilience",
+          "text": "selector-resilience.md is in the core set for every other review and is explicitly skipped for mobile, because Maestro addresses elements by native accessibility id rather than DOM selector. This is the only core fragment the step file removes rather than adds, and it is the one an agent following the core list mechanically would keep."
+        },
+        {
+          "id": "without-these-a-flow-scores-100-by-matching-nothing",
+          "text": "maestro-flows.md and mobile-test-strategy.md are required to score rows C7, M8, H9 and L8 at all. Without them a flow is reviewed against browser predicates that cannot match it, which is how a flow previously scored 100 by matching nothing."
+        }
+      ]
+    },
+    {
+      "id": "test-review-java-suite",
+      "name": "Reviewing a JUnit suite",
+      "stack": "junit",
+      "prompt": "Review the integration tests under src/test/java for the orders service and give me the score.",
+      "repoFacts": [
+        "Maven project with JUnit 5; there is no package.json in the repo",
+        "the review set is six *Test.java files",
+        "no browser automation, no pact artifacts, no .maestro directory"
+      ],
+      "config": { "test_stack_type": "backend", "tea_use_playwright_utils": true, "tea_use_pactjs_utils": true },
+      "expect": {
+        "mustLoad": [
+          "test-quality.md",
+          "data-factories.md",
+          "test-levels-framework.md",
+          "selective-testing.md",
+          "test-healing-patterns.md",
+          "selector-resilience.md",
+          "timing-debugging.md"
+        ],
+        "mustNotLoad": ["playwright-utils-mandate.md", "pactjs-utils-mandate.md", "maestro-flows.md", "mobile-test-strategy.md"]
+      },
+      "assertions": [
+        {
+          "id": "both-mandates-stay-closed",
+          "text": "Both library flags default true and a Maven repo has no JavaScript manifest, so neither package can be installed and neither mandate loads. This matters more here than anywhere else: those mandates supply the firing predicates for registry rows M9, L9 and M10, so loading them against a Java suite would arm rows that cannot apply to it."
+        },
+        {
+          "id": "core-is-not-mobile",
+          "text": "The mobile branch is gated on the detected stack or on a Maestro flow being in the review set. Neither holds, so selector-resilience stays in the core set rather than being skipped."
+        }
+      ]
+    }
+  ]
+}
