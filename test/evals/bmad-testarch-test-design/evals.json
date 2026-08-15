@@ -1,0 +1,136 @@
+{
+  "workflow": "bmad-testarch-test-design",
+  "about": "Fragment selection for the test-design workflow. Ground truth is section 4 of step-02 (System-Level and Epic-Level required lists, the NFR condition, and the Pact relevance rule) plus the stack detection in section 2.",
+  "contextFiles": ["steps-c/step-02-load-context.md"],
+  "cases": [
+    {
+      "id": "test-design-system-level",
+      "name": "System-level design for a new platform",
+      "stack": "system",
+      "prompt": "We are starting a new payments platform. Produce the system-level test design: architecture-level quality attributes, the test levels we should invest in, and the readiness criteria for the first release.",
+      "repoFacts": [
+        "docs/architecture.md exists and describes three services",
+        "no test directory yet",
+        "no pact artifacts, no .maestro directory"
+      ],
+      "config": { "mode": "system-level", "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": [
+          "adr-quality-readiness-checklist.md",
+          "nfr-criteria.md",
+          "test-levels-framework.md",
+          "risk-governance.md",
+          "test-quality.md"
+        ],
+        "mustNotLoad": ["maestro-flows.md", "contract-testing.md"]
+      },
+      "assertions": [
+        {
+          "id": "system-required-list-is-complete",
+          "text": "All five System-Level required fragments load. Dropping adr-quality-readiness-checklist.md is the common miss, because the other four read as the obvious ones."
+        }
+      ]
+    },
+    {
+      "id": "test-design-epic-level",
+      "name": "Epic-level design with no NFR content",
+      "stack": "epic",
+      "prompt": "Design the test coverage for the saved-payment-methods epic: add a card, set a default, delete a card, and show the default at checkout.",
+      "repoFacts": [
+        "docs/epics/saved-payment-methods.md describes four stories",
+        "the epic states no security, performance, reliability, scalability, compliance, maintainability, or operational requirement",
+        "an existing Playwright suite is in tests/"
+      ],
+      "config": { "mode": "epic-level", "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": ["risk-governance.md", "probability-impact.md", "test-levels-framework.md", "test-priorities-matrix.md"],
+        "mustNotLoad": ["adr-quality-readiness-checklist.md", "maestro-flows.md"]
+      },
+      "assertions": [
+        {
+          "id": "mode-narrows-the-set",
+          "text": "Epic-level and system-level have different required lists, and the epic list is the shorter one. Loading the system-level set for an epic is over-loading, not thoroughness: the step says to load only what is relevant."
+        },
+        {
+          "id": "nfr-is-conditional",
+          "text": "nfr-criteria.md is conditional on the epic actually carrying an NFR, and this epic carries none. It is not part of the epic-level required list."
+        }
+      ]
+    },
+    {
+      "id": "test-design-epic-with-nfrs",
+      "name": "Epic-level design that carries security and performance requirements",
+      "stack": "epic",
+      "prompt": "Design the test coverage for the bulk-export epic. Exports must be authorized per tenant, must not leak rows across tenants, and must complete within 30 seconds for a 500k-row account.",
+      "repoFacts": [
+        "docs/epics/bulk-export.md states a tenant isolation requirement and a 30s p95 latency budget",
+        "no pact artifacts, no .maestro directory"
+      ],
+      "config": { "mode": "epic-level", "tea_use_pactjs_utils": false },
+      "expect": {
+        "mustLoad": [
+          "risk-governance.md",
+          "probability-impact.md",
+          "test-levels-framework.md",
+          "test-priorities-matrix.md",
+          "nfr-criteria.md"
+        ],
+        "mustNotLoad": ["maestro-flows.md"]
+      },
+      "assertions": [
+        {
+          "id": "nfr-condition-fires",
+          "text": "Tenant isolation is a security requirement and the 30s budget is a performance requirement, so the conditional NFR load fires. This case and the previous one differ only in whether the epic carries an NFR, which is what makes the pair worth running."
+        }
+      ]
+    },
+    {
+      "id": "test-design-pact-consumer-is-a-frontend",
+      "name": "Pact relevance on a frontend repo",
+      "stack": "pact",
+      "prompt": "Design the test coverage for the accounts-dashboard epic. The dashboard is the consumer of the accounts service API.",
+      "repoFacts": [
+        "package.json depends on react, @playwright/test, and @seontechnologies/pactjs-utils",
+        "tests/contract/ contains two .pacttest.ts files",
+        "detected stack is frontend, not backend or fullstack"
+      ],
+      "config": { "mode": "epic-level", "tea_use_pactjs_utils": true },
+      "expect": {
+        "mustLoad": ["pactjs-utils-mandate.md", "risk-governance.md", "test-levels-framework.md", "test-priorities-matrix.md"],
+        "mustNotLoad": ["contract-testing.md", "maestro-flows.md"]
+      },
+      "assertions": [
+        {
+          "id": "relevance-is-not-a-stack-question",
+          "text": "The step says relevance is not a stack question: the consumer side of a contract is most often a frontend, and gating on backend/fullstack alone skips exactly the case Pact exists for. The .pacttest.ts files are the trigger, not the detected stack."
+        }
+      ]
+    },
+    {
+      "id": "test-design-backend-junit",
+      "name": "Epic-level design for a JVM service with no JS ecosystem",
+      "stack": "junit",
+      "prompt": "Design the test coverage for the settlement-retry epic on the payments service: retry with backoff, a poison-message path, and an idempotency guarantee on replay.",
+      "repoFacts": [
+        "Gradle project with JUnit 5 and Testcontainers; there is no package.json in the repo",
+        "no pact artifacts and no PACT_BROKER environment variables",
+        "no .maestro directory"
+      ],
+      "config": { "mode": "epic-level", "tea_use_pactjs_utils": true },
+      "expect": {
+        "mustLoad": ["risk-governance.md", "probability-impact.md", "test-levels-framework.md", "test-priorities-matrix.md"],
+        "mustNotLoad": ["pactjs-utils-mandate.md", "contract-testing.md", "maestro-flows.md", "playwright-utils-mandate.md"]
+      },
+      "assertions": [
+        {
+          "id": "default-true-flag-still-needs-relevance",
+          "text": "tea_use_pactjs_utils defaults to true and this repo has no Pact artifacts, no broker variables, and no microservice contract indicators the step names. The flag never means add contract tests to this project, so nothing Pact-related loads."
+        },
+        {
+          "id": "jvm-is-a-first-class-stack",
+          "text": "A Gradle repo with no package.json gets the same risk and level fragments as a JavaScript one. Fragment selection that degrades on a JVM repo is TEA failing at the stack-agnostic claim it makes."
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,198 @@
+{
+  "workflow": "bmad-testarch-automate",
+  "about": "Fragment selection for the automate workflow. Ground truth is section 4 of step-01 plus the loading profiles above it; every mustLoad and mustNotLoad below is quoted from a line in that step file rather than from an opinion about what a good agent would pick.",
+  "contextFiles": ["steps-c/step-01-preflight-and-context.md"],
+  "cases": [
+    {
+      "id": "automate-playwright-ui-utils-on",
+      "name": "Playwright browser suite with playwright-utils installed",
+      "stack": "playwright",
+      "prompt": "Generate end-to-end tests for the checkout flow: add to cart, apply a promo code, complete payment, and confirm the order appears in order history.",
+      "repoFacts": [
+        "package.json depends on @playwright/test and @seontechnologies/playwright-utils",
+        "tests/ contains specs using page.goto and page.getByRole",
+        "no .maestro or maestro directory",
+        "no pact directory and no @pact-foundation/pact dependency"
+      ],
+      "config": {
+        "test_stack_type": "frontend",
+        "tea_use_playwright_utils": true,
+        "tea_use_pactjs_utils": false
+      },
+      "expect": {
+        "mustLoad": [
+          "test-levels-framework.md",
+          "test-priorities-matrix.md",
+          "data-factories.md",
+          "selective-testing.md",
+          "ci-burn-in.md",
+          "test-quality.md",
+          "playwright-utils-mandate.md",
+          "intercept-network-call.md",
+          "fixtures-composition.md",
+          "network-first.md"
+        ],
+        "mustNotLoad": ["maestro-flows.md", "mobile-test-strategy.md", "mobile-ci-device-lab.md", "contract-testing.md"]
+      },
+      "assertions": [
+        {
+          "id": "mandate-first",
+          "text": "playwright-utils-mandate.md is loaded, and named first, because it governs how every other playwright-utils fragment is applied."
+        },
+        {
+          "id": "no-mobile-bleed",
+          "text": "No mobile fragment is loaded for a browser suite. Loading maestro-flows.md here is the failure where a device-flow pattern leaks into a Playwright spec."
+        }
+      ]
+    },
+    {
+      "id": "automate-backend-pytest",
+      "name": "Python service with pytest and no JavaScript manifest",
+      "stack": "pytest",
+      "prompt": "Write integration tests for the /v1/invoices API: create an invoice, fetch it, void it, and assert the void is rejected once the invoice is paid.",
+      "repoFacts": [
+        "pyproject.toml with pytest and httpx; there is no package.json anywhere in the repo",
+        "tests/ contains test_*.py files using the httpx test client",
+        "no browser automation of any kind",
+        "no .maestro directory"
+      ],
+      "config": {
+        "test_stack_type": "backend",
+        "tea_use_playwright_utils": true,
+        "tea_use_pactjs_utils": false
+      },
+      "expect": {
+        "mustLoad": [
+          "test-levels-framework.md",
+          "test-priorities-matrix.md",
+          "data-factories.md",
+          "selective-testing.md",
+          "ci-burn-in.md",
+          "test-quality.md"
+        ],
+        "mustNotLoad": [
+          "playwright-utils-mandate.md",
+          "intercept-network-call.md",
+          "network-first.md",
+          "maestro-flows.md",
+          "mobile-test-strategy.md"
+        ]
+      },
+      "assertions": [
+        {
+          "id": "flag-is-not-enough",
+          "text": "tea_use_playwright_utils is true and the package is still absent, because the repo has no JavaScript manifest at all. The precondition needs both halves, so the mandate must not load. Loading it on the flag alone is the exact failure the run-level preconditions section exists to prevent."
+        },
+        {
+          "id": "core-still-applies",
+          "text": "The six core fragments are stack-neutral and load for a pytest suite exactly as they do for Playwright."
+        }
+      ]
+    },
+    {
+      "id": "automate-mobile-maestro",
+      "name": "Expo app with Maestro flows",
+      "stack": "maestro",
+      "prompt": "Write device flows for onboarding: launch the app cold, sign in, skip the notifications prompt, and land on the home tab with the user's name visible.",
+      "repoFacts": [
+        "app.json declares expo; package.json depends on react-native",
+        ".maestro/ contains existing flow YAML files",
+        "no page.goto or page.locator anywhere in the repo",
+        "no pact artifacts"
+      ],
+      "config": {
+        "test_stack_type": "mobile",
+        "tea_use_playwright_utils": true,
+        "tea_use_pactjs_utils": false
+      },
+      "expect": {
+        "mustLoad": [
+          "mobile-test-strategy.md",
+          "maestro-flows.md",
+          "mobile-ci-device-lab.md",
+          "test-levels-framework.md",
+          "test-priorities-matrix.md",
+          "test-quality.md"
+        ],
+        "mustNotLoad": ["network-first.md", "playwright-config.md", "intercept-network-call.md", "selector-resilience.md"]
+      },
+      "assertions": [
+        {
+          "id": "browser-fragments-excluded",
+          "text": "The four browser fragments are excluded by name in the mobile profile: a device flow has no DOM and no request interceptor, and loading them invites browser patterns into a Maestro flow."
+        },
+        {
+          "id": "maestro-directory-decides",
+          "text": "A .maestro directory selects the mobile profile regardless of what test_dir holds, and regardless of react-native making package.json look like a frontend project."
+        }
+      ]
+    },
+    {
+      "id": "automate-pact-consumer",
+      "name": "Node consumer with pactjs-utils installed",
+      "stack": "pact",
+      "prompt": "Write consumer contract tests for the billing client: it calls GET /accounts/{id} and POST /accounts/{id}/charges against the accounts provider.",
+      "repoFacts": [
+        "package.json depends on @pact-foundation/pact and @seontechnologies/pactjs-utils",
+        "tests/contract/ contains one existing .pacttest.ts",
+        "vitest.config.pact.ts exists",
+        "no .maestro directory"
+      ],
+      "config": {
+        "test_stack_type": "backend",
+        "tea_use_playwright_utils": false,
+        "tea_use_pactjs_utils": true
+      },
+      "expect": {
+        "mustLoad": [
+          "pactjs-utils-mandate.md",
+          "pactjs-utils-overview.md",
+          "pactjs-utils-consumer-helpers.md",
+          "pactjs-utils-provider-verifier.md",
+          "pactjs-utils-request-filter.md",
+          "pactjs-utils-zod-to-pact.md"
+        ],
+        "mustNotLoad": ["contract-testing.md", "maestro-flows.md", "mobile-test-strategy.md"]
+      },
+      "assertions": [
+        {
+          "id": "utils-path-not-vanilla-path",
+          "text": "contract-testing.md is the flag-off path. With pactjs-utils enabled and installed, loading it alongside the mandate gives the generator two competing sources for the same code shape."
+        }
+      ]
+    },
+    {
+      "id": "automate-backend-junit",
+      "name": "Java service with JUnit 5",
+      "stack": "junit",
+      "prompt": "Write integration tests for the OrderService REST controller covering creation, a duplicate-order conflict, and cancellation after fulfilment.",
+      "repoFacts": [
+        "pom.xml with spring-boot-starter-test and JUnit 5; no package.json",
+        "src/test/java contains existing *Test.java files",
+        "no browser automation, no pact artifacts, no .maestro directory"
+      ],
+      "config": {
+        "test_stack_type": "backend",
+        "tea_use_playwright_utils": true,
+        "tea_use_pactjs_utils": true
+      },
+      "expect": {
+        "mustLoad": [
+          "test-levels-framework.md",
+          "test-priorities-matrix.md",
+          "data-factories.md",
+          "selective-testing.md",
+          "ci-burn-in.md",
+          "test-quality.md"
+        ],
+        "mustNotLoad": ["playwright-utils-mandate.md", "pactjs-utils-mandate.md", "intercept-network-call.md", "maestro-flows.md"]
+      },
+      "assertions": [
+        {
+          "id": "two-flags-two-closed-gates",
+          "text": "Both library flags are true and both packages are absent from a Maven project, so both mandates stay closed. A JVM repo is where a flag-only reading of the preconditions does the most damage, because there is no manifest the agent could even check for the package."
+        }
+      ]
+    }
+  ]
+}

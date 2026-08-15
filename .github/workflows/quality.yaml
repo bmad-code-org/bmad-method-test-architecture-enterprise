@@ -7,6 +7,18 @@ name: Quality & Validation
 # - Schema validation (YAML structure)
 # - Agent schema tests (fixture-based validation)
 # - Installation component tests (compilation)
+#
+# The `validate` job must stay a superset of `npm test`'s non-lint half. Three
+# suites used to run ONLY from .husky/pre-commit — test:knowledge, test:changelog,
+# and test:tea-workflow-descriptions — and `git commit --no-verify` skips that
+# hook, as does every edit made through the GitHub web UI. test:knowledge is the
+# one carrying the nine-copy knowledge parity check, so for as long as it was
+# absent here nothing in CI stopped the workflow copies of the knowledge base from
+# silently diverging from the agent's.
+#
+# test:cli is the deliberate exception in the other direction: it runs here and
+# NOT in `npm test`, because it takes ~12 minutes (measured: 12m21s) and `npm test`
+# runs on every commit through the pre-commit hook.
 
 "on":
   pull_request:
@@ -115,6 +127,41 @@ jobs:
 
       - name: Test agent compilation components
         run: npm run test:install
+
+      - name: Test knowledge base (index sync, link resolution, nine-copy parity)
+        run: npm run test:knowledge
+
+      - name: Validate criteria-registry to fragment traceability
+        run: npm run test:criteria-fragments
+
+      - name: Test write-time enforcement hook
+        run: npm run test:enforce-hook
+
+      - name: Validate fragment-selection eval data
+        run: npm run test:eval-data
+
+      - name: Test changelog stamping
+        run: npm run test:changelog
+
+      - name: Validate TEA workflow descriptions
+        run: npm run test:tea-workflow-descriptions
+
+  # Split out of `validate` on its own: it takes ~12 minutes, and leaving it in
+  # line meant every fast check behind it reported 12 minutes late.
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Test TEA test-review CLI
         run: npm run test:cli

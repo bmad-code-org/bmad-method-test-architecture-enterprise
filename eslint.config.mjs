@@ -81,9 +81,12 @@ export default [
     },
   },
 
-  // CLI scripts under cli/**, tools/** and test/**
+  // CLI scripts under cli/**, tools/** and test/**, plus the hook scripts the
+  // framework workflow copies verbatim into a user's project. Those must stay
+  // plain, dependency-free CommonJS that runs on whatever Node the project has,
+  // so the same relaxations apply.
   {
-    files: ['cli/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.js'],
+    files: ['cli/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.js', 'src/workflows/**/resources/hooks/*.cjs'],
     rules: {
       // Allow CommonJS patterns for Node CLI scripts
       'unicorn/prefer-module': 'off',
