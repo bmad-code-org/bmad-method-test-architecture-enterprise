@@ -14,7 +14,7 @@ partyModeWorkflow: '{project-root}/_bmad/core/workflows/party-mode/workflow.md'
 
 ## STEP GOAL:
 
-To provide menu-driven exploration of 42 TEA knowledge fragments organized by category, allowing deep-dive into specific advanced topics on-demand.
+To provide menu-driven exploration of 59 TEA knowledge fragments organized by category, allowing deep-dive into specific advanced topics on-demand.
 
 ## MANDATORY EXECUTION RULES (READ FIRST):
 
@@ -48,7 +48,7 @@ To provide menu-driven exploration of 42 TEA knowledge fragments organized by ca
 
 "🧪 **Session 7: Advanced Patterns** (Ongoing Exploration)
 
-**Objective:** Deep-dive into 42 TEA knowledge fragments
+**Objective:** Deep-dive into 59 TEA knowledge fragments
 
 **This session is different:**
 
@@ -81,8 +81,9 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - selector-resilience.md - Robust selectors
 - timing-debugging.md - Race condition fixes
 
-**2. Playwright Utils (19 fragments)**
+**2. Playwright & Pact Utils (23 fragments)**
 
+- playwright-utils-mandate.md - Binding rule: utils are the default implementation
 - overview.md - Playwright Utils overview
 - api-request.md - Typed HTTP client
 - network-recorder.md - HAR record/playback
@@ -93,17 +94,20 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - burn-in.md - Smart test selection
 - network-error-monitor.md - HTTP error detection
 - contract-testing.md - Pact integration
+- pactjs-utils-mandate.md - Binding rule for Pact suites
 - pactjs-utils-overview.md - Pact.js Utils overview
 - pactjs-utils-consumer-helpers.md - Consumer-side Pact helpers
 - pactjs-utils-provider-verifier.md - Provider verification
 - pactjs-utils-request-filter.md - Auth injection request filter
+- pactjs-utils-zod-to-pact.md - Zod schema to Pact matchers
 - pact-mcp.md - SmartBear MCP for PactFlow
 - pact-consumer-framework-setup.md - Consumer CDC framework setup
 - pact-consumer-di.md - DI pattern for Pact consumers
+- pact-broker-webhooks.md - Broker webhook wiring
 - playwright-cli.md - CLI for AI browser automation
 - visual-debugging.md - Trace viewer workflows
 
-**3. Configuration & Governance (6 fragments)**
+**3. Configuration & Governance (9 fragments)**
 
 - playwright-config.md - Environment & timeout guardrails
 - ci-burn-in.md - CI orchestration
@@ -111,6 +115,9 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - feature-flags.md - Governance & cleanup
 - risk-governance.md - Scoring matrix & gates
 - adr-quality-readiness-checklist.md - Quality readiness checklist
+- library-integration-mandate.md - General contract for every integration flag
+- confidence-gate.md - Ask rather than invent when confidence is low
+- evidence-integrity.md - Checks that cannot fail, and how to spot them
 
 **4. Quality Frameworks (5 fragments)**
 
@@ -126,9 +133,25 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - auth-session.md - Token persistence
 - error-handling.md - Exception handling
 
+**6. Mobile (3 fragments)**
+
+- mobile-test-strategy.md - Level framework for device suites
+- maestro-flows.md - Declarative flow authoring and selectors
+- mobile-ci-device-lab.md - Simulators, emulators, device profiles in CI
+
+**7. Webhooks (7 fragments)**
+
+- webhook-testing-fundamentals.md - What a webhook test proves
+- webhook-module-setup.md - Module wiring
+- webhook-providers.md - Provider-specific behaviour
+- webhook-waiting-querying.md - Waiting for and querying deliveries
+- webhook-template-matchers.md - Payload template matching
+- webhook-timeout-error.md - Timeout and error paths
+- webhook-risk-guidance.md - Risk scoring for webhook coverage
+
 **GitHub Repository:** <https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/tree/main/src/agents/bmad-tea/resources/knowledge>
 
-**Select a category (1-5) or specific fragment to explore, or [X] to finish:**"
+**Select a category (1-7) or specific fragment to explore, or [X] to finish:**"
 
 ### 4. Fragment Exploration Loop
 
@@ -136,7 +159,7 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 
 **Handle selection:**
 
-- **IF 1-5 (category):** Display all fragments in that category with descriptions, ask which fragment to explore
+- **IF 1-7 (category):** Display all fragments in that category with descriptions, ask which fragment to explore
 - **IF specific fragment name:** Load and present that fragment's content
 - **IF X:** Proceed to step 5 (complete session)
 - **IF Any other:** Help user, redisplay categories

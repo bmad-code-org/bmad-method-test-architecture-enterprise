@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `teach-me-testing` session 7 could reach only 42 of the 59 knowledge fragments. Every mobile fragment (`maestro-flows`, `mobile-test-strategy`, `mobile-ci-device-lab`), the entire seven-fragment webhook family, both integration mandates, `library-integration-mandate`, `confidence-gate`, and `evidence-integrity` had no category to appear under, so the only browsable view of the knowledge base silently hid a third of it. The menu gains a Mobile category and a Webhooks category, the existing categories absorb the rest, and the sixteen places that advertised "42 fragments" now state the real number. `test-knowledge-base.js` Test Suite 6 asserts all of it: every fragment appears exactly once, no phantom entries, each category subtotal matches its own list, and every stated total matches the base. The count matching the short menu is what kept the shortfall invisible.
+
 - `quality.yaml` did not run the full test suite. `test:knowledge`, `test:changelog`, and `test:tea-workflow-descriptions` ran only from `.husky/pre-commit`, which `git commit --no-verify` skips and which no GitHub web-UI edit ever reaches. `test:knowledge` is the suite carrying the knowledge-base parity check across the eight workflow copies, so until now nothing in CI stopped the workflow copies from silently diverging from the agent's. All three now run in the `validate` job, alongside the three new checks above. `test:cli` moved to its own job: it takes 12m21s measured, and leaving it in line made every fast check behind it report twelve minutes late. It stays out of `npm test` for the same reason, since `npm test` runs on every commit.
 
 ## [1.22.6] - 2026-08-14
