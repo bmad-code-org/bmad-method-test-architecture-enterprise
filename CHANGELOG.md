@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.0] - 2026-08-15
+
 ### Added
 
 - Write-time enforcement hook, scaffolded by the `framework` workflow. TEA was advisory (knowledge fragments) plus post-hoc (`test-review` scoring) with nothing at the write itself, so a `.only`, a `waitForTimeout`, or a `Thread.sleep` could land, be committed, and only surface at review. `src/workflows/testarch/bmad-testarch-framework/resources/hooks/tea-enforce.cjs` blocks the write instead, and `steps-c/step-04-docs-and-scripts.md` installs it plus its `.claude/settings.json` registration into the target project. Rules are the mechanically decidable `Absolute` rows of `criteria-registry.md` (C2, C3, C4 for Maestro flows, H1, H5, H6, H8 block; C1 warns, because its row is conditioned on a documented, still-true reason that no pattern can check). Multi-language by construction: Playwright, Cypress, Vitest/Jest, Pact, pytest, JUnit, Go test, and Maestro flows each get their own predicates and their own comment and string stripping, so a `waitForTimeout` inside a comment or a doc example is not a violation. Three passes rather than one: `--pre` blocks the fragment about to be written, `--post` re-reads the whole file from disk (which is what catches writes made through Bash, violations split across two edits, and whole-file rules), and `--stop` sweeps test files modified during the turn (which is what catches a codegen script that wrote files it never named). The hook fails open on any error of its own.
