@@ -380,9 +380,11 @@ function runTests() {
     // the bullets that follow it.
     const lines = menu.split('\n');
     const subtotalErrors = [];
+    let subtotalSum = 0;
     for (const [index, line] of lines.entries()) {
       const heading = /^\*\*(\d+)\.\s+(.+?)\s+\((\d+)\s+fragments\)\*\*$/.exec(line.trim());
       if (!heading) continue;
+      subtotalSum += Number(heading[3]);
       let counted = 0;
       for (let scan = index + 1; scan < lines.length; scan += 1) {
         if (/^\*\*\d+\.\s/.test(lines[scan].trim())) break;
@@ -393,6 +395,16 @@ function runTests() {
       }
     }
     assert(subtotalErrors.length === 0, 'every teaching-menu category subtotal matches its own list', subtotalErrors.join('; '));
+
+    // The arithmetic has to close as well. Each subtotal agreeing with its own
+    // bullets does not make the categories add up to the base: moving a fragment
+    // between two categories and correcting only one heading leaves every
+    // assertion above satisfied while the sum quietly stops matching.
+    assert(
+      subtotalSum === allFragments.length,
+      `teaching-menu category subtotals sum to the fragment count (${allFragments.length})`,
+      `they sum to ${subtotalSum}`,
+    );
 
     // Prose totals: every other stated count refers to the whole base, and prose
     // drifts silently. This is the drift that hid the 17 unreachable fragments:
