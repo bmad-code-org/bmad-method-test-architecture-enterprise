@@ -270,11 +270,11 @@ function kindForPath(relativePath, config) {
 // ---------------------------------------------------------------------------
 // Comment and string stripping
 //
-// Ivan Davidov's scaffold greps `waitForTimeout(` in any `.ts` while its own
-// docstring claims zero false-positive risk, which is how a documentation example
-// becomes a blocked write. Stripping first is what makes that claim true. The
-// output is the same length as the input, with stripped characters replaced by
-// spaces, so every reported line number is the real one.
+// A naive implementation greps `waitForTimeout(` in any `.ts` and then claims zero
+// false-positive risk, which is how a documentation example becomes a blocked
+// write. Stripping first is what makes that claim true. The output is the same
+// length as the input, with stripped characters replaced by spaces, so every
+// reported line number is the real one.
 // ---------------------------------------------------------------------------
 
 function blank(length) {
