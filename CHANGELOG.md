@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.1] - 2026-08-16
+
 ### Changed
 
 - `persistent_facts` ships empty. All ten `customize.toml` files — the TEA agent plus the nine `testarch` workflows — carried `persistent_facts = ["file:{project-root}/**/project-context.md"]` pre-seeded, which made loading that file an opt-out default baked into every skill rather than a customization you choose (#136).
