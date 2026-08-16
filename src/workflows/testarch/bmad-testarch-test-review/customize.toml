@@ -29,9 +29,7 @@ activation_steps_append = []
 #   - a file reference prefixed with `file:`, e.g. "file:{project-root}/docs/test-standards.md"
 #     (glob patterns are supported; matching files load in lexical path order as facts).
 
-persistent_facts = [
-  "file:{project-root}/**/project-context.md",
-]
+persistent_facts = []
 
 # Scalar: executed when the workflow reaches its terminal step in any
 # mode (create, validate, edit), after the final outputs are produced.
