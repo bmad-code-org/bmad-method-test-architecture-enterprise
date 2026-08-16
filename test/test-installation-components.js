@@ -149,8 +149,8 @@ async function runTests() {
       assert(/^\s*icon\s*=\s*"🧪"/m.test(customizeContent), 'customize.toml pins agent.icon');
       assert(customizeContent.includes('persistent_facts'), 'customize.toml defines persistent_facts');
       assert(
-        customizeContent.includes('file:{project-root}/**/project-context.md'),
-        'customize.toml loads project-context.md as a persistent fact',
+        /^\s*persistent_facts\s*=\s*\[\s*\]/m.test(customizeContent),
+        'customize.toml ships persistent_facts empty (opt-in, not a baked default)',
       );
       assert(customizeContent.includes('activation_steps_prepend'), 'customize.toml defines activation_steps_prepend');
       assert(customizeContent.includes('activation_steps_append'), 'customize.toml defines activation_steps_append');
@@ -302,8 +302,8 @@ async function runTests() {
         assert(customizeContent.includes('persistent_facts'), `${dirName}/customize.toml defines persistent_facts`);
         assert(customizeContent.includes('on_complete'), `${dirName}/customize.toml defines on_complete`);
         assert(
-          customizeContent.includes('file:{project-root}/**/project-context.md'),
-          `${dirName}/customize.toml loads project-context.md as a persistent fact`,
+          /^\s*persistent_facts\s*=\s*\[\s*\]/m.test(customizeContent),
+          `${dirName}/customize.toml ships persistent_facts empty (opt-in, not a baked default)`,
         );
       } catch (error) {
         assert(false, `${dirName}/customize.toml validates`, error.message);
