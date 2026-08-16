@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `persistent_facts` ships empty. All ten `customize.toml` files — the TEA agent plus the nine `testarch` workflows — carried `persistent_facts = ["file:{project-root}/**/project-context.md"]` pre-seeded, which made loading that file an opt-out default baked into every skill rather than a customization you choose (#136).
+
+  Repository-wide context belongs in `AGENTS.md`, which every skill already sees. `persistent_facts` is for context that only one workflow needs, loaded when it runs instead of carried as constant memory. To opt a skill back in, add the entry to your team or user override TOML:
+
+  ```toml
+  persistent_facts = ["file:{project-root}/**/project-context.md"]
+  ```
+
+### Fixed
+
+- Installation component tests assert the current contract (#137). `test/test-installation-components.js` asserted that every `customize.toml` _contained_ the project-context glob. Emptying those arrays inverted ten assertions, taking `main` red and failing the follow-on Publish run. They now assert that `persistent_facts` ships as an empty array; the neighbouring checks that the key is present are unchanged.
+
 ## [1.23.0] - 2026-08-15
 
 ### Added
