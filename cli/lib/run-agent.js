@@ -6,8 +6,10 @@
  * docs/reference/tea-test-review-cli.md for how each real vendor was verified.
  *
  * Hardening notes:
- * - The prompt is delivered on STDIN via spawnSync `input`, never on argv, so it
- *   cannot leak through process lists.
+ * - claude, codex, and custom receive the prompt on STDIN via spawnSync `input`.
+ *   Adapters with promptViaArgv, currently agy, place it in argv because their
+ *   CLI does not accept stdin. That transport can expose the prompt to local
+ *   process inspection and must be documented per adapter.
  * - The child receives a minimal environment (PATH, HOME, locale, proxy, and
  *   the selected adapter's vendor variables only) plus names explicitly
  *   allowed with --env-pass.

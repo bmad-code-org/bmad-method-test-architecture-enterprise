@@ -419,7 +419,7 @@ npx playwright test tests/e2e/guest-checkout.spec.ts --headed
 npx playwright test tests/e2e/guest-checkout.spec.ts --debug -g "should complete guest checkout"
 
 # Run tests with coverage
-c8 --reporter=text npx playwright test tests/api/guest-checkout.spec.ts
+npx c8 --reporter=text npx playwright test tests/api/guest-checkout.spec.ts
 ```
 
 ---

@@ -181,7 +181,7 @@ average_score: { average_score }
 
 ### Learning Artifacts
 
-All session notes and progress tracking available at:
+Session notes are available at:
 `{test_artifacts}/tea-academy/{user_name}/`
 
 **Session Notes:**

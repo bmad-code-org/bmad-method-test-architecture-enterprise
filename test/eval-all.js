@@ -19,7 +19,7 @@ const USAGE = `Usage: npm run eval:all -- --agent <agy|claude|codex|custom> [opt
 Runs fragment selection for every covered skill, then the test-review behavioral eval.
 
 Options:
-  --agent <name>         Runner to use. Repeat for both built-in runners.
+  --agent <name>         Runner to use. Repeat for multiple built-in runners.
   --workflow <name>      Limit fragment selection to one workflow. Repeatable.
   --fragment-runs <n>    Repetitions per fragment case. Default: 2.
   --review-runs <n>      Complete review repetitions. Default: 3.
@@ -121,6 +121,9 @@ function parseArgs(argv) {
   if (options.help) return options;
   if (options.agents.length === 0) throw usageError('--agent is required; choose agy, claude, codex, or custom');
   if (options.agents.includes('custom') && !options.agentCmd) throw usageError('--agent custom requires --agent-cmd');
+  if (options.agents.includes('custom') && options.model) {
+    throw usageError('--model is not supported by --agent custom; pass the runner model through --agent-arg');
+  }
   if (options.agents.length > 1 && (options.agentCmd || options.agentArgs.length > 0 || options.envPass.length > 0 || options.model)) {
     throw usageError('runner overrides require exactly one --agent; run separate commands for different runner configurations');
   }

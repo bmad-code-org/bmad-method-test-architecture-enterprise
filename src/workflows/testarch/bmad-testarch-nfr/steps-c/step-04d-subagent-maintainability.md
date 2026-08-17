@@ -39,7 +39,7 @@ This is an **isolated subagent** running in parallel with other NFR domain evide
 
 **D) Observability:**
 
-- Structured logging validated (telemetry headers present)
+- Structured logging validated from a structured log sample, documented schema, or automated format assertion
 - Error tracking configured (Sentry/monitoring integration)
 - Log levels and error context sufficient for debugging
 
@@ -73,15 +73,27 @@ and N/A mean and are shared across all four NFR domain workers.
       "description": "Duplication at 6%, above the 5% threshold",
       "evidence": ["jscpd report - reports/jscpd/jscpd-report.json"],
       "recommendations": ["Extract shared helper for the duplicated fixture setup", "Track duplication trend per PR"]
+    },
+    {
+      "category": "Observability",
+      "status": "CONCERNS",
+      "description": "Structured log format is documented but has no automated assertion",
+      "evidence": ["Structured logging schema - docs/observability/log-schema.json"],
+      "recommendations": ["Add an automated assertion for the structured log schema"]
     }
   ],
   "compliance": {
     "coverage_80pct": "PASS",
     "duplication_5pct": "CONCERNS",
-    "vulnerability_scan": "PASS"
+    "vulnerability_scan": "PASS",
+    "observability": "CONCERNS"
   },
-  "priority_actions": ["Reduce fixture-setup duplication below 5%", "Confirm error tracking captures unhandled promise rejections"],
-  "summary": "Coverage and vulnerability scan clean; duplication trending above threshold"
+  "priority_actions": [
+    "Reduce fixture-setup duplication below 5%",
+    "Add an automated structured-log format assertion",
+    "Confirm error tracking captures unhandled promise rejections"
+  ],
+  "summary": "Coverage and vulnerability scan clean; duplication and observability need follow-up"
 }
 ```
 

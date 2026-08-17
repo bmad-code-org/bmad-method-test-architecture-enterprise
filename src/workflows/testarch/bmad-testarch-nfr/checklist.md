@@ -104,7 +104,7 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] CI coverage report collected
 - [ ] Code duplication report collected (jscpd)
 - [ ] Dependency vulnerability scan collected (npm audit)
-- [ ] Structured logging validated (telemetry headers present)
+- [ ] Structured logging validated from a structured log sample, documented schema, or automated format assertion
 - [ ] Error tracking configuration validated (Sentry/monitoring integration)
 
 ---

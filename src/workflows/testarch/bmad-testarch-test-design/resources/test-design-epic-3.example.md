@@ -22,7 +22,7 @@ lastSaved: '2026-08-17'
 
 **Risk Summary:**
 
-- Total risks identified: 6
+- Total risks identified: 7
 - High risks with score 6 or greater: 3
 - Critical categories: Security, Data Integrity, Business Impact
 
@@ -56,10 +56,11 @@ Risk score determines the required governance action. Test priority is assigned 
 
 ### Medium Risks: Score 3 to 4
 
-| Risk ID | Category | Description                                               | Probability | Impact | Score | Mitigation                                                      | Owner           |
-| ------- | -------- | --------------------------------------------------------- | ----------: | -----: | ----: | --------------------------------------------------------------- | --------------- |
-| R-004   | OPS      | Email-provider retries send duplicate invitation messages |           2 |      2 |     4 | Persist the provider receipt and deduplicate by invitation ID   | Platform team   |
-| R-005   | DATA     | Audit records omit the actor, old role, or new role       |           1 |      3 |     3 | Emit the audit event in the same transaction as the role update | Membership team |
+| Risk ID | Category | Description                                                             | Probability | Impact | Score | Mitigation                                                      | Owner           |
+| ------- | -------- | ----------------------------------------------------------------------- | ----------: | -----: | ----: | --------------------------------------------------------------- | --------------- |
+| R-004   | OPS      | Email-provider retries send duplicate invitation messages               |           2 |      2 |     4 | Persist the provider receipt and deduplicate by invitation ID   | Platform team   |
+| R-005   | DATA     | Audit records omit the actor, old role, or new role                     |           1 |      3 |     3 | Emit the audit event in the same transaction as the role update | Membership team |
+| R-007   | PERF     | Bulk invitation creation exceeds the accepted latency or throughput SLO |           2 |      2 |     4 | Define the SLO, then validate it at the approved concurrency    | Platform team   |
 
 ### Low Risks: Score 1 to 2
 
@@ -83,7 +84,7 @@ This plan names future evidence. Final PASS, CONCERNS, and FAIL decisions belong
 | NFR Domain      | Requirement or Threshold                                                                                    | Risk Link    | Planned Validation                                         | Evidence Needed                    |
 | --------------- | ----------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------- | ---------------------------------- |
 | Security        | Tenant isolation on every invitation and role endpoint; Owner privilege cannot be granted through this epic | R-001        | API authorization matrix plus denied cross-tenant E2E path | API report, E2E trace, SAST report |
-| Performance     | UNKNOWN: no accepted latency or throughput threshold exists for bulk invitation creation                    | R-004        | Clarify SLO, then run k6 at the approved concurrency       | Approved SLO and k6 report         |
+| Performance     | UNKNOWN: no accepted latency or throughput threshold exists for bulk invitation creation                    | R-007        | Clarify SLO, then run k6 at the approved concurrency       | Approved SLO and k6 report         |
 | Reliability     | Provider retry must create one logical invitation and at most one membership                                | R-002, R-004 | API idempotency tests and 10-iteration burn-in             | JUnit results and burn-in report   |
 | Maintainability | Membership module line coverage at least 80%; no duplicated role-policy implementation                      | R-001, R-005 | Coverage report and static duplication analysis            | LCOV and duplication report        |
 
@@ -158,7 +159,7 @@ P0, P1, P2, and P3 describe priority. Execution timing is defined separately bel
 | Test ID    | Requirement                                   | Test Level  | Risk Link | Notes                                   |
 | ---------- | --------------------------------------------- | ----------- | --------- | --------------------------------------- |
 | 3-EXP-001  | Keyboard-only review of the invitation dialog | Exploratory | None      | Record accessibility observations       |
-| 3-PERF-001 | Establish a provisional bulk-invite baseline  | Performance | R-004     | Informational until the SLO is approved |
+| 3-PERF-001 | Establish a provisional bulk-invite baseline  | Performance | R-007     | Informational until the SLO is approved |
 
 **Total P3:** 2 scenarios, about 3 to 5 hours
 

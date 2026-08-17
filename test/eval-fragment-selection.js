@@ -157,6 +157,9 @@ function parseArgs(argv) {
   }
   if (agents.length === 0) agents.push('claude');
   if (agents.includes('custom') && !agentCmd) fatal(2, '--agent custom requires --agent-cmd');
+  if (agents.includes('custom') && model) {
+    fatal(2, '--model is not supported by --agent custom; pass the runner model through --agent-arg');
+  }
   if (agents.length > 1 && (agentCmd || agentArgs.length > 0 || envPass.length > 0 || model)) {
     fatal(2, 'runner overrides require exactly one --agent; run separate commands for different runner configurations');
   }
@@ -368,6 +371,7 @@ function preflight({ agents, agentCmd }) {
     const executable = agent === 'custom' ? agentCmd : agent;
     const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
     if (probe.error) problems.push(`agent CLI "${executable}" is not on PATH (${probe.error.code})`);
+    else if (probe.status !== 0) problems.push(`agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
     const credential = agent === 'custom' ? null : missingCredential(agent);
     if (credential) problems.push(credential);
   }

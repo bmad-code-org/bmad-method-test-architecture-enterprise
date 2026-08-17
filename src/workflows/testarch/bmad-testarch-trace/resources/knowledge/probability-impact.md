@@ -201,7 +201,7 @@ export const paymentScenarios: TestScenario[] = [
       impact: 1, // Minor (cosmetic issue, email still sent)
       reasoning: 'Non-blocking, users get email regardless',
     }),
-    priority: 'P3', // Cosmetic, non-blocking
+    priority: 'P2', // Customer-facing presentation, with email still delivered
     testLevel: 'Unit',
     owner: 'dev-team',
   },
@@ -214,7 +214,7 @@ export const paymentScenarios: TestScenario[] = [
       impact: 3, // Critical (complete checkout failure)
       reasoning: 'Rare but catastrophic, requires retry mechanism',
     }),
-    priority: 'P1', // Revenue-critical when it happens, despite low probability
+    priority: 'P0', // Revenue-critical checkout failure with no workaround
     testLevel: 'API',
     owner: 'qa-team',
   },
@@ -247,7 +247,7 @@ export function generateRiskReport(scenarios: TestScenario[]): string {
 ${generateRiskMatrix()}
 
 ## Priority Distribution
-- **P0 (Blocker)**: ${priorityCounts.P0 || 0} scenarios
+- **P0 (Critical)**: ${priorityCounts.P0 || 0} scenarios
 - **P1 (High)**: ${priorityCounts.P1 || 0} scenarios
 - **P2 (Medium)**: ${priorityCounts.P2 || 0} scenarios
 - **P3 (Low)**: ${priorityCounts.P3 || 0} scenarios

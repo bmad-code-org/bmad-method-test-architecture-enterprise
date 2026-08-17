@@ -19,11 +19,16 @@ This is an **isolated subagent** running in parallel with other NFR domain evide
 
 ### 1. Performance Evidence Audit Categories
 
+Read the Performance thresholds established in Step 2 from
+`subagentContext.nfr_thresholds.performance` and assess every finding against those values. When a
+threshold is `UNKNOWN`, report `CONCERNS`. The fixed values below are examples of the evidence shape;
+they are never authoritative defaults.
+
 **A) Response Times:**
 
-- API response times (<200ms target)
-- Page load times (<2s target)
-- Time to interactive (<3s target)
+- API response times (example: <200ms)
+- Page load times (example: <2s)
+- Time to interactive (example: <3s)
 
 **B) Throughput:**
 

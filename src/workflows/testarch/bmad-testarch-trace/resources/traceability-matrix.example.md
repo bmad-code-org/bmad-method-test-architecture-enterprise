@@ -254,7 +254,7 @@ No human waiver was requested or applied. `WAIVED` cannot be derived from these 
 
 **Overall Residual Risk:** Medium
 
-### Critical Issues
+### Open Issues
 
 | Priority | Issue                         | Description                                | Owner          | Due Date   | Status |
 | -------- | ----------------------------- | ------------------------------------------ | -------------- | ---------- | ------ |

@@ -94,7 +94,7 @@ Priority is a separate judgment that the risk score informs rather than determin
 
 **3. Red tests, in** `atdd` (optional). Run before implementation. It generates acceptance tests that all carry `test.skip()`, plus data factories, fixtures, and an implementation checklist that lists, per test, the tasks required to make it pass and the command to run it. The developer un-skips one test, confirms it fails, then makes it pass. The red phase is the point: a test that has never failed has proven nothing.
 
-**4. Coverage, in** `automate`**.** Run after implementation. Workers generate API, E2E, backend, and mobile tests in parallel depending on the detected stack, and the aggregation step reports the totals broken down by priority. It also rolls up every deviation from an active integration mandate as `file:line — reason`, and writes `None` when there are none, because a reader cannot tell an empty section from a forgotten one.
+**4. Coverage, in** `automate`**.** Run after implementation. Workers generate API, E2E, backend, and mobile tests in parallel depending on the detected stack, and the aggregation step reports the totals broken down by priority. It also rolls up every deviation from an active integration mandate as `file:line: reason`, and writes `None` when there are none, because a reader cannot tell an empty section from a forgotten one.
 
 **5. Quality, in** `test-review`**.** Every finding must cite a registry row (`C1`, `H2`, `M4`), and the row carries the severity. Score starts at 100:
 
@@ -124,16 +124,16 @@ That separation exists because it was measured. Two reviewers of the same four f
 
 **6. Gate, in** `trace` **Phase 2.** Requirements are mapped to tests with Given/When/Then, coverage is computed per priority, and the decision is deterministic:
 
-| Condition                                          | Decision     |
-| -------------------------------------------------- | ------------ |
-| P0 coverage below 100%                             | **FAIL**     |
-| Overall coverage below 80%                         | **FAIL**     |
-| P1 coverage below 80%                              | **FAIL**     |
-| P0 at 100%, overall ≥ 80%, P1 ≥ 90%                | **PASS**     |
-| P0 at 100%, overall ≥ 80%, P1 between 80% and 89%  | **CONCERNS** |
-| Stakeholder-approved waiver, with owner and expiry | **WAIVED**   |
+| Condition                                                       | Decision     |
+| --------------------------------------------------------------- | ------------ |
+| P0 coverage below 100%                                          | **FAIL**     |
+| Overall coverage below 80%                                      | **FAIL**     |
+| P1 coverage below 80%                                           | **FAIL**     |
+| P0 at 100%, overall ≥ 80%, P1 ≥ 90%                             | **PASS**     |
+| P0 at 100%, overall ≥ 80%, P1 between 80% and 89%               | **CONCERNS** |
+| Stakeholder-approved waiver with the complete approval contract | **WAIVED**   |
 
-Our epic finishes at P0 100%, P1 87%, overall 84%, so it gates at CONCERNS with the residual risk named rather than passing quietly. Two overlays can lower that result further and can never raise it: a requirement resting only on recorded live verification caps at CONCERNS, and a synthetic coverage oracle below high confidence does the same. WAIVED is never derived; a human sets it, and the artifact demands an approver, a date, an expiry, and a remediation owner.
+Our epic finishes at P0 100%, P1 87%, overall 84%, so it gates at CONCERNS with the residual risk named rather than passing quietly. Two overlays can lower that result further and can never raise it: a requirement resting only on recorded live verification caps at CONCERNS, and a synthetic coverage oracle below high confidence does the same. WAIVED is never derived; a human sets it, and the artifact demands an approver, approval date, reason, expiry, monitoring plan, remediation owner, and fix target. The authoritative contract is in the [Traceability template](./src/workflows/testarch/bmad-testarch-trace/trace-template.md#waiver-details).
 
 If the run is not gate-eligible at all, because evidence collection was waived, restricted, inaccessible, or deferred, TEA emits no decision rather than computing one on partial evidence.
 
@@ -305,7 +305,7 @@ Installing this package also installs a `tea-test-review` binary that runs the r
 npx tea-test-review --base origin/main --min-score 80
 ```
 
-It scopes to changed tests (`--base`, `--files`), runs through an agent adapter with a pinned review model, isolates the filesystem, emits a JSON verdict, and separates its exit codes: `0` pass, `1` verdict failure, `2` environment failure, `3` an unparseable report. For example, a missing credential is an environment failure with exit code `2`.
+It scopes to changed tests (`--base`, `--files`), runs through an agent adapter with a pinned review model, isolates the filesystem, emits a JSON verdict, and separates its exit codes: `0` pass, `1` verdict failure, `2` environment or configuration failure, and `3` agent failure or an unparseable or untrusted report. For example, a missing credential exits `2`, while a runner crash after launch exits `3`.
 
 The recommendation is derived from the findings rather than taken from the agent's prose. Any CRITICAL derives Block. Any HIGH, or a score under 70, derives Request Changes. The agent's own stated recommendation is preserved as `reportedRecommendation` when the two disagree. `--waive` exists for the exceptions and requires an expiry.
 
@@ -410,23 +410,25 @@ The normal path is one command. It runs fragment selection across all eight cove
 npm run eval:all -- --agent codex
 ```
 
-Use `claude` instead, or run both built-in adapters:
+Use `claude` or `agy` instead, or run all three built-in adapters:
 
 ```bash
 npm run eval:all -- --agent claude
-npm run eval:all -- --agent codex --agent claude
+npm run eval:all -- --agent agy
+npm run eval:all -- --agent agy --agent claude --agent codex
 ```
 
-`eval:all` uses two repetitions per fragment-selection case and three repetitions for `test-review`. One runner makes 51 agent calls: 48 fragment selections plus 3 reviews. Both built-in runners make 102 calls.
+`eval:all` uses two repetitions per fragment-selection case and three repetitions for `test-review`. One runner makes 51 agent calls: 48 fragment selections plus 3 reviews. All three built-in runners make 153 calls.
 
 Check the data, executable, login, fixtures, and expected results without making a model call:
 
 ```bash
 npm run eval:all -- --agent codex --preflight-only
 npm run eval:all -- --agent claude --preflight-only
+npm run eval:all -- --agent agy --preflight-only
 ```
 
-Output ending with `nothing measured` is expected in preflight mode. It means the static eval data is valid and the selected built-in runner is ready. The flag intentionally exits before launching the agent.
+Output ending with `nothing measured` is expected in preflight mode. It means the static eval data is valid and the selected executable passed the available readiness checks. Some runners cannot expose session authentication to this probe, so a preflight pass does not guarantee that the later live call will authenticate. The flag intentionally exits before launching the agent.
 
 ### A La Carte Live Evals
 
@@ -440,8 +442,8 @@ npm run eval:test-review -- --agent codex --runs 1
 npm run eval:test-review -- --agent codex
 npm run eval:test-review -- --agent claude
 
-# Complete eval with both built-in runners. This makes six review calls.
-npm run eval:test-review -- --agent codex --agent claude
+# Complete eval with all three built-in runners. This makes nine review calls.
+npm run eval:test-review -- --agent agy --agent claude --agent codex
 ```
 
 ### Run Fragment Selection by Skill
@@ -459,15 +461,15 @@ Each command below runs one repetition. Use `--runs 2` for the complete stabilit
 | `test-review` routing | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-test-review --runs 1` |
 | `trace`               | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-trace --runs 1`       |
 
-Run every suite with one or both built-in runners:
+Run every suite with one or all built-in runners:
 
 ```bash
 # 24 cases run twice: 48 calls.
 npm run eval:fragment-selection -- --agent codex
 npm run eval:fragment-selection -- --agent claude
 
-# Both runners: 96 calls.
-npm run eval:fragment-selection -- --agent codex --agent claude
+# All three runners: 144 calls.
+npm run eval:fragment-selection -- --agent agy --agent claude --agent codex
 ```
 
 ### Antigravity, Claude, Codex, and Custom Agent CLIs
@@ -482,7 +484,7 @@ npm run eval:all -- --agent codex
 
 Any other headless CLI can use `--agent custom`. The runner must:
 
-1. Read the complete prompt from standard input or process its prompt parameter.
+1. Read the complete prompt from standard input.
 2. Run non-interactively in the repository working directory.
 3. Print its final response to standard output. The review eval must also allow the agent to write the report path named in the prompt.
 4. Exit with a nonzero status when the agent call fails.
@@ -560,7 +562,7 @@ Custom workflows are still compatible with TEA, but they are no longer implicitl
 2. Attach it to `bmad-tea` using the agent customization flow.
 3. Reinstall/update BMAD so the new menu item and workflow are registered.
 
-See [Extend TEA with Custom Workflows](docs/how-to/customization/extend-tea-with-custom-workflows.md) and the BMAD customization guide at `[BMAD-METHOD/docs/how-to/customize-bmad.md](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/docs/how-to/customize-bmad.md)`.
+See [Extend TEA with Custom Workflows](docs/how-to/customization/extend-tea-with-custom-workflows.md) and the BMAD customization guide at [BMAD-METHOD/docs/how-to/customize-bmad.md](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/docs/how-to/customize-bmad.md).
 
 ## Contributing
 

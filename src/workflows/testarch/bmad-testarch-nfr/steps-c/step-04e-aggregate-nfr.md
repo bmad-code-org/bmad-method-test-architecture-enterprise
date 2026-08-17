@@ -58,8 +58,11 @@ domains.forEach((domain) => {
   assessments[domain].findings.forEach((finding) => {
     if (finding.status === 'PASS') {
       finding.status = 'CONCERNS';
-      finding.description = `${finding.description} (downgraded from PASS: threshold was UNKNOWN at Step 2 — an unmeasured target cannot pass).`;
+      finding.description = `${finding.description} (downgraded from PASS: threshold was UNKNOWN at Step 2; an unmeasured target cannot pass).`;
     }
+  });
+  Object.entries(assessments[domain].compliance || {}).forEach(([standard, status]) => {
+    if (status === 'PASS') assessments[domain].compliance[standard] = 'CONCERNS';
   });
 });
 ```

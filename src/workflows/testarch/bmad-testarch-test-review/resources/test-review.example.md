@@ -63,7 +63,7 @@ The score remains high because the file is small, readable, and mostly determini
 | Playwright Utils Adoption            | ✅ PASS       |          0 | Convention: playwrightUtils (16 of 24 sampled)                          | Imports merged fixtures and uses utility interception    |
 | Pact.js Utils Adoption               | ✅ PASS (n/a) |          0 | Applicability: the reviewed file is not a Pact artifact                 | Gate closed                                              |
 | Explicit Assertions                  | ✅ PASS       |          0 | Absolute                                                                | Every test has a falsifiable assertion                   |
-| Test Length (≤1000 lines)            | ✅ PASS       |        146 | Absolute                                                                | File is 146 lines                                        |
+| Test Length (≤1000 lines)            | ✅ PASS       |          0 | Absolute                                                                | File is 146 lines                                        |
 | Test Duration (≤1.5 min)             | ⚠️ WARN       |          1 | Absolute                                                                | Measured at 18 seconds, but H1 still makes timing unsafe |
 | Flakiness Patterns                   | ❌ FAIL       |          1 | Absolute                                                                | Same H1 timer, counted once in the ledger                |
 

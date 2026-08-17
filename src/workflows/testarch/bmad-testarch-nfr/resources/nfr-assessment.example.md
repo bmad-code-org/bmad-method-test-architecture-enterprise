@@ -27,7 +27,7 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 
 **Blockers:** 3 (Vulnerability Management under Security, Resource Usage under Performance, Fault Tolerance under Reliability)
 
-**High Priority Issues:** 2 (Authorization Controls under Security, MTTR under Reliability)
+**High Priority Issues:** 2 (Resource Usage under Performance, Authorization Controls under Security)
 
 **Recommendation:** Hold the release. Patch or mitigate the PDF-rendering vulnerability, reduce peak export-worker heap below its threshold, and add the export-worker circuit breaker before shipping. The remaining CONCERNS can proceed as scheduled follow-up work.
 

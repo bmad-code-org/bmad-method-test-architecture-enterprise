@@ -25,7 +25,7 @@
  *   waivable exit 2/3)
  * - isolate backend selection and profile/prefix construction
  * - run-agent minimal env, adapter lookup (AGENT_UNKNOWN), and AGENT_NOT_FOUND
- * - agent-adapters table shape for claude/codex plus the explicit custom
+ * - agent-adapters table shape for agy/claude/codex plus the explicit custom
  *   runner contract
  * - CLI end-to-end with --agent none, with a stub agent (spawned child
  *   processes), against a real temp git repo, and under the chmod isolation
@@ -88,7 +88,7 @@ const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable
 const { runAgent, buildMinimalEnv } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS } = require('../cli/lib/resolve-tea-config');
-const { parseArgs: parseReviewEvalArgs } = require('./eval-test-review');
+const { parseArgs: parseReviewEvalArgs, missingCredential } = require('./eval-test-review');
 const { parseArgs: parseFragmentEvalArgs } = require('./eval-fragment-selection');
 const { parseArgs: parseAllEvalArgs, buildInvocations, aggregateExitCodes } = require('./eval-all');
 
@@ -2160,6 +2160,55 @@ async function runTests() {
       'eval:all forwards the same portable runner contract to both live harnesses',
       JSON.stringify(customInvocations),
     );
+    for (const script of ['eval-all.js', 'eval-fragment-selection.js', 'eval-test-review.js']) {
+      const rejectedCustomModel = spawnSync(
+        process.execPath,
+        [path.join(repoRoot, 'test', script), '--agent', 'custom', '--agent-cmd', process.execPath, '--model', 'runner-model'],
+        { cwd: repoRoot, encoding: 'utf8' },
+      );
+      assert(
+        rejectedCustomModel.status === 2 && rejectedCustomModel.stderr.includes('--model is not supported by --agent custom'),
+        `${script} rejects --model with the custom adapter before evaluation begins`,
+        `status=${rejectedCustomModel.status} stderr=${rejectedCustomModel.stderr}`,
+      );
+    }
+
+    const versionFailRunner = path.join(tmpRoot, 'version-fail-runner');
+    fs.writeFileSync(versionFailRunner, '#!/bin/sh\nif [ "$1" = "--version" ]; then exit 9; fi\nexit 0\n', { mode: 0o755 });
+    for (const [script, extraArgs] of [
+      ['eval-fragment-selection.js', ['--workflow', 'bmad-testarch-ci', '--runs', '1']],
+      ['eval-test-review.js', ['--preflight-only']],
+    ]) {
+      const rejectedProbe = spawnSync(
+        process.execPath,
+        [path.join(repoRoot, 'test', script), '--agent', 'custom', '--agent-cmd', versionFailRunner, ...extraArgs],
+        { cwd: repoRoot, encoding: 'utf8' },
+      );
+      assert(
+        rejectedProbe.status === 2 && rejectedProbe.stderr.includes('failed its --version probe (exit 9)'),
+        `${script} rejects a runner whose --version probe exits nonzero`,
+        `status=${rejectedProbe.status} stderr=${rejectedProbe.stderr}`,
+      );
+    }
+
+    const priorHome = process.env.HOME;
+    const priorOpenAiKey = process.env.OPENAI_API_KEY;
+    const emptyCodexHome = path.join(tmpRoot, 'empty-codex-home');
+    fs.mkdirSync(emptyCodexHome, { recursive: true });
+    process.env.HOME = emptyCodexHome;
+    process.env.OPENAI_API_KEY = 'sk-present-but-not-logged-in';
+    try {
+      assert(
+        missingCredential('codex')?.includes('stored login at ~/.codex/auth.json'),
+        'codex eval preflight requires the stored login that the CLI actually consumes',
+        String(missingCredential('codex')),
+      );
+    } finally {
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+      if (priorOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = priorOpenAiKey;
+    }
     assert(
       aggregateExitCodes([0, 0]) === 0 && aggregateExitCodes([1, 0]) === 1 && aggregateExitCodes([1, 2]) === 2,
       'eval:all preserves pass, measured-failure, and environment-failure exit classes',

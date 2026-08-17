@@ -139,7 +139,7 @@ Created with:
 
 Added to `package.json`:
 
-- `test:e2e`: `npx playwright test`
+- `test:e2e`: `npx playwright test --config tests/playwright.config.ts`
 
 ### Write-Time Enforcement Hook
 

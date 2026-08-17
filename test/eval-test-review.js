@@ -127,6 +127,9 @@ function parseArgs(argv) {
   }
   if (agents.length === 0) agents.push('codex');
   if (agents.includes('custom') && !agentCmd) fatal(2, '--agent custom requires --agent-cmd');
+  if (agents.includes('custom') && model) {
+    fatal(2, '--model is not supported by --agent custom; pass the runner model through --agent-arg');
+  }
   if (agents.length > 1 && (agentCmd || agentArgs.length > 0 || envPass.length > 0 || model)) {
     fatal(2, 'runner overrides require exactly one --agent; run separate commands for different runner configurations');
   }
@@ -146,11 +149,10 @@ function fatal(code, message) {
  * Whether a vendor has no usable credential in ANY of the shapes its CLI accepts.
  * Returns a problem string, or null when the vendor can authenticate.
  *
- * An environment variable is not the only shape, and treating it as the only one
- * blocks the eval on a machine where the vendor is plainly logged in. Both CLIs
- * read a stored credential keyed by HOME (which is why run-agent.js forwards HOME
- * and USER): claude keeps one in the macOS Keychain or ~/.claude/.credentials.json,
- * codex in ~/.codex/auth.json ; verified 2026-08-03, see agent-adapters.js.
+ * Stored credentials are keyed by HOME, which is why run-agent.js forwards HOME
+ * and USER. Claude also accepts its documented environment variables. Codex
+ * 0.146.0 does not consume OPENAI_API_KEY directly; CI must first write
+ * ~/.codex/auth.json with `codex login --with-api-key`. See agent-adapters.js.
  */
 function missingCredential(agent) {
   const home = process.env.HOME || os.homedir();
@@ -162,9 +164,8 @@ function missingCredential(agent) {
     return 'claude needs ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, or a stored login (keychain / ~/.claude/.credentials.json)';
   }
   if (agent === 'codex') {
-    if (process.env.OPENAI_API_KEY) return null;
     if (fs.existsSync(path.join(home, '.codex', 'auth.json'))) return null;
-    return 'codex needs OPENAI_API_KEY or a stored login at ~/.codex/auth.json (codex login)';
+    return 'codex needs a stored login at ~/.codex/auth.json (in CI: printenv OPENAI_API_KEY | codex login --with-api-key)';
   }
   return null;
 }
@@ -225,6 +226,7 @@ function preflight({ agents, agentCmd }) {
     const executable = agent === 'custom' ? agentCmd : agent;
     const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
     if (probe.error) problems.push(`agent CLI "${executable}" is not on PATH (${probe.error.code})`);
+    else if (probe.status !== 0) problems.push(`agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
     const credential = agent === 'custom' ? null : missingCredential(agent);
     if (credential) problems.push(credential);
   }

@@ -120,14 +120,14 @@ export function assessTestFailureRisk(failure: {
 
 ### Example 2: Gate Decision Engine with Traceability Validation
 
-> **Illustrative only, not the gate TEA executes.** This example teaches risk-driven gate
-> governance: a decision keyed directly on risk scores. The gate TEA actually runs is
-> `src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md`, keyed on coverage
-> percentages instead (P0 at 100%, overall at 80%, P1 at 90% for PASS / 80% for the CONCERNS
-> floor), with `WAIVED` reserved for a human override rather than derived from risk data the way
-> `evaluateGate()` derives it below. Both produce the same four words (PASS / CONCERNS / FAIL /
-> WAIVED) from different inputs; if you are answering "how does the gate decide", answer with the
-> coverage engine, not this one.
+> **Illustrative only. The coverage gate is authoritative.** This example teaches a risk-driven
+> decision keyed directly on risk scores. TEA executes
+> `src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md`. That gate evaluates
+> coverage only when `allow_gate` is true and `collection_status` is `COLLECTED`; otherwise its
+> outcome is `NOT_EVALUATED`. Eligible coverage produces `PASS`, `CONCERNS`, or `FAIL` from P0,
+> P1, and overall percentages. Coverage resting only on recorded live verification cannot produce
+> `PASS` and is capped at `CONCERNS`. `WAIVED` remains a human override with its own approval
+> contract. When answering "how does the gate decide", use that coverage engine.
 
 **Context**: Automated gate decision based on risk scores and test coverage
 
