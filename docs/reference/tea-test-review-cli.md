@@ -17,6 +17,7 @@ The skill is the source of truth for all review logic (checklist, scoring, repor
   - **Pinned with `--skill-root <path>`** (recommended for CI): unpack from a pinned npm tarball, point `--skill-root` at it. Reviewer never comes from the PR checkout.
 - For `--agent claude` (default): the `claude` CLI on `PATH`, authenticated via subscription/keychain login or `ANTHROPIC_API_KEY`/`CLAUDE_CODE_OAUTH_TOKEN` in the environment.
 - For `--agent codex`: the `codex` CLI on `PATH`, authenticated via `codex login`, which stores credentials in `$HOME/.codex/auth.json`. **`OPENAI_API_KEY` in the environment is not enough**: codex 0.146.0 never reads it, and a run with only that variable set sends no credential at all and fails with `401 ... Missing bearer or basic authentication in header`. On a machine with no interactive login, such as any CI runner, write the auth file first with `printenv OPENAI_API_KEY | codex login --with-api-key`.
+- For `--agent custom`: an explicit `--agent-cmd` executable that reads the prompt from stdin, runs non-interactively in the project directory, writes the report path named in the prompt, and exits nonzero on failure. Supply every runner argument with `--agent-arg` and allow required credential variables through with `--env-pass`.
 
 ## Run it locally
 
@@ -85,9 +86,9 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 | `--skill-root <path>`                                  | probe the project                          | Trusted skill root (must contain `SKILL.md`); skips the install probe. Outside `--project-root`, the control-plane guard is moot. |
 | `--output <file>`                                      | `test-review.md`                           | Report path the agent writes.                                                                                                     |
 | `--json <file>`                                        | -                                          | Also write the verdict JSON here.                                                                                                 |
-| `--agent <agent>`                                      | `claude`                                   | `claude` or `codex` spawn the matching CLI via its adapter (`cli/lib/agent-adapters.js`); `none` prints the prompt only.          |
-| `--model <model>`                                      | `claude`: `sonnet`, `codex`: `gpt-5.6-sol` | Model the agent runs on. Overrides whatever the vendor CLI would pick from its own config. Rejected with `--agent none`.          |
-| `--agent-cmd <path>`                                   | the selected adapter's command             | Override the agent executable; the selected `--agent` adapter's argv/env still apply (advanced).                                  |
+| `--agent <agent>`                                      | `claude`                                   | `claude` or `codex` use built-in adapters; `custom` uses the portable runner contract; `none` prints the prompt only.             |
+| `--model <model>`                                      | `claude`: `sonnet`, `codex`: `gpt-5.6-sol` | Model for a built-in adapter. Rejected with `custom` and `none`; select a custom runner's model through `--agent-arg`.            |
+| `--agent-cmd <path>`                                   | the selected adapter's command             | Override a built-in executable; required with `--agent custom`.                                                                   |
 | `--agent-arg <arg>`                                    | -                                          | Extra argument appended to the selected agent's argv (repeatable).                                                                |
 | `--env-pass <NAME>`                                    | -                                          | Env var allowed through beyond the default set (repeatable).                                                                      |
 | `--timeout-ms <n>`                                     | `1800000` (30 min)                         | Agent wall-clock timeout (SIGTERM on expiry).                                                                                     |
@@ -128,7 +129,7 @@ Why the two lists are separated, and why context can never waive: [Test Review C
 
 ## Which model does the reviewing
 
-Each adapter pins a model. `--model` overrides it.
+Each built-in adapter pins a model. `--model` overrides it.
 
 | `--agent` | Pinned default | Override with     |
 | --------- | -------------- | ----------------- |
@@ -137,9 +138,9 @@ Each adapter pins a model. `--model` overrides it.
 
 The pinned values are aliases: they hold the tier steady, not the exact weights. Pass a fully-qualified slug to `--model` when a run has to be reproducible across model generations.
 
-The resolved model travels in the verdict JSON as `model`, alongside `agent`. Two scores are only comparable when those two fields match. A model supplied through `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn.
+The resolved built-in model travels in the verdict JSON as `model`, alongside `agent`. Two scores are only comparable when those two fields match. A model supplied through a built-in adapter's `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn.
 
-`--model` is rejected with `--agent none`, which runs no agent.
+`--agent custom` has no universal model flag. Select its model through `--agent-arg`; its verdict records `agent: "custom"` and `model: null`. Keep the custom runner command and model in CI configuration when results need to be compared over time. `--model` is rejected with `custom` and with `none`, which runs no agent.
 
 **Codex reasoning effort is a second unstated input, and it is not pinned here.** A local `model_reasoning_effort = "max"` costs about ten extra seconds even on a one-word prompt, and far more on a real review. It is codex-only, so it gets no vendor-agnostic flag; set it per run with `--agent-arg -c --agent-arg model_reasoning_effort=low`.
 
@@ -272,7 +273,7 @@ The comment carries the score/recommendation/violations digest plus up to three 
 ## Security model
 
 - **Stdin prompt delivery**: the prompt travels to the agent on stdin, never argv, so it can't leak through process lists.
-- **Safe-mode agent execution**: the `claude` adapter spawns the vendor CLI with `--safe-mode` (repo customizations stripped) and `--tools`/`--allowedTools` held to `Read,Write,Edit,Glob,Grep`. Both are arguments to the `claude` CLI, not `tea-test-review` flags; the `codex` adapter has no equivalent and confines its run with `--sandbox workspace-write` instead. Every adapter gets a minimal child environment; only `--env-pass` variables are added.
+- **Agent execution**: the `claude` adapter strips repo customizations and limits tools to `Read,Write,Edit,Glob,Grep`. The `codex` adapter confines its run with `--sandbox workspace-write`. A custom runner receives only the arguments supplied at the command line, so its caller owns the equivalent tool and approval policy. Every adapter gets a minimal child environment; only `--env-pass` variables are added.
 - **Filesystem isolation**: with `--isolate` (default on in CI) the agent may read the project but can't modify the tree under review; it writes only the report, verdict, and the temp files the workflow's own subagent steps declare (sandbox-exec on macOS, bwrap on Linux, chmod fallback).
 - **Control-plane guard**: a PR diff that modifies the vendored skill fails the run closed (exit 2) unless `--files` was explicit. An explicit `--skill-root` outside the checkout is untouchable by the diff.
 - **Untrusted-content contract**: reviewed-file and context-file content is data: instructions inside either are defects to report, never commands. Context can raise a finding but never waive one, so a story cannot argue a violation away. Hostile paths (newlines, NUL bytes, delimiter literals) are rejected before they reach the prompt; both lists travel as JSON arrays in their own delimited blocks.

@@ -143,24 +143,24 @@ BMad is a small **agent + workflow engine**. There is no external orchestrator; 
 
 ### Building Blocks
 
-| File / Scope                                              | What it does                                                                                                 | When it loads                                                     |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `src/agents/bmad-tea/SKILL.md`                            | Murat's activation sequence and critical actions; renders the `{agent.menu}` placeholder                     | First, activates the TEA agent                                    |
-| `src/agents/bmad-tea/customize.toml`                      | Agent customization surface: `[[agent.menu]]` items (code to skill), persona fields, persistent facts, hooks | During agent activation                                           |
-| `src/workflows/testarch/<workflow>/SKILL.md`              | Workflow entrypoint: resolves workflow customization, picks mode, routes to the first step                   | When a TEA workflow is invoked                                    |
-| `src/workflows/testarch/<workflow>/customize.toml`        | Workflow customization surface: activation hooks, persistent facts, optional `on_complete` behavior          | During workflow activation                                        |
-| `src/workflows/testarch/<workflow>/workflow.yaml`         | Machine-readable metadata: config bindings, run variables, tool hints, output paths                          | Installer, tooling, and workflow metadata lookups                 |
-| `instructions.md`                                         | Workflow-specific summary and operator notes                                                                 | On demand                                                         |
-| `steps-c/*.md`                                            | **Create** steps: primary execution, 5 to 12 files per workflow, 75 across the module                        | One at a time (just-in-time)                                      |
-| `steps-c/step-NNx-subagent-*.md`                          | **Worker** steps: one isolated dimension each, dispatched in parallel                                        | When an orchestrator step delegates                               |
-| `steps-e/*.md`                                            | **Edit** steps: always 2 files, assess target then apply edit                                                | One at a time                                                     |
-| `steps-v/*.md`                                            | **Validate** steps: always 1 file, evaluate against the checklist                                            | On demand                                                         |
-| `checklist.md`                                            | Validation criteria: what "done" looks like for this workflow                                                | Read by steps-v                                                   |
-| `*-template.md`                                           | Output skeleton with `{PLACEHOLDER}` vars, filled in by steps to produce the artifact                        | Read by steps-c when generating output                            |
-| `bmad-testarch-test-review/steps-c/criteria-registry.md`  | The 35 scoreable rows, each with a fixed severity and gate class. Severity is read here                      | Read by every review worker before it scores anything             |
-| `bmad-testarch-framework/resources/hooks/tea-enforce.cjs` | Claude Code guardrail for mechanically decidable test-quality violations; framework Create scaffolds it      | Before writes, after writes or Bash, and when a Claude turn stops |
-| `resources/tea-index.csv`                                 | Knowledge fragment index: id, name, description, tags, tier, path. 59 rows                                   | Read before recommendations and by knowledge-loading steps        |
-| `resources/knowledge/*.md`                                | 59 reusable fragments: standards, patterns, API references, integration mandates                             | Selectively read into context by tier and config flags            |
+| File / Scope                                              | What it does                                                                                                 | When it loads                                                               |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `src/agents/bmad-tea/SKILL.md`                            | Murat's activation sequence and critical actions; renders the `{agent.menu}` placeholder                     | First, activates the TEA agent                                              |
+| `src/agents/bmad-tea/customize.toml`                      | Agent customization surface: `[[agent.menu]]` items (code to skill), persona fields, persistent facts, hooks | During agent activation                                                     |
+| `src/workflows/testarch/<workflow>/SKILL.md`              | Workflow entrypoint: resolves workflow customization, picks mode, routes to the first step                   | When a TEA workflow is invoked                                              |
+| `src/workflows/testarch/<workflow>/customize.toml`        | Workflow customization surface: activation hooks, persistent facts, optional `on_complete` behavior          | During workflow activation                                                  |
+| `src/workflows/testarch/<workflow>/workflow.yaml`         | Machine-readable metadata: config bindings, run variables, tool hints, output paths                          | Installer, tooling, and workflow metadata lookups                           |
+| `instructions.md`                                         | Workflow-specific summary and operator notes                                                                 | On demand                                                                   |
+| `steps-c/*.md`                                            | **Create** steps: primary execution, 5 to 12 files per workflow, 75 across the module                        | One at a time (just-in-time)                                                |
+| `steps-c/step-NNx-subagent-*.md`                          | **Worker** steps: one isolated dimension each, dispatched in parallel                                        | When an orchestrator step delegates                                         |
+| `steps-e/*.md`                                            | **Edit** steps: always 2 files, assess target then apply edit                                                | One at a time                                                               |
+| `steps-v/*.md`                                            | **Validate** steps: always 1 file, evaluate against the checklist                                            | On demand                                                                   |
+| `checklist.md`                                            | Validation criteria: what "done" looks like for this workflow                                                | Read by steps-v                                                             |
+| `*-template.md`                                           | Output skeleton with `{PLACEHOLDER}` vars, filled in by steps to produce the artifact                        | Read by steps-c when generating output                                      |
+| `bmad-testarch-test-review/steps-c/criteria-registry.md`  | The 35 scoreable rows, each with a fixed severity and gate class. Severity is read here                      | Read by every review worker before it scores anything                       |
+| `bmad-testarch-framework/resources/hooks/tea-enforce.cjs` | Project-level guardrail for mechanically decidable test-quality violations; framework Create scaffolds it    | Before writes, after writes or shell commands, and when an agent turn stops |
+| `resources/tea-index.csv`                                 | Knowledge fragment index: id, name, description, tags, tier, path. 59 rows                                   | Read before recommendations and by knowledge-loading steps                  |
+| `resources/knowledge/*.md`                                | 59 reusable fragments: standards, patterns, API references, integration mandates                             | Selectively read into context by tier and config flags                      |
 
 Nine copies of the knowledge base exist on purpose: the agent carries one, and so does each of the eight workflows that consult it. Every copy is byte-identical. A workflow skill has to stay self-contained so it can be installed, copied, or invoked without reaching across skill boundaries, so when knowledge changes, propagate the update into the affected workflow resource directories rather than replacing them with a central runtime path. `bmad-teach-me-testing` is the exception; it carries a curated pointer file at `data/tea-resources-index.yaml` instead of the fragments themselves.
 
@@ -184,7 +184,7 @@ flowchart TB
 
 **1. Activation.** `/bmad-tea` or `$bmad-tea` loads the agent skill. It resolves its customization block across base, team, and user layers, adopts the persona, loads persistent facts and `_bmad/tea/config.yaml`, greets you, and renders `{agent.menu}` as a numbered table. Naming an intent in your first message ("let's design tests for this epic") skips the menu and dispatches directly.
 
-**2. Workflow entry.** Direct commands are `/bmad-testarch-automate` (Claude Code, Cursor, Windsurf) and `$bmad-testarch-automate` (Codex). `TA` is the equivalent agent-menu code, available only once TEA is active. Either way, the workflow's `SKILL.md` resolves its own `[workflow]` customization block and asks which mode to run: Create, Resume, Validate, or Edit. Create and Resume both route into `steps-c/`; Validate into `steps-v/`; Edit into `steps-e/`. `test-review` alone supports `headless: true`, which skips the greeting and the menu and runs Create directly. That is how the CLI drives it in CI.
+**2. Workflow entry.** Direct workflow commands use the installed skill name, such as `/bmad-testarch-automate` or `$bmad-testarch-automate`, depending on the host's invocation syntax. `TA` is the equivalent agent-menu code, available only once TEA is active. Either way, the workflow's `SKILL.md` resolves its own `[workflow]` customization block and asks which mode to run: Create, Resume, Validate, or Edit. Create and Resume both route into `steps-c/`; Validate into `steps-v/`; Edit into `steps-e/`. `test-review` alone supports `headless: true`, which skips the greeting and the menu and runs Create directly. That is how the CLI drives it in CI.
 
 **3. Steps.** Each step file declares its own wiring in YAML frontmatter: `outputFile`, `nextStepFile`, and where relevant `knowledgeIndex` and `resumeStepFile`. A step loads on its own, pulls only the fragments its mode and config flags call for, fills any `*-template.md` placeholders, writes its output, and names the next step. Nothing loads the whole workflow at once, and the step files say so in as many words: "Do not load the next step until this step is complete."
 
@@ -206,7 +206,7 @@ Five workflows split their heaviest step across isolated workers. An orchestrato
 | `atdd`        | failing API tests, failing E2E tests                           |
 | `test-design` | system-level mode may generate its two documents in parallel   |
 
-`tea_execution_mode` decides how they run: `auto`, `agent-team`, `subagent`, or `sequential`. With `tea_capability_probe` at its default of `true`, `auto` probes the runtime and prefers agent-team, then subagent, then sequential, which keeps behavior portable across Claude Code, Codex, and everything else. With probing off, TEA honors the configured mode strictly and fails with an explicit error rather than falling back silently. Mode changes orchestration only. The output schema, the validation rules, and the aggregation contract are identical in every mode.
+`tea_execution_mode` decides how they run: `auto`, `agent-team`, `subagent`, or `sequential`. With `tea_capability_probe` at its default of `true`, `auto` probes the runtime and prefers agent-team, then subagent, then sequential, which keeps behavior portable across supported agent runtimes. With probing off, TEA honors the configured mode strictly and fails with an explicit error rather than falling back silently. Mode changes orchestration only. The output schema, the validation rules, and the aggregation contract are identical in every mode.
 
 Workers exchange nothing directly. Each writes a JSON file under `/tmp` keyed by a shared run timestamp, and the aggregation step asserts every expected file exists before it scores anything. Isolation is what makes a parallel review honest. The shared criteria registry is what stops two isolated workers from disagreeing about what a finding is worth: every worker loads it, and none of them choose a severity.
 
@@ -229,13 +229,13 @@ A test rule can be enforced at three moments, and most tools occupy one of them.
 
 The hook has separate installation and runtime lifecycles. The `bmad-testarch-framework` Create path installs it during its documentation and scripts step. Resume reaches the same step when installation is still incomplete. Framework Validate and Edit do not install it, and no other TEA workflow calls it.
 
-Once installed, the hook belongs to the Claude Code project lifecycle through `.claude/settings.json`. Claude Code invokes it for matching tool events from any agent or prompt in that project. It can therefore protect tests written during `atdd`, `automate`, another workflow, or an ordinary coding session without requiring Murat or a TEA workflow to be active.
+Once installed, the hook is project-scoped rather than workflow-scoped. It runs on matching tool events across TEA workflows, other agents, and ordinary coding sessions without requiring Murat or a TEA workflow to be active.
 
-The three passes cover different user-visible moments. `--pre` checks content before Write, Edit, or MultiEdit reaches disk and rejects a blocking violation with a fix. `--post` re-reads the affected file after those tools or Bash, then reports violations that only become visible in the complete file. `--stop` scans recently modified test files when the Claude Code turn finishes, including outputs a code generator did not name in its command. All three passes are limited to the test and Pact configuration globs written for the detected stack in `.tea/enforce-config.json`.
+The three passes cover different user-visible moments. `--pre` checks content before a direct file write reaches disk and rejects a blocking violation with a fix. `--post` re-reads the affected file after direct file writes or shell commands, then reports violations that only become visible in the complete file. `--stop` scans recently modified test files when the agent turn finishes, including outputs a code generator did not name in its command. All three passes are limited to the test and Pact configuration globs written for the detected stack in `.tea/enforce-config.json`.
 
-This closes the gap between advisory generation guidance and a later `test-review`. It blocks seven mechanically decidable Absolute rules and warns on one: focused tests, tautological assertions, hard waits, oversized test files, Maestro flows that cannot fail, two Pact parallelism rules, and undocumented disabled tests as the warning. Rules that require semantic judgment stay in `test-review`. The hook fails open on its own errors so a broken guardrail cannot lock the agent out of writing. Cursor, Windsurf, and Codex have no equivalent write-time interception point today, so the framework workflow skips installation on those platforms and `test-review` remains the enforcement path.
+This closes the gap between advisory generation guidance and a later `test-review`. It blocks seven mechanically decidable Absolute rules and warns on one: focused tests, tautological assertions, hard waits, oversized test files, Maestro flows that cannot fail, two Pact parallelism rules, and undocumented disabled tests as the warning. Rules that require semantic judgment stay in `test-review`. The hook fails open on its own errors so a broken guardrail cannot lock the agent out of writing. Agent platforms without a write-time hook API skip installation and rely on `test-review` for enforcement.
 
-**How workflows become commands.** `npx bmad-method install` copies each TEA skill into your tool's skills directory under its own name: `.claude/skills/` for Claude Code, `.agents/skills/` for Codex and other supported tools. Invoking that name loads the skill, and the step-file process takes over. The skill name is identical on every platform the BMad installer supports.
+**How workflows become commands.** `npx bmad-method install` copies each TEA skill into the host runtime's skill directory under its own name. Invoking that name loads the skill, and the step-file process takes over. The skill name is identical on every platform the BMad installer supports.
 
 ## Install
 
@@ -246,12 +246,12 @@ npx bmad-method install
 
 **Note:** TEA is automatically added to party mode after installation. Use `/party` to collaborate with TEA alongside other BMad agents.
 
-### Tool-specific invocation
+### Invocation Syntax
 
-| Tool                            | Invocation style                | Example                                  |
-| ------------------------------- | ------------------------------- | ---------------------------------------- |
-| Claude Code / Cursor / Windsurf | Slash command                   | `/bmad-testarch-automate`                |
-| Codex                           | `$` skill from `.agents/skills` | `$bmad-tea` or `$bmad-testarch-automate` |
+| Host convention       | Example                                  |
+| --------------------- | ---------------------------------------- |
+| Slash command         | `/bmad-testarch-automate`                |
+| Dollar-prefixed skill | `$bmad-tea` or `$bmad-testarch-automate` |
 
 ## Quickstart
 
@@ -274,7 +274,7 @@ npx bmad-method install
 
 ## Workflows
 
-| Trigger | Slash Command                | Codex Skill                  | Purpose                                                                     |
+| Trigger | Slash Command                | Dollar Skill                 | Purpose                                                                     |
 | ------- | ---------------------------- | ---------------------------- | --------------------------------------------------------------------------- |
 | TMT     | `/bmad-teach-me-testing`     | `$bmad-teach-me-testing`     | Teach Me Testing (TEA Academy)                                              |
 | TD      | `/bmad-testarch-test-design` | `$bmad-testarch-test-design` | System-level or epic-level test design and NFR planning                     |
@@ -302,10 +302,10 @@ npx bmad-method install
 Installing this package also installs a `tea-test-review` binary that runs the review workflow headlessly against a pull request diff.
 
 ```bash
-npx tea-test-review --base origin/main --agent claude --min-score 80
+npx tea-test-review --base origin/main --min-score 80
 ```
 
-It scopes to changed tests (`--base`, `--files`), runs behind a vendor adapter with a pinned review model, isolates the filesystem, emits a JSON verdict, and separates its exit codes: `0` pass, `1` verdict failure, `2` environment failure, `3` an unparseable report. A missing credential is an environment failure, never a silent zero.
+It scopes to changed tests (`--base`, `--files`), runs through an agent adapter with a pinned review model, isolates the filesystem, emits a JSON verdict, and separates its exit codes: `0` pass, `1` verdict failure, `2` environment failure, `3` an unparseable report. For example, a missing credential is an environment failure with exit code `2`.
 
 The recommendation is derived from the findings rather than taken from the agent's prose. Any CRITICAL derives Block. Any HIGH, or a score under 70, derives Request Changes. The agent's own stated recommendation is preserved as `reportedRecommendation` when the two disagree. `--waive` exists for the exceptions and requires an expiry.
 
@@ -367,29 +367,190 @@ test/                    # quality gate suites and the two eval harnesses
 
 ## How TEA Keeps Itself Honest
 
-The gate that guards this repo is the same shape as the one TEA asks you to adopt.
+TEA has deterministic checks and live evals. These cover specific risks. They are not end-to-end evals of every skill.
 
-`npm test` chains thirteen deterministic checks, including three that exist because of the mechanics above:
+### Current Eval Coverage
 
-- `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 35 rows are currently mapped across 46 anchors, and because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
-- `test:enforce-hook` fails when a new Absolute registry row appears in neither the hook's enforced list nor its deferred list, so nobody can add a rule and quietly leave the write-time decision unmade.
-- `test:eval-data` checks that all 24 fragment-selection cases are structurally usable: their workflow context files exist, every expected fragment exists and is indexed for that workflow, and the required and forbidden sets do not overlap. The expected sets are authored from the workflow step files. This check does not ask an agent to select anything.
+The eight suites under `test/evals/` measure one decision inside each knowledge-bearing workflow: whether the agent selects the required knowledge fragments and avoids fragments the workflow excludes. They do not execute the complete workflow or grade its final artifact.
 
-These checks produce the same answer from the same repository state. They need no vendor credential, network call, or model budget. The `test:eval-data` path runs in `npm test`, the local pre-commit hook, the pull-request Quality workflow, and the publish workflow.
+`test-review` has an additional behavioral eval. It runs the complete review against files containing nine planted defects plus one clean file, then scores recall, precision, score variance, and verdict stability.
 
-The live evals measure agent behavior that deterministic checks cannot predict:
+| Skill                       | Fragment-selection cases | Full behavioral eval                                       |
+| --------------------------- | ------------------------ | ---------------------------------------------------------- |
+| `bmad-tea`                  | N/A                      | None                                                       |
+| `bmad-teach-me-testing`     | N/A                      | None; this skill has no workflow knowledge index           |
+| `bmad-testarch-atdd`        | 3                        | None                                                       |
+| `bmad-testarch-automate`    | 5                        | None                                                       |
+| `bmad-testarch-ci`          | 2                        | None                                                       |
+| `bmad-testarch-framework`   | 3                        | None                                                       |
+| `bmad-testarch-nfr`         | 2                        | None                                                       |
+| `bmad-testarch-test-design` | 5                        | None                                                       |
+| `bmad-testarch-test-review` | 2                        | Yes; three files, nine planted defects, and one clean file |
+| `bmad-testarch-trace`       | 2                        | None                                                       |
 
-| Command                           | What it measures                                                                                                                                                                                                                                         | When and cost                                                                                                                                                                                                                                          |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run eval:fragment-selection` | Required-fragment recall of at least 90%, forbidden-fragment selection of at most 10%, and selection stability on repeated identical cases. The 24 cases cover the eight workflows that ship a knowledge base.                                           | Manual only in this repository. It requires an installed, authenticated Claude or Codex CLI. The default is Claude with two repetitions, which makes 48 agent calls. Use `--workflow`, `--agent`, and `--runs` after `--` to narrow or change the run. |
-| `npm run eval:test-review`        | Review output against three fixtures containing nine planted defects and one clean file: overall recall of at least 70%, CRITICAL recall of 100%, clean-file precision of at least 80%, score standard deviation no higher than 3, and a stable verdict. | Manual only in this repository. It requires an installed, authenticated Claude or Codex CLI. The default is three Codex-backed reviews of the complete fixture corpus. Use `--agent` and `--runs` after `--` to change the matrix.                     |
-| `npm run test:eval-data`          | Integrity of the fragment-selection benchmark itself. It validates files, indexes, case shape, and expected-set consistency. It does not measure recall, forbidden selection, or stability.                                                              | Runs locally and in CI with no agent call or vendor usage. It calls the same harness as `npm run eval:fragment-selection -- --validate-only`.                                                                                                          |
+A passing fragment-selection eval means the workflow loaded the right knowledge. It makes no claim about the quality of the workflow's final output. Full behavioral evals for the other skills remain a coverage gap. The source-controlled [Eval Quality and Behavioral Coverage Roadmap](./docs/explanation/eval-quality-roadmap.md) records the per-skill contracts, runner work, CI plan, and intended boundary with the upcoming standalone `eval-quality` project.
 
-Every live call consumes the selected vendor's quota or billed usage. Neither live eval is wired into GitHub Actions or `npm test`. For a cost-free readiness check of the review corpus, run `npm run eval:test-review -- --preflight-only`; it checks the CLI, credential, fixture JSON, paths, and ground-truth line references without invoking the model. The review eval has no validation-only path in CI.
+### Deterministic Checks
 
-This separation matters. Unit and consistency tests prove that schemas, registries, fragments, hook rules, and benchmark data agree with checked-in facts. Live evals expose instruction-following failures, vendor or model drift, false positives, missed findings, and nondeterminism across identical runs. A green `test:eval-data` result means the benchmark is coherent. It makes no claim that an agent met the live thresholds.
+`npm test` chains thirteen deterministic checks, including three that keep the rules, guidance, hook, and eval data aligned:
 
-The same standard is turned on TEA's own documentation. The `evidence-integrity` knowledge fragment catalogs the ways a suite reports a result it did not earn, and it is applied to this repository's own claims: one mobile knowledge fragment now says outright that a previously asserted mechanism "is not established," and re-labels the explanation as an untested hypothesis and the workaround as a countermeasure rather than a fix. `DESIGN-CRITERIA-REGISTRY.md` records the investigation that produced the registry, including the finding that two review runs of the same pull request agreed on the score and returned opposite verdicts, which is why the recommendation is now computed rather than written.
+- `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 35 rows are currently mapped across 48 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
+- `test:enforce-hook` fails when a new Absolute registry row appears in neither the hook's enforced list nor its deferred list. This prevents a rule from being added without an explicit write-time enforcement decision.
+- `test:eval-data` checks that all 24 fragment-selection cases are structurally usable: their workflow context files exist, every expected fragment exists and is indexed for that workflow, and the required and forbidden sets do not overlap. The expected sets come from the workflow step files. This check does not ask an agent to select anything.
+
+These checks produce the same answer from the same repository state. They need no agent credential, network call, or model budget. `test:eval-data` runs through `npm test`, the local pre-commit hook, pull-request quality checks, and the publish workflow.
+
+### Start Here
+
+You do not start an interactive agent session. A live eval launches the selected agent CLI as a headless subprocess, sends it each prompt, waits for the result, and scores the result.
+
+The normal path is one command. It runs fragment selection across all eight covered workflow skills, then runs the behavioral `test-review` eval:
+
+```bash
+npm run eval:all -- --agent codex
+```
+
+Use `claude` instead, or run both built-in adapters:
+
+```bash
+npm run eval:all -- --agent claude
+npm run eval:all -- --agent codex --agent claude
+```
+
+`eval:all` uses two repetitions per fragment-selection case and three repetitions for `test-review`. One runner makes 51 agent calls: 48 fragment selections plus 3 reviews. Both built-in runners make 102 calls.
+
+Check the data, executable, login, fixtures, and expected results without making a model call:
+
+```bash
+npm run eval:all -- --agent codex --preflight-only
+npm run eval:all -- --agent claude --preflight-only
+```
+
+Output ending with `nothing measured` is expected in preflight mode. It means the static eval data is valid and the selected built-in runner is ready. The flag intentionally exits before launching the agent.
+
+### A La Carte Live Evals
+
+Use the focused commands when debugging one metric or skill. A one-call review smoke test is:
+
+```bash
+# One review. Recall and precision are measured; variance and stability are not.
+npm run eval:test-review -- --agent codex --runs 1
+
+# Complete eval with one runner.
+npm run eval:test-review -- --agent codex
+npm run eval:test-review -- --agent claude
+
+# Complete eval with both built-in runners. This makes six review calls.
+npm run eval:test-review -- --agent codex --agent claude
+```
+
+### Run Fragment Selection by Skill
+
+Each command below runs one repetition. Use `--runs 2` for the complete stability measurement.
+
+| Skill                 | Copy-paste command                                                                               |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| `atdd`                | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-atdd --runs 1`        |
+| `automate`            | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-automate --runs 1`    |
+| `ci`                  | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-ci --runs 1`          |
+| `framework`           | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-framework --runs 1`   |
+| `nfr`                 | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-nfr --runs 1`         |
+| `test-design`         | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-test-design --runs 1` |
+| `test-review` routing | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-test-review --runs 1` |
+| `trace`               | `npm run eval:fragment-selection -- --agent codex --workflow bmad-testarch-trace --runs 1`       |
+
+Run every suite with one or both built-in runners:
+
+```bash
+# 24 cases run twice: 48 calls.
+npm run eval:fragment-selection -- --agent codex
+npm run eval:fragment-selection -- --agent claude
+
+# Both runners: 96 calls.
+npm run eval:fragment-selection -- --agent codex --agent claude
+```
+
+### Antigravity, Claude, Codex, and Custom Agent CLIs
+
+The built-in adapters are `claude`, `codex`, and `agy` (Antigravity CLI). Run live evals with any built-in adapter:
+
+```bash
+npm run eval:all -- --agent agy
+npm run eval:all -- --agent claude
+npm run eval:all -- --agent codex
+```
+
+Any other headless CLI can use `--agent custom`. The runner must:
+
+1. Read the complete prompt from standard input or process its prompt parameter.
+2. Run non-interactively in the repository working directory.
+3. Print its final response to standard output. The review eval must also allow the agent to write the report path named in the prompt.
+4. Exit with a nonzero status when the agent call fails.
+
+[Gemini CLI headless mode](https://geminicli.com/docs/cli/headless/) accepts standard input alongside a `-p` prompt. Once Gemini is installed and authenticated, run every live eval with:
+
+```bash
+npm run eval:all -- \
+  --agent custom \
+  --agent-cmd gemini \
+  --agent-arg -p \
+  --agent-arg "Follow the complete instructions from standard input." \
+  --agent-arg --output-format \
+  --agent-arg text \
+  --agent-arg --approval-mode \
+  --agent-arg yolo \
+  --agent-arg --skip-trust \
+  --env-pass GEMINI_API_KEY \
+  --env-pass GOOGLE_API_KEY
+```
+
+This uses `yolo` because the review eval must write its report. To run fragment selection alone with a read-only policy:
+
+```bash
+npm run eval:fragment-selection -- \
+  --agent custom \
+  --agent-cmd gemini \
+  --agent-arg -p \
+  --agent-arg "Follow the complete instructions from standard input." \
+  --agent-arg --output-format \
+  --agent-arg text \
+  --agent-arg --approval-mode \
+  --agent-arg plan \
+  --agent-arg --skip-trust \
+  --env-pass GEMINI_API_KEY \
+  --env-pass GOOGLE_API_KEY
+```
+
+`--env-pass` is required only for credentials stored in environment variables. Stored CLI logins use the home directory that the harness already passes through. Model selection for a custom runner is also explicit, using repeated `--agent-arg` values for that CLI's model flag and value.
+
+### What Passes
+
+| Eval                              | Passing result                                                                                                                                        | Default volume               |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `npm run eval:all -- --agent ...` | Both live evals below pass for the selected runner                                                                                                    | 48 selections plus 3 reviews |
+| Fragment selection                | At least 90% required-fragment recall, at most 10% forbidden-fragment selection, and stable choices across repeated cases                             | 24 cases twice: 48 calls     |
+| Test review                       | At least 70% overall recall, 100% CRITICAL recall, at least 80% clean-file precision, score standard deviation no higher than 3, and a stable verdict | Three complete reviews       |
+| `npm run test:eval-data`          | Every case references valid workflow files and indexed fragments; required and forbidden sets do not overlap                                          | No agent calls               |
+
+### CI Usage
+
+Run the deterministic check on every pull request:
+
+```bash
+npm ci
+npm run test:eval-data
+```
+
+Run live evals in a scheduled or manually triggered CI job after installing and authenticating the selected agent CLI:
+
+```bash
+npm ci
+npm run eval:all -- --agent codex
+```
+
+The eval harnesses use CI-compatible exit codes: `0` means every threshold passed, `1` means a measured result missed a threshold, and `2` means the environment could not run the eval. Live jobs consume model quota and can vary as models change, so keep their result separate from the deterministic pull-request gate until the team chooses to make model quality a required check.
+
+TEA applies the same evidence rule to its documentation. Unproven explanations are labeled as hypotheses, and workarounds are labeled as countermeasures. `DESIGN-CRITERIA-REGISTRY.md` records the investigations behind the review rules and scoring decisions.
 
 ## Extending TEA
 
@@ -536,7 +697,7 @@ npx bmad-method install
 /bmad-testarch-test-design    # run a workflow directly
 ```
 
-Codex uses `$` in place of `/`.
+Hosts that use dollar-prefixed skills use `$` in place of `/`.
 
 ### Rollback a Release (if needed)
 

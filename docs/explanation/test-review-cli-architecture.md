@@ -75,7 +75,7 @@ The CLI hardcodes the module defaults (mirroring `src/module.yaml`) so it can st
 
 The same argument covers inputs the prompt never sees. The model is one: nothing about it appears in the prompt text, and it decides the verdict more than most things that do. An unpinned model is resolved by the vendor CLI from its own config file, which exists on a developer machine and not on a CI runner, so "vendor agnostic" quietly meant "different reviewer in each environment", and the CI reviewer changed whenever the vendor shipped a new default. Same defect as the unstated config keys, one layer down: the branch lived in the spawn instead of the prompt, which is why it survived the first pass.
 
-Each adapter now pins a `defaultModel` and `--model` overrides it. The resolved value goes into the verdict JSON next to the agent, because a score with no attribution cannot be compared to another. An input is stated or it is decided for you, and where the input lives has nothing to do with whether that is true.
+Each built-in adapter now pins a `defaultModel` and `--model` overrides it. The resolved value goes into the verdict JSON next to the agent, because a score with no attribution cannot be compared to another. The custom runner has no portable model flag, so its caller supplies model selection through explicit runner arguments and keeps that configuration beside the result. An input is stated or it is decided for you, and where the input lives has nothing to do with whether that is true.
 
 ---
 

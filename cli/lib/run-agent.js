@@ -1,6 +1,6 @@
 /**
- * Spawn the review agent CLI (claude/codex per agent-adapters.js, or the
- * --agent-cmd executable override). This is one of two subprocesses the
+ * Spawn the review agent CLI through a built-in adapter or the custom runner
+ * contract. This is one of two subprocesses the
  * CLI launches; the other is `git diff` in changed-tests.js. Never exercised
  * live by unit tests (a stub agent is used instead) — see
  * docs/reference/tea-test-review-cli.md for how each real vendor was verified.
@@ -87,7 +87,17 @@ function runAgent(
     throw error;
   }
   const resolvedCommand = agentCommand || adapter.command;
-  const agentArgv = adapter.buildArgv(agentArgs, resolveModel(agent, model, agentArgs));
+  if (!resolvedCommand) {
+    const error = new Error(`agent "${agent}" requires an explicit --agent-cmd executable.`);
+    error.code = 'AGENT_COMMAND_REQUIRED';
+    throw error;
+  }
+  let agentArgv = adapter.buildArgv(agentArgs, resolveModel(agent, model, agentArgs));
+  let input = prompt;
+  if (adapter.promptViaArgv) {
+    agentArgv = agentArgv.map((arg) => (arg === '__PROMPT__' ? prompt : arg));
+    input = undefined;
+  }
   const isolated = spawnPrefix.length > 0;
   const command = isolated ? spawnPrefix[0] : resolvedCommand;
   const args = isolated ? [...spawnPrefix.slice(1), resolvedCommand, ...agentArgv] : agentArgv;
@@ -95,7 +105,7 @@ function runAgent(
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
-    input: prompt,
+    input,
     env: buildMinimalEnv(envPass, process.env, adapter.envNames),
     maxBuffer: 64 * 1024 * 1024,
     timeout,

@@ -38,6 +38,7 @@
  *   node test/eval-fragment-selection.js --validate-only
  *   node test/eval-fragment-selection.js --agent claude --runs 3
  *   node test/eval-fragment-selection.js --agent codex --workflow bmad-testarch-automate
+ *   node test/eval-fragment-selection.js --agent custom --agent-cmd my-runner --agent-arg --headless
  *
  * Exit codes:
  *   0  data is valid (--validate-only), or every vendor met the thresholds
@@ -90,8 +91,12 @@ function fatal(code, message) {
 function parseArgs(argv) {
   const agents = [];
   const workflows = [];
+  const agentArgs = [];
+  const envPass = [];
   let runs = 2;
   let validateOnly = false;
+  let agentCmd;
+  let model;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
@@ -115,6 +120,32 @@ function parseArgs(argv) {
         index += 1;
         break;
       }
+      case '--agent-cmd': {
+        agentCmd = argv[index + 1];
+        if (!agentCmd) fatal(2, '--agent-cmd requires an executable path or name');
+        index += 1;
+        break;
+      }
+      case '--agent-arg': {
+        const value = argv[index + 1];
+        if (value === undefined) fatal(2, '--agent-arg requires a value');
+        agentArgs.push(value);
+        index += 1;
+        break;
+      }
+      case '--env-pass': {
+        const value = argv[index + 1];
+        if (!value) fatal(2, '--env-pass requires an environment variable name');
+        envPass.push(value);
+        index += 1;
+        break;
+      }
+      case '--model': {
+        model = argv[index + 1];
+        if (!model) fatal(2, '--model requires a model name');
+        index += 1;
+        break;
+      }
       case '--validate-only': {
         validateOnly = true;
         break;
@@ -125,7 +156,11 @@ function parseArgs(argv) {
     }
   }
   if (agents.length === 0) agents.push('claude');
-  return { agents, workflows, runs, validateOnly };
+  if (agents.includes('custom') && !agentCmd) fatal(2, '--agent custom requires --agent-cmd');
+  if (agents.length > 1 && (agentCmd || agentArgs.length > 0 || envPass.length > 0 || model)) {
+    fatal(2, 'runner overrides require exactly one --agent; run separate commands for different runner configurations');
+  }
+  return { agents, workflows, runs, validateOnly, agentCmd, agentArgs, envPass, model };
 }
 
 /** Every evals.json under test/evals, or only the requested workflows. */
@@ -320,7 +355,7 @@ function scoreCase(item, selected) {
   };
 }
 
-function preflight(agents) {
+function preflight({ agents, agentCmd }) {
   const problems = [];
   for (const agent of agents) {
     // Check the name against the adapter registry BEFORE spawning it. runAgent
@@ -330,9 +365,10 @@ function preflight(agents) {
       problems.push(`unknown agent "${agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
       continue;
     }
-    const probe = spawnSync(agent, ['--version'], { encoding: 'utf8' });
-    if (probe.error) problems.push(`vendor CLI "${agent}" is not on PATH (${probe.error.code})`);
-    const credential = missingCredential(agent);
+    const executable = agent === 'custom' ? agentCmd : agent;
+    const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
+    if (probe.error) problems.push(`agent CLI "${executable}" is not on PATH (${probe.error.code})`);
+    const credential = agent === 'custom' ? null : missingCredential(agent);
     if (credential) problems.push(credential);
   }
   if (problems.length > 0) {
@@ -344,7 +380,8 @@ function preflight(agents) {
 }
 
 function main() {
-  const { agents, workflows, runs, validateOnly } = parseArgs(process.argv.slice(2));
+  const options = parseArgs(process.argv.slice(2));
+  const { agents, workflows, runs, validateOnly } = options;
 
   console.log(`${colors.cyan}========================================`);
   console.log('tea fragment-selection eval harness');
@@ -370,8 +407,8 @@ function main() {
     process.exit(0);
   }
 
-  preflight(agents);
-  console.log(`${colors.dim}${runs} run(s) per case per vendor${colors.reset}\n`);
+  preflight(options);
+  console.log(`${colors.dim}${runs} run(s) per case per agent${colors.reset}\n`);
 
   let anyBelowThreshold = false;
 
@@ -393,7 +430,15 @@ function main() {
         for (let runIndex = 0; runIndex < runs; runIndex += 1) {
           let stdout = '';
           try {
-            ({ stdout } = runAgent(prompt, { agent, timeout: RUN_TIMEOUT_MS, cwd: PROJECT_ROOT }));
+            ({ stdout } = runAgent(prompt, {
+              agent,
+              agentCommand: options.agentCmd,
+              agentArgs: options.agentArgs,
+              envPass: options.envPass,
+              model: options.model,
+              timeout: RUN_TIMEOUT_MS,
+              cwd: PROJECT_ROOT,
+            }));
           } catch (error) {
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: ${error.message}${colors.reset}`);
             unmeasured += 1;
@@ -469,4 +514,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { loadSuites, validateSuites, parseSelection, scoreCase, buildPrompt, THRESHOLDS };
+module.exports = { loadSuites, validateSuites, parseSelection, scoreCase, buildPrompt, parseArgs, THRESHOLDS };

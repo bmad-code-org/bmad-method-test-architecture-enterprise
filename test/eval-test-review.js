@@ -21,6 +21,7 @@
  * Usage:
  *   node test/eval-test-review.js --agent codex --runs 3
  *   node test/eval-test-review.js --agent claude --agent codex --runs 5
+ *   node test/eval-test-review.js --agent custom --agent-cmd my-runner --agent-arg --headless
  *   node test/eval-test-review.js --preflight-only
  *
  * Exit codes:
@@ -35,6 +36,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
@@ -66,8 +68,12 @@ const colors = {
 
 function parseArgs(argv) {
   const agents = [];
+  const agentArgs = [];
+  const envPass = [];
   let runs = 3;
   let preflightOnly = false;
+  let agentCmd;
+  let model;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
@@ -84,6 +90,32 @@ function parseArgs(argv) {
         index += 1;
         break;
       }
+      case '--agent-cmd': {
+        agentCmd = argv[index + 1];
+        if (!agentCmd) fatal(2, '--agent-cmd requires an executable path or name');
+        index += 1;
+        break;
+      }
+      case '--agent-arg': {
+        const value = argv[index + 1];
+        if (value === undefined) fatal(2, '--agent-arg requires a value');
+        agentArgs.push(value);
+        index += 1;
+        break;
+      }
+      case '--env-pass': {
+        const value = argv[index + 1];
+        if (!value) fatal(2, '--env-pass requires an environment variable name');
+        envPass.push(value);
+        index += 1;
+        break;
+      }
+      case '--model': {
+        model = argv[index + 1];
+        if (!model) fatal(2, '--model requires a model name');
+        index += 1;
+        break;
+      }
       case '--preflight-only': {
         preflightOnly = true;
         break;
@@ -94,11 +126,15 @@ function parseArgs(argv) {
     }
   }
   if (agents.length === 0) agents.push('codex');
+  if (agents.includes('custom') && !agentCmd) fatal(2, '--agent custom requires --agent-cmd');
+  if (agents.length > 1 && (agentCmd || agentArgs.length > 0 || envPass.length > 0 || model)) {
+    fatal(2, 'runner overrides require exactly one --agent; run separate commands for different runner configurations');
+  }
   // Variance across one run is not a number. Say so rather than printing 0.
   if (runs < 2 && !preflightOnly) {
     console.error(`${colors.yellow}note${colors.reset}: --runs ${runs} cannot measure variance; use --runs 2 or more.`);
   }
-  return { agents, runs, preflightOnly };
+  return { agents, runs, preflightOnly, agentCmd, agentArgs, envPass, model };
 }
 
 function fatal(code, message) {
@@ -114,7 +150,7 @@ function fatal(code, message) {
  * blocks the eval on a machine where the vendor is plainly logged in. Both CLIs
  * read a stored credential keyed by HOME (which is why run-agent.js forwards HOME
  * and USER): claude keeps one in the macOS Keychain or ~/.claude/.credentials.json,
- * codex in ~/.codex/auth.json — verified 2026-08-03, see agent-adapters.js.
+ * codex in ~/.codex/auth.json ; verified 2026-08-03, see agent-adapters.js.
  */
 function missingCredential(agent) {
   const home = process.env.HOME || os.homedir();
@@ -140,7 +176,7 @@ function missingCredential(agent) {
  * and reads as "the reviewer found nothing", which is the most expensive possible
  * way to be wrong about your own tool.
  */
-function preflight(agents) {
+function preflight({ agents, agentCmd }) {
   const problems = [];
 
   if (!fs.existsSync(CLI)) problems.push(`CLI not found at ${CLI}`);
@@ -182,9 +218,14 @@ function preflight(agents) {
   }
 
   for (const agent of agents) {
-    const probe = spawnSync(agent, ['--version'], { encoding: 'utf8' });
-    if (probe.error) problems.push(`vendor CLI "${agent}" is not on PATH (${probe.error.code})`);
-    const credential = missingCredential(agent);
+    if (!Object.prototype.hasOwnProperty.call(AGENT_ADAPTERS, agent)) {
+      problems.push(`unknown agent "${agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
+      continue;
+    }
+    const executable = agent === 'custom' ? agentCmd : agent;
+    const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
+    if (probe.error) problems.push(`agent CLI "${executable}" is not on PATH (${probe.error.code})`);
+    const credential = agent === 'custom' ? null : missingCredential(agent);
     if (credential) problems.push(credential);
   }
 
@@ -195,12 +236,14 @@ function preflight(agents) {
     process.exit(2);
   }
 
-  console.log(`${colors.green}âœ“${colors.reset} pre-flight: CLI, fixtures, ground truth, and ${agents.length} vendor credential(s) present`);
+  console.log(
+    `${colors.green}âœ“${colors.reset} pre-flight: CLI, fixtures, ground truth, and runner executable(s) available; built-in credentials checked`,
+  );
   return groundTruth;
 }
 
 /** One review of the whole fixture corpus. Returns the parsed verdict, or null. */
-function runReview(agent, runIndex) {
+function runReview(agent, runIndex, runner = {}) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-'));
   const jsonPath = path.join(runDir, 'verdict.json');
   const reviewFiles = ['seeded/checkout.spec.ts', 'seeded/orders.service.spec.ts', 'clean/profile.spec.ts'].map((relative) =>
@@ -215,7 +258,12 @@ function runReview(agent, runIndex) {
     //
     // Every run is bounded. An agent that hangs would otherwise stall the whole
     // matrix with no output and no way to tell a hang from a slow model.
-    const result = spawnSync(process.execPath, [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath], {
+    const cliArgs = [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath];
+    if (runner.agentCmd) cliArgs.push('--agent-cmd', runner.agentCmd);
+    if (runner.model) cliArgs.push('--model', runner.model);
+    for (const value of runner.agentArgs ?? []) cliArgs.push(`--agent-arg=${value}`);
+    for (const name of runner.envPass ?? []) cliArgs.push('--env-pass', name);
+    const result = spawnSync(process.execPath, cliArgs, {
       encoding: 'utf8',
       cwd: path.join(__dirname, '..'),
       timeout: RUN_TIMEOUT_MS,
@@ -246,7 +294,7 @@ function runReview(agent, runIndex) {
  *
  * The verdict's own `violations` field is four severity COUNTS, not findings, so
  * recall cannot be scored from it. The report is the contract, and it renders each
- * finding with a `**Row**:` identity beside its `**Location**:` line — matching on
+ * finding with a `**Row**:` identity beside its `**Location**:` line ; matching on
  * the registry row is what makes a hit comparable across vendors, since prose
  * descriptions of the same defect differ and row identities do not.
  *
@@ -364,13 +412,14 @@ const ratio = (numerator, denominator) => (denominator === 0 ? Number.NaN : nume
 const pct = (value) => (Number.isNaN(value) ? '  n/a' : `${(value * 100).toFixed(0).padStart(3)}%`);
 
 function main() {
-  const { agents, runs, preflightOnly } = parseArgs(process.argv.slice(2));
+  const options = parseArgs(process.argv.slice(2));
+  const { agents, runs, preflightOnly } = options;
 
   console.log(`${colors.cyan}========================================`);
   console.log('tea-test-review eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const groundTruth = preflight(agents);
+  const groundTruth = preflight(options);
   if (preflightOnly) {
     console.log(`\n${colors.green}pre-flight only; nothing measured.${colors.reset}`);
     process.exit(0);
@@ -378,7 +427,7 @@ function main() {
 
   const plantedTotal = (groundTruth.files ?? []).reduce((sum, file) => sum + (file.planted ?? []).length, 0);
   console.log(
-    `${colors.dim}corpus: ${groundTruth.files.length} fixtures, ${plantedTotal} planted defects, ${runs} run(s) per vendor${colors.reset}\n`,
+    `${colors.dim}corpus: ${groundTruth.files.length} fixtures, ${plantedTotal} planted defects, ${runs} run(s) per agent${colors.reset}\n`,
   );
 
   let anyBelowThreshold = false;
@@ -387,7 +436,7 @@ function main() {
     console.log(`${colors.cyan}${agent}${colors.reset}`);
     const results = [];
     for (let runIndex = 0; runIndex < runs; runIndex += 1) {
-      const verdict = runReview(agent, runIndex);
+      const verdict = runReview(agent, runIndex, options);
       if (!verdict) continue;
       const scored = scoreVerdict(verdict, groundTruth);
       if (!scored) {
@@ -471,4 +520,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { findingsFromReport, scoreVerdict, missingCredential, THRESHOLDS };
+module.exports = { findingsFromReport, scoreVerdict, missingCredential, parseArgs, THRESHOLDS };

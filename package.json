@@ -39,6 +39,7 @@
     "docs:fix-links": "node tools/fix-doc-links.js --write",
     "docs:preview": "npm --prefix website run preview",
     "docs:validate-links": "node tools/validate-doc-links.js",
+    "eval:all": "node test/eval-all.js",
     "eval:fragment-selection": "node test/eval-fragment-selection.js",
     "eval:test-review": "node test/eval-test-review.js",
     "format:check": "prettier --check .",
