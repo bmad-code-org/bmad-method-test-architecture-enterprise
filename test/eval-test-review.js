@@ -247,7 +247,7 @@ function runReview(agent, runIndex, runner = {}) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-'));
   const jsonPath = path.join(runDir, 'verdict.json');
   const reviewFiles = ['seeded/checkout.spec.ts', 'seeded/orders.service.spec.ts', 'clean/profile.spec.ts'].map((relative) =>
-    path.join(FIXTURE_ROOT, relative),
+    path.relative(path.join(__dirname, '..'), path.join(FIXTURE_ROOT, relative)),
   );
 
   try {

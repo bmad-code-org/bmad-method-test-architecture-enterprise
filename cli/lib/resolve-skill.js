@@ -14,6 +14,7 @@ const SKILL_CANDIDATES = [
   path.join('_bmad', 'tea', 'workflows', 'testarch', SKILL_NAME),
   path.join('.claude', 'skills', SKILL_NAME),
   path.join('.agents', 'skills', SKILL_NAME),
+  path.join('src', 'workflows', 'testarch', SKILL_NAME),
 ];
 
 const INSTALL_REMEDIATION =
