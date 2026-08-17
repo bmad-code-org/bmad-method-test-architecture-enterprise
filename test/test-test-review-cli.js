@@ -25,15 +25,15 @@
  *   waivable exit 2/3)
  * - isolate backend selection and profile/prefix construction
  * - run-agent minimal env, adapter lookup (AGENT_UNKNOWN), and AGENT_NOT_FOUND
- * - agent-adapters table shape for claude/codex (command, buildArgv arg
- *   passthrough, envNames)
+ * - agent-adapters table shape for agy/claude/codex plus the explicit custom
+ *   runner contract
  * - CLI end-to-end with --agent none, with a stub agent (spawned child
  *   processes), against a real temp git repo, and under the chmod isolation
  *   fallback
  *
  * No vendor CLI is ever actually spawned here; the stub agent
  * (fixtures/test-review-cli/stub-agent.js) stands in via --agent-cmd for
- * every vendor's argv shape. The claude and codex adapters were each verified
+ * every built-in adapter's argv shape. The claude and codex adapters were each verified
  * with a real live run outside this suite — see
  * docs/reference/tea-test-review-cli.md. A gemini adapter was drafted and
  * dropped (see agent-adapters.js) for lack of a verifiable credential.
@@ -88,6 +88,9 @@ const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable
 const { runAgent, buildMinimalEnv } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS } = require('../cli/lib/resolve-tea-config');
+const { parseArgs: parseReviewEvalArgs, missingCredential } = require('./eval-test-review');
+const { parseArgs: parseFragmentEvalArgs } = require('./eval-fragment-selection');
+const { parseArgs: parseAllEvalArgs, buildInvocations, aggregateExitCodes } = require('./eval-all');
 
 // ANSI colors
 const colors = {
@@ -2045,6 +2048,171 @@ async function runTests() {
         );
       }
     }
+    const customAdapter = AGENT_ADAPTERS.custom;
+    assert(
+      customAdapter.command === null &&
+        customAdapter.defaultModel === null &&
+        customAdapter.modelFlags.length === 0 &&
+        customAdapter.buildArgv(['--headless']).join(' ') === '--headless',
+      'custom adapter has no implicit executable, model, or argv',
+      JSON.stringify(customAdapter.buildArgv(['--headless'])),
+    );
+    assert(resolveModel('custom') === null, 'custom adapter records no implicit model');
+    try {
+      resolveModel('custom', 'some-model');
+      assert(false, 'custom adapter rejects --model because runner argv must be explicit');
+    } catch (error) {
+      assert(
+        error.code === 'MODEL_UNSUPPORTED',
+        'custom adapter directs model selection through --agent-arg',
+        `${error.code}: ${error.message}`,
+      );
+    }
+    try {
+      runAgent('prompt', { agent: 'custom' });
+      assert(false, 'custom adapter without --agent-cmd throws');
+    } catch (error) {
+      assert(
+        error.code === 'AGENT_COMMAND_REQUIRED',
+        'custom adapter requires an explicit runner executable',
+        `${error.code}: ${error.message}`,
+      );
+    }
+    const customEcho = runAgent('portable prompt', {
+      agent: 'custom',
+      agentCommand: process.execPath,
+      agentArgs: ['-e', 'process.stdin.pipe(process.stdout)'],
+    });
+    assert(customEcho.stdout === 'portable prompt', 'custom runner receives the complete prompt on stdin', customEcho.stdout);
+
+    const parsedReviewRunner = parseReviewEvalArgs([
+      '--agent',
+      'custom',
+      '--agent-cmd',
+      'runner',
+      '--agent-arg',
+      '--headless',
+      '--env-pass',
+      'RUNNER_TOKEN',
+      '--runs',
+      '2',
+    ]);
+    assert(
+      parsedReviewRunner.agents[0] === 'custom' &&
+        parsedReviewRunner.agentCmd === 'runner' &&
+        parsedReviewRunner.agentArgs[0] === '--headless' &&
+        parsedReviewRunner.envPass[0] === 'RUNNER_TOKEN' &&
+        parsedReviewRunner.runs === 2,
+      'test-review eval parses the portable runner contract',
+      JSON.stringify(parsedReviewRunner),
+    );
+    const parsedFragmentRunner = parseFragmentEvalArgs([
+      '--agent',
+      'custom',
+      '--agent-cmd',
+      'runner',
+      '--agent-arg',
+      '--headless',
+      '--workflow',
+      'bmad-testarch-ci',
+      '--runs',
+      '1',
+    ]);
+    assert(
+      parsedFragmentRunner.agents[0] === 'custom' &&
+        parsedFragmentRunner.agentCmd === 'runner' &&
+        parsedFragmentRunner.agentArgs[0] === '--headless' &&
+        parsedFragmentRunner.workflows[0] === 'bmad-testarch-ci' &&
+        parsedFragmentRunner.runs === 1,
+      'fragment-selection eval parses the portable runner contract',
+      JSON.stringify(parsedFragmentRunner),
+    );
+    const parsedAll = parseAllEvalArgs(['--agent', 'codex', '--fragment-runs', '2', '--review-runs', '3']);
+    const allInvocations = buildInvocations(parsedAll);
+    assert(
+      allInvocations.length === 2 &&
+        allInvocations[0].args.includes('codex') &&
+        allInvocations[0].args.includes('2') &&
+        allInvocations[1].args.includes('codex') &&
+        allInvocations[1].args.includes('3'),
+      'eval:all forwards one selected agent to both live harnesses with their own repetition counts',
+      JSON.stringify(allInvocations),
+    );
+    const parsedAllCustom = parseAllEvalArgs([
+      '--agent',
+      'custom',
+      '--agent-cmd',
+      'gemini',
+      '--agent-arg',
+      '-p',
+      '--env-pass',
+      'GEMINI_API_KEY',
+    ]);
+    const customInvocations = buildInvocations(parsedAllCustom);
+    assert(
+      customInvocations.every(
+        (invocation) =>
+          invocation.args.includes('custom') &&
+          invocation.args.includes('gemini') &&
+          invocation.args.includes('-p') &&
+          invocation.args.includes('GEMINI_API_KEY'),
+      ),
+      'eval:all forwards the same portable runner contract to both live harnesses',
+      JSON.stringify(customInvocations),
+    );
+    for (const script of ['eval-all.js', 'eval-fragment-selection.js', 'eval-test-review.js']) {
+      const rejectedCustomModel = spawnSync(
+        process.execPath,
+        [path.join(repoRoot, 'test', script), '--agent', 'custom', '--agent-cmd', process.execPath, '--model', 'runner-model'],
+        { cwd: repoRoot, encoding: 'utf8' },
+      );
+      assert(
+        rejectedCustomModel.status === 2 && rejectedCustomModel.stderr.includes('--model is not supported by --agent custom'),
+        `${script} rejects --model with the custom adapter before evaluation begins`,
+        `status=${rejectedCustomModel.status} stderr=${rejectedCustomModel.stderr}`,
+      );
+    }
+
+    const versionFailRunner = path.join(tmpRoot, 'version-fail-runner');
+    fs.writeFileSync(versionFailRunner, '#!/bin/sh\nif [ "$1" = "--version" ]; then exit 9; fi\nexit 0\n', { mode: 0o755 });
+    for (const [script, extraArgs] of [
+      ['eval-fragment-selection.js', ['--workflow', 'bmad-testarch-ci', '--runs', '1']],
+      ['eval-test-review.js', ['--preflight-only']],
+    ]) {
+      const rejectedProbe = spawnSync(
+        process.execPath,
+        [path.join(repoRoot, 'test', script), '--agent', 'custom', '--agent-cmd', versionFailRunner, ...extraArgs],
+        { cwd: repoRoot, encoding: 'utf8' },
+      );
+      assert(
+        rejectedProbe.status === 2 && rejectedProbe.stderr.includes('failed its --version probe (exit 9)'),
+        `${script} rejects a runner whose --version probe exits nonzero`,
+        `status=${rejectedProbe.status} stderr=${rejectedProbe.stderr}`,
+      );
+    }
+
+    const priorHome = process.env.HOME;
+    const priorOpenAiKey = process.env.OPENAI_API_KEY;
+    const emptyCodexHome = path.join(tmpRoot, 'empty-codex-home');
+    fs.mkdirSync(emptyCodexHome, { recursive: true });
+    process.env.HOME = emptyCodexHome;
+    process.env.OPENAI_API_KEY = 'sk-present-but-not-logged-in';
+    try {
+      assert(
+        missingCredential('codex')?.includes('stored login at ~/.codex/auth.json'),
+        'codex eval preflight requires the stored login that the CLI actually consumes',
+        String(missingCredential('codex')),
+      );
+    } finally {
+      if (priorHome === undefined) delete process.env.HOME;
+      else process.env.HOME = priorHome;
+      if (priorOpenAiKey === undefined) delete process.env.OPENAI_API_KEY;
+      else process.env.OPENAI_API_KEY = priorOpenAiKey;
+    }
+    assert(
+      aggregateExitCodes([0, 0]) === 0 && aggregateExitCodes([1, 0]) === 1 && aggregateExitCodes([1, 2]) === 2,
+      'eval:all preserves pass, measured-failure, and environment-failure exit classes',
+    );
     assert(resolveModel('not-a-real-vendor') === null, 'resolveModel returns null for an unknown adapter');
     try {
       resolveModel('codex', undefined, ['-m', 'one', '--model=two']);
@@ -2069,6 +2237,11 @@ async function runTests() {
     const stubEnv = buildMinimalEnv([], { PATH: '/usr/bin', OPENAI_API_KEY: 'sk-x' }, AGENT_ADAPTERS.codex.envNames);
     assert(stubEnv.OPENAI_API_KEY === 'sk-x', "codex adapter's envNames reach buildMinimalEnv", JSON.stringify(stubEnv));
 
+    assert(AGENT_ADAPTERS.agy && AGENT_ADAPTERS.agy.command === 'agy', 'agy adapter is registered with command agy');
+    assert(AGENT_ADAPTERS.agy.promptViaArgv === true, 'agy adapter has promptViaArgv enabled');
+    const agyArgv = AGENT_ADAPTERS.agy.buildArgv([], 'gemini-2.5');
+    assert(agyArgv.includes('--print') && agyArgv.includes('__PROMPT__'), 'agy adapter builds argv containing --print __PROMPT__');
+
     try {
       runAgent('prompt', { agentCommand: '/nonexistent/tea-test-review-agent-xyz' });
       assert(false, 'nonexistent agent executable throws');
@@ -2085,7 +2258,7 @@ async function runTests() {
       assert(false, 'unknown agent key throws');
     } catch (error) {
       assert(
-        error.code === 'AGENT_UNKNOWN' && error.message.includes('claude, codex'),
+        error.code === 'AGENT_UNKNOWN' && error.message.includes('claude, codex, custom, agy'),
         'unknown agent key throws AGENT_UNKNOWN naming the valid adapters',
         `${error.code}: ${error.message}`,
       );
@@ -2510,6 +2683,50 @@ async function runTests() {
       codexAdapterRun.status === 0,
       "--agent codex resolves its adapter's argv/env and still runs the stub via --agent-cmd",
       `status=${codexAdapterRun.status} stderr=${codexAdapterRun.stderr}`,
+    );
+
+    const customAdapterOut = path.join(tmpRoot, 'custom-adapter-run', 'test-review.md');
+    const customAdapterJson = path.join(tmpRoot, 'custom-adapter-run', 'verdict.json');
+    const customAdapterRun = runCli(
+      [
+        '--agent',
+        'custom',
+        '--files',
+        'tests/checkout.spec.ts',
+        '--project-root',
+        fixtureProject,
+        '--output',
+        customAdapterOut,
+        '--json',
+        customAdapterJson,
+        '--agent-cmd',
+        stubAgent,
+        '--agent-arg=--custom-marker',
+        '--no-isolate',
+        ...stubPass('STUB_MODE', 'STUB_ASSERT_STDIN'),
+      ],
+      { STUB_MODE: 'approve', STUB_ASSERT_STDIN: '1' },
+    );
+    const customAdapterPayload = customAdapterRun.status === 0 ? JSON.parse(fs.readFileSync(customAdapterJson, 'utf8')) : {};
+    assert(
+      customAdapterRun.status === 0 && customAdapterPayload.agent === 'custom' && customAdapterPayload.model === null,
+      '--agent custom runs an explicit stdin-driven executable and records the portable runner identity',
+      `status=${customAdapterRun.status} stderr=${customAdapterRun.stderr} payload=${JSON.stringify(customAdapterPayload)}`,
+    );
+
+    const missingCustomCommand = runCli([
+      '--agent',
+      'custom',
+      '--files',
+      'tests/checkout.spec.ts',
+      '--project-root',
+      fixtureProject,
+      '--no-isolate',
+    ]);
+    assert(
+      missingCustomCommand.status === 2 && missingCustomCommand.stderr.includes('--agent custom requires --agent-cmd'),
+      '--agent custom fails during configuration validation when its executable is missing',
+      `status=${missingCustomCommand.status} stderr=${missingCustomCommand.stderr}`,
     );
 
     // The model has to reach the spawned argv, which only an end-to-end run can

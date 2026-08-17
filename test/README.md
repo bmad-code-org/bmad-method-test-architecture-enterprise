@@ -28,7 +28,7 @@ npm run validate:schemas
 ## tea-test-review CLI suite
 
 `test-test-review-cli.js` covers `cli/` in isolation. Its header comment lists
-every suite it contains. No vendor CLI (`claude`, `codex`) is ever actually
+every suite it contains. No vendor CLI (`agy`, `claude`, `codex`) is ever actually
 spawned here; `fixtures/test-review-cli/stub-agent.js` stands in via
 `--agent-cmd` for every adapter's argv shape.
 
@@ -53,5 +53,5 @@ about what a live agent emits. `wrapped-steps-flow.md` and `empty-steps-flow.md`
 exist because a real run produced a frontmatter shape that every other fixture
 had missed; `plain-bullets-key-strengths.md` exists because a real `--agent
 codex` run wrote plain `- ` bullets under Key Strengths/Weaknesses instead of
-the `✅`/`❌`-prefixed form `claude` reliably produces — the parser's own
+the `✅`/`❌`-prefixed form `claude` reliably produces; the parser's own
 best-effort design already tolerates this, the fixture just pins it down.

@@ -243,10 +243,14 @@ function main() {
       `model the review agent runs on, overriding whatever the vendor CLI would resolve from its own config (pinned defaults: ${Object.entries(
         AGENT_ADAPTERS,
       )
+        .filter(([, adapter]) => adapter.defaultModel)
         .map(([name, adapter]) => `${name}=${adapter.defaultModel}`)
         .join(', ')})`,
     )
-    .option('--agent-cmd <path>', 'override the agent executable (advanced; used by tests with a stub agent)')
+    .option(
+      '--agent-cmd <path>',
+      'override the selected adapter executable; required with --agent custom for any stdin-driven headless CLI',
+    )
     .option('--agent-arg <arg>', 'extra argument appended to the selected agent CLI argv (repeatable)', collect, [])
     .option(
       '--env-pass <NAME>',
@@ -298,6 +302,9 @@ function main() {
   if (!AGENTS.has(options.agent)) {
     fail(EXIT.ENV_ERROR, `--agent must be one of ${[...AGENTS].join(', ')}; got "${options.agent}".`);
   }
+  if (options.agent === 'custom' && !options.agentCmd) {
+    fail(EXIT.ENV_ERROR, '--agent custom requires --agent-cmd <path>.');
+  }
   if (options.scope !== undefined && !SCOPES.has(options.scope)) {
     fail(EXIT.ENV_ERROR, `--scope must be one of ${[...SCOPES].join(', ')}; got "${options.scope}".`);
   }
@@ -318,7 +325,7 @@ function main() {
     try {
       resolvedModel = resolveModel(options.agent, options.model, options.agentArg);
     } catch (error) {
-      if (error.code === 'MODEL_ARG_INVALID' || error.code === 'MODEL_ARG_CONFLICT') {
+      if (error.code === 'MODEL_ARG_INVALID' || error.code === 'MODEL_ARG_CONFLICT' || error.code === 'MODEL_UNSUPPORTED') {
         fail(EXIT.ENV_ERROR, error.message);
       }
       throw error;

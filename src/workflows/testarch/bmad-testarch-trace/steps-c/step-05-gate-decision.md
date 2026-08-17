@@ -297,8 +297,14 @@ if (!gateEligible) {
       : `P0 coverage is 100% and overall coverage is ${overallCoverage}% (minimum: 80%), but additional non-P1 gaps need mitigation.`;
   }
 
-  // Rule 6: Manual waiver — set gateDecision = 'WAIVED' and update rationale here
-  // if a stakeholder-approved waiver applies (wired through config or user input upstream).
+  // Rule 6: Manual waiver — deliberately not computed here. Rules 1-5 above are the only rules
+  // that set gateDecision automatically; WAIVED is never derived from coverage data or any other
+  // input to this step. It can only be applied by a human overriding the automated decision after
+  // the fact, and the resulting artifact must carry the full waiver contract (approver, approval
+  // date, waiver reason, expiry, monitoring plan, remediation owner, fix target) defined in
+  // trace-template.md's "Waiver Details" section and validated by checklist.md's Decision
+  // Integrity and Waiver Scenarios checks. There is no default waiver expiry anywhere in the
+  // repo; a human granting a waiver must supply one explicitly.
 
   // Oracle confidence overlay
   if (syntheticOracle && gateDecision === 'PASS' && effectiveOracleConfidence !== 'high') {

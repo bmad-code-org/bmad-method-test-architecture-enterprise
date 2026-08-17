@@ -123,7 +123,7 @@ Four workflows ship dedicated worker step files. Four resolve execution mode ins
 | `automate`    | Parallel generation | API, backend, E2E, mobile test generation                                 | Merges tests, fixtures, and summary stats                   |
 | `atdd`        | Parallel generation | Failing API tests, failing E2E tests                                      | Validates red-phase output, merges artifacts                |
 | `test-review` | Parallel validation | Determinism, isolation, maintainability, performance                      | Computes the combined quality score and report              |
-| `nfr-assess`  | Parallel validation | Security, performance, reliability, scalability                           | Computes overall risk, compliance summary, priority actions |
+| `nfr-assess`  | Parallel validation | Security, performance, reliability, maintainability                       | Computes overall risk, compliance summary, priority actions |
 | `framework`   | Sequential + probe  | Scaffold work units (structure/config, fixtures, samples)                 | Consolidates the generated framework setup                  |
 | `ci`          | Sequential + probe  | Pipeline generation                                                       | One deterministic pipeline artifact                         |
 | `test-design` | Sequential + probe  | Output generation                                                         | One deterministic design artifact                           |

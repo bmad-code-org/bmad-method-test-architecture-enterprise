@@ -1,5 +1,5 @@
 /**
- * Per-vendor agent adapter table: how to invoke each supported headless CLI.
+ * Agent adapter table: how to invoke each supported headless CLI.
  *
  * Each adapter supplies the default executable, the argv the CLI needs for a
  * non-interactive run with file read/write access to the working directory,
@@ -38,13 +38,16 @@
  * tier steady, not the exact weights. Pass a fully-qualified slug to --model
  * when a run has to be reproducible across model generations.
  *
- * A gemini adapter was drafted and partially probed (the real `-p`/
+ * A built-in gemini adapter was drafted and partially probed (the real `-p`/
  * `--approval-mode yolo`/`--skip-trust` flag surface, and that --skip-trust
  * clears the headless trusted-folder gate) but dropped from this table: this
  * account's `gemini` CLI OAuth login is on a since-deprecated Code Assist
  * free tier (IneligibleTierError) and no GEMINI_API_KEY/GOOGLE_API_KEY was
  * available to fall back to, so it was never verified end-to-end with a
- * parseable report. Re-add once it can actually be run, not before.
+ * parseable report. Re-add once it can actually be run. Until then, Gemini and
+ * other headless CLIs can use the custom adapter with an explicit executable
+ * and argv. That path makes no vendor-specific claims and keeps its runner
+ * contract visible at the call site.
  */
 
 const TOOLS = 'Read,Write,Edit,Glob,Grep';
@@ -184,6 +187,34 @@ const AGENT_ADAPTERS = {
     ],
     envNames: ['OPENAI_API_KEY'],
   },
+  custom: {
+    command: null,
+    defaultModel: null,
+    modelFlags: [],
+    // The custom runner contract is intentionally small: read the complete
+    // prompt from stdin, operate in cwd, write any requested artifact named in
+    // the prompt, print the final response to stdout, and exit nonzero on
+    // failure. Every argv value is supplied explicitly with --agent-arg.
+    buildArgv: (extra = []) => [...extra],
+    envNames: [],
+  },
+  agy: {
+    command: 'agy',
+    defaultModel: null,
+    modelFlags: ['--model'],
+    promptViaArgv: true,
+    // agy reads its prompt from the --print argument on argv.
+    buildArgv: (extra = [], model) => [
+      '--print',
+      '__PROMPT__',
+      '--output-format',
+      'text',
+      '--dangerously-skip-permissions',
+      ...modelArgv(AGENT_ADAPTERS.agy.modelFlags, model, extra),
+      ...extra,
+    ],
+    envNames: [],
+  },
 };
 
 /**
@@ -198,6 +229,15 @@ const AGENT_ADAPTERS = {
 function resolveModel(agent, model, extra = []) {
   const adapter = AGENT_ADAPTERS[agent];
   if (!adapter) {
+    return null;
+  }
+  if (adapter.modelFlags.length === 0) {
+    if (model !== undefined && model !== null) {
+      throw modelArgumentError(
+        'MODEL_UNSUPPORTED',
+        `--model is not supported by the ${agent} adapter; pass the runner's model flag with --agent-arg.`,
+      );
+    }
     return null;
   }
   const hasExplicitModel = model !== undefined && model !== null;

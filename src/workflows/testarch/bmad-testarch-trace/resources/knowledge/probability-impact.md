@@ -151,34 +151,21 @@ export type TestScenario = {
 };
 
 /**
- * Assess test scenarios and auto-assign priority based on risk score
+ * Priority is a separate judgment, not a function of risk score.
+ *
+ * Risk score classifies the remediation ACTION required (DOCUMENT/MONITOR/MITIGATE/BLOCK, see
+ * classifyRiskAction above). Priority (P0-P3) is assigned using the business-impact decision
+ * tree in test-priorities-matrix.md, which the risk score informs but does not determine. Two
+ * scenarios with the same score can carry different priorities depending on revenue impact,
+ * user reach, and workaround availability.
  */
-export function assessTestScenarios(scenarios: Omit<TestScenario, 'risk' | 'priority'>[]): TestScenario[] {
-  return scenarios.map((scenario) => {
-    // Auto-assign priority based on risk score
-    const priority = mapRiskToPriority(scenario.risk.score);
-    return { ...scenario, priority };
-  });
-}
-
-/**
- * Map risk score to test priority (P0-P3)
- * P0: Critical (score 9) - blocks release
- * P1: High (score 6-8) - must fix before release
- * P2: Medium (score 4-5) - fix if time permits
- * P3: Low (score 1-3) - document and defer
- */
-function mapRiskToPriority(score: number): 'P0' | 'P1' | 'P2' | 'P3' {
-  if (score === 9) return 'P0';
-  if (score >= 6) return 'P1';
-  if (score >= 4) return 'P2';
-  return 'P3';
-}
 
 /**
  * Example: Payment flow risk assessment
+ * Priority below follows the test-priorities-matrix.md decision tree, informed by (not derived
+ * from) the risk score.
  */
-export const paymentScenarios: Array<Omit<TestScenario, 'priority'>> = [
+export const paymentScenarios: TestScenario[] = [
   {
     id: 'PAY-001',
     title: 'Valid credit card payment completes successfully',
@@ -188,6 +175,7 @@ export const paymentScenarios: Array<Omit<TestScenario, 'priority'>> = [
       impact: 3, // Critical (revenue loss if broken)
       reasoning: 'Core revenue flow, but Stripe is well-tested',
     }),
+    priority: 'P0', // Revenue-critical core journey
     testLevel: 'E2E',
     owner: 'qa-team',
   },
@@ -200,6 +188,7 @@ export const paymentScenarios: Array<Omit<TestScenario, 'priority'>> = [
       impact: 2, // Degraded (users see error, but can retry)
       reasoning: 'Error handling logic is custom and complex',
     }),
+    priority: 'P1', // Core user journey, frequent error path
     testLevel: 'E2E',
     owner: 'qa-team',
   },
@@ -212,6 +201,7 @@ export const paymentScenarios: Array<Omit<TestScenario, 'priority'>> = [
       impact: 1, // Minor (cosmetic issue, email still sent)
       reasoning: 'Non-blocking, users get email regardless',
     }),
+    priority: 'P2', // Customer-facing presentation, with email still delivered
     testLevel: 'Unit',
     owner: 'dev-team',
   },
@@ -224,6 +214,7 @@ export const paymentScenarios: Array<Omit<TestScenario, 'priority'>> = [
       impact: 3, // Critical (complete checkout failure)
       reasoning: 'Rare but catastrophic, requires retry mechanism',
     }),
+    priority: 'P0', // Revenue-critical checkout failure with no workaround
     testLevel: 'API',
     owner: 'qa-team',
   },
@@ -256,7 +247,7 @@ export function generateRiskReport(scenarios: TestScenario[]): string {
 ${generateRiskMatrix()}
 
 ## Priority Distribution
-- **P0 (Blocker)**: ${priorityCounts.P0 || 0} scenarios
+- **P0 (Critical)**: ${priorityCounts.P0 || 0} scenarios
 - **P1 (High)**: ${priorityCounts.P1 || 0} scenarios
 - **P2 (Medium)**: ${priorityCounts.P2 || 0} scenarios
 - **P3 (Low)**: ${priorityCounts.P3 || 0} scenarios
@@ -278,7 +269,8 @@ ${scenarios
 
 **Key Points**:
 
-- Risk score → Priority mapping (P0-P3 automated)
+- Risk score → remediation action mapping (DOCUMENT/MONITOR/MITIGATE/BLOCK, automated); priority
+  is assigned separately via the test-priorities-matrix.md decision tree
 - Report generation with priority/action distribution
 - Scenarios sorted by risk score (highest first)
 - Visual matrix included in reports

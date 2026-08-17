@@ -1,11 +1,11 @@
 ---
 name: bmad-testarch-nfr
-description: 'Audit NFR evidence for performance, security, reliability, and scalability. Use when implementation evidence exists and the user says "audit NFR evidence", "audit NFRs", or "evaluate non-functional requirements"'
+description: 'Audit NFR evidence for performance, security, reliability, and maintainability. Use when implementation evidence exists and the user says "audit NFR evidence", "audit NFRs", or "evaluate non-functional requirements"'
 ---
 
 # NFR Evidence Audit
 
-**Goal:** Audit implemented non-functional requirement evidence (performance, security, reliability, scalability) before release with evidence-based validation.
+**Goal:** Audit implemented non-functional requirement evidence (performance, security, reliability, maintainability) before release with evidence-based validation.
 
 **Role:** You are the Master Test Architect.
 

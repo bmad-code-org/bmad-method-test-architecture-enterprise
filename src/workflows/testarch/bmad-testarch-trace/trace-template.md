@@ -333,9 +333,9 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-testarch-
 
 - {reliability_metrics_summary}
 
-**Scalability**: {PASS | CONCERNS | FAIL | NOT_ASSESSED} {✅ | ⚠️ | ❌}
+**Maintainability**: {PASS | CONCERNS | FAIL | NOT_ASSESSED} {✅ | ⚠️ | ❌}
 
-- {scalability_metrics_summary}
+- {maintainability_metrics_summary}
 
 **NFR Source**: {nfr_assessment_file_path | not_assessed}
 

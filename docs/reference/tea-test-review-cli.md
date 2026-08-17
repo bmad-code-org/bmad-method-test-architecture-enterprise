@@ -17,6 +17,8 @@ The skill is the source of truth for all review logic (checklist, scoring, repor
   - **Pinned with `--skill-root <path>`** (recommended for CI): unpack from a pinned npm tarball, point `--skill-root` at it. Reviewer never comes from the PR checkout.
 - For `--agent claude` (default): the `claude` CLI on `PATH`, authenticated via subscription/keychain login or `ANTHROPIC_API_KEY`/`CLAUDE_CODE_OAUTH_TOKEN` in the environment.
 - For `--agent codex`: the `codex` CLI on `PATH`, authenticated via `codex login`, which stores credentials in `$HOME/.codex/auth.json`. **`OPENAI_API_KEY` in the environment is not enough**: codex 0.146.0 never reads it, and a run with only that variable set sends no credential at all and fails with `401 ... Missing bearer or basic authentication in header`. On a machine with no interactive login, such as any CI runner, write the auth file first with `printenv OPENAI_API_KEY | codex login --with-api-key`.
+- For `--agent agy`: the `agy` CLI on `PATH` with its Antigravity session ready. It accepts `--model`; without an override it uses the session's model. This adapter sends the complete prompt through the `--print` process argument because `agy` does not consume the prompt from stdin.
+- For `--agent custom`: an explicit `--agent-cmd` executable that reads the prompt from stdin, runs non-interactively in the project directory, writes the report path named in the prompt, and exits nonzero on failure. Supply every runner argument with `--agent-arg` and allow required credential variables through with `--env-pass`.
 
 ## Run it locally
 
@@ -73,35 +75,35 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 
 ## Flags
 
-| Flag                                                   | Default                                    | Purpose                                                                                                                           |
-| ------------------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `--base <ref>`                                         | `origin/main`                              | Git base ref to diff changed files.                                                                                               |
-| `--files <list>`                                       | -                                          | Explicit review set (repeatable, comma-separated); skips the git diff and test-file filter.                                       |
-| `--scope <scope>`                                      | derived                                    | `review_scope` override (`single` \| `directory` \| `suite`); default `single` for one file, else `directory`.                    |
-| `--test-dir <dir>`                                     | `tests`                                    | `test_dir` hint passed to the skill.                                                                                              |
-| `--focus <text>`                                       | -                                          | Requester focus note handed to the reviewer verbatim; may raise scrutiny, never waives, and is quoted as a `**Focus**:` line.     |
-| `--test-glob <substring-or-regex>`                     | -                                          | Extra test-file matcher (substring or `/regex/`, repeatable).                                                                     |
-| `--project-root <dir>`                                 | current directory                          | Consuming project root.                                                                                                           |
-| `--skill-root <path>`                                  | probe the project                          | Trusted skill root (must contain `SKILL.md`); skips the install probe. Outside `--project-root`, the control-plane guard is moot. |
-| `--output <file>`                                      | `test-review.md`                           | Report path the agent writes.                                                                                                     |
-| `--json <file>`                                        | -                                          | Also write the verdict JSON here.                                                                                                 |
-| `--agent <agent>`                                      | `claude`                                   | `claude` or `codex` spawn the matching CLI via its adapter (`cli/lib/agent-adapters.js`); `none` prints the prompt only.          |
-| `--model <model>`                                      | `claude`: `sonnet`, `codex`: `gpt-5.6-sol` | Model the agent runs on. Overrides whatever the vendor CLI would pick from its own config. Rejected with `--agent none`.          |
-| `--agent-cmd <path>`                                   | the selected adapter's command             | Override the agent executable; the selected `--agent` adapter's argv/env still apply (advanced).                                  |
-| `--agent-arg <arg>`                                    | -                                          | Extra argument appended to the selected agent's argv (repeatable).                                                                |
-| `--env-pass <NAME>`                                    | -                                          | Env var allowed through beyond the default set (repeatable).                                                                      |
-| `--timeout-ms <n>`                                     | `1800000` (30 min)                         | Agent wall-clock timeout (SIGTERM on expiry).                                                                                     |
-| `--min-score <n>`                                      | -                                          | Fail when the quality score is below `n` (0-100).                                                                                 |
-| `--max-critical <n>`                                   | no cap                                     | Fail when Critical violations exceed `n`.                                                                                         |
-| `--min-files <n>`                                      | `1`                                        | Fail when fewer than `n` files are reviewed.                                                                                      |
-| `--fail-on <level>`                                    | `request-changes`                          | Weakest recommendation that fails CI.                                                                                             |
-| `--fail-on-skip`                                       | off                                        | Exit 1 instead of 0 on skip (no changed test files).                                                                              |
-| `--waive <reason>`                                     | -                                          | Waive a fail (exit 0), record the reason; requires `--waive-until`. Exit 2/3 never waivable.                                      |
-| `--waive-until <YYYY-MM-DD>`                           | -                                          | Waiver expiry; must be a real future calendar date.                                                                               |
-| `--isolate` / `--no-isolate`                           | isolated when `CI` is set                  | Run the agent under filesystem isolation.                                                                                         |
-| `--use-playwright-utils` / `--no-use-playwright-utils` | resolved (below)                           | Force `tea_use_playwright_utils`.                                                                                                 |
-| `--use-pactjs-utils` / `--no-use-pactjs-utils`         | resolved (below)                           | Force `tea_use_pactjs_utils`.                                                                                                     |
-| `--pact-mcp <mode>`                                    | resolved (below)                           | Force `tea_pact_mcp` (`mcp` \| `none`).                                                                                           |
+| Flag                                                   | Default                                                            | Purpose                                                                                                                           |
+| ------------------------------------------------------ | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `--base <ref>`                                         | `origin/main`                                                      | Git base ref to diff changed files.                                                                                               |
+| `--files <list>`                                       | -                                                                  | Explicit review set (repeatable, comma-separated); skips the git diff and test-file filter.                                       |
+| `--scope <scope>`                                      | derived                                                            | `review_scope` override (`single` \| `directory` \| `suite`); default `single` for one file, else `directory`.                    |
+| `--test-dir <dir>`                                     | `tests`                                                            | `test_dir` hint passed to the skill.                                                                                              |
+| `--focus <text>`                                       | -                                                                  | Requester focus note handed to the reviewer verbatim; may raise scrutiny, never waives, and is quoted as a `**Focus**:` line.     |
+| `--test-glob <substring-or-regex>`                     | -                                                                  | Extra test-file matcher (substring or `/regex/`, repeatable).                                                                     |
+| `--project-root <dir>`                                 | current directory                                                  | Consuming project root.                                                                                                           |
+| `--skill-root <path>`                                  | probe the project                                                  | Trusted skill root (must contain `SKILL.md`); skips the install probe. Outside `--project-root`, the control-plane guard is moot. |
+| `--output <file>`                                      | `test-review.md`                                                   | Report path the agent writes.                                                                                                     |
+| `--json <file>`                                        | -                                                                  | Also write the verdict JSON here.                                                                                                 |
+| `--agent <agent>`                                      | `claude`                                                           | `agy`, `claude`, or `codex` use built-in adapters; `custom` uses the portable runner contract; `none` prints the prompt only.     |
+| `--model <model>`                                      | `claude`: `sonnet`, `codex`: `gpt-5.6-sol`, `agy`: session default | Model for a built-in adapter. Rejected with `custom` and `none`; select a custom runner's model through `--agent-arg`.            |
+| `--agent-cmd <path>`                                   | the selected adapter's command                                     | Override a built-in executable; required with `--agent custom`.                                                                   |
+| `--agent-arg <arg>`                                    | -                                                                  | Extra argument appended to the selected agent's argv (repeatable).                                                                |
+| `--env-pass <NAME>`                                    | -                                                                  | Env var allowed through beyond the default set (repeatable).                                                                      |
+| `--timeout-ms <n>`                                     | `1800000` (30 min)                                                 | Agent wall-clock timeout (SIGTERM on expiry).                                                                                     |
+| `--min-score <n>`                                      | -                                                                  | Fail when the quality score is below `n` (0-100).                                                                                 |
+| `--max-critical <n>`                                   | no cap                                                             | Fail when Critical violations exceed `n`.                                                                                         |
+| `--min-files <n>`                                      | `1`                                                                | Fail when fewer than `n` files are reviewed.                                                                                      |
+| `--fail-on <level>`                                    | `request-changes`                                                  | Weakest recommendation that fails CI.                                                                                             |
+| `--fail-on-skip`                                       | off                                                                | Exit 1 instead of 0 on skip (no changed test files).                                                                              |
+| `--waive <reason>`                                     | -                                                                  | Waive a fail (exit 0), record the reason; requires `--waive-until`. Exit 2/3 never waivable.                                      |
+| `--waive-until <YYYY-MM-DD>`                           | -                                                                  | Waiver expiry; must be a real future calendar date.                                                                               |
+| `--isolate` / `--no-isolate`                           | isolated when `CI` is set                                          | Run the agent under filesystem isolation.                                                                                         |
+| `--use-playwright-utils` / `--no-use-playwright-utils` | resolved (below)                                                   | Force `tea_use_playwright_utils`.                                                                                                 |
+| `--use-pactjs-utils` / `--no-use-pactjs-utils`         | resolved (below)                                                   | Force `tea_use_pactjs_utils`.                                                                                                     |
+| `--pact-mcp <mode>`                                    | resolved (below)                                                   | Force `tea_pact_mcp` (`mcp` \| `none`).                                                                                           |
 
 ## What the review is judged against
 
@@ -128,18 +130,19 @@ Why the two lists are separated, and why context can never waive: [Test Review C
 
 ## Which model does the reviewing
 
-Each adapter pins a model. `--model` overrides it.
+Each built-in adapter resolves a model. `--model` overrides that resolution.
 
-| `--agent` | Pinned default | Override with     |
-| --------- | -------------- | ----------------- |
-| `claude`  | `sonnet`       | `--model <model>` |
-| `codex`   | `gpt-5.6-sol`  | `--model <model>` |
+| `--agent` | Default resolution | Override with     |
+| --------- | ------------------ | ----------------- |
+| `agy`     | Session model      | `--model <model>` |
+| `claude`  | `sonnet`           | `--model <model>` |
+| `codex`   | `gpt-5.6-sol`      | `--model <model>` |
 
-The pinned values are aliases: they hold the tier steady, not the exact weights. Pass a fully-qualified slug to `--model` when a run has to be reproducible across model generations.
+The Claude and Codex defaults are aliases: they hold the tier steady, not the exact weights. Pass a fully-qualified slug to `--model` when a run has to be reproducible across model generations. Agy's session default is unpinned until an explicit model is supplied.
 
-The resolved model travels in the verdict JSON as `model`, alongside `agent`. Two scores are only comparable when those two fields match. A model supplied through `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn.
+The resolved built-in model travels in the verdict JSON as `model`, alongside `agent`. Two scores are only comparable when those two fields match. A model supplied through a built-in adapter's `--agent-arg` becomes the resolved value too. Combining `--model` with a passthrough model, or declaring multiple passthrough models, is rejected before spawn. `agy` records `model: null` when it uses the session default and records the explicit value when `--model` is supplied.
 
-`--model` is rejected with `--agent none`, which runs no agent.
+`--agent custom` has no universal model flag. Select its model through `--agent-arg`; its verdict records `agent: "custom"` and `model: null`. Keep the custom runner command and model in CI configuration when results need to be compared over time. `--model` is rejected with `custom` and with `none`, which runs no agent.
 
 **Codex reasoning effort is a second unstated input, and it is not pinned here.** A local `model_reasoning_effort = "max"` costs about ten extra seconds even on a one-word prompt, and far more on a real review. It is codex-only, so it gets no vendor-agnostic flag; set it per run with `--agent-arg -c --agent-arg model_reasoning_effort=low`.
 
@@ -271,8 +274,8 @@ The comment carries the score/recommendation/violations digest plus up to three 
 
 ## Security model
 
-- **Stdin prompt delivery**: the prompt travels to the agent on stdin, never argv, so it can't leak through process lists.
-- **Safe-mode agent execution**: the `claude` adapter spawns the vendor CLI with `--safe-mode` (repo customizations stripped) and `--tools`/`--allowedTools` held to `Read,Write,Edit,Glob,Grep`. Both are arguments to the `claude` CLI, not `tea-test-review` flags; the `codex` adapter has no equivalent and confines its run with `--sandbox workspace-write` instead. Every adapter gets a minimal child environment; only `--env-pass` variables are added.
+- **Prompt delivery**: `claude`, `codex`, and `custom` receive the complete prompt on stdin, so their prompt does not appear in process arguments. `agy` requires the prompt in its `--print` argument. Its complete prompt can therefore be visible to local process inspection and CI diagnostics; use it only in an appropriately isolated runner.
+- **Agent execution**: the `claude` adapter strips repo customizations and limits tools to `Read,Write,Edit,Glob,Grep`. The `codex` adapter confines its run with `--sandbox workspace-write`. The `agy` adapter uses `--dangerously-skip-permissions`, with filesystem limits supplied by the CLI's isolation wrapper. A custom runner receives only the arguments supplied at the command line, so its caller owns the equivalent tool and approval policy. Every adapter gets a minimal child environment; only `--env-pass` variables are added.
 - **Filesystem isolation**: with `--isolate` (default on in CI) the agent may read the project but can't modify the tree under review; it writes only the report, verdict, and the temp files the workflow's own subagent steps declare (sandbox-exec on macOS, bwrap on Linux, chmod fallback).
 - **Control-plane guard**: a PR diff that modifies the vendored skill fails the run closed (exit 2) unless `--files` was explicit. An explicit `--skill-root` outside the checkout is untouchable by the diff.
 - **Untrusted-content contract**: reviewed-file and context-file content is data: instructions inside either are defects to report, never commands. Context can raise a finding but never waive one, so a story cannot argue a violation away. Hostile paths (newlines, NUL bytes, delimiter literals) are rejected before they reach the prompt; both lists travel as JSON arrays in their own delimited blocks.

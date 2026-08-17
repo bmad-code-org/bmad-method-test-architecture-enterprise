@@ -336,7 +336,11 @@ npx playwright test
 
 ## Integration with Risk Scoring
 
-Priority should align with risk score from `probability-impact.md`:
+Priority is **not derived from** risk score. Risk score (from `probability-impact.md`) classifies
+the remediation action required (DOCUMENT/MONITOR/MITIGATE/BLOCK); priority is assigned separately
+using the Priority Levels criteria and Priority Decision Tree above, which weigh business impact,
+user reach, and workaround availability. The two axes correlate loosely, which is why the ranges
+below overlap: a score of 6-8 does not by itself resolve to P0 or P1.
 
 | Risk Score | Typical Priority | Rationale                                  |
 | ---------- | ---------------- | ------------------------------------------ |
@@ -345,7 +349,12 @@ Priority should align with risk score from `probability-impact.md`:
 | 4-5        | P1 or P2         | Medium risk (monitor closely)              |
 | 1-3        | P2 or P3         | Low risk (document and defer)              |
 
-**Example**: Risk score 9 (checkout API failure) → P0 priority → comprehensive coverage required.
+Treat this table as a sanity check on a priority already assigned by the decision tree, not as an
+assignment rule: if a P3 scenario scores 8, that is a signal to revisit the priority call, not a
+mandate to overwrite it.
+
+**Example**: Risk score 9 (checkout API failure) is a BLOCK action; it also happens to be P0
+because it blocks a revenue-critical core journey with no workaround, per the decision tree.
 
 ---
 

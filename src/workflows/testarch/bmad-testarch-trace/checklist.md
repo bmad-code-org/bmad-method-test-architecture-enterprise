@@ -369,7 +369,7 @@ Knowledge fragments referenced:
 
 - [ ] Test results summary complete (total, passed, failed, pass rates)
 - [ ] Coverage summary complete (P0/P1 criteria, code coverage)
-- [ ] NFR validation summary complete (security, performance, reliability, scalability)
+- [ ] NFR validation summary complete (security, performance, reliability, maintainability)
 - [ ] Flakiness summary complete (burn-in iterations, flaky test count)
 
 **Rationale Documented:**
