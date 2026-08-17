@@ -42,7 +42,7 @@ Collect evidence for:
 - **Performance**: load tests, metrics, response time data
 - **Security**: scans, auth tests, vuln reports
 - **Reliability**: error rates, burn-in runs, failover tests
-- **Scalability**: load-balancer and auto-scaling config, replica and partition setup
+- **Maintainability**: CI coverage report, jscpd duplication report, npm audit results, structured logging and error-tracking config
 - **Other categories**: logs, monitoring, DR drills, deployability checks
 
 ---

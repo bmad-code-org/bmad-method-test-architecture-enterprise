@@ -49,7 +49,7 @@ Before deriving thresholds from raw documents, check if a `test-design` output e
 
 ## 1. Select Categories
 
-Use the ADR Quality Readiness Checklist (8 categories):
+Use the ADR Quality Readiness Checklist (8 categories) as the elicitation source for thresholds:
 
 1. Testability & Automation
 2. Test Data Strategy
@@ -61,6 +61,8 @@ Use the ADR Quality Readiness Checklist (8 categories):
 8. Deployability
 
 Add any `custom_nfr_categories` if provided.
+
+**Note:** This workflow's automated evidence audit (step 4) evaluates exactly four domains: Security, Performance, Reliability, Maintainability. Security and Performance draw their thresholds from the ADR-8 list above. Maintainability does not: its criteria (test coverage, code duplication, dependency vulnerabilities, structured logging, error tracking) come directly from `nfr-criteria.md`, not from any ADR-8 category — the two taxonomies serve different purposes (ADR-8 is an architecture/testability review checklist; the four audit domains are what step 4's evidence-audit subagents execute). Thresholds gathered here for the remaining ADR-8 categories (Test Data Strategy, Disaster Recovery, Monitorability, QoS/QoE, Deployability) are recorded for the report but are not evaluated by an automated subagent in this workflow.
 
 ---
 

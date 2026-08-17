@@ -165,36 +165,36 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 
 ---
 
-## Scalability Assessment
+## Maintainability Assessment
 
-### Horizontal Scaling
+### Test Coverage
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "stateless services, auto-scale to 20 replicas")
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "≥80% coverage")
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Kubernetes HPA manifest - k8s/hpa.yaml")
+- **Evidence:** {EVIDENCE_SOURCE} (e.g., "CI coverage report - coverage/lcov-report/index.html")
 - **Findings:** {FINDINGS_DESCRIPTION}
 
-### Vertical Scaling
+### Code Duplication
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION}
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "<5% duplication")
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {EVIDENCE_SOURCE} (e.g., "jscpd report - reports/jscpd/jscpd-report.json")
 - **Findings:** {FINDINGS_DESCRIPTION}
 
-### Data Scaling
+### Vulnerability Scan
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "read replicas plus partitioning above 100M rows")
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "0 critical, 0 high vulnerabilities")
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {EVIDENCE_SOURCE} (e.g., "npm audit CI job output")
 - **Findings:** {FINDINGS_DESCRIPTION}
 
-### Traffic Handling
+### Observability
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION}
+- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "structured logging + error tracking configured")
 - **Actual:** {ACTUAL_DESCRIPTION}
 - **Evidence:** {EVIDENCE_SOURCE}
 - **Findings:** {FINDINGS_DESCRIPTION}
@@ -319,9 +319,9 @@ Note: This audit summarizes existing implementation evidence; it does not run te
   - **Owner:** {OWNER}
   - **Estimated Effort:** {EFFORT}
 
-### Auto-Scaling Triggers (Scalability)
+### Coverage/Duplication Gates (Maintainability)
 
-- [ ] {AUTO_SCALING_TRIGGER_DESCRIPTION}
+- [ ] {COVERAGE_DUPLICATION_GATE_DESCRIPTION}
   - **Owner:** {OWNER}
   - **Estimated Effort:** {EFFORT}
 

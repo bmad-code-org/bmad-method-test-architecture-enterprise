@@ -48,6 +48,14 @@ This is an **isolated subagent** running in parallel with other NFR domain evide
 
 ---
 
+### 2. Status Assignment
+
+For each category, determine status. Load
+`{skill-root}/steps-c/nfr-status-definitions.md` for what PASS, CONCERNS, FAIL,
+and N/A mean and are shared across all four NFR domain workers.
+
+---
+
 ## OUTPUT FORMAT
 
 ```json
@@ -64,7 +72,7 @@ This is an **isolated subagent** running in parallel with other NFR domain evide
     },
     {
       "category": "Monitoring",
-      "status": "CONCERN",
+      "status": "CONCERNS",
       "description": "No APM (Application Performance Monitoring) tool",
       "evidence": ["Logging present but no distributed tracing"],
       "recommendations": ["Implement APM (Datadog/New Relic)", "Add distributed tracing"]

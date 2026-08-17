@@ -123,7 +123,8 @@ lastSaved: ''
 
 ### P0 (Critical) - Run on every commit
 
-**Criteria**: Blocks core journey + High risk (≥6) + No workaround
+**Criteria**: Blocks core journey + high risk + no workaround (see `test-priorities-matrix.md`
+Priority Levels and Decision Tree; risk score is a supporting signal, not the determining one)
 
 | Requirement   | Test Level | Risk Link | Test Count | Owner | Notes   |
 | ------------- | ---------- | --------- | ---------- | ----- | ------- |
@@ -134,7 +135,7 @@ lastSaved: ''
 
 ### P1 (High) - Run on PR to main
 
-**Criteria**: Important features + Medium risk (3-4) + Common workflows
+**Criteria**: Important features + medium risk + common workflows
 
 | Requirement   | Test Level | Risk Link | Test Count | Owner | Notes   |
 | ------------- | ---------- | --------- | ---------- | ----- | ------- |
@@ -145,7 +146,7 @@ lastSaved: ''
 
 ### P2 (Medium) - Run nightly/weekly
 
-**Criteria**: Secondary features + Low risk (1-2) + Edge cases
+**Criteria**: Secondary features + low risk + edge cases
 
 | Requirement   | Test Level | Risk Link | Test Count | Owner | Notes   |
 | ------------- | ---------- | --------- | ---------- | ----- | ------- |

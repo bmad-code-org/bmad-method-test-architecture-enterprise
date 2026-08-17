@@ -162,10 +162,10 @@ If probing is disabled, honor the requested mode strictly. If that mode cannot b
 - Output: `/tmp/tea-nfr-reliability-${timestamp}.json`
 - Status: Running... ⟳
 
-**Subagent D: Scalability Evidence Audit**
+**Subagent D: Maintainability Evidence Audit**
 
-- File: `./step-04d-subagent-scalability.md`
-- Output: `/tmp/tea-nfr-scalability-${timestamp}.json`
+- File: `./step-04d-subagent-maintainability.md`
+- Output: `/tmp/tea-nfr-maintainability-${timestamp}.json`
 - Status: Running... ⟳
 
 In `agent-team` and `subagent` modes, runtime decides worker scheduling and concurrency.
@@ -181,7 +181,7 @@ In `agent-team` and `subagent` modes, runtime decides worker scheduling and conc
   ├── Subagent A (Security): Running... ⟳
   ├── Subagent B (Performance): Running... ⟳
   ├── Subagent C (Reliability): Running... ⟳
-  └── Subagent D (Scalability): Running... ⟳
+  └── Subagent D (Maintainability): Running... ⟳
 
 [... time passes ...]
 
@@ -199,7 +199,7 @@ In `agent-team` and `subagent` modes, runtime decides worker scheduling and conc
 ### 5. Verify All Outputs Exist
 
 ```javascript
-const outputs = ['security', 'performance', 'reliability', 'scalability'].map((domain) => `/tmp/tea-nfr-${domain}-${timestamp}.json`);
+const outputs = ['security', 'performance', 'reliability', 'maintainability'].map((domain) => `/tmp/tea-nfr-${domain}-${timestamp}.json`);
 
 outputs.forEach((output) => {
   if (!fs.existsSync(output)) {

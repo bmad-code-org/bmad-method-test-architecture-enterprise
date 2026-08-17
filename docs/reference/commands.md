@@ -285,7 +285,7 @@ clamped to 0-100. The bonus has exactly six categories, each worth `0` or `5` wi
 
 **Key Inputs:**
 
-- NFR categories (Security, Performance, Reliability, Scalability), plus any `custom_nfr_categories`
+- NFR categories (Security, Performance, Reliability, Maintainability), plus any `custom_nfr_categories`
 - Thresholds from PRD, architecture, or `test-design`
 - Evidence locations (test reports, scans, metrics, logs, monitoring, CI results)
 

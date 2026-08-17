@@ -17,7 +17,7 @@ This is an **isolated subagent** running in parallel with other NFR domain evide
 
 ## MANDATORY EXECUTION RULES
 
-- ✅ Assess SECURITY only (not performance, reliability, scalability)
+- ✅ Assess SECURITY only (not performance, reliability, maintainability)
 - ✅ Output structured JSON to temp file
 - ❌ Do NOT assess other NFR domains
 
@@ -66,12 +66,9 @@ This is an **isolated subagent** running in parallel with other NFR domain evide
 
 ### 2. Risk Assessment
 
-For each category, determine status:
-
-- **PASS**: Properly implemented
-- **CONCERN**: Partially implemented or weak
-- **FAIL**: Not implemented or critical vulnerability
-- **N/A**: Not applicable to this system
+For each category, determine status. Load
+`{skill-root}/steps-c/nfr-status-definitions.md` for what PASS, CONCERNS, FAIL,
+and N/A mean and are shared across all four NFR domain workers.
 
 ### 3. Compliance Check
 
@@ -101,7 +98,7 @@ For each category, determine status:
     },
     {
       "category": "Data Encryption",
-      "status": "CONCERN",
+      "status": "CONCERNS",
       "description": "Database encryption at rest not enabled",
       "evidence": ["Database config shows no encryption"],
       "recommendations": ["Enable database encryption at rest", "Use AWS RDS encryption or equivalent", "Implement key rotation policy"]

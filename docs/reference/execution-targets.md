@@ -53,11 +53,12 @@ Burn-in is enabled by default for frontend and fullstack stacks and skipped by d
 
 TEA plans these, sets thresholds, requires the evidence, and audits what you produce. It does not run the tools or parse their output.
 
-| Category                    | Tools named                              | What TEA does                                                                                                                               |
-| --------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Performance and load        | k6 (worked examples), JMeter, Gatling    | Sets SLO and SLA thresholds during test design, requires results during the NFR evidence audit, scores the category PASS / CONCERNS / FAIL. |
-| Security                    | OWASP ZAP, Burp Suite, `npm audit`, Snyk | Same. Threshold definition and evidence audit; no scanner is invoked or parsed.                                                             |
-| Reliability and scalability | Your telemetry and chaos tooling         | Same.                                                                                                                                       |
+| Category             | Tools named                              | What TEA does                                                                                                                               |
+| -------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Performance and load | k6 (worked examples), JMeter, Gatling    | Sets SLO and SLA thresholds during test design, requires results during the NFR evidence audit, scores the category PASS / CONCERNS / FAIL. |
+| Security             | OWASP ZAP, Burp Suite, `npm audit`, Snyk | Same. Threshold definition and evidence audit; no scanner is invoked or parsed.                                                             |
+| Reliability          | Your telemetry and chaos tooling         | Same.                                                                                                                                       |
+| Maintainability      | CI coverage report, jscpd, `npm audit`   | Same. Reads coverage, duplication, and vulnerability reports your CI already produces; does not run them.                                   |
 
 The NFR gate defaults to CONCERNS when a threshold or its evidence is undefined, so an unmeasured category does not silently pass.
 

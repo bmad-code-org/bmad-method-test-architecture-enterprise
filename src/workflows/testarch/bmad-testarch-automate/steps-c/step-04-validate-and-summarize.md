@@ -70,7 +70,7 @@ Write `{outputFile}` including:
 - Key assumptions and risks
 - Next recommended workflow (e.g., `test-review` or `trace`)
 
-**If `tea_use_playwright_utils` is true**, add a `Playwright Utils deviations` section listing every entry rolled up in Step 3C, one line each as `file:line — reason`. Write `None` when the list is empty; the reader cannot tell an empty section from a forgotten one.
+**If `tea_use_playwright_utils` is true**, add a `Playwright Utils deviations` section listing every entry rolled up in Step 3C, one line each as `file:line: reason`. Write `None` when the list is empty; the reader cannot tell an empty section from a forgotten one.
 
 **If `tea_use_pactjs_utils` is true and contract artifacts were generated**, add a `Pact.js Utils deviations` section on the same terms, from the same roll-up. Separate headings: a run can be clean on one mandate and not the other.
 

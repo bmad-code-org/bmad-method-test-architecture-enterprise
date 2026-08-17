@@ -120,6 +120,15 @@ export function assessTestFailureRisk(failure: {
 
 ### Example 2: Gate Decision Engine with Traceability Validation
 
+> **Illustrative only, not the gate TEA executes.** This example teaches risk-driven gate
+> governance: a decision keyed directly on risk scores. The gate TEA actually runs is
+> `src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md`, keyed on coverage
+> percentages instead (P0 at 100%, overall at 80%, P1 at 90% for PASS / 80% for the CONCERNS
+> floor), with `WAIVED` reserved for a human override rather than derived from risk data the way
+> `evaluateGate()` derives it below. Both produce the same four words (PASS / CONCERNS / FAIL /
+> WAIVED) from different inputs; if you are answering "how does the gate decide", answer with the
+> coverage engine, not this one.
+
 **Context**: Automated gate decision based on risk scores and test coverage
 
 **Implementation**:
@@ -260,6 +269,7 @@ console.log(gateResult.recommendations);
 - **Clear criteria**: FAIL = critical risks or gaps, CONCERNS = high risks with plans, PASS = low risks
 - **Actionable output**: Recommendations drive next steps
 - **Audit trail**: Timestamp, decision, and context for compliance
+- **Not the executed gate**: see the callout above; `step-05-gate-decision.md` is the rule set that runs
 
 ---
 

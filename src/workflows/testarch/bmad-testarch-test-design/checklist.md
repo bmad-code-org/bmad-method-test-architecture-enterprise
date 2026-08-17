@@ -154,9 +154,10 @@
 - [ ] **Priority sections (P0/P1/P2/P3) do NOT include execution context** (e.g., no "Run on every commit" in headers)
 - [ ] **Priority sections have only "Criteria" and "Purpose"** (no "Execution:" field)
 - [ ] **Execution Strategy section** is separate and handles timing based on infrastructure overhead
-- [ ] P0: Truly blocks core functionality + High-risk (≥6) + No workaround
-- [ ] P1: Important features + Medium-risk (3-4) + Common workflows
-- [ ] P2: Secondary features + Low-risk (1-2) + Edge cases
+- [ ] P0: Truly blocks core functionality + high risk + no workaround (risk score informs, not
+      determines, per `test-priorities-matrix.md`)
+- [ ] P1: Important features + medium risk + common workflows
+- [ ] P2: Secondary features + low risk + edge cases
 - [ ] P3: Nice-to-have + Exploratory + Benchmarks
 - [ ] **Note at top of Test Coverage Plan**: Clarifies P0/P1/P2/P3 = priority/risk, NOT execution timing
 
