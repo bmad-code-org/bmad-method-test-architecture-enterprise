@@ -1,7 +1,7 @@
 # Test Suite
 
 Test coverage for this module: the Zod-based agent schema validator
-(`tools/schema/agent.js`, which ensures every `*.agent.yaml` conforms to the
+(`test/schema/agent.js`, which ensures every `*.agent.yaml` conforms to the
 BMAD agent specification), the installation components, the knowledge base,
 release metadata, and the `tea-test-review` CLI.
 
