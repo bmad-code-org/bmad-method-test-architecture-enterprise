@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.23.3] - 2026-08-19
+
 ### Removed
 
 - Stale BMad Builder run artifacts from the skills migration. `e295715` carried 16 `validation-report-20260127-*.md` files, two per workflow across the eight `bmad-testarch-*` workflows, recording a 2026-01-27 validation run. Every one of them asserted `workflow.md present: YES` for a file that no longer exists in any workflow (it became `SKILL.md` in that same migration), and every step-file count and line count in them disagreed with the tree they shipped alongside. Each workflow directory is a published skill root in `.claude-plugin/marketplace.json`, so these were shipping to consumers as skill payload, where a wrong file listing is worse than no file listing.
