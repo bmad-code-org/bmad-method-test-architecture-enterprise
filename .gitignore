@@ -5,16 +5,13 @@ bun.lock
 deno.lock
 pnpm-workspace.yaml
 
-test-output/*
+# Test coverage output
 coverage/
 
 # Logs
 logs/
 *.log
 npm-debug.log*
-
-# Build output
-build/*.txt
 
 # Environment variables
 .env

@@ -194,9 +194,7 @@ Users do not need to know any of this to run a workflow. What they see is consis
 
 ## Validation
 
-Eight of the nine TEA workflows carry BMad Builder validation reports at `src/workflows/testarch/<workflow>/validation-report-*.md`, each scoring 100%. `bmad-teach-me-testing` has no validation report.
-
-Validation checks for granular instructions, explicit exit conditions, context injection in every step, strict action boundaries, and subagent support where the workflow supports it.
+Every workflow is validated with BMad Builder, which checks for granular instructions, explicit exit conditions, context injection in every step, strict action boundaries, and subagent support where the workflow supports it. Validation runs against the working tree at the time it is invoked, so its output is a point-in-time reading rather than a durable artifact; the reports are not committed. Re-run BMad Builder validation after editing a step file, and read the result from that run.
 
 All nine workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and `ci` for GitHub Actions and GitLab CI generation.
 

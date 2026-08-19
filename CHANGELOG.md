@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Stale BMad Builder run artifacts from the skills migration. `e295715` carried 16 `validation-report-20260127-*.md` files, two per workflow across the eight `bmad-testarch-*` workflows, recording a 2026-01-27 validation run. Every one of them asserted `workflow.md present: YES` for a file that no longer exists in any workflow (it became `SKILL.md` in that same migration), and every step-file count and line count in them disagreed with the tree they shipped alongside. Each workflow directory is a published skill root in `.claude-plugin/marketplace.json`, so these were shipping to consumers as skill payload, where a wrong file listing is worse than no file listing.
+- The nine authoring-time workflow plans: `workflow-plan.md` in each of the eight `bmad-testarch-*` workflows, plus `workflow-plan-teach-me-testing.md`. Nothing in `src/`, `test/`, `tools/`, `cli/`, or the docs read them; the only inbound references were from the validation reports removed above. Seven of the eight listed a step set that no longer matched their own directory, and the `teach-me-testing` one was a 950-line build-session log carrying `status: FOUNDATION_COMPLETE` frontmatter and a `cp -r` deployment instruction pointing at an external project root. Like the reports, they shipped inside a skill root.
+- Three orphaned scripts from the TEA migration, each with zero inbound references from `package.json`, CI, or the pre-commit hook. `test/validate-agent-schema.js` was a stale copy of `tools/validate-agent-schema.js` whose own usage line named the `tools/` path; it globbed the abandoned `src/{core,modules/*}/agents/` layout and printed `No agent files found` when run. `test/unit-test-schema.js` failed one of its own three assertions and exited 0 regardless, so wiring it up would have gated nothing. `tools/verify-paths.js` was a one-off checker for leftover BMM references, and the migration it guarded is finished.
+- Dead ignore entries that never matched anything in this repository's history: `test/template-test-generator/**` and its two sibling globs, `tools/template-test-generator/test-scenarios/**`, `test-project-install/**`, `sample-project/**`, `src/modules/*/sub-modules/**`, and `.bundler-temp/**` from `eslint.config.mjs`; `test-output/*` from `.gitignore`, along with its redundant `build/*.txt` entry, which `build/` already covers.
+
+### Fixed
+
+- `docs/explanation/step-file-architecture.md` no longer claims the workflows carry committed validation reports "each scoring 100%". No score appears anywhere in the 16 reports the sentence described, so the claim was unverifiable against its own evidence before those reports were removed. The section now states what validation checks and that its output is a point-in-time reading of the working tree rather than a committed artifact.
+- `docs/explanation/eval-quality-roadmap.md` is reachable from the documentation site. It was the only page in `docs/explanation/` missing from the Starlight sidebar in `website/astro.config.mjs`, so it built and published but could only be found through the direct link in `README.md`.
+- `test/README.md` names the validator the suite actually loads. It cited `tools/schema/agent.js`, while `test/test-agent-schema.js` requires the byte-identical copy at `test/schema/agent.js`.
+
 ## [1.23.1] - 2026-08-16
 
 ### Changed
