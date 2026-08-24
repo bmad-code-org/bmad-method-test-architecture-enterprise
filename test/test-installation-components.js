@@ -382,6 +382,40 @@ async function runTests() {
             assert(stepContent.includes("workflowPath: '{skill-root}'"), `${stepLabel} anchors workflowPath to {skill-root}`);
           }
 
+          if (stepDir === 'steps-v') {
+            const reportPathMatch = frontmatter.match(/^(?:outputFile|validationReport):\s*['"]([^'"]+)['"]/m);
+            assert(frontmatter.includes('{run_timestamp}'), `${stepLabel} gives every validation run a timestamped report path`);
+            assert(Boolean(reportPathMatch), `${stepLabel} declares a parseable validation report path`);
+            assert(
+              stepContent.includes('refuse to overwrite') || stepContent.includes('Never overwrite'),
+              `${stepLabel} refuses to overwrite an existing validation report`,
+            );
+
+            if (dirName !== 'bmad-teach-me-testing') {
+              assert(
+                frontmatter.includes('{validation_scope}'),
+                `${stepLabel} identifies the artifact scope in the validation report path`,
+              );
+              assert(stepContent.includes('selected artifacts'), `${stepLabel} records the selected artifacts in the validation report`);
+
+              if (reportPathMatch) {
+                const reportPathTemplate = reportPathMatch[1];
+                const epicNineReport = reportPathTemplate
+                  .replace('{validation_scope}', 'epic-9')
+                  .replace('{run_timestamp}', '20260824T120000000Z');
+                const epicTenReport = reportPathTemplate
+                  .replace('{validation_scope}', 'epic-10')
+                  .replace('{run_timestamp}', '20260824T120000000Z');
+                const epicNineRerun = reportPathTemplate
+                  .replace('{validation_scope}', 'epic-9')
+                  .replace('{run_timestamp}', '20260824T120001000Z');
+
+                assert(epicNineReport !== epicTenReport, `${stepLabel} keeps parallel epic validation reports separate`);
+                assert(epicNineReport !== epicNineRerun, `${stepLabel} keeps repeated validation reports in run history`);
+              }
+            }
+          }
+
           if (frontmatter.includes('knowledgeIndex:')) {
             const knowledgeIndexMatch = frontmatter.match(/^knowledgeIndex:\s*['"]([^'"]+)['"]/m);
             assert(Boolean(knowledgeIndexMatch), `${stepLabel} declares a parseable knowledgeIndex`);

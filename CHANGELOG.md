@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Validate mode now writes a scope-specific, timestamped report for each run instead of reusing one fixed filename. Artifact validation reports record the exact files checked, and every validate workflow refuses to overwrite an existing report, so sequential and parallel QA runs retain independent history (#140).
+
 ## [1.23.3] - 2026-08-19
 
 ### Removed
