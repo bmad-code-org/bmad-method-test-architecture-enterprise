@@ -1,7 +1,7 @@
 ---
 name: 'step-01-validate'
 description: 'Validate workflow outputs against checklist'
-outputFile: '{test_artifacts}/ci-validation-report.md'
+outputFile: '{test_artifacts}/ci-validation-report-{validation_scope}-{run_timestamp}.md'
 validationChecklist: '{skill-root}/checklist.md'
 ---
 
@@ -26,6 +26,7 @@ Validate outputs using the workflow checklist and record findings.
 
 - 🎯 Validate against `{validationChecklist}`
 - 🚫 Do not skip checks
+- 🚫 Never overwrite an existing validation report
 
 ## EXECUTION PROTOCOLS:
 
@@ -34,7 +35,7 @@ Validate outputs using the workflow checklist and record findings.
 
 ## CONTEXT BOUNDARIES:
 
-- Available context: workflow outputs and checklist
+- Available context: user-selected workflow outputs and checklist
 - Focus: validation only
 - Limits: do not modify outputs in this step
 
@@ -42,15 +43,23 @@ Validate outputs using the workflow checklist and record findings.
 
 **CRITICAL:** Follow this sequence exactly.
 
-### 1. Load Checklist
+### 1. Select Scope and Resolve Report Path
+
+Use the artifact paths the user supplied with the Validate request. If none were supplied, list the likely outputs for this workflow and ask which exact file or files to validate. When several candidates exist, do not guess.
+
+Read the selected artifacts. Derive `validation_scope` from their shared story, epic, system, pull request, or other meaningful scope. Use an artifact basename without its extension when no broader scope is available. Normalize the value to lowercase ASCII with only letters, numbers, and single hyphens. Remove leading and trailing hyphens. Ask for a short scope label if normalization leaves an empty value.
+
+Set `run_timestamp` to the current UTC time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format and resolve `{outputFile}` with both values. Atomically reserve that path using an exclusive-create operation that fails if the file already exists. A separate existence check followed by a normal write is forbidden. On collision, generate a fresh timestamp, resolve a new path, and retry exclusive creation until it succeeds. Initialize the reserved file with `validation_scope`, `run_timestamp`, `validated_artifacts`, and `status: IN_PROGRESS`. This run may update only the file it reserved. If the workflow stops, leave that reservation in place. Never delete, truncate, or reuse a report from another run. Always refuse to overwrite prior validation history.
+
+### 2. Load Checklist
 
 Read `{validationChecklist}` and list all criteria.
 
-### 2. Validate Outputs
+### 3. Validate Outputs
 
 Evaluate outputs against each checklist item.
 
-### 2a. Script Injection Scan
+### 3a. Script Injection Scan
 
 Scan all generated YAML workflow files for unsafe interpolation patterns inside `run:` blocks.
 
@@ -64,9 +73,9 @@ Scan all generated YAML workflow files for unsafe interpolation patterns inside 
 
 **Safe patterns to ignore** (exempt from flagging): `${{ steps.*.outputs.* }}`, `${{ matrix.* }}`, `${{ runner.os }}`, `${{ github.sha }}`, `${{ github.ref }}`, `${{ secrets.* }}`, `${{ env.* }}` — these are safe from GitHub expression injection when used in `run:` blocks.
 
-### 3. Write Report
+### 4. Write Report
 
-Write a validation report to `{outputFile}` with PASS/WARN/FAIL per section.
+Replace the `IN_PROGRESS` body in this run's reserved `{outputFile}` with the final validation report. Include PASS/WARN/FAIL per section plus the original `validation_scope`, `run_timestamp`, and `validated_artifacts` metadata. Record every selected artifact using its exact project-relative path.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS:
 
@@ -74,6 +83,7 @@ Write a validation report to `{outputFile}` with PASS/WARN/FAIL per section.
 
 - Validation report written
 - All checklist items evaluated
+- All selected artifacts recorded in the report
 
 ### ❌ SYSTEM FAILURE:
 

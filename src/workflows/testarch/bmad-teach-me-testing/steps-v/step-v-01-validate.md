@@ -4,7 +4,7 @@ description: 'Validate teach-me-testing workflow quality against BMAD standards'
 
 workflowPath: '{skill-root}'
 checklistFile: '{skill-root}/checklist.md'
-validationReport: '{test_artifacts}/workflow-validation/teach-me-testing-validation-{date}.md'
+validationReport: '{test_artifacts}/workflow-validation/teach-me-testing-validation-{run_timestamp}.md'
 ---
 
 # Validate Step 1: Quality Validation
@@ -30,6 +30,7 @@ To systematically validate the teach-me-testing workflow against BMAD quality st
 
 - 🎯 Focus on comprehensive validation
 - 🚫 FORBIDDEN to skip any checks
+- 🚫 Never overwrite an existing validation report
 - 💬 Report findings clearly
 
 ## EXECUTION PROTOCOLS:
@@ -40,7 +41,11 @@ To systematically validate the teach-me-testing workflow against BMAD quality st
 
 ## MANDATORY SEQUENCE
 
-### 1. Validation Start
+### 1. Resolve Unique Report Path
+
+Set `run_timestamp` to the current UTC time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format and resolve `{validationReport}`. Atomically reserve that path using an exclusive-create operation that fails if the file already exists. A separate existence check followed by a normal write is forbidden. On collision, generate a fresh timestamp, resolve a new path, and retry exclusive creation until it succeeds. Initialize the reserved file with `workflow: teach-me-testing`, `run_timestamp`, and `status: IN_PROGRESS`. This run may update only the file it reserved. If the workflow stops, leave that reservation in place. Never delete, truncate, or reuse a report from another run. Always refuse to overwrite prior validation history.
+
+### 2. Validation Start
 
 "**Validating Workflow: teach-me-testing**
 
@@ -59,7 +64,7 @@ This will validate:
 
 **Starting validation...**"
 
-### 2. Foundation Structure Validation
+### 3. Foundation Structure Validation
 
 **Check:**
 
@@ -72,7 +77,7 @@ This will validate:
 
 Report findings: Pass/Fail for each check.
 
-### 3. Template Validation
+### 4. Template Validation
 
 **Check templates/:**
 
@@ -85,7 +90,7 @@ Report findings: Pass/Fail for each check.
 
 Report findings.
 
-### 4. Step File Validation (CREATE Mode)
+### 5. Step File Validation (CREATE Mode)
 
 **For each of 12 steps in steps-c/:**
 
@@ -100,7 +105,7 @@ Report findings.
 
 Report findings per step.
 
-### 5. Data File Validation
+### 6. Data File Validation
 
 **Check data/:**
 
@@ -112,7 +117,7 @@ Report findings per step.
 
 Report findings.
 
-### 6. Content Quality Validation
+### 7. Content Quality Validation
 
 **Check session steps:**
 
@@ -125,7 +130,7 @@ Report findings.
 
 Report findings.
 
-### 7. State Management Validation
+### 8. State Management Validation
 
 **Check continuable workflow features:**
 
@@ -138,7 +143,7 @@ Report findings.
 
 Report findings.
 
-### 8. User Experience Validation
+### 9. User Experience Validation
 
 **Check UX:**
 
@@ -151,14 +156,15 @@ Report findings.
 
 Report findings.
 
-### 9. Generate Validation Report
+### 10. Generate Validation Report
 
-Create {validationReport}:
+Replace the `IN_PROGRESS` body in this run's reserved {validationReport} with:
 
 ```markdown
 ---
 workflow: teach-me-testing
 validation_date: { current_date }
+run_timestamp: { run_timestamp }
 validator: TEA Validation Workflow
 overall_status: PASS / FAIL / PASS_WITH_WARNINGS
 ---
@@ -231,7 +237,7 @@ overall_status: PASS / FAIL / PASS_WITH_WARNINGS
 **Status:** {READY_FOR_PRODUCTION / NEEDS_FIXES / PASS_WITH_MINOR_ISSUES}
 ```
 
-### 10. Display Results
+### 11. Display Results
 
 "**Validation Complete!**
 
