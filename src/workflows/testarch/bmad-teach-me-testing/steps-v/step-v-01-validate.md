@@ -43,7 +43,7 @@ To systematically validate the teach-me-testing workflow against BMAD quality st
 
 ### 1. Resolve Unique Report Path
 
-Set `run_timestamp` to the current UTC time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format and resolve `{validationReport}`. Check whether that exact path exists before validation begins. If it exists, generate a fresh timestamp and resolve the path again. Never delete, truncate, or reuse the existing file. Always refuse to overwrite prior validation history.
+Set `run_timestamp` to the current UTC time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format and resolve `{validationReport}`. Atomically reserve that path using an exclusive-create operation that fails if the file already exists. A separate existence check followed by a normal write is forbidden. On collision, generate a fresh timestamp, resolve a new path, and retry exclusive creation until it succeeds. Initialize the reserved file with `workflow: teach-me-testing`, `run_timestamp`, and `status: IN_PROGRESS`. This run may update only the file it reserved. If the workflow stops, leave that reservation in place. Never delete, truncate, or reuse a report from another run. Always refuse to overwrite prior validation history.
 
 ### 2. Validation Start
 
@@ -158,7 +158,7 @@ Report findings.
 
 ### 10. Generate Validation Report
 
-Create {validationReport}:
+Replace the `IN_PROGRESS` body in this run's reserved {validationReport} with:
 
 ```markdown
 ---

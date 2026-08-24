@@ -49,7 +49,7 @@ Use the artifact paths the user supplied with the Validate request. If none were
 
 Read the selected artifacts. Derive `validation_scope` from their shared story, epic, system, pull request, or other meaningful scope. Use an artifact basename without its extension when no broader scope is available. Normalize the value to lowercase ASCII with only letters, numbers, and single hyphens. Remove leading and trailing hyphens. Ask for a short scope label if normalization leaves an empty value.
 
-Set `run_timestamp` to the current UTC time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format. Resolve `{outputFile}` with both values, then check whether that exact path exists. If it exists, generate a fresh timestamp and resolve the path again. Never delete, truncate, or reuse the existing file. Always refuse to overwrite prior validation history.
+Set `run_timestamp` to the current UTC time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format and resolve `{outputFile}` with both values. Atomically reserve that path using an exclusive-create operation that fails if the file already exists. A separate existence check followed by a normal write is forbidden. On collision, generate a fresh timestamp, resolve a new path, and retry exclusive creation until it succeeds. Initialize the reserved file with `validation_scope`, `run_timestamp`, `validated_artifacts`, and `status: IN_PROGRESS`. This run may update only the file it reserved. If the workflow stops, leave that reservation in place. Never delete, truncate, or reuse a report from another run. Always refuse to overwrite prior validation history.
 
 ### 2. Load Checklist
 
@@ -75,7 +75,7 @@ Scan all generated YAML workflow files for unsafe interpolation patterns inside 
 
 ### 4. Write Report
 
-Write a validation report to `{outputFile}` with PASS/WARN/FAIL per section. Include `validation_scope`, `run_timestamp`, and `validated_artifacts` metadata. Record every selected artifact using its exact project-relative path.
+Replace the `IN_PROGRESS` body in this run's reserved `{outputFile}` with the final validation report. Include PASS/WARN/FAIL per section plus the original `validation_scope`, `run_timestamp`, and `validated_artifacts` metadata. Record every selected artifact using its exact project-relative path.
 
 ## 🚨 SYSTEM SUCCESS/FAILURE METRICS:
 

@@ -384,22 +384,26 @@ async function runTests() {
 
           if (stepDir === 'steps-v') {
             const reportPathMatch = frontmatter.match(/^(?:outputFile|validationReport):\s*['"]([^'"]+)['"]/m);
-            assert(frontmatter.includes('{run_timestamp}'), `${stepLabel} gives every validation run a timestamped report path`);
             assert(Boolean(reportPathMatch), `${stepLabel} declares a parseable validation report path`);
+            const reportPathTemplate = reportPathMatch ? reportPathMatch[1] : '';
+            assert(reportPathTemplate.includes('{run_timestamp}'), `${stepLabel} gives every validation run a timestamped report path`);
             assert(
               stepContent.includes('refuse to overwrite') || stepContent.includes('Never overwrite'),
               `${stepLabel} refuses to overwrite an existing validation report`,
             );
+            assert(
+              stepContent.includes('Atomically reserve') && stepContent.includes('exclusive-create operation'),
+              `${stepLabel} claims its validation report path atomically`,
+            );
 
             if (dirName !== 'bmad-teach-me-testing') {
               assert(
-                frontmatter.includes('{validation_scope}'),
+                reportPathTemplate.includes('{validation_scope}'),
                 `${stepLabel} identifies the artifact scope in the validation report path`,
               );
               assert(stepContent.includes('selected artifacts'), `${stepLabel} records the selected artifacts in the validation report`);
 
               if (reportPathMatch) {
-                const reportPathTemplate = reportPathMatch[1];
                 const epicNineReport = reportPathTemplate
                   .replace('{validation_scope}', 'epic-9')
                   .replace('{run_timestamp}', '20260824T120000000Z');

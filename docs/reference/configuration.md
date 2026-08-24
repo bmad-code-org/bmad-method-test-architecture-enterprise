@@ -478,7 +478,7 @@ Paths are relative to `{test_artifacts}` unless noted. Deliverables are declared
 
 Validate mode preserves every report as a separate artifact. The eight artifact-producing workflows write `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` under `{test_artifacts}`. The workflow identifier is `atdd`, `automate`, `ci`, `framework`, `nfr-assess`, `test-design`, `test-review`, or `trace`.
 
-`validation_scope` identifies what was checked, such as `story-1-2`, `epic-9`, `system`, or `pull-request-123`. `run_timestamp` is the UTC start time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format. Each report also records the exact project-relative paths of its validated artifacts. Validate mode checks the resolved path before writing and refuses to overwrite an existing report.
+`validation_scope` identifies what was checked, such as `story-1-2`, `epic-9`, `system`, or `pull-request-123`. `run_timestamp` is the UTC start time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format. Each report also records the exact project-relative paths of its validated artifacts. Validate mode atomically reserves the resolved path with exclusive creation. A collision produces a fresh timestamp and retry, so two concurrent runs cannot claim the same report.
 
 The `teach-me-testing` workflow validates its own workflow definition rather than a selected output scope. Its reports use `workflow-validation/teach-me-testing-validation-{run_timestamp}.md` under `{test_artifacts}` and follow the same no-overwrite rule.
 
