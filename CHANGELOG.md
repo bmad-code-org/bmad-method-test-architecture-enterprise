@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Skill activation passes `--project-root` to the customization resolver instead of letting it work the root out on its own. `resolve_customization.py` walked up from the skill's installed directory when the flag was absent, so a skill installed under the user's home reached `~` — where a user-level BMad install's `~/_bmad` made home look like the project. Team overrides in the actual project were silently ignored, returning shipped defaults with no error. All 37 call sites across the testarch workflows and their `steps-c/`, `steps-v/`, and `steps-e/` step files now pass it, as does the installation-component test that asserts on the invocation string. The resolver itself is fixed upstream in [BMAD-METHOD#2802](https://github.com/bmad-code-org/BMAD-METHOD/pull/2802), which is what repairs an existing install — TEA ships no copy of the script and calls core's (#142).
+
 - Validate mode now writes a scope-specific, timestamped report for each run instead of reusing one fixed filename. Artifact validation reports record the exact files checked, and every validate workflow atomically reserves its report through exclusive creation with collision retry, so sequential and parallel QA runs retain independent history (#140).
 
 ## [1.23.3] - 2026-08-19
