@@ -273,7 +273,7 @@ async function runTests() {
         assert(skillContent && skillContent.trim().length > 0, `${dirName}/SKILL.md is not empty`);
         assert(skillContent.includes('## On Activation'), `${dirName}/SKILL.md has On Activation section`);
         assert(
-          skillContent.includes('resolve_customization.py --skill {skill-root} --key workflow'),
+          skillContent.includes('resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow'),
           `${dirName}/SKILL.md resolves the workflow customization block`,
         );
         assert(skillContent.includes('{workflow.activation_steps_prepend}'), `${dirName}/SKILL.md executes prepend activation steps`);
