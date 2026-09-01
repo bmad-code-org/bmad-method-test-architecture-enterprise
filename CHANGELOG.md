@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-09-01
+
 ### Changed
 
 - Pact guidance now covers the short-lived branch coordination shipped in
