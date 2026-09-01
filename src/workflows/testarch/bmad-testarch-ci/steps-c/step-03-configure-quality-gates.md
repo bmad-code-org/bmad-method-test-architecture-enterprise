@@ -106,7 +106,7 @@ Use `{knowledgeIndex}` to load:
 
 - `pact-consumer-framework-setup.md` — determinism gate (`check-pact-determinism.sh`), `jq -S` publish normalization, 1:1 local/CI parity
 - `pactjs-utils-consumer-helpers.md` — one-interaction-per-`it()` determinism rule
-- `pactjs-utils-provider-verifier.md` — `buildVerifierOptions`, broker config, breaking change patterns, vitest `pool: 'forks'` + `singleFork` (same rule applies to consumer AND provider)
+- `pactjs-utils-provider-verifier.md` — verifier builders, scoped consumer branch selectors, provider revision metadata, breaking-change branch classification, and FFI-safe Vitest config
 - `pactjs-utils-request-filter.md` — `createRequestFilter` auth injection patterns for CI pipeline auth setup
 - `pact-broker-webhooks.md` — webhook auth pattern, PAT rotation runbook, staleness monitoring (webhook failures silently break `can-i-deploy`)
 

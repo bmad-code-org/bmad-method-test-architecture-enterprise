@@ -163,6 +163,7 @@ Create Node.js/TypeScript contract testing directory structure per `pact-consume
 - `tests/contract/support/` — pact config, provider state factories, consumer helpers shim
 - `scripts/` — shell scripts (`env-setup.sh`, `publish-pact.sh`, `can-i-deploy.sh`, `record-deployment.sh`)
 - `.github/actions/detect-breaking-change/` — PR checkbox-driven breaking change detection
+- `.github/actions/detect-provider-branch/` — consumer PR adds one provider branch to `can-i-deploy`
 - `.github/workflows/contract-test-consumer.yml` — consumer CDC CI workflow
 
 ---
@@ -380,16 +381,16 @@ Create helpers for:
 
 **If `config.tea_use_pactjs_utils` is enabled, the relevance gate in section 1 opened, and runtime is Node.js/TypeScript** (i.e., `{detected_stack}` is `frontend` or `fullstack`, or `{detected_stack}` is `backend` with Node.js/TypeScript runtime):
 
-Create Node.js/TypeScript contract test samples per `pact-consumer-framework-setup.md`. Every sample follows `pactjs-utils-mandate.md`: `createProviderState` rather than a hand-cast `.given()`, `buildVerifierOptions` rather than a literal options object, `createRequestFilter` rather than bespoke auth middleware, and the `pact-consumer-di.md` injection so the sample exercises the real client instead of raw `fetch`. These samples are the reference every later workflow copies, so a raw-Pact sample teaches the wrong pattern permanently.
+Create Node.js/TypeScript contract test samples per `pact-consumer-framework-setup.md`. Every sample follows `pactjs-utils-mandate.md`: `createProviderState` rather than a hand-cast `.given()`, `buildVerifierOptions` rather than a literal options object, scoped `consumerBranch` rather than a hand-built selector, `isBreakingChangeTolerantBranch` where an explicit tolerance policy exists, `createRequestFilter` rather than bespoke auth middleware, and the `pact-consumer-di.md` injection so the sample exercises the real client instead of raw `fetch`. These samples are the reference every later workflow copies, so a raw-Pact sample teaches the wrong pattern permanently.
 
 - **Consumer test**: Example using PactV4 `addInteraction()` builder + `createProviderState` + real consumer code with URL injection (`.pacttest.ts` extension). **One `addInteraction()` per `it()` block** — never chain multiple interactions in a single test (PactV4 FFI drops them non-deterministically; see `pactjs-utils-consumer-helpers.md` Example 6).
 - **Support files**: Pact config factory (`pact-config.ts`), provider state factories (`provider-states.ts`), local consumer-helpers shim (`consumer-helpers.ts`)
 - **Vitest config (consumer)**: Minimal `vitest.config.pact.ts` with **`fileParallelism: false` AND `pool: 'forks'` + `poolOptions.forks.singleFork: true`** (both required — `fileParallelism: false` prevents shared pact JSON corruption from parallel workers; forks pool + singleFork prevents the Pact Rust FFI from leaking state across files and flaking on Linux CI. See `pact-consumer-framework-setup.md` Example 2). Do NOT copy settings from unit config.
-- **Vitest config (provider)**: `vitest.config.contract.ts` with **`pool: 'forks'` + `poolOptions.forks.singleFork: true`** (same rule as consumer; required for message providers and multi-file HTTP providers; see `pactjs-utils-provider-verifier.md` Example 7).
-- **Shell scripts**: `env-setup.sh`, `check-pact-determinism.sh` (primary defense against non-deterministic pact generation), `publish-pact.sh` (with `jq -S` interaction sort normalization), `can-i-deploy.sh`, `record-deployment.sh` in `scripts/`
+- **Vitest config (provider)**: `vitest.config.contract.ts` with **`pool: 'forks'` + `poolOptions.forks.singleFork: true`** (same rule as consumer; required for message providers and multi-file HTTP providers; see `pactjs-utils-provider-verifier.md` Example 8).
+- **Shell scripts**: `env-setup.sh`, `check-pact-determinism.sh` (primary defense against non-deterministic pact generation), `publish-pact.sh` (with `jq -S` interaction sort normalization), branch-aware `can-i-deploy.sh`, `record-deployment.sh` in `scripts/`
 - **package.json scripts**: Split `test:pact:consumer` (determinism gate — runs `check-pact-determinism.sh` with 3 runs) and `test:pact:consumer:run` (inner single-pass vitest invocation). CI and local both call `npm run test:pact:consumer` for 1:1 parity.
-- **CI workflow**: `contract-test-consumer.yml` with detect-breaking-change action
-- **package.json scripts**: `test:pact:consumer` (determinism gate), `test:pact:consumer:run` (inner single-pass vitest), `publish:pact`, `can:i:deploy:consumer`, `record:consumer:deployment`
+- **CI workflow**: `contract-test-consumer.yml` with detect-breaking-change and PR-only detect-provider-branch actions
+- **package.json scripts**: `test:pact:consumer` (determinism gate), `test:pact:consumer:run` (inner single-pass vitest), `publish:pact`, `can:i:deploy:consumer` with scoped `PROVIDER_PACTICIPANT`, `record:consumer:deployment`
 - **.gitignore**: Add `/pacts/` and `pact-logs/`
 
 ---

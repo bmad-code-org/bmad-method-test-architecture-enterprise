@@ -111,7 +111,11 @@ function buildAstroSite() {
 
   const siteDir = path.join(BUILD_DIR, 'site');
   const artifactsDir = path.join(BUILD_DIR, 'artifacts');
+  const astroCacheDir = path.join(PROJECT_ROOT, 'website', 'node_modules', '.astro');
 
+  // The content directory is a symlink to docs/. Stale cache entries can make
+  // repeated builds register a changed document twice under the same ID.
+  fs.rmSync(astroCacheDir, { recursive: true, force: true });
   // Build Astro site (outputs to build/site via astro.config.mjs)
   runAstroBuild();
   copyArtifactsToSite(artifactsDir, siteDir);

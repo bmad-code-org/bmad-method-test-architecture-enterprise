@@ -35,8 +35,10 @@ scripts/
 
 .github/
 ├── actions/
-│   └── detect-breaking-change/
-│       └── action.yml                   # PR checkbox-driven breaking change detection
+│   ├── detect-breaking-change/
+│   │   └── action.yml                   # PR checkbox-driven breaking change detection
+│   └── detect-provider-branch/
+│       └── action.yml                   # PR-only provider branch coordination
 └── workflows/
     └── contract-test-consumer.yml       # Consumer CDC CI workflow
 ```
@@ -77,8 +79,8 @@ export default defineConfig({
 **Key Points**:
 
 - **`fileParallelism: false` is required** — primary defense against non-deterministic pact generation. Without it, parallel workers race on the shared pact JSON file and corrupt interactions. Symptom: local runs pass, CI randomly fails with `Cannot change pact content for already published pact`. The `publish-pact.sh` `jq` sort (Example 4) provides byte-stability at publish time.
-- **`pool: 'forks'` + `singleFork: true` is required for multi-file consumer suites** — same config the provider side uses (`pactjs-utils-provider-verifier.md` Example 7). Best current understanding: the `@pact-foundation/pact` napi-rs binding is not robust across Vitest worker threads sharing a process; with the default threads pool (Vitest v1) and multiple `.pacttest.ts` files on the same consumer+provider pair, we observed reproducible "request was expected but not received" flakes on Linux CI only. `singleFork: true` serializes every pact file into one forked subprocess and eliminated the flake across multiple repos. Vitest v2+ defaults to `forks`, but set the pool explicitly so the contract does not drift with Vitest version bumps.
-- **One `.pacttest.ts` per consumer+provider pair is the canonical pattern** — not just an observation. Two files for the same pair in one process (which `singleFork: true` guarantees) cause an FFI handle collision: the second file's `new PactV4(...)` call re-enters the FFI handle still holding stale state from the first file → "request was expected but not received" sporadically on Linux CI. The fix is structural — merge the files, not the config. `pool: 'forks'` is still required for pact JSON write safety but does NOT prevent same-pair file splits from colliding. Multiple files for **different** pairs (different consumer or provider name) are correct and safe. See Example 10 for the ✅/❌ pattern.
+- **`pool: 'forks'` + `singleFork: true` is required for multi-file consumer suites** — same config the provider side uses (`pactjs-utils-provider-verifier.md` Example 8). Best current understanding: the `@pact-foundation/pact` napi-rs binding is not robust across Vitest worker threads sharing a process; with the default threads pool (Vitest v1) and multiple `.pacttest.ts` files on the same consumer+provider pair, we observed reproducible "request was expected but not received" flakes on Linux CI only. `singleFork: true` serializes every pact file into one forked subprocess and eliminated the flake across multiple repos. Vitest v2+ defaults to `forks`, but set the pool explicitly so the contract does not drift with Vitest version bumps.
+- **One `.pacttest.ts` per consumer+provider pair is the canonical pattern** — not just an observation. Two files for the same pair in one process (which `singleFork: true` guarantees) cause an FFI handle collision: the second file's `new PactV4(...)` call re-enters the FFI handle still holding stale state from the first file → "request was expected but not received" sporadically on Linux CI. The fix is structural — merge the files, not the config. `pool: 'forks'` is still required for pact JSON write safety but does NOT prevent same-pair file splits from colliding. Multiple files for **different** pairs (different consumer or provider name) are correct and safe. See Example 11 for the ✅/❌ pattern.
 - **Interacting settings**: leave `isolate` at its default (`true`). Do NOT set `sequence.concurrent: true`, `maxConcurrency > 1`, or `maxWorkers > 1` in this config — they defeat the serialization this rule relies on. `hookTimeout` may be raised if mock-server startup is slow, but keep `testTimeout` ≥ `hookTimeout`.
 - Do NOT add `setupFiles`, `coverage`, or other settings from the unit test config
 - Keep it minimal — Pact tests run in Node environment with extended timeout
@@ -98,13 +100,16 @@ export default defineConfig({
   "scripts": {
     "test:pact:consumer": "vitest run --config vitest.config.pact.ts",
     "publish:pact": ". ./scripts/env-setup.sh && ./scripts/publish-pact.sh",
-    "can:i:deploy:consumer": ". ./scripts/env-setup.sh && PACTICIPANT=<service-name> ./scripts/can-i-deploy.sh",
+    "can:i:deploy:consumer": ". ./scripts/env-setup.sh && PACTICIPANT=<consumer-name> PROVIDER_PACTICIPANT=<provider-name> ./scripts/can-i-deploy.sh",
     "record:consumer:deployment": ". ./scripts/env-setup.sh && PACTICIPANT=<service-name> ./scripts/record-deployment.sh"
   }
 }
 ```
 
-Replace `<service-name>` with the consumer's pacticipant name (e.g., `my-frontend-app`).
+Replace `<consumer-name>` and `<provider-name>` with the Pact Broker
+pacticipant names. `PROVIDER_PACTICIPANT` scopes the optional short-lived
+provider branch override; the plain environment gate still works when no
+override is set.
 
 **Key Points**:
 
@@ -185,12 +190,33 @@ set -euo pipefail
 PACTICIPANT="${PACTICIPANT:?PACTICIPANT env var is required}"
 ENVIRONMENT="${ENVIRONMENT:-dev}"
 
-pact-broker can-i-deploy \
-    --pacticipant "$PACTICIPANT" \
-    --version="$GITHUB_SHA" \
-    --to-environment "$ENVIRONMENT" \
-    --retry-while-unknown=10 \
-    --retry-interval=30
+# PR-only override set by detect-provider-branch. Preserve the environment-wide
+# gate for every other dependency, and check the in-flight provider branch
+# separately. Both calls fail hard under set -e.
+if [ -n "${PACT_PROVIDER_BRANCH:-}" ] && [ -n "${PROVIDER_PACTICIPANT:-}" ]; then
+  pact-broker can-i-deploy \
+      --pacticipant "$PACTICIPANT" \
+      --version="$GITHUB_SHA" \
+      --to-environment "$ENVIRONMENT" \
+      --ignore "$PROVIDER_PACTICIPANT" \
+      --retry-while-unknown=10 \
+      --retry-interval=30
+
+  pact-broker can-i-deploy \
+      --pacticipant "$PACTICIPANT" \
+      --version="$GITHUB_SHA" \
+      --pacticipant "$PROVIDER_PACTICIPANT" \
+      --branch="$PACT_PROVIDER_BRANCH" \
+      --retry-while-unknown=10 \
+      --retry-interval=30
+else
+  pact-broker can-i-deploy \
+      --pacticipant "$PACTICIPANT" \
+      --version="$GITHUB_SHA" \
+      --to-environment "$ENVIRONMENT" \
+      --retry-while-unknown=10 \
+      --retry-interval=30
+fi
 ```
 
 #### `scripts/record-deployment.sh` — Record Deployment
@@ -224,6 +250,9 @@ fi
 - Use `pact-broker` directly, NOT `npx pact-broker`
 - Use `PACTICIPANT` env var (required via `${PACTICIPANT:?...}`), not hardcoded service names
 - `can-i-deploy` includes `--retry-while-unknown=10 --retry-interval=30` (waits for provider verification)
+- A PR-only `PACT_PROVIDER_BRANCH` override is additive: the environment check
+  ignores only `PROVIDER_PACTICIPANT`, then a second check targets that
+  pacticipant's branch. `--branch` never silently replaces `--to-environment`.
 - `record-deployment` has branch guard (only records on main/master)
 - **`publish-pact.sh` normalizes interactions with `jq -S` + `sort_by(...)` before publishing** — ensures byte-stable payload to the broker regardless of generator ordering quirks.
 - Do NOT invent custom env vars like `PACT_CONSUMER_VERSION` or `PACT_BREAKING_CHANGE` in scripts — those are handled by `env-setup.sh` and the CI detect-breaking-change action respectively
@@ -269,6 +298,9 @@ jobs:
       - name: Detect Pact breaking change
         uses: ./.github/actions/detect-breaking-change
 
+      - name: Detect Pact provider branch
+        uses: ./.github/actions/detect-provider-branch
+
       - name: Install dependencies
         run: npm ci
 
@@ -284,10 +316,15 @@ jobs:
       # the provider's contract-test-provider.yml workflow.
       # can-i-deploy retries while waiting for provider verification.
 
-      # (4) Check deployment safety (main only — on PRs, local verification is the gate)
-      - name: Can I deploy consumer? (main only)
-        if: github.ref == 'refs/heads/main' && env.PACT_BREAKING_CHANGE != 'true'
+      # (4) Check deployment safety.
+      # NOTE: First-time bootstrap: if no verified contract exists on the broker yet,
+      # gate this to main only: if: github.ref == 'refs/heads/main' && env.PACT_BREAKING_CHANGE != 'true'
+      # Once the first contract is published and verified on main, remove the main-only condition.
+      - name: Can I deploy consumer?
+        if: env.PACT_BREAKING_CHANGE != 'true'
         run: npm run can:i:deploy:consumer
+        env:
+          PACT_PROVIDER_BRANCH: ${{ env.PACT_PROVIDER_BRANCH }}
 
       # (5) Record deployment (main only)
       - name: Record consumer deployment (main only)
@@ -300,8 +337,12 @@ jobs:
 - **1:1 local/CI parity is a hard rule**: every CI step is `npm run <same-name-a-dev-uses>`. Never let CI invoke `vitest` or `pact-broker` directly — that divergence is how "works on my machine" slips in. Consumer tests, publish, can-i-deploy, and record-deployment are all the same commands a developer runs locally.
 - **Workflow-level `env` block** for broker secrets and git vars — not per-step
 - **`detect-breaking-change` step** runs before install to set `PACT_BREAKING_CHANGE` env var
+- **`detect-provider-branch` step** runs on PR events before install and exports
+  a short-lived `PACT_PROVIDER_BRANCH` hint from the PR description
 - **Step numbering skips (3)** — step 3 is the webhook-triggered provider verification (happens externally)
-- **can-i-deploy condition**: `github.ref == 'refs/heads/main' && env.PACT_BREAKING_CHANGE != 'true'`
+- **can-i-deploy condition**: `env.PACT_BREAKING_CHANGE != 'true'` after the
+  first main contract has been published and verified. During one-time broker
+  bootstrap, gate it to main until that verification exists.
 - **Comment on (4)**: "on PRs, local verification is the gate"
 - **No upload-artifact step** — the broker is the source of truth for pact files
 - **`dependabot[bot]` skip** on the job (contract tests don't run for dependency updates)
@@ -377,7 +418,38 @@ runs:
 
 ---
 
-### Example 7: Consumer Test Using PactV4 Builder
+### Example 7: Detect Provider Branch Composite Action
+
+**Context**: A consumer PR needs verification against a provider branch that
+has not merged or deployed yet. Add `Pact provider branch: <name>` to the PR
+template and parse it only for `pull_request` events.
+
+```yaml
+name: 'Detect Pact Provider Branch'
+description: 'Exports a PR-only provider branch override'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set PACT_PROVIDER_BRANCH from PR description
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const body = context.payload.pull_request.body || '';
+          const match = body.match(
+            /^[^\S\r\n]*Pact provider branch:[^\S\r\n]*(\S+)[^\S\r\n]*$/im
+          );
+          core.exportVariable('PACT_PROVIDER_BRANCH', match?.[1] || '');
+```
+
+Do not read this field from the merged PR on push. It is a coordination hint for
+one open PR, not durable deployment metadata. After merge, the normal
+`--to-environment` gate must be authoritative again.
+
+---
+
+### Example 8: Consumer Test Using PactV4 Builder
 
 **Context**: Consumer pact test using PactV4 `addInteraction()` builder pattern. The test MUST call **real consumer code** (your actual API client/service functions) against the mock server — not raw `fetch()`. Using `fetch()` directly defeats the purpose of CDC testing because it doesn't verify your actual consumer code works with the contract.
 
@@ -503,7 +575,7 @@ describe('Movies API Consumer Contract', () => {
 
 ---
 
-### Example 8: Support Files
+### Example 9: Support Files
 
 #### Pact Config Factory
 
@@ -608,7 +680,7 @@ export const setJsonBody = (body: unknown) => setJsonContent({ body });
 
 ---
 
-### Example 9: .gitignore Entries
+### Example 10: .gitignore Entries
 
 **Context**: Pact-specific entries to add to `.gitignore`.
 
@@ -620,7 +692,7 @@ pact-logs/
 
 ---
 
-### Example 10: Test File Organization — One File Per Consumer+Provider Pair
+### Example 11: Test File Organization — One File Per Consumer+Provider Pair
 
 **Context**: Avoiding Pact Rust FFI handle collisions when structuring consumer test files.
 
@@ -664,7 +736,7 @@ describe('Movies API', () => {
 Before presenting the consumer CDC framework to the user, verify:
 
 - [ ] `vitest.config.pact.ts` is minimal **and sets `fileParallelism: false` AND `pool: 'forks'` with `poolOptions.forks.singleFork: true`** (`fileParallelism: false` prevents shared pact JSON corruption from parallel workers; forks + `singleFork: true` is required for pact JSON write safety across files — see Example 2 Key Points for mechanism and evidence)
-- [ ] Each consumer+provider pair is covered by exactly ONE `.pacttest.ts` file — never split interactions for the same pair across multiple files (two `PactV4` instances for the same pair in one process cause FFI handle collision → "request was expected but not received" on Linux CI; `singleFork: true` does NOT prevent this — it ensures both files share one process, which guarantees the collision; see Example 10)
+- [ ] Each consumer+provider pair is covered by exactly ONE `.pacttest.ts` file — never split interactions for the same pair across multiple files (two `PactV4` instances for the same pair in one process cause FFI handle collision → "request was expected but not received" on Linux CI; `singleFork: true` does NOT prevent this — it ensures both files share one process, which guarantees the collision; see Example 11)
 - [ ] `vitest.config.pact.ts` does NOT set `sequence.concurrent: true`, `maxConcurrency > 1`, `maxWorkers > 1`, or `isolate: false` — all four defeat the serialization the rule relies on
 - [ ] `scripts/publish-pact.sh` normalizes interactions with `jq -S '.interactions |= sort_by(.description, (.providerStates[0].name // ""), .request.method, .request.path)'` before the `pact-broker publish` call (ensures byte-stable payload to PactFlow regardless of generator ordering)
 - [ ] Script names match pactjs-utils (`test:pact:consumer`, `publish:pact`, `can:i:deploy:consumer`, `record:consumer:deployment`)
@@ -672,6 +744,9 @@ Before presenting the consumer CDC framework to the user, verify:
 - [ ] Shell scripts use `pact-broker` not `npx pact-broker`
 - [ ] Shell scripts use `PACTICIPANT` env var pattern
 - [ ] `can-i-deploy.sh` has `--retry-while-unknown=10 --retry-interval=30`
+- [ ] `can-i-deploy.sh` keeps the environment-wide check and, only when both
+      `PACT_PROVIDER_BRANCH` and `PROVIDER_PACTICIPANT` exist, ignores that one
+      provider there and checks its branch in a second failing command
 - [ ] `record-deployment.sh` has branch guard
 - [ ] `env-setup.sh` uses `set -eu`; broker scripts use `set -euo pipefail` — each with explanatory comment
 - [ ] CI workflow named `contract-test-consumer.yml`
@@ -683,6 +758,8 @@ Before presenting the consumer CDC framework to the user, verify:
 - [ ] CI can-i-deploy has `PACT_BREAKING_CHANGE != 'true'` condition
 - [ ] CI has NO upload-artifact step
 - [ ] `.github/actions/detect-breaking-change/action.yml` exists
+- [ ] `.github/actions/detect-provider-branch/action.yml` reads `Pact provider
+branch: <name>` on PR events only
 - [ ] Consumer tests use `.pacttest.ts` extension
 - [ ] Consumer tests use PactV4 `addInteraction()` builder
 - [ ] `uponReceiving()` names follow `"a request to <action> <resource> [<condition>]"` pattern and are unique within the consumer-provider pair
