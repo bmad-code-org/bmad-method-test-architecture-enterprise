@@ -9,6 +9,10 @@ Configure PactFlow webhooks to trigger provider verification in GitHub Actions v
 ### Why webhooks matter
 
 - PactFlow's `contract_requiring_verification_published` webhook is the mechanism that notifies a provider repo (via `repository_dispatch`) that a consumer has published a contract needing verification.
+- The webhook carries `${pactbroker.providerVersionNumber}` and
+  `${pactbroker.providerVersionBranch}` for the provider version missing a
+  result. The provider workflow checks out that exact registered revision
+  before publishing verification.
 - Without a working webhook, `can-i-deploy` in the consumer CI **times out** (900s) and eventually fails with `There is no verified pact between <consumer-version> and the version of <provider> currently in <env>` — even though nothing is wrong in either codebase.
 - Webhook failures are **silent by default**: PactFlow keeps emitting requests, GitHub keeps returning `401 Unauthorized`, but nothing alerts the team until a PR is blocked.
 
@@ -85,13 +89,38 @@ jobs:
       PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
       # Pulled from webhook client_payload when triggered by PactFlow:
       PACT_PAYLOAD_URL: ${{ github.event.client_payload.pact_url }}
-      GITHUB_SHA: ${{ github.event.client_payload.sha || github.sha }}
-      GITHUB_BRANCH: ${{ github.event.client_payload.branch || github.head_ref || github.ref_name }}
+      PACT_PROVIDER_VERSION: ${{ github.event.client_payload.sha }}
+      PACT_PROVIDER_BRANCH: ${{ github.event.client_payload.branch }}
     steps:
       - uses: actions/checkout@v4
         with:
-          # Check out the provider version known to the broker — this is the provider SHA PactFlow wants verified.
-          ref: ${{ github.event.client_payload.sha || github.sha }}
+          fetch-depth: 0
+      - name: Select provider revision
+        id: provider-revision
+        run: |
+          if [ -z "$PACT_PROVIDER_BRANCH" ] || [ -z "$PACT_PROVIDER_VERSION" ]; then
+            echo "Webhook payload is missing the provider branch or version."
+            exit 1
+          fi
+
+          git fetch origin -- "$PACT_PROVIDER_BRANCH"
+
+          if ! git rev-parse --verify --quiet "$PACT_PROVIDER_VERSION^{commit}" >/dev/null; then
+            echo "Provider version $PACT_PROVIDER_VERSION is unavailable."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$PACT_PROVIDER_VERSION" FETCH_HEAD; then
+            echo "Provider version $PACT_PROVIDER_VERSION is not on $PACT_PROVIDER_BRANCH."
+            exit 1
+          fi
+
+          git checkout --detach "$PACT_PROVIDER_VERSION"
+          SELECTED_VERSION="$(git rev-parse HEAD)"
+
+          echo "PACT_PROVIDER_VERSION=$SELECTED_VERSION" >> "$GITHUB_ENV"
+          echo "PACT_PROVIDER_BRANCH=$PACT_PROVIDER_BRANCH" >> "$GITHUB_ENV"
+          echo "GITHUB_BRANCH=$PACT_PROVIDER_BRANCH" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -107,7 +136,14 @@ jobs:
 
 - `repository_dispatch` is the event type emitted by GitHub when the webhook's REST call hits `/repos/<org>/<repo>/dispatches`.
 - The `types` filter must match the webhook's `event_type` (`contract_requiring_verification_published` here).
-- Checking out the provider version known to the broker (`providerVersionNumber`) ensures verification runs against the exact provider commit PactFlow registered — not whatever is on main.
+- Check out the exact `providerVersionNumber` on `providerVersionBranch`.
+  PactFlow emits this event for each main, deployed, or released provider
+  version missing a result.
+- Verify that the commit exists and belongs to the registered branch before
+  detaching to it. A force-pushed or deleted revision fails the job and leaves
+  the requested result unknown.
+- After checkout, overwrite `PACT_PROVIDER_VERSION` with `git rev-parse HEAD`
+  and publish the result against `PACT_PROVIDER_BRANCH`.
 - `PACT_PAYLOAD_URL` makes `buildVerifierOptions` verify only the triggering pact (see `pactjs-utils-provider-verifier.md` Example 1).
 
 ### Example 3: Secret Rotation Runbook
@@ -180,6 +216,9 @@ jobs:
 - **Classic PAT, `repo` scope, no expiration** — required for `repository_dispatch`. The "no expiration" trade-off is accepted in exchange for machine-user ownership + PactFlow-secret storage + staleness monitoring.
 - **Store the PAT as a PactFlow secret** at `/settings/secrets`, reference it from the webhook via `${user.<secret-name>}`. Never inline the token.
 - **Monitor for silence** — at minimum, a daily scheduled CI job that asserts a recent verification timestamp exists for each critical consumer/provider pair.
+- **Provider targets need broker history** — publish provider verification
+  results with branch metadata. Record deployments and releases so PactFlow can
+  identify every provider version that this event must verify.
 - **Rotation is a runbook, not an emergency** — document it (see Example 3), keep it in the repo, and do a practice rotation once a year so it stays fresh.
 - **Symptom to remember**: "consumer `can-i-deploy` timeout after 900s with `There is no verified pact...`" + "provider's `contract-test-provider` workflow has no recent runs" = expired/revoked PAT. Start with Example 3.
 

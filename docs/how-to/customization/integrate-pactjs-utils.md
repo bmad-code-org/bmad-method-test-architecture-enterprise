@@ -134,6 +134,53 @@ await new Verifier(
 
 State handler names and their `params` must match the consumer's `createProviderState` exactly. That pairing is the contract's own contract.
 
+## Coordinate Different PR Branch Names
+
+`matchingBranch: true` covers teams that use the same branch name in consumer
+and provider repositories. Pact.js Utils 1.2.0 also covers short-lived branches
+with different names.
+
+On the provider side, `buildVerifierOptions` and
+`buildMessageVerifierOptions` accept `consumerBranch`, defaulting to
+`PACT_CONSUMER_BRANCH`:
+
+```typescript
+buildVerifierOptions({
+  provider: 'SampleMoviesAPI',
+  port: '3001',
+  includeMainAndDeployed: true,
+  consumer: 'SampleAppConsumer',
+  consumerBranch: process.env.PACT_CONSUMER_BRANCH,
+});
+```
+
+The explicit selector is scoped to `consumer`; the builders throw when a
+consumer branch is supplied without one. It stays alongside the matching,
+main, and deployed selectors.
+
+On the consumer side, copy the package's `detect-provider-branch` composite
+action and add `Pact provider branch: <name>` to the PR template. During the PR,
+`can-i-deploy.sh`:
+
+1. checks the target environment while ignoring only that named provider;
+2. checks the same consumer version against the provider branch tip.
+
+Both calls are required. A branch check proves less than an environment check,
+so the override is read on pull requests only and disappears on push to main.
+
+The provider has a mirror `detect-consumer-branch` action for manual
+coordination. Keep that PR flow separate from PactFlow's
+`contract_requiring_verification_published` webhook. The webhook identifies an
+exact provider version that needs a result. Check out its
+`providerVersionNumber`, verify that commit belongs to
+`providerVersionBranch`, and publish against those values.
+
+Provider suites with an explicit breaking-change tolerance policy should use
+`isBreakingChangeTolerantBranch`. It recognizes only `main`, `master`, and
+`release/**`. Check and reject a missing hand-entered `PACT_CONSUMER_BRANCH`
+before applying that tolerance, so a typo cannot turn an unexecuted
+cross-branch verification green.
+
 ## Which Workflows Change
 
 | Workflow      | What the flag changes                                                                                                                                                                              |

@@ -58,19 +58,20 @@ These are correctness rules from the per-utility fragments, not style preference
 
 ## Substitution Table
 
-| Need                                         | Raw Pact — do not emit                                                             | pactjs-utils — emit this                                                            | Level       | Fragment                            |
-| -------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ----------- | ----------------------------------- |
-| Provider state on an interaction             | `.given('name', { id: 1 } as JsonMap)`, hand-cast params                           | `.given(...createProviderState({ name, params }))`                                  | REQUIRED    | `pactjs-utils-consumer-helpers.md`  |
-| Coercing params to Pact's `JsonMap`          | Manual casts, `String(date)`, `null` handling per call site                        | `toJsonMap(value)`                                                                  | REQUIRED    | `pactjs-utils-consumer-helpers.md`  |
-| PactV4 request/response builder callbacks    | Repeated inline `(b) => { b.query(...); b.headers(...); b.jsonBody(...) }` lambdas | `setJsonContent({ query?, headers?, body? })`, or `setJsonBody(body)` for body-only | REQUIRED    | `pactjs-utils-consumer-helpers.md`  |
-| HTTP provider verification options           | A hand-assembled 30-line `VerifierOptions` object                                  | `buildVerifierOptions({ provider, port, includeMainAndDeployed, stateHandlers })`   | REQUIRED    | `pactjs-utils-provider-verifier.md` |
-| Message/Kafka provider verification options  | A second hand-assembled options object                                             | `buildMessageVerifierOptions({ ... })`                                              | REQUIRED    | `pactjs-utils-provider-verifier.md` |
-| Broker URL and consumer version selectors    | Hand-written env-var branching for local vs remote vs breaking-change flows        | `handlePactBrokerUrlAndSelectors(...)` (or let `buildVerifierOptions` read the env) | REQUIRED    | `pactjs-utils-provider-verifier.md` |
-| Provider version tags in CI                  | Hand-written branch/tag extraction per CI platform                                 | `getProviderVersionTags()`                                                          | REQUIRED    | `pactjs-utils-provider-verifier.md` |
-| Auth injection during provider verification  | A bespoke Express middleware, with its recurring `Bearer Bearer` bug               | `createRequestFilter({ tokenGenerator })`                                           | REQUIRED    | `pactjs-utils-request-filter.md`    |
-| A provider that needs no auth injection      | Omitting `requestFilter`, or an empty inline function                              | `noOpRequestFilter`                                                                 | REQUIRED    | `pactjs-utils-request-filter.md`    |
-| Response matchers where a Zod schema exists  | Hand-written `MatchersV3` trees duplicating the schema                             | `zodToPactMatchers(schema, examples?)`                                              | RECOMMENDED | `pactjs-utils-zod-to-pact.md`       |
-| Exercising the consumer inside `executeTest` | Raw `fetch(`${mockServer.url}/...`)`                                               | Inject `mockServer.url` as `baseUrl` and call the real client                       | RECOMMENDED | `pact-consumer-di.md`               |
+| Need                                         | Raw Pact — do not emit                                                               | pactjs-utils — emit this                                                            | Level       | Fragment                            |
+| -------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ----------- | ----------------------------------- |
+| Provider state on an interaction             | `.given('name', { id: 1 } as JsonMap)`, hand-cast params                             | `.given(...createProviderState({ name, params }))`                                  | REQUIRED    | `pactjs-utils-consumer-helpers.md`  |
+| Coercing params to Pact's `JsonMap`          | Manual casts, `String(date)`, `null` handling per call site                          | `toJsonMap(value)`                                                                  | REQUIRED    | `pactjs-utils-consumer-helpers.md`  |
+| PactV4 request/response builder callbacks    | Repeated inline `(b) => { b.query(...); b.headers(...); b.jsonBody(...) }` lambdas   | `setJsonContent({ query?, headers?, body? })`, or `setJsonBody(body)` for body-only | REQUIRED    | `pactjs-utils-consumer-helpers.md`  |
+| HTTP provider verification options           | A hand-assembled 30-line `VerifierOptions` object                                    | `buildVerifierOptions({ provider, port, includeMainAndDeployed, stateHandlers })`   | REQUIRED    | `pactjs-utils-provider-verifier.md` |
+| Message/Kafka provider verification options  | A second hand-assembled options object                                               | `buildMessageVerifierOptions({ ... })`                                              | REQUIRED    | `pactjs-utils-provider-verifier.md` |
+| Broker URL and consumer version selectors    | Hand-written env branching for local, remote, breaking-change, or named-branch flows | `handlePactBrokerUrlAndSelectors(...)` (or let `buildVerifierOptions` read the env) | REQUIRED    | `pactjs-utils-provider-verifier.md` |
+| Provider version tags in CI                  | Hand-written branch/tag extraction per CI platform                                   | `getProviderVersionTags()`                                                          | REQUIRED    | `pactjs-utils-provider-verifier.md` |
+| Breaking-change tolerant branch check        | Repeated `main` / `master` / `release/` string logic                                 | `isBreakingChangeTolerantBranch(branch)`                                            | REQUIRED    | `pactjs-utils-provider-verifier.md` |
+| Auth injection during provider verification  | A bespoke Express middleware, with its recurring `Bearer Bearer` bug                 | `createRequestFilter({ tokenGenerator })`                                           | REQUIRED    | `pactjs-utils-request-filter.md`    |
+| A provider that needs no auth injection      | Omitting `requestFilter`, or an empty inline function                                | `noOpRequestFilter`                                                                 | REQUIRED    | `pactjs-utils-request-filter.md`    |
+| Response matchers where a Zod schema exists  | Hand-written `MatchersV3` trees duplicating the schema                               | `zodToPactMatchers(schema, examples?)`                                              | RECOMMENDED | `pactjs-utils-zod-to-pact.md`       |
+| Exercising the consumer inside `executeTest` | Raw `fetch(`${mockServer.url}/...`)`                                                 | Inject `mockServer.url` as `baseUrl` and call the real client                       | RECOMMENDED | `pact-consumer-di.md`               |
 
 `zodToPactMatchers` is RECOMMENDED because it needs a Zod schema to exist. Where the project has one, derive the matchers from it rather than maintaining a parallel matcher tree. Where it does not, write matchers from provider scrutiny and say so.
 
@@ -82,6 +83,11 @@ When this mandate is active, these are defects in generated or reviewed code:
 
 - `.given('state name', someObject as JsonMap)` — a hand-cast provider state where `createProviderState` applies.
 - A literal `VerifierOptions` object passed to `new Verifier(...)`, where `buildVerifierOptions` applies.
+- Hand-built `{ branch: process.env.PACT_CONSUMER_BRANCH }` selectors where the
+  builder's scoped `consumer` + `consumerBranch` inputs apply.
+- Hand-written `branch === 'main' || branch === 'master' ||
+branch.startsWith('release/')` checks where
+  `isBreakingChangeTolerantBranch` applies.
 - A bespoke `requestFilter` middleware that prefixes a bearer token by hand.
 - Repeated inline PactV4 builder lambdas that `setJsonContent` or `setJsonBody` would replace.
 - Raw `fetch` inside `executeTest` in a project whose consumer client is importable, with no note saying why.
@@ -159,6 +165,8 @@ await new Verifier(
     provider: 'SampleMoviesAPI',
     port: '3001',
     includeMainAndDeployed: process.env.PACT_BREAKING_CHANGE !== 'true',
+    consumer: 'movie-web',
+    consumerBranch: process.env.PACT_CONSUMER_BRANCH,
     stateHandlers,
     requestFilter: createRequestFilter({ tokenGenerator: () => process.env.TEST_AUTH_TOKEN ?? 'test-token' }),
   }),
@@ -179,6 +187,13 @@ Any `yes` is a blocker.
 6. Does `executeTest` call raw `fetch` while the consumer client is importable, with no stated reason?
 7. Is any response matcher derived from consumer-side types rather than provider source, OpenAPI, or broker data?
 8. Is any interaction missing its `// Provider endpoint:` comment?
+9. Does provider verification hand-build an explicit consumer branch selector,
+   or set `consumerBranch` without a scoped `consumer`?
+10. Does a breaking-change catch hand-roll tolerant branch classification
+    instead of `isBreakingChangeTolerantBranch`, or check breaking-change
+    tolerance before rejecting a "no pacts found" result that occurred with
+    an explicit `PACT_CONSUMER_BRANCH` set (letting a typo masquerade as a
+    tolerated breaking change)?
 
 Fix, or record a deviation. Do not emit unresolved.
 

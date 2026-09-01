@@ -12,6 +12,7 @@ Use production-ready utilities from `@seontechnologies/pactjs-utils` to eliminat
 - **Repeated builder lambdas**: PactV4 interactions often repeat inline callbacks with `builder.query(...)`, `builder.headers(...)`, and `builder.jsonBody(...)`
 - **Verifier configuration sprawl**: `VerifierOptions` requires 30+ lines of scattered configuration (broker URL, selectors, state handlers, request filters, version tags)
 - **Environment variable juggling**: Different env vars for local vs remote flows, breaking change coordination, payload URL matching
+- **Mismatched short-lived branches**: `matchingBranch` cannot coordinate a consumer PR and provider release branch with different names
 - **Express middleware types**: Request filter requires Express types that aren't re-exported from Pact
 - **Bearer prefix bugs**: Easy to double-prefix tokens as `Bearer Bearer ...` in request filters
 - **CI version tagging**: Manual logic to extract branch/tag info from CI environment
@@ -26,6 +27,12 @@ Use production-ready utilities from `@seontechnologies/pactjs-utils` to eliminat
 - **`buildMessageVerifierOptions`**: Same as above but for message/Kafka provider verification
 - **`handlePactBrokerUrlAndSelectors`**: Resolves broker URL and consumer version selectors from env vars with breaking change awareness
 - **`getProviderVersionTags`**: CI-aware version tagging (extracts branch/tag from GitHub Actions, GitLab CI, etc.)
+- **`isBreakingChangeTolerantBranch`**: Recognizes `main`, `master`, and
+  `release/**` when a repository explicitly tolerates coordinated
+  breaking-change verification failures
+- **Named branch coordination**: `consumerBranch` / `PACT_CONSUMER_BRANCH` lets
+  provider verification add one scoped consumer branch; the CI templates pair
+  `PACT_PROVIDER_BRANCH` with an additive branch-aware `can-i-deploy` check
 - **`createRequestFilter`**: Pluggable token generator pattern — prevents double-Bearer bugs by contract
 - **`noOpRequestFilter`**: Pass-through for providers that don't require auth injection
 - **`zodToPactMatchers`**: Converts a Zod schema (+ optional example values or `.openapi({ example })` metadata) into Pact V3 matchers — single source of truth for response shape, no hand-written matcher helpers
@@ -49,10 +56,11 @@ npm install -D @pact-foundation/pact
 | Consumer Helpers  | `toJsonMap`                       | Converts any object to Pact-compatible `JsonMap`     | Explicit type coercion for provider state params                                                          |
 | Consumer Helpers  | `setJsonContent`                  | Curried request/response JSON callback helper        | PactV4 `.withRequest(...)` and `.willRespondWith(...)` builders                                           |
 | Consumer Helpers  | `setJsonBody`                     | Body-only alias of `setJsonContent`                  | Body-only `.willRespondWith(...)` responses                                                               |
-| Provider Verifier | `buildVerifierOptions`            | Assembles complete HTTP `VerifierOptions`            | Provider verification: `new Verifier(buildVerifierOptions(...))`                                          |
-| Provider Verifier | `buildMessageVerifierOptions`     | Assembles message `VerifierOptions`                  | Kafka/async provider verification                                                                         |
+| Provider Verifier | `buildVerifierOptions`            | Assembles complete HTTP `VerifierOptions`            | Provider verification, including a scoped `consumerBranch` selector                                       |
+| Provider Verifier | `buildMessageVerifierOptions`     | Assembles message `VerifierOptions`                  | Kafka/async provider verification, including a scoped `consumerBranch` selector                           |
 | Provider Verifier | `handlePactBrokerUrlAndSelectors` | Resolves broker URL + selectors from env vars        | Env-aware broker configuration                                                                            |
 | Provider Verifier | `getProviderVersionTags`          | CI-aware version tag extraction                      | Provider version tagging in CI                                                                            |
+| Provider Verifier | `isBreakingChangeTolerantBranch`  | Classifies main/master/release branches              | Guarding an explicit `PACT_BREAKING_CHANGE` tolerance policy                                              |
 | Request Filter    | `createRequestFilter`             | Express middleware with pluggable token generator    | Auth injection for provider verification                                                                  |
 | Request Filter    | `noOpRequestFilter`               | Pass-through filter (no-op)                          | Providers without auth requirements                                                                       |
 | Schema → Matchers | `zodToPactMatchers`               | Derives Pact V3 matchers from a Zod schema           | Consumer tests: response body matchers from a consumer-curated Zod schema instead of hand-written helpers |
@@ -146,7 +154,13 @@ await new Verifier(opts).verifyProvider();
 - **Peer dependency**: `@pact-foundation/pact` must be installed separately
 - **Local flow**: No broker needed — set `pactUrls` in verifier options pointing to local pact files
 - **Remote flow**: Set `PACT_BROKER_BASE_URL` and `PACT_BROKER_TOKEN` env vars
-- **Breaking changes**: Set `includeMainAndDeployed: false` when coordinating breaking changes (verifies only matchingBranch)
+- **Breaking changes**: Set `includeMainAndDeployed: false` to omit main and
+  deployed selectors. `matchingBranch` remains, along with a configured
+  `consumerBranch`.
+- **Different branch names**: Set `consumer` plus `consumerBranch` (or
+  `PACT_CONSUMER_BRANCH`) on the provider side. On a consumer PR, use the
+  template's PR-only `PACT_PROVIDER_BRANCH` flow so `can-i-deploy` preserves
+  the environment gate and checks the named provider branch separately.
 - **Builder helpers**: Use `setJsonContent` when you need query/headers/body together; use `setJsonBody` for body-only callbacks
 - **Type exports**: Library exports `StateHandlers`, `RequestFilter`, `JsonMap`, `JsonContentInput`, `ConsumerVersionSelector` types
 

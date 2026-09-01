@@ -201,11 +201,11 @@ Write the selected pipeline configuration to the resolved output path from step 
 
 **If `tea_use_pactjs_utils` is enabled**, use `{knowledgeIndex}` to load:
 
-- `pact-consumer-framework-setup.md` — determinism gate, `jq -S` publish normalization, 1:1 local/CI parity, full consumer CI workflow template
+- `pact-consumer-framework-setup.md` — determinism gate, `jq -S` publish normalization, PR-only provider branch detection, additive branch-aware `can-i-deploy`, 1:1 local/CI parity
 - `pactjs-utils-consumer-helpers.md` — one-interaction-per-`it()` determinism rule
-- `pactjs-utils-provider-verifier.md` — `buildVerifierOptions`, broker config, breaking change patterns, **vitest `pool: 'forks'` + `singleFork: true`** (same rule applies to consumer AND provider configs)
+- `pactjs-utils-provider-verifier.md` — `buildVerifierOptions`, scoped consumer branch selectors, provider revision metadata, `isBreakingChangeTolerantBranch`, breaking change patterns, and FFI-safe Vitest config
 - `pactjs-utils-request-filter.md` — `createRequestFilter` auth injection patterns for CI pipeline auth setup
-- `pact-broker-webhooks.md` — PactFlow → GitHub webhook auth (dedicated machine user, classic PAT with `repo` scope, PactFlow-stored secret), rotation runbook, and staleness monitoring options (the webhook is what makes `can-i-deploy` succeed end-to-end)
+- `pact-broker-webhooks.md` — PactFlow → GitHub webhook auth, exact registered provider target checkout, rotation runbook, and staleness monitoring
 
 When `tea_use_pactjs_utils` is enabled, add a `contract-test` stage after `test`:
 
@@ -229,21 +229,24 @@ env:
 
 2. **Provider verification**: Run provider verification against published pacts
    - `npm run test:pact:provider:remote:contract`
-   - `buildVerifierOptions` auto-reads `PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`, `GITHUB_SHA`, `GITHUB_BRANCH`
-   - Provider Vitest config (`vitest.config.contract.ts`) **must** use `pool: 'forks'` + `poolOptions.forks.singleFork: true` (see `pactjs-utils-provider-verifier.md` Example 7) — required for message providers and any multi-file provider contract suite to keep Pact Rust FFI state coherent. The SAME config is required on the consumer side (`vitest.config.pact.ts`) alongside `fileParallelism: false` — see `pact-consumer-framework-setup.md` Example 2.
+   - `buildVerifierOptions` auto-reads `PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`, `PACT_CONSUMER_BRANCH`, `PACT_PROVIDER_VERSION`, `PACT_PROVIDER_BRANCH`, `GITHUB_SHA`, and `GITHUB_BRANCH`
+   - An explicit consumer branch requires a scoped `consumer`; emit both or neither
+   - Provider Vitest config (`vitest.config.contract.ts`) **must** use `pool: 'forks'` + `poolOptions.forks.singleFork: true` (see `pactjs-utils-provider-verifier.md` Example 8) — required for message providers and any multi-file provider contract suite to keep Pact Rust FFI state coherent. The SAME config is required on the consumer side (`vitest.config.pact.ts`) alongside `fileParallelism: false` — see `pact-consumer-framework-setup.md` Example 2.
    - Verification results published to broker when `CI=true`
 
 3. **Can-I-Deploy gate**: Block deployment if contracts are incompatible
    - `npm run can:i:deploy:provider`
-   - Ensure the script adds `--retry-while-unknown 6 --retry-interval 10` for async verification
+   - Ensure the script adds `--retry-while-unknown=10 --retry-interval=30` for async verification
+   - On consumer PRs with a named provider branch, preserve the environment check: `--ignore` only that provider, then run a second check with `--pacticipant <provider> --branch <name>`. Both calls fail hard. Never replace `--to-environment` globally.
 
 4. **Webhook job**: Add `repository_dispatch` trigger for `contract_requiring_verification_published` event
    - Provider verification runs when consumers publish new pacts
+   - Check out the exact provider version and branch registered in PactFlow; fail when that target is unavailable or the commit is outside the registered branch
    - Ensures compatibility is checked on both consumer and provider changes
    - Webhook authentication uses a dedicated GitHub machine user + classic PAT (`repo` scope, no expiration) stored as a PactFlow secret. See `pact-broker-webhooks.md` for the full pattern, rotation runbook, and staleness monitoring. A silently-expired PAT is the most common non-code cause of `can-i-deploy` timeouts with `There is no verified pact between ...`.
 
 5. **Breaking change handling**: When `PACT_BREAKING_CHANGE=true` env var is set:
-   - Provider test passes `includeMainAndDeployed: false` to `buildVerifierOptions` — verifies only matching branch
+   - Provider test passes `includeMainAndDeployed: false` to `buildVerifierOptions` — omits main and deployed selectors while retaining matching branch and any scoped `consumerBranch`
    - Coordinate with consumer team before removing the flag
 
 6. **Record deployment**: After successful deployment, record version in broker

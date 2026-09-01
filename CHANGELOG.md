@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Pact guidance now covers the short-lived branch coordination shipped in
+  `@seontechnologies/pactjs-utils` 1.2.0: scoped `consumerBranch` selectors for
+  HTTP and message provider verification, PR-only consumer/provider branch
+  detection, exact PactFlow provider-revision checkout, and an additive
+  `can-i-deploy` branch check that preserves the environment-wide safety gate.
+  It also adopts `isBreakingChangeTolerantBranch` with the explicit-consumer
+  no-pacts guard that prevents typo-driven false greens. The Pact mandate,
+  framework scaffolding, knowledge selection metadata, and public integration
+  documentation use the same rules.
+
+### Fixed
+
+- Documentation builds clear Astro's content cache before reading the symlinked
+  `docs/` tree, preventing duplicate content IDs on repeated builds.
+
 ## [1.23.4] - 2026-08-31
 
 ### Fixed

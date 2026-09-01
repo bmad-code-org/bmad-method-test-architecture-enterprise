@@ -78,6 +78,7 @@ against and no partial-migration case to protect.
 
 Load `pactjs-utils-mandate.md` before scoring M10: it holds the REQUIRED
 substitution list M10 fires on (`createProviderState`, `buildVerifierOptions`,
+scoped `consumerBranch`, `isBreakingChangeTolerantBranch`,
 `createRequestFilter`, `setJsonContent`), the constructs it must not fire on
 (`MatchersV3` used directly), and the RECOMMENDED items that never deduct
 (`zodToPactMatchers`, the DI injection). The determinism and FFI rows (H6, H7, H8,
