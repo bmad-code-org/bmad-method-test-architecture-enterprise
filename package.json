@@ -141,7 +141,7 @@
     "zod-to-json-schema": "3.25.1"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "publishConfig": {
     "access": "public"
