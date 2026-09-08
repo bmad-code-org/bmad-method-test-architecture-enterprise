@@ -1,0 +1,476 @@
+{
+  "$ref": "#/definitions/EvalRun",
+  "definitions": {
+    "EvalResult": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1.1.0"
+        },
+        "kind": {
+          "type": "string",
+          "const": "suite-result"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "live",
+            "validate-only",
+            "preflight-only"
+          ]
+        },
+        "repository": {
+          "type": "object",
+          "properties": {
+            "commit": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "dirty": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "commit",
+            "dirty"
+          ],
+          "additionalProperties": false
+        },
+        "suite": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "evalType": {
+              "type": "string",
+              "enum": [
+                "fragment-selection",
+                "behavioral"
+              ]
+            },
+            "skills": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+              },
+              "minItems": 1
+            },
+            "contracts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+                  },
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "version"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "ciTier": {
+              "type": "string",
+              "enum": [
+                "deterministic",
+                "smoke",
+                "full-matrix"
+              ]
+            },
+            "runnerCapabilities": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "read-only",
+                  "scoped-artifact-writes",
+                  "command-execution"
+                ]
+              },
+              "minItems": 1
+            },
+            "fixtureDigest": {
+              "type": "string",
+              "pattern": "^sha256:[\\da-f]{64}$"
+            },
+            "promptDigest": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/EvalResult/properties/suite/properties/fixtureDigest"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "caseIds": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+              }
+            },
+            "cases": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+                  },
+                  "promptDigest": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/definitions/EvalResult/properties/suite/properties/fixtureDigest"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "promptDigest"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "thresholds": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "number"
+              }
+            },
+            "declaredRepetitions": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "id",
+            "evalType",
+            "skills",
+            "contracts",
+            "ciTier",
+            "runnerCapabilities",
+            "fixtureDigest",
+            "promptDigest",
+            "caseIds",
+            "cases",
+            "thresholds",
+            "declaredRepetitions"
+          ],
+          "additionalProperties": false
+        },
+        "runners": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "agent": {
+                "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+              },
+              "executable": {
+                "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+              },
+              "version": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "parameters": {
+                "type": "object",
+                "properties": {
+                  "agentArgs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "envPassNames": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "timeoutMs": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "promptTransport": {
+                    "type": "string",
+                    "enum": [
+                      "stdin",
+                      "argv"
+                    ]
+                  }
+                },
+                "required": [
+                  "agentArgs",
+                  "envPassNames",
+                  "timeoutMs",
+                  "promptTransport"
+                ],
+                "additionalProperties": false
+              },
+              "repetitions": {
+                "type": "object",
+                "properties": {
+                  "expected": {
+                    "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
+                  },
+                  "completed": {
+                    "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
+                  }
+                },
+                "required": [
+                  "expected",
+                  "completed"
+                ],
+                "additionalProperties": false
+              },
+              "measurements": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "durationMs": {
+                "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
+              },
+              "usage": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "inputTokens": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "outputTokens": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "totalTokens": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "costUsd": {
+                        "anyOf": [
+                          {
+                            "type": "number",
+                            "minimum": 0
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "inputTokens",
+                      "outputTokens",
+                      "totalTokens",
+                      "costUsd"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "failureClass": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "quality",
+                  "environment-incomplete-repetitions",
+                  "environment-parser",
+                  "environment-missing-artifact",
+                  "environment-timeout",
+                  "environment-transport",
+                  "environment-authentication",
+                  "environment-configuration"
+                ]
+              },
+              "failures": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "agent",
+              "executable",
+              "version",
+              "model",
+              "parameters",
+              "repetitions",
+              "measurements",
+              "durationMs",
+              "usage",
+              "failureClass",
+              "failures"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "durationMs": {
+          "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
+        },
+        "failureClass": {
+          "type": "string",
+          "enum": [
+            "none",
+            "quality",
+            "environment-incomplete-repetitions",
+            "environment-parser",
+            "environment-missing-artifact",
+            "environment-timeout",
+            "environment-transport",
+            "environment-authentication",
+            "environment-configuration"
+          ]
+        },
+        "exitCode": {
+          "type": "number",
+          "enum": [
+            0,
+            1,
+            2
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "generatedAt",
+        "mode",
+        "repository",
+        "suite",
+        "runners",
+        "durationMs",
+        "failureClass",
+        "exitCode"
+      ],
+      "additionalProperties": false
+    },
+    "EvalRun": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "string",
+          "const": "1.1.0"
+        },
+        "kind": {
+          "type": "string",
+          "const": "run-summary"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "repository": {
+          "$ref": "#/definitions/EvalResult/properties/repository"
+        },
+        "suites": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EvalResult"
+          }
+        },
+        "unaccountedSkills": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+          }
+        },
+        "durationMs": {
+          "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
+        },
+        "failureClass": {
+          "type": "string",
+          "enum": [
+            "none",
+            "quality",
+            "environment-incomplete-repetitions",
+            "environment-parser",
+            "environment-missing-artifact",
+            "environment-timeout",
+            "environment-transport",
+            "environment-authentication",
+            "environment-configuration"
+          ]
+        },
+        "exitCode": {
+          "type": "number",
+          "enum": [
+            0,
+            1,
+            2
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "generatedAt",
+        "repository",
+        "suites",
+        "unaccountedSkills",
+        "durationMs",
+        "failureClass",
+        "exitCode"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

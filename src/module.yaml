@@ -19,6 +19,7 @@ agents:
 ## document_output_language
 ## output_folder
 ## project_root
+## project_name
 
 # TEA-specific configuration variables
 # IMPORTANT: tea_use_playwright_utils, tea_use_pactjs_utils, tea_pact_mcp, tea_browser_automation,

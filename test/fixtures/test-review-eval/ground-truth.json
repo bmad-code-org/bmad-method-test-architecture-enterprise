@@ -4,9 +4,23 @@
     "fixture files, not guessed; re-derive them if a fixture changes or recall is measured",
     "against the wrong lines and the number silently lies.",
     "",
-    "lineTolerance exists because a reviewer citing the enclosing test rather than the exact",
-    "offending line has still found the defect. It is deliberately small: a tolerance wide",
-    "enough to cover a whole file would score 'named the file' as 'named the defect'.",
+    "`admittedLines` is the set of lines a reviewer may cite and still be scored as having",
+    "found the defect. It replaces the symmetric `lineTolerance` radius, which was wrong in",
+    "both directions. The radius was justified in one direction only, that a reviewer citing",
+    "the enclosing test rather than the exact offending line has still found the defect, and",
+    "a symmetric window did not reach the enclosing declaration for H3 or L1 while it did",
+    "admit lines 41, 42 and 43 of a 40-line file, which the rubric's own fabricated-location",
+    "penalty calls a defect.",
+    "",
+    "Each set is derived from the fixture and holds three kinds of line: the line the",
+    "registry rule fires on, the enclosing test or describe declaration, and the comment",
+    "naming the row. No member is past the end of its file. H4 is the one plant whose set",
+    "spans the file, because H4 is a two-location defect by definition: the state is declared",
+    "at one line and written at another, and the rule fires on the write. Both citations find",
+    "it.",
+    "",
+    "`lineTolerance` is kept for a reader that has no `admittedLines`. Every plant carries one,",
+    "so nothing in this repository reads the fallback.",
     "",
     "Precision is scored from the fixtures with an EMPTY planted array, not from the mustNotReport",
     "key: a reviewer that reports everything scores 100% recall and is worthless, so precision is",
@@ -19,20 +33,74 @@
     {
       "path": "seeded/checkout.spec.ts",
       "planted": [
-        { "row": "H4", "line": 9, "what": "module-level mutable state mutated in a test with no reset" },
-        { "row": "H1", "line": 16, "what": "waitForTimeout used to order steps" },
-        { "row": "L1", "line": 19, "what": "CSS id locator where a role locator is available" },
-        { "row": "H3", "line": 31, "what": "conditional decides whether anything is asserted" },
-        { "row": "C1", "line": 38, "what": "the tenant-boundary test is skipped with no reason" }
+        {
+          "row": "H4",
+          "line": 22,
+          "admittedLines": [7, 8, 9, 12, 22],
+          "what": "module-level mutable state mutated in a test with no reset",
+          "why": "The rule fires on the write at 22, not on the declaration at 9. Both are correct citations for a defect that needs the two lines together, so both are admitted, along with the enclosing test at 12 and the comment at 7 and 8."
+        },
+        {
+          "row": "H1",
+          "line": 16,
+          "admittedLines": [12, 15, 16],
+          "what": "waitForTimeout used to order steps",
+          "why": "The call at 16, its comment at 15, and the enclosing test at 12."
+        },
+        {
+          "row": "L1",
+          "line": 19,
+          "admittedLines": [12, 18, 19],
+          "what": "CSS id locator where a role locator is available",
+          "why": "The locator at 19, its comment at 18, and the enclosing test at 12. A symmetric radius of 4 started at 15 and never reached the declaration."
+        },
+        {
+          "row": "H3",
+          "line": 31,
+          "admittedLines": [26, 29, 30, 31],
+          "what": "conditional decides whether anything is asserted",
+          "why": "The conditional at 31, its two comment lines, and the enclosing test at 26. A symmetric radius of 4 started at 27 and never reached the declaration."
+        },
+        {
+          "row": "C1",
+          "line": 38,
+          "admittedLines": [36, 37, 38],
+          "what": "the tenant-boundary test is skipped with no reason",
+          "why": "The skip at 38 is itself the declaration, so the set is the comment and the line. The file is 42 lines, and a symmetric radius admitted 41 and 42, which belong to a different test."
+        }
       ]
     },
     {
       "path": "seeded/orders.service.spec.ts",
       "planted": [
-        { "row": "C3", "line": 17, "what": "expect(true).toBe(true) can never fail" },
-        { "row": "C4", "line": 23, "what": "test body has no assertion" },
-        { "row": "C5", "line": 31, "what": "asserts a mock it configured; the service is never called" },
-        { "row": "M3", "line": 39, "what": "typeof shape assertion instead of the value" }
+        {
+          "row": "C3",
+          "line": 17,
+          "admittedLines": [15, 16, 17],
+          "what": "expect(true).toBe(true) can never fail",
+          "why": "The assertion at 17, the enclosing test at 16, and the comment at 15."
+        },
+        {
+          "row": "C4",
+          "line": 23,
+          "admittedLines": [20, 21, 22, 23],
+          "what": "test body has no assertion",
+          "why": "C4 is a whole-body defect, so the set is the body: the comment, the declaration, and both statements. There is no single offending line to cite."
+        },
+        {
+          "row": "C5",
+          "line": 31,
+          "admittedLines": [26, 27, 28, 30, 31],
+          "what": "asserts a mock it configured; the service is never called",
+          "why": "The assertion at 31 and the direct mock call at 30 both name the defect, plus the declaration and its two comment lines."
+        },
+        {
+          "row": "H10",
+          "line": 39,
+          "admittedLines": [34, 35, 36, 39],
+          "what": "shape-only assertion: the type of the returned id is constrained and its value is not",
+          "why": "This plant was recorded as M3 until 2026-09-08, and M3 is Multi-concern test, which does not cover it. No registry row did, so a reviewer following the registry correctly could not report a row here, the harness matched on row identity, and recall was capped at eight of nine for a reason that was not the reviewer's. H10 was added to the registry to cover it. The file is 40 lines and a symmetric radius admitted 41, 42 and 43."
+        }
       ]
     },
     {
@@ -44,7 +112,8 @@
           "network-first: the intercept IS registered before the navigation",
           "priority markers: [P1]/[P2] are present in the test names",
           "data factories: buildProfile is a factory with overrides",
-          "selector resilience: every locator is role-based"
+          "selector resilience: every locator is role-based",
+          "H10 shape-only assertion: every assertion here constrains a value, not a type"
         ]
       }
     }
@@ -54,7 +123,8 @@
       "id": "coverage-out-of-scope",
       "expectation": "A changed implementation with no accompanying test must NOT be reported by test-review.",
       "why": "Coverage is out of scope for this workflow and belongs to trace. Murat's original seeded-PR design listed 'an implementation change with no test' among the planted defects, but for THIS workflow finding it is a scope violation rather than a hit. Scored as a false positive, never as recall.",
-      "howToExercise": "Include a changed source file with no matching test in the context set, then assert the report raises no coverage violation."
+      "howToExercise": "Include a changed source file with no matching test in the context set, then assert the report raises no coverage violation.",
+      "status": "not exercised. No source file is bound into the review set, so nothing in this repository can make this control fail."
     }
   ]
 }

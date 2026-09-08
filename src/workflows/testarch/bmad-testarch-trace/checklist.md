@@ -71,12 +71,16 @@ This checklist covers **two sequential phases**:
 
 ## Coverage Classification
 
+This section is the definition of the five coverage statuses. Every other file in this workflow cites it.
+
 - [ ] Coverage status classified for each criterion:
-  - [ ] **FULL** - All scenarios validated at appropriate level(s)
-  - [ ] **PARTIAL** - Some coverage but missing edge cases or levels
+  - [ ] **FULL** - Every scenario the criterion states is established by the evidence, whether that takes one level or several
+  - [ ] **PARTIAL** - Part of what the criterion states is established and part of it is not, whether the missing part is an edge case or a level the criterion needs
   - [ ] **NONE** - No test coverage at any level
-  - [ ] **UNIT-ONLY** - Only unit tests (missing integration/E2E validation)
-  - [ ] **INTEGRATION-ONLY** - Only API/Component tests (missing unit confidence)
+  - [ ] **UNIT-ONLY** - Unit tests are the only evidence and the criterion states behavior a unit test cannot reach, such as an HTTP status, a rendered state, or a path wired across components
+  - [ ] **INTEGRATION-ONLY** - API or component tests are the only evidence and the criterion states behavior they cannot reach, such as branch-level logic that needs unit proof
+- [ ] Classification decided on what the evidence establishes about the criterion; the number of levels the evidence spans does not set the status
+- [ ] **UNIT-ONLY** and **INTEGRATION-ONLY** applied only where the missing level is what leaves the criterion unestablished. A criterion an appropriate single level establishes in full is **FULL**, and `resources/traceability-matrix.example.md` classifies two single-level criteria that way
 - [ ] Classification justifications provided
 - [ ] Edge cases considered in FULL vs PARTIAL determination
 
@@ -105,11 +109,12 @@ This checklist covers **two sequential phases**:
   - [ ] Criteria with happy-path-only coverage (missing error scenarios)
   - [ ] Inferred UI journeys missing E2E/component coverage
   - [ ] Inferred UI journeys missing loading/empty/error/permission state coverage
-- [ ] Gaps prioritized by risk level using test-priorities framework:
-  - [ ] **CRITICAL** - P0 criteria without FULL coverage (BLOCKER)
-  - [ ] **HIGH** - P1 criteria without FULL coverage (PR blocker)
-  - [ ] **MEDIUM** - P2 criteria without FULL coverage (nightly gap)
-  - [ ] **LOW** - P3 criteria without FULL coverage (acceptable)
+- [ ] Gaps prioritized by risk level using test-priorities framework. This list is the definition of the four risk buckets; `steps-c/step-04-analyze-gaps.md` section 1 builds them from it:
+  - [ ] **CRITICAL** - P0 criteria without FULL coverage (BLOCKER). Gate Rule 1 requires P0 coverage at 100% and counts only FULL criteria, so a P0 criterion at PARTIAL, UNIT-ONLY, or INTEGRATION-ONLY fails the gate by itself and belongs here
+  - [ ] **HIGH** - P1 criteria with NONE coverage (PR blocker)
+  - [ ] **MEDIUM** - P2 criteria with NONE coverage (nightly gap)
+  - [ ] **LOW** - P3 criteria with NONE coverage (acceptable)
+  - [ ] P1 to P3 criteria at PARTIAL, UNIT-ONLY, or INTEGRATION-ONLY are reported in the partial-coverage and unit-only lists above and drag their priority percentage, so they stay out of the risk buckets
 - [ ] Specific test recommendations provided for each gap:
   - [ ] Suggested test level (E2E, API, Component, Unit)
   - [ ] Test description (Given-When-Then)
@@ -192,6 +197,8 @@ Knowledge fragments referenced:
 - [ ] `gate_criteria` thresholds and actuals match gate decision
 - [ ] `blockers` array present (may be empty)
 - [ ] `recommendations` array present (may be empty)
+- [ ] `waivers` present when `{waiver_register_input}` exists, carrying `register`, `filed`, `valid`, `invalid`, and one entry per waiver with its `id`, `covers`, `valid` flag, and `failed_checks`; absent when no register was found
+- [ ] `rejected_evidence` array present (may be empty), one entry per test whose name claims a criterion its assertions do not establish
 - [ ] `links.trace_report_path` points to `traceability-matrix.md`
 - [ ] `links.trace_report_url`, `links.artifact_url`, and `links.journey_evidence_url` fields present (may be empty)
 - [ ] `gate-decision.json` written to `{gate_decision_output}` when gate-eligible
@@ -258,6 +265,7 @@ Knowledge fragments referenced:
 - [ ] Story/epic/release file identified and read
 - [ ] Test design document discovered or explicitly provided (if available)
 - [ ] Traceability matrix discovered or explicitly provided (available from Phase 1)
+- [ ] Waiver register read from `{waiver_register_input}` when the file exists (see Waiver Scenarios)
 - [ ] NFR evidence audit discovered or explicitly provided (if available)
 - [ ] Code coverage report discovered or explicitly provided (if available)
 - [ ] Burn-in results discovered or explicitly provided (if available)
@@ -576,12 +584,22 @@ Knowledge fragments referenced:
 
 ### Waiver Scenarios
 
-- [ ] Waiver only used for FAIL decision (not PASS or CONCERNS)
-- [ ] Waiver has business justification (not technical convenience)
-- [ ] Waiver has named approver with authority (VP/CTO/PO)
-- [ ] Waiver has expiry date (does NOT apply to future releases)
-- [ ] Waiver has remediation plan with concrete due date
-- [ ] Security vulnerabilities are NOT waived (enforced)
+This list is the definition of waiver validity. `steps-c/step-05-gate-decision.md` section 2b evaluates every waiver filed in `{waiver_register_input}` against these checks and names the ones it fails by id. A waiver that fails any check is invalid, and an invalid waiver is reported as such.
+
+- [ ] **fail_only** - Waiver only used for FAIL decision (not PASS or CONCERNS)
+- [ ] **business_justification** - Waiver has business justification (not technical convenience)
+- [ ] **approver_authority** - Waiver has named approver with authority (VP/CTO/PO)
+- [ ] **expiry_present** - Waiver has expiry date (does NOT apply to future releases)
+- [ ] **remediation_due_date** - Waiver has remediation plan with concrete due date
+- [ ] **not_security** - Security vulnerabilities are NOT waived (enforced). Authentication and authorization criteria are security-critical paths under `test-priorities-matrix.md`
+- [ ] **contract_complete** - Every field the Waiver Details section of `trace-template.md` names is present: waiver reason, approver with role, approval date, expiry, monitoring plan, and a remediation plan carrying fix target, due date, owner, and verification
+
+**Waiver register handling:**
+
+- [ ] Waiver register read from `{waiver_register_input}` when the file exists
+- [ ] Every filed waiver reported by id with the gap it covers and its validity
+- [ ] Every invalid waiver reported with the check ids it failed, and its covered gap left in the gap analysis
+- [ ] The derived gate decision is the one Rules 1 to 5 produced, with no waiver of any validity applied to it
 
 ---
 

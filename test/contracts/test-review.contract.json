@@ -1,0 +1,1129 @@
+{
+  "schemaVersion": 4,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-test-review-behavioral",
+  "sourceSpecDigest": "sha256:cfb461959e36b43afd077be4d60fecd4ed82d7438c080c28c1f6268412432c3d",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "Every planted CRITICAL defect is named at its registry row, in the right file, within the declared line window.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The verdict artifact carries one finding per planted CRITICAL row, each citing the fixture the defect was planted in and a line inside that row's declared window.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "C1"
+        },
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "C3"
+        },
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "C4"
+        },
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "C5"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "missed-critical-defect"
+        }
+      ],
+      "oracles": ["O-005", "O-006", "O-007", "O-008"]
+    },
+    {
+      "id": "B-002",
+      "description": "The clean control draws no finding.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No finding in the verdict artifact names profile.spec.ts.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean/profile.spec.ts"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-everything"
+        }
+      ],
+      "oracles": ["O-010"]
+    },
+    {
+      "id": "B-003",
+      "description": "Every planted HIGH defect is named at its registry row, in the right file, within the declared line window.",
+      "severity": "material",
+      "observableSuccessCriterion": "The verdict artifact carries one finding per planted HIGH row, each citing the fixture the defect was planted in and a line inside that row's declared window.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "H1"
+        },
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "H3"
+        },
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "H4"
+        },
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "H10"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "missed-high-defect"
+        }
+      ],
+      "oracles": ["O-001", "O-002", "O-004", "O-009"]
+    },
+    {
+      "id": "B-004",
+      "description": "Every planted MEDIUM or LOW defect is named at its registry row, in the right file, within the declared line window.",
+      "severity": "material",
+      "observableSuccessCriterion": "The verdict artifact carries one finding per planted MEDIUM or LOW row, each citing the fixture the defect was planted in and a line inside that row's declared window.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-criteria-registry",
+          "id": "L1"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "missed-minor-defect"
+        }
+      ],
+      "oracles": ["O-003"]
+    },
+    {
+      "id": "B-005",
+      "description": "Coverage findings stay out of scope, because coverage belongs to the trace workflow.",
+      "severity": "material",
+      "observableSuccessCriterion": "No finding in the verdict artifact names a source file outside the review set.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "coverage-out-of-scope"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "scope-creep-into-trace"
+        }
+      ],
+      "oracles": ["O-011"]
+    },
+    {
+      "id": "B-006",
+      "description": "The verdict artifact is internally consistent and the run measured something.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The verdict carries a findings array, severity counts, a quality score, and a recommendation; every finding carries a row, a file, a line, and a severity; and the exit code is one of the two that report a measured verdict.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-cli-contract",
+          "id": "verdict-payload"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-012", "O-013"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "H4 at checkout.spec.ts:22. module-level mutable state mutated in a test with no reset",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row H4 in checkout.spec.ts.",
+        "negativeDomain": "A review that reports H4 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "H4"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [7, 8, 9, 12, 22]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "H1 at checkout.spec.ts:16. waitForTimeout used to order steps",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row H1 in checkout.spec.ts.",
+        "negativeDomain": "A review that reports H1 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "H1"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [12, 15, 16]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "L1 at checkout.spec.ts:19. CSS id locator where a role locator is available",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row L1 in checkout.spec.ts.",
+        "negativeDomain": "A review that reports L1 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "L1"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [12, 18, 19]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "H3 at checkout.spec.ts:31. conditional decides whether anything is asserted",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row H3 in checkout.spec.ts.",
+        "negativeDomain": "A review that reports H3 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "H3"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [26, 29, 30, 31]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "C1 at checkout.spec.ts:38. the tenant-boundary test is skipped with no reason",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row C1 in checkout.spec.ts.",
+        "negativeDomain": "A review that reports C1 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "C1"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [36, 37, 38]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "C3 at orders.service.spec.ts:17. expect(true).toBe(true) can never fail",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row C3 in orders.service.spec.ts.",
+        "negativeDomain": "A review that reports C3 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "C3"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?orders\\.service\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [15, 16, 17]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-007",
+      "polarity": "expects-hold",
+      "commentary": "C4 at orders.service.spec.ts:23. test body has no assertion",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row C4 in orders.service.spec.ts.",
+        "negativeDomain": "A review that reports C4 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "C4"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?orders\\.service\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [20, 21, 22, 23]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-008",
+      "polarity": "expects-hold",
+      "commentary": "C5 at orders.service.spec.ts:31. asserts a mock it configured; the service is never called",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row C5 in orders.service.spec.ts.",
+        "negativeDomain": "A review that reports C5 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "C5"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?orders\\.service\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [26, 27, 28, 30, 31]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-009",
+      "polarity": "expects-hold",
+      "commentary": "H10 at orders.service.spec.ts:39. shape-only assertion: the type of the returned id is constrained and its value is not",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every finding the review reported, searched for one naming registry row H10 in orders.service.spec.ts.",
+        "negativeDomain": "A review that reports H10 nowhere, or reports it against another file, or cites a line the ground truth does not admit for it.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/row"
+                },
+                {
+                  "literal": "H10"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?orders\\.service\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [34, 35, 36, 39]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-010",
+      "polarity": "expects-hold",
+      "commentary": "The clean control. profile.spec.ts carries no planted defect, so every finding against it is a definite false positive.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every finding the review reported, searched for any that names the clean control file.",
+        "negativeDomain": "A review that reports any finding at all against profile.spec.ts.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?profile\\.spec\\.ts$"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-011",
+      "polarity": "expects-hold",
+      "commentary": "The scope control recorded as negativeControls[0] in ground-truth.json. A changed implementation with no accompanying test belongs to trace, so reporting it here is a scope violation scored as a false positive.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every finding the review reported, searched for one naming a source file outside the review set.",
+        "negativeDomain": "A review that raises a coverage violation against a changed implementation file.",
+        "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/)?[a-z0-9-]+\\.(?:ts|js)$"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-012",
+      "polarity": "expects-hold",
+      "commentary": "The verdict is the contract. A findings array that disagrees with the severity counts beside it makes every rate computed from either one unreadable.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The verdict artifact taken as a whole.",
+        "negativeDomain": "A verdict declaring severity counts with no findings array, or an array whose entries carry no registry row.",
+        "evidenceTargets": [
+          "/interactions/review-corpus/artifact/verdict/findings",
+          "/interactions/review-corpus/artifact/verdict/violations",
+          "/interactions/review-corpus/artifact/verdict/qualityScore",
+          "/interactions/review-corpus/artifact/verdict/recommendation"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/violations"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/qualityScore"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/review-corpus/artifact/verdict/recommendation"
+              }
+            ]
+          },
+          {
+            "op": "for-all",
+            "collection": {
+              "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "existence",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    }
+                  ]
+                },
+                {
+                  "op": "existence",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ]
+                },
+                {
+                  "op": "existence",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    }
+                  ]
+                },
+                {
+                  "op": "existence",
+                  "operands": [
+                    {
+                      "pointer": "@/severity"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-013",
+      "polarity": "expects-hold",
+      "commentary": "Four CRITICAL rows are planted, and the registry computes Block from any CRITICAL, so exit 1 is the only correct outcome. Exit 0 means the review missed all four. Exit 2 and exit 3 are environment and agent failures, and neither is a low score.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The exit code of the one review invocation.",
+        "negativeDomain": "An exit code reporting an environment failure, an agent failure, or a usage error.",
+        "evidenceTargets": ["/interactions/review-corpus/exit-code"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/review-corpus/exit-code"
+          },
+          {
+            "literal": 1
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [
+    {
+      "id": "R-001",
+      "maxLength": 600,
+      "scaleLevels": [
+        {
+          "level": 1,
+          "anchor": "Every reported finding quotes the offending code and names the rule it violates."
+        },
+        {
+          "level": 2,
+          "anchor": "Every reported finding names the rule it violates and cites a location."
+        },
+        {
+          "level": 3,
+          "anchor": "A reported finding names a rule with no location, or a location with no rule."
+        }
+      ],
+      "criteria": [
+        {
+          "id": "RC-001",
+          "text": "Does each reported finding cite a location and a registry row that a reader could check against the file?",
+          "evidence": "/interactions/review-corpus/artifact/verdict/findings"
+        }
+      ],
+      "failureModePenalties": [
+        {
+          "name": "unattributed-finding",
+          "description": "A finding with no registry row, which cannot be compared across runners."
+        },
+        {
+          "name": "fabricated-location",
+          "description": "A location that does not exist in the reviewed file."
+        }
+      ]
+    }
+  ],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-test-review",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "review-test-files",
+          "invocation": {
+            "executable": "tea-test-review",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": true,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": ["files", "json", "agent"],
+              "permittedKeys": ["files", "json", "agent", "model", "output", "project-root", "skill-root", "test-dir"],
+              "types": {
+                "files": "string",
+                "json": "string",
+                "agent": "string",
+                "model": "string",
+                "output": "string",
+                "project-root": "string",
+                "skill-root": "string",
+                "test-dir": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "OPENAI_API_KEY": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            }
+          },
+          "artifacts": ["verdict", "report"],
+          "descriptorChannel": {
+            "kind": "artifact",
+            "artifactId": "verdict"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "report",
+              "files",
+              "agent",
+              "model",
+              "recommendation",
+              "qualityScore",
+              "violations",
+              "findings",
+              "reviewedFiles",
+              "contextBasis",
+              "contextFiles",
+              "contextWaiversApplied",
+              "keyStrengths",
+              "keyWeaknesses"
+            ],
+            "permittedKeys": [
+              "report",
+              "files",
+              "agent",
+              "model",
+              "recommendation",
+              "qualityScore",
+              "violations",
+              "findings",
+              "reviewedFiles",
+              "contextBasis",
+              "contextFiles",
+              "contextWaiversApplied",
+              "keyStrengths",
+              "keyWeaknesses",
+              "conventionBaseline",
+              "reportedQualityScore",
+              "reportedRecommendation",
+              "unscorableTestArtifacts",
+              "gateFailures",
+              "waived",
+              "waiveReason",
+              "waiveUntil"
+            ],
+            "types": {
+              "report": "string",
+              "files": "array",
+              "agent": "string",
+              "model": null,
+              "recommendation": "string",
+              "qualityScore": "number",
+              "violations": "object",
+              "findings": "array",
+              "reviewedFiles": "array",
+              "contextBasis": "string",
+              "contextFiles": "array",
+              "contextWaiversApplied": "number",
+              "keyStrengths": "array",
+              "keyWeaknesses": "array",
+              "conventionBaseline": "object",
+              "reportedQualityScore": "number",
+              "reportedRecommendation": "string",
+              "unscorableTestArtifacts": "array",
+              "gateFailures": "array",
+              "waived": "boolean",
+              "waiveReason": "string",
+              "waiveUntil": "string"
+            },
+            "successIndicator": "/recommendation",
+            "channelRoles": {
+              "/recommendation": "success-indicator",
+              "/findings": "collection",
+              "/qualityScore": "payload",
+              "/violations": "payload"
+            },
+            "collectionLocations": [
+              {
+                "pointer": "/findings",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 200
+                }
+              }
+            ]
+          },
+          "volatilePointers": ["/report"],
+          "sensitivityWitness": {
+            "witnessId": "review-reads-the-files",
+            "channel": "option",
+            "legs": [
+              {
+                "legId": "witness-seeded-only",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+                    "json": "verdict.json",
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "absent"
+                  }
+                }
+              },
+              {
+                "legId": "witness-clean-only",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "files": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+                    "json": "verdict.json",
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "absent"
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-seeded-only/artifact/verdict/violations"
+                    },
+                    {
+                      "pointer": "/interactions/witness-clean-only/artifact/verdict/violations"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {
+    "planted-critical-rows": {
+      "keys": ["row"],
+      "members": [
+        {
+          "row": "C1"
+        },
+        {
+          "row": "C3"
+        },
+        {
+          "row": "C4"
+        },
+        {
+          "row": "C5"
+        }
+      ],
+      "commentary": "The four CRITICAL rows the corpus plants. Keyed on the row alone because no row repeats in this corpus; a corpus that planted one row twice would need a composite key, and this contract would have to change with it."
+    }
+  },
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "review-corpus",
+      "operationId": "review-test-files",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "files": {
+            "literal": "test/fixtures/test-review-eval/seeded/checkout.spec.ts,test/fixtures/test-review-eval/seeded/orders.service.spec.ts,test/fixtures/test-review-eval/clean/profile.spec.ts"
+          },
+          "json": {
+            "matcher": "any"
+          },
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": null
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "The three fixture files under test/fixtures/test-review-eval/ are checked in and carry the planted defects ground-truth.json records. No other setup runs.",
+    "cleanup": "Delete the report and verdict the run wrote. The fixtures are read-only and are never modified.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 200,
+    "maxWallClockMinutes": 15,
+    "maxCostUsd": "2.00"
+  },
+  "safetyLimits": [
+    "The runner reads and writes only inside the disposable working directory the harness creates.",
+    "No credential value appears in a prompt, an artifact, a log, or a result file."
+  ],
+  "requiredEvidence": [
+    "The verdict artifact the run wrote, in full.",
+    "The exit code of the review invocation.",
+    "The review report the verdict points at."
+  ],
+  "probeStepBound": 4,
+  "fixtureReset": null
+}

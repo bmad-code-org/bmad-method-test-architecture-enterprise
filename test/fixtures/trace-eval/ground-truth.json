@@ -1,0 +1,974 @@
+{
+  "$comment": [
+    "Ground truth for the bmad-testarch-trace behavioral eval. It was authored from the fixture",
+    "design and from the skill's own step files. No trace run produced any value in this file.",
+    "",
+    "Every line number here was derived by reading the fixture files after they were written.",
+    "A guessed line number makes recall lie quietly, so re-derive every span whenever a fixture",
+    "changes. The pre-flight should reject a span that falls outside its file.",
+    "",
+    "evidenceLineTolerance is 1, not the 4 the test-review corpus uses. That corpus scores a",
+    "reviewer pointing at a defect on a single line, where citing the enclosing test is still a",
+    "find. This corpus scores evidence citations instead, and it records the full line span of",
+    "every test, so a citation anywhere inside a test already matches without any tolerance at",
+    "all. The tolerance of 1 exists only to absorb a citation of the line immediately above a",
+    "test declaration, which is where a reporter that cites the decorator or the blank separator",
+    "lands. Every pair of adjacent tests in this corpus is separated by exactly one blank line,",
+    "so lineStart minus 1 is always that blank line and can never reach the previous test. A",
+    "tolerance of 2 would reach it, which is why the value is 1.",
+    "",
+    "coveragePercentTolerance is 0. The skill computes every percentage as",
+    "Math.round(covered / total * 100) in step-04 section 4, so the expected value is exact",
+    "integer arithmetic and a tolerance would only hide a real miscalculation. The harness must",
+    "recompute the expected percentages from criteria[].trueCoverage rather than trusting the",
+    "numbers typed into coverageArithmetic. The typed numbers are there so the two can be",
+    "compared and a mistake in this file is caught rather than propagated.",
+    "",
+    "Precision is measured on the clean set, whose every criterion has adequate evidence. A run",
+    "that reports gaps everywhere scores perfect recall on the seeded set and is worthless, so",
+    "the clean set is not optional. mustNotReport and commonFalsePositives are documentation for",
+    "whoever adjudicates a false positive later; nothing needs to branch on them.",
+    "",
+    "The fixture files carry no labels naming which criterion is falsely covered. The test-review",
+    "corpus labels each planted defect inline because its defects are visible either way. Here the",
+    "whole discriminating case is whether the agent reads the evidence instead of matching names,",
+    "so an inline label would hand it the answer.",
+    "",
+    "The harness must not put this file into the agent's context. It must also not put the",
+    "clean set into the same run as the seeded set unless it wants one combined oracle: the two",
+    "sets are separate coverage oracles with separate gate decisions, and combining them changes",
+    "every percentage below.",
+    "",
+    "Skill citations are pinned to commit 7ba2130. The line numbers are the ones in that commit;",
+    "the section names are stable and should be preferred if the lines drift."
+  ],
+  "evidenceLineTolerance": 1,
+  "coveragePercentTolerance": 0,
+  "skillRuleCitations": {
+    "gateRule1P0": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
+      "section": "2. Apply Gate Decision Logic",
+      "lines": "268-272",
+      "rule": "Rule 1: P0 coverage must be 100%; anything lower is FAIL."
+    },
+    "gateRule2Overall": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
+      "section": "2. Apply Gate Decision Logic",
+      "lines": "273-277",
+      "rule": "Rule 2: overall coverage below 80% is FAIL."
+    },
+    "gateRule3P1Floor": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
+      "section": "2. Apply Gate Decision Logic",
+      "lines": "278-284",
+      "rule": "Rule 3: P1 coverage below 80% is FAIL."
+    },
+    "gateRule4Pass": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
+      "section": "2. Apply Gate Decision Logic",
+      "lines": "285-291",
+      "rule": "Rule 4: P0 at 100%, overall at or above 80%, and P1 at or above 90% is PASS."
+    },
+    "gateRule5Concerns": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
+      "section": "2. Apply Gate Decision Logic",
+      "lines": "292-298",
+      "rule": "Rule 5: P1 coverage between 80% and 89% with the other two met is CONCERNS."
+    },
+    "gateRule6WaiverNeverDerived": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
+      "section": "2. Apply Gate Decision Logic",
+      "lines": "300-307",
+      "rule": "Rule 6: WAIVED is never computed by the workflow. Rules 1 to 5 are the only rules that set a decision. A waiver is a human override applied after the fact, and it must carry the full contract from trace-template.md."
+    },
+    "gateEligibility": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
+      "section": "2. Apply Gate Decision Logic",
+      "lines": "260",
+      "rule": "A gate is evaluated only when allow_gate is true and collection_status is COLLECTED."
+    },
+    "liveEvidenceCap": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
+      "section": "2. Apply Gate Decision Logic",
+      "lines": "322-334",
+      "rule": "A requirement covered only by recorded live verification caps the run at CONCERNS. The overlay can lower a PASS and can never lift a FAIL."
+    },
+    "liveDispositionRules": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-02-discover-tests.md",
+      "section": "1b. Load Recorded Live Verification Results",
+      "lines": "59-204",
+      "rule": "Only a live record with a unique id, a known requirement_id, status pass, and a source_sha matching the commit under trace counts as coverage. Every other outcome is recorded as a blocker and counts as nothing."
+    },
+    "liveBlockerSeverity": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-04-analyze-gaps.md",
+      "section": "2b. Roll Up Live Evidence",
+      "lines": "217-234",
+      "rule": "stale, unverifiable, fail, and contradicted records are high severity blockers. blocked, skipped, unmatched, and invalid records are medium severity blockers."
+    },
+    "coverageStatusEnum": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/checklist.md",
+      "section": "Coverage Classification",
+      "lines": "72-82",
+      "rule": "FULL is all scenarios validated at the appropriate level or levels. PARTIAL is some coverage with missing edge cases or levels. NONE is no coverage at any level. UNIT-ONLY is only unit tests. INTEGRATION-ONLY is only API or component tests."
+    },
+    "coverageArithmetic": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-04-analyze-gaps.md",
+      "section": "4. Calculate Coverage Statistics",
+      "lines": "458-485",
+      "rule": "Only FULL counts toward a coverage percentage. Each percentage is Math.round(covered / total * 100), and a priority with no criteria resolves to 100."
+    },
+    "singleLevelFullPrecedent": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/resources/traceability-matrix.example.md",
+      "section": "Detailed Mapping",
+      "lines": "61-73",
+      "rule": "The skill's own worked example marks AC-3 FULL on one API test and AC-4 FULL on one component test. Coverage at a single appropriate level is FULL, not UNIT-ONLY or INTEGRATION-ONLY, when that level establishes the whole criterion."
+    },
+    "waiverContract": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/trace-template.md",
+      "section": "Waiver Details (For WAIVED only)",
+      "lines": "488-522",
+      "rule": "A waiver must carry a business justification, a named approver with a role, an approval date, an expiry date that does not carry into the next release, a monitoring plan, and a remediation plan with a fix target, a due date, an owner, and a verification step."
+    },
+    "waiverScenarios": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/checklist.md",
+      "section": "Waiver Scenarios",
+      "lines": "585-605",
+      "rule": "A waiver applies only to a FAIL decision. Its justification must be business, not technical convenience. Its approver must hold authority such as VP, CTO, or PO. It must have an expiry date and a remediation plan with a concrete due date. Security vulnerabilities are not waived."
+    },
+    "decisionIntegrity": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/checklist.md",
+      "section": "Decision Integrity",
+      "lines": "486-493",
+      "rule": "The decision follows the rules rather than judgment. P0 failures produce FAIL unless waived. Security issues produce FAIL and should never be waived. A waiver needs a business justification and an approver."
+    },
+    "p0IsSecurityCritical": {
+      "file": "src/workflows/testarch/bmad-testarch-trace/resources/knowledge/test-priorities-matrix.md",
+      "section": "P0 - Critical (Must Test)",
+      "lines": "9-32",
+      "rule": "Authentication and authorization are named P0 security-critical paths, and P0 requires both happy and unhappy path coverage."
+    }
+  },
+  "fixtureSets": [
+    {
+      "id": "seeded-tenant-data-export",
+      "root": "seeded",
+      "purpose": "Positive case. Coverage looks nearly complete and is not, and the difference turns on reading the evidence instead of matching names.",
+      "oracle": {
+        "document": "seeded/docs/epics/epic-4-tenant-data-export-and-erasure.md",
+        "coverageBasis": "acceptance_criteria",
+        "oracleResolutionMode": "formal_requirements",
+        "oracleConfidence": "high",
+        "externalPointerStatus": "not_used",
+        "why": "The epic states ten numbered criteria with explicit priorities, so the formal requirements branch of step-01 resolves first and nothing synthetic is inferred."
+      },
+      "testRoot": "seeded/tests",
+      "sourceRoot": "seeded/src",
+      "liveResultsFile": "seeded/test-artifacts/live-verification-results.json",
+      "waiverRegister": "seeded/test-artifacts/gate-waivers.md",
+      "collection": {
+        "collectionMode": "contract_static",
+        "collectionStatus": "COLLECTED",
+        "allowGate": true,
+        "gateEligible": true,
+        "why": "Static tests exist and are readable, so nothing puts the collection into a non-collecting mode. Gate eligibility follows from allow_gate true and collection_status COLLECTED."
+      },
+      "criteria": [
+        {
+          "id": "AC-1",
+          "priority": "P0",
+          "text": "An admin export request returns a signed download link.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "seeded/tests/api/tenant-export.api.spec.ts",
+              "line": 15,
+              "lineEnd": 28,
+              "level": "api",
+              "title": "AC-1 an admin export request produces a ready job with a signed link",
+              "establishes": "Asserts the request is accepted with 202, the job reaches the ready state, and the download URL is signed."
+            },
+            {
+              "file": "seeded/tests/e2e/tenant-export.spec.ts",
+              "line": 10,
+              "lineEnd": 18,
+              "level": "e2e",
+              "title": "AC-1 an admin starts an export and the download link becomes available",
+              "establishes": "Asserts the console surfaces a download link whose href carries a signature after an admin requests the export."
+            }
+          ],
+          "why": "Both halves of the criterion, the ready job and the signed link, are asserted at two levels."
+        },
+        {
+          "id": "AC-2",
+          "priority": "P0",
+          "text": "Export is denied to a member without the admin role.",
+          "trueCoverage": "NONE",
+          "evidence": [],
+          "why": "No test anywhere exercises a member without the admin role, and no test asserts a 403 or the absence of a created job. The criterion has no evidence at any level.",
+          "isDiscriminatingCase": true,
+          "falseEvidence": [
+            {
+              "file": "seeded/tests/api/tenant-export.api.spec.ts",
+              "line": 30,
+              "lineEnd": 38,
+              "level": "api",
+              "title": "AC-2 rejects export requests from members without the admin role",
+              "whyItIsNotEvidence": "The title names AC-2 and the body does not test it. It builds a context from ADMIN_TOKEN, posts the same export request AC-1 already covers, and asserts a 202. Nothing observes a member actor, a 403, or the job queue. MEMBER_TOKEN is declared at the top of the file and never used, which is the whole gap made visible."
+            },
+            {
+              "file": "seeded/test-artifacts/live-verification-results.json",
+              "recordId": "4-LIVE-001",
+              "level": "live",
+              "whyItIsNotEvidence": "The recorded live pass describes exactly the AC-2 behavior, and it was observed against source_sha 0123456789abcdef0123456789abcdef01234567, which is not the commit under trace. Step-02 counts a live record only when its recorded sha matches the current commit, so this record contributes no coverage and is raised as a high severity blocker."
+            }
+          ],
+          "notPartialBecause": "PARTIAL means some coverage with missing edge cases or levels. Nothing in the corpus covers any part of AC-2, so the status is NONE."
+        },
+        {
+          "id": "AC-3",
+          "priority": "P1",
+          "text": "The export manifest lists contacts, invoices, and audit entries.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "seeded/tests/api/tenant-export.api.spec.ts",
+              "line": 40,
+              "lineEnd": 50,
+              "level": "api",
+              "title": "AC-3 the export manifest names contacts, invoices, and audit entries",
+              "establishes": "Asserts the served manifest names exactly the three sections in order and that each section reports an integer record count."
+            },
+            {
+              "file": "seeded/tests/unit/export-manifest.spec.ts",
+              "line": 10,
+              "lineEnd": 18,
+              "level": "unit",
+              "title": "AC-3 emits the contacts, invoices, and audit-entries sections with record counts",
+              "establishes": "Asserts the manifest builder emits the three named sections with the counts it was given."
+            }
+          ],
+          "why": "Both named facts, the three section names and the per-section record counts, are asserted."
+        },
+        {
+          "id": "AC-4",
+          "priority": "P1",
+          "text": "Erasure requires the tenant slug to be typed exactly.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "seeded/tests/e2e/tenant-export.spec.ts",
+              "line": 33,
+              "lineEnd": 45,
+              "level": "e2e",
+              "title": "AC-4 the erasure confirm control stays disabled until the slug matches exactly",
+              "establishes": "Asserts the confirm control is disabled for the near miss blue-harbour and enabled for the exact slug blue-harbor."
+            }
+          ],
+          "why": "The criterion names two states, a near miss and an exact match, and the test asserts both.",
+          "singleLevelNote": "One E2E test is the appropriate level for a control-enablement rule in a dialog. See skillRuleCitations.singleLevelFullPrecedent."
+        },
+        {
+          "id": "AC-5",
+          "priority": "P1",
+          "text": "A queued export can be cancelled before it starts.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "seeded/tests/api/tenant-export.api.spec.ts",
+              "line": 52,
+              "lineEnd": 67,
+              "level": "api",
+              "title": "AC-5 a queued export can be cancelled and never exposes a link",
+              "establishes": "Asserts the cancel call succeeds, the job reaches the cancelled state, and its downloadUrl is null."
+            }
+          ],
+          "why": "Both named facts, the cancelled state and the absent link, are asserted."
+        },
+        {
+          "id": "AC-6",
+          "priority": "P1",
+          "text": "A download link expires 24 hours after it is issued.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "seeded/tests/api/tenant-export.api.spec.ts",
+              "line": 69,
+              "lineEnd": 82,
+              "level": "api",
+              "title": "AC-6 a download link returns 410 once it is more than 24 hours old",
+              "establishes": "Advances the test clock past the 24 hour window and asserts the signed URL returns 410."
+            }
+          ],
+          "why": "The criterion states one fact, a 410 after 24 hours, and the test asserts it against a controlled clock."
+        },
+        {
+          "id": "AC-7",
+          "priority": "P1",
+          "text": "Erasure is irreversible.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "seeded/tests/api/tenant-export.api.spec.ts",
+              "line": 84,
+              "lineEnd": 95,
+              "level": "api",
+              "title": "AC-7 after an erasure completes a new export request returns 404",
+              "establishes": "Runs an erasure to completion and asserts a later export request for the same tenant returns 404."
+            }
+          ],
+          "why": "The criterion states the observable consequence of irreversibility, and the test asserts exactly that consequence."
+        },
+        {
+          "id": "AC-8",
+          "priority": "P2",
+          "text": "The audit log records the actor and the time of every export request.",
+          "trueCoverage": "PARTIAL",
+          "evidence": [
+            {
+              "file": "seeded/tests/api/audit-log.api.spec.ts",
+              "line": 14,
+              "lineEnd": 25,
+              "level": "api",
+              "title": "AC-8 an export request is written to the audit log against the requesting user",
+              "establishes": "Asserts the audit entry carries the export.requested action and the requesting user's email."
+            }
+          ],
+          "why": "The criterion names two facts, the actor and the time. The test asserts the actor and never reads or asserts any time field, so half the criterion has evidence.",
+          "missing": [
+            "No assertion that the audit entry records when the request was made."
+          ]
+        },
+        {
+          "id": "AC-9",
+          "priority": "P2",
+          "text": "Export progress reaches 100 percent before the download becomes available.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "seeded/tests/e2e/tenant-export.spec.ts",
+              "line": 20,
+              "lineEnd": 31,
+              "level": "e2e",
+              "title": "AC-9 the progress percentage reaches 100 before the download is offered",
+              "establishes": "Asserts the download link is hidden while the progress value is 0 and visible once the value reaches 100."
+            }
+          ],
+          "why": "The criterion states an ordering between the percentage and the download control, and the test asserts both sides of that ordering."
+        },
+        {
+          "id": "AC-10",
+          "priority": "P3",
+          "text": "The archive filename carries the tenant slug and the request date.",
+          "trueCoverage": "NONE",
+          "evidence": [],
+          "why": "No test in the corpus reads a filename. Nothing at any level touches this criterion.",
+          "falseEvidence": [
+            {
+              "file": "seeded/test-artifacts/live-verification-results.json",
+              "recordId": "4-LIVE-002",
+              "level": "live",
+              "whyItIsNotEvidence": "The record carries status verified, which is not one of pass, fail, blocked, or skipped. Step-02 classifies it as invalid, so it counts as nothing and is raised as a medium severity blocker."
+            }
+          ]
+        }
+      ],
+      "coverageArithmetic": {
+        "note": "Recompute every number here from criteria[].trueCoverage and compare. Only FULL counts as covered, per skillRuleCitations.coverageArithmetic.",
+        "fullCriteria": [
+          "AC-1",
+          "AC-3",
+          "AC-4",
+          "AC-5",
+          "AC-6",
+          "AC-7",
+          "AC-9"
+        ],
+        "partialCriteria": [
+          "AC-8"
+        ],
+        "noneCriteria": [
+          "AC-2",
+          "AC-10"
+        ],
+        "unitOnlyCriteria": [],
+        "integrationOnlyCriteria": [],
+        "overall": {
+          "full": 7,
+          "total": 10,
+          "formula": "round(7 / 10 * 100)",
+          "expectedPct": 70
+        },
+        "priority": {
+          "P0": {
+            "members": [
+              "AC-1",
+              "AC-2"
+            ],
+            "full": 1,
+            "total": 2,
+            "formula": "round(1 / 2 * 100)",
+            "expectedPct": 50
+          },
+          "P1": {
+            "members": [
+              "AC-3",
+              "AC-4",
+              "AC-5",
+              "AC-6",
+              "AC-7"
+            ],
+            "full": 5,
+            "total": 5,
+            "formula": "round(5 / 5 * 100)",
+            "expectedPct": 100
+          },
+          "P2": {
+            "members": [
+              "AC-8",
+              "AC-9"
+            ],
+            "full": 1,
+            "total": 2,
+            "formula": "round(1 / 2 * 100)",
+            "expectedPct": 50
+          },
+          "P3": {
+            "members": [
+              "AC-10"
+            ],
+            "full": 0,
+            "total": 1,
+            "formula": "round(0 / 1 * 100)",
+            "expectedPct": 0
+          }
+        },
+        "gapBuckets": {
+          "note": "Step-04 section 1 builds these from criteria whose coverage is exactly NONE. A PARTIAL criterion is never a gap bucket member.",
+          "criticalGaps": [
+            "AC-2"
+          ],
+          "highGaps": [],
+          "mediumGaps": [],
+          "lowGaps": [
+            "AC-10"
+          ],
+          "partialCoverageItems": [
+            "AC-8"
+          ],
+          "unitOnlyItems": []
+        },
+        "riskSummary": {
+          "critical_open": 1,
+          "high_open": 0,
+          "medium_open": 0,
+          "low_open": 1
+        },
+        "byLevelCriteriaCovered": {
+          "note": "Counts criteria whose status is FULL, PARTIAL, UNIT-ONLY, or INTEGRATION-ONLY, once per level that has a mapped test. Invariant across the test-count ambiguity described in nonDeterministicReportedValues.",
+          "e2e": 3,
+          "api": 6,
+          "component": 0,
+          "unit": 1,
+          "live": 0,
+          "other": 0
+        }
+      },
+      "expectedGate": {
+        "decision": "FAIL",
+        "producedBy": "gateRule1P0",
+        "derivation": "P0 coverage is 1 of 2, which is 50%. Rule 1 requires 100% and fires first, so the decision is FAIL and no later rule is reached. Rule 2 would also fire on its own, since overall coverage is 70% against a minimum of 80%.",
+        "expectedRationaleFacts": [
+          "P0 coverage is 50 percent against a required 100 percent.",
+          "One critical requirement is uncovered."
+        ],
+        "gateCriteria": {
+          "p0_coverage_required": "100%",
+          "p0_coverage_actual": "50%",
+          "p0_status": "NOT_MET",
+          "p1_coverage_target": "90%",
+          "p1_coverage_minimum": "80%",
+          "p1_coverage_actual": "100%",
+          "p1_status": "MET",
+          "overall_coverage_minimum": "80%",
+          "overall_coverage_actual": "70%",
+          "overall_status": "NOT_MET"
+        },
+        "mustNotBe": [
+          "WAIVED, for any reason. See skillRuleCitations.gateRule6WaiverNeverDerived. The workflow never derives a waiver, and both waivers in the register are unapplied requests."
+        ]
+      },
+      "expectedLiveEvidence": {
+        "present": true,
+        "counted": 0,
+        "requirements_live_only": 0,
+        "failed": 0,
+        "contradicted": 0,
+        "blocked": 0,
+        "skipped": 0,
+        "unmatched": 0,
+        "invalid": 1,
+        "environmentDependentPair": {
+          "why": "Record 4-LIVE-001 is a pass whose recorded sha is a well formed object id that is not the commit under trace. Its disposition depends on whether the run can resolve a current commit sha at all, which is a property of the workspace rather than of the fixture. Both outcomes mean the same thing: the record counts as no coverage and is a high severity blocker.",
+          "whenCurrentShaResolves": {
+            "stale": 1,
+            "unverifiable": 0,
+            "freshness": "stale"
+          },
+          "whenCurrentShaIsEmpty": {
+            "stale": 0,
+            "unverifiable": 1,
+            "freshness": "unverifiable"
+          }
+        },
+        "expectedBlockers": [
+          {
+            "id": "4-LIVE-001",
+            "severity": "high",
+            "why": "stale and unverifiable are both in the high severity list in step-04 section 2b."
+          },
+          {
+            "id": "4-LIVE-002",
+            "severity": "medium",
+            "why": "invalid is not in the high severity list, so it falls through to medium."
+          }
+        ],
+        "invariant": "Neither live record contributes coverage. AC-2 and AC-10 stay uncovered, and requirements_live_only stays 0 because no criterion in this set is covered by a live record."
+      },
+      "expectedWaiverHandling": {
+        "note": "Both waivers are filed and unapplied. Neither changes the derived gate decision, because the workflow never derives WAIVED.",
+        "valid": [
+          {
+            "id": "W-1",
+            "file": "seeded/test-artifacts/gate-waivers.md",
+            "waives": "AC-8",
+            "whyItIsWellFormed": [
+              "It attaches to a FAIL decision, which is the only decision a waiver may attach to.",
+              "Its justification is a contractual date and a stated absence of customer-facing and security impact, which is business rather than technical convenience.",
+              "Its approver is a VP of Engineering, which is the level of authority the checklist names.",
+              "It carries an approval date and an expiry date, and it states that it does not carry into the next release.",
+              "It carries a monitoring plan with an escalation criterion.",
+              "It carries a remediation plan with a fix target, a due date, an owner, and a verification step.",
+              "The gap it covers is a P2 reporting-fidelity gap, not a security control."
+            ],
+            "expectedTreatment": "Recorded as a well formed waiver request against the AC-8 gap. It does not clear the gate, because the FAIL is produced by AC-2, which W-1 does not address."
+          }
+        ],
+        "invalid": [
+          {
+            "id": "W-2",
+            "file": "seeded/test-artifacts/gate-waivers.md",
+            "waives": "AC-2",
+            "violations": [
+              {
+                "rule": "waiverScenarios",
+                "detail": "Its justification is the cost of building a staging fixture, which is technical convenience rather than business justification."
+              },
+              {
+                "rule": "waiverScenarios",
+                "detail": "Its approver is the engineer who wrote the endpoint being waived. That is neither an authority level the checklist accepts nor an independent approver."
+              },
+              {
+                "rule": "waiverScenarios",
+                "detail": "It has no expiry date and states that it stands until the fixture exists, so it carries into future releases."
+              },
+              {
+                "rule": "waiverScenarios",
+                "detail": "Its remediation plan has no due date, no owner, and no verification step."
+              },
+              {
+                "rule": "waiverScenarios",
+                "detail": "It waives a P0 authorization criterion. The priorities matrix classifies authorization as a security-critical path, and both the checklist and the template state that security issues are not waived."
+              },
+              {
+                "rule": "waiverContract",
+                "detail": "Its monitoring plan is the word None, so the waiver contract's monitoring section is absent."
+              }
+            ],
+            "expectedTreatment": "Reported as an invalid waiver request that cannot be applied, with at least the missing expiry, the approver's lack of authority, and the security nature of the waived criterion named. It must not appear as an accepted waiver and must not remove AC-2 from the gap analysis."
+          }
+        ]
+      },
+      "mustNotReport": [
+        "Any gap against AC-1, AC-3, AC-4, AC-5, AC-6, AC-7, or AC-9. Each of those has evidence that establishes every fact the criterion states.",
+        "A WAIVED gate decision.",
+        "A coverage status outside FULL, PARTIAL, NONE, UNIT-ONLY, and INTEGRATION-ONLY.",
+        "A criterion this epic does not state. The oracle is exactly AC-1 through AC-10."
+      ],
+      "commonFalsePositives": [
+        {
+          "finding": "AC-2 reported as covered, most often FULL, on the strength of the test titled for it.",
+          "consequence": "P0 coverage reports 100% and overall coverage reports 80%, which reaches Rule 4 and returns PASS. The single wrong classification moves the gate from FAIL to PASS, which is the reason this case exists."
+        },
+        {
+          "finding": "AC-2 reported as covered on the strength of the recorded live pass in 4-LIVE-001.",
+          "consequence": "P0 reports 100% and the requirement is live-only, so the live overlay caps the run at CONCERNS. The decision is still wrong, and its rationale blames live evidence when the gap is a missing test."
+        },
+        {
+          "finding": "AC-8 reported as FULL because an audit entry is asserted.",
+          "consequence": "Overall coverage reports 80% instead of 70% and the P2 breakdown reports 100% instead of 50%. The criterion names a time that no assertion reads."
+        },
+        {
+          "finding": "AC-3 reported as UNIT-ONLY because a unit test covers it.",
+          "consequence": "The API test at tenant-export.api.spec.ts:40 also covers it, so the criterion is not unit-only. Overall coverage would drop to 60%."
+        },
+        {
+          "finding": "W-2 accepted as a waiver, or the gate reported as WAIVED because a waiver register exists.",
+          "consequence": "A P0 authorization gap is signed off by its own author with no expiry and no remediation date."
+        },
+        {
+          "finding": "The live records counted, or reported as fresh, without checking the recorded sha.",
+          "consequence": "live_evidence.freshness reports fresh and counted reports 1 or 2, which is the failure the freshness rule exists to prevent."
+        },
+        {
+          "finding": "AC-10 reported as covered because the live record describes the filename.",
+          "consequence": "The record's status is the unrecognized value verified, so it is invalid and counts as nothing."
+        }
+      ]
+    },
+    {
+      "id": "clean-api-token-lifecycle",
+      "root": "clean",
+      "purpose": "Negative control. Every criterion has adequate evidence, so any reported gap is a false positive and the harness counts it as one.",
+      "oracle": {
+        "document": "clean/docs/epics/epic-5-api-token-lifecycle.md",
+        "coverageBasis": "acceptance_criteria",
+        "oracleResolutionMode": "formal_requirements",
+        "oracleConfidence": "high",
+        "externalPointerStatus": "not_used",
+        "why": "The epic states five numbered criteria with explicit priorities."
+      },
+      "testRoot": "clean/tests",
+      "sourceRoot": "clean/src",
+      "liveResultsFile": null,
+      "waiverRegister": null,
+      "collection": {
+        "collectionMode": "contract_static",
+        "collectionStatus": "COLLECTED",
+        "allowGate": true,
+        "gateEligible": true
+      },
+      "criteria": [
+        {
+          "id": "AC-1",
+          "priority": "P0",
+          "text": "A revoked token stops working immediately.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "clean/tests/api/token-revocation.api.spec.ts",
+              "line": 14,
+              "lineEnd": 30,
+              "level": "api",
+              "title": "AC-1 the request after a revocation is rejected with 401",
+              "establishes": "Asserts the token authenticates before the revocation and that the very next request after it returns 401."
+            }
+          ],
+          "why": "The criterion names one observable fact, and the test asserts it with a control observation before the revocation."
+        },
+        {
+          "id": "AC-2",
+          "priority": "P0",
+          "text": "A token secret is returned once and never again.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "clean/tests/api/token-revocation.api.spec.ts",
+              "line": 32,
+              "lineEnd": 48,
+              "level": "api",
+              "title": "AC-2 the secret is present at creation and absent from every later read",
+              "establishes": "Asserts the secret is present in the creation response, absent from the single read, and absent from every row of the list."
+            }
+          ],
+          "why": "The criterion names one presence and two absences, and the test asserts all three."
+        },
+        {
+          "id": "AC-3",
+          "priority": "P1",
+          "text": "An admin creates a token with a name and an expiry.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "clean/tests/e2e/token-management.spec.ts",
+              "line": 10,
+              "lineEnd": 22,
+              "level": "e2e",
+              "title": "AC-3 an admin creates a named token with an expiry and sees it listed with a masked prefix",
+              "establishes": "Fills the name and the expiry, creates the token, and asserts the listed row carries the name, a masked prefix, and the expiry date."
+            }
+          ],
+          "why": "Every fact the criterion states is asserted on the resulting row."
+        },
+        {
+          "id": "AC-4",
+          "priority": "P1",
+          "text": "A token past its expiry stops working and is marked expired.",
+          "trueCoverage": "FULL",
+          "isDiscriminatingCase": true,
+          "evidence": [
+            {
+              "file": "clean/tests/api/credential-lifetime.api.spec.ts",
+              "line": 15,
+              "lineEnd": 27,
+              "level": "api",
+              "title": "a request made after the credential lifetime has run out is rejected with 401",
+              "establishes": "Creates a token whose expiresAt is in the past and asserts the request presenting it returns 401."
+            },
+            {
+              "file": "clean/tests/api/credential-lifetime.api.spec.ts",
+              "line": 29,
+              "lineEnd": 42,
+              "level": "api",
+              "title": "the console listing reports a lapsed credential in the expired state",
+              "establishes": "Asserts the listed token carries state expired and the same past expiresAt value."
+            }
+          ],
+          "why": "Both halves of the criterion are asserted. Neither the file name nor either test title mentions AC-4 or the word expiry, so the mapping can only be made by reading what the tests assert. A run that matches on names reports AC-4 as a gap, which is a false positive and the mirror image of the seeded set's AC-2."
+        },
+        {
+          "id": "AC-5",
+          "priority": "P2",
+          "text": "The token list shows when each token was last used.",
+          "trueCoverage": "FULL",
+          "evidence": [
+            {
+              "file": "clean/tests/component/token-list.spec.tsx",
+              "line": 10,
+              "lineEnd": 22,
+              "level": "component",
+              "title": "AC-5 shows the last use time for a used token and \"Never used\" for an unused one",
+              "establishes": "Mounts the list with one used and one unused token and asserts both rendered states."
+            }
+          ],
+          "why": "The criterion names two states and the test asserts both.",
+          "singleLevelNote": "Component level is the appropriate level for a rendering rule with two branches. See skillRuleCitations.singleLevelFullPrecedent."
+        }
+      ],
+      "coverageArithmetic": {
+        "fullCriteria": [
+          "AC-1",
+          "AC-2",
+          "AC-3",
+          "AC-4",
+          "AC-5"
+        ],
+        "partialCriteria": [],
+        "noneCriteria": [],
+        "unitOnlyCriteria": [],
+        "integrationOnlyCriteria": [],
+        "overall": {
+          "full": 5,
+          "total": 5,
+          "formula": "round(5 / 5 * 100)",
+          "expectedPct": 100
+        },
+        "priority": {
+          "P0": {
+            "members": [
+              "AC-1",
+              "AC-2"
+            ],
+            "full": 2,
+            "total": 2,
+            "formula": "round(2 / 2 * 100)",
+            "expectedPct": 100
+          },
+          "P1": {
+            "members": [
+              "AC-3",
+              "AC-4"
+            ],
+            "full": 2,
+            "total": 2,
+            "formula": "round(2 / 2 * 100)",
+            "expectedPct": 100
+          },
+          "P2": {
+            "members": [
+              "AC-5"
+            ],
+            "full": 1,
+            "total": 1,
+            "formula": "round(1 / 1 * 100)",
+            "expectedPct": 100
+          },
+          "P3": {
+            "members": [],
+            "full": 0,
+            "total": 0,
+            "formula": "safePct returns 100 when total is 0",
+            "expectedPct": 100,
+            "why": "step-04 section 4 defines safePct as returning 100 for an empty priority, so an absent priority never drags a percentage down."
+          }
+        },
+        "gapBuckets": {
+          "criticalGaps": [],
+          "highGaps": [],
+          "mediumGaps": [],
+          "lowGaps": [],
+          "partialCoverageItems": [],
+          "unitOnlyItems": []
+        },
+        "riskSummary": {
+          "critical_open": 0,
+          "high_open": 0,
+          "medium_open": 0,
+          "low_open": 0
+        },
+        "byLevelCriteriaCovered": {
+          "e2e": 1,
+          "api": 3,
+          "component": 1,
+          "unit": 0,
+          "live": 0,
+          "other": 0
+        }
+      },
+      "expectedGate": {
+        "decision": "PASS",
+        "producedBy": "gateRule4Pass",
+        "derivation": "P0 coverage is 100%, so Rule 1 does not fire. Overall coverage is 100%, so Rule 2 does not fire. P1 coverage is 100%, so Rule 3 does not fire and Rule 4 applies. No synthetic oracle and no live-only requirement exists, so neither overlay lowers the result.",
+        "gateCriteria": {
+          "p0_coverage_required": "100%",
+          "p0_coverage_actual": "100%",
+          "p0_status": "MET",
+          "p1_coverage_target": "90%",
+          "p1_coverage_minimum": "80%",
+          "p1_coverage_actual": "100%",
+          "p1_status": "MET",
+          "overall_coverage_minimum": "80%",
+          "overall_coverage_actual": "100%",
+          "overall_status": "MET"
+        }
+      },
+      "expectedLiveEvidence": {
+        "present": false,
+        "freshness": "not_present",
+        "counted": 0,
+        "requirements_live_only": 0,
+        "invariant": "This set has no live results file. Every disposition count is 0 and the blockers array is empty."
+      },
+      "mustNotReport": [
+        "A gap, a PARTIAL, a UNIT-ONLY, or an INTEGRATION-ONLY status against any of the five criteria.",
+        "A gate decision other than PASS.",
+        "Any blocker. No test in this set is skipped, pending, or marked fixme, and there is no live results file.",
+        "Any waiver. This set has no waiver register."
+      ],
+      "commonFalsePositives": [
+        {
+          "finding": "AC-4 reported as NONE or PARTIAL because no test names it.",
+          "consequence": "P1 coverage reports 50% and the gate reports FAIL by Rule 3. This is the single most likely false positive in the corpus and the reason the criterion is written this way."
+        },
+        {
+          "finding": "AC-1 or AC-2 reported as INTEGRATION-ONLY because their only coverage is an API test.",
+          "consequence": "P0 coverage reports 0% and the gate reports FAIL. The skill's own worked example marks single-level coverage FULL at the appropriate level."
+        },
+        {
+          "finding": "AC-5 reported as PARTIAL because a component test is not an E2E test.",
+          "consequence": "Overall coverage reports 80% instead of 100%. The criterion describes rendering, which is what the component level establishes."
+        },
+        {
+          "finding": "AC-2 reported as PARTIAL because part of its evidence is an absence assertion.",
+          "consequence": "An absence is what the criterion states, so asserting the absence is the correct evidence."
+        },
+        {
+          "finding": "A recommendation to add live verification, or a live_evidence block reporting present true.",
+          "consequence": "This set has no live results file and needs none."
+        },
+        {
+          "finding": "A duplicate-coverage finding against the two tests in credential-lifetime.api.spec.ts.",
+          "consequence": "They assert different facts, the 401 and the listed state, so they are not duplicate coverage of the same validation."
+        }
+      ]
+    }
+  ],
+  "nonDeterministicReportedValues": [
+    {
+      "field": "tests.cases and coverage.by_level.*.tests for the seeded set",
+      "expected": "10 or 11",
+      "why": "Step-04 section 4b counts only tests that appear in a requirement's tests array. A run that leaves the misnamed AC-2 test unmapped counts 10 cases and 5 api tests. A run that maps it to AC-2 while classifying that criterion NONE counts 11 cases and 6 api tests. Both are defensible readings of the same evidence, so neither count is scored. coverage.by_level.*.criteria_covered is unaffected, because AC-2 is NONE under both readings and NONE is not coverage-eligible."
+    },
+    {
+      "field": "tests.files for the seeded set",
+      "expected": "4",
+      "why": "Both readings map tests from the same four files."
+    },
+    {
+      "field": "live_evidence.stale versus live_evidence.unverifiable for the seeded set",
+      "expected": "one of the two is 1 and the other is 0",
+      "why": "See expectedLiveEvidence.environmentDependentPair. The disposition depends on whether the workspace resolves a current commit sha, which is not a fact the fixture carries."
+    },
+    {
+      "field": "recommendations text",
+      "expected": "free text",
+      "why": "The recommendation strings are assembled from counts in step-04 section 3. Score the requirement ids each recommendation names, not its wording."
+    }
+  ],
+  "oracles": {
+    "deterministic": [
+      "Every criterion id in the oracle document appears in the reported matrix exactly once, and no id outside it appears.",
+      "Every reported coverage status is inside the five-value enum.",
+      "coverage.inventory.covered, .total, and .pct match the values recomputed from criteria[].trueCoverage.",
+      "coverage.priority_breakdown P0 through P3 totals, covered counts, and percentages match the recomputed values.",
+      "Each reported percentage equals round(covered / total * 100), with an empty priority resolving to 100.",
+      "gate_status equals expectedGate.decision, given the per-criterion statuses. The rule that produces it is a pure function of three numbers.",
+      "gate_criteria statuses match the thresholds, and gate_basis is priority_thresholds for both sets.",
+      "risk_summary counts match the gap buckets recomputed from the per-criterion statuses.",
+      "collection_status is COLLECTED and the gate is evaluated rather than skipped.",
+      "coverage.by_level.*.criteria_covered matches byLevelCriteriaCovered.",
+      "For the seeded set, live_evidence.counted is 0, invalid is 1, requirements_live_only is 0, and both live record ids appear in blockers at the declared severities.",
+      "For the clean set, blockers is empty and live_evidence.present is false.",
+      "Every evidence citation the report gives for a criterion resolves to a file and line span this file records for that criterion, within evidenceLineTolerance.",
+      "The waiver register's declared fields are present or absent as recorded: W-2 has no expiry date and no remediation due date, which is a field check and needs no judgment."
+    ],
+    "semantic": [
+      "The per-criterion coverage status. Deciding that the test titled for AC-2 does not establish AC-2, and that the AC-8 test establishes only half of AC-8, requires reading assertions against a sentence. This is the judgment the whole corpus exists to measure, and everything in the deterministic list above is a function of its output.",
+      "Mapping AC-4 in the clean set to two tests that never name it. The facts are in the fixture; recognizing them as the criterion's evidence is a semantic step.",
+      "Whether W-2's stated reason is a business justification or technical convenience, and whether its approver holds authority. The absence of an expiry date is deterministic; these two are not.",
+      "Whether a P0 authorization criterion counts as security for the purpose of the no-security-waiver rule.",
+      "Whether a gap recommendation is specific enough to act on."
+    ]
+  },
+  "negativeControls": [
+    {
+      "id": "test-quality-out-of-scope",
+      "expectation": "A trace run must not report test-quality defects as coverage gaps.",
+      "why": "The fixtures are deliberately clean on test quality so that the only signal in the corpus is coverage. A finding such as a hard wait or a hidden assertion belongs to test-review, and here there is nothing of the kind to find. Any such finding is unattributed and should be adjudicated as a false positive rather than counted as recall.",
+      "howToExercise": "Assert the report raises no BLOCKER or WARNING quality issue against either set."
+    },
+    {
+      "id": "no-test-generation",
+      "expectation": "A trace run must not write tests to close the gaps it finds.",
+      "why": "The workflow's own template states that it does not generate tests and that gaps are handed to atdd or automate. A run that adds a test for AC-2 changes the fixture and destroys the benchmark.",
+      "howToExercise": "Compare the fixture tree digest before and after the run and require it unchanged."
+    },
+    {
+      "id": "waiver-does-not-set-the-gate",
+      "expectation": "The presence of a well formed waiver must not change the derived gate decision.",
+      "why": "Step-05 Rule 6 states that WAIVED is never derived. W-1 is well formed on purpose so that a run which upgrades the decision on its strength is caught by a case where the waiver itself is not the defect.",
+      "howToExercise": "Assert gate_status is FAIL for the seeded set even though a valid waiver is on file."
+    }
+  ],
+  "rejectedCases": [
+    {
+      "case": "A live verification record that must be classified as counted.",
+      "why": "counted requires the recorded source_sha to match the commit under trace, which is git rev-parse HEAD of the host repository. That value is not a fact the fixture carries and it changes on every commit, so the expected disposition would not be derivable from the evidence given to the agent."
+    },
+    {
+      "case": "A live record with disposition unmatched.",
+      "why": "unmatched is only reachable from a record that first qualifies as counted, which needs a matching current sha. Same reason as above."
+    },
+    {
+      "case": "A criterion whose expected status is UNIT-ONLY.",
+      "why": "The status is defensible only when a reviewer agrees the unit level is insufficient, and PARTIAL is an equally defensible reading of the same evidence. The two statuses split the gap buckets differently while leaving every percentage identical, which would put an unscoreable value into the middle of the corpus. The distinction is worth adding later with a criterion whose text names a level explicitly."
+    },
+    {
+      "case": "A collection_mode other than contract_static, such as restricted or inaccessible.",
+      "why": "Those modes are configuration rather than evidence. The expected answer would depend on how the harness invokes the workflow, not on anything the agent can read in the fixture."
+    },
+    {
+      "case": "A test-quality defect planted inside a covering test, such as a hard wait.",
+      "why": "It would make the expected coverage status depend on how strictly a run applies the checklist's quality section, which is a different contract. Coverage and quality would become entangled and neither number would mean anything on its own."
+    }
+  ]
+}

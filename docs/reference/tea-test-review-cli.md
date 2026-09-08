@@ -190,6 +190,16 @@ A passing review (also written to `--json <file>` when given):
   "recommendation": "Approve",
   "qualityScore": 92,
   "violations": { "critical": 0, "high": 1, "medium": 2, "low": 3 },
+  "findings": [
+    {
+      "severity": "High",
+      "row": "H1",
+      "file": "tests/checkout.spec.ts",
+      "line": 16,
+      "section": "Recommendations (Should Fix)",
+      "title": "Hard wait orders two steps"
+    }
+  ],
   "reviewedFiles": ["tests/checkout.spec.ts"],
   "contextBasis": "pr_diff",
   "contextFiles": ["docs/stories/checkout-decline.md", "src/checkout/payment.ts"],
@@ -210,6 +220,10 @@ A passing review (also written to `--json <file>` when given):
 }
 ```
 
+`findings` is one entry per finding block documented under `## Critical Issues (Must Fix)` and `## Recommendations (Should Fix)`, in report order. `violations` is four severity counts, so it says how many defects a review found and never which ones; `findings` carries the defects themselves, which is what a consumer scoring recall, opening a ticket, or annotating a line actually needs. `severity` is read from the cited row in `criteria-registry.md`, never from the finding's own prose, so a report cannot relabel a Critical row as a Low. `file` and `line` come from the finding's `**Location**:` line and are `null` when it is missing or unreadable: the finding still counts and still reaches the verdict, with nothing to say about where to look. Findings are never deduplicated here — `(file, line, row)` identity is applied by the workflow's own aggregation step, which runs before the report exists.
+
+Per severity, `findings` agrees with `violations`: exactly for Critical and High, and never exceeding it for Medium and Low, which a report may summarize in prose. A disagreement is a parse failure (exit 3), so the two fields can never describe different reviews.
+
 `contextWaiversApplied` is strict and always `0`. `keyStrengths` and `keyWeaknesses` are best-effort, pulled from the report's Executive Summary bullet lists for PR-comment display; they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
 
 `conventionBaseline` is the CLI's own deterministic measurement of step-02-discover-tests.md §2b's convention baseline, never the agent's. It travels in the verdict alongside `agent` and `model`, so a stored score also says what house convention it was judged against and how that was established.
@@ -218,7 +232,9 @@ A passing review (also written to `--json <file>` when given):
 
 The field is absent only when no baseline was computed for this run, such as a bare `parseReport` call in a unit test with no CLI around it.
 
-A failing verdict adds `gateFailures` (machine-readable reasons, e.g. `"insufficient evidence: 1 files reviewed (3 required)"`); a waived failure adds `waived`, `waiveReason`, `waiveUntil`.
+A failing verdict adds `gateFailures` (machine-readable reasons, e.g. `"insufficient evidence: 1 files reviewed (3 required)"`); a waived failure adds `waived`, `waiveReason`, `waiveUntil`. A diff carrying changed test artifacts the ledger has no criteria for (Gherkin features, `.http` collections) adds `unscorableTestArtifacts` naming them, so a consumer reading only the verdict learns a changed test artifact went unscored. `reportedQualityScore` and `reportedRecommendation` carry what the agent stated whenever the derived ledger values replaced it.
+
+The full key set is declared as `VERDICT_KEYS` in [`cli/test-review.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/test-review.js): fourteen keys every verdict carries and eight the run's own outcome decides. Every published payload is asserted against it, and `test/contracts/test-review.contract.json` derives its response descriptor from it rather than restating it.
 
 A skipped review (no changed test files):
 
@@ -234,7 +250,7 @@ A skipped review (no changed test files):
 }
 ```
 
-A skip carries no `agent` or `model`, because no agent ran and nothing judged anything. A deletions-only diff uses `reason: "only test deletions in diff; nothing to review"` and adds `deletedFiles`. A waived skip gains the waiver fields. With `--agent none` the payload is `{ "promptOnly": true, "files": [...], "contextFiles": [...], "contextBasis": "..." }`.
+A skip carries no `agent`, `model`, `violations`, or `findings`, because no agent ran and nothing judged anything: an empty `findings` array would say a review looked and found nothing. A deletions-only diff uses `reason: "only test deletions in diff; nothing to review"` and adds `deletedFiles`. A skip whose diff held unscorable test artifacts adds `unscorableTestArtifacts` and says so in `reason`. A waived skip gains the waiver fields. The skip shape is declared as `SKIP_KEYS` beside `VERDICT_KEYS`. With `--agent none` the payload is `{ "promptOnly": true, "files": [...], "contextFiles": [...], "contextBasis": "...", "unscorableTestArtifacts": [...] }`.
 
 ## Reviewed-files manifest contract
 
@@ -250,7 +266,7 @@ The report itself is strictly validated:
 - The Reviewed Files manifest
 - Exactly one `**Context Basis**` line in the Executive Summary, plus a run-bound `## Review Context` manifest whenever the basis is not `none`
 - Exactly one `**Context Waivers Applied**: 0` line in the Executive Summary
-- Every finding under `## Critical Issues (Must Fix)` / `## Recommendations (Should Fix)` cites a real `**Row**: <id>` whose criteria-registry.md severity matches its own `**Severity**` line; the number of Critical findings documented must equal the Critical count in `**Total Violations**`, and the number of P1 (High) findings documented must equal the High count
+- Every finding under `## Critical Issues (Must Fix)` / `## Recommendations (Should Fix)` cites a real `**Row**: <id>` whose criteria-registry.md severity matches its own `**Severity**` line; the number of Critical findings documented must equal the Critical count in `**Total Violations**`, the number of P1 (High) findings documented must equal the High count, and the documented Medium and Low findings must not outnumber their counts
 
 Fenced code blocks are stripped first, so a quoted example can't spoof a verdict. Markdown emphasis is stripped only where it wraps a whole value, so `tests/user_profile.spec.ts` survives the manifest intact.
 
@@ -262,7 +278,9 @@ A report declaring Critical violations alongside an approve-type recommendation 
 
 The `**Total Violations**` summary line is not trusted either. The CLI counts the finding blocks actually documented under `## Critical Issues (Must Fix)` and the P1 (High) ones under `## Recommendations (Should Fix)`, then rejects a report whose summary disagrees with what it wrote (exit 3). This closes a real defect: a report documented a genuine Critical finding in prose while its summary line claimed zero, and the CLI computed Approve at 100/100 from the summary alone.
 
-The cross-check is scoped to Critical and High, the two severities `deriveRecommendation` acts on; Medium and Low counts are not cross-checked. [`cli/lib/registry-rows.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/registry-rows.js) reads the row→severity map straight from the skill's own `criteria-registry.md`, so the mapping never drifts from the shipped rubric.
+Exact equality is scoped to Critical and High, the two severities `deriveRecommendation` acts on. Medium and Low are bounded in one direction: a report may summarize a counted Medium finding in prose rather than write a block for it, and may never document more findings than it counted, which would deduct less than its own findings require. [`cli/lib/registry-rows.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/registry-rows.js) reads the row→severity map straight from the skill's own `criteria-registry.md`, so the mapping never drifts from the shipped rubric.
+
+The finding blocks are read exactly once, and both this cross-check and the verdict's `findings` array come out of that single pass. A consumer therefore never has to re-parse the markdown report to learn which defects were found: the verdict is the contract.
 
 ## Example workflow
 

@@ -1,0 +1,78 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the floor, and a REAL CAPTURE drives it. The report declares ten",
+    "violations in its Total Violations line and documents not one finding block, so the verdict's findings",
+    "array is empty and the review named none of the nine planted defects. Recall 0 of 9 and CRITICAL",
+    "recall 0 of 4 are what that is worth.",
+    "",
+    "It scored null until scorer v2, on the reasoning that a report declaring ten violations and attributing",
+    "none of them had moved the contract, so nothing could be scored. The verdict is the contract now: the",
+    "CLI refuses a report it cannot parse, and it binds the Critical and High counts to the findings it",
+    "documents exactly, so an empty findings array beside a Medium-and-Low-only count is a review that",
+    "documented nothing rather than a parser that failed. Scoring it as a miss is the honest reading.",
+    "",
+    "The two are still kept apart, and verdict-without-findings holds the other one: an absent findings",
+    "array is unmeasurable, an empty one is a measured zero.",
+    "",
+    "The report stays at its original path under test/fixtures/test-review-cli/reports/, where the CLI",
+    "parser suite already reads it and where the formatters leave captured bytes alone. verdict.json",
+    "records why it is not copied here."
+  ],
+  "id": "unattributed-violations",
+  "suite": "test-review",
+  "scorerVersion": 2,
+  "storedOutput": {
+    "origin": "real-capture",
+    "verdict": "verdict.json",
+    "report": "test/fixtures/test-review-cli/reports/wrapped-steps-flow.md",
+    "capturedBy": "a real agent run; test/README.md records that this fixture exists because a real run produced a frontmatter shape every hand-written fixture had missed"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The verdict declares 0 Critical, 0 High, 7 Medium and 3 Low, which sums to 10, and its findings array",
+    "is empty: the report has no findings sections at all, so the CLI parser produced no finding block.",
+    "",
+    "Zero findings means nothing is filtered as unlocated and nothing reaches matching, so reported is 0,",
+    "hits is 0, and misses holds all nine plants in ground-truth order. criticalHits is 0 of 4.",
+    "falsePositives and unattributed are 0, because both are counted over reported findings and there are",
+    "none.",
+    "",
+    "The counts the harness derives from these: recall 0/9 = 0.00 against a 0.70 floor and CRITICAL recall",
+    "0/4 = 0.00 against a 1.00 floor, both failures. nonFalsePositiveRate is 0/0, which is NaN, and the",
+    "harness treats an unmeasurable metric as a failure that names itself rather than as a threshold",
+    "silently cleared.",
+    "",
+    "The report names files that are not in the eval corpus at all, which changes nothing: no finding is",
+    "reported anywhere, so no path is ever compared with a fixture.",
+    "",
+    "score and recommendation come from the verdict: 100 - 0x10 - 0x5 - 7x2 - 3x1 = 83, and with no",
+    "Critical and no High the ledger derives Approve with Comments. An approving verdict at 83 that found",
+    "none of the nine planted defects is the pairing this case exists to record."
+  ],
+  "result": {
+    "score": 83,
+    "recommendation": "Approve with Comments",
+    "planted": 9,
+    "hits": 0,
+    "misses": [
+      "H4 seeded/checkout.spec.ts:22",
+      "H1 seeded/checkout.spec.ts:16",
+      "L1 seeded/checkout.spec.ts:19",
+      "H3 seeded/checkout.spec.ts:31",
+      "C1 seeded/checkout.spec.ts:38",
+      "C3 seeded/orders.service.spec.ts:17",
+      "C4 seeded/orders.service.spec.ts:23",
+      "C5 seeded/orders.service.spec.ts:31",
+      "H10 seeded/orders.service.spec.ts:39"
+    ],
+    "criticalPlanted": 4,
+    "criticalHits": 0,
+    "reported": 0,
+    "falsePositives": 0,
+    "unattributed": 0,
+    "unlocated": 0
+  }
+}

@@ -9,7 +9,7 @@ TEA is a standalone BMAD module that delivers risk-based test strategy, test aut
 
 - one expert agent, Murat, Master Test Architect and Quality Advisor
 - nine workflows spanning Teach Me Testing (TEA Academy), test design, framework setup, CI guidance, ATDD, automation, test review, NFR Evidence Audit, and traceability
-- a 35-row criteria registry that fixes the severity of every reviewable violation, so a score is a lookup rather than a judgment call
+- a 36-row criteria registry that fixes the severity of every reviewable violation, so a score is a lookup rather than a judgment call
 - `tea-test-review`, a headless CLI that runs the review workflow as a CI gate with real exit codes
 - a write-time enforcement hook that blocks the mechanically decidable violations before they reach disk
 
@@ -373,30 +373,31 @@ TEA has deterministic checks and live evals. These cover specific risks. They ar
 
 The eight suites under `test/evals/` measure one decision inside each knowledge-bearing workflow: whether the agent selects the required knowledge fragments and avoids fragments the workflow excludes. They do not execute the complete workflow or grade its final artifact.
 
-`test-review` has an additional behavioral eval. It runs the complete review against files containing nine planted defects plus one clean file, then scores recall, precision, score variance, and verdict stability.
+`test-review` and `trace` each have an additional behavioral eval. `test-review` runs the complete review against files containing nine planted defects plus one clean file, then scores recall, the non-false-positive rate, score variance, and verdict stability. `trace` runs the complete traceability workflow against a ten-criterion seeded set whose declared gate is FAIL and a five-criterion clean set whose declared gate is PASS, then scores criterion status, the gate decision and the criteria behind it, the coverage arithmetic, evidence citation, and case stability.
 
-| Skill                       | Fragment-selection cases | Full behavioral eval                                       |
-| --------------------------- | ------------------------ | ---------------------------------------------------------- |
-| `bmad-tea`                  | N/A                      | None                                                       |
-| `bmad-teach-me-testing`     | N/A                      | None; this skill has no workflow knowledge index           |
-| `bmad-testarch-atdd`        | 3                        | None                                                       |
-| `bmad-testarch-automate`    | 5                        | None                                                       |
-| `bmad-testarch-ci`          | 2                        | None                                                       |
-| `bmad-testarch-framework`   | 3                        | None                                                       |
-| `bmad-testarch-nfr`         | 2                        | None                                                       |
-| `bmad-testarch-test-design` | 5                        | None                                                       |
-| `bmad-testarch-test-review` | 2                        | Yes; three files, nine planted defects, and one clean file |
-| `bmad-testarch-trace`       | 2                        | None                                                       |
+| Skill                       | Fragment-selection cases | Full behavioral eval                                           |
+| --------------------------- | ------------------------ | -------------------------------------------------------------- |
+| `bmad-tea`                  | N/A                      | None                                                           |
+| `bmad-teach-me-testing`     | N/A                      | None; this skill has no workflow knowledge index               |
+| `bmad-testarch-atdd`        | 3                        | None                                                           |
+| `bmad-testarch-automate`    | 5                        | None                                                           |
+| `bmad-testarch-ci`          | 2                        | None                                                           |
+| `bmad-testarch-framework`   | 3                        | None                                                           |
+| `bmad-testarch-nfr`         | 2                        | None                                                           |
+| `bmad-testarch-test-design` | 5                        | None                                                           |
+| `bmad-testarch-test-review` | 2                        | Yes; three files, nine planted defects, and one clean file     |
+| `bmad-testarch-trace`       | 2                        | Yes; a ten-criterion seeded set and a five-criterion clean set |
 
 A passing fragment-selection eval means the workflow loaded the right knowledge. It makes no claim about the quality of the workflow's final output. Full behavioral evals for the other skills remain a coverage gap. The source-controlled [Eval Quality and Behavioral Coverage Roadmap](./docs/explanation/eval-quality-roadmap.md) records the per-skill contracts, runner work, CI plan, and intended boundary with the upcoming standalone `eval-quality` project.
 
 ### Deterministic Checks
 
-`npm test` chains thirteen deterministic checks, including three that keep the rules, guidance, hook, and eval data aligned:
+`npm test` chains nineteen checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Four of the nineteen keep the rules, guidance, hook, and eval data aligned:
 
-- `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 35 rows are currently mapped across 48 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
+- `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:enforce-hook` fails when a new Absolute registry row appears in neither the hook's enforced list nor its deferred list. This prevents a rule from being added without an explicit write-time enforcement decision.
 - `test:eval-data` checks that all 24 fragment-selection cases are structurally usable: their workflow context files exist, every expected fragment exists and is indexed for that workflow, and the required and forbidden sets do not overlap. The expected sets come from the workflow step files. This check does not ask an agent to select anything.
+- `test:eval-schemas` checks `test/evals/suite-manifest.json` against its schema, confirms that every threshold it declares is the threshold the harness actually applies, and fails when a TEA skill has neither a behavioral suite nor a deferred declaration. A suite list that omits a skill reads as coverage, so the omission has to be an error rather than a silence.
 
 These checks produce the same answer from the same repository state. They need no agent credential, network call, or model budget. `test:eval-data` runs through `npm test`, the local pre-commit hook, pull-request quality checks, and the publish workflow.
 
@@ -404,7 +405,7 @@ These checks produce the same answer from the same repository state. They need n
 
 You do not start an interactive agent session. A live eval launches the selected agent CLI as a headless subprocess, sends it each prompt, waits for the result, and scores the result.
 
-The normal path is one command. It runs fragment selection across all eight covered workflow skills, then runs the behavioral `test-review` eval:
+The normal path is one command. It runs fragment selection across all eight covered workflow skills, then runs the behavioral `test-review` and `trace` evals:
 
 ```bash
 npm run eval:all -- --agent codex
@@ -418,7 +419,7 @@ npm run eval:all -- --agent agy
 npm run eval:all -- --agent agy --agent claude --agent codex
 ```
 
-`eval:all` uses two repetitions per fragment-selection case and three repetitions for `test-review`. One runner makes 51 agent calls: 48 fragment selections plus 3 reviews. All three built-in runners make 153 calls.
+`eval:all` uses two repetitions per fragment-selection case, three repetitions for `test-review`, and two repetitions per `trace` fixture set. One runner makes 55 agent calls: 48 fragment selections, 3 reviews, and 4 traces. All three built-in runners make 165 calls.
 
 Check the data, executable, login, fixtures, and expected results without making a model call:
 
@@ -435,7 +436,7 @@ Output ending with `nothing measured` is expected in preflight mode. It means th
 Use the focused commands when debugging one metric or skill. A one-call review smoke test is:
 
 ```bash
-# One review. Recall and precision are measured; variance and stability are not.
+# One review. Recall and the non-false-positive rate are measured; variance and stability are not.
 npm run eval:test-review -- --agent codex --runs 1
 
 # Complete eval with one runner.
@@ -444,6 +445,19 @@ npm run eval:test-review -- --agent claude
 
 # Complete eval with all three built-in runners. This makes nine review calls.
 npm run eval:test-review -- --agent agy --agent claude --agent codex
+```
+
+The `trace` suite runs the same way, one call per fixture set per repetition:
+
+```bash
+# One trace per fixture set. Accuracy is measured; stability is not.
+npm run eval:trace -- --agent codex --runs 1
+
+# One fixture set only.
+npm run eval:trace -- --agent codex --set seeded-tenant-data-export
+
+# Complete eval with one runner. Two fixture sets twice: 4 calls.
+npm run eval:trace -- --agent codex
 ```
 
 ### Run Fragment Selection by Skill
@@ -525,22 +539,46 @@ npm run eval:fragment-selection -- \
 
 `--env-pass` is required only for credentials stored in environment variables. Stored CLI logins use the home directory that the harness already passes through. Model selection for a custom runner is also explicit, using repeated `--agent-arg` values for that CLI's model flag and value.
 
-### What Passes
+### What Has to Pass
 
-| Eval                              | Passing result                                                                                                                                        | Default volume               |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `npm run eval:all -- --agent ...` | Both live evals below pass for the selected runner                                                                                                    | 48 selections plus 3 reviews |
-| Fragment selection                | At least 90% required-fragment recall, at most 10% forbidden-fragment selection, and stable choices across repeated cases                             | 24 cases twice: 48 calls     |
-| Test review                       | At least 70% overall recall, 100% CRITICAL recall, at least 80% clean-file precision, score standard deviation no higher than 3, and a stable verdict | Three complete reviews       |
-| `npm run test:eval-data`          | Every case references valid workflow files and indexed fragments; required and forbidden sets do not overlap                                          | No agent calls               |
+Every row below is a declared gate. No live eval run has been recorded in this repository, so there is no measured recall, citation, or stability number to quote, and `DESIGN-CRITERIA-REGISTRY.md` carries the rule that keeps it that way. The live thresholds are the ones `test/evals/suite-manifest.json` declares, and `npm run test:eval-schemas` fails when a harness constant and the manifest disagree.
+
+| Eval                              | Declared threshold                                                                                                                                                                                                                                                                                                                                | Declared volume                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| `npm run eval:all -- --agent ...` | All three live suites below meet their thresholds for the selected runner                                                                                                                                                                                                                                                                         | 48 selections, 3 reviews, and 4 traces |
+| Fragment selection                | At least 90% required-fragment recall, at most 10% forbidden-fragment selection, and stable choices across repeated cases                                                                                                                                                                                                                         | 24 cases twice: 48 calls               |
+| Test review                       | At least 70% overall recall, 100% CRITICAL recall, an 80% non-false-positive rate, score standard deviation no higher than 3, and a stable verdict                                                                                                                                                                                                | Three complete reviews                 |
+| Trace                             | At least 90% criterion-status accuracy and 90% evidence-citation precision; 100% on both discriminating criteria, the gate decision, the gate criteria, the coverage arithmetic, the oracle resolution, the rejected evidence, the waiver validity, and the live evidence; no clean-set false positive, no unstable case, and no fixture mutation | Two fixture sets twice: 4 calls        |
+| `npm run test:eval-data`          | Every case references valid workflow files and indexed fragments; required and forbidden sets do not overlap                                                                                                                                                                                                                                      | No agent calls                         |
+| `npm run test:eval-schemas`       | The suite manifest matches its schema, declares the thresholds the harnesses apply, and accounts for every TEA skill                                                                                                                                                                                                                              | No agent calls                         |
+
+Every declared repetition has to complete. A run that loses one to a timeout, a transport error, or an unparseable reply cannot measure variance or stability, so it exits `2` rather than reporting a lower score.
+
+The non-false-positive rate is the share of reported findings that are not definite false positives, and only the clean fixture makes a false positive definite. A finding on a seeded fixture that matches no planted row is reported separately as `unattributed`: the fixture may carry an incidental real defect nobody planted, so counting it either way would be a guess.
+
+### The Suite Manifest and Machine-Readable Results
+
+`test/evals/suite-manifest.json` registers every suite `eval:all` runs, with its skills, fixtures, ground truth, contract, thresholds, repetition count, CI tier, and the capabilities its runner needs. It also carries a `deferred` list: one entry per skill with no behavioral suite, naming the owner, the missing evidence, and the condition that retires the entry. `eval:all` reads the suite list from that file and refuses to run when a TEA skill appears in neither list.
+
+Add `--json <path>` to any of the three harnesses to write a result record alongside the console output:
+
+```bash
+npm run eval:all -- --agent codex --json results/eval-all.json
+npm run eval:test-review -- --agent codex --json results/test-review.json
+```
+
+The record carries the repository commit, the suite and case IDs, the runner executable and version, the resolved model and parameters, the fixture and prompt digests, the expected and completed repetitions, the measurements, the duration, and the final failure class. `test/schema/eval-result.schema.json` is the generated JSON Schema for it, and every record is validated against the schema before it is written.
 
 ### CI Usage
 
-Run the deterministic check on every pull request:
+Run the eval's deterministic checks on every pull request. `npm test` runs all of these along with the rest of the chain:
 
 ```bash
 npm ci
 npm run test:eval-data
+npm run test:eval-trace-data
+npm run test:eval-schemas
+npm run test:eval-replay
 ```
 
 Run live evals in a scheduled or manually triggered CI job after installing and authenticating the selected agent CLI:

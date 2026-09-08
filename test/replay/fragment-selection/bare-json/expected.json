@@ -1,0 +1,73 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the contract shape the prompt asks for, JSON only with no prose",
+    "and no fence, and it is the baseline every other fragment-selection case is measured against. It is",
+    "also the only case where every required fragment is chosen and no forbidden one is, so both metrics",
+    "sit at their best value and any matching change moves them.",
+    "",
+    "The stdout is CONSTRUCTED. No live fragment-selection run has been recorded anywhere in this",
+    "repository, so there is no real capture to reuse; the roadmap's own Next Implementation Slice still",
+    "reads 'No live run has happened.'"
+  ],
+  "id": "bare-json",
+  "suite": "fragment-selection",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one real eval case. The pair (expect, stdout) is the whole input to scoreCase, so",
+      "the expect block is stored here rather than read from evals.json: a replay has to keep scoring the",
+      "scenario it was derived against even after the live eval data moves on, and",
+      "`npm run test:eval-data` already guards the live data against the step files."
+    ],
+    "sourceCase": "test/evals/bmad-testarch-atdd/evals.json :: atdd-frontend-playwright",
+    "frozenOn": "2026-09-08",
+    "expect": {
+      "mustLoad": [
+        "data-factories.md",
+        "component-tdd.md",
+        "test-quality.md",
+        "test-healing-patterns.md",
+        "selector-resilience.md",
+        "timing-debugging.md",
+        "playwright-utils-mandate.md"
+      ],
+      "mustNotLoad": ["maestro-flows.md", "mobile-test-strategy.md", "contract-testing.md"]
+    }
+  },
+  "derivation": [
+    "The stdout is a single JSON object. The fenced candidate finds nothing, the braced candidate matches",
+    "the whole line and parses, and the seven names come back unchanged because none carries a knowledge/",
+    "prefix. selection is those seven names in the order the reply gave them.",
+    "",
+    "scoreCase compares that set against the frozen expect block. mustLoad has 7 entries and the chosen set",
+    "contains all 7, so missing is empty and hits is 7 - 0 = 7. mustNotLoad has 3 entries and the chosen set",
+    "contains none of them, so forbidden is empty and forbiddenTotal is 3. selected is the length of the",
+    "reply's own list, which is 7.",
+    "",
+    "The counts the harness derives from these: requiredRecall 7/7 = 1.00 against a 0.90 floor, and",
+    "forbiddenRate 0/3 = 0.00 against a 0.10 ceiling."
+  ],
+  "result": {
+    "selection": [
+      "data-factories.md",
+      "component-tdd.md",
+      "test-quality.md",
+      "test-healing-patterns.md",
+      "selector-resilience.md",
+      "timing-debugging.md",
+      "playwright-utils-mandate.md"
+    ],
+    "score": {
+      "required": 7,
+      "hits": 7,
+      "missing": [],
+      "forbiddenTotal": 3,
+      "forbidden": [],
+      "selected": 7
+    }
+  }
+}

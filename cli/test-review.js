@@ -19,6 +19,10 @@
  * waiver never applies to exit 2 or 3: infrastructure failures are never
  * waivable.
  *
+ * The payload shapes are declared as VERDICT_KEYS and SKIP_KEYS and exported,
+ * because test/contracts/test-review.contract.json states the verdict's key set
+ * and types and had no way to check that claim against this file.
+ *
  * Usage:
  *   tea-test-review --base origin/main --agent claude --json test-review.json
  *   tea-test-review --agent none --files x.spec.ts   # print prompt bundle only
@@ -45,7 +49,7 @@ const {
   registerExtraTestPattern,
 } = require('./lib/changed-tests');
 const { buildPrompt } = require('./lib/build-prompt');
-const { parseReport, normalizeReportScore, verdictFor, scoreFails } = require('./lib/parse-report');
+const { parseReport, normalizeReportScore, verdictFor, scoreFails, PARSED_VERDICT_KEYS } = require('./lib/parse-report');
 const { computeConventionBaseline } = require('./lib/convention-baseline');
 const { loadRegistryRowSeverities } = require('./lib/registry-rows');
 const { runAgent } = require('./lib/run-agent');
@@ -67,6 +71,96 @@ const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
 const ENV_PASS_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const AGENT_OUTPUT_TAIL_LINES = 20;
 const AGENT_OUTPUT_TAIL_CHARS = 8000;
+
+// The adapter a run uses when --agent is not given. Named because
+// tools/generate-contracts.js supplies it on the contract's sensitivity-witness
+// legs, and a leg has to be a request this CLI could actually be handed.
+const DEFAULT_AGENT = 'claude';
+
+/**
+ * Every key the verdict payload can carry, with the JSON type of each.
+ *
+ * This composes what parseReport contributes with the four fields the wrapper
+ * adds around it, the two CLI-computed diagnostics, and the three fields a
+ * waiver attaches. tools/generate-contracts.js derives
+ * test-review.contract.json's response descriptor from it, so the contract's
+ * requiredKeys, permittedKeys and types are read off the CLI. The transcription
+ * they replaced permitted fifteen keys against the twenty-two named here.
+ *
+ * `model` is typed `null` ("declared, type not stated") because an adapter with
+ * no model flag resolves no model and the key carries null on those runs, so no
+ * single JSON type is true for it.
+ */
+const VERDICT_KEYS = {
+  always: {
+    report: 'string',
+    files: 'array',
+    agent: 'string',
+    model: null,
+    ...PARSED_VERDICT_KEYS.always,
+  },
+  conditional: {
+    ...PARSED_VERDICT_KEYS.conditional,
+    unscorableTestArtifacts: 'array',
+    gateFailures: 'array',
+    waived: 'boolean',
+    waiveReason: 'string',
+    waiveUntil: 'string',
+  },
+};
+
+/**
+ * Every key the skip payload can carry.
+ *
+ * A skip is a different shape from a verdict: no agent ran, so it states a null
+ * recommendation and score and carries none of the fields a review produces. It
+ * is deliberately excluded from the contract's response descriptor, because one
+ * descriptor covering both shapes could only declare the union, and a union
+ * whose recommendation and score are sometimes null asserts nothing about the
+ * verdict the contract exists to check. Declared and asserted here so the
+ * exclusion stays a tracked decision.
+ */
+const SKIP_KEYS = {
+  always: {
+    skipped: 'boolean',
+    reason: 'string',
+    recommendation: null,
+    qualityScore: null,
+    files: 'array',
+    contextBasis: 'string',
+    contextFiles: 'array',
+  },
+  conditional: {
+    unscorableTestArtifacts: 'array',
+    deletedFiles: 'array',
+    waived: 'boolean',
+    waiveReason: 'string',
+    waiveUntil: 'string',
+  },
+};
+
+/**
+ * Refuse to publish a payload whose keys disagree with its declaration.
+ *
+ * The contract's descriptor is generated from these constants, so an undeclared
+ * key would ship a verdict the published contract forbids, and a declared
+ * `always` key gone missing would ship one the contract's requiredKeys demand.
+ * Both are code defects rather than report content, so this throws instead of
+ * routing through an exit code.
+ */
+function assertDeclaredKeys(payload, declaration, label) {
+  for (const key of Object.keys(declaration.always)) {
+    if (!Object.hasOwn(payload, key)) {
+      throw new Error(`tea-test-review: the ${label} payload is missing declared key "${key}"`);
+    }
+  }
+  for (const key of Object.keys(payload)) {
+    if (!Object.hasOwn(declaration.always, key) && !Object.hasOwn(declaration.conditional, key)) {
+      throw new Error(`tea-test-review: the ${label} payload carries "${key}", which its key declaration does not name`);
+    }
+  }
+  return payload;
+}
 
 function fail(exitCode, message) {
   console.error(`tea-test-review: ${message}`);
@@ -236,7 +330,7 @@ function main() {
     .option(
       '--agent <agent>',
       `review executor: ${[...Object.keys(AGENT_ADAPTERS), 'none'].join('|')} (none prints the prompt bundle only)`,
-      'claude',
+      DEFAULT_AGENT,
     )
     .option(
       '--model <model>',
@@ -532,6 +626,9 @@ function main() {
     }
     const deletionsOnly = deletedTestFiles.length > 0;
     const skipFails = deletionsOnly || options.failOnSkip;
+    // No `findings` key here, for the same reason there is no `violations` key: no
+    // agent ran and no report exists, so an empty array would assert that a review
+    // looked and found nothing. An absent field says nothing looked.
     const skipped = {
       skipped: true,
       reason: deletionsOnly ? 'only test deletions in diff; nothing to review' : 'no changed test files in diff',
@@ -557,7 +654,7 @@ function main() {
     for (const artifact of unscorableTestArtifacts) {
       console.error(`tea-test-review: changed test artifact not scorable by the ledger: ${artifact} (use --test-glob to include it)`);
     }
-    const skippedPayload = applyWaiver(skipped, skipFails);
+    const skippedPayload = assertDeclaredKeys(applyWaiver(skipped, skipFails), SKIP_KEYS, 'skip');
     console.log(JSON.stringify(skippedPayload, null, 2));
     if (jsonPath) {
       writeJsonFile(jsonPath, skippedPayload);
@@ -783,6 +880,9 @@ function main() {
     // section — what the agent actually reviewed — never the input list.
     // agent/model travel with it so a stored verdict says what produced it:
     // a score is only comparable against another score from the same reviewer.
+    // parsed.findings rides along for the same reason: violations alone is four
+    // severity counts, so a consumer that wants to know WHICH defects were found
+    // had to re-parse the markdown report to learn it.
     const verdictPayload = {
       report: path.relative(projectRoot, outputPath),
       files: parsed.reviewedFiles,
@@ -799,7 +899,7 @@ function main() {
     if (gateFailures.length > 0) {
       verdictPayload.gateFailures = gateFailures;
     }
-    const finalPayload = applyWaiver(verdictPayload, gateFailures.length > 0);
+    const finalPayload = assertDeclaredKeys(applyWaiver(verdictPayload, gateFailures.length > 0), VERDICT_KEYS, 'verdict');
     console.log(JSON.stringify(finalPayload, null, 2));
 
     if (jsonPath) {
@@ -862,10 +962,16 @@ function main() {
   process.exit(gateFailures.length > 0 && !waiver ? EXIT.VERDICT_FAIL : EXIT.PASS);
 }
 
-try {
-  main();
-} catch (error) {
-  // Exit code 1 is reserved strictly for a failing review verdict; anything
-  // unexpected reaching here is an agent/runner failure.
-  fail(EXIT.AGENT_OR_PARSE_ERROR, error && error.message ? error.message : String(error));
+// Guarded so tools/generate-contracts.js can read VERDICT_KEYS without running a
+// review; this file is only ever executed as the `tea-test-review` bin.
+if (require.main === module) {
+  try {
+    main();
+  } catch (error) {
+    // Exit code 1 is reserved strictly for a failing review verdict; anything
+    // unexpected reaching here is an agent/runner failure.
+    fail(EXIT.AGENT_OR_PARSE_ERROR, error && error.message ? error.message : String(error));
+  }
 }
+
+module.exports = { VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT };

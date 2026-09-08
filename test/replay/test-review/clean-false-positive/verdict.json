@@ -1,0 +1,119 @@
+{
+  "$comment": ["Constructed. Derived from the report beside it by cli/lib/parse-report.js, same as every other", "constructed case here."],
+  "report": "test/replay/test-review/clean-false-positive/report.md",
+  "files": [
+    "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+    "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+    "test/fixtures/test-review-eval/clean/profile.spec.ts"
+  ],
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "recommendation": "Block",
+  "qualityScore": 32,
+  "violations": {
+    "critical": 4,
+    "high": 5,
+    "medium": 1,
+    "low": 1
+  },
+  "findings": [
+    {
+      "severity": "Critical",
+      "row": "C1",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 38,
+      "section": "Critical Issues (Must Fix)",
+      "title": "The tenant-boundary test is skipped with no reason"
+    },
+    {
+      "severity": "Critical",
+      "row": "C3",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 17,
+      "section": "Critical Issues (Must Fix)",
+      "title": "Tautological assertion that can never fail"
+    },
+    {
+      "severity": "Critical",
+      "row": "C4",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 23,
+      "section": "Critical Issues (Must Fix)",
+      "title": "Test body has no assertion"
+    },
+    {
+      "severity": "Critical",
+      "row": "C5",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 31,
+      "section": "Critical Issues (Must Fix)",
+      "title": "Asserts a mock the same test configured"
+    },
+    {
+      "severity": "High",
+      "row": "H1",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 16,
+      "section": "Recommendations (Should Fix)",
+      "title": "Hard wait used to order two steps"
+    },
+    {
+      "severity": "High",
+      "row": "H3",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 31,
+      "section": "Recommendations (Should Fix)",
+      "title": "Conditional decides whether anything is asserted"
+    },
+    {
+      "severity": "High",
+      "row": "H4",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 22,
+      "section": "Recommendations (Should Fix)",
+      "title": "Module-level mutable state written in a test with no reset"
+    },
+    {
+      "severity": "High",
+      "row": "H10",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 39,
+      "section": "Recommendations (Should Fix)",
+      "title": "Shape-only assertion on a value the service produced"
+    },
+    {
+      "severity": "High",
+      "row": "H10",
+      "file": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+      "line": 26,
+      "section": "Recommendations (Should Fix)",
+      "title": "Heading assertion constrains presence rather than the returned name"
+    },
+    {
+      "severity": "Medium",
+      "row": "M3",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 36,
+      "section": "Recommendations (Should Fix)",
+      "title": "Creation test mixes the repository call and the returned payload"
+    },
+    {
+      "severity": "Low",
+      "row": "L1",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 19,
+      "section": "Recommendations (Should Fix)",
+      "title": "CSS id locator where a role locator is available"
+    }
+  ],
+  "reviewedFiles": [
+    "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+    "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+    "test/fixtures/test-review-eval/clean/profile.spec.ts"
+  ],
+  "contextBasis": "none",
+  "contextFiles": [],
+  "contextWaiversApplied": 0,
+  "keyStrengths": [],
+  "keyWeaknesses": []
+}

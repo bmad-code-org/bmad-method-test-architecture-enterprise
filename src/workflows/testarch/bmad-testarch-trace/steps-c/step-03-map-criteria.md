@@ -40,7 +40,7 @@ Create the traceability matrix linking the resolved oracle items to tests.
 For each resolved oracle item (formal requirement, endpoint/spec item, or synthetic journey):
 
 - Map to matching tests
-- Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY
+- Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY, defined in checklist.md's "Coverage Classification" section
 - Record test level and priority
 - Preserve each mapped test's stable identity fields (`id`, `title`, `file`, `line`, `level`, status flags) so Phase 1 can deduplicate unique tests before JSON export
 - Record heuristic signals:
@@ -49,6 +49,32 @@ For each resolved oracle item (formal requirement, endpoint/spec item, or synthe
   - Error-path coverage present/missing (validation, timeout, network/server failures)
   - UI journey E2E coverage present/missing (for source-derived journeys)
   - UI state coverage present/missing (loading, empty, validation, error, permission-denied)
+
+---
+
+## 1a. Tests That Name a Criterion Without Establishing It
+
+A test earns its place in a criterion's `tests` array by establishing part of what the criterion states. A test that claims the criterion in its title, its test ID, or a comment, and whose assertions establish none of it, stays out of that array.
+
+That is the rule for this workflow, and it fixes what every count derived from `tests` means: `tests.cases`, `coverage.by_level.*.tests`, and Step 4's live-only derivation all count test cases this trace accepted as evidence. The other answer, admitting the test and leaving the criterion at NONE, would have made the same numbers mean "test cases considered", so a suite full of mistitled tests would report level counts a reader could not use to judge where coverage actually sits.
+
+Record every such test in `rejectedEvidence` against the criterion it claims, with the reason its assertions fall short. Carry the list forward for Step 4 and persist it into the progress document so a resumed Step 4 can read it. A reader needs to see that the test was read and turned down: a test that claims a criterion and then vanishes from the report is indistinguishable from a test nobody found.
+
+```javascript
+// One entry per test whose name claims a criterion its assertions do not establish.
+// Shape only; the entries come from reading the tests against the criterion text.
+const rejectedEvidence = [
+  // {
+  //   requirement_id: 'AC-7',
+  //   test_id: '9-UNIT-014',
+  //   file: 'tests/unit/pricing-rules.spec.ts',
+  //   line: 112,
+  //   level: 'unit',
+  //   title: 'AC-7 applies the loyalty discount before tax',
+  //   reason: 'Builds a cart and asserts the subtotal is a number. Never asserts the discount was applied, and never asserts the ordering against tax.',
+  // },
+];
+```
 
 ---
 

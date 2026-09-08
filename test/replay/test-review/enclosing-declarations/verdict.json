@@ -1,0 +1,103 @@
+{
+  "$comment": ["Constructed. Derived from the report beside it by cli/lib/parse-report.js, same as every other", "constructed case here."],
+  "report": "test/replay/test-review/enclosing-declarations/report.md",
+  "files": [
+    "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+    "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+    "test/fixtures/test-review-eval/clean/profile.spec.ts"
+  ],
+  "agent": "codex",
+  "model": "gpt-5.6-sol",
+  "recommendation": "Block",
+  "qualityScore": 39,
+  "violations": {
+    "critical": 4,
+    "high": 4,
+    "medium": 0,
+    "low": 1
+  },
+  "findings": [
+    {
+      "severity": "Critical",
+      "row": "C1",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 36,
+      "section": "Critical Issues (Must Fix)",
+      "title": "The tenant-boundary case is disabled"
+    },
+    {
+      "severity": "Critical",
+      "row": "C3",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 16,
+      "section": "Critical Issues (Must Fix)",
+      "title": "The configuration test asserts nothing that can differ"
+    },
+    {
+      "severity": "Critical",
+      "row": "C4",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 21,
+      "section": "Critical Issues (Must Fix)",
+      "title": "The tenant listing test has no assertion in its body"
+    },
+    {
+      "severity": "Critical",
+      "row": "C5",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 28,
+      "section": "Critical Issues (Must Fix)",
+      "title": "The tenant filter test proves only that the mock records calls"
+    },
+    {
+      "severity": "High",
+      "row": "H1",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 12,
+      "section": "Recommendations (Should Fix)",
+      "title": "The order-placing test orders its steps with a timer"
+    },
+    {
+      "severity": "High",
+      "row": "H3",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 26,
+      "section": "Recommendations (Should Fix)",
+      "title": "The history test may assert nothing at all"
+    },
+    {
+      "severity": "High",
+      "row": "H4",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 9,
+      "section": "Recommendations (Should Fix)",
+      "title": "Module-level order id is shared across the suite"
+    },
+    {
+      "severity": "High",
+      "row": "H10",
+      "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 36,
+      "section": "Recommendations (Should Fix)",
+      "title": "The creation test constrains the type of the id, never its value"
+    },
+    {
+      "severity": "Low",
+      "row": "L1",
+      "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 12,
+      "section": "Recommendations (Should Fix)",
+      "title": "The order-placing test locates its submit control by CSS id"
+    }
+  ],
+  "reviewedFiles": [
+    "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+    "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+    "test/fixtures/test-review-eval/clean/profile.spec.ts"
+  ],
+  "contextBasis": "none",
+  "contextFiles": [],
+  "contextWaiversApplied": 0,
+  "keyStrengths": [],
+  "keyWeaknesses": []
+}

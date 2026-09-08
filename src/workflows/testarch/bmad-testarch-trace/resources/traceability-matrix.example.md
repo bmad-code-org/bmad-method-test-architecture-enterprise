@@ -38,7 +38,7 @@ This workflow audits coverage and applies its deterministic gate. It does not ge
 | P3        |              0 |             0 |       N/A | N/A          |
 | **Total** |          **8** |         **7** | **87.5%** | **CONCERNS** |
 
-Coverage status uses FULL, PARTIAL, NONE, UNIT-ONLY, and INTEGRATION-ONLY. The gate counts only FULL criteria in its percentages.
+Coverage status uses FULL, PARTIAL, NONE, UNIT-ONLY, and INTEGRATION-ONLY, defined in the "Coverage Classification" section of `checklist.md`. The gate counts only FULL criteria in its percentages. AC-3 and AC-4 below are FULL on one test each, because the level each uses establishes the whole criterion.
 
 ### Detailed Mapping
 
@@ -320,7 +320,7 @@ traceability_and_gate:
 
 ## Machine-Readable Outputs
 
-- `test-artifacts/e2e-trace-summary.json`: schema version 0.2.0, gate status CONCERNS, complete oracle, inventory, coverage, heuristic, live-evidence, blocker, and link fields
+- `test-artifacts/e2e-trace-summary.json`: schema version 0.3.0, gate status CONCERNS, complete oracle, inventory, coverage, heuristic, live-evidence, blocker, and link fields. No waiver register was filed for this gate, so the run emits no `waivers` block
 - `test-artifacts/gate-decision.json`: schema version 0.1.0, evaluated timestamp, priority-threshold gate basis, CONCERNS status, rationale, and per-criterion status
 
 ## Related Artifacts

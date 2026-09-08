@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 4,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-fragment-selection-nfr",
+  "sourceSpecDigest": "sha256:8364c3cf335d8dd638a5d7b6695b09f8717d6895d13a302aa676b504be74ebac",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "An NFR assessment on a JVM service loads the unconditional required set and opens neither mandate. The case asserts: \"Both library flags default true and neither package can be present in a Gradle repo with no JavaScript manifest, so both mandates stay closed. The flag alone is never sufficient.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for nfr-backend-junit-no-browser names all five required fragments, playwright-config.md included, and names none of playwright-utils-mandate.md, pactjs-utils-mandate.md, maestro-flows.md, network-first.md, selector-resilience.md, or playwright-cli.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-nfr/steps-c/step-01-load-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "mandate-opened-without-the-package"
+        }
+      ],
+      "oracles": ["O-001", "O-002"]
+    },
+    {
+      "id": "B-002",
+      "description": "An NFR assessment with browser automation set to cli adds one config-gated fragment to the required set. The case asserts: \"playwright-cli.md is gated on tea_browser_automation being cli or auto, which is a config value rather than a property of the repository. This is the pair to the backend case, where the same key is none and the fragment must not load.\"",
+      "severity": "material",
+      "observableSuccessCriterion": "The selection returned for nfr-browser-automation-cli names all six mandated fragments, playwright-cli.md included, and names neither maestro-flows.md nor contract-testing.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-nfr/steps-c/step-01-load-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "config-gated-fragment-missed"
+        }
+      ],
+      "oracles": ["O-003", "O-004"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The step file names all five as required with no stack condition, including playwright-config.md. Ground truth here is the step file as written; if that unconditional include is wrong it is a bug in the workflow, and this case is what would make it visible.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for nfr-backend-junit-no-browser, against the 5 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/nfr-backend-junit-no-browser/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/nfr-backend-junit-no-browser/stdout/fragments"
+          },
+          {
+            "literal": [
+              "adr-quality-readiness-checklist.md",
+              "ci-burn-in.md",
+              "test-quality.md",
+              "playwright-config.md",
+              "error-handling.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "The 6 fragments the step file excludes for nfr-backend-junit-no-browser. Both flags default true and a Gradle repository with no JavaScript manifest can carry neither package. playwright-cli.md is gated on tea_browser_automation, which this run sets to none; the paired case sets the same key to cli and is where the fragment must load.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for nfr-backend-junit-no-browser, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of playwright-utils-mandate.md, pactjs-utils-mandate.md, maestro-flows.md, network-first.md, selector-resilience.md, playwright-cli.md.",
+        "evidenceTargets": ["/interactions/nfr-backend-junit-no-browser/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/nfr-backend-junit-no-browser/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": [
+                    "playwright-utils-mandate.md",
+                    "pactjs-utils-mandate.md",
+                    "maestro-flows.md",
+                    "network-first.md",
+                    "selector-resilience.md",
+                    "playwright-cli.md"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "The five unconditional fragments plus playwright-cli.md, which the cli setting of tea_browser_automation turns on.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for nfr-browser-automation-cli, against the 6 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/nfr-browser-automation-cli/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/nfr-browser-automation-cli/stdout/fragments"
+          },
+          {
+            "literal": [
+              "adr-quality-readiness-checklist.md",
+              "ci-burn-in.md",
+              "test-quality.md",
+              "playwright-config.md",
+              "error-handling.md",
+              "playwright-cli.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "The 2 fragments the step file excludes for nfr-browser-automation-cli. The repository has no .maestro directory and no pact artifact.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for nfr-browser-automation-cli, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of maestro-flows.md, contract-testing.md.",
+        "evidenceTargets": ["/interactions/nfr-browser-automation-cli/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/nfr-browser-automation-cli/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["maestro-flows.md", "contract-testing.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-fragment-selection-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "select-fragments",
+          "invocation": {
+            "executable": "tea-fragment-selection-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": ["model"],
+              "types": {
+                "model": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "OPENAI_API_KEY": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": ["fragments"],
+            "permittedKeys": ["fragments"],
+            "types": {
+              "fragments": "array"
+            },
+            "successIndicator": "/fragments",
+            "channelRoles": {
+              "/fragments": "collection"
+            },
+            "collectionLocations": [
+              {
+                "pointer": "/fragments",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 59
+                }
+              }
+            ]
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "selection-follows-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-nfr-backend-junit-no-browser",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case nfr-backend-junit-no-browser: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              },
+              {
+                "legId": "witness-nfr-browser-automation-cli",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case nfr-browser-automation-cli: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-nfr-backend-junit-no-browser/stdout/fragments"
+                    },
+                    {
+                      "pointer": "/interactions/witness-nfr-browser-automation-cli/stdout/fragments"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "nfr-backend-junit-no-browser",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "nfr-browser-automation-cli",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Every case runs against the checked-in bmad-testarch-nfr workflow: its step file or files named in requirementLinks, and its resources/tea-index.csv. The harness assembles one prompt per case from those files plus the case's task, repository facts, and TEA config, and writes it to the runner's standard input. The prompt bytes are evidence rather than declaration. This contract states what must be true of each case's selection, and the sealed run record carries the digest of the prompt that produced it, so a step-file edit that changes what the runner was asked shows up in the record instead of hiding inside a literal here.",
+    "cleanup": "Nothing is written. The runner reads a prompt from standard input and prints one JSON object to standard output; the workflow files and the eval data are read-only for the whole run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 10,
+    "maxWallClockMinutes": 10,
+    "maxCostUsd": "0.50"
+  },
+  "safetyLimits": [
+    "The runner receives a minimal environment: PATH, HOME, USER, LOGNAME, the locale and proxy variables, and the selected vendor credential variables. Nothing else is passed through.",
+    "No credential value appears in a prompt, in a selection, or in a result file.",
+    "The runner writes nothing. The workflow step files, resources/tea-index.csv, and the eval data are read-only for the whole run."
+  ],
+  "requiredEvidence": [
+    "The JSON object the runner printed on standard output for every case, in full.",
+    "The exit code of every case invocation.",
+    "The digest of the prompt each case was given, so a step-file edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 4,
+  "fixtureReset": null
+}

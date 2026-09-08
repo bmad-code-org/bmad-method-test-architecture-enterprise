@@ -1,0 +1,66 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the only stored verdict carrying a finding with a null file and",
+    "a null line, so it is the only case that pins what the scorer does with one. The CLI keeps such a",
+    "finding deliberately, because dropping it would leave the verdict documenting fewer findings than the",
+    "report and than its own summary line counted.",
+    "",
+    "The scorer counts it in `unlocated` and nowhere else. It cannot match a plant, because matching needs",
+    "a line to compare. It is not a definite false positive, because those are findings against the clean",
+    "control and this one names no file. It is not unattributed either, because that is a finding on a",
+    "seeded fixture and this one names no fixture. Folding it into the rate's denominator would dilute the",
+    "false-positive share with a finding nobody can check, so `reported` is 9 while the verdict carries 10.",
+    "",
+    "It scored null until scorer v2, for a reason that no longer exists: the old parser read adjacency in",
+    "the markdown, counted nine, compared that with the ten violations declared, and refused the run.",
+    "",
+    "The report is CONSTRUCTED, from full-recall's report with a tenth block added. The shape is real:",
+    "test/fixtures/test-review-cli/reports/finding-without-location.md exists because a finding with a row",
+    "and no location is something reports actually contain."
+  ],
+  "id": "row-without-location",
+  "suite": "test-review",
+  "scorerVersion": 2,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "report.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The verdict declares 4 Critical, 4 High, 1 Medium and 1 Low, which sums to 10, and carries ten",
+    "findings. Nine name a file and a line: C1, C3, C4, C5, H1, H3, H4, H10 and L1, all at the lines their",
+    "rules fire on. The tenth cites Row M3 with file null and line null, because its block carries no",
+    "Location line.",
+    "",
+    "The tenth is filtered out before matching, so unlocated is 1 and reported is 9.",
+    "",
+    "The nine that remain are full-recall's nine, at the same lines, so every plant matches: hits 9,",
+    "criticalHits 4 of 4, misses empty, falsePositives 0, unattributed 0.",
+    "",
+    "The counts the harness derives from these: recall 9/9 = 1.00, CRITICAL recall 4/4 = 1.00,",
+    "nonFalsePositiveRate (9 - 0)/9 = 1.00. Counting the M3 in the denominator instead would give 10/10 =",
+    "1.00 here and would hide a real false positive on a run that had one, which is why it is counted",
+    "beside the rate rather than inside it.",
+    "",
+    "The verdict's own numbers come from cli/lib/parse-report.js reading this report:",
+    "100 - 4x10 - 4x5 - 1x2 - 1x1 = 37, and any Critical at all forces Block. The M3 deducts two points",
+    "and contributes nothing to recall, which is the same split partially-attributed records."
+  ],
+  "result": {
+    "score": 37,
+    "recommendation": "Block",
+    "planted": 9,
+    "hits": 9,
+    "misses": [],
+    "criticalPlanted": 4,
+    "criticalHits": 4,
+    "reported": 9,
+    "falsePositives": 0,
+    "unattributed": 0,
+    "unlocated": 1
+  }
+}

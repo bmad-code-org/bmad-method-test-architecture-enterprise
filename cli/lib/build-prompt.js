@@ -312,6 +312,12 @@ function buildPrompt({
     '  "## Recommendations (Should Fix)" must equal the High count exactly. The CLI counts the finding blocks itself',
     '  and rejects a report whose summary line disagrees with what it actually documented — a Critical or High finding',
     '  described in prose but left out of the summary line (or the reverse) is a broken report, not a clean one.',
+    '- The P2 (Medium) and P3 (Low) findings documented under "## Recommendations (Should Fix)" may never outnumber the',
+    '  Medium and Low counts in "**Total Violations**:". Documenting more findings than the summary counted means the',
+    '  ledger deducted for fewer than the report describes, which publishes a score the findings do not support.',
+    '- Each finding\'s "**Location**:" line names the reviewed file and the line, in `path:line` form. The CLI publishes',
+    '  every finding in its JSON verdict — severity, row, file, line — so a finding whose location it cannot read still',
+    '  counts, and still reaches the consumer with nowhere to look.',
     '- A "## Reviewed Files" section listing every file in the authoritative review set exactly once, one canonical',
     '  repo-relative path per line, with no other paths.',
     contextFiles.length > 0

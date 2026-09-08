@@ -1,6 +1,11 @@
 # Test fixtures with intentionally broken/malformed files
 test/fixtures/**
 
+# Generated from test/schema/eval-result.js by tools/validate-eval-schemas.js,
+# which compares it byte for byte to catch drift. Reformatting it here would
+# make that comparison fail on formatting rather than on content.
+test/schema/eval-result.schema.json
+
 # Contributor Covenant (external standard)
 CODE_OF_CONDUCT.md
 

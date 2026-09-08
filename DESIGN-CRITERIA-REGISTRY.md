@@ -120,10 +120,17 @@ always fires carries no information, and one that fires on taste cannot be repro
 `test/eval-test-review.js`, `npm run eval:test-review`, fixtures under
 `test/fixtures/test-review-eval/`. Reports per vendor:
 
-- **recall** — planted defects named, matched on registry row within a 4-line
-  tolerance. Row matching is what makes vendors comparable; prose descriptions differ.
+- **recall** — planted defects named, matched on registry row and on the plant's own
+  `admittedLines` set: the line the rule fires on, the enclosing declaration, and the
+  comment naming the row, each derived from the fixture. It replaced a symmetric
+  four-line radius that admitted lines past the end of a 40-line file for two plants
+  and never reached the enclosing declaration for two others. Row matching is what
+  makes vendors comparable; prose descriptions differ.
 - **CRITICAL recall** — thresholded at 100%. A missed `.skip` is the whole failure mode.
-- **precision** — computed from violations against the clean fixture only.
+- **non-false-positive rate** — the share of reported findings that are not definite false
+  positives, computed from violations against the clean fixture only. It was called precision
+  until the name was checked against what it measures: precision needs every reported finding
+  adjudicated, and the unattributed ones below are not.
 - **score variance** — stdev across repeated runs of identical input, plus whether the
   verdict itself was stable. This is the number nobody had, and no amount of comparing
   two reviews by eye produces it.

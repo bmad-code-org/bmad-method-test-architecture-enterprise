@@ -53,9 +53,12 @@ const {
   deriveRecommendation,
   verdictFor,
   scoreFails,
+  PARSED_VERDICT_KEYS,
   CONTEXT_BASIS_ENUM,
   verifyFindingSeverityCounts,
+  extractFindings,
 } = require('../cli/lib/parse-report');
+const { VERDICT_KEYS, SKIP_KEYS } = require('../cli/test-review');
 const {
   computeConventionBaseline,
   directoryDistance,
@@ -90,7 +93,9 @@ const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS } = require('../cli/lib/resolve-tea-config');
 const { parseArgs: parseReviewEvalArgs, missingCredential } = require('./eval-test-review');
 const { parseArgs: parseFragmentEvalArgs } = require('./eval-fragment-selection');
-const { parseArgs: parseAllEvalArgs, buildInvocations, aggregateExitCodes } = require('./eval-all');
+const { parseArgs: parseAllEvalArgs, buildInvocations, aggregateExitCodes, runFailureClass } = require('./eval-all');
+const { loadSuiteManifest } = require('./lib/suite-manifest');
+const { exitCodeForFailureClass } = require('./schema/eval-result');
 
 // ANSI colors
 const colors = {
@@ -2127,15 +2132,20 @@ async function runTests() {
       'fragment-selection eval parses the portable runner contract',
       JSON.stringify(parsedFragmentRunner),
     );
+    // eval-all discovers its suites from test/evals/suite-manifest.json, so its
+    // invocation builder is handed the validated manifest rather than reading one.
+    const { manifest: evalSuiteManifest } = loadSuiteManifest(repoRoot);
     const parsedAll = parseAllEvalArgs(['--agent', 'codex', '--fragment-runs', '2', '--review-runs', '3']);
-    const allInvocations = buildInvocations(parsedAll);
+    const allInvocations = buildInvocations(parsedAll, evalSuiteManifest);
+    // One invocation per live suite in the manifest, so adding a suite moves this
+    // number rather than leaving a new harness silently unrun.
+    const liveSuiteCount = evalSuiteManifest.suites.length;
     assert(
-      allInvocations.length === 2 &&
-        allInvocations[0].args.includes('codex') &&
+      allInvocations.length === liveSuiteCount &&
+        allInvocations.every((invocation) => invocation.args.includes('codex')) &&
         allInvocations[0].args.includes('2') &&
-        allInvocations[1].args.includes('codex') &&
         allInvocations[1].args.includes('3'),
-      'eval:all forwards one selected agent to both live harnesses with their own repetition counts',
+      `eval:all forwards one selected agent to every live harness (${liveSuiteCount}) with their own repetition counts`,
       JSON.stringify(allInvocations),
     );
     const parsedAllCustom = parseAllEvalArgs([
@@ -2148,7 +2158,7 @@ async function runTests() {
       '--env-pass',
       'GEMINI_API_KEY',
     ]);
-    const customInvocations = buildInvocations(parsedAllCustom);
+    const customInvocations = buildInvocations(parsedAllCustom, evalSuiteManifest);
     assert(
       customInvocations.every(
         (invocation) =>
@@ -2212,6 +2222,56 @@ async function runTests() {
     assert(
       aggregateExitCodes([0, 0]) === 0 && aggregateExitCodes([1, 0]) === 1 && aggregateExitCodes([1, 2]) === 2,
       'eval:all preserves pass, measured-failure, and environment-failure exit classes',
+    );
+    // eval:all exits with the code its own run summary carries, and that code comes
+    // from this one class. A child that exits 0 while its record says it failed a
+    // threshold used to leave the process on 0 beside an artifact reading exitCode 1.
+    const childOutcomes = [
+      { children: [{ record: { failureClass: 'quality' }, exitCode: 0 }], expected: 'quality' },
+      { children: [{ record: { failureClass: 'none' }, exitCode: 2 }], expected: 'environment-configuration' },
+      { children: [{ record: { failureClass: 'environment-timeout' }, exitCode: 2 }], expected: 'environment-timeout' },
+      { children: [{ record: { failureClass: 'environment-timeout' }, exitCode: 0 }], expected: 'environment-timeout' },
+      {
+        children: [
+          { record: { failureClass: 'none' }, exitCode: 0 },
+          { record: { failureClass: 'quality' }, exitCode: 1 },
+        ],
+        expected: 'quality',
+      },
+      { children: [{ record: null, exitCode: 1 }], expected: 'quality' },
+      { children: [{ record: { failureClass: 'none' }, exitCode: 0 }], expected: 'none' },
+    ];
+    assert(
+      childOutcomes.every(({ children, expected }) => runFailureClass(children) === expected),
+      'eval:all settles each child from its own record and exit code, and a contradiction takes the worse of the two',
+      JSON.stringify(childOutcomes.map(({ children }) => runFailureClass(children))),
+    );
+    // The end-to-end half: a preflight run where one suite reports an environment
+    // failure and the others pass. The process exit and the exit code inside the
+    // summary it wrote are read back and compared.
+    const summaryPath = path.join(tmpRoot, 'eval-all-run-summary.json');
+    const reconciledRun = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'test', 'eval-all.js'),
+        '--agent',
+        'custom',
+        '--agent-cmd',
+        versionFailRunner,
+        '--preflight-only',
+        '--json',
+        summaryPath,
+      ],
+      { cwd: repoRoot, encoding: 'utf8' },
+    );
+    const writtenSummary = fs.existsSync(summaryPath) ? JSON.parse(fs.readFileSync(summaryPath, 'utf8')) : null;
+    assert(
+      writtenSummary !== null &&
+        writtenSummary.exitCode === reconciledRun.status &&
+        exitCodeForFailureClass(writtenSummary.failureClass) === reconciledRun.status &&
+        writtenSummary.failureClass === 'environment-transport',
+      'eval:all exits with the code its own run summary carries, and keeps the class the failing child recorded',
+      `status=${reconciledRun.status} summary=${JSON.stringify(writtenSummary && { failureClass: writtenSummary.failureClass, exitCode: writtenSummary.exitCode })}`,
     );
     assert(resolveModel('not-a-real-vendor') === null, 'resolveModel returns null for an unknown adapter');
     try {
@@ -2956,6 +3016,53 @@ async function runTests() {
       );
     } catch (error) {
       assert(false, 'block run writes the verdict JSON file even on verdict-fail', error.message);
+    }
+
+    // End-to-end proof that the verdict, not the report, is the machine-readable
+    // contract: a consumer reading only this JSON learns which defects were found,
+    // where, and under which registry row, with no second parse of the markdown.
+    const findingsJsonPath = path.join(tmpRoot, 'findings-run', 'verdict.json');
+    const findingsRun = runCli(
+      [
+        '--files',
+        'tests/checkout.spec.ts',
+        '--project-root',
+        fixtureProject,
+        '--output',
+        path.join(tmpRoot, 'findings-run', 'test-review.md'),
+        '--json',
+        findingsJsonPath,
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'findings' },
+    );
+    assert(
+      findingsRun.status === 1,
+      'findings run exits 1 (a Critical finding blocks)',
+      `status=${findingsRun.status} stderr=${findingsRun.stderr}`,
+    );
+    try {
+      const findingsPayload = JSON.parse(fs.readFileSync(findingsJsonPath, 'utf8'));
+      assert(
+        Array.isArray(findingsPayload.findings) &&
+          findingsPayload.findings.length === 5 &&
+          findingsPayload.findings.filter((finding) => finding.severity === 'Critical').length === findingsPayload.violations.critical &&
+          findingsPayload.findings.filter((finding) => finding.severity === 'High').length === findingsPayload.violations.high,
+        'the written verdict JSON carries the findings themselves, agreeing per severity with its own violation counts',
+        JSON.stringify(findingsPayload.findings),
+      );
+      assert(
+        findingsPayload.findings[0].file === 'tests/checkout.spec.ts' &&
+          findingsPayload.findings[0].line === 38 &&
+          findingsPayload.findings[0].row === 'C1',
+        'a consumer reading only the verdict JSON learns the file, line, and registry row of each defect',
+        JSON.stringify(findingsPayload.findings[0]),
+      );
+    } catch (error) {
+      assert(false, 'the written verdict JSON carries the findings themselves', error.message);
     }
 
     for (const [failOn, expectedStatus] of [
@@ -3714,6 +3821,15 @@ async function runTests() {
         'deletions-only --json payload records the deleted test files',
         JSON.stringify(deletePayload),
       );
+      // No `findings` key on a skip, for the same reason there is no `violations`
+      // key: nothing reviewed anything, and an empty array would say a review looked
+      // and found nothing.
+      assert(
+        !Object.prototype.hasOwnProperty.call(deletePayload, 'findings') &&
+          !Object.prototype.hasOwnProperty.call(deletePayload, 'violations'),
+        'a skip payload carries no findings array: an empty one would claim a review looked and found nothing',
+        JSON.stringify(Object.keys(deletePayload)),
+      );
     } catch (error) {
       assert(false, 'deletions-only --json payload records the deleted test files', error.message);
     }
@@ -3961,6 +4077,122 @@ async function runTests() {
       `status=${honestCriticalCountRun.status} stdout=${honestCriticalCountRun.stdout} stderr=${honestCriticalCountRun.stderr}`,
     );
     git(['checkout', 'main'], gitRepo);
+
+    // ---- the verdict payload's declared key set ----
+    //
+    // test/contracts/test-review.contract.json states the verdict's key set and
+    // types, and tools/generate-contracts.js derives that statement from the
+    // CLI's VERDICT_KEYS export. Nothing measured VERDICT_KEYS against a running
+    // CLI, which is how the hand-written descriptor it replaced came to permit
+    // fifteen keys while the CLI emitted twenty-two. These runs cover every
+    // branch that adds a conditional key and compare the union they emit to the
+    // declaration, so a declared key nothing can reach and an emitted key nothing
+    // declares both fail here.
+    git(['checkout', '-b', 'unscorable-artifact'], gitRepo);
+    fs.mkdirSync(path.join(gitRepo, 'features'), { recursive: true });
+    fs.writeFileSync(path.join(gitRepo, 'features', 'checkout.feature'), 'Feature: checkout\n  Scenario: pay\n    Given a cart\n');
+    fs.writeFileSync(path.join(gitRepo, 'tests', 'checkout.spec.ts'), "test('checkout v4', () => {});\n");
+    git(['add', '.'], gitRepo);
+    git(['commit', '-m', 'add a gherkin feature beside the spec'], gitRepo);
+    const unscorableJson = path.join(tmpRoot, 'payload-unscorable', 'verdict.json');
+    const unscorableRun = runCli(
+      [
+        '--base',
+        'main',
+        '--project-root',
+        gitRepo,
+        '--output',
+        path.join(tmpRoot, 'payload-unscorable', 'test-review.md'),
+        '--json',
+        unscorableJson,
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'approve' },
+    );
+    git(['checkout', 'main'], gitRepo);
+
+    /** One CLI run against the static fixture project, returning where its verdict JSON landed. */
+    const payloadRun = (name, extraArgs, env) => {
+      const jsonPath = path.join(tmpRoot, name, 'verdict.json');
+      const run = runCli(
+        [
+          '--files',
+          'tests/legacy-login.spec.ts',
+          '--project-root',
+          fixtureProject,
+          '--output',
+          path.join(tmpRoot, name, 'test-review.md'),
+          '--json',
+          jsonPath,
+          '--agent-cmd',
+          stubAgent,
+          '--no-isolate',
+          ...extraArgs,
+          ...stubPass('STUB_MODE'),
+        ],
+        env,
+      );
+      return { run, jsonPath };
+    };
+
+    const scoreMismatchPayload = payloadRun('payload-score-mismatch', [], { STUB_MODE: 'score-mismatch' });
+    const waivedPayloadRun = payloadRun('payload-waived', ['--waive', 'measuring the payload shape', '--waive-until', futureWaiveDate], {
+      STUB_MODE: 'request-changes-critical',
+    });
+
+    const emittedKeys = new Set();
+    let payloadRunsReadable = true;
+    for (const { label, jsonPath } of [
+      { label: 'unscorable', jsonPath: unscorableJson },
+      { label: 'score-mismatch', jsonPath: scoreMismatchPayload.jsonPath },
+      { label: 'waived', jsonPath: waivedPayloadRun.jsonPath },
+    ]) {
+      try {
+        for (const key of Object.keys(JSON.parse(fs.readFileSync(jsonPath, 'utf8')))) emittedKeys.add(key);
+      } catch (error) {
+        payloadRunsReadable = false;
+        assert(false, `verdict payload runs produce a readable verdict (${label})`, error.message);
+      }
+    }
+    assert(
+      unscorableRun.status === 0 && emittedKeys.has('unscorableTestArtifacts'),
+      'a changed Gherkin feature beside a changed spec reaches the verdict as unscorableTestArtifacts',
+      `status=${unscorableRun.status} stderr=${unscorableRun.stderr}`,
+    );
+    if (payloadRunsReadable) {
+      const declared = [...Object.keys(VERDICT_KEYS.always), ...Object.keys(VERDICT_KEYS.conditional)];
+      const undeclared = [...emittedKeys].filter((key) => !declared.includes(key));
+      const unreachable = declared.filter((key) => !emittedKeys.has(key));
+      assert(
+        undeclared.length === 0 && unreachable.length === 0,
+        `VERDICT_KEYS names exactly the ${declared.length} keys these runs emit`,
+        `undeclared ${JSON.stringify(undeclared)}, unreachable ${JSON.stringify(unreachable)}`,
+      );
+    }
+
+    const skipPayloadJson = path.join(tmpRoot, 'payload-skip', 'verdict.json');
+    const skipPayloadRun = runCli(['--agent', 'none', '--files', '', '--project-root', fixtureProject, '--json', skipPayloadJson]);
+    try {
+      const skipPayload = JSON.parse(fs.readFileSync(skipPayloadJson, 'utf8'));
+      const skipDeclared = new Set([...Object.keys(SKIP_KEYS.always), ...Object.keys(SKIP_KEYS.conditional)]);
+      assert(
+        skipPayloadRun.status === 0 && Object.keys(skipPayload).every((key) => skipDeclared.has(key)),
+        'the skip payload stays inside SKIP_KEYS, which the contract descriptor deliberately excludes',
+        `status=${skipPayloadRun.status} keys=${JSON.stringify(Object.keys(skipPayload))}`,
+      );
+    } catch (error) {
+      assert(false, 'the skip payload stays inside SKIP_KEYS', error.message);
+    }
+
+    assert(
+      Object.keys(PARSED_VERDICT_KEYS.always).every((key) => VERDICT_KEYS.always[key] === PARSED_VERDICT_KEYS.always[key]) &&
+        Object.keys(PARSED_VERDICT_KEYS.conditional).every((key) => VERDICT_KEYS.conditional[key] === PARSED_VERDICT_KEYS.conditional[key]),
+      'VERDICT_KEYS carries every parseReport key at the type parse-report declares',
+      JSON.stringify({ parsed: PARSED_VERDICT_KEYS, verdict: VERDICT_KEYS }),
+    );
 
     console.log('');
 
@@ -4578,12 +4810,13 @@ async function runTests() {
     const registryRowSeverities = loadRegistryRowSeverities(registrySkillRoot);
     assert(
       registryRowSeverities !== null &&
-        Object.keys(registryRowSeverities).length === 35 &&
-        ['M9', 'M10', 'L9'].every((row) => registryRowSeverities[row] !== undefined) &&
+        Object.keys(registryRowSeverities).length === 36 &&
+        ['M9', 'M10', 'L9', 'H10'].every((row) => registryRowSeverities[row] !== undefined) &&
         registryRowSeverities.M9 === 'Medium' &&
         registryRowSeverities.M10 === 'Medium' &&
-        registryRowSeverities.L9 === 'Low',
-      'loadRegistryRowSeverities reads all 35 real rows from criteria-registry.md, including the mandate rows M9/M10 at Medium and L9 at Low',
+        registryRowSeverities.L9 === 'Low' &&
+        registryRowSeverities.H10 === 'High',
+      'loadRegistryRowSeverities reads all 36 real rows from criteria-registry.md, including the mandate rows M9/M10 at Medium, L9 at Low, and H10 at High',
       JSON.stringify(registryRowSeverities ? Object.keys(registryRowSeverities).length : null),
     );
     assert(
@@ -4798,6 +5031,296 @@ async function runTests() {
       findingCountsPrompt.includes('must equal the Critical count') && findingCountsPrompt.includes('must equal the High count'),
       'prompt states that documented finding counts must equal the Total Violations counts exactly',
     );
+
+    console.log('');
+
+    // ============================================================
+    // Test Suite 13: the verdict's findings array
+    // ============================================================
+    console.log(`${colors.yellow}Test Suite 13: the verdict's findings array${colors.reset}\n`);
+
+    // Before this array existed, `violations` was four severity COUNTS and nothing
+    // else, so every consumer that needed to know WHICH defects a review reported
+    // had to re-parse the markdown report with its own regexes — the machine-readable
+    // artifact was not machine-readable enough to score, which left the prose report
+    // as the real contract. These tests hold the verdict to that job instead.
+    try {
+      const multi = parseReport(readFixture('reports', 'findings-multi-severity.md'), { registryRowSeverities });
+      assert(
+        Array.isArray(multi.findings) && multi.findings.length === 5,
+        'findings-multi-severity: every documented finding reaches the verdict (1 Critical, 2 High, 1 Medium, 1 Low)',
+        JSON.stringify(multi.findings),
+      );
+      assert(
+        JSON.stringify(multi.findings[0]) ===
+          JSON.stringify({
+            severity: 'Critical',
+            row: 'C1',
+            file: 'tests/checkout.spec.ts',
+            line: 38,
+            section: 'Critical Issues (Must Fix)',
+            title: 'Tenant boundary test is skipped with no reason',
+          }),
+        'a finding entry carries severity, registry row, file, line, its section, and its title',
+        JSON.stringify(multi.findings[0]),
+      );
+      assert(
+        multi.findings.every((finding) => finding.file === 'tests/checkout.spec.ts' && Number.isInteger(finding.line)),
+        'every entry resolves a file and an integer line, backticked or bare',
+        JSON.stringify(multi.findings.map((finding) => [finding.file, finding.line])),
+      );
+      assert(
+        JSON.stringify(multi.findings.map((finding) => finding.row)) === JSON.stringify(['C1', 'H1', 'H4', 'M3', 'L1']),
+        'a backticked "**Row**: `H4`" resolves to the same row id as a bare one: rendering is not the contract',
+        JSON.stringify(multi.findings.map((finding) => finding.row)),
+      );
+      assert(
+        !multi.findings.some((finding) => finding.title === 'Naming notes'),
+        'a "### " block under Recommendations carrying neither a Severity nor a Row line is prose, and produces no finding',
+        JSON.stringify(multi.findings.map((finding) => finding.title)),
+      );
+    } catch (error) {
+      assert(false, 'findings-multi-severity fixture parses into a findings array', error.message);
+    }
+
+    // Severity is read from the registry row, never from the report's own prose, so
+    // filing a Critical row under a P3 (Low) heading cannot demote it in the verdict.
+    try {
+      parseReport(
+        findingReport({ totalCritical: 0, totalHigh: 0, recommendation: 'Approve with Comments' })
+          .replace('**Total Violations**: 0 Critical, 0 High, 0 Medium, 0 Low', '**Total Violations**: 0 Critical, 0 High, 0 Medium, 1 Low')
+          .replace(
+            '## Quality Score Breakdown',
+            [
+              '## Recommendations (Should Fix)',
+              '',
+              '### 1. Relabelled',
+              '',
+              '**Severity**: P3 (Low)',
+              '**Row**: C1',
+              '',
+              '## Quality Score Breakdown',
+            ].join('\n'),
+          ),
+        { registryRowSeverities },
+      );
+      assert(false, 'a Critical registry row declared as P3 (Low) throws');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /Row "C1" \(registry severity Critical\) but declares Severity Low/.test(error.message),
+        'a report cannot relabel a Critical row as a Low: severity comes from the registry map, never the finding prose',
+        error.message,
+      );
+    }
+
+    // A finding block with no readable Location keeps its place. Dropping it would
+    // make the verdict document fewer findings than the report and than the summary
+    // line counted, so a formatting slip would read downstream as a defect nobody found.
+    try {
+      const noLocation = parseReport(readFixture('reports', 'finding-without-location.md'), { registryRowSeverities });
+      assert(
+        noLocation.findings.length === 2 && noLocation.violations.high === 2,
+        'finding-without-location: a missing Location line never throws the parse away, and the finding still counts',
+        JSON.stringify(noLocation.findings),
+      );
+      assert(
+        noLocation.findings[1].file === null && noLocation.findings[1].line === null && noLocation.findings[1].row === 'H4',
+        'the located half comes back null rather than guessed, and the row still identifies the finding',
+        JSON.stringify(noLocation.findings[1]),
+      );
+    } catch (error) {
+      assert(false, 'finding-without-location fixture parses', error.message);
+    }
+
+    // A path with a space is a supported input: the Reviewed Files manifest already
+    // admits one, on looksLikeFilePath's rule that a spaced token is a path when it
+    // ends in an extension. The location parse bounded the path at the first space
+    // instead, so `tests/checkout flow.spec.ts:38` published a finding against
+    // `tests/checkout` with no line, keeping its severity and its weight in the gate
+    // while naming a file nobody can open.
+    try {
+      const spaced = parseReport(readFixture('reports', 'spaced-path-location.md'), { registryRowSeverities });
+      assert(
+        spaced.findings.length === 2 && spaced.findings[0].file === 'tests/checkout flow.spec.ts' && spaced.findings[0].line === 38,
+        'spaced-path-location: a path containing a space survives the location parse with its line',
+        JSON.stringify(spaced.findings[0]),
+      );
+      assert(
+        spaced.findings[1].file === 'tests/checkout flow.spec.ts' && spaced.findings[1].line === null,
+        'the same path with no line keeps the whole path and reports the missing line as null',
+        JSON.stringify(spaced.findings[1]),
+      );
+    } catch (error) {
+      assert(false, 'spaced-path-location fixture parses', error.message);
+    }
+
+    // The `(file, line, row)` identity is deduplicated by the workflow's own
+    // aggregation step (steps-c/step-03f-aggregate-scores.md §2), which runs before
+    // the report exists. This parser reads the result, so it never dedups again: the
+    // verdict publishes exactly what the report documented, bound to the report's
+    // own counts.
+    try {
+      const duplicate = parseReport(readFixture('reports', 'duplicate-finding.md'), { registryRowSeverities });
+      assert(
+        duplicate.findings.length === 2 &&
+          duplicate.findings[0].row === duplicate.findings[1].row &&
+          duplicate.findings[0].file === duplicate.findings[1].file &&
+          duplicate.findings[0].line === duplicate.findings[1].line,
+        'duplicate-finding: two blocks at the same (file, line, row) both reach the verdict, agreeing with the declared count of 2',
+        JSON.stringify(duplicate.findings),
+      );
+    } catch (error) {
+      assert(false, 'duplicate-finding fixture parses', error.message);
+    }
+    try {
+      parseReport(
+        readFixture('reports', 'duplicate-finding.md').replace(
+          '**Total Violations**: 0 Critical, 2 High, 0 Medium, 0 Low',
+          '**Total Violations**: 0 Critical, 1 High, 0 Medium, 0 Low',
+        ),
+        { registryRowSeverities },
+      );
+      assert(false, 'a deduplicated count beside two documented blocks throws');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /declares 1 High, but.*documents 2 High-severity finding/.test(error.message),
+        'a report that counted one defect while documenting two blocks for it is rejected, not silently collapsed',
+        error.message,
+      );
+    }
+
+    // Fenced blocks are stripped before anything is scanned, so a quoted example
+    // report cannot put a finding in the verdict any more than it can spoof a score.
+    try {
+      const fenced = parseReport(readFixture('reports', 'fenced-fake-finding.md'), { registryRowSeverities });
+      assert(
+        fenced.findings.length === 1 && fenced.findings[0].row === 'H1' && fenced.violations.critical === 0,
+        'fenced-fake-finding: a complete, correctly shaped Critical finding inside a fenced example reaches neither the counts nor the findings array',
+        JSON.stringify(fenced.findings),
+      );
+      assert(
+        !fenced.findings.some((finding) => finding.file === 'tests/spoofed.spec.ts'),
+        'the spoofed path quoted in the fence never appears in the verdict',
+        JSON.stringify(fenced.findings),
+      );
+    } catch (error) {
+      assert(false, 'fenced-fake-finding fixture parses', error.message);
+    }
+
+    // Documenting MORE Medium/Low findings than the summary counted is the direction
+    // that inflates a score: the ledger deducted for fewer than the report describes.
+    // The other direction (a counted Medium summarized in prose) stays legal, which
+    // Suite 12 pins.
+    try {
+      parseReport(
+        readFixture('reports', 'findings-multi-severity.md').replace(
+          '1 Critical, 2 High, 1 Medium, 1 Low',
+          '1 Critical, 2 High, 0 Medium, 1 Low',
+        ),
+        {
+          registryRowSeverities,
+        },
+      );
+      assert(false, 'documenting a Medium finding the summary line did not count throws');
+    } catch (error) {
+      assert(
+        error.code === 'REPORT_UNPARSEABLE' && /declares 0 Medium, but.*documents 1 Medium-severity finding/.test(error.message),
+        'a documented Medium finding the summary never counted is rejected: the score deducted less than the findings require',
+        error.message,
+      );
+    }
+
+    // The invariant, asserted over the whole fixture corpus rather than case by case:
+    // for EVERY report this parser accepts, the findings it publishes agree with the
+    // violation counts it gated on. Critical and High are exact both ways; Medium and
+    // Low are bounded above, because a report may summarize a counted finding in prose
+    // and may never document one it did not count.
+    const acceptedReports = [];
+    const countDisagreements = [];
+    for (const reportFile of fs.readdirSync(path.join(fixturesRoot, 'reports')).sort()) {
+      let parsedReport;
+      try {
+        parsedReport = parseReport(readFixture('reports', reportFile), { registryRowSeverities });
+      } catch {
+        continue; // a deliberately invalid fixture; the invariant only speaks to accepted reports
+      }
+      acceptedReports.push(reportFile);
+      const documented = { critical: 0, high: 0, medium: 0, low: 0 };
+      for (const finding of parsedReport.findings) {
+        if (finding.severity) {
+          documented[finding.severity.toLowerCase()] += 1;
+        }
+      }
+      const agrees =
+        documented.critical === parsedReport.violations.critical &&
+        documented.high === parsedReport.violations.high &&
+        documented.medium <= parsedReport.violations.medium &&
+        documented.low <= parsedReport.violations.low;
+      if (!agrees) {
+        countDisagreements.push(
+          `${reportFile}: documented ${JSON.stringify(documented)} vs declared ${JSON.stringify(parsedReport.violations)}`,
+        );
+      }
+    }
+    assert(
+      acceptedReports.length >= 20,
+      `the corpus sweep actually ran over the accepted fixture reports (${acceptedReports.length} of them)`,
+      JSON.stringify(acceptedReports),
+    );
+    assert(
+      countDisagreements.length === 0,
+      'PROPERTY: every accepted report publishes findings that agree with its own violation counts (Critical/High exact, Medium/Low bounded above)',
+      countDisagreements.join('; '),
+    );
+
+    // A Recommendations finding that declares no Severity at all still has one,
+    // because the row carries it. This is criteria-registry.md rule 1 read literally:
+    // severity comes from the table, so omitting the prose line loses nothing. The
+    // Critical section keeps its stricter rule (Suite 12 pins it), because that
+    // heading is Critical-only by contract and a block there declaring nothing is a
+    // block filed by nobody.
+    try {
+      const rowOnly = parseReport(
+        findingReport({ totalCritical: 0, totalHigh: 1, highRows: ['H1'], recommendation: 'Request Changes' }).replace(
+          '**Severity**: P1 (High)\n',
+          '',
+        ),
+        { registryRowSeverities },
+      );
+      assert(
+        rowOnly.findings.length === 1 && rowOnly.findings[0].severity === 'High' && rowOnly.findings[0].row === 'H1',
+        'a Recommendations finding with no Severity line still resolves High from its registry row, and still counts',
+        JSON.stringify(rowOnly.findings),
+      );
+    } catch (error) {
+      assert(false, 'a row-only finding resolves its severity from the registry', error.message);
+    }
+
+    // Location shapes seen in live reports: a bare path, a line range, and a
+    // parenthesized line. None of them is the template's form, and none of them is
+    // worth failing a substantively complete review over.
+    for (const [locationLine, expected] of [
+      ['**Location**: `tests/x.spec.ts:12`', { file: 'tests/x.spec.ts', line: 12 }],
+      ['**Location**: tests/x.spec.ts:12-40', { file: 'tests/x.spec.ts', line: 12 }],
+      ['**Location**: tests/x.spec.ts', { file: 'tests/x.spec.ts', line: null }],
+      ['**Location**: `tests/x.spec.ts` (line 12)', { file: 'tests/x.spec.ts', line: 12 }],
+      ['**Location:** tests/x.spec.ts:12', { file: 'tests/x.spec.ts', line: 12 }],
+      // A token that is not path-shaped reaches the consumer as no location at all,
+      // rather than as a file nobody can open.
+      ['**Location**: TBD', { file: null, line: null }],
+    ]) {
+      const located = extractFindings(
+        ['## Critical Issues (Must Fix)', '', '### 1. Located', '', '**Severity**: P0 (Critical)', locationLine, '**Row**: C1', ''].join(
+          '\n',
+        ),
+        registryRowSeverities,
+      );
+      assert(
+        located.length === 1 && located[0].file === expected.file && located[0].line === expected.line,
+        `location "${locationLine}" reads as ${JSON.stringify(expected)}`,
+        JSON.stringify(located),
+      );
+    }
 
     console.log('');
   } finally {

@@ -1,0 +1,22 @@
+{
+  "schema_version": "0.1.0",
+  "source_sha": "0123456789abcdef0123456789abcdef01234567",
+  "observed_at": "2026-09-01T09:20:00Z",
+  "producer": "manual verification by release engineer",
+  "results": [
+    {
+      "id": "4-LIVE-001",
+      "requirement_id": "AC-2",
+      "title": "A member without the admin role cannot start an export",
+      "status": "pass",
+      "evidence": "Signed in as member@blue-harbor.test, posted the export request, received 403, and confirmed the job queue stayed empty."
+    },
+    {
+      "id": "4-LIVE-002",
+      "requirement_id": "AC-10",
+      "title": "The archive filename carries the tenant slug and the request date",
+      "status": "verified",
+      "evidence": "Downloaded archive was named blue-harbor-2026-09-01.zip."
+    }
+  ]
+}

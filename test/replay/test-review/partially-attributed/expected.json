@@ -1,0 +1,69 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the only one where the verdict's findings array is strictly",
+    "shorter than the violation count the same verdict declares, and it pins that this is an ordinary",
+    "report rather than an unscoreable one. The CLI parser permits it: assertFindingCountsAgree binds",
+    "Critical and High exactly in both directions and bounds Medium and Low in one direction only, because",
+    "summarizing a counted Medium in prose is the shape live reports take.",
+    "",
+    "It scored null until scorer v2, when the eval stopped re-parsing the markdown and started reading the",
+    "verdict. The old parser refused any report that declared more violations than it attributed to rows,",
+    "which refused this shape, so the most common thing a real report does was recorded as a moved",
+    "contract.",
+    "",
+    "It also holds the pair that keeps recall and score apart. Its hits and misses are misses-two's",
+    "exactly, and its score is two points lower, because the ledger deducted for a Medium that no finding",
+    "block describes. Recall is computed from the findings; the score is read off the verdict; a change",
+    "that started deriving one from the other moves this case and no other.",
+    "",
+    "The report is CONSTRUCTED, from misses-two's report with one more Medium counted."
+  ],
+  "id": "partially-attributed",
+  "suite": "test-review",
+  "scorerVersion": 2,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "report.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The verdict declares 4 Critical, 3 High, 1 Medium and 0 Low, which sums to 8, and carries seven",
+    "findings: C1, C3, C4, C5, H1, H3 and H4, each at the line its rule fires on. The eighth violation is",
+    "the Medium, which the report counts in its Total Violations line and describes in the naming-notes",
+    "prose with no Severity or Row line, so the CLI parser produces no finding for it.",
+    "",
+    "Seven findings, seven plants matched: hits 7, and misses holds L1 (seeded/checkout.spec.ts:19) and",
+    "H10 (seeded/orders.service.spec.ts:39), in the order ground truth lists them. All four C rows are",
+    "among the seven, so criticalHits is 4 of 4.",
+    "",
+    "Every finding matched a plant, nothing was reported against the clean control, and all seven name a",
+    "file: falsePositives 0, unattributed 0, unlocated 0, reported 7.",
+    "",
+    "The counted-but-undocumented Medium is invisible to recall, which is correct. Recall asks which",
+    "planted defects the reviewer named at a place a reader can go and look; a violation with no row and no",
+    "location names none. It is not invisible to the score, which is where the deduction lands.",
+    "",
+    "The counts the harness derives from these: recall 7/9 = 0.7778, CRITICAL recall 4/4 = 1.00,",
+    "nonFalsePositiveRate (7 - 0)/7 = 1.00.",
+    "",
+    "The verdict's own numbers come from cli/lib/parse-report.js reading this report:",
+    "100 - 4x10 - 3x5 - 1x2 - 0x1 = 43, and any Critical at all forces Block."
+  ],
+  "result": {
+    "score": 43,
+    "recommendation": "Block",
+    "planted": 9,
+    "hits": 7,
+    "misses": ["L1 seeded/checkout.spec.ts:19", "H10 seeded/orders.service.spec.ts:39"],
+    "criticalPlanted": 4,
+    "criticalHits": 4,
+    "reported": 7,
+    "falsePositives": 0,
+    "unattributed": 0,
+    "unlocated": 0
+  }
+}

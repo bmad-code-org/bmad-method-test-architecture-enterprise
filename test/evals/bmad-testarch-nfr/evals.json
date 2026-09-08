@@ -26,7 +26,8 @@
           "pactjs-utils-mandate.md",
           "maestro-flows.md",
           "network-first.md",
-          "selector-resilience.md"
+          "selector-resilience.md",
+          "playwright-cli.md"
         ]
       },
       "assertions": [

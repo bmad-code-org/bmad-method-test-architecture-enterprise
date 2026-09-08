@@ -1,0 +1,479 @@
+{
+  "schemaVersion": 4,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-fragment-selection-framework",
+  "sourceSpecDigest": "sha256:8e0c39aa9ca34c68ac7bd1fa838d879830302426c0bf5d11cb59ffafebf7b738",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "Scaffolding a mobile framework loads the mobile set and no browser fragment. The case asserts: \"The three browser fragments are excluded by name: a device flow has no DOM and no request interceptor. This is the same exclusion the automate workflow makes, and the two agreeing is what keeps a scaffolded mobile project from acquiring browser patterns at setup time.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for framework-mobile-scaffold names all six mandated fragments and names none of network-first.md, playwright-config.md, or intercept-network-call.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-framework/steps-c/step-03-scaffold-framework.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "browser-fragment-in-a-mobile-run"
+        }
+      ],
+      "oracles": ["O-001", "O-002"]
+    },
+    {
+      "id": "B-002",
+      "description": "Scaffolding a browser framework with playwright-utils enabled loads the whole utils set plus the stack-gated interceptor fragment. The case asserts: \"The samples this workflow writes are the reference every later workflow copies, so a mandate fragment missing here does not just affect setup: it teaches the wrong pattern permanently.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for framework-greenfield-playwright-utils names all eleven mandated fragments and names none of maestro-flows.md, mobile-test-strategy.md, contract-testing.md, or pactjs-utils-mandate.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-framework/steps-c/step-03-scaffold-framework.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "wrong-pattern-scaffolded-into-every-later-run"
+        }
+      ],
+      "oracles": ["O-003", "O-004"]
+    },
+    {
+      "id": "B-003",
+      "description": "Scaffolding for a Python service with no JavaScript loads two stack-neutral fragments and opens neither mandate. The case asserts: \"Both library flags default true and a repo with no package.json can have neither package installed, so both mandates stay closed. Scaffolding is the worst place to get this wrong, because a mandate loaded here writes sample files a Python project cannot use.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for framework-python-backend names test-quality.md and data-factories.md and names none of playwright-utils-mandate.md, pactjs-utils-mandate.md, pact-consumer-framework-setup.md, maestro-flows.md, intercept-network-call.md, or playwright-config.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-framework/steps-c/step-03-scaffold-framework.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "mandate-opened-without-the-package"
+        },
+        {
+          "scheme": "tea-eval-risk",
+          "id": "pact-relevance-read-off-the-flag"
+        }
+      ],
+      "oracles": ["O-005", "O-006"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The three mobile fragments plus the level, priority, and quality fragments. mobile-test-strategy.md is marked CRITICAL and load-first because it decides which behaviors become device flows at all, and the step file says most should not.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for framework-mobile-scaffold, against the 6 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/framework-mobile-scaffold/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/framework-mobile-scaffold/stdout/fragments"
+          },
+          {
+            "literal": [
+              "mobile-test-strategy.md",
+              "maestro-flows.md",
+              "mobile-ci-device-lab.md",
+              "test-levels-framework.md",
+              "test-priorities-matrix.md",
+              "test-quality.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "The 3 fragments the step file excludes for framework-mobile-scaffold. A device flow has no DOM and no request interceptor, so the three browser fragments are excluded by name, and a scaffolded project keeps whatever it is set up with.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for framework-mobile-scaffold, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of network-first.md, playwright-config.md, intercept-network-call.md.",
+        "evidenceTargets": ["/interactions/framework-mobile-scaffold/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/framework-mobile-scaffold/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["network-first.md", "playwright-config.md", "intercept-network-call.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "The playwright-utils set, which loads whenever the flag is on and the package is installed, plus intercept-network-call.md, which is added only when the detected stack is frontend or fullstack.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for framework-greenfield-playwright-utils, against the 11 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/framework-greenfield-playwright-utils/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/framework-greenfield-playwright-utils/stdout/fragments"
+          },
+          {
+            "literal": [
+              "playwright-utils-mandate.md",
+              "overview.md",
+              "fixtures-composition.md",
+              "auth-session.md",
+              "api-request.md",
+              "recurse.md",
+              "log.md",
+              "burn-in.md",
+              "network-error-monitor.md",
+              "data-factories.md",
+              "intercept-network-call.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "The 4 fragments the step file excludes for framework-greenfield-playwright-utils. The repository has no .maestro directory and no pact artifact, and tea_use_pactjs_utils is off, so nothing mobile and nothing contract-related is in scope.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for framework-greenfield-playwright-utils, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of maestro-flows.md, mobile-test-strategy.md, contract-testing.md, pactjs-utils-mandate.md.",
+        "evidenceTargets": ["/interactions/framework-greenfield-playwright-utils/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/framework-greenfield-playwright-utils/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["maestro-flows.md", "mobile-test-strategy.md", "contract-testing.md", "pactjs-utils-mandate.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "Two stack-neutral fragments are the whole answer for a FastAPI service with no JavaScript manifest.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for framework-python-backend, against the 2 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/framework-python-backend/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/framework-python-backend/stdout/fragments"
+          },
+          {
+            "literal": ["test-quality.md", "data-factories.md"]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "The 6 fragments the step file excludes for framework-python-backend. Both flags default true and a repository with no package.json can have neither package installed. The Pact relevance gate is a property of the repository, and this one has no pact artifact, no broker variable, and no separate provider.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for framework-python-backend, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of playwright-utils-mandate.md, pactjs-utils-mandate.md, pact-consumer-framework-setup.md, maestro-flows.md, intercept-network-call.md, playwright-config.md.",
+        "evidenceTargets": ["/interactions/framework-python-backend/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/framework-python-backend/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": [
+                    "playwright-utils-mandate.md",
+                    "pactjs-utils-mandate.md",
+                    "pact-consumer-framework-setup.md",
+                    "maestro-flows.md",
+                    "intercept-network-call.md",
+                    "playwright-config.md"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-fragment-selection-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "select-fragments",
+          "invocation": {
+            "executable": "tea-fragment-selection-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": ["model"],
+              "types": {
+                "model": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "OPENAI_API_KEY": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": ["fragments"],
+            "permittedKeys": ["fragments"],
+            "types": {
+              "fragments": "array"
+            },
+            "successIndicator": "/fragments",
+            "channelRoles": {
+              "/fragments": "collection"
+            },
+            "collectionLocations": [
+              {
+                "pointer": "/fragments",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 59
+                }
+              }
+            ]
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "selection-follows-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-framework-mobile-scaffold",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case framework-mobile-scaffold: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              },
+              {
+                "legId": "witness-framework-python-backend",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case framework-python-backend: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-framework-mobile-scaffold/stdout/fragments"
+                    },
+                    {
+                      "pointer": "/interactions/witness-framework-python-backend/stdout/fragments"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "framework-mobile-scaffold",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "framework-greenfield-playwright-utils",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "framework-python-backend",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Every case runs against the checked-in bmad-testarch-framework workflow: its step file or files named in requirementLinks, and its resources/tea-index.csv. The harness assembles one prompt per case from those files plus the case's task, repository facts, and TEA config, and writes it to the runner's standard input. The prompt bytes are evidence rather than declaration. This contract states what must be true of each case's selection, and the sealed run record carries the digest of the prompt that produced it, so a step-file edit that changes what the runner was asked shows up in the record instead of hiding inside a literal here.",
+    "cleanup": "Nothing is written. The runner reads a prompt from standard input and prints one JSON object to standard output; the workflow files and the eval data are read-only for the whole run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 15,
+    "maxWallClockMinutes": 15,
+    "maxCostUsd": "0.75"
+  },
+  "safetyLimits": [
+    "The runner receives a minimal environment: PATH, HOME, USER, LOGNAME, the locale and proxy variables, and the selected vendor credential variables. Nothing else is passed through.",
+    "No credential value appears in a prompt, in a selection, or in a result file.",
+    "The runner writes nothing. The workflow step files, resources/tea-index.csv, and the eval data are read-only for the whole run."
+  ],
+  "requiredEvidence": [
+    "The JSON object the runner printed on standard output for every case, in full.",
+    "The exit code of every case invocation.",
+    "The digest of the prompt each case was given, so a step-file edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 5,
+  "fixtureReset": null
+}

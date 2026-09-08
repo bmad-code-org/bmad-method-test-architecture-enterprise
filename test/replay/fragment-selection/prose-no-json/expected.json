@@ -1,0 +1,52 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the unmeasurable branch for fragment selection, and it is the",
+    "sharpest form of it. The prose names all seven required fragments and rules out all three forbidden",
+    "ones, so a human reading it would call the routing correct. The parser still returns null, and the",
+    "harness records an environment-parser failure rather than a score.",
+    "",
+    "That is the whole reason the null exists. Scoring an unparseable reply as an empty selection would",
+    "report 0 of 7 required fragments, the worst number the suite can produce, for a run that answered well",
+    "in the wrong format.",
+    "",
+    "The stdout is CONSTRUCTED, for the reason bare-json records."
+  ],
+  "id": "prose-no-json",
+  "suite": "fragment-selection",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "sourceCase": "test/evals/bmad-testarch-atdd/evals.json :: atdd-frontend-playwright",
+    "frozenOn": "2026-09-08",
+    "expect": {
+      "mustLoad": [
+        "data-factories.md",
+        "component-tdd.md",
+        "test-quality.md",
+        "test-healing-patterns.md",
+        "selector-resilience.md",
+        "timing-debugging.md",
+        "playwright-utils-mandate.md"
+      ],
+      "mustNotLoad": ["maestro-flows.md", "mobile-test-strategy.md", "contract-testing.md"]
+    }
+  },
+  "derivation": [
+    "The reply has no code fence, so the fenced candidate list is empty. It has no brace anywhere, so the",
+    "braced candidate does not match either. The last candidate is the raw text, and JSON.parse rejects it.",
+    "",
+    "Every candidate is exhausted, so parseSelection returns null, scoreCase is never reached, and the",
+    "stored result is null on both fields.",
+    "",
+    "Nothing about the frozen expect block enters the arithmetic. It is stored anyway so the case says which",
+    "scenario the reply was answering, and so a later change that starts returning a selection here can be",
+    "scored against the same ground truth the other two cases use."
+  ],
+  "result": {
+    "selection": null,
+    "score": null
+  }
+}

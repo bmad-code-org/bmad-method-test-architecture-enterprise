@@ -1,0 +1,478 @@
+{
+  "schemaVersion": 4,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-fragment-selection-atdd",
+  "sourceSpecDigest": "sha256:02902e80fe29188a065d8490c90cc5a478858f49cc31f9512d38985f9a4c2b1a",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "A frontend Playwright run loads the core set and the frontend branch on top of it. The case asserts: \"The four core fragments load regardless of stack, and the frontend branch adds selector-resilience and timing-debugging on top rather than replacing the core set.\"",
+      "severity": "material",
+      "observableSuccessCriterion": "The selection returned for atdd-frontend-playwright names all seven mandated fragments and names none of maestro-flows.md, mobile-test-strategy.md, or contract-testing.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-atdd/steps-c/step-01-preflight-and-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "stack-branch-replaces-the-core-set"
+        }
+      ],
+      "oracles": ["O-001", "O-002"]
+    },
+    {
+      "id": "B-002",
+      "description": "A backend pytest run loads the core set and the backend branch, and opens no library mandate. The case asserts: \"selector-resilience and timing-debugging are gated on frontend or fullstack. A backend run loads neither, and the playwright-utils mandate needs the package as well as the flag, which a repo with no package.json cannot have.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for atdd-backend-pytest names all seven mandated fragments and names none of selector-resilience.md, playwright-utils-mandate.md, network-first.md, or maestro-flows.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-atdd/steps-c/step-01-preflight-and-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "mandate-opened-without-the-package"
+        },
+        {
+          "scheme": "tea-eval-risk",
+          "id": "dom-fragment-in-a-backend-run"
+        }
+      ],
+      "oracles": ["O-003", "O-004"]
+    },
+    {
+      "id": "B-003",
+      "description": "A fullstack run takes the frontend branch and the backend branch together. The case asserts: \"fullstack satisfies both the frontend condition and the backend condition, so both branches fire. Treating them as mutually exclusive is the likely wrong reading and would drop the backend level fragments from a run that needs them.\"",
+      "severity": "material",
+      "observableSuccessCriterion": "The selection returned for atdd-fullstack-pact names all eight mandated fragments and names neither contract-testing.md nor maestro-flows.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-atdd/steps-c/step-01-preflight-and-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "fullstack-branches-treated-as-exclusive"
+        }
+      ],
+      "oracles": ["O-005", "O-006"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The four core fragments plus the frontend branch and the playwright-utils mandate, which opens because the flag is on and the package is installed.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for atdd-frontend-playwright, against the 7 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/atdd-frontend-playwright/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/atdd-frontend-playwright/stdout/fragments"
+          },
+          {
+            "literal": [
+              "data-factories.md",
+              "component-tdd.md",
+              "test-quality.md",
+              "test-healing-patterns.md",
+              "selector-resilience.md",
+              "timing-debugging.md",
+              "playwright-utils-mandate.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "The 3 fragments the step file excludes for atdd-frontend-playwright. This is a browser run with no .maestro directory and no pact artifact, so no mobile fragment and no contract fragment is in scope.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for atdd-frontend-playwright, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of maestro-flows.md, mobile-test-strategy.md, contract-testing.md.",
+        "evidenceTargets": ["/interactions/atdd-frontend-playwright/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/atdd-frontend-playwright/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["maestro-flows.md", "mobile-test-strategy.md", "contract-testing.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "The four core fragments plus the backend level and priority fragments and ci-burn-in.md.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for atdd-backend-pytest, against the 7 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/atdd-backend-pytest/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/atdd-backend-pytest/stdout/fragments"
+          },
+          {
+            "literal": [
+              "data-factories.md",
+              "component-tdd.md",
+              "test-quality.md",
+              "test-healing-patterns.md",
+              "test-levels-framework.md",
+              "test-priorities-matrix.md",
+              "ci-burn-in.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "The 4 fragments the step file excludes for atdd-backend-pytest. tea_use_playwright_utils is true and the repository has no package.json, so the mandate cannot open, and the DOM fragments are gated on frontend or fullstack while this run is backend.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for atdd-backend-pytest, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of selector-resilience.md, playwright-utils-mandate.md, network-first.md, maestro-flows.md.",
+        "evidenceTargets": ["/interactions/atdd-backend-pytest/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/atdd-backend-pytest/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["selector-resilience.md", "playwright-utils-mandate.md", "network-first.md", "maestro-flows.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "Both branches fire for a fullstack run, and the pactjs-utils mandate opens because the flag is on and the package is installed.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for atdd-fullstack-pact, against the 8 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/atdd-fullstack-pact/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/atdd-fullstack-pact/stdout/fragments"
+          },
+          {
+            "literal": [
+              "data-factories.md",
+              "component-tdd.md",
+              "test-quality.md",
+              "test-healing-patterns.md",
+              "test-levels-framework.md",
+              "test-priorities-matrix.md",
+              "ci-burn-in.md",
+              "pactjs-utils-mandate.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "The 2 fragments the step file excludes for atdd-fullstack-pact. contract-testing.md is the flag-off path and the pactjs-utils mandate is open here, and the repository has no .maestro directory.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for atdd-fullstack-pact, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of contract-testing.md, maestro-flows.md.",
+        "evidenceTargets": ["/interactions/atdd-fullstack-pact/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/atdd-fullstack-pact/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["contract-testing.md", "maestro-flows.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-fragment-selection-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "select-fragments",
+          "invocation": {
+            "executable": "tea-fragment-selection-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": ["model"],
+              "types": {
+                "model": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "OPENAI_API_KEY": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": ["fragments"],
+            "permittedKeys": ["fragments"],
+            "types": {
+              "fragments": "array"
+            },
+            "successIndicator": "/fragments",
+            "channelRoles": {
+              "/fragments": "collection"
+            },
+            "collectionLocations": [
+              {
+                "pointer": "/fragments",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 59
+                }
+              }
+            ]
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "selection-follows-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-atdd-frontend-playwright",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case atdd-frontend-playwright: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              },
+              {
+                "legId": "witness-atdd-backend-pytest",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case atdd-backend-pytest: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-atdd-frontend-playwright/stdout/fragments"
+                    },
+                    {
+                      "pointer": "/interactions/witness-atdd-backend-pytest/stdout/fragments"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "atdd-frontend-playwright",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "atdd-backend-pytest",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "atdd-fullstack-pact",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Every case runs against the checked-in bmad-testarch-atdd workflow: its step file or files named in requirementLinks, and its resources/tea-index.csv. The harness assembles one prompt per case from those files plus the case's task, repository facts, and TEA config, and writes it to the runner's standard input. The prompt bytes are evidence rather than declaration. This contract states what must be true of each case's selection, and the sealed run record carries the digest of the prompt that produced it, so a step-file edit that changes what the runner was asked shows up in the record instead of hiding inside a literal here.",
+    "cleanup": "Nothing is written. The runner reads a prompt from standard input and prints one JSON object to standard output; the workflow files and the eval data are read-only for the whole run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 15,
+    "maxWallClockMinutes": 15,
+    "maxCostUsd": "0.75"
+  },
+  "safetyLimits": [
+    "The runner receives a minimal environment: PATH, HOME, USER, LOGNAME, the locale and proxy variables, and the selected vendor credential variables. Nothing else is passed through.",
+    "No credential value appears in a prompt, in a selection, or in a result file.",
+    "The runner writes nothing. The workflow step files, resources/tea-index.csv, and the eval data are read-only for the whole run."
+  ],
+  "requiredEvidence": [
+    "The JSON object the runner printed on standard output for every case, in full.",
+    "The exit code of every case invocation.",
+    "The digest of the prompt each case was given, so a step-file edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 5,
+  "fixtureReset": null
+}

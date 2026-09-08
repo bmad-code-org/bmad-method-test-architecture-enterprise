@@ -10,7 +10,7 @@
  *
  *   STUB_MODE          approve (default) | approve-low | block | request-changes |
  *                      request-changes-critical | critical-approve | conflict |
- *                      score-mismatch | partial | nothing | fail |
+ *                      score-mismatch | partial | findings | nothing | fail |
  *                      forbidden-write | stale-copy | fabricated-convention |
  *                      honest-absent-convention | fabricated-critical-count |
  *                      honest-critical-count
@@ -42,6 +42,10 @@ const REPORTS = {
   conflict: 'conflicting.md',
   'score-mismatch': 'score-mismatch.md',
   partial: 'malformed.md',
+  // One finding at each severity, each with a Location and a registry Row, so an
+  // end-to-end run can prove the written verdict JSON carries the findings
+  // themselves rather than four severity counts.
+  findings: 'findings-multi-severity.md',
 };
 
 function readStdin() {
