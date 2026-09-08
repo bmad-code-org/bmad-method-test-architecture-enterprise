@@ -31,6 +31,7 @@
   "author": "Murat K Ozcan (TEA Creator) & Brian (BMad) Madison",
   "main": "",
   "bin": {
+    "tea-fragment-selection-runner": "cli/fragment-selection-runner.js",
     "tea-test-review": "cli/test-review.js"
   },
   "scripts": {
@@ -54,7 +55,7 @@
     "release:minor": "gh workflow run publish.yaml -f channel=latest -f bump=minor",
     "release:next": "gh workflow run publish.yaml -f channel=next",
     "release:patch": "gh workflow run publish.yaml -f channel=latest -f bump=patch",
-    "test": "npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:criteria-fragments && npm run test:enforce-hook && npm run test:eval-data && npm run test:eval-trace-data && npm run test:eval-schemas && npm run test:eval-replay && npm run test:contract-sources && npm run test:contracts && npm run test:ci-coverage && npm run test:release-metadata && npm run test:changelog && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
+    "test": "npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:criteria-fragments && npm run test:enforce-hook && npm run test:eval-data && npm run test:eval-trace-data && npm run test:eval-schemas && npm run test:eval-replay && npm run test:contract-sources && npm run test:contracts && npm run test:probe-targets && npm run test:ci-coverage && npm run test:release-metadata && npm run test:changelog && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
     "test:changelog": "node test/test-stamp-changelog.js",
     "test:ci-coverage": "node tools/validate-ci-coverage.js",
     "test:cli": "node test/test-test-review-cli.js",
@@ -69,6 +70,7 @@
     "test:eval-trace-data": "node test/eval-trace.js --validate-only",
     "test:install": "node test/test-installation-components.js",
     "test:knowledge": "node test/test-knowledge-base.js",
+    "test:probe-targets": "node test/test-probe-targets.js",
     "test:release-metadata": "node test/test-release-metadata.js",
     "test:schemas": "node test/test-agent-schema.js",
     "test:tea-workflow-descriptions": "node tools/validate-tea-workflow-descriptions.js",

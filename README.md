@@ -388,7 +388,7 @@ The eight suites under `test/evals/` measure one decision inside each knowledge-
 | `bmad-testarch-test-review` | 2                        | Yes; three files, nine planted defects, and one clean file     |
 | `bmad-testarch-trace`       | 2                        | Yes; a ten-criterion seeded set and a five-criterion clean set |
 
-A passing fragment-selection eval means the workflow loaded the right knowledge. It makes no claim about the quality of the workflow's final output. Full behavioral evals for the other skills remain a coverage gap. The source-controlled [Eval Quality and Behavioral Coverage Roadmap](./docs/explanation/eval-quality-roadmap.md) records the per-skill contracts, runner work, CI plan, and intended boundary with the upcoming standalone `eval-quality` project.
+A passing fragment-selection eval means the workflow loaded the right knowledge. It makes no claim about the quality of the workflow's final output. Full behavioral evals for the other skills remain a coverage gap. The source-controlled [Eval Quality and Behavioral Coverage Roadmap](./docs/explanation/eval-quality-roadmap.md) records the per-skill contracts, runner work, CI plan, and intended boundary with the upcoming standalone `eval-quality` project. [The eval-quality Command Adapter](./docs/explanation/eval-quality-command-adapter.md) records how TEA runs the commands those evals measure.
 
 ### Deterministic Checks
 
