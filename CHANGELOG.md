@@ -42,6 +42,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The `test-review` eval harness defaulted to the `codex` runner while `eval-fragment-selection` and `eval-trace` defaulted to `claude`. All three default to `claude` now.
+- `engines.node` is `>=22.0.0`, the current LTS and the one before it. It said `>=20.0.0`, which is older than any Node line still under long-term support.
 - `redactArgs` drops a credential-shaped value anywhere in an argument. The pattern was start-anchored and was never applied to the value half of `--flag=value`, so `--extra=sk-live-abc`, `--header=ghp_...`, `Authorization: Bearer ghp_...` and `?token=ghp_...` all reached a result file CI uploads. A boundary in front of the prefix keeps `risk-based` and `task-runner` intact.
 - `tools/generate-contracts.js` hashes through the one digest helper in `test/lib/eval-record.js`, which length-prefixes each file. Concatenating bytes let a byte moved from the tail of one step file to the head of the next leave the digest unchanged, and `bmad-testarch-ci` pins a multi-file list. Every `sourceSpecDigest` moved.
 - Behavior B-003 grades `material`. Missing every planted HIGH defect graded `low`, below one out-of-scope finding. The grade is derived from the registry severity of the group's rows, on the rule that CRITICAL carries its own recall gate and everything else feeds the pooled one.

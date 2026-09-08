@@ -173,7 +173,7 @@ function parseArgs(argv) {
       }
     }
   }
-  if (agents.length === 0) agents.push('codex');
+  if (agents.length === 0) agents.push('claude');
   if (agents.includes('custom') && !agentCmd) fatal(2, '--agent custom requires --agent-cmd');
   if (agents.includes('custom') && model) {
     fatal(2, '--model is not supported by --agent custom; pass the runner model through --agent-arg');
