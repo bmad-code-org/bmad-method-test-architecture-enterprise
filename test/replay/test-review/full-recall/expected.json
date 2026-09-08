@@ -1,0 +1,53 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the ceiling. Every ratio the harness computes is 1 here, so",
+    "any change that breaks row matching, path matching or admitted-line matching moves this case first,",
+    "and it is the only case that proves all nine admitted-line sets accept their own firing line.",
+    "",
+    "The report is CONSTRUCTED. No live run of the eval has ever happened, so there is no real capture",
+    "that scores against this ground truth. See storedOutput.origin on every case."
+  ],
+  "id": "full-recall",
+  "suite": "test-review",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "report.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "Ground truth plants nine defects: H4@22, H1@16, L1@19, H3@31 and C1@38 in seeded/checkout.spec.ts,",
+    "then C3@17, C4@23, C5@31 and H10@39 in seeded/orders.service.spec.ts. Four of the nine rows start",
+    "with C, so criticalPlanted is 4.",
+    "",
+    "The report cites all nine rows at exactly those lines, so every planted row finds an unmatched",
+    "report finding with the same basename, the same row and a line inside its admitted set: hits 9,",
+    "criticalHits 4, misses empty.",
+    "",
+    "Nothing is reported against clean/profile.spec.ts, so falsePositives is 0, and every one of the nine",
+    "findings matched a plant, so unattributed is 0. reported is the count of Row lines paired with a",
+    "Location line, which is 9.",
+    "",
+    "The counts the harness derives from these: recall 9/9 = 1.00 against a 0.70 floor, CRITICAL recall",
+    "4/4 = 1.00 against a 1.00 floor, nonFalsePositiveRate (9 - 0)/9 = 1.00 against a 0.80 floor.",
+    "",
+    "score and recommendation are read straight off the verdict. The CLI ledger puts them at",
+    "100 - 4x10 - 4x5 - 0x2 - 1x1 = 39, and any Critical at all forces Block."
+  ],
+  "result": {
+    "score": 39,
+    "recommendation": "Block",
+    "planted": 9,
+    "hits": 9,
+    "misses": [],
+    "criticalPlanted": 4,
+    "criticalHits": 4,
+    "reported": 9,
+    "falsePositives": 0,
+    "unattributed": 0
+  }
+}

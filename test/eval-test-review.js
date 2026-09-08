@@ -2,32 +2,50 @@
  * test-review eval harness.
  *
  * The workflow's quality has been asserted rather than measured. This measures it,
- * against a fixture corpus with known ground truth, and reports three numbers per
+ * against a fixture corpus with known ground truth, and reports these numbers per
  * vendor:
  *
- *   recall     — planted defects the reviewer named, at the right line
- *   precision  — of everything it reported, how much was real (1 - false-positive rate)
- *   variance   — spread of the quality score across repeated runs of IDENTICAL input
+ *   recall                — planted defects the reviewer named, at the right line
+ *   nonFalsePositiveRate  — the share of everything it reported that is not a
+ *                           DEFINITE false positive, where definite means reported
+ *                           against the clean fixture, which has no defects by
+ *                           construction
+ *   unattributed          — findings on a seeded fixture that match no planted row,
+ *                           carried beside the rate and never folded into it
+ *   variance              — spread of the quality score across repeated runs of
+ *                           IDENTICAL input
  *
- * The third number is the one nobody had. Two reviewers scoring the same four files
- * 82 and 85 tells you the spread across vendors; it says nothing about whether one
- * vendor returns 82 twice. A gate whose verdict moves on re-run is not a gate, and
- * you cannot know that from a single run.
+ * The variance number is the one nobody had. Two reviewers scoring the same four
+ * files 82 and 85 tells you the spread across vendors; it says nothing about whether
+ * one vendor returns 82 twice. A gate whose verdict moves on re-run is not a gate,
+ * and you cannot know that from a single run.
  *
- * Precision is measured on the same corpus as recall on purpose. A reviewer that
- * reports every possible finding scores perfect recall and is useless, so the clean
- * fixture is not optional and its violations count against the score.
+ * The rate above used to be called precision, which was a claim the number could not
+ * support. Precision needs every reported finding adjudicated as correct or
+ * incorrect, and an unmatched finding on a seeded fixture is neither until a human
+ * judges it: a fixture can carry an incidental real defect nobody planted. Only the
+ * clean fixture supports a definite verdict, so only it can lower the rate, and the
+ * name now says so. Its threshold is unchanged.
+ *
+ * The clean fixture is not optional either way. A reviewer that reports every
+ * possible finding scores perfect recall and is useless.
+ *
+ * Every declared repetition must complete. Variance across two of three runs is not
+ * variance, so a lost run makes stability unmeasurable and exits 2.
  *
  * Usage:
  *   node test/eval-test-review.js --agent codex --runs 3
  *   node test/eval-test-review.js --agent claude --agent codex --runs 5
  *   node test/eval-test-review.js --agent custom --agent-cmd my-runner --agent-arg --headless
+ *   node test/eval-test-review.js --agent codex --json results/test-review.json
  *   node test/eval-test-review.js --preflight-only
  *
  * Exit codes:
  *   0  every requested vendor met the thresholds
  *   1  a vendor missed a threshold (a real result, reported)
- *   2  the environment could not run the eval (nothing was measured)
+ *   2  the environment could not run the eval (nothing was measured): a missing
+ *      credential, a timeout, a transport error, an unparseable reply, a missing
+ *      artifact, or fewer completed runs than were declared
  */
 
 'use strict';
@@ -36,11 +54,25 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
+const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
+const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const {
+  digest,
+  digestFiles,
+  repositoryState,
+  probeVersion,
+  redactArgs,
+  measured,
+  suiteResultRecord,
+  writeSuiteResult,
+} = require('./lib/eval-record');
+const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 
+const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const CLI = path.join(__dirname, '..', 'cli', 'test-review.js');
+const CLI = path.join(PROJECT_ROOT, 'cli', 'test-review.js');
+const SUITE_ID = 'test-review';
 
 /**
  * Thresholds. Deliberately conservative: this harness exists to detect regression
@@ -53,7 +85,10 @@ const RUN_TIMEOUT_MS = RUN_TIMEOUT_MINUTES * 60_000;
 const THRESHOLDS = {
   criticalRecall: 1, // every CRITICAL row must be found. A missed .skip is the whole failure mode.
   recall: 0.7,
-  precision: 0.8,
+  // Named for what it measures. Only a finding against the clean fixture is a
+  // definite false positive; see scoreVerdict for why an unmatched finding on a
+  // seeded fixture cannot be counted as either correct or incorrect.
+  nonFalsePositiveRate: 0.8,
   maxScoreStdev: 3, // a wider spread than one MEDIUM violation means the score is not reproducible
 };
 
@@ -74,6 +109,7 @@ function parseArgs(argv) {
   let preflightOnly = false;
   let agentCmd;
   let model;
+  let jsonPath;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
@@ -116,6 +152,12 @@ function parseArgs(argv) {
         index += 1;
         break;
       }
+      case '--json': {
+        jsonPath = argv[index + 1];
+        if (!jsonPath) fatal(2, '--json requires a file path');
+        index += 1;
+        break;
+      }
       case '--preflight-only': {
         preflightOnly = true;
         break;
@@ -137,7 +179,7 @@ function parseArgs(argv) {
   if (runs < 2 && !preflightOnly) {
     console.error(`${colors.yellow}note${colors.reset}: --runs ${runs} cannot measure variance; use --runs 2 or more.`);
   }
-  return { agents, runs, preflightOnly, agentCmd, agentArgs, envPass, model };
+  return { agents, runs, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath };
 }
 
 function fatal(code, message) {
@@ -179,16 +221,21 @@ function missingCredential(agent) {
  */
 function preflight({ agents, agentCmd }) {
   const problems = [];
+  const versions = {};
+  // Every problem carries the failure class it belongs to, so a missing
+  // credential and a missing fixture stay distinguishable in the result record
+  // instead of collapsing into one "could not run".
+  const report = (failureClass, message) => problems.push({ failureClass, message });
 
-  if (!fs.existsSync(CLI)) problems.push(`CLI not found at ${CLI}`);
-  if (!fs.existsSync(GROUND_TRUTH)) problems.push(`ground truth not found at ${GROUND_TRUTH}`);
+  if (!fs.existsSync(CLI)) report('environment-missing-artifact', `CLI not found at ${CLI}`);
+  if (!fs.existsSync(GROUND_TRUTH)) report('environment-missing-artifact', `ground truth not found at ${GROUND_TRUTH}`);
 
   let groundTruth = null;
   if (fs.existsSync(GROUND_TRUTH)) {
     try {
       groundTruth = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
     } catch (error) {
-      problems.push(`ground truth is not valid JSON: ${error.message}`);
+      report('environment-configuration', `ground truth is not valid JSON: ${error.message}`);
     }
   }
 
@@ -198,13 +245,26 @@ function preflight({ agents, agentCmd }) {
   for (const entry of groundTruth?.files ?? []) {
     const absolute = path.join(FIXTURE_ROOT, entry.path);
     if (!fs.existsSync(absolute)) {
-      problems.push(`fixture missing: ${entry.path}`);
+      report('environment-missing-artifact', `fixture missing: ${entry.path}`);
       continue;
     }
     const lineCount = fs.readFileSync(absolute, 'utf8').split('\n').length;
     for (const planted of entry.planted ?? []) {
       if (planted.line > lineCount) {
-        problems.push(`${entry.path}: ground truth cites line ${planted.line}, file has ${lineCount}`);
+        report('environment-configuration', `${entry.path}: ground truth cites line ${planted.line}, file has ${lineCount}`);
+      }
+      // An admitted line past the end of the file would score a fabricated
+      // location as a hit, which is the rubric's own named penalty.
+      for (const admitted of planted.admittedLines ?? []) {
+        if (admitted < 1 || admitted > lineCount) {
+          report('environment-configuration', `${entry.path}: ${planted.row} admits line ${admitted}, file has ${lineCount}`);
+        }
+      }
+      // A plant whose own firing line is not admitted cannot be found by a
+      // reviewer that cites it exactly, which is the one citation that is always
+      // right.
+      if (Array.isArray(planted.admittedLines) && !planted.admittedLines.includes(planted.line)) {
+        report('environment-configuration', `${entry.path}: ${planted.row} does not admit its own line ${planted.line}`);
       }
     }
   }
@@ -214,43 +274,60 @@ function preflight({ agents, agentCmd }) {
   // from the key. Pin the invariant here so the two cannot drift apart.
   for (const entry of groundTruth?.files ?? []) {
     if (entry.mustNotReport && (entry.planted ?? []).length > 0) {
-      problems.push(`${entry.path}: mustNotReport requires an empty planted array; precision is measured on clean fixtures only`);
+      report(
+        'environment-configuration',
+        `${entry.path}: mustNotReport requires an empty planted array; a definite false positive is only definite on a clean fixture`,
+      );
     }
   }
 
   for (const agent of agents) {
     if (!Object.prototype.hasOwnProperty.call(AGENT_ADAPTERS, agent)) {
-      problems.push(`unknown agent "${agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
+      report('environment-configuration', `unknown agent "${agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
       continue;
     }
     const executable = agent === 'custom' ? agentCmd : agent;
     const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
-    if (probe.error) problems.push(`agent CLI "${executable}" is not on PATH (${probe.error.code})`);
-    else if (probe.status !== 0) problems.push(`agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
+    if (probe.error) report('environment-transport', `agent CLI "${executable}" is not on PATH (${probe.error.code})`);
+    else if (probe.status === 0)
+      versions[agent] =
+        String(probe.stdout || '')
+          .trim()
+          .split('\n')[0] || null;
+    else report('environment-transport', `agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
     const credential = agent === 'custom' ? null : missingCredential(agent);
-    if (credential) problems.push(credential);
+    if (credential) report('environment-authentication', credential);
   }
 
-  if (problems.length > 0) {
-    console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
-    for (const problem of problems) console.error(`  - ${problem}`);
-    console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
-    process.exit(2);
+  if (problems.length === 0) {
+    console.log(
+      `${colors.green}✓${colors.reset} pre-flight: CLI, fixtures, ground truth, and runner executable(s) available; built-in credentials checked`,
+    );
   }
-
-  console.log(
-    `${colors.green}✓${colors.reset} pre-flight: CLI, fixtures, ground truth, and runner executable(s) available; built-in credentials checked`,
-  );
-  return groundTruth;
+  return { problems, groundTruth, versions };
 }
 
-/** One review of the whole fixture corpus. Returns the parsed verdict, or null. */
+/** The three fixtures under review, as repository-relative paths. */
+function reviewFilePaths() {
+  return ['seeded/checkout.spec.ts', 'seeded/orders.service.spec.ts', 'clean/profile.spec.ts'].map((relative) =>
+    path.relative(PROJECT_ROOT, path.join(FIXTURE_ROOT, relative)),
+  );
+}
+
+/**
+ * One review of the whole fixture corpus.
+ *
+ * Returns `{ ok: true, verdict }`, or `{ ok: false, failureClass }` naming why
+ * nothing came back. The distinction is the whole point: a timeout and a missing
+ * verdict used to return null, and the caller then scored the runs that survived,
+ * which converted a failed model call into a lower measured score.
+ *
+ * @returns {{ok: true, verdict: object}|{ok: false, failureClass: string}}
+ */
 function runReview(agent, runIndex, runner = {}) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-'));
   const jsonPath = path.join(runDir, 'verdict.json');
-  const reviewFiles = ['seeded/checkout.spec.ts', 'seeded/orders.service.spec.ts', 'clean/profile.spec.ts'].map((relative) =>
-    path.relative(path.join(__dirname, '..'), path.join(FIXTURE_ROOT, relative)),
-  );
+  const reviewFiles = reviewFilePaths();
 
   try {
     // No --fail-on override: the enum is request-changes|block, so there is no "never".
@@ -267,24 +344,24 @@ function runReview(agent, runIndex, runner = {}) {
     for (const name of runner.envPass ?? []) cliArgs.push('--env-pass', name);
     const result = spawnSync(process.execPath, cliArgs, {
       encoding: 'utf8',
-      cwd: path.join(__dirname, '..'),
+      cwd: PROJECT_ROOT,
       timeout: RUN_TIMEOUT_MS,
     });
 
     if (result.error?.code === 'ETIMEDOUT' || result.signal === 'SIGTERM') {
       console.error(`  ${colors.red}run ${runIndex + 1}: timed out after ${RUN_TIMEOUT_MINUTES} minutes${colors.reset}`);
-      return null;
+      return { ok: false, failureClass: 'environment-timeout' };
     }
     if (!fs.existsSync(jsonPath)) {
       console.error(`  ${colors.red}run ${runIndex + 1}: no verdict written${colors.reset} (exit ${result.status})`);
       if (result.stderr) console.error(`  ${colors.dim}${result.stderr.trim().split('\n').slice(-3).join('\n  ')}${colors.reset}`);
-      return null;
+      return { ok: false, failureClass: 'environment-missing-artifact' };
     }
     try {
-      return JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      return { ok: true, verdict: JSON.parse(fs.readFileSync(jsonPath, 'utf8')) };
     } catch (error) {
       console.error(`  ${colors.red}run ${runIndex + 1}: verdict is not valid JSON: ${error.message}${colors.reset}`);
-      return null;
+      return { ok: false, failureClass: 'environment-parser' };
     }
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });
@@ -306,7 +383,7 @@ function runReview(agent, runIndex, runner = {}) {
  * IS a measured miss on a corpus with planted defects.
  */
 function findingsFromReport(verdict) {
-  const reportPath = path.resolve(path.join(__dirname, '..'), String(verdict.report ?? ''));
+  const reportPath = path.resolve(PROJECT_ROOT, String(verdict.report ?? ''));
   if (!verdict.report || !fs.existsSync(reportPath)) return null;
   const counts = verdict.violations ?? {};
   const declared = ['critical', 'high', 'medium', 'low'].reduce((sum, key) => sum + (Number(counts[key]) || 0), 0);
@@ -335,10 +412,33 @@ function findingsFromReport(verdict) {
 }
 
 /**
+ * The lines a reviewer may cite for one planted defect and still be scored as
+ * having found it.
+ *
+ * `admittedLines` is the authority and every plant carries one. Each set is
+ * derived from the fixture and holds the line the rule fires on, the enclosing
+ * declaration, and the comment naming the row. The symmetric `lineTolerance`
+ * radius it replaced was justified in one direction only, so it failed to reach
+ * the enclosing declaration for two plants while admitting lines past the end of
+ * a file for two others.
+ *
+ * The radius remains the fallback for a plant that declares no set, so ground
+ * truth written against the older shape still scores rather than scoring zero.
+ */
+function admittedLinesFor(planted, tolerance) {
+  if (Array.isArray(planted.admittedLines) && planted.admittedLines.length > 0) {
+    return new Set(planted.admittedLines.map(Number));
+  }
+  const window = new Set();
+  for (let line = Math.max(1, planted.line - tolerance); line <= planted.line + tolerance; line += 1) window.add(line);
+  return window;
+}
+
+/**
  * Score one verdict against ground truth.
  *
  * A planted defect counts as found when a reported finding cites the same
- * registry row within lineTolerance of the planted line. Matching on the row is
+ * registry row at one of the lines admitted for it. Matching on the row is
  * what makes this comparable across vendors: prose descriptions of the same defect
  * differ, row identities do not.
  *
@@ -362,7 +462,7 @@ function scoreVerdict(verdict, groundTruth) {
       if (matched.has(actualIndex)) return false;
       const samePath = String(actual.file ?? '').endsWith(path.basename(expected.path));
       const sameRow = String(actual.row ?? '').toUpperCase() === expected.row;
-      const closeEnough = Math.abs(Number(actual.line ?? -1) - expected.line) <= tolerance;
+      const closeEnough = admittedLinesFor(expected, tolerance).has(Number(actual.line ?? -1));
       if (samePath && sameRow && closeEnough) {
         matched.add(actualIndex);
         return true;
@@ -381,7 +481,9 @@ function scoreVerdict(verdict, groundTruth) {
   // necessarily wrong. A fixture can carry an incidental real defect nobody planted.
   // Folding those into the false-positive count would punish a reviewer for being
   // right about something the manifest failed to anticipate, so they are reported
-  // separately and precision is computed from the definite ones.
+  // separately and nonFalsePositiveRate is computed from the definite ones. That is
+  // also why the metric is not called precision: precision would require every
+  // reported finding to be adjudicated, and these are not.
   const isCleanFixture = (file) => [...cleanPaths].some((clean) => String(file).endsWith(path.basename(clean)));
 
   const falsePositives = reported.filter((actual, actualIndex) => !matched.has(actualIndex) && isCleanFixture(actual.file));
@@ -413,7 +515,100 @@ const stdev = (values) => {
 const ratio = (numerator, denominator) => (denominator === 0 ? Number.NaN : numerator / denominator);
 const pct = (value) => (Number.isNaN(value) ? '  n/a' : `${(value * 100).toFixed(0).padStart(3)}%`);
 
+/**
+ * The digest of the exact prompt the CLI sends, read out of the CLI's own
+ * `--agent none` mode rather than rebuilt here: a digest of a prompt the harness
+ * reconstructed is a digest of something that was never sent.
+ *
+ * Absolute paths that change every run are normalized out first. Without that the
+ * digest is a fresh number each time and compares with nothing.
+ *
+ * @returns {string|null} Null when the CLI could not produce a prompt.
+ */
+function promptDigestFromCli() {
+  const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-prompt-'));
+  try {
+    const args = [CLI, '--agent', 'none', '--files', reviewFilePaths().join(','), '--output', path.join(probeDir, 'test-review.md')];
+    const probe = spawnSync(process.execPath, args, { encoding: 'utf8', cwd: PROJECT_ROOT, timeout: 120_000 });
+    if (probe.error || probe.status !== 0 || !probe.stdout) return null;
+    const normalized = probe.stdout.split(PROJECT_ROOT).join('<project-root>').split(probeDir).join('<run-dir>');
+    return digest(normalized);
+  } catch {
+    return null;
+  } finally {
+    fs.rmSync(probeDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Write the machine-readable record when --json asked for one, then exit with
+ * the code the failure class carries. The class is derived from the runners and
+ * the suite-level problems, and the exit code from the class, so the printed
+ * outcome and the recorded outcome cannot disagree.
+ */
+function finish({ options, startedAt, mode, runners, suiteFailureClasses = [] }) {
+  const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
+  const exitCode = exitCodeForFailureClass(failureClass);
+
+  if (options.jsonPath) {
+    // The record's suite identity comes from the manifest, so a manifest that
+    // cannot be read means the record cannot be written. That is a configuration
+    // failure, never a silent skip of the file the caller asked for.
+    let suite;
+    try {
+      suite = suiteById(loadSuiteManifest(PROJECT_ROOT).manifest, SUITE_ID);
+    } catch (error) {
+      console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
+      process.exit(2);
+    }
+    // One review call covers the whole corpus, so every case shares the bundle's
+    // prompt digest.
+    const promptDigest = mode === 'live' ? promptDigestFromCli() : null;
+    writeSuiteResult(
+      options.jsonPath,
+      suiteResultRecord({
+        mode,
+        suite,
+        repository: repositoryState(PROJECT_ROOT),
+        fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
+        promptDigest,
+        cases: suite.fixtures.map((fixture) => ({ id: fixture, promptDigest })),
+        runners,
+        durationMs: Date.now() - startedAt,
+        suiteFailureClasses,
+      }),
+    );
+    console.log(`${colors.dim}result written to ${options.jsonPath}${colors.reset}`);
+  }
+
+  process.exit(exitCode);
+}
+
+/** The per-runner half of the result record. */
+function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+  const executable = agent === 'custom' ? options.agentCmd : agent;
+  return {
+    agent,
+    executable,
+    version: versions[agent] ?? probeVersion(executable),
+    model: resolveModel(agent, options.model, options.agentArgs),
+    parameters: {
+      agentArgs: redactArgs(options.agentArgs),
+      envPassNames: [...options.envPass],
+      timeoutMs: RUN_TIMEOUT_MS,
+      promptTransport: AGENT_ADAPTERS[agent]?.promptViaArgv ? 'argv' : 'stdin',
+    },
+    repetitions: { expected, completed },
+    measurements,
+    durationMs,
+    usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
+    failureClass,
+    failures,
+  };
+}
+
 function main() {
+  const startedAt = Date.now();
   const options = parseArgs(process.argv.slice(2));
   const { agents, runs, preflightOnly } = options;
 
@@ -421,10 +616,22 @@ function main() {
   console.log('tea-test-review eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const groundTruth = preflight(options);
+  const { problems, groundTruth, versions } = preflight(options);
+  if (problems.length > 0) {
+    console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
+    for (const problem of problems) console.error(`  - ${problem.message}`);
+    console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
+    finish({
+      options,
+      startedAt,
+      mode: preflightOnly ? 'preflight-only' : 'live',
+      runners: [],
+      suiteFailureClasses: problems.map((problem) => problem.failureClass),
+    });
+  }
   if (preflightOnly) {
     console.log(`\n${colors.green}pre-flight only; nothing measured.${colors.reset}`);
-    process.exit(0);
+    finish({ options, startedAt, mode: 'preflight-only', runners: [] });
   }
 
   const plantedTotal = (groundTruth.files ?? []).reduce((sum, file) => sum + (file.planted ?? []).length, 0);
@@ -432,17 +639,24 @@ function main() {
     `${colors.dim}corpus: ${groundTruth.files.length} fixtures, ${plantedTotal} planted defects, ${runs} run(s) per agent${colors.reset}\n`,
   );
 
-  let anyBelowThreshold = false;
+  const runners = [];
 
   for (const agent of agents) {
     console.log(`${colors.cyan}${agent}${colors.reset}`);
+    const agentStartedAt = Date.now();
     const results = [];
+    const lostRunClasses = [];
+
     for (let runIndex = 0; runIndex < runs; runIndex += 1) {
-      const verdict = runReview(agent, runIndex, options);
-      if (!verdict) continue;
-      const scored = scoreVerdict(verdict, groundTruth);
+      const outcome = runReview(agent, runIndex, options);
+      if (!outcome.ok) {
+        lostRunClasses.push(outcome.failureClass);
+        continue;
+      }
+      const scored = scoreVerdict(outcome.verdict, groundTruth);
       if (!scored) {
         console.error(`  ${colors.red}run ${runIndex + 1}: findings could not be scored against ground truth${colors.reset}`);
+        lostRunClasses.push('environment-parser');
         continue;
       }
       results.push(scored);
@@ -453,23 +667,36 @@ function main() {
     }
 
     if (results.length === 0) {
-      console.error(`  ${colors.red}no successful runs; cannot report numbers for ${agent}${colors.reset}\n`);
-      anyBelowThreshold = true;
+      console.error(`  ${colors.red}no successful runs; nothing was measured for ${agent}${colors.reset}\n`);
+      runners.push(
+        runnerRecord(agent, options, versions, {
+          expected: runs,
+          completed: 0,
+          measurements: {},
+          durationMs: Date.now() - agentStartedAt,
+          failureClass: worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']),
+          failures: ['no run produced a scorable result'],
+        }),
+      );
       continue;
     }
 
     const recall = mean(results.map((r) => ratio(r.hits, r.planted)));
     const criticalRecall = mean(results.map((r) => ratio(r.criticalHits, r.criticalPlanted)));
-    const precision = mean(results.map((r) => ratio(r.reported - r.falsePositives, r.reported)));
+    const nonFalsePositiveRate = mean(results.map((r) => ratio(r.reported - r.falsePositives, r.reported)));
+    const unattributedMean = mean(results.map((r) => r.unattributed));
     const scoreSpread = stdev(results.map((r) => r.score));
     const verdicts = new Set(results.map((r) => r.recommendation));
 
     console.log(`  ${colors.dim}────────${colors.reset}`);
     console.log(`  recall            ${pct(recall)}   (threshold ${pct(THRESHOLDS.recall)})`);
     console.log(`  CRITICAL recall   ${pct(criticalRecall)}   (threshold ${pct(THRESHOLDS.criticalRecall)})`);
-    console.log(`  precision         ${pct(precision)}   (threshold ${pct(THRESHOLDS.precision)}, clean-fixture false positives only)`);
     console.log(
-      `  unattributed      ${mean(results.map((r) => r.unattributed))
+      `  non-false-positive${pct(nonFalsePositiveRate)}   (threshold ${pct(THRESHOLDS.nonFalsePositiveRate)}, ` +
+        'clean-fixture findings are the only definite false positives)',
+    );
+    console.log(
+      `  unattributed      ${unattributedMean
         .toFixed(1)
         .padStart(
           5,
@@ -488,16 +715,49 @@ function main() {
       for (const miss of missed) console.log(`    ${miss.row} ${miss.path}:${miss.line} — ${miss.what}`);
     }
 
+    const measurements = {
+      recall: measured(recall),
+      criticalRecall: measured(criticalRecall),
+      nonFalsePositiveRate: measured(nonFalsePositiveRate),
+      unattributedMean: measured(unattributedMean),
+      scoreStdev: measured(scoreSpread),
+      distinctVerdicts: verdicts.size,
+      meanScore: measured(mean(results.map((r) => r.score))),
+    };
+
+    // A lost run is an environment failure, and it takes variance and stability
+    // with it: agreement across two of three runs is one fewer observation than
+    // the gate declared, so reporting it as stable would launder the loss into a
+    // pass. The numbers above still print, because a partial measurement is worth
+    // reading even when it cannot be scored.
+    if (results.length < runs) {
+      const failureClass = worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']);
+      console.log(
+        `  ${colors.red}only ${results.length}/${runs} declared repetitions completed; variance and stability are unmeasurable${colors.reset}\n`,
+      );
+      runners.push(
+        runnerRecord(agent, options, versions, {
+          expected: runs,
+          completed: results.length,
+          measurements,
+          durationMs: Date.now() - agentStartedAt,
+          failureClass,
+          failures: [`${results.length} of ${runs} declared repetitions completed`],
+        }),
+      );
+      continue;
+    }
+
     // NaN fails every comparison, so an unmeasurable metric would otherwise pass
     // its threshold silently: a reviewer that reports nothing at all divides by
-    // zero for precision and clears the bar it never met. Unmeasurable is a
-    // failure here, and it says which metric. scoreSpread is the one exception,
-    // since a single run legitimately has no variance to measure.
+    // zero and clears the bar it never met. Unmeasurable is a failure here, and it
+    // says which metric. scoreSpread is the one exception, since a single run
+    // legitimately has no variance to measure.
     const failures = [];
     for (const [label, value, threshold] of [
       ['CRITICAL recall', criticalRecall, THRESHOLDS.criticalRecall],
       ['recall', recall, THRESHOLDS.recall],
-      ['precision', precision, THRESHOLDS.precision],
+      ['non-false-positive rate', nonFalsePositiveRate, THRESHOLDS.nonFalsePositiveRate],
     ]) {
       if (Number.isNaN(value)) failures.push(`${label} (unmeasurable)`);
       else if (value < threshold) failures.push(label);
@@ -506,14 +766,24 @@ function main() {
     if (verdicts.size > 1) failures.push('verdict stability');
 
     if (failures.length > 0) {
-      anyBelowThreshold = true;
       console.log(`  ${colors.red}below threshold: ${failures.join(', ')}${colors.reset}\n`);
     } else {
       console.log(`  ${colors.green}all thresholds met${colors.reset}\n`);
     }
+
+    runners.push(
+      runnerRecord(agent, options, versions, {
+        expected: runs,
+        completed: results.length,
+        measurements,
+        durationMs: Date.now() - agentStartedAt,
+        failureClass: failures.length > 0 ? 'quality' : 'none',
+        failures,
+      }),
+    );
   }
 
-  process.exit(anyBelowThreshold ? 1 : 0);
+  finish({ options, startedAt, mode: 'live', runners });
 }
 
 // Only when invoked directly, so the scoring internals can be exercised without
@@ -522,4 +792,13 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { findingsFromReport, scoreVerdict, missingCredential, parseArgs, THRESHOLDS };
+module.exports = {
+  findingsFromReport,
+  admittedLinesFor,
+  scoreVerdict,
+  missingCredential,
+  parseArgs,
+  reviewFilePaths,
+  THRESHOLDS,
+  SUITE_ID,
+};

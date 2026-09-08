@@ -1,0 +1,65 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the regression test for admittedLines. Not one finding cites the",
+    "line its rule fires on, and all nine still count. Measured against the ground truth as it stood when the",
+    "radius was replaced, where H4 was planted at line 9, two of the citations were out of reach of a",
+    "symmetric lineTolerance of 4: L1 at checkout:12 and H3 at checkout:26, which is the reason",
+    "ground-truth.json records for replacing the radius with per-plant sets. Against the current plant lines",
+    "it is three, because H4 now fires at 22 and the declaration at 9 is outside a radius of 4 as well.",
+    "",
+    "It produces the same numbers as full-recall from a completely different set of citations, which is the",
+    "point: the result is a property of the admitted sets rather than of one lucky report.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "enclosing-declarations",
+  "suite": "test-review",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "report.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "Each citation is checked against the admitted set ground truth records for that row:",
+    "  C1 at checkout:36, the comment naming the row, admitted set [36 37 38].",
+    "  H1 at checkout:12, the enclosing test, admitted set [12 15 16].",
+    "  L1 at checkout:12, the same enclosing test, admitted set [12 18 19]. A radius of 4 around 19 starts",
+    "    at 15 and never reaches 12.",
+    "  H4 at checkout:9, the declaration, admitted set [7 8 9 12 22]. The rule fires on the write at 22.",
+    "  H3 at checkout:26, the enclosing test, admitted set [26 29 30 31]. A radius of 4 around 31 starts at",
+    "    27 and never reaches 26.",
+    "  C3 at orders:16, the enclosing it, admitted set [15 16 17].",
+    "  C4 at orders:21, the enclosing it, admitted set [20 21 22 23].",
+    "  C5 at orders:28, the enclosing it, admitted set [26 27 28 30 31].",
+    "  H10 at orders:36, the enclosing it, admitted set [34 35 36 39].",
+    "",
+    "Nine citations, nine admitted sets, nine hits, four of them CRITICAL, misses empty. H1 and L1 both",
+    "cite line 12 and still match separately, because a match needs the row to agree as well as the line.",
+    "",
+    "Nothing is reported against the clean control and every finding matched a plant, so falsePositives and",
+    "unattributed are 0 and reported is 9.",
+    "",
+    "The counts the harness derives from these: recall 9/9 = 1.00, CRITICAL recall 4/4 = 1.00,",
+    "nonFalsePositiveRate (9 - 0)/9 = 1.00.",
+    "",
+    "score and recommendation come from the verdict, whose violation counts match full-recall's:",
+    "100 - 4x10 - 4x5 - 0x2 - 1x1 = 39, Block on Criticals."
+  ],
+  "result": {
+    "score": 39,
+    "recommendation": "Block",
+    "planted": 9,
+    "hits": 9,
+    "misses": [],
+    "criticalPlanted": 4,
+    "criticalHits": 4,
+    "reported": 9,
+    "falsePositives": 0,
+    "unattributed": 0
+  }
+}

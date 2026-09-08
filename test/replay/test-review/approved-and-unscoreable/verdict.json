@@ -1,0 +1,28 @@
+{
+  "$comment": [
+    "The report this points at is a REAL CAPTURE from a `--agent codex` run and stays in its original",
+    "home, for the reason the unattributed-violations verdict gives.",
+    "",
+    "This verdict is a reconstruction from those bytes by cli/lib/parse-report.js. model is null",
+    "because the capture predates the CLI recording a resolved model beside the score."
+  ],
+  "report": "test/fixtures/test-review-cli/reports/plain-bullets-key-strengths.md",
+  "files": ["playwright/tests/home.spec.ts"],
+  "agent": "codex",
+  "model": null,
+  "recommendation": "Approve with Comments",
+  "qualityScore": 98,
+  "violations": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 2
+  },
+  "findings": [],
+  "reviewedFiles": ["playwright/tests/home.spec.ts"],
+  "contextBasis": "none",
+  "contextFiles": [],
+  "contextWaiversApplied": 0,
+  "keyStrengths": [],
+  "keyWeaknesses": []
+}

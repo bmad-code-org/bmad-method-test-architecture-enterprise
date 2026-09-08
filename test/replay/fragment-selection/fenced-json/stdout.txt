@@ -1,0 +1,17 @@
+Following section 5 of step-01 this is a frontend Playwright run with playwright-utils enabled, so the four core fragments load and the frontend branch adds to them.
+
+```json
+{
+  "fragments": [
+    "data-factories.md",
+    "component-tdd.md",
+    "test-quality.md",
+    "test-healing-patterns.md",
+    "knowledge/selector-resilience.md",
+    "playwright-utils-mandate.md",
+    "maestro-flows.md"
+  ]
+}
+```
+
+I included the Maestro flows in case the saved-search feature has a mobile surface.

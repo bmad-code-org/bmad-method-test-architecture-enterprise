@@ -1,0 +1,30 @@
+{
+  "$comment": [
+    "The report this points at is a REAL CAPTURE and it stays in its original home under",
+    "test/fixtures/test-review-cli/reports/, where the formatters leave captured bytes alone and where",
+    "the CLI parser suite already reads it. Copying it here would fork one artifact into two.",
+    "",
+    "This verdict is a reconstruction: the capture predates the eval harness, so no verdict JSON was",
+    "kept beside it. Every field is what cli/lib/parse-report.js derives from those bytes today.",
+    "agent and model are null because the fixture records only that a real run produced it."
+  ],
+  "report": "test/fixtures/test-review-cli/reports/wrapped-steps-flow.md",
+  "files": ["playwright/tests/api/auth-signup-age-gate.spec.ts", "packages/db/test/rls-policies.spec.ts"],
+  "agent": null,
+  "model": null,
+  "recommendation": "Approve with Comments",
+  "qualityScore": 83,
+  "violations": {
+    "critical": 0,
+    "high": 0,
+    "medium": 7,
+    "low": 3
+  },
+  "findings": [],
+  "reviewedFiles": ["playwright/tests/api/auth-signup-age-gate.spec.ts", "packages/db/test/rls-policies.spec.ts"],
+  "contextBasis": "none",
+  "contextFiles": [],
+  "contextWaiversApplied": 0,
+  "keyStrengths": [],
+  "keyWeaknesses": []
+}

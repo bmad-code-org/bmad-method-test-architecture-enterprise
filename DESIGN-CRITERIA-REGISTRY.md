@@ -123,7 +123,10 @@ always fires carries no information, and one that fires on taste cannot be repro
 - **recall** — planted defects named, matched on registry row within a 4-line
   tolerance. Row matching is what makes vendors comparable; prose descriptions differ.
 - **CRITICAL recall** — thresholded at 100%. A missed `.skip` is the whole failure mode.
-- **precision** — computed from violations against the clean fixture only.
+- **non-false-positive rate** — the share of reported findings that are not definite false
+  positives, computed from violations against the clean fixture only. It was called precision
+  until the name was checked against what it measures: precision needs every reported finding
+  adjudicated, and the unattributed ones below are not.
 - **score variance** — stdev across repeated runs of identical input, plus whether the
   verdict itself was stable. This is the number nobody had, and no amount of comparing
   two reviews by eye produces it.

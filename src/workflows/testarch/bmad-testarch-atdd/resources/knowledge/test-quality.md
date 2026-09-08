@@ -761,6 +761,21 @@ assert total == Decimal("42.00")
 - An assertion after an unconditional `return`, or inside a `catch` the happy path never enters, or inside a callback the test never awaits, does not run
 - Prefer `rejects`/`raises` forms over `try`/`catch` around the thing you expect to throw: they fail when nothing throws
 
+**The assertion that can fail and still cannot tell you anything.** One step past the three above sits an assertion that would fail on a wrong type and passes on every wrong value of the right type. It is not an assertion that cannot fail, so none of the rows above reach it, and it is the most common way a test looks thorough and proves nothing.
+
+```typescript
+// ❌ BAD: every wrong id of the right type passes
+const created = await service.createOrder(input);
+expect(typeof created.id).toBe('string');
+expect(created.total).toBeDefined();
+
+// ✅ GOOD: the value is constrained, not the shape
+expect(created.id).toBe(input.idempotencyKey);
+expect(created.total).toBe(4299);
+```
+
+`toBeDefined`, `toBeTruthy`, `not.toBeNull`, a bare `toBeInstanceOf`, and `toHaveProperty` with no expected value are the same shape wearing different names. Three cases are not violations: a value assertion standing beside the type check, a value the system generates that the test genuinely cannot predict such as a server-assigned id or a timestamp, where the line should say why the type is all there is to assert, and a presence assertion about a UI element such as `toBeVisible`, where being on the screen is the behavior under test.
+
 ### Example 8: Suite Structure, Naming, and One Dialect
 
 **Context**: These do not make a test wrong. They make a failure expensive to read, which is the same cost paid every time the suite goes red for the next several years.

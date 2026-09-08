@@ -373,7 +373,7 @@ TEA has deterministic checks and live evals. These cover specific risks. They ar
 
 The eight suites under `test/evals/` measure one decision inside each knowledge-bearing workflow: whether the agent selects the required knowledge fragments and avoids fragments the workflow excludes. They do not execute the complete workflow or grade its final artifact.
 
-`test-review` has an additional behavioral eval. It runs the complete review against files containing nine planted defects plus one clean file, then scores recall, precision, score variance, and verdict stability.
+`test-review` has an additional behavioral eval. It runs the complete review against files containing nine planted defects plus one clean file, then scores recall, the non-false-positive rate, score variance, and verdict stability.
 
 | Skill                       | Fragment-selection cases | Full behavioral eval                                       |
 | --------------------------- | ------------------------ | ---------------------------------------------------------- |
@@ -392,11 +392,12 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains thirteen deterministic checks, including three that keep the rules, guidance, hook, and eval data aligned:
+`npm test` chains fourteen deterministic checks, including four that keep the rules, guidance, hook, and eval data aligned:
 
 - `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 35 rows are currently mapped across 48 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:enforce-hook` fails when a new Absolute registry row appears in neither the hook's enforced list nor its deferred list. This prevents a rule from being added without an explicit write-time enforcement decision.
 - `test:eval-data` checks that all 24 fragment-selection cases are structurally usable: their workflow context files exist, every expected fragment exists and is indexed for that workflow, and the required and forbidden sets do not overlap. The expected sets come from the workflow step files. This check does not ask an agent to select anything.
+- `test:eval-schemas` checks `test/evals/suite-manifest.json` against its schema, confirms that every threshold it declares is the threshold the harness actually applies, and fails when a TEA skill has neither a behavioral suite nor a deferred declaration. A suite list that omits a skill reads as coverage, so the omission has to be an error rather than a silence.
 
 These checks produce the same answer from the same repository state. They need no agent credential, network call, or model budget. `test:eval-data` runs through `npm test`, the local pre-commit hook, pull-request quality checks, and the publish workflow.
 
@@ -435,7 +436,7 @@ Output ending with `nothing measured` is expected in preflight mode. It means th
 Use the focused commands when debugging one metric or skill. A one-call review smoke test is:
 
 ```bash
-# One review. Recall and precision are measured; variance and stability are not.
+# One review. Recall and the non-false-positive rate are measured; variance and stability are not.
 npm run eval:test-review -- --agent codex --runs 1
 
 # Complete eval with one runner.
@@ -527,20 +528,39 @@ npm run eval:fragment-selection -- \
 
 ### What Passes
 
-| Eval                              | Passing result                                                                                                                                        | Default volume               |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| `npm run eval:all -- --agent ...` | Both live evals below pass for the selected runner                                                                                                    | 48 selections plus 3 reviews |
-| Fragment selection                | At least 90% required-fragment recall, at most 10% forbidden-fragment selection, and stable choices across repeated cases                             | 24 cases twice: 48 calls     |
-| Test review                       | At least 70% overall recall, 100% CRITICAL recall, at least 80% clean-file precision, score standard deviation no higher than 3, and a stable verdict | Three complete reviews       |
-| `npm run test:eval-data`          | Every case references valid workflow files and indexed fragments; required and forbidden sets do not overlap                                          | No agent calls               |
+| Eval                              | Passing result                                                                                                                                     | Default volume               |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| `npm run eval:all -- --agent ...` | Both live evals below pass for the selected runner                                                                                                 | 48 selections plus 3 reviews |
+| Fragment selection                | At least 90% required-fragment recall, at most 10% forbidden-fragment selection, and stable choices across repeated cases                          | 24 cases twice: 48 calls     |
+| Test review                       | At least 70% overall recall, 100% CRITICAL recall, an 80% non-false-positive rate, score standard deviation no higher than 3, and a stable verdict | Three complete reviews       |
+| `npm run test:eval-data`          | Every case references valid workflow files and indexed fragments; required and forbidden sets do not overlap                                       | No agent calls               |
+| `npm run test:eval-schemas`       | The suite manifest matches its schema, declares the thresholds the harnesses apply, and accounts for every TEA skill                               | No agent calls               |
+
+Every declared repetition has to complete. A run that loses one to a timeout, a transport error, or an unparseable reply cannot measure variance or stability, so it exits `2` rather than reporting a lower score.
+
+The non-false-positive rate is the share of reported findings that are not definite false positives, and only the clean fixture makes a false positive definite. A finding on a seeded fixture that matches no planted row is reported separately as `unattributed`: the fixture may carry an incidental real defect nobody planted, so counting it either way would be a guess.
+
+### The Suite Manifest and Machine-Readable Results
+
+`test/evals/suite-manifest.json` registers every suite `eval:all` runs, with its skills, fixtures, ground truth, contract, thresholds, repetition count, CI tier, and the capabilities its runner needs. It also carries a `deferred` list: one entry per skill with no behavioral suite, naming the owner, the missing evidence, and the condition that retires the entry. `eval:all` reads the suite list from that file and refuses to run when a TEA skill appears in neither list.
+
+Add `--json <path>` to any of the three harnesses to write a result record alongside the console output:
+
+```bash
+npm run eval:all -- --agent codex --json results/eval-all.json
+npm run eval:test-review -- --agent codex --json results/test-review.json
+```
+
+The record carries the repository commit, the suite and case IDs, the runner executable and version, the resolved model and parameters, the fixture and prompt digests, the expected and completed repetitions, the measurements, the duration, and the final failure class. `test/schema/eval-result.schema.json` is the generated JSON Schema for it, and every record is validated against the schema before it is written.
 
 ### CI Usage
 
-Run the deterministic check on every pull request:
+Run the deterministic checks on every pull request:
 
 ```bash
 npm ci
 npm run test:eval-data
+npm run test:eval-schemas
 ```
 
 Run live evals in a scheduled or manually triggered CI job after installing and authenticating the selected agent CLI:

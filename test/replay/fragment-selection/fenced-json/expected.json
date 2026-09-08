@@ -1,0 +1,74 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the only fragment-selection case that exercises three behaviours",
+    "at once. The reply is wrapped in a code fence the prompt explicitly asked it not to use, one entry",
+    "carries the knowledge/ prefix the parser has to strip, and the selection both drops a required",
+    "fragment and picks up a forbidden one. It is the only case where missing and forbidden come back",
+    "non-empty, so a scorer that stopped populating either would still look correct everywhere else.",
+    "",
+    "Over-loading is the failure mode the forbidden metric exists for, and a Maestro fragment in a",
+    "Playwright run is the example the harness header names.",
+    "",
+    "The stdout is CONSTRUCTED, for the reason bare-json records."
+  ],
+  "id": "fenced-json",
+  "suite": "fragment-selection",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "sourceCase": "test/evals/bmad-testarch-atdd/evals.json :: atdd-frontend-playwright",
+    "frozenOn": "2026-09-08",
+    "expect": {
+      "mustLoad": [
+        "data-factories.md",
+        "component-tdd.md",
+        "test-quality.md",
+        "test-healing-patterns.md",
+        "selector-resilience.md",
+        "timing-debugging.md",
+        "playwright-utils-mandate.md"
+      ],
+      "mustNotLoad": ["maestro-flows.md", "mobile-test-strategy.md", "contract-testing.md"]
+    }
+  },
+  "derivation": [
+    "The reply opens with a sentence of prose, so parsing the whole text fails. The fenced candidate is",
+    "tried first and yields the JSON object, which parses. The reply's fifth entry is",
+    "knowledge/selector-resilience.md and the parser strips the prefix, so selection holds seven bare",
+    "fragment names.",
+    "",
+    "scoreCase compares that set against the frozen expect block. Of the 7 mustLoad entries the set",
+    "contains 6; timing-debugging.md is absent, so missing is [timing-debugging.md] and hits is 7 - 1 = 6.",
+    "Of the 3 mustNotLoad entries the set contains maestro-flows.md, so forbidden is [maestro-flows.md] and",
+    "forbiddenTotal stays 3. selected is the length of the reply's own list, which is 7.",
+    "",
+    "selector-resilience.md counts as a hit only because the prefix was stripped. Without the strip, missing",
+    "would hold two entries and hits would be 5.",
+    "",
+    "The counts the harness derives from these: requiredRecall 6/7 = 0.8571, below the 0.90 floor, and",
+    "forbiddenRate 1/3 = 0.3333, above the 0.10 ceiling. Both metrics fail on this one case, which is what",
+    "makes it the useful counterweight to bare-json."
+  ],
+  "result": {
+    "selection": [
+      "data-factories.md",
+      "component-tdd.md",
+      "test-quality.md",
+      "test-healing-patterns.md",
+      "selector-resilience.md",
+      "playwright-utils-mandate.md",
+      "maestro-flows.md"
+    ],
+    "score": {
+      "required": 7,
+      "hits": 6,
+      "missing": ["timing-debugging.md"],
+      "forbiddenTotal": 3,
+      "forbidden": ["maestro-flows.md"],
+      "selected": 7
+    }
+  }
+}

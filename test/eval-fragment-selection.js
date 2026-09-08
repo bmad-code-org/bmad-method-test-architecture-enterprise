@@ -34,16 +34,25 @@
  *   default          Spends a vendor run per case per repetition. Run it by hand
  *                    or on a schedule; it needs a logged-in claude or codex.
  *
+ * EVERY DECLARED REPETITION MUST COMPLETE
+ *
+ * Stability is a claim about repeated runs. A case that lost a run to a timeout or
+ * an unparseable reply has fewer observations than the gate declared, so it is
+ * unmeasurable and exits 2. A failed model call is never a low score.
+ *
  * Usage:
  *   node test/eval-fragment-selection.js --validate-only
  *   node test/eval-fragment-selection.js --agent claude --runs 3
  *   node test/eval-fragment-selection.js --agent codex --workflow bmad-testarch-automate
  *   node test/eval-fragment-selection.js --agent custom --agent-cmd my-runner --agent-arg --headless
+ *   node test/eval-fragment-selection.js --agent claude --json results/fragment-selection.json
  *
  * Exit codes:
  *   0  data is valid (--validate-only), or every vendor met the thresholds
  *   1  a threshold was missed, or the eval data is inconsistent (a real result)
- *   2  the environment could not run the eval (nothing was measured)
+ *   2  the environment could not run the eval (nothing was measured): a missing
+ *      credential, a timeout, a transport error, an unparseable reply, or fewer
+ *      completed runs than were declared
  */
 
 'use strict';
@@ -54,12 +63,27 @@ const { spawnSync } = require('node:child_process');
 const { parse } = require('csv-parse/sync');
 
 const { runAgent } = require('../cli/lib/run-agent');
-const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
+const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { missingCredential } = require('./eval-test-review');
+const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const {
+  digest,
+  digestFiles,
+  digestPrompts,
+  repositoryState,
+  probeVersion,
+  redactArgs,
+  measured,
+  classifyAgentError,
+  suiteResultRecord,
+  writeSuiteResult,
+} = require('./lib/eval-record');
+const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVAL_ROOT = path.join(__dirname, 'evals');
 const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch');
+const SUITE_ID = 'fragment-selection';
 
 const RUN_TIMEOUT_MS = 5 * 60_000;
 
@@ -97,6 +121,7 @@ function parseArgs(argv) {
   let validateOnly = false;
   let agentCmd;
   let model;
+  let jsonPath;
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     switch (arg) {
@@ -146,6 +171,12 @@ function parseArgs(argv) {
         index += 1;
         break;
       }
+      case '--json': {
+        jsonPath = argv[index + 1];
+        if (!jsonPath) fatal(2, '--json requires a file path');
+        index += 1;
+        break;
+      }
       case '--validate-only': {
         validateOnly = true;
         break;
@@ -163,7 +194,7 @@ function parseArgs(argv) {
   if (agents.length > 1 && (agentCmd || agentArgs.length > 0 || envPass.length > 0 || model)) {
     fatal(2, 'runner overrides require exactly one --agent; run separate commands for different runner configurations');
   }
-  return { agents, workflows, runs, validateOnly, agentCmd, agentArgs, envPass, model };
+  return { agents, workflows, runs, validateOnly, agentCmd, agentArgs, envPass, model, jsonPath };
 }
 
 /** Every evals.json under test/evals, or only the requested workflows. */
@@ -360,30 +391,107 @@ function scoreCase(item, selected) {
 
 function preflight({ agents, agentCmd }) {
   const problems = [];
+  const versions = {};
+  // Each problem carries its failure class so the result record keeps a missing
+  // credential and a missing executable apart.
+  const report = (failureClass, message) => problems.push({ failureClass, message });
+
   for (const agent of agents) {
     // Check the name against the adapter registry BEFORE spawning it. runAgent
     // would reject an unknown vendor too, but only after preflight had already
     // handed the string to spawnSync as a command.
     if (!Object.prototype.hasOwnProperty.call(AGENT_ADAPTERS, agent)) {
-      problems.push(`unknown agent "${agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
+      report('environment-configuration', `unknown agent "${agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
       continue;
     }
     const executable = agent === 'custom' ? agentCmd : agent;
     const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
-    if (probe.error) problems.push(`agent CLI "${executable}" is not on PATH (${probe.error.code})`);
-    else if (probe.status !== 0) problems.push(`agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
+    if (probe.error) report('environment-transport', `agent CLI "${executable}" is not on PATH (${probe.error.code})`);
+    else if (probe.status === 0)
+      versions[agent] =
+        String(probe.stdout || '')
+          .trim()
+          .split('\n')[0] || null;
+    else report('environment-transport', `agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
     const credential = agent === 'custom' ? null : missingCredential(agent);
-    if (credential) problems.push(credential);
+    if (credential) report('environment-authentication', credential);
   }
-  if (problems.length > 0) {
-    console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
-    for (const problem of problems) console.error(`  - ${problem}`);
-    console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
-    process.exit(2);
+  return { problems, versions };
+}
+
+/**
+ * Every case with the exact prompt it is sent, keyed so two workflows cannot
+ * collide on a shared case id.
+ *
+ * @param {Array<object>} suites
+ * @returns {Array<{id: string, prompt: string}>}
+ */
+function caseIndex(suites) {
+  return suites.flatMap((suite) => suite.data.cases.map((item) => ({ id: `${suite.dir}:${item.id}`, prompt: buildPrompt(suite, item) })));
+}
+
+/**
+ * Write the machine-readable record when --json asked for one, then exit with
+ * the code the failure class carries.
+ */
+function finish({ options, startedAt, mode, suites, runners, suiteFailureClasses = [] }) {
+  const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
+  const exitCode = exitCodeForFailureClass(failureClass);
+
+  if (options.jsonPath) {
+    let suite;
+    try {
+      suite = suiteById(loadSuiteManifest(PROJECT_ROOT).manifest, SUITE_ID);
+    } catch (error) {
+      console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
+      process.exit(2);
+    }
+    const cases = caseIndex(suites).map((item) => ({ id: item.id, promptDigest: digest(item.prompt) }));
+    writeSuiteResult(
+      options.jsonPath,
+      suiteResultRecord({
+        mode,
+        suite,
+        repository: repositoryState(PROJECT_ROOT),
+        fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
+        promptDigest: digestPrompts(caseIndex(suites)),
+        cases,
+        runners,
+        durationMs: Date.now() - startedAt,
+        suiteFailureClasses,
+      }),
+    );
+    console.log(`${colors.dim}result written to ${options.jsonPath}${colors.reset}`);
   }
+
+  process.exit(exitCode);
+}
+
+/** The per-runner half of the result record. */
+function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+  const executable = agent === 'custom' ? options.agentCmd : agent;
+  return {
+    agent,
+    executable,
+    version: versions[agent] ?? probeVersion(executable),
+    model: resolveModel(agent, options.model, options.agentArgs),
+    parameters: {
+      agentArgs: redactArgs(options.agentArgs),
+      envPassNames: [...options.envPass],
+      timeoutMs: RUN_TIMEOUT_MS,
+      promptTransport: AGENT_ADAPTERS[agent]?.promptViaArgv ? 'argv' : 'stdin',
+    },
+    repetitions: { expected, completed },
+    measurements,
+    durationMs,
+    usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
+    failureClass,
+    failures,
+  };
 }
 
 function main() {
+  const startedAt = Date.now();
   const options = parseArgs(process.argv.slice(2));
   const { agents, workflows, runs, validateOnly } = options;
 
@@ -399,7 +507,20 @@ function main() {
     console.error(`${colors.red}eval data is inconsistent:${colors.reset}`);
     for (const problem of problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
     console.error('');
-    process.exit(1);
+    // Inconsistent data keeps its historical exit 1. It is a real finding about
+    // the repository, measured without a model call, and an environment that
+    // could not run is a different thing.
+    //
+    // No suites are handed to the record: building a prompt out of data that
+    // just failed validation is how a reporting path turns into a second crash.
+    finish({
+      options,
+      startedAt,
+      mode: validateOnly ? 'validate-only' : 'live',
+      suites: [],
+      runners: [],
+      suiteFailureClasses: ['quality'],
+    });
   }
 
   console.log(
@@ -408,21 +529,41 @@ function main() {
 
   if (validateOnly) {
     console.log(`\n${colors.green}eval data valid; nothing measured (--validate-only).${colors.reset}\n`);
-    process.exit(0);
+    finish({ options, startedAt, mode: 'validate-only', suites, runners: [] });
   }
 
-  preflight(options);
+  const { problems: readiness, versions } = preflight(options);
+  if (readiness.length > 0) {
+    console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
+    for (const problem of readiness) console.error(`  - ${problem.message}`);
+    console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
+    finish({
+      options,
+      startedAt,
+      mode: 'live',
+      suites,
+      runners: [],
+      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+    });
+  }
   console.log(`${colors.dim}${runs} run(s) per case per agent${colors.reset}\n`);
 
-  let anyBelowThreshold = false;
+  const runners = [];
 
   for (const agent of agents) {
     console.log(`${colors.cyan}${agent}${colors.reset}`);
+    const agentStartedAt = Date.now();
     let requiredTotal = 0;
     let hitTotal = 0;
     let forbiddenHits = 0;
     let forbiddenOpportunities = 0;
-    let unmeasured = 0;
+    let unmeasuredRuns = 0;
+    let completedRuns = 0;
+    let unstableCases = 0;
+    let incompleteCases = 0;
+    // Every environment failure seen across every case, so the runner's class is
+    // the worst of them rather than the last one printed.
+    const lostRunClasses = [];
 
     for (const suite of suites) {
       console.log(`  ${colors.dim}${suite.data.workflow}${colors.reset}`);
@@ -444,23 +585,29 @@ function main() {
               cwd: PROJECT_ROOT,
             }));
           } catch (error) {
+            // The model never answered. That is an environment failure, and
+            // scoring the runs that did answer would turn it into a lower number.
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: ${error.message}${colors.reset}`);
-            unmeasured += 1;
+            lostRunClasses.push(classifyAgentError(error));
+            unmeasuredRuns += 1;
             continue;
           }
           const selected = parseSelection(stdout);
           if (selected === null) {
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: no parseable fragment list in the reply${colors.reset}`);
-            unmeasured += 1;
+            lostRunClasses.push('environment-parser');
+            unmeasuredRuns += 1;
             continue;
           }
           signatures.add([...selected].sort().join(','));
           caseScores.push(scoreCase(item, selected));
         }
 
+        completedRuns += caseScores.length;
+
         if (caseScores.length === 0) {
           console.log(`    ${colors.red}${item.id}: no measurable run${colors.reset}`);
-          anyBelowThreshold = true;
+          incompleteCases += 1;
           continue;
         }
 
@@ -474,18 +621,23 @@ function main() {
         // been measured. With one of two runs failing, a single signature is one
         // observation, not agreement, and reporting it as `stable` would launder a
         // failed run into a pass.
-        const stable = signatures.size === 1 && caseScores.length === runs;
+        const complete = caseScores.length === runs;
+        const stable = signatures.size === 1 && complete;
         const status =
           first.missing.length === 0 && first.forbidden.length === 0
             ? `${colors.green}✓${colors.reset}`
             : `${colors.yellow}•${colors.reset}`;
         console.log(
           `    ${status} ${item.id}: ${first.hits}/${first.required} required, ${first.forbidden.length} forbidden, ` +
-            `${stable ? 'stable' : caseScores.length < runs ? `${colors.red}only ${caseScores.length}/${runs} runs measured${colors.reset}` : `${colors.red}${signatures.size} different sets on identical input${colors.reset}`}`,
+            `${stable ? 'stable' : complete ? `${colors.red}${signatures.size} different sets on identical input${colors.reset}` : `${colors.red}only ${caseScores.length}/${runs} runs measured${colors.reset}`}`,
         );
         if (first.missing.length > 0) console.log(`        ${colors.yellow}missed:${colors.reset} ${first.missing.join(', ')}`);
         if (first.forbidden.length > 0) console.log(`        ${colors.red}loaded anyway:${colors.reset} ${first.forbidden.join(', ')}`);
-        if (!stable) anyBelowThreshold = true;
+        // An unstable set on complete runs is a measured quality failure. A case
+        // short of its runs is an environment failure, and the two must not be
+        // reported through the same channel.
+        if (!complete) incompleteCases += 1;
+        else if (!stable) unstableCases += 1;
       }
     }
 
@@ -496,26 +648,64 @@ function main() {
     console.log(`  ${colors.dim}────────${colors.reset}`);
     console.log(`  required recall   ${pct(recall)}   (threshold ${pct(THRESHOLDS.requiredRecall)})`);
     console.log(`  forbidden rate    ${pct(forbiddenRate)}   (max ${pct(THRESHOLDS.forbiddenRate)})`);
-    if (unmeasured > 0) console.log(`  ${colors.yellow}${unmeasured} run(s) produced nothing measurable${colors.reset}`);
+    if (unmeasuredRuns > 0) console.log(`  ${colors.yellow}${unmeasuredRuns} run(s) produced nothing measurable${colors.reset}`);
+
+    const expectedRuns = caseCount * runs;
+    const measurements = {
+      requiredRecall: measured(recall),
+      forbiddenRate: measured(forbiddenRate),
+      unstableCases,
+      incompleteCases,
+      unmeasuredRuns,
+    };
 
     const failures = [];
     if (Number.isNaN(recall)) failures.push('required recall (unmeasurable)');
     else if (recall < THRESHOLDS.requiredRecall) failures.push('required recall');
     if (!Number.isNaN(forbiddenRate) && forbiddenRate > THRESHOLDS.forbiddenRate) failures.push('forbidden rate');
+    if (unstableCases > 0) failures.push(`${unstableCases} unstable case(s)`);
+
+    if (incompleteCases > 0) {
+      const failureClass = worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']);
+      console.log(
+        `  ${colors.red}${incompleteCases} case(s) completed fewer than ${runs} declared repetitions; stability is unmeasurable${colors.reset}\n`,
+      );
+      runners.push(
+        runnerRecord(agent, options, versions, {
+          expected: expectedRuns,
+          completed: completedRuns,
+          measurements,
+          durationMs: Date.now() - agentStartedAt,
+          failureClass,
+          failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+        }),
+      );
+      continue;
+    }
 
     if (failures.length > 0) {
-      anyBelowThreshold = true;
       console.log(`  ${colors.red}below threshold: ${failures.join(', ')}${colors.reset}\n`);
     } else {
       console.log(`  ${colors.green}all thresholds met${colors.reset}\n`);
     }
+
+    runners.push(
+      runnerRecord(agent, options, versions, {
+        expected: expectedRuns,
+        completed: completedRuns,
+        measurements,
+        durationMs: Date.now() - agentStartedAt,
+        failureClass: failures.length > 0 ? 'quality' : 'none',
+        failures,
+      }),
+    );
   }
 
-  process.exit(anyBelowThreshold ? 1 : 0);
+  finish({ options, startedAt, mode: 'live', suites, runners });
 }
 
 if (require.main === module) {
   main();
 }
 
-module.exports = { loadSuites, validateSuites, parseSelection, scoreCase, buildPrompt, parseArgs, THRESHOLDS };
+module.exports = { loadSuites, validateSuites, parseSelection, scoreCase, buildPrompt, caseIndex, parseArgs, THRESHOLDS, SUITE_ID };

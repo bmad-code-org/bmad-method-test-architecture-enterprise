@@ -1,0 +1,678 @@
+{
+  "schemaVersion": 4,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-fragment-selection-automate",
+  "sourceSpecDigest": "sha256:5b4204a73577d71517210049399b170254aa36ccdc18cab8d2305ec6bdf66803",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "A Playwright browser suite loads the core set and the playwright-utils set, and no mobile fragment. The case asserts: \"No mobile fragment is loaded for a browser suite. Loading maestro-flows.md here is the failure where a device-flow pattern leaks into a Playwright spec.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for automate-playwright-ui-utils-on names all ten mandated fragments and names none of maestro-flows.md, mobile-test-strategy.md, mobile-ci-device-lab.md, or contract-testing.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-automate/steps-c/step-01-preflight-and-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "mobile-fragment-in-a-browser-run"
+        }
+      ],
+      "oracles": ["O-001", "O-002"]
+    },
+    {
+      "id": "B-002",
+      "description": "A pytest service run loads the stack-neutral core set and opens no library mandate. The case asserts: \"tea_use_playwright_utils is true and the package is still absent, because the repo has no JavaScript manifest at all. The precondition needs both halves, so the mandate must not load. Loading it on the flag alone is the exact failure the run-level preconditions section exists to prevent.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for automate-backend-pytest names all six core fragments and names none of playwright-utils-mandate.md, intercept-network-call.md, network-first.md, maestro-flows.md, or mobile-test-strategy.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-automate/steps-c/step-01-preflight-and-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "mandate-opened-without-the-package"
+        }
+      ],
+      "oracles": ["O-003", "O-004"]
+    },
+    {
+      "id": "B-003",
+      "description": "A Maestro device run loads the mobile profile and no browser fragment. The case asserts: \"The four browser fragments are excluded by name in the mobile profile: a device flow has no DOM and no request interceptor, and loading them invites browser patterns into a Maestro flow.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for automate-mobile-maestro names all six mandated fragments and names none of network-first.md, playwright-config.md, intercept-network-call.md, or selector-resilience.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-automate/steps-c/step-01-preflight-and-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "browser-fragment-in-a-mobile-run"
+        }
+      ],
+      "oracles": ["O-005", "O-006"]
+    },
+    {
+      "id": "B-004",
+      "description": "A Pact consumer run with pactjs-utils installed takes the utils path and not the vanilla path. The case asserts: \"contract-testing.md is the flag-off path. With pactjs-utils enabled and installed, loading it alongside the mandate gives the generator two competing sources for the same code shape.\"",
+      "severity": "material",
+      "observableSuccessCriterion": "The selection returned for automate-pact-consumer names all six pactjs-utils fragments and names none of contract-testing.md, maestro-flows.md, or mobile-test-strategy.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-automate/steps-c/step-01-preflight-and-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "two-competing-sources-for-one-code-shape"
+        }
+      ],
+      "oracles": ["O-007", "O-008"]
+    },
+    {
+      "id": "B-005",
+      "description": "A Maven JUnit run loads the stack-neutral core set and opens neither library mandate. The case asserts: \"Both library flags are true and both packages are absent from a Maven project, so both mandates stay closed. A JVM repo is where a flag-only reading of the preconditions does the most damage, because there is no manifest the agent could even check for the package.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for automate-backend-junit names all six core fragments and names none of playwright-utils-mandate.md, pactjs-utils-mandate.md, intercept-network-call.md, or maestro-flows.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-automate/steps-c/step-01-preflight-and-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "mandate-opened-without-the-package"
+        }
+      ],
+      "oracles": ["O-009", "O-010"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The six core fragments plus the playwright-utils set. The step file also says to load the mandate first, because it governs how every other playwright-utils fragment is applied, but the harness scores set membership rather than order, so only its presence is measured here.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for automate-playwright-ui-utils-on, against the 10 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/automate-playwright-ui-utils-on/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/automate-playwright-ui-utils-on/stdout/fragments"
+          },
+          {
+            "literal": [
+              "test-levels-framework.md",
+              "test-priorities-matrix.md",
+              "data-factories.md",
+              "selective-testing.md",
+              "ci-burn-in.md",
+              "test-quality.md",
+              "playwright-utils-mandate.md",
+              "intercept-network-call.md",
+              "fixtures-composition.md",
+              "network-first.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "The 4 fragments the step file excludes for automate-playwright-ui-utils-on. The repository has no .maestro directory and no pact dependency, and a device-flow pattern leaking into a Playwright spec is the failure this exclusion exists to prevent.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for automate-playwright-ui-utils-on, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of maestro-flows.md, mobile-test-strategy.md, mobile-ci-device-lab.md, contract-testing.md.",
+        "evidenceTargets": ["/interactions/automate-playwright-ui-utils-on/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/automate-playwright-ui-utils-on/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["maestro-flows.md", "mobile-test-strategy.md", "mobile-ci-device-lab.md", "contract-testing.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "The six core fragments are stack-neutral and load for a pytest suite exactly as they do for Playwright.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for automate-backend-pytest, against the 6 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/automate-backend-pytest/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/automate-backend-pytest/stdout/fragments"
+          },
+          {
+            "literal": [
+              "test-levels-framework.md",
+              "test-priorities-matrix.md",
+              "data-factories.md",
+              "selective-testing.md",
+              "ci-burn-in.md",
+              "test-quality.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "The 5 fragments the step file excludes for automate-backend-pytest. The flag is on and the package is absent because the repository carries no JavaScript manifest, so the mandate stays closed and the browser fragments it governs stay out.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for automate-backend-pytest, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of playwright-utils-mandate.md, intercept-network-call.md, network-first.md, maestro-flows.md, mobile-test-strategy.md.",
+        "evidenceTargets": ["/interactions/automate-backend-pytest/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/automate-backend-pytest/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": [
+                    "playwright-utils-mandate.md",
+                    "intercept-network-call.md",
+                    "network-first.md",
+                    "maestro-flows.md",
+                    "mobile-test-strategy.md"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "The three mobile fragments plus the level, priority, and quality fragments. A .maestro directory selects the mobile profile whatever test_dir holds and whatever react-native makes package.json look like.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for automate-mobile-maestro, against the 6 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/automate-mobile-maestro/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/automate-mobile-maestro/stdout/fragments"
+          },
+          {
+            "literal": [
+              "mobile-test-strategy.md",
+              "maestro-flows.md",
+              "mobile-ci-device-lab.md",
+              "test-levels-framework.md",
+              "test-priorities-matrix.md",
+              "test-quality.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "The 4 fragments the step file excludes for automate-mobile-maestro. A device flow has no DOM and no request interceptor, so the four browser fragments are excluded by name.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for automate-mobile-maestro, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of network-first.md, playwright-config.md, intercept-network-call.md, selector-resilience.md.",
+        "evidenceTargets": ["/interactions/automate-mobile-maestro/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/automate-mobile-maestro/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["network-first.md", "playwright-config.md", "intercept-network-call.md", "selector-resilience.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-007",
+      "polarity": "expects-hold",
+      "commentary": "The pactjs-utils mandate and its five companion fragments, because the flag is on and both packages are installed.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for automate-pact-consumer, against the 6 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/automate-pact-consumer/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/automate-pact-consumer/stdout/fragments"
+          },
+          {
+            "literal": [
+              "pactjs-utils-mandate.md",
+              "pactjs-utils-overview.md",
+              "pactjs-utils-consumer-helpers.md",
+              "pactjs-utils-provider-verifier.md",
+              "pactjs-utils-request-filter.md",
+              "pactjs-utils-zod-to-pact.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-008",
+      "polarity": "expects-hold",
+      "commentary": "The 3 fragments the step file excludes for automate-pact-consumer. contract-testing.md is the flag-off path and would compete with the open mandate for the same code shape, and the repository has no .maestro directory.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for automate-pact-consumer, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of contract-testing.md, maestro-flows.md, mobile-test-strategy.md.",
+        "evidenceTargets": ["/interactions/automate-pact-consumer/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/automate-pact-consumer/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["contract-testing.md", "maestro-flows.md", "mobile-test-strategy.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-009",
+      "polarity": "expects-hold",
+      "commentary": "The six core fragments, which are stack-neutral and apply to a Maven project unchanged.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for automate-backend-junit, against the 6 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/automate-backend-junit/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/automate-backend-junit/stdout/fragments"
+          },
+          {
+            "literal": [
+              "test-levels-framework.md",
+              "test-priorities-matrix.md",
+              "data-factories.md",
+              "selective-testing.md",
+              "ci-burn-in.md",
+              "test-quality.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-010",
+      "polarity": "expects-hold",
+      "commentary": "The 4 fragments the step file excludes for automate-backend-junit. Both library flags are true and a Maven project has no JavaScript manifest, so neither package can be installed and neither mandate can open.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for automate-backend-junit, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of playwright-utils-mandate.md, pactjs-utils-mandate.md, intercept-network-call.md, maestro-flows.md.",
+        "evidenceTargets": ["/interactions/automate-backend-junit/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/automate-backend-junit/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["playwright-utils-mandate.md", "pactjs-utils-mandate.md", "intercept-network-call.md", "maestro-flows.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-fragment-selection-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "select-fragments",
+          "invocation": {
+            "executable": "tea-fragment-selection-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": ["model"],
+              "types": {
+                "model": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "OPENAI_API_KEY": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": ["fragments"],
+            "permittedKeys": ["fragments"],
+            "types": {
+              "fragments": "array"
+            },
+            "successIndicator": "/fragments",
+            "channelRoles": {
+              "/fragments": "collection"
+            },
+            "collectionLocations": [
+              {
+                "pointer": "/fragments",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 59
+                }
+              }
+            ]
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "selection-follows-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-automate-playwright-ui-utils-on",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case automate-playwright-ui-utils-on: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              },
+              {
+                "legId": "witness-automate-mobile-maestro",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case automate-mobile-maestro: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-automate-playwright-ui-utils-on/stdout/fragments"
+                    },
+                    {
+                      "pointer": "/interactions/witness-automate-mobile-maestro/stdout/fragments"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "automate-playwright-ui-utils-on",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "automate-backend-pytest",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "automate-mobile-maestro",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "automate-pact-consumer",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "automate-backend-junit",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Every case runs against the checked-in bmad-testarch-automate workflow: its step file or files named in requirementLinks, and its resources/tea-index.csv. The harness assembles one prompt per case from those files plus the case's task, repository facts, and TEA config, and writes it to the runner's standard input. The prompt bytes are evidence rather than declaration. This contract states what must be true of each case's selection, and the sealed run record carries the digest of the prompt that produced it, so a step-file edit that changes what the runner was asked shows up in the record instead of hiding inside a literal here.",
+    "cleanup": "Nothing is written. The runner reads a prompt from standard input and prints one JSON object to standard output; the workflow files and the eval data are read-only for the whole run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 25,
+    "maxWallClockMinutes": 25,
+    "maxCostUsd": "1.25"
+  },
+  "safetyLimits": [
+    "The runner receives a minimal environment: PATH, HOME, USER, LOGNAME, the locale and proxy variables, and the selected vendor credential variables. Nothing else is passed through.",
+    "No credential value appears in a prompt, in a selection, or in a result file.",
+    "The runner writes nothing. The workflow step files, resources/tea-index.csv, and the eval data are read-only for the whole run."
+  ],
+  "requiredEvidence": [
+    "The JSON object the runner printed on standard output for every case, in full.",
+    "The exit code of every case invocation.",
+    "The digest of the prompt each case was given, so a step-file edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 7,
+  "fixtureReset": null
+}

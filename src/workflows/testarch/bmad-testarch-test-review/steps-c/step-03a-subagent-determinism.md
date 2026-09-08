@@ -56,6 +56,7 @@ pinned severity, and its gate. This worker owns every `CRITICAL` row except C5.
 | H6  | Pact worker parallelism                   |     HIGH | Absolute      |
 | H7  | Pact pool isolation (≥2 pacttest files)   |     HIGH | Applicability |
 | H8  | Pact serialization defeated               |     HIGH | Absolute      |
+| H10 | Shape-only assertion                      |     HIGH | Absolute      |
 | L4  | Pact single-file pool advisory            |      LOW | Applicability |
 
 **Three scoring conflicts this replaces, all of which produced different numbers
@@ -74,6 +75,15 @@ every test that stamped a timestamp for a value nothing depended on. H2 gates it
 what the value governs: an expiry, token lifetime, TTL, or scheduling boundary,
 which is where a wall-clock race actually costs something. A timestamp used as
 opaque test data is not a violation. Say which case you found.
+
+**C3, C4 and H10 are three questions asked in order about the same test.** Does an
+assertion exist at all (C4)? Can it fail (C3)? Can the one that can fail tell a
+correct result from a wrong one (H10)? Only the last of those fires on
+`expect(typeof created.id).toBe('string')`: the call reached the system, the
+assertion would fail on a number, and every wrong string still passes. Emit one
+row per test here, the first of the three that fires, and say which value the
+test never constrained. `expect(true).toBe(true)` is C3 and not H10, because the
+literal was never a value the system produced.
 
 **Non-determinism with no registry row** (`Math.random()` without a seed, an
 unmocked external call, a filesystem write to a random path, an unordered database

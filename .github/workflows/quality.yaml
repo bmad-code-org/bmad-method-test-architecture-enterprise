@@ -140,6 +140,9 @@ jobs:
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
 
+      - name: Validate the eval suite manifest and result schema
+        run: npm run test:eval-schemas
+
       - name: Test changelog stamping
         run: npm run test:changelog
 

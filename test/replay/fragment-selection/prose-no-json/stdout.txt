@@ -1,0 +1,5 @@
+For this run I would load the data factory patterns, the component TDD guidance, the general test quality rules and the test healing patterns, since those four are the core set every atdd run loads regardless of stack.
+
+The repository is a Playwright project with playwright-utils installed, so on top of the core set I would add the selector resilience notes, the timing and debugging notes, and the playwright-utils mandate.
+
+I would leave the Maestro flows and the mobile test strategy alone, and the contract testing fragment as well, since there are no pact artifacts anywhere in the repository.

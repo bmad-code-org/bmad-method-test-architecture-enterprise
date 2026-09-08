@@ -1,0 +1,40 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the unmeasurable branch, and a REAL CAPTURE drives it. The",
+    "report declares ten violations in its Total Violations line and attributes none of them to a registry",
+    "row, so there is nothing to score recall against. Returning null is what keeps a moved report contract",
+    "from reading as 0 of 9 planted defects found, which is the most expensive way to be wrong about the",
+    "reviewer.",
+    "",
+    "The report stays at its original path under test/fixtures/test-review-cli/reports/, where the CLI",
+    "parser suite already reads it and where the formatters leave captured bytes alone. verdict.json",
+    "records why it is not copied here."
+  ],
+  "id": "unattributed-violations",
+  "suite": "test-review",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "real-capture",
+    "verdict": "verdict.json",
+    "report": "test/fixtures/test-review-cli/reports/wrapped-steps-flow.md",
+    "capturedBy": "a real agent run; test/README.md records that this fixture exists because a real run produced a frontmatter shape every hand-written fixture had missed"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The verdict declares 0 Critical, 0 High, 7 Medium and 3 Low, which sums to 10.",
+    "",
+    "The report has no findings sections at all, so no line matches the Location pattern and no line",
+    "matches the Row pattern. Zero findings are attributed.",
+    "",
+    "0 attributed is fewer than 10 declared, so findingsFromReport returns null and scoreVerdict returns",
+    "null with it. Nothing about the ground truth enters the arithmetic: the run is unscoreable before the",
+    "planted rows are ever consulted, which is why this result stays null even though the report names",
+    "files that are not in the eval corpus at all.",
+    "",
+    "The harness that owns this branch treats it as environment-parser and refuses to fold it into a score."
+  ],
+  "result": null
+}

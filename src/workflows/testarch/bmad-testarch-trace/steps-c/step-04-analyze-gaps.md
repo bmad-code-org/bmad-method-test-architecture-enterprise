@@ -128,8 +128,16 @@ const unitOnlyCoverage = traceabilityMatrix.filter((req) => req.coverage === 'UN
 
 **Prioritize gaps by risk:**
 
+The four buckets are defined in checklist.md's "Gap Analysis" section. Build them from that definition; do not restate it here.
+
 ```javascript
-const criticalGaps = uncoveredRequirements.filter((req) => req.priority === 'P0');
+// CRITICAL is every P0 criterion below FULL, which is wider than the other three buckets on purpose.
+// Gate Rule 1 requires P0 coverage at 100% and counts only FULL, so a P0 at PARTIAL, UNIT-ONLY, or
+// INTEGRATION-ONLY fails the gate by itself. Building this list from NONE alone produced a report
+// whose gate said FAIL while the gap section it feeds never named the criterion that caused it.
+const criticalGaps = traceabilityMatrix.filter((req) => req.priority === 'P0' && req.coverage !== 'FULL');
+// HIGH, MEDIUM, and LOW stay scoped to criteria with no coverage at all. A P1 to P3 criterion below
+// FULL is reported in partialCoverage or unitOnlyCoverage and already drags its priority percentage.
 const highGaps = uncoveredRequirements.filter((req) => req.priority === 'P1');
 const mediumGaps = uncoveredRequirements.filter((req) => req.priority === 'P2');
 const lowGaps = uncoveredRequirements.filter((req) => req.priority === 'P3');
@@ -479,6 +487,8 @@ const p3CoveragePercentage = safePct(p3Covered, p3Total);
 
 Persist the unique discovered tests in Phase 1 so Step 5 does not need to reconstruct counts from per-requirement mappings.
 
+Every count below is built from `req.tests`, and Step 3 section 1a admits only tests that establish part of their criterion. So `cases` and `by_level.*.tests` count the test cases this trace accepted as evidence, and a test whose name claims a criterion its assertions do not establish is absent from both. Those tests are in `rejectedEvidence`, which is carried into the matrix in section 5 and reported by Step 5.
+
 ```javascript
 // Declared locally so this section stays self-contained when workers run in parallel.
 const coverageEligibleStatuses = new Set(['FULL', 'PARTIAL', 'UNIT-ONLY', 'INTEGRATION-ONLY']);
@@ -634,6 +644,10 @@ const coverageMatrix = {
     low_gaps: lowGaps,
     partial_coverage_items: partialCoverage,
     unit_only_items: unitOnlyCoverage,
+    // From Step 3 section 1a: tests whose names claim a criterion their assertions do not establish.
+    // They carry no coverage and are counted in no test total; they are here so the report can show
+    // that each one was read and turned down.
+    rejected_evidence: runtime.getRejectedEvidence?.() || rejectedEvidence || progressRejectedEvidence || [],
   },
 
   coverage_heuristics: {

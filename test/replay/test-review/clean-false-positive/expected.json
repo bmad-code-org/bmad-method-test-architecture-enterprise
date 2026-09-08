@@ -1,0 +1,55 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the only one that can tell a scorer which keeps definite false",
+    "positives apart from unattributed findings from one that folds them together. It reports two findings",
+    "that match no plant, one against the clean control and one against a seeded file, and only the first",
+    "may lower the rate.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "clean-false-positive",
+  "suite": "test-review",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "report.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The report carries eleven findings: the nine planted rows at their firing lines, an M3 against",
+    "seeded/orders.service.spec.ts:36, and a second H10 against clean/profile.spec.ts:26. So reported is 11",
+    "and hits is 9, with criticalHits 4 of 4 and misses empty.",
+    "",
+    "M3 matches no plant, because ground truth plants no M3 anywhere. Its file is a seeded fixture, whose",
+    "planted array is non-empty, so it is not a clean path and it lands in unattributed: 1. That is the",
+    "case ground-truth.json's own history describes, where this plant was recorded as M3 until the H10 row",
+    "was added to the registry.",
+    "",
+    "The second H10 cannot match the planted H10, because matching requires the reported file to end with",
+    "the planted file's basename and clean/profile.spec.ts does not end with orders.service.spec.ts. Its",
+    "file IS the clean control, whose planted array is empty, so it lands in falsePositives: 1. Ground",
+    "truth lists exactly this shape under commonFalsePositives for the clean fixture.",
+    "",
+    "The counts the harness derives from these: recall 9/9 = 1.00, CRITICAL recall 4/4 = 1.00,",
+    "nonFalsePositiveRate (11 - 1)/11 = 0.9091 against a 0.80 floor. Folding the unattributed M3 into the",
+    "numerator would give (11 - 2)/11 = 0.8182 instead, which is the difference this case exists to pin.",
+    "",
+    "score and recommendation come from the verdict: 100 - 4x10 - 5x5 - 1x2 - 1x1 = 32, Block on Criticals."
+  ],
+  "result": {
+    "score": 32,
+    "recommendation": "Block",
+    "planted": 9,
+    "hits": 9,
+    "misses": [],
+    "criticalPlanted": 4,
+    "criticalHits": 4,
+    "reported": 11,
+    "falsePositives": 1,
+    "unattributed": 1
+  }
+}

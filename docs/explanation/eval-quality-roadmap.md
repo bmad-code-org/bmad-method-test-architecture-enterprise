@@ -13,11 +13,12 @@ The central constraint is simple: `npm run eval:all` runs every live eval that e
 
 TEA currently has three layers of self-validation:
 
-| Layer                           | What exists                                                                                | What it proves                                                                                                    |
-| ------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| Deterministic repository checks | `npm test`, including `test:criteria-fragments`, `test:enforce-hook`, and `test:eval-data` | Repository structure, rule traceability, hook decisions, and eval data remain internally consistent               |
-| Fragment-selection eval         | 24 cases across eight workflow skills, repeated twice by default                           | The agent selects required knowledge and avoids explicitly excluded knowledge                                     |
-| Full behavioral eval            | `test-review`, repeated three times against nine planted defects and one clean file        | The complete review can find known defects without flooding a clean file, and its score and verdict remain stable |
+| Layer                           | What exists                                                                                                        | What it proves                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Deterministic repository checks | `npm test`, including `test:criteria-fragments`, `test:enforce-hook`, `test:eval-data`, and `test:eval-trace-data` | Repository structure, rule traceability, hook decisions, and both eval corpora remain internally consistent       |
+| Fragment-selection eval         | 24 cases across eight workflow skills, repeated twice by default                                                   | The agent selects required knowledge and avoids explicitly excluded knowledge                                     |
+| Full behavioral eval            | `test-review`, repeated three times against nine planted defects and one clean file                                | The complete review can find known defects without flooding a clean file, and its score and verdict remain stable |
+| Full behavioral eval            | `trace`, repeated twice against a ten-criterion seeded set and a five-criterion clean set                          | Nothing yet. The harness and its corpus are in place and no model has run against them; see the last section      |
 
 The single live entrypoint is:
 
@@ -25,11 +26,11 @@ The single live entrypoint is:
 npm run eval:all -- --agent codex
 ```
 
-It runs 48 fragment selections and 3 complete reviews for one runner. The focused harnesses remain available for debugging.
+It runs 48 fragment selections, 3 complete reviews, and 4 complete traces for one runner. The focused harnesses remain available for debugging.
 
 ## Coverage Still Owed
 
-Fragment selection is a routing measurement. A passing routing suite does not establish that the workflow produced a correct final artifact. Nine of TEA's ten skills still need a full behavioral eval.
+Fragment selection is a routing measurement. A passing routing suite does not establish that the workflow produced a correct final artifact. Eight of TEA's ten skills still need a full behavioral eval.
 
 | Skill                       | Existing live coverage                      | Behavioral contract to add                                                                                                                                     |
 | --------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -42,7 +43,7 @@ Fragment selection is a routing measurement. A passing routing suite does not es
 | `bmad-testarch-nfr`         | Fragment selection                          | Ground every status in supplied evidence, cover all four NFR domains, return `CONCERNS` for unknown thresholds, and avoid unsupported `PASS` results           |
 | `bmad-testarch-test-design` | Fragment selection                          | Identify grounded risks, apply probability and impact consistently, assign priorities through stated judgment, and map each material risk to suitable coverage |
 | `bmad-testarch-test-review` | Fragment selection and full behavioral eval | Expand the corpus across languages and frameworks, add more clean controls, and measure drift across runner and model changes                                  |
-| `bmad-testarch-trace`       | Fragment selection                          | Map criteria to real evidence, calculate coverage correctly, expose gaps, enforce evidence and waiver rules, and derive the expected gate decision             |
+| `bmad-testarch-trace`       | Fragment selection and full behavioral eval | Run the suite against a real model, then add a set whose oracle is synthetic and a set that exercises a counted live record, both of which the corpus declines |
 
 Each behavioral eval needs both positive cases and clean or negative controls. Recall alone rewards a system that reports everything.
 
@@ -152,13 +153,13 @@ A skill can be marked behaviorally covered only when all of these are true:
 
 ## Next Implementation Slice
 
-The next agent should keep the slice narrow:
+Items 1, 2, 4 and half of 5 are done. What remains:
 
-1. Add the suite manifest and JSON result schema.
-2. Migrate fragment selection and `test-review` into the manifest without changing their current thresholds.
-3. Add deterministic replay tests for both result types.
-4. Express those two suites as the first `eval-quality` contracts once its public compiler and scorer are ready.
-5. Add the `trace` behavioral suite as the first new skill contract.
-6. Run the deterministic gate, then one runner smoke job, then the full existing `eval:all` baseline.
+1. ~~Add the suite manifest and JSON result schema.~~ `test/evals/suite-manifest.json` and `test/schema/eval-result.js`.
+2. ~~Migrate fragment selection and `test-review` into the manifest without changing their current thresholds.~~ Both registered, every threshold unchanged, and `npm run test:eval-schemas` fails when the manifest and the harness constants disagree.
+3. **Add deterministic replay tests for both result types.** Still owed. The scorers are exported and the result schema exists, so a replay harness reads a stored verdict and report, scores them with no model call, and compares against a recorded result. This is the item that makes a parser or scorer change prove it reproduces history.
+4. ~~Express those two suites as the first `eval-quality` contracts.~~ Nine contracts under `test/contracts/`. None compiles: `eval-quality`'s contract language can only describe a system under test that speaks HTTP. `test/contracts/README.md` carries the evidence, and closing it is that project's epic 9.
+5. ~~Add the `trace` behavioral suite.~~ `test/eval-trace.js` scores the corpus at `test/fixtures/trace-eval/` against thirteen declared thresholds, `trace` is registered in the manifest as behavioral, and its deferred entry is gone. Its per-criterion statuses come from the traceability matrix because `e2e-trace-summary.json` carries no per-criterion block at schema_version 0.3.0; adding one is the change that would let the whole suite score from a single JSON file.
+6. Run the deterministic gate, then one runner smoke job, then the full existing `eval:all` baseline. **No live run has happened.** Every path added here is exercised by the deterministic gate and by a stub runner only, and no accuracy, citation, or stability number has been produced against the trace corpus by a model.
 
 Gemini verification, Antigravity admission, manual export and import, and the remaining eight behavioral suites stay visible in the manifest as deferred work. A deferred entry must name its owner, missing evidence, and exit condition so `eval:all` cannot silently imply coverage that does not exist.

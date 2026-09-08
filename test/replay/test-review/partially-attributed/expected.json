@@ -1,0 +1,47 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the only one where the number of findings attributed to a",
+    "registry row is strictly between zero and the number of violations the verdict declares. Every other",
+    "case attributes all of them or none of them, so loosening findingsFromReport's guard from",
+    "`findings.length < declared` to `findings.length === 0 && declared > 0` reproduces the whole corpus",
+    "without it. A real run that attributed seven of eight would then be scored as 7 of 9 recall instead",
+    "of refused, which is the exact confusion the guard exists to prevent.",
+    "",
+    "The report is CONSTRUCTED, from misses-two's report with one more Medium counted. The CLI parser",
+    "permits that: assertFindingCountsAgree binds Critical and High exactly in both directions and bounds",
+    "Medium and Low in one direction only, because summarizing a counted Medium in prose is the shape live",
+    "reports take."
+  ],
+  "id": "partially-attributed",
+  "suite": "test-review",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "report.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The verdict declares 4 Critical, 3 High, 1 Medium and 0 Low, which sums to 8.",
+    "",
+    "The report carries seven finding blocks, each with a Location line followed by a Row line: C1, C3, C4,",
+    "C5, H1, H3 and H4. The eighth violation is the Medium, which the report counts in its Total Violations",
+    "line and describes in the naming-notes prose without a Location or a Row. Seven findings are",
+    "attributed.",
+    "",
+    "7 is fewer than 8, so findingsFromReport returns null and scoreVerdict returns null with it. The seven",
+    "attributed rows are never matched against the plants, so recall is not 7 of 9; it does not exist.",
+    "",
+    "That is the whole point of the case. Those seven rows are real hits against real plants, and a scorer",
+    "that scored them anyway would publish 0.7778 recall for a run whose report contract had moved. The",
+    "shortfall is one violation, the smallest a report can have, and the rule is a comparison rather than a",
+    "tolerance, so one is enough.",
+    "",
+    "The verdict's own numbers come from cli/lib/parse-report.js reading this report:",
+    "100 - 4x10 - 3x5 - 1x2 - 0x1 = 43, and any Critical at all forces Block."
+  ],
+  "result": null
+}

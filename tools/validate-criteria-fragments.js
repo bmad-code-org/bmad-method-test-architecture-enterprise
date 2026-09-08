@@ -100,6 +100,13 @@ const MANIFEST = {
       { fragment: 'test-quality.md', anchor: 'happy path never enters the catch' },
     ],
   },
+  H10: {
+    severity: 'HIGH',
+    teaches: [
+      { fragment: 'test-quality.md', anchor: 'every wrong id of the right type passes' },
+      { fragment: 'test-quality.md', anchor: 'the same shape wearing different names' },
+    ],
+  },
   H2: {
     severity: 'HIGH',
     teaches: [

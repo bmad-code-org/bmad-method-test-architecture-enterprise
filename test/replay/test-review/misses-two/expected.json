@@ -1,0 +1,56 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the only one whose recall is not an endpoint. 7/9 sits above",
+    "the 0.70 floor and below 1, so a change that tightens matching drops it under the floor and a change",
+    "that loosens it rounds it up to the ceiling. Either direction is visible here and nowhere else.",
+    "",
+    "The two rows it misses are both non-CRITICAL on purpose, which pins the second half of the point:",
+    "overall recall can move while CRITICAL recall stays at its own threshold of 1.00.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "misses-two",
+  "suite": "test-review",
+  "scorerVersion": 1,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "report.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The report cites seven of the nine planted rows at their firing lines: C1, C3, C4, C5, H1, H3 and H4.",
+    "L1 (seeded/checkout.spec.ts:19) and H10 (seeded/orders.service.spec.ts:39) are absent, so hits is 7",
+    "and misses holds those two, in the order ground truth lists them: checkout's plants come first, and",
+    "L1 is third within that file.",
+    "",
+    "All four C rows are among the seven, so criticalHits is 4 of 4.",
+    "",
+    "Every finding matched a plant and nothing was reported against the clean control, so falsePositives",
+    "and unattributed are both 0 and reported is 7.",
+    "",
+    "The counts the harness derives from these: recall 7/9 = 0.7778, above the 0.70 floor and short of the",
+    "ceiling. CRITICAL recall 4/4 = 1.00, exactly its threshold. nonFalsePositiveRate (7 - 0)/7 = 1.00.",
+    "",
+    "The trailing prose block under Recommendations carries neither a Location nor a Row, so it is not a",
+    "finding and reported stays 7. That is deliberate: it keeps a prose paragraph from inflating the",
+    "denominator of the rate.",
+    "",
+    "score and recommendation come from the verdict: 100 - 4x10 - 3x5 - 0x2 - 0x1 = 45, Block on Criticals."
+  ],
+  "result": {
+    "score": 45,
+    "recommendation": "Block",
+    "planted": 9,
+    "hits": 7,
+    "misses": ["L1 seeded/checkout.spec.ts:19", "H10 seeded/orders.service.spec.ts:39"],
+    "criticalPlanted": 4,
+    "criticalHits": 4,
+    "reported": 7,
+    "falsePositives": 0,
+    "unattributed": 0
+  }
+}

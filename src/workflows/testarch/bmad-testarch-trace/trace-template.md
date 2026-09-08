@@ -63,6 +63,9 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-testarch-
   - Missing: {MISSING_SCENARIO_1}
   - Missing: {MISSING_SCENARIO_2}
 
+- **Considered and rejected:** (if any test claims this criterion without establishing it)
+  - `{TEST_ID}` - {TEST_FILE}:{LINE}: {WHY_ITS_ASSERTIONS_DO_NOT_ESTABLISH_THE_CRITERION}
+
 - **Recommendation:** {RECOMMENDATION_TEXT}
 
 ---
@@ -104,6 +107,8 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-testarch-
 ### Gap Analysis
 
 #### Critical Gaps (BLOCKER) ❌
+
+Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 requires P0 coverage at 100% and counts only FULL, so each entry here fails the gate on its own.
 
 {CRITICAL_GAP_COUNT} gaps found. **Do not release until resolved.**
 
@@ -437,6 +442,31 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-testarch-
 
 ---
 
+### Waiver Register Review
+
+Read from `{waiver_register_input}`. Every waiver filed against this gate is listed, whether or not it holds up. No waiver on this list changed the decision above: a waiver is a human override applied after the fact, and the workflow never derives one.
+
+**Waivers filed:** {WAIVER_COUNT} ({VALID_COUNT} valid, {INVALID_COUNT} invalid)
+
+| ID          | Covers         | Priority   | Valid | Failed checks      |
+| ----------- | -------------- | ---------- | ----- | ------------------ |
+| {WAIVER_ID} | {CRITERION_ID} | {PRIORITY} | ✅/❌ | {FAILED_CHECK_IDS} |
+
+Check ids are defined in the "Waiver Scenarios" section of `checklist.md`. A gap covered by a waiver stays in the gap analysis and stays in every coverage percentage.
+
+**Example:**
+
+| ID  | Covers | Priority | Valid | Failed checks                            |
+| --- | ------ | -------- | ----- | ---------------------------------------- |
+| W-4 | AC-12  | P2       | ✅    | none                                     |
+| W-5 | AC-6   | P1       | ❌    | `expiry_present`, `remediation_due_date` |
+
+> W-5 states no expiry date and its remediation plan carries no due date, so it is an open-ended acceptance of a P1 gap. AC-6 remains in the high-priority gap list.
+
+Delete this section when no waiver register exists.
+
+---
+
 ### {Section: Delete if not applicable}
 
 #### Residual Risks (For CONCERNS or WAIVED)
@@ -456,6 +486,8 @@ List unresolved P1/P2 issues that don't block release but should be tracked:
 ---
 
 #### Waiver Details (For WAIVED only)
+
+The fields below are the waiver contract: the `contract_complete` check in `checklist.md`'s "Waiver Scenarios" section requires every one of them. That section holds the validity rules; this one holds the fields.
 
 **Original Decision**: ❌ FAIL
 

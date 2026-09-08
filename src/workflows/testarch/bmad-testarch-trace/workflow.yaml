@@ -8,6 +8,7 @@ config_source: "{project-root}/_bmad/tea/config.yaml"
 output_folder: "{config_source}:output_folder"
 test_artifacts: "{config_source}:test_artifacts"
 user_name: "{config_source}:user_name"
+project_name: "{config_source}:project_name" # Emitted as `repo` in e2e-trace-summary.json and gate-decision.json
 communication_language: "{config_source}:communication_language"
 document_output_language: "{config_source}:document_output_language"
 date: system-generated
@@ -24,6 +25,7 @@ variables:
   test_dir: "{project-root}/tests" # Root test directory
   source_dir: "{project-root}" # Source code directory (customize if needed, e.g., {project-root}/src or {project-root}/lib)
   live_results_input: "{test_artifacts}/live-verification-results.json" # Optional input: recorded runtime verification consumed as `live` level evidence
+  waiver_register_input: "{test_artifacts}/gate-waivers.md" # Optional input: human-authored waiver register, read and validated by step-05 and never applied to the decision
 
   # Workflow behavior
   coverage_levels: "e2e,api,component,unit,live" # Which test levels to trace; drop `live` to ignore recorded runtime verification, except under collection_mode: runtime_manifest, which implies the live level and reads the results file regardless
@@ -42,7 +44,7 @@ e2e_trace_summary_output: "{test_artifacts}/e2e-trace-summary.json" # Machine-re
 gate_decision_output: "{test_artifacts}/gate-decision.json" # Optional downstream gate signal for CI/CD enforcement
 
 # e2e-trace-summary.json schema (emitted by step-05 at workflow completion)
-# schema_version: "0.2.0"   (0.2.0 added the live_evidence block and the by_level.live bucket)
+# schema_version: "0.3.0"   (0.2.0 added the live_evidence block and the by_level.live bucket; 0.3.0 added the waivers block)
 # snapshot_at: ISO timestamp
 # repo / collection_mode / collection_status / inventory_basis / gate_basis / source_sha
 # target: { type, id, label } / decision_mode / evaluator / confidence
@@ -55,7 +57,11 @@ gate_decision_output: "{test_artifacts}/gate-decision.json" # Optional downstrea
 # live_evidence: { present, results_file, freshness, recorded_source_sha, current_source_sha, producer,
 #                  counted, stale, unverifiable, failed, contradicted, blocked, skipped, unmatched, invalid, requirements_live_only }
 # gate_criteria: { p0_coverage_required/actual/status, p1_coverage_target/minimum/actual/status, overall_coverage_minimum/actual/status } (gate-eligible runs only)
+# waivers: { register, read_error, filed, valid, invalid, entries[ { id, title, covers, priority, valid, failed_checks[] } ] }
+#          (present only when {waiver_register_input} exists; a waiver never changes gate_status)
 # blockers: [ { id, severity, reason, test_file?, test_title? } ]
+# rejected_evidence: [ { requirement_id, test_id, file, line, level, title, reason } ]
+#          (tests whose names claim a criterion their assertions do not establish; always present, may be empty)
 # recommendations: [ { priority, action, requirements[] } ]
 # links: { trace_report_path, trace_report_url, artifact_url, journey_evidence_url }
 # gate-decision.json carries its own schema_version "0.1.0" and a slim subset of the above.
@@ -73,6 +79,13 @@ gate_decision_output: "{test_artifacts}/gate-decision.json" # Optional downstrea
 # recognizes, status `pass`, and a source_sha matching the commit under trace.
 # Every other outcome (stale, unverifiable, fail, contradicted, blocked, skipped, unmatched, invalid)
 # is recorded as a blocker and counts as no coverage.
+
+# gate-waivers.md (READ by step-05 from {waiver_register_input}; this workflow never writes it)
+# A human-authored markdown register of waiver requests filed against a gate: one `## {ID}: {title}` heading
+# per waiver, carrying the fields the "Waiver Details" section of trace-template.md names.
+# Step-05 section 2b validates each entry against the Waiver Scenarios checks in checklist.md and reports
+# every entry with its validity. A waiver is a human override applied after the fact; step-05 Rule 6 keeps
+# the derived decision the one Rules 1 to 5 produced whatever the register says.
 
 # Required tools
 required_tools:

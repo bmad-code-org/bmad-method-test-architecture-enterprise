@@ -50,6 +50,14 @@
  * also stating the requirement in build-prompt.js, per the same discipline that
  * governs everything else in this file.
  *
+ * The verdict also carries `findings`: one entry per finding block documented
+ * under "## Critical Issues (Must Fix)" and "## Recommendations (Should Fix)",
+ * each with its severity, criteria-registry row, file, and line. It exists because
+ * `violations` is four severity COUNTS, so every consumer that needed to know WHICH
+ * defects a review reported had to re-parse the markdown report with its own
+ * regexes. The machine-readable artifact was not machine-readable enough to score,
+ * which left the prose report as the real contract. See extractFindings.
+ *
  * Fenced code blocks (``` ... ```) are stripped before scanning so an example
  * report quoted inside the real one can never spoof a verdict.
  */
@@ -103,6 +111,90 @@ const FINAL_GRADE_PATTERNS = [
   /^([ \t]*Grade[ \t]*:[ \t]*)[A-F]([ \t]*\r?)$/,
   /^([ \t]*\|[ \t]*Grade[ \t]*\|[ \t]*)[A-F]([ \t]*\|?[ \t]*\r?)$/i,
 ];
+
+/**
+ * Every key parseReport's verdict object can carry, with the JSON type of each.
+ *
+ * `always` is what a parseable report always produces; `conditional` is what
+ * appears only when the run supplies it or when the agent's own numbers had to
+ * be corrected. The split matters because a contract's `requiredKeys` and
+ * `permittedKeys` are exactly those two sets.
+ *
+ * parseReport builds its return value by projecting through this constant, so a
+ * field cannot enter the payload without being declared here.
+ * tools/generate-contracts.js derives test-review.contract.json's response
+ * descriptor from it, through the VERDICT_KEYS composition in cli/test-review.js.
+ * That makes the descriptor a reading of this code. The transcription it replaced
+ * had already drifted: the CLI could emit twenty-two keys where the contract on
+ * disk permitted fifteen. This is the idiom tools/validate-eval-schemas.js uses to
+ * check a manifest's declared thresholds against the THRESHOLDS its harness
+ * applies.
+ *
+ * Type names are eval-quality's JSON type enum. `null` means "declared, type not
+ * stated", which is the spelling for a key whose value has no single JSON type.
+ */
+const PARSED_VERDICT_KEYS = {
+  always: {
+    recommendation: 'string',
+    qualityScore: 'number',
+    violations: 'object',
+    findings: 'array',
+    reviewedFiles: 'array',
+    contextBasis: 'string',
+    contextFiles: 'array',
+    contextWaiversApplied: 'number',
+    keyStrengths: 'array',
+    keyWeaknesses: 'array',
+  },
+  conditional: {
+    conventionBaseline: 'object',
+    reportedQualityScore: 'number',
+    reportedRecommendation: 'string',
+  },
+};
+
+/**
+ * A programmer-error throw, carrying no REPORT_UNPARSEABLE code.
+ *
+ * These guards fire on a mismatch between the code and its own key declaration,
+ * never on report content, so routing them through the parse-failure exit code
+ * would report a CLI defect as a bad report.
+ */
+function undeclaredKey(message) {
+  throw new Error(`parse-report: ${message}`);
+}
+
+/**
+ * Build the verdict object from PARSED_VERDICT_KEYS.always, in that order.
+ *
+ * The projection runs in both directions: a declared key with no computed value
+ * throws, and a computed value with no declaration throws. Either one alone would
+ * let the declaration and the payload drift, which is the defect this constant
+ * exists to close.
+ */
+function projectAlwaysKeys(values) {
+  const parsed = {};
+  for (const key of Object.keys(PARSED_VERDICT_KEYS.always)) {
+    if (!Object.hasOwn(values, key)) {
+      undeclaredKey(`PARSED_VERDICT_KEYS declares "${key}" and parseReport computed no value for it`);
+    }
+    parsed[key] = values[key];
+  }
+  for (const key of Object.keys(values)) {
+    if (!Object.hasOwn(PARSED_VERDICT_KEYS.always, key)) {
+      undeclaredKey(`parseReport computed "${key}", which PARSED_VERDICT_KEYS.always does not declare`);
+    }
+  }
+  return parsed;
+}
+
+/** Attach one of the conditional keys, refusing any name the constant does not declare. */
+function setConditionalKey(parsed, key, value) {
+  if (!Object.hasOwn(PARSED_VERDICT_KEYS.conditional, key)) {
+    undeclaredKey(`parseReport set "${key}", which PARSED_VERDICT_KEYS.conditional does not declare`);
+  }
+  parsed[key] = value;
+}
 
 function unparseable(message) {
   const error = new Error(`${message}; a parse failure is never a silent pass.`);
@@ -656,8 +748,15 @@ const FINDING_SEVERITY_LINE = /^\*\*Severity\*\*:\s*P([0-3])\s*\(([A-Za-z]+)\)/m
 // Captures whatever token follows, valid-looking or not, so a fabricated ID (e.g.
 // "Z9") is reported as "not a real row" rather than misread as "no Row line at all".
 const FINDING_ROW_LINE = /^\*\*Row\*\*:\s*(\S+)/m;
+// The template prints "**Location**: `{filename}:{line_number}`". The bold-colon
+// variant and a dropped pair of backticks are the two shapes live runs drift into,
+// and the value itself is read leniently (see parseFindingLocation).
+const FINDING_LOCATION_LINE = /^\*\*Location:?\*\*:?[ \t]*([^\r\n]+?)[ \t]*$/m;
 const ROW_ID_SHAPE = /^[CHML]\d+$/;
 const PRIORITY_TO_SEVERITY = { 0: 'Critical', 1: 'High', 2: 'Medium', 3: 'Low' };
+// The title is display data for a human reading the verdict, so it is bounded the
+// same way keyStrengths is: a runaway heading must not bloat the stored payload.
+const MAX_FINDING_TITLE_LENGTH = 200;
 
 /** Split a section's text into its "### N. Title" finding blocks (empty when none). */
 function splitFindingBlocks(sectionText) {
@@ -673,110 +772,265 @@ function splitFindingBlocks(sectionText) {
     .map((body) => `### ${body}`);
 }
 
-/** Parse one finding block's declared Severity and Row citation. */
-function parseFinding(block) {
+/** The finding block's heading text, minus its positional "N." prefix, bounded. */
+function findingTitle(block) {
+  const heading = block.slice('### '.length).split('\n')[0];
+  const title = stripWrappers(heading.trim())
+    .replace(/^\d+[.)]\s*/, '')
+    .trim();
+  return title.length > MAX_FINDING_TITLE_LENGTH ? `${title.slice(0, MAX_FINDING_TITLE_LENGTH)}...` : title;
+}
+
+/**
+ * Split a "**Location**:" value into a file path and a line number.
+ *
+ * Best effort, and it never throws. Location is the finding field live reports
+ * reshape most (a line range, a parenthesized line, a bare path with no line), and
+ * a shape this cannot read must not take an otherwise complete review down with it.
+ * Each half comes back null on its own, so a consumer can tell "the report named no
+ * line" from "the report said line 0".
+ *
+ * @param {string|null} rawValue - The captured "**Location**:" value, or null.
+ * @returns {{file: string|null, line: number|null}}
+ */
+function parseFindingLocation(rawValue) {
+  if (rawValue === null) {
+    return { file: null, line: null };
+  }
+  const value = stripWrappers(rawValue).replaceAll('\\', '/');
+  // A token has to look like a path to be published as one, so a "**Location**: TBD"
+  // reaches the consumer as no location rather than as a file nobody can open.
+  const asPath = (token) => {
+    const cleaned = stripWrappers(token);
+    return /[./]/.test(cleaned) ? cleaned : null;
+  };
+  const pathWithLine = /^([^\s:]+):(\d+)/.exec(value);
+  if (pathWithLine) {
+    return { file: asPath(pathWithLine[1]), line: Number.parseInt(pathWithLine[2], 10) };
+  }
+  // Backticks are stripped again here: emphasis that wraps only the path survives
+  // the whole-value strip above, as in "`tests/x.spec.ts` (line 12)".
+  const pathOnly = /^([^\s,;()]+)/.exec(value);
+  const spelledLine = /\blines?\s*:?\s*(\d+)/i.exec(value);
+  return {
+    file: pathOnly ? asPath(pathOnly[1]) : null,
+    line: spelledLine ? Number.parseInt(spelledLine[1], 10) : null,
+  };
+}
+
+/**
+ * Resolve and validate a finding's criteria-registry row, or throw.
+ *
+ * The registry row is the finding's identity: severity is read from it, and it is
+ * what makes one reviewer's finding comparable to another's. A row that names an id
+ * criteria-registry.md does not carry stays an error, and so does a declared
+ * "**Severity**:" that disagrees with the row it cites.
+ *
+ * @returns {{row: string, severity: string|null}} The severity is the registry's,
+ *   falling back to the declared value only when no registry map was supplied.
+ */
+function requireRow(rowMatch, sectionLabel, declaredSeverity, rawSeverity, registryRowSeverities) {
+  if (!rowMatch) {
+    unparseable(
+      `A finding under "## ${sectionLabel}" has no "**Row**:" line; every finding there must cite the criteria-registry ` +
+        'row that produced it, per the report contract',
+    );
+  }
+  // Wrapping emphasis is stripped because a backticked "**Row**: `C1`" is a
+  // rendering choice, and rendering has never been the contract in this file.
+  const row = stripWrappers(rowMatch[1]);
+  // Contract-free shape check: a token that isn't even <letter><digits> shaped is
+  // fabricated regardless of whether registry data is available to check further.
+  if (!ROW_ID_SHAPE.test(row)) {
+    unparseable(
+      `A finding under "## ${sectionLabel}" cites Row "${row}", which is not a criteria-registry row ID ` +
+        '(expected a shape like "C1", "H5", "M3", "L2")',
+    );
+  }
+  if (!registryRowSeverities) {
+    return { row, severity: declaredSeverity };
+  }
+  const rowSeverity = registryRowSeverities[row];
+  if (!rowSeverity) {
+    unparseable(`A finding under "## ${sectionLabel}" cites Row "${row}", which is not a row in criteria-registry.md`);
+  }
+  // A finding that declares nothing is judged by its row alone, which is the rule
+  // criteria-registry.md states. A finding that declares something else is rejected
+  // rather than corrected, so relabelling a Critical row as a Low fails the report
+  // instead of quietly publishing the registry value beside contradicting prose.
+  if (rawSeverity !== null && rowSeverity !== declaredSeverity) {
+    unparseable(
+      `A finding under "## ${sectionLabel}" cites Row "${row}" (registry severity ${rowSeverity}) but declares Severity ` +
+        `${declaredSeverity ?? rawSeverity ?? '(unrecognized)'}; severity is read from the row, never chosen`,
+    );
+  }
+  return { row, severity: rowSeverity };
+}
+
+/**
+ * Parse one "### N. Title" block into a finding entry, or null when it is prose.
+ *
+ * @param {string} block - The block text, "### " prefix included.
+ * @param {string} sectionLabel - The level-2 heading the block was found under.
+ * @param {object|null} registryRowSeverities - See extractFindings.
+ * @returns {object|null}
+ */
+function parseFindingBlock(block, sectionLabel, registryRowSeverities) {
   const severityMatch = block.match(FINDING_SEVERITY_LINE);
-  let severity = null;
+  const rowMatch = block.match(FINDING_ROW_LINE);
+  const isCriticalSection = sectionLabel === CRITICAL_ISSUES_HEADING;
+
+  // "## Critical Issues (Must Fix)" is findings-only by contract, so every block
+  // there is one. The same heading level under "## Recommendations (Should Fix)"
+  // also carries prose (naming notes, a closing paragraph), and a block with
+  // neither finding line is that prose. Skipping it keeps a real report parsing;
+  // a paragraph has no registry row to cite.
+  if (!isCriticalSection && !severityMatch && !rowMatch) {
+    return null;
+  }
+
+  let declaredSeverity = null;
   if (severityMatch) {
     const word = severityMatch[2];
     const canonical = SEVERITY_ENUM.find((candidate) => candidate.toLowerCase() === word.toLowerCase());
     // Only trust a P-number/word pair that agree with each other (per the template,
     // P0 is always "(Critical)", never "(High)" attached to a P0 by mistake).
-    severity = canonical && PRIORITY_TO_SEVERITY[severityMatch[1]] === canonical ? canonical : null;
+    declaredSeverity = canonical && PRIORITY_TO_SEVERITY[severityMatch[1]] === canonical ? canonical : null;
   }
-  return {
-    severity,
-    rawSeverity: severityMatch ? severityMatch[0].replace(/^\*\*Severity\*\*:\s*/, '') : null,
-    rowMatch: block.match(FINDING_ROW_LINE),
-  };
+  const rawSeverity = severityMatch ? severityMatch[0].replace(/^\*\*Severity\*\*:\s*/, '') : null;
+
+  if (isCriticalSection && declaredSeverity !== 'Critical') {
+    unparseable(
+      `A finding under "## ${CRITICAL_ISSUES_HEADING}" declares Severity ${rawSeverity ?? '(missing)'} instead of ` +
+        `P0 (Critical); "## ${CRITICAL_ISSUES_HEADING}" is Critical-only by contract`,
+    );
+  }
+
+  const { row, severity } = requireRow(rowMatch, sectionLabel, declaredSeverity, rawSeverity, registryRowSeverities);
+  const locationMatch = block.match(FINDING_LOCATION_LINE);
+  // A finding with no readable "**Location**:" is kept, with a null file and line.
+  // Dropping it would make the verdict document fewer findings than the report and
+  // than its own summary line counted, so a formatting slip would read downstream as
+  // a defect nobody found. The entry still counts toward its severity; only the
+  // place to look is missing, and the null says so.
+  const { file, line } = parseFindingLocation(locationMatch ? locationMatch[1] : null);
+
+  return { severity, row, file, line, section: sectionLabel, title: findingTitle(block) };
 }
 
 /**
- * Bind every finding actually documented under "## Critical Issues (Must Fix)" and
- * "## Recommendations (Should Fix)" to the report's own "**Total Violations**:" line,
- * and every cited "**Row**:" to a real criteria-registry.md row with the severity the
- * finding claims. Scoped to Critical and High only — the two severities that actually
- * change the CI verdict (`deriveRecommendation`: any Critical → Block, any High →
- * Request Changes); Medium/Low only ever add "Approve with Comments" regardless of
- * count, so a miscount there doesn't flip a merge decision the way this does.
+ * Extract every finding documented under the two finding sections, once.
+ *
+ * This is the single parse of the finding blocks: the severity-count cross-check
+ * below and the verdict's own `findings` array both read this list, so the verdict
+ * can never publish something other than what the report was gated on.
+ *
+ * Findings are never deduplicated here. Identity — `(file, line, row)`, with
+ * file-level rows dropping the line — is applied by the workflow's own aggregation
+ * step (steps-c/step-03f-aggregate-scores.md §2), which runs before the report
+ * exists, so this parser reads an already-deduplicated list. Collapsing duplicates a
+ * second time would leave the verdict documenting fewer findings than the report it
+ * came from, and would hide a run whose aggregation never deduplicated at all.
+ *
+ * @param {string} text - Fence-stripped report text, so a finding block quoted
+ *   inside a fenced example report can never reach the verdict.
+ * @param {object|null} registryRowSeverities - cli/lib/registry-rows.js's row→severity
+ *   map, or null when unavailable (e.g. a bare test-fixture skill root with no
+ *   criteria-registry.md) — row IDs are still required and shape-validated, but the
+ *   "does this row really exist, and is its real severity what the finding claims"
+ *   cross-check is skipped without it, and severity falls back to the declared value.
+ * @returns {Array<{severity: string|null, row: string, file: string|null, line: number|null,
+ *   section: string, title: string}>}
+ */
+function extractFindings(text, registryRowSeverities) {
+  const findings = [];
+  for (const heading of [CRITICAL_ISSUES_HEADING, RECOMMENDATIONS_HEADING]) {
+    for (const block of splitFindingBlocks(extractSection(text, heading))) {
+      const finding = parseFindingBlock(block, heading, registryRowSeverities);
+      if (finding !== null) {
+        findings.push(finding);
+      }
+    }
+  }
+  return findings;
+}
+
+/** Documented findings per severity; one with no resolvable severity counts in none. */
+function findingCountsBySeverity(findings) {
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const finding of findings) {
+    if (finding.severity) {
+      counts[finding.severity.toLowerCase()] += 1;
+    }
+  }
+  return counts;
+}
+
+/**
+ * Bind the extracted findings to the report's own "**Total Violations**:" line.
  *
  * Why this exists: nothing here was ever checked before. A report could — and, in the
  * defect this fixes, would — document a real, row-cited Critical finding in prose
  * while its "**Total Violations**:" line claimed zero, and the CLI computed Approve
  * at 100/100 from the summary line alone, never reading the finding it sat beside.
  *
- * @param {string} text - Fence-stripped report text.
- * @param {{critical: number, high: number}} violations - Parsed Total Violations counts.
- * @param {object|null} registryRowSeverities - cli/lib/registry-rows.js's row→severity
- *   map, or null when unavailable (e.g. a bare test-fixture skill root with no
- *   criteria-registry.md) — row IDs are still required and internally validated, but
- *   the "does this row really exist, and is its real severity what the finding claims"
- *   cross-check is skipped without it.
+ * Critical and High are exact in both directions. They are the two severities that
+ * change the CI verdict (`deriveRecommendation`: any Critical → Block, any High →
+ * Request Changes), and build-prompt.js states the equality to the agent verbatim.
+ *
+ * Medium and Low are bounded in one direction only: a report may document fewer than
+ * it counted, and may never document more. The asymmetry is deliberate. Summarizing
+ * a counted Medium in prose is the shape live reports actually take. Every fixture
+ * in test/fixtures/test-review-cli/reports/ that declares a Medium or Low count
+ * writes no block for it, and the prompt has never forbidden that, so rejecting it
+ * would fail substantively complete reviews over a presentation choice. Over-
+ * documentation is a different thing: the ledger deducted for fewer findings than
+ * the report describes, so the published score is higher than its own findings
+ * support. That is the same class of defect as a miscounted Critical, and it is
+ * rejected the same way.
+ *
+ * @param {Array} findings - extractFindings' result.
+ * @param {{critical: number, high: number, medium: number, low: number}} violations
  */
-function verifyFindingSeverityCounts(text, violations, registryRowSeverities) {
-  function findingsIn(heading) {
-    return splitFindingBlocks(extractSection(text, heading)).map(parseFinding);
-  }
-
-  function requireRow(finding, sectionLabel) {
-    if (!finding.rowMatch) {
-      unparseable(
-        `A finding under "## ${sectionLabel}" has no "**Row**:" line; every finding there must cite the criteria-registry ` +
-          'row that produced it, per the report contract',
-      );
-    }
-    const row = finding.rowMatch[1];
-    // Contract-free shape check: a token that isn't even <letter><digits> shaped is
-    // fabricated regardless of whether registry data is available to check further.
-    if (!ROW_ID_SHAPE.test(row)) {
-      unparseable(
-        `A finding under "## ${sectionLabel}" cites Row "${row}", which is not a criteria-registry row ID ` +
-          '(expected a shape like "C1", "H5", "M3", "L2")',
-      );
-    }
-    if (!registryRowSeverities) {
-      return row;
-    }
-    const rowSeverity = registryRowSeverities[row];
-    if (!rowSeverity) {
-      unparseable(`A finding under "## ${sectionLabel}" cites Row "${row}", which is not a row in criteria-registry.md`);
-    }
-    if (rowSeverity !== finding.severity) {
-      unparseable(
-        `A finding under "## ${sectionLabel}" cites Row "${row}" (registry severity ${rowSeverity}) but declares Severity ` +
-          `${finding.severity ?? finding.rawSeverity ?? '(unrecognized)'}; severity is read from the row, never chosen`,
-      );
-    }
-    return row;
-  }
-
-  const criticalFindings = findingsIn(CRITICAL_ISSUES_HEADING);
-  for (const finding of criticalFindings) {
-    if (finding.severity !== 'Critical') {
-      unparseable(
-        `A finding under "## ${CRITICAL_ISSUES_HEADING}" declares Severity ${finding.rawSeverity ?? '(missing)'} instead of ` +
-          `P0 (Critical); "## ${CRITICAL_ISSUES_HEADING}" is Critical-only by contract`,
-      );
-    }
-    requireRow(finding, CRITICAL_ISSUES_HEADING);
-  }
-  if (criticalFindings.length !== violations.critical) {
+function assertFindingCountsAgree(findings, violations) {
+  const documented = findingCountsBySeverity(findings);
+  if (documented.critical !== violations.critical) {
     unparseable(
       `Report "**Total Violations**:" declares ${violations.critical} Critical, but "## ${CRITICAL_ISSUES_HEADING}" documents ` +
-        `${criticalFindings.length} finding(s); the two must agree exactly`,
+        `${documented.critical} finding(s); the two must agree exactly`,
     );
   }
-
-  const highFindings = findingsIn(RECOMMENDATIONS_HEADING).filter((finding) => finding.severity === 'High');
-  for (const finding of highFindings) {
-    requireRow(finding, RECOMMENDATIONS_HEADING);
-  }
-  if (highFindings.length !== violations.high) {
+  if (documented.high !== violations.high) {
     unparseable(
       `Report "**Total Violations**:" declares ${violations.high} High, but "## ${RECOMMENDATIONS_HEADING}" documents ` +
-        `${highFindings.length} High-severity finding(s); the two must agree exactly`,
+        `${documented.high} High-severity finding(s); the two must agree exactly`,
     );
   }
+  for (const level of ['Medium', 'Low']) {
+    const key = level.toLowerCase();
+    if (documented[key] > violations[key]) {
+      unparseable(
+        `Report "**Total Violations**:" declares ${violations[key]} ${level}, but "## ${RECOMMENDATIONS_HEADING}" documents ` +
+          `${documented[key]} ${level}-severity finding(s); a report may summarize findings it counted, never count fewer ` +
+          'than it documents, which deducts less than its own findings require',
+      );
+    }
+  }
+}
+
+/**
+ * Extract every documented finding and bind it to the report's summary counts.
+ *
+ * @param {string} text - Fence-stripped report text.
+ * @param {{critical: number, high: number, medium: number, low: number}} violations -
+ *   Parsed Total Violations counts.
+ * @param {object|null} registryRowSeverities - See extractFindings.
+ * @returns {Array} The extracted findings, for the verdict payload.
+ */
+function verifyFindingSeverityCounts(text, violations, registryRowSeverities) {
+  const findings = extractFindings(text, registryRowSeverities);
+  assertFindingCountsAgree(findings, violations);
+  return findings;
 }
 
 /**
@@ -914,9 +1168,8 @@ function normalizeReportScore(reportText, qualityScore) {
  *
  * @param {string} reportText - Full test-review.md contents.
  * @param {object} [runContract] - Exact reviewed/context evidence supplied by the runner.
- * @returns {{recommendation: string, qualityScore: number, reportedQualityScore?: number, violations: object,
- *   reviewedFiles: string[], contextBasis: string, contextFiles: string[],
- *   contextWaiversApplied: number}}
+ * @returns {object} The verdict object, whose keys are exactly PARSED_VERDICT_KEYS.always
+ *   plus whichever of PARSED_VERDICT_KEYS.conditional this run produced.
  * @throws {Error} With code REPORT_UNPARSEABLE on any missing/invalid element.
  */
 function parseReport(reportText, runContract = {}) {
@@ -947,7 +1200,7 @@ function parseReport(reportText, runContract = {}) {
         'critical violations with an approve recommendation is an inconsistent verdict',
     );
   }
-  verifyFindingSeverityCounts(text, violations, runContract.registryRowSeverities ?? null);
+  const findings = verifyFindingSeverityCounts(text, violations, runContract.registryRowSeverities ?? null);
 
   const qualityScore = deriveQualityScore(reportText, violations);
 
@@ -987,32 +1240,33 @@ function parseReport(reportText, runContract = {}) {
   // keep what the agent said so the substitution is visible rather than silent.
   const derivedRecommendation = deriveRecommendation(violations, qualityScore);
 
-  const parsed = {
+  const parsed = projectAlwaysKeys({
     recommendation: derivedRecommendation,
     qualityScore,
     violations,
+    findings,
     reviewedFiles,
     contextBasis,
     contextFiles,
     contextWaiversApplied,
     keyStrengths,
     keyWeaknesses,
-  };
+  });
   // Surfaced (not just used to gate) so a stored verdict JSON says what this run
   // actually measured, the same reasoning as attaching agent/model: a fabricated
   // baseline is invisible to a human reviewer unless the ground truth travels with
   // the verdict, not just the pass/fail outcome of checking against it.
   if (runContract.conventionBaseline) {
-    parsed.conventionBaseline = runContract.conventionBaseline;
+    setConditionalKey(parsed, 'conventionBaseline', runContract.conventionBaseline);
   }
   if (
     reportedQualityScore !== qualityScore ||
     (reportedQualityGrade !== undefined && reportedQualityGrade !== gradeForScore(qualityScore))
   ) {
-    parsed.reportedQualityScore = reportedQualityScore;
+    setConditionalKey(parsed, 'reportedQualityScore', reportedQualityScore);
   }
   if (derivedRecommendation !== executive) {
-    parsed.reportedRecommendation = executive;
+    setConditionalKey(parsed, 'reportedRecommendation', executive);
   }
   return parsed;
 }
@@ -1074,8 +1328,10 @@ module.exports = {
   deriveRecommendation,
   verdictFor,
   scoreFails,
+  PARSED_VERDICT_KEYS,
   CONTEXT_BASIS_ENUM,
   verifyConventionBaseline,
   parseConventionCitations,
   verifyFindingSeverityCounts,
+  extractFindings,
 };

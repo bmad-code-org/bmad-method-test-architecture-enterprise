@@ -31,7 +31,7 @@ it('filters by tenant', () => {
   expect(repository.findMany).toHaveBeenCalledWith({ where: { tenantId: 'tenant-a' } })
 })
 
-// M3 + a shallow assertion: asserts the shape of the result instead of its value,
+// H10: asserts the shape of the result instead of its value,
 // so any string passes.
 it('creates an order', async () => {
   repository.create.mockResolvedValue({ id: 'o-2', total: 1999, currency: 'USD' })

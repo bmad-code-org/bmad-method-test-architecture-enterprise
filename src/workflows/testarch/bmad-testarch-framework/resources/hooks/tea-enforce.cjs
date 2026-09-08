@@ -727,6 +727,7 @@ const DEFERRED = {
   C6: 'Reachability of an assertion depends on control flow and on whether a callback is ever awaited.',
   H3: 'Distinguishing a conditional assertion from a legitimately guarded one requires knowing whether the guarded UI is genuinely optional.',
   H4: 'Whether module-level state is reset depends on what the hooks actually do, not on their presence.',
+  H10: 'Deciding that no assertion in a test constrains a value requires reading every assertion in the test together, and the three exemptions turn on whether the value is predictable at all.',
   M3: 'Counting subjects rather than expect calls is a semantic judgment.',
   M4: 'Requires counting tests and recognizing grouping constructs across frameworks and custom wrappers.',
   M6: 'A promise-returning call is only a defect when it is not awaited AND its effect is asserted; both need type information.',

@@ -1,0 +1,374 @@
+{
+  "schemaVersion": 4,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-fragment-selection-test-review",
+  "sourceSpecDigest": "sha256:57114ed5f2c2d178216dbf558bb13144401f09dbb711dfae0b004135b82327f4",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "Reviewing a Maestro flow needs the two mobile fragments and drops one core fragment. The case asserts: \"maestro-flows.md and mobile-test-strategy.md are required to score rows C7, M8, H9 and L8 at all. Without them a flow is reviewed against browser predicates that cannot match it, which is how a flow previously scored 100 by matching nothing.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for test-review-maestro-flow-set names all eight mandated fragments and names none of selector-resilience.md, playwright-utils-mandate.md, network-first.md, or intercept-network-call.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-test-review/steps-c/step-01-load-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "flow-scored-against-predicates-that-cannot-match"
+        }
+      ],
+      "oracles": ["O-001", "O-002"]
+    },
+    {
+      "id": "B-002",
+      "description": "Reviewing a JUnit suite keeps the whole core set and opens neither mandate. The case asserts: \"Both library flags default true and a Maven repo has no JavaScript manifest, so neither package can be installed and neither mandate loads. This matters more here than anywhere else: those mandates supply the firing predicates for registry rows M9, L9 and M10, so loading them against a Java suite would arm rows that cannot apply to it.\"",
+      "severity": "critical",
+      "observableSuccessCriterion": "The selection returned for test-review-java-suite names all seven core review fragments, selector-resilience.md included, and names none of playwright-utils-mandate.md, pactjs-utils-mandate.md, maestro-flows.md, or mobile-test-strategy.md.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-workflow-step",
+          "id": "bmad-testarch-test-review/steps-c/step-01-load-context.md"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "mandate-opened-without-the-package"
+        }
+      ],
+      "oracles": ["O-003", "O-004"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The core review set with selector-resilience removed, plus the two mobile fragments the mobile registry rows need.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for test-review-maestro-flow-set, against the 8 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/test-review-maestro-flow-set/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/test-review-maestro-flow-set/stdout/fragments"
+          },
+          {
+            "literal": [
+              "test-quality.md",
+              "data-factories.md",
+              "test-levels-framework.md",
+              "selective-testing.md",
+              "test-healing-patterns.md",
+              "timing-debugging.md",
+              "maestro-flows.md",
+              "mobile-test-strategy.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "The 4 fragments the step file excludes for test-review-maestro-flow-set. Maestro addresses elements by native accessibility id rather than DOM selector, so selector-resilience.md is the one core fragment the step file removes, and the repository has no @playwright/test and no playwright-utils.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for test-review-maestro-flow-set, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of selector-resilience.md, playwright-utils-mandate.md, network-first.md, intercept-network-call.md.",
+        "evidenceTargets": ["/interactions/test-review-maestro-flow-set/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/test-review-maestro-flow-set/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["selector-resilience.md", "playwright-utils-mandate.md", "network-first.md", "intercept-network-call.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "The full core review set. The mobile branch is gated on the detected stack or on a Maestro flow being in the review set, and neither holds, so selector-resilience stays in the core set rather than being skipped.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The fragment list returned for test-review-java-suite, against the 7 fragments the step file mandates for it.",
+        "negativeDomain": "A selection that omits any mandated fragment.",
+        "evidenceTargets": ["/interactions/test-review-java-suite/stdout/fragments"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/test-review-java-suite/stdout/fragments"
+          },
+          {
+            "literal": [
+              "test-quality.md",
+              "data-factories.md",
+              "test-levels-framework.md",
+              "selective-testing.md",
+              "test-healing-patterns.md",
+              "selector-resilience.md",
+              "timing-debugging.md"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "The 4 fragments the step file excludes for test-review-java-suite. A Maven repository has no JavaScript manifest, so neither package can be installed and neither mandate loads, and neither the detected stack nor the review set is mobile.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "Every fragment returned for test-review-java-suite, searched for any the step file excludes.",
+        "negativeDomain": "A selection carrying any of playwright-utils-mandate.md, pactjs-utils-mandate.md, maestro-flows.md, mobile-test-strategy.md.",
+        "evidenceTargets": ["/interactions/test-review-java-suite/stdout/fragments"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/test-review-java-suite/stdout/fragments"
+            },
+            "predicate": {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/"
+                },
+                {
+                  "literal": ["playwright-utils-mandate.md", "pactjs-utils-mandate.md", "maestro-flows.md", "mobile-test-strategy.md"]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-fragment-selection-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "select-fragments",
+          "invocation": {
+            "executable": "tea-fragment-selection-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": false,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [],
+              "permittedKeys": ["model"],
+              "types": {
+                "model": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "OPENAI_API_KEY": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [],
+          "descriptorChannel": {
+            "kind": "stream",
+            "channel": "stdout"
+          },
+          "responseDescriptor": {
+            "requiredKeys": ["fragments"],
+            "permittedKeys": ["fragments"],
+            "types": {
+              "fragments": "array"
+            },
+            "successIndicator": "/fragments",
+            "channelRoles": {
+              "/fragments": "collection"
+            },
+            "collectionLocations": [
+              {
+                "pointer": "/fragments",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 59
+                }
+              }
+            ]
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "selection-follows-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-test-review-maestro-flow-set",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case test-review-maestro-flow-set: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              },
+              {
+                "legId": "witness-test-review-java-suite",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case test-review-java-suite: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-test-review-maestro-flow-set/stdout/fragments"
+                    },
+                    {
+                      "pointer": "/interactions/witness-test-review-java-suite/stdout/fragments"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "test-review-maestro-flow-set",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "test-review-java-suite",
+      "operationId": "select-fragments",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": null,
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Every case runs against the checked-in bmad-testarch-test-review workflow: its step file or files named in requirementLinks, and its resources/tea-index.csv. The harness assembles one prompt per case from those files plus the case's task, repository facts, and TEA config, and writes it to the runner's standard input. The prompt bytes are evidence rather than declaration. This contract states what must be true of each case's selection, and the sealed run record carries the digest of the prompt that produced it, so a step-file edit that changes what the runner was asked shows up in the record instead of hiding inside a literal here.",
+    "cleanup": "Nothing is written. The runner reads a prompt from standard input and prints one JSON object to standard output; the workflow files and the eval data are read-only for the whole run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 10,
+    "maxWallClockMinutes": 10,
+    "maxCostUsd": "0.50"
+  },
+  "safetyLimits": [
+    "The runner receives a minimal environment: PATH, HOME, USER, LOGNAME, the locale and proxy variables, and the selected vendor credential variables. Nothing else is passed through.",
+    "No credential value appears in a prompt, in a selection, or in a result file.",
+    "The runner writes nothing. The workflow step files, resources/tea-index.csv, and the eval data are read-only for the whole run."
+  ],
+  "requiredEvidence": [
+    "The JSON object the runner printed on standard output for every case, in full.",
+    "The exit code of every case invocation.",
+    "The digest of the prompt each case was given, so a step-file edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 4,
+  "fixtureReset": null
+}
