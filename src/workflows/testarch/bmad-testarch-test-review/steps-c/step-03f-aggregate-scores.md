@@ -167,10 +167,23 @@ const bonuses = {
 const bonusTotal = Object.values(bonuses).reduce((sum, value) => sum + value, 0);
 ```
 
-**Final score**, clamped to the 0-100 range the report contract requires:
+**Raw deduction score**, clamped to the 0-100 range the report contract requires:
 
 ```javascript
-const roundedScore = Math.max(0, Math.min(100, 100 - deductions + bonusTotal));
+const rawScore = Math.max(0, Math.min(100, 100 - deductions + bonusTotal));
+```
+
+**Effective score**, capped by the highest finding severity so the score and verdict
+cannot contradict each other:
+
+```javascript
+const severityCaps = { CRITICAL: 69, HIGH: 79, MEDIUM: 89, LOW: 99 };
+const highestSeverity = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].find((severity) => violationSummary[severity] > 0);
+const scoreCap = highestSeverity ? severityCaps[highestSeverity] : 100;
+const roundedScore = Math.min(rawScore, scoreCap);
+const scoreOverrideRule = highestSeverity
+  ? `Highest severity ${highestSeverity} caps effective score at ${scoreCap}: min(raw deduction score ${rawScore}, ${scoreCap}) = ${roundedScore}.`
+  : `No severity cap: no findings; effective score equals raw deduction score ${rawScore}.`;
 ```
 
 **Determine grade.** These five letters are the complete scale. Never emit a
@@ -214,6 +227,16 @@ const deriveRecommendation = ({ CRITICAL, HIGH, MEDIUM, LOW }, score) => {
 };
 
 const recommendation = deriveRecommendation(violationSummary, roundedScore);
+const verdictRule =
+  violationSummary.CRITICAL > 0
+    ? `Critical > 0 => Block (${violationSummary.CRITICAL} Critical).`
+    : violationSummary.HIGH > 0
+      ? `Critical = 0 and High > 0 => Request Changes (${violationSummary.HIGH} High).`
+      : roundedScore < 70
+        ? `Critical = 0, High = 0, and effective score < 70 => Request Changes (${roundedScore}).`
+        : violationSummary.MEDIUM + violationSummary.LOW > 0
+          ? 'No Critical or High, effective score >= 70, and findings remain => Approve with Comments.'
+          : 'No findings => Approve.';
 ```
 
 Why these boundaries:
@@ -248,9 +271,15 @@ broken report; recompute rather than publishing the mismatch.
 
 ---
 
-### 4. Prioritize Recommendations
+### 4. Separate Scored Weaknesses From Advisory Observations
 
-**Extract recommendations from all dimensions:**
+`Key Weaknesses` is another view of `dedupedViolations`, not a free-form list.
+Each item must carry its registry row so the human summary can be checked against
+the scored finding blocks.
+
+Subagent recommendations that do not correspond to a deduplicated violation are
+unscored ideas. Keep useful ones as advisory observations. Drop empty strings and
+literal `n/a`; do not promote them into weaknesses.
 
 ```javascript
 const allRecommendations = dimensions.flatMap((dim) =>
@@ -261,9 +290,28 @@ const allRecommendations = dimensions.flatMap((dim) =>
   })),
 );
 
-// Sort by impact (HIGH first)
-const prioritizedRecommendations = allRecommendations.sort((a, b) => (a.impact === 'HIGH' ? -1 : 1)).slice(0, 10); // Top 10 recommendations
+const keyWeaknesses = dedupedViolations.slice(0, 5).map((violation) => ({
+  row: violation.row,
+  summary: violation.description ?? violation.category,
+}));
+
+const scoredRecommendationTexts = new Set(
+  dedupedViolations.flatMap((violation) => [violation.recommendation, violation.description]).filter(Boolean),
+);
+const advisoryObservations = allRecommendations
+  .map(({ recommendation }) =>
+    (typeof recommendation === 'string' ? recommendation : (recommendation?.recommendation ?? recommendation?.description ?? '')).trim(),
+  )
+  .filter((recommendation) => recommendation && !/^n\s*\/?\s*a[.!]?$/i.test(recommendation))
+  .filter((recommendation) => !scoredRecommendationTexts.has(recommendation))
+  .filter((recommendation, index, all) => all.indexOf(recommendation) === index)
+  .slice(0, 10);
 ```
+
+This text comparison is only a routing aid. It never changes
+`dedupedViolations`, the violation counts, the score, or the recommendation. If
+it is unclear whether an idea corresponds to a violation, keep the scored
+finding under Key Weaknesses and omit the duplicate advisory wording.
 
 ---
 
@@ -273,12 +321,16 @@ const prioritizedRecommendations = allRecommendations.sort((a, b) => (a.impact =
 
 ```javascript
 const reviewSummary = {
+  raw_score: rawScore,
+  score_cap: scoreCap,
+  score_override_rule: scoreOverrideRule,
   overall_score: roundedScore,
   overall_grade: overallGrade,
   quality_assessment: getQualityAssessment(roundedScore),
   // Computed in 3b from the deduped violation counts. Publish this value in both
   // report sections verbatim; it is not a starting point for a judgment call.
   recommendation,
+  verdict_rule: verdictRule,
   // Carried through so the report can cite adoption counts on Convention rows and
   // say `PASS (n/a)` where a convention is absent rather than a bare WARN.
   convention_baseline: subagentContext.convention_baseline,
@@ -307,7 +359,10 @@ const reviewSummary = {
 
   high_severity_violations: highSeverity,
 
-  top_10_recommendations: prioritizedRecommendations,
+  // Human-readable Executive Summary collections. Key weaknesses are scored;
+  // advisory observations are useful but never enter the ledger.
+  key_weaknesses: keyWeaknesses,
+  advisory_observations: advisoryObservations,
 
   subagent_execution: 'PARALLEL (4 quality dimensions)',
   performance_gain: '~60% faster than sequential',

@@ -196,9 +196,23 @@ jobs:
                     `[Review job artifacts](${artifactsUrl})`,
                   ].join("\n");
                 } else {
-                  const counts = verdict.violations ?? {};
+                  const counts = verdict.gatingViolations ?? verdict.violations ?? {};
                   const violations = `${counts.critical ?? 0} Critical / ${counts.high ?? 0} High / ${counts.medium ?? 0} Medium / ${counts.low ?? 0} Low`;
-                  const weaknesses = (verdict.keyWeaknesses ?? []).slice(0, 3);
+                  const findings = Array.isArray(verdict.findings) ? verdict.findings : [];
+                  const findingByRow = new Map(findings.filter((finding) => finding?.row).map((finding) => [finding.row, finding]));
+                  const displayItems = (items) =>
+                    (Array.isArray(items) ? items : [])
+                      .map((item) => String(item).trim())
+                      .filter((item) => item && !/^n\s*\/?\s*a[.!]?$/i.test(item));
+                  const weaknesses = displayItems(verdict.keyWeaknesses)
+                    .map((item) => {
+                      const row = item.match(/^\[([A-Z]\d+)\](?:\s+|$)/)?.[1];
+                      const finding = findingByRow.get(row);
+                      return finding ? `[${row}] ${finding.title}` : null;
+                    })
+                    .filter(Boolean)
+                    .slice(0, 3);
+                  const advisories = displayItems(verdict.advisoryObservations).slice(0, 3);
                   // Named, not just counted: a finding that cites "line 200" is
                   // unattributable on a PR touching more than one test file.
                   const reviewed = Array.isArray(verdict.reviewedFiles) ? verdict.reviewedFiles : [];
@@ -214,9 +228,17 @@ jobs:
                     marker,
                     `## TEA Test Review: ${verdict.recommendation}`,
                     "",
-                    `- **Quality score**: ${verdict.qualityScore ?? "n/a"}/100`,
+                    `- **Gate mode**: ${verdict.gateOn ?? "all"}`,
+                    `- **Gating quality score**: ${verdict.gatingQualityScore ?? verdict.qualityScore ?? "n/a"}/100`,
+                    `- **Full-review effective score**: ${verdict.qualityScore ?? "n/a"}/100`,
+                    `- **Raw deduction score**: ${verdict.rawQualityScore ?? "n/a"}/100`,
+                    `- **Full-review score rule**: ${verdict.scoreOverrideRule ?? "n/a"}`,
                     `- **Recommendation**: ${verdict.recommendation}`,
-                    `- **Violations**: ${violations}`,
+                    ...(verdict.allFindingsRecommendation
+                      ? [`- **Full-review recommendation**: ${verdict.allFindingsRecommendation}`]
+                      : []),
+                    `- **Gating violations**: ${violations}`,
+                    `- **Verdict rule**: ${verdict.verdictRule ?? "n/a"}`,
                     `- **Reviewed files**: ${reviewed.length}`,
                     ...reviewed.slice(0, 10).map((f) => `  - ${markdownCodeSpan(f)}`),
                     ...(reviewed.length > 10 ? [`  - … and ${reviewed.length - 10} more`] : []),
@@ -230,8 +252,25 @@ jobs:
                   if (reviewer.length > 0) {
                     lines.push(`- **Reviewer**: ${reviewer.join(" / ")}`);
                   }
+                  const provenance = verdict.reviewProvenance ?? {};
+                  const shown = (value) => markdownCodeSpan(value ?? "unavailable");
+                  lines.push(
+                    `- **TeA CLI / skill rubric**: ${shown(provenance.teaCliVersion)} / ${shown(provenance.skillRubricVersion)}`,
+                    `- **Model**: ${shown(provenance.modelIdentifier)}`,
+                    `- **Base / head SHA**: ${shown(provenance.baseSha)} / ${shown(provenance.headSha)}`,
+                    `- **Gate mode**: ${shown(provenance.gateMode)}`,
+                  );
+                  if (provenance.triggerComment) {
+                    lines.push(`- **Trigger comment**: ${shown(provenance.triggerComment)}`);
+                  }
+                  if (provenance.workflowRun) {
+                    lines.push(`- **Workflow run**: ${shown(provenance.workflowRun)}`);
+                  }
                   if (weaknesses.length > 0) {
                     lines.push("", "**Key weaknesses**:", ...weaknesses.map((w) => `- ${w}`));
+                  }
+                  if (advisories.length > 0) {
+                    lines.push("", "**Advisory observations**:", ...advisories.map((item) => `- ${item}`));
                   }
                   lines.push("");
 

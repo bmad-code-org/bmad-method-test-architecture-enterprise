@@ -18,76 +18,130 @@
   },
   "findings": [
     {
+      "criterion_id": "C1",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 36,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C1",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 36,
       "section": "Critical Issues (Must Fix)",
-      "title": "The tenant-boundary case is disabled"
+      "title": "The tenant-boundary case is disabled",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C3",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 16,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C3",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 16,
       "section": "Critical Issues (Must Fix)",
-      "title": "The configuration test asserts nothing that can differ"
+      "title": "The configuration test asserts nothing that can differ",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C4",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 21,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C4",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 21,
       "section": "Critical Issues (Must Fix)",
-      "title": "The tenant listing test has no assertion in its body"
+      "title": "The tenant listing test has no assertion in its body",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C5",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 28,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C5",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 28,
       "section": "Critical Issues (Must Fix)",
-      "title": "The tenant filter test proves only that the mock records calls"
+      "title": "The tenant filter test proves only that the mock records calls",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H1",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 12,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H1",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 12,
       "section": "Recommendations (Should Fix)",
-      "title": "The order-placing test orders its steps with a timer"
+      "title": "The order-placing test orders its steps with a timer",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H3",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 26,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H3",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 26,
       "section": "Recommendations (Should Fix)",
-      "title": "The history test may assert nothing at all"
+      "title": "The history test may assert nothing at all",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H4",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 9,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H4",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 9,
       "section": "Recommendations (Should Fix)",
-      "title": "Module-level order id is shared across the suite"
+      "title": "Module-level order id is shared across the suite",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H10",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 36,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H10",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 36,
       "section": "Recommendations (Should Fix)",
-      "title": "The creation test constrains the type of the id, never its value"
+      "title": "The creation test constrains the type of the id, never its value",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "L1",
       "severity": "Low",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 12,
+      "provenance": "unknown",
+      "deduction": 1,
+      "verdict_impact": true,
       "row": "L1",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 12,
       "section": "Recommendations (Should Fix)",
-      "title": "The order-placing test locates its submit control by CSS id"
+      "title": "The order-placing test locates its submit control by CSS id",
+      "changed_line_evidence": null
     }
   ],
   "reviewedFiles": [
@@ -99,5 +153,6 @@
   "contextFiles": [],
   "contextWaiversApplied": 0,
   "keyStrengths": [],
-  "keyWeaknesses": []
+  "keyWeaknesses": [],
+  "advisoryObservations": []
 }

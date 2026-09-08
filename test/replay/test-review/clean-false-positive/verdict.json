@@ -18,92 +18,158 @@
   },
   "findings": [
     {
+      "criterion_id": "C1",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 38,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C1",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 38,
       "section": "Critical Issues (Must Fix)",
-      "title": "The tenant-boundary test is skipped with no reason"
+      "title": "The tenant-boundary test is skipped with no reason",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C3",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 17,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C3",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 17,
       "section": "Critical Issues (Must Fix)",
-      "title": "Tautological assertion that can never fail"
+      "title": "Tautological assertion that can never fail",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C4",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 23,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C4",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 23,
       "section": "Critical Issues (Must Fix)",
-      "title": "Test body has no assertion"
+      "title": "Test body has no assertion",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C5",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 31,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C5",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 31,
       "section": "Critical Issues (Must Fix)",
-      "title": "Asserts a mock the same test configured"
+      "title": "Asserts a mock the same test configured",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H1",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 16,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H1",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 16,
       "section": "Recommendations (Should Fix)",
-      "title": "Hard wait used to order two steps"
+      "title": "Hard wait used to order two steps",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H3",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 31,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H3",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 31,
       "section": "Recommendations (Should Fix)",
-      "title": "Conditional decides whether anything is asserted"
+      "title": "Conditional decides whether anything is asserted",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H4",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 22,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H4",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 22,
       "section": "Recommendations (Should Fix)",
-      "title": "Module-level mutable state written in a test with no reset"
+      "title": "Module-level mutable state written in a test with no reset",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H10",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 39,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H10",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 39,
       "section": "Recommendations (Should Fix)",
-      "title": "Shape-only assertion on a value the service produced"
+      "title": "Shape-only assertion on a value the service produced",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H10",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+      "line": 26,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H10",
       "file": "test/fixtures/test-review-eval/clean/profile.spec.ts",
-      "line": 26,
       "section": "Recommendations (Should Fix)",
-      "title": "Heading assertion constrains presence rather than the returned name"
+      "title": "Heading assertion constrains presence rather than the returned name",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "M3",
       "severity": "Medium",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 36,
+      "provenance": "unknown",
+      "deduction": 2,
+      "verdict_impact": true,
       "row": "M3",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 36,
       "section": "Recommendations (Should Fix)",
-      "title": "Creation test mixes the repository call and the returned payload"
+      "title": "Creation test mixes the repository call and the returned payload",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "L1",
       "severity": "Low",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 19,
+      "provenance": "unknown",
+      "deduction": 1,
+      "verdict_impact": true,
       "row": "L1",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 19,
       "section": "Recommendations (Should Fix)",
-      "title": "CSS id locator where a role locator is available"
+      "title": "CSS id locator where a role locator is available",
+      "changed_line_evidence": null
     }
   ],
   "reviewedFiles": [
@@ -115,5 +181,6 @@
   "contextFiles": [],
   "contextWaiversApplied": 0,
   "keyStrengths": [],
-  "keyWeaknesses": []
+  "keyWeaknesses": [],
+  "advisoryObservations": []
 }

@@ -51,12 +51,15 @@ const {
   parseReport,
   normalizeReportScore,
   deriveRecommendation,
+  effectiveScoreFor,
   verdictFor,
   scoreFails,
+  rawScoreForViolations,
   PARSED_VERDICT_KEYS,
   CONTEXT_BASIS_ENUM,
   verifyFindingSeverityCounts,
   extractFindings,
+  FINDING_KEYS,
 } = require('../cli/lib/parse-report');
 const { VERDICT_KEYS, SKIP_KEYS } = require('../cli/test-review');
 const {
@@ -91,6 +94,8 @@ const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable
 const { runAgent, buildMinimalEnv } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS } = require('../cli/lib/resolve-tea-config');
+const { changedRanges, classifyFinding, applyFindingProvenance, subtractCounts } = require('../cli/lib/diff-evidence');
+const { TEA_CLI_VERSION, REVIEW_PROVENANCE_KEYS } = require('../cli/lib/review-provenance');
 const { parseArgs: parseReviewEvalArgs, missingCredential } = require('./eval-test-review');
 const { parseArgs: parseFragmentEvalArgs } = require('./eval-fragment-selection');
 const { parseArgs: parseAllEvalArgs, buildInvocations, aggregateExitCodes, runFailureClass } = require('./eval-all');
@@ -246,7 +251,11 @@ async function runTests() {
         'approve fixture: nothing normalized, so the report agreed with its own findings',
         JSON.stringify(approve),
       );
-      assert(approve.qualityScore === 93, 'approve fixture: quality score is 93', JSON.stringify(approve));
+      assert(
+        approve.rawQualityScore === 93 && approve.qualityScore === 89,
+        'approve fixture: raw score 93 is capped to effective score 89 by Medium severity',
+        JSON.stringify(approve),
+      );
       assert(
         approve.violations &&
           approve.violations.critical === 0 &&
@@ -293,14 +302,18 @@ async function runTests() {
         JSON.stringify(enriched.keyStrengths),
       );
       assert(
-        Array.isArray(enriched.keyWeaknesses) && enriched.keyWeaknesses.length === 3,
-        'key-strengths-weaknesses fixture: Key Weaknesses bullets parsed',
+        Array.isArray(enriched.keyWeaknesses) &&
+          enriched.keyWeaknesses.length === 1 &&
+          enriched.keyWeaknesses[0] === '[H1] Fixture stub High finding 1',
+        'key-strengths-weaknesses fixture: only a row-backed scored finding is a Key Weakness',
         JSON.stringify(enriched.keyWeaknesses),
       );
       assert(
-        enriched.keyWeaknesses[0] === 'Missing explicit test IDs on two test cases',
-        'key-strengths-weaknesses fixture: first Key Weaknesses bullet text matches',
-        JSON.stringify(enriched.keyWeaknesses),
+        Array.isArray(enriched.advisoryObservations) &&
+          enriched.advisoryObservations.length === 1 &&
+          enriched.advisoryObservations[0] === 'Consider extracting the setup into a shared helper',
+        'key-strengths-weaknesses fixture: advisory text is separate and empty/n/a items are suppressed',
+        JSON.stringify(enriched.advisoryObservations),
       );
     } catch (error) {
       assert(false, 'key-strengths-weaknesses fixture parses', error.message);
@@ -338,6 +351,28 @@ async function runTests() {
       assert(block.violations && block.violations.critical === 2, 'block fixture: critical violations parsed', JSON.stringify(block));
     } catch (error) {
       assert(false, 'block fixture parses', error.message);
+    }
+
+    try {
+      const source = readFixture('reports', 'critical-raw-100.md');
+      const blocked = parseReport(source);
+      const normalized = normalizeReportScore(source, blocked);
+      assert(
+        blocked.recommendation === 'Block' && blocked.rawQualityScore === 100 && blocked.qualityScore === 69 && blocked.scoreCap === 69,
+        'regression: Block preserves raw 100 but cannot publish 100/100 as its effective score',
+        JSON.stringify(blocked),
+      );
+      assert(
+        blocked.verdictRule === 'Critical > 0 => Block (1 Critical).' &&
+          normalized.includes('**Quality Score**: 69/100 (D - Critical Issues)') &&
+          normalized.includes('**Raw Deduction Score**: 100/100') &&
+          normalized.includes('**Verdict Rule**: Critical > 0 => Block (1 Critical).') &&
+          !normalized.includes('Grade:                   A'),
+        'regression: a Critical finding cannot produce grade A and the report names the override rule',
+        normalized,
+      );
+    } catch (error) {
+      assert(false, 'critical raw-100 regression fixture parses and normalizes', error.message);
     }
 
     try {
@@ -411,6 +446,41 @@ async function runTests() {
         const actual = deriveRecommendation(violations, score);
         assert(actual === expected, `deriveRecommendation: ${description}`, `got ${actual}, expected ${expected}`);
       }
+
+      const capCases = [
+        [counts(1, 2, 3, 4), 100, 69, 'Critical is the highest severity'],
+        [counts(0, 1, 3, 4), 100, 79, 'High is the highest severity'],
+        [counts(0, 0, 1, 4), 100, 89, 'Medium is the highest severity'],
+        [counts(0, 0, 0, 1), 100, 99, 'Low is the highest severity'],
+        [counts(0, 0, 0, 0), 100, 100, 'no findings apply no cap'],
+      ];
+      for (const [violations, rawScore, expected, description] of capCases) {
+        const actual = effectiveScoreFor(rawScore, violations).qualityScore;
+        assert(actual === expected, `effectiveScoreFor: ${description}`, `got ${actual}, expected ${expected}`);
+      }
+
+      // Regression: rawScoreForViolations backs the PR delta gate's score. Its
+      // one hard case is a full-review rawQualityScore that hit the floor
+      // clamp, which erases how negative the true unclamped score was.
+      const rawScoreCases = [
+        [95, counts(0, 1, 0, 0), counts(0, 0, 0, 0), 100, 'unclamped: exact bonus recovered, all deductions removed'],
+        [100, counts(0, 0, 0, 3), counts(0, 0, 0, 1), 100, 'ceiling-clamped: an inexact recovered bonus still clamps to 100'],
+        [0, counts(0, 0, 70, 0), counts(0, 0, 5, 0), 90, 'floor-clamped: assumes bonus 0, the smallest legal value'],
+        [0, counts(12, 0, 0, 0), counts(10, 0, 0, 0), 0, 'floor-clamped: a reduced count can still floor at 0'],
+      ];
+      for (const [rawQualityScore, fullViolations, targetViolations, expected, description] of rawScoreCases) {
+        const actual = rawScoreForViolations(rawQualityScore, fullViolations, targetViolations);
+        assert(actual === expected, `rawScoreForViolations: ${description}`, `got ${actual}, expected ${expected}`);
+      }
+      // The pre-fix reconstruction added the excluded findings' deduction
+      // straight onto the clamped rawQualityScore: min(100, 0 + 130) = 100.
+      // The fix above returns 90 for the same inputs; this pins that it never
+      // regresses back to the inflated, over-lenient value.
+      assert(
+        rawScoreForViolations(0, counts(0, 0, 70, 0), counts(0, 0, 5, 0)) !== 100,
+        'rawScoreForViolations: does not reproduce the pre-fix over-clamped reconstruction',
+        String(rawScoreForViolations(0, counts(0, 0, 70, 0), counts(0, 0, 5, 0))),
+      );
     }
 
     // Regression: a live claude -p run wrote stepsCompleted as a wrapped YAML
@@ -470,16 +540,17 @@ async function runTests() {
       const source = readFixture('reports', 'score-mismatch.md');
       const corrected = parseReport(source);
       assert(
-        corrected.qualityScore === 91 && corrected.reportedQualityScore === 86,
-        'score-mismatch fixture: CLI derives 91/A and preserves the agent-reported 86/B score as metadata',
+        corrected.rawQualityScore === 91 && corrected.qualityScore === 89 && corrected.reportedQualityScore === 86,
+        'score-mismatch fixture: CLI preserves raw 91, caps it to 89, and preserves the agent-reported 86',
         JSON.stringify(corrected),
       );
-      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      const normalized = normalizeReportScore(source, corrected);
       assert(
         normalized.includes('**Quality Score**: 42/100 (F - Example only)') &&
-          normalized.includes('**Quality Score**: 91/100 (A)') &&
-          normalized.includes('Final Score:             91/100') &&
-          normalized.includes('Grade:                   A'),
+          normalized.includes('**Quality Score**: 89/100 (B)') &&
+          normalized.includes('**Raw Deduction Score**: 91/100') &&
+          normalized.includes('Raw Deduction Score:') &&
+          normalized.includes('Grade:                   B'),
         'score-mismatch fixture: every active score and grade field normalizes while an earlier fenced example stays untouched',
         normalized,
       );
@@ -496,15 +567,18 @@ async function runTests() {
       const source = readFixture('reports', 'table-breakdown.md');
       const corrected = parseReport(source);
       assert(
-        corrected.qualityScore === 90 && corrected.reportedQualityScore === 85 && corrected.recommendation === 'Request Changes',
-        'table-breakdown fixture: a table-rendered ledger derives 90/A and preserves the agent-reported 85',
+        corrected.rawQualityScore === 90 &&
+          corrected.qualityScore === 79 &&
+          corrected.reportedQualityScore === 85 &&
+          corrected.recommendation === 'Request Changes',
+        'table-breakdown fixture: a table-rendered ledger preserves raw 90, caps it to 79, and preserves reported 85',
         JSON.stringify(corrected),
       );
-      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      const normalized = normalizeReportScore(source, corrected);
       assert(
-        normalized.includes('**Quality Score**: 90/100 (A)') &&
-          normalized.includes('| Final score | 90 |') &&
-          normalized.includes('| Grade | A |'),
+        normalized.includes('**Quality Score**: 79/100 (C)') &&
+          normalized.includes('| Raw Deduction Score | 90 |') &&
+          normalized.includes('| Grade | C |'),
         'table-breakdown fixture: the table ledger rows normalize to the derived score and grade',
         normalized,
       );
@@ -521,10 +595,11 @@ async function runTests() {
         '| Final score | eighty-five |\n| Final score | 85 |',
       );
       const corrected = parseReport(source);
-      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      const normalized = normalizeReportScore(source, corrected);
       assert(
-        corrected.qualityScore === 90 &&
-          normalized.includes('| Final score | 90 |') &&
+        corrected.rawQualityScore === 90 &&
+          corrected.qualityScore === 79 &&
+          normalized.includes('| Raw Deduction Score | 90 |') &&
           normalized.includes('| Final score | eighty-five |'),
         'a malformed ledger row no longer blocks the valid row beneath it from normalizing',
         normalized,
@@ -540,7 +615,7 @@ async function runTests() {
       const source = readFixture('reports', 'table-breakdown.md').replace('| Final score | 85 |\n', '').replace('| Grade | B |\n', '');
       const corrected = parseReport(source);
       assert(
-        corrected.qualityScore === 90 && corrected.recommendation === 'Request Changes',
+        corrected.rawQualityScore === 90 && corrected.qualityScore === 79 && corrected.recommendation === 'Request Changes',
         'a table ledger with a valid bonus but no final score or grade row still derives the score',
         JSON.stringify(corrected),
       );
@@ -551,9 +626,12 @@ async function runTests() {
     try {
       const source = readFixture('reports', 'approve.md').replace('93/100 (A)', '93/100 (F)');
       const corrected = parseReport(source);
-      const normalized = normalizeReportScore(source, corrected.qualityScore);
+      const normalized = normalizeReportScore(source, corrected);
       assert(
-        corrected.qualityScore === 93 && corrected.reportedQualityScore === 93 && normalized.includes('**Quality Score**: 93/100 (A)'),
+        corrected.rawQualityScore === 93 &&
+          corrected.qualityScore === 89 &&
+          corrected.reportedQualityScore === 93 &&
+          normalized.includes('**Quality Score**: 89/100 (B)'),
         'grade-only mismatch triggers normalization even when the reported numeric score is correct',
         JSON.stringify(corrected),
       );
@@ -761,7 +839,10 @@ async function runTests() {
     try {
       const fenced = parseReport(readFixture('reports', 'fenced-recommendation.md'));
       assert(
-        fenced.recommendation === 'Approve with Comments' && fenced.qualityScore === 98 && fenced.violations.critical === 0,
+        fenced.recommendation === 'Approve with Comments' &&
+          fenced.rawQualityScore === 98 &&
+          fenced.qualityScore === 89 &&
+          fenced.violations.critical === 0,
         'fenced fixture: Recommendation/score inside a fenced block are ignored',
         JSON.stringify(fenced),
       );
@@ -772,7 +853,7 @@ async function runTests() {
     try {
       const colon = parseReport(readFixture('reports', 'colon-in-bold.md'));
       assert(
-        colon.recommendation === 'Approve with Comments' && colon.qualityScore === 90,
+        colon.recommendation === 'Approve with Comments' && colon.rawQualityScore === 90 && colon.qualityScore === 89,
         'colon-in-bold fixture: "**Recommendation:**" form parses, inline stepsCompleted accepted',
         JSON.stringify(colon),
       );
@@ -1048,6 +1129,18 @@ async function runTests() {
         'a Convention citation matching the measured baseline exactly (0 of 40, zero signal) parses and the ground truth is surfaced on the parsed result',
         JSON.stringify(honest.conventionBaseline),
       );
+      assert(
+        honest.recommendation === 'Approve' &&
+          honest.keyWeaknesses.length === 0 &&
+          honest.advisoryObservations.length === 1 &&
+          !honest.advisoryObservations.some((item) => /^n\s*\/?\s*a[.!]?$/i.test(item)),
+        'approved report: n/a is not published as a weakness or advisory, while a real unscored suggestion stays advisory',
+        JSON.stringify({
+          recommendation: honest.recommendation,
+          keyWeaknesses: honest.keyWeaknesses,
+          advisoryObservations: honest.advisoryObservations,
+        }),
+      );
 
       const unavailableReport = parseReport(readFixture('reports', 'convention-baseline-unavailable.md'), {
         conventionBaseline: unavailableBaseline,
@@ -1159,6 +1252,71 @@ async function runTests() {
     assert(scoreFails(40, 50) === true, 'scoreFails(40, 50) is true');
     assert(scoreFails(50, 50) === false, 'scoreFails(50, 50) is false (boundary)');
     assert(scoreFails(90, 50) === false, 'scoreFails(90, 50) is false');
+
+    const ranges = changedRanges('@@ -2,0 +3,2 @@\n+one\n+two\n@@ -8 +10 @@ name\n-old\n+new\n');
+    assert(
+      JSON.stringify(ranges) ===
+        JSON.stringify([
+          { start: 3, end: 4, provenance: 'introduced' },
+          { start: 10, end: 10, provenance: 'modified' },
+        ]),
+      'delta evidence parses added-side hunk ranges',
+      JSON.stringify(ranges),
+    );
+    const evidence = new Map([
+      [
+        'tests/changed.spec.ts',
+        {
+          fileStatus: 'modified',
+          changedRanges: [
+            { start: 10, end: 12, provenance: 'modified' },
+            { start: 20, end: 20, provenance: 'introduced' },
+          ],
+        },
+      ],
+      ['tests/new.spec.ts', { fileStatus: 'added', changedRanges: [{ start: 1, end: 20 }] }],
+    ]);
+    const baseFinding = { severity: 'High', row: 'H1', section: 'Recommendations', title: 'wait' };
+    const modified = classifyFinding({ ...baseFinding, file: 'tests/changed.spec.ts', line: 11 }, evidence);
+    const preExisting = classifyFinding({ ...baseFinding, file: 'tests/changed.spec.ts', line: 3 }, evidence);
+    const introduced = classifyFinding({ ...baseFinding, file: 'tests/changed.spec.ts', line: 20 }, evidence);
+    const introducedFile = classifyFinding({ ...baseFinding, file: 'tests/new.spec.ts', line: 3 }, evidence);
+    assert(
+      modified.provenance === 'modified' &&
+        preExisting.provenance === 'pre_existing' &&
+        introduced.provenance === 'introduced' &&
+        introducedFile.provenance === 'introduced',
+      'findings classify from changed-line evidence',
+      JSON.stringify([modified, preExisting, introduced, introducedFile]),
+    );
+    assert(
+      modified.changed_line_evidence.fileStatus === 'modified' &&
+        modified.changed_line_evidence.changed === true &&
+        preExisting.changed_line_evidence.fileStatus === 'modified' &&
+        preExisting.changed_line_evidence.changed === false &&
+        preExisting.changed_line_evidence.reason.includes('outside every added-side diff hunk') &&
+        introducedFile.changed_line_evidence.fileStatus === 'added' &&
+        Array.isArray(introduced.changed_line_evidence.ranges) &&
+        introduced.changed_line_evidence.ranges.length === 2,
+      'classifyFinding attaches changed_line_evidence alongside provenance',
+      JSON.stringify([modified, preExisting, introducedFile, introduced]),
+    );
+    const gatedFindings = applyFindingProvenance(
+      [
+        { ...baseFinding, file: 'tests/changed.spec.ts', line: 11 },
+        { ...baseFinding, file: 'tests/changed.spec.ts', line: 3 },
+      ],
+      evidence,
+      'introduced',
+    );
+    const advisory = gatedFindings.filter((finding) => !finding.verdict_impact);
+    assert(
+      gatedFindings[0].verdict_impact === true &&
+        gatedFindings[1].verdict_impact === false &&
+        subtractCounts({ critical: 0, high: 2, medium: 0, low: 0 }, advisory).high === 1,
+      'introduced mode removes only proven pre-existing findings from gate inputs',
+      JSON.stringify(gatedFindings),
+    );
 
     console.log('');
 
@@ -1639,7 +1797,7 @@ async function runTests() {
     // the same model and make clear that agent arithmetic is provisional.
     assert(
       prompt.includes('"## Quality Score Breakdown" section is required') &&
-        prompt.includes('replaces it with the deterministic ledger result before gating'),
+        prompt.includes('The effective score controls the grade and gate'),
       'prompt identifies the ledger as the CLI-owned score source',
     );
     assert(
@@ -2333,10 +2491,29 @@ async function runTests() {
     ];
     const commentVerdict = {
       recommendation: 'Approve',
-      qualityScore: 100,
-      violations: { critical: 0, high: 0, medium: 0, low: 0 },
+      rawQualityScore: 100,
+      qualityScore: 69,
+      scoreOverrideRule: 'Highest severity Critical caps effective score at 69: min(raw deduction score 100, 69) = 69.',
+      verdictRule: 'No Critical or High and no gating findings => Approve.',
+      violations: { critical: 1, high: 0, medium: 0, low: 0 },
+      gateOn: 'introduced',
+      gatingQualityScore: 95,
+      gatingViolations: { critical: 0, high: 0, medium: 2, low: 1 },
+      allFindingsRecommendation: 'Block',
       reviewedFiles,
-      keyWeaknesses: [],
+      findings: [],
+      keyWeaknesses: ['n/a', '[L2] Optional marker adoption'],
+      advisoryObservations: ['', 'n/a', 'Document why priority markers are not used'],
+      reviewProvenance: {
+        teaCliVersion: '1.24.0',
+        skillRubricVersion: '4.0',
+        modelIdentifier: 'claude-sonnet-4-6',
+        baseSha: 'a'.repeat(40),
+        headSha: 'b'.repeat(40),
+        triggerComment: 'https://github.com/bmad-code-org/fixture/issues/456#issuecomment-789',
+        workflowRun: 'https://github.com/bmad-code-org/fixture/actions/runs/123',
+        gateMode: 'introduced',
+      },
     };
     for (const workflowPath of [
       path.join(repoRoot, '.github', 'workflows', 'tea-test-review.yaml'),
@@ -2345,12 +2522,51 @@ async function runTests() {
       const commentBody = await buildWorkflowComment(workflowPath, commentVerdict);
       assert(
         commentBody.includes('- **Reviewed files**: 11') &&
+          commentBody.includes('- **Gate mode**: introduced') &&
+          commentBody.includes('- **Gating quality score**: 95/100') &&
+          commentBody.includes('- **Gating violations**: 0 Critical / 0 High / 2 Medium / 1 Low') &&
+          commentBody.includes('- **Full-review effective score**: 69/100') &&
+          commentBody.includes('- **Raw deduction score**: 100/100') &&
+          commentBody.includes('- **Full-review recommendation**: Block') &&
+          commentBody.includes('- **Verdict rule**: No Critical or High and no gating findings => Approve.') &&
           commentBody.includes(`  - \`\`${hostileReviewedPath}\`\``) &&
           commentBody.includes(`  - \`${normalReviewedPath}\``) &&
           commentBody.includes('  - … and 1 more') &&
+          commentBody.includes('- **TeA CLI / skill rubric**: `1.24.0` / `4.0`') &&
+          commentBody.includes('- **Model**: `claude-sonnet-4-6`') &&
+          commentBody.includes(`- **Base / head SHA**: \`${'a'.repeat(40)}\` / \`${'b'.repeat(40)}\``) &&
+          commentBody.includes('- **Gate mode**: `introduced`') &&
+          commentBody.includes('- **Trigger comment**: `https://github.com/bmad-code-org/fixture/issues/456#issuecomment-789`') &&
+          commentBody.includes('- **Workflow run**: `https://github.com/bmad-code-org/fixture/actions/runs/123`') &&
           !commentBody.includes('tests/extra-8.spec.ts'),
-        `${path.relative(repoRoot, workflowPath)} safely renders reviewed paths and preserves count/truncation`,
+        `${path.relative(repoRoot, workflowPath)} safely renders paths, provenance, and count/truncation`,
         commentBody,
+      );
+      const { allFindingsRecommendation: _omittedDeltaRecommendation, ...verdictWithoutDelta } = commentVerdict;
+      const noDeltaCommentBody = await buildWorkflowComment(workflowPath, verdictWithoutDelta);
+      assert(
+        !noDeltaCommentBody.includes('Full-review recommendation'),
+        `${path.relative(repoRoot, workflowPath)} omits the full-review recommendation when the gate never overrode it`,
+        noDeltaCommentBody,
+      );
+      assert(
+        !commentBody.includes('**Key weaknesses**:') &&
+          commentBody.includes('**Advisory observations**:') &&
+          commentBody.includes('- Document why priority markers are not used') &&
+          !commentBody.includes('- n/a'),
+        `${path.relative(repoRoot, workflowPath)} keeps an approved comment free of unscored/n/a weaknesses and renders real advice separately`,
+        commentBody,
+      );
+      const scoredCommentBody = await buildWorkflowComment(workflowPath, {
+        ...commentVerdict,
+        recommendation: 'Request Changes',
+        findings: [{ row: 'H1', title: 'Real scored timer finding' }],
+        keyWeaknesses: ['[H1] Optional library adoption'],
+      });
+      assert(
+        scoredCommentBody.includes('- [H1] Real scored timer finding') && !scoredCommentBody.includes('Optional library adoption'),
+        `${path.relative(repoRoot, workflowPath)} renders canonical scored finding text, not free-form weakness text`,
+        scoredCommentBody,
       );
     }
 
@@ -2371,6 +2587,43 @@ async function runTests() {
         promptOnly.stdout.includes('review_scope=single'),
       'prompt-only run prints the prompt bundle (JSON file block, write restriction, derived scope)',
       promptOnly.stdout,
+    );
+    const introducedWithoutDiff = runCli([
+      '--agent',
+      'none',
+      '--files',
+      'x.spec.ts',
+      '--gate-on',
+      'introduced',
+      '--project-root',
+      fixtureProject,
+    ]);
+    assert(
+      introducedWithoutDiff.status === 2 && introducedWithoutDiff.stderr.includes('--gate-on introduced requires git diff evidence'),
+      '--gate-on introduced rejects --files because it has no changed-line evidence',
+      `status=${introducedWithoutDiff.status} stderr=${introducedWithoutDiff.stderr}`,
+    );
+    const versionRun = runCli(['--version']);
+    assert(
+      versionRun.status === 0 && versionRun.stdout.trim() === TEA_CLI_VERSION,
+      '--version reports the TeA CLI package version recorded in review provenance',
+      `status=${versionRun.status} stdout=${versionRun.stdout} stderr=${versionRun.stderr}`,
+    );
+    assert(
+      JSON.stringify(REVIEW_PROVENANCE_KEYS) ===
+        JSON.stringify({
+          teaCliVersion: 'string',
+          skillRubricVersion: null,
+          modelIdentifier: null,
+          baseSha: null,
+          headSha: null,
+          triggerComment: null,
+          workflowRun: null,
+          gateMode: 'string',
+          sources: 'object',
+        }),
+      'REVIEW_PROVENANCE_KEYS declares every reproducibility field and its nullable values',
+      JSON.stringify(REVIEW_PROVENANCE_KEYS),
     );
 
     const truncatedStubOutput = path.join(tmpRoot, 'stub-truncated-context', 'test-review.md');
@@ -2625,8 +2878,8 @@ async function runTests() {
         JSON.stringify(approvePayload.files),
       );
       assert(
-        Array.isArray(approvePayload.reviewedFiles) && approvePayload.qualityScore === 93,
-        'verdict JSON carries reviewedFiles and qualityScore',
+        Array.isArray(approvePayload.reviewedFiles) && approvePayload.rawQualityScore === 93 && approvePayload.qualityScore === 89,
+        'verdict JSON carries reviewedFiles plus raw and effective quality scores',
         JSON.stringify(approvePayload),
       );
     } catch (error) {
@@ -2661,15 +2914,16 @@ async function runTests() {
       const normalizedPayload = JSON.parse(fs.readFileSync(normalizedScoreJsonPath, 'utf8'));
       const normalizedReport = fs.readFileSync(normalizedScoreOut, 'utf8');
       assert(
-        normalizedPayload.qualityScore === 91 && normalizedPayload.reportedQualityScore === 86,
-        'normalized verdict JSON uses the CLI score crossing into grade A and preserves the agent score',
+        normalizedPayload.rawQualityScore === 91 && normalizedPayload.qualityScore === 89 && normalizedPayload.reportedQualityScore === 86,
+        'normalized verdict JSON preserves the raw score, uses the capped effective score, and preserves the agent score',
         JSON.stringify(normalizedPayload),
       );
       assert(
         normalizedReport.includes('**Quality Score**: 42/100 (F - Example only)') &&
-          normalizedReport.includes('**Quality Score**: 91/100 (A)') &&
-          normalizedReport.includes('Final Score:             91/100') &&
-          normalizedReport.includes('Grade:                   A'),
+          normalizedReport.includes('**Quality Score**: 89/100 (B)') &&
+          normalizedReport.includes('**Raw Deduction Score**: 91/100') &&
+          normalizedReport.includes('Raw Deduction Score:') &&
+          normalizedReport.includes('Grade:                   B'),
         'normalized report publishes the same derived score and grade as the verdict JSON while preserving fenced examples',
         normalizedReport,
       );
@@ -3057,9 +3311,23 @@ async function runTests() {
       assert(
         findingsPayload.findings[0].file === 'tests/checkout.spec.ts' &&
           findingsPayload.findings[0].line === 38 &&
-          findingsPayload.findings[0].row === 'C1',
-        'a consumer reading only the verdict JSON learns the file, line, and registry row of each defect',
+          findingsPayload.findings[0].row === 'C1' &&
+          findingsPayload.findings[0].path === 'tests/checkout.spec.ts' &&
+          findingsPayload.findings[0].criterion_id === 'C1' &&
+          findingsPayload.findings[0].provenance === 'unknown' &&
+          findingsPayload.findings[0].deduction === 10 &&
+          findingsPayload.findings[0].verdict_impact === true,
+        'the verdict keeps compatibility aliases beside stable finding fields',
         JSON.stringify(findingsPayload.findings[0]),
+      );
+      assert(
+        findingsPayload.reviewProvenance.teaCliVersion === TEA_CLI_VERSION &&
+          findingsPayload.reviewProvenance.modelIdentifier === 'sonnet' &&
+          findingsPayload.reviewProvenance.baseSha === null &&
+          findingsPayload.reviewProvenance.gateMode === 'all' &&
+          findingsPayload.reviewProvenance.sources.baseSha.includes('--files bypassed'),
+        'serialized verdict provenance records known values and explains safe null fallbacks',
+        JSON.stringify(findingsPayload.reviewProvenance),
       );
     } catch (error) {
       assert(false, 'the written verdict JSON carries the findings themselves', error.message);
@@ -3672,6 +3940,12 @@ async function runTests() {
     git(['commit', '-m', 'update spec'], gitRepo);
     git(['checkout', 'main'], gitRepo);
 
+    git(['checkout', '-b', 'append-spec'], gitRepo);
+    fs.appendFileSync(path.join(gitRepo, 'tests', 'checkout.spec.ts'), "test('new checkout case', () => {});\n");
+    git(['add', '.'], gitRepo);
+    git(['commit', '-m', 'append spec without touching legacy line'], gitRepo);
+    git(['checkout', 'main'], gitRepo);
+
     git(['checkout', '-b', 'change-spec-context'], gitRepo);
     fs.writeFileSync(path.join(gitRepo, 'tests', 'checkout.spec.ts'), "test('checkout with context', () => {});\n");
     fs.writeFileSync(path.join(gitRepo, 'src', 'app.ts'), 'export const app = 3;\n');
@@ -3721,6 +3995,71 @@ async function runTests() {
         gitHappy.stdout.includes('tests/checkout.spec.ts'),
       'git fixture: modified-spec branch runs the review end-to-end (stdin prompt verified)',
       `status=${gitHappy.status} stderr=${gitHappy.stderr}`,
+    );
+    git(['checkout', 'main'], gitRepo);
+
+    git(['checkout', 'append-spec'], gitRepo);
+    const introducedJsonPath = path.join(tmpRoot, 'git-delta-introduced', 'verdict.json');
+    const introducedReportPath = path.join(tmpRoot, 'git-delta-introduced', 'test-review.md');
+    const introducedGateRun = runCli(
+      [
+        '--base',
+        'main',
+        '--project-root',
+        gitRepo,
+        '--output',
+        introducedReportPath,
+        '--json',
+        introducedJsonPath,
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'honest-critical-count' },
+    );
+    const introducedPayload = fs.existsSync(introducedJsonPath) ? JSON.parse(fs.readFileSync(introducedJsonPath, 'utf8')) : null;
+    assert(
+      introducedGateRun.status === 0 &&
+        introducedPayload?.gateOn === 'introduced' &&
+        introducedPayload?.recommendation === 'Approve' &&
+        introducedPayload?.allFindingsRecommendation === 'Block' &&
+        introducedPayload?.gatingViolations?.critical === 0 &&
+        introducedPayload?.findings?.[0]?.provenance === 'pre_existing' &&
+        introducedPayload?.findings?.[0]?.verdict_impact === false,
+      'git fixture: default PR gate makes an unchanged-line Critical finding advisory',
+      `status=${introducedGateRun.status} payload=${JSON.stringify(introducedPayload)} stderr=${introducedGateRun.stderr}`,
+    );
+    const introducedReport = fs.existsSync(introducedReportPath) ? fs.readFileSync(introducedReportPath, 'utf8') : '';
+    assert(
+      introducedReport.includes('### Pre-existing Findings (Advisory)') &&
+        introducedReport.includes('Verdict impact: no') &&
+        introducedReport.includes('reported line is outside every added-side diff hunk'),
+      'git fixture: introduced mode writes advisory changed-line evidence',
+      introducedReport,
+    );
+
+    const allGateRun = runCli(
+      [
+        '--base',
+        'main',
+        '--gate-on',
+        'all',
+        '--project-root',
+        gitRepo,
+        '--output',
+        path.join(tmpRoot, 'git-delta-all', 'test-review.md'),
+        '--agent-cmd',
+        stubAgent,
+        '--no-isolate',
+        ...stubPass('STUB_MODE'),
+      ],
+      { STUB_MODE: 'honest-critical-count' },
+    );
+    assert(
+      allGateRun.status === 1 && allGateRun.stdout.includes('"gateOn": "all"') && allGateRun.stdout.includes('"recommendation": "Block"'),
+      'git fixture: --gate-on all preserves baseline blocking behavior',
+      `status=${allGateRun.status} stdout=${allGateRun.stdout} stderr=${allGateRun.stderr}`,
     );
     git(['checkout', 'main'], gitRepo);
 
@@ -4149,6 +4488,7 @@ async function runTests() {
       { label: 'unscorable', jsonPath: unscorableJson },
       { label: 'score-mismatch', jsonPath: scoreMismatchPayload.jsonPath },
       { label: 'waived', jsonPath: waivedPayloadRun.jsonPath },
+      { label: 'delta-introduced', jsonPath: introducedJsonPath },
     ]) {
       try {
         for (const key of Object.keys(JSON.parse(fs.readFileSync(jsonPath, 'utf8')))) emittedKeys.add(key);
@@ -5039,6 +5379,25 @@ async function runTests() {
     // ============================================================
     console.log(`${colors.yellow}Test Suite 13: the verdict's findings array${colors.reset}\n`);
 
+    assert(
+      JSON.stringify(FINDING_KEYS) ===
+        JSON.stringify({
+          criterion_id: 'string',
+          severity: null,
+          path: null,
+          line: null,
+          provenance: 'string',
+          deduction: null,
+          verdict_impact: 'boolean',
+          row: 'string',
+          file: null,
+          section: 'string',
+          title: 'string',
+        }),
+      'FINDING_KEYS declares the stable fields and compatibility aliases in wire order',
+      JSON.stringify(FINDING_KEYS),
+    );
+
     // Before this array existed, `violations` was four severity COUNTS and nothing
     // else, so every consumer that needed to know WHICH defects a review reported
     // had to re-parse the markdown report with its own regexes — the machine-readable
@@ -5054,14 +5413,19 @@ async function runTests() {
       assert(
         JSON.stringify(multi.findings[0]) ===
           JSON.stringify({
+            criterion_id: 'C1',
             severity: 'Critical',
+            path: 'tests/checkout.spec.ts',
+            line: 38,
+            provenance: 'unknown',
+            deduction: 10,
+            verdict_impact: true,
             row: 'C1',
             file: 'tests/checkout.spec.ts',
-            line: 38,
             section: 'Critical Issues (Must Fix)',
             title: 'Tenant boundary test is skipped with no reason',
           }),
-        'a finding entry carries severity, registry row, file, line, its section, and its title',
+        'a finding carries stable automation fields and its compatibility aliases',
         JSON.stringify(multi.findings[0]),
       );
       assert(
@@ -5081,6 +5445,21 @@ async function runTests() {
       );
     } catch (error) {
       assert(false, 'findings-multi-severity fixture parses into a findings array', error.message);
+    }
+
+    try {
+      const classified = parseReport(
+        readFixture('reports', 'findings-multi-severity.md').replace('**Row**: C1', '**Row**: C1\n**Provenance**: pre_existing'),
+        { registryRowSeverities },
+      );
+      assert(
+        classified.findings[0].provenance === 'pre_existing' &&
+          classified.findings.slice(1).every((finding) => finding.provenance === 'unknown'),
+        'a report-provided changed-line classification is serialized; older findings use unknown',
+        JSON.stringify(classified.findings.map((finding) => finding.provenance)),
+      );
+    } catch (error) {
+      assert(false, 'finding provenance classification parses', error.message);
     }
 
     // Severity is read from the registry row, never from the report's own prose, so

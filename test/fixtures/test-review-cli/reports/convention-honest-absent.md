@@ -22,6 +22,16 @@ stepsCompleted:
 
 **Context Waivers Applied**: 0
 
+### Key Weaknesses
+
+❌ n/a
+
+### Advisory Observations
+
+ℹ️ Consider documenting why priority markers are not used in this repository
+ℹ️ n/a
+-
+
 ### Summary
 
 Honestly reports the convention as absent, matching what the sampled corpus

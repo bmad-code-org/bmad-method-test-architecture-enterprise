@@ -42,9 +42,9 @@ The score remains high because the file is small, readable, and mostly determini
 
 ### Key Weaknesses
 
-- One fixed `waitForTimeout` introduces timing-dependent behavior
-- One network observer is registered after navigation
-- One test omits the repository's established priority marker
+❌ [H1] One fixed `waitForTimeout` introduces timing-dependent behavior
+❌ [M1] One network observer is registered after navigation
+❌ [L2] One test omits the repository's established priority marker
 
 ## Quality Criteria Assessment
 

@@ -49,13 +49,25 @@ const {
   registerExtraTestPattern,
 } = require('./lib/changed-tests');
 const { buildPrompt } = require('./lib/build-prompt');
-const { parseReport, normalizeReportScore, verdictFor, scoreFails, PARSED_VERDICT_KEYS } = require('./lib/parse-report');
+const {
+  parseReport,
+  normalizeReportScore,
+  deriveRecommendation,
+  effectiveScoreFor,
+  verdictRuleFor,
+  verdictFor,
+  scoreFails,
+  rawScoreForViolations,
+  PARSED_VERDICT_KEYS,
+} = require('./lib/parse-report');
+const { getDiffEvidence, applyFindingProvenance, subtractCounts } = require('./lib/diff-evidence');
 const { computeConventionBaseline } = require('./lib/convention-baseline');
 const { loadRegistryRowSeverities } = require('./lib/registry-rows');
 const { runAgent } = require('./lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
 const { resolveTeaConfig, PACT_MCP_VALUES } = require('./lib/resolve-tea-config');
+const { TEA_CLI_VERSION, buildReviewProvenance } = require('./lib/review-provenance');
 
 const EXIT = {
   PASS: 0,
@@ -67,6 +79,7 @@ const EXIT = {
 const AGENTS = new Set([...Object.keys(AGENT_ADAPTERS), 'none']);
 const SCOPES = new Set(['single', 'directory', 'suite']);
 const FAIL_ON_LEVELS = new Set(['request-changes', 'block']);
+const GATE_ON_MODES = new Set(['introduced', 'all']);
 const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
 const ENV_PASS_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const AGENT_OUTPUT_TAIL_LINES = 20;
@@ -80,9 +93,9 @@ const DEFAULT_AGENT = 'claude';
 /**
  * Every key the verdict payload can carry, with the JSON type of each.
  *
- * This composes what parseReport contributes with the four fields the wrapper
- * adds around it, the two CLI-computed diagnostics, and the three fields a
- * waiver attaches. tools/generate-contracts.js derives
+ * This composes what parseReport contributes with the wrapper metadata, the
+ * delta-gate fields, the CLI-computed diagnostics, and waiver metadata.
+ * tools/generate-contracts.js derives
  * test-review.contract.json's response descriptor from it, so the contract's
  * requiredKeys, permittedKeys and types are read off the CLI. The transcription
  * they replaced permitted fifteen keys against the twenty-two named here.
@@ -97,6 +110,10 @@ const VERDICT_KEYS = {
     files: 'array',
     agent: 'string',
     model: null,
+    gateOn: 'string',
+    gatingQualityScore: 'number',
+    gatingViolations: 'object',
+    reviewProvenance: 'object',
     ...PARSED_VERDICT_KEYS.always,
   },
   conditional: {
@@ -106,6 +123,7 @@ const VERDICT_KEYS = {
     waived: 'boolean',
     waiveReason: 'string',
     waiveUntil: 'string',
+    allFindingsRecommendation: 'string',
   },
 };
 
@@ -129,6 +147,8 @@ const SKIP_KEYS = {
     files: 'array',
     contextBasis: 'string',
     contextFiles: 'array',
+    gateOn: 'string',
+    reviewProvenance: 'object',
   },
   conditional: {
     unscorableTestArtifacts: 'array',
@@ -290,11 +310,38 @@ function writeReportArtifact(artifactPath, temporaryPath, content) {
   });
 }
 
+function appendDeltaAdvisory(report, findings, recommendation, qualityScore) {
+  const advisory = findings.filter((finding) => !finding.verdict_impact);
+  const lines = [
+    '',
+    '## PR Delta Gate',
+    '',
+    '**Gate Mode**: introduced',
+    `**Gate Recommendation**: ${recommendation}`,
+    `**Gate Quality Score**: ${qualityScore}/100`,
+  ];
+  if (advisory.length === 0) {
+    lines.push('', 'No pre-existing findings were excluded from the PR verdict.');
+  } else {
+    lines.push('', '### Pre-existing Findings (Advisory)', '');
+    for (const finding of advisory) {
+      const location = finding.file ? `${finding.file}${finding.line === null ? '' : `:${finding.line}`}` : 'location unavailable';
+      lines.push(
+        `- **${finding.severity || 'Unscored'} ${finding.row}: ${finding.title}** — ${location}`,
+        `  - Changed-line evidence: ${finding.changed_line_evidence.reason}.`,
+        '  - Verdict impact: no.',
+      );
+    }
+  }
+  return `${report.trimEnd()}\n${lines.join('\n')}\n`;
+}
+
 function main() {
   const program = new Command();
 
   program
     .name('tea-test-review')
+    .version(TEA_CLI_VERSION)
     .description(
       "Headless runner for the bmad-testarch-test-review skill: scopes the review to the PR's changed test files, reads the rest of the diff as context, and emits a JSON verdict with CI-friendly exit codes.",
     )
@@ -357,6 +404,10 @@ function main() {
     .option('--max-critical <n>', 'verdict fails when the report declares more than n Critical violations (integer; default: no cap)')
     .option('--min-files <n>', 'verdict fails when the report reviews fewer than n files (integer)', '1')
     .option('--fail-on <level>', 'weakest recommendation that fails CI: request-changes or block', 'request-changes')
+    .option(
+      '--gate-on <mode>',
+      'findings that affect the verdict: introduced or all (default: introduced for git-diff PR reviews, all with --files)',
+    )
     .option('--fail-on-skip', 'exit 1 instead of 0 when the review is skipped (no changed test files)')
     .option(
       '--waive <reason>',
@@ -404,6 +455,9 @@ function main() {
   }
   if (!FAIL_ON_LEVELS.has(options.failOn)) {
     fail(EXIT.ENV_ERROR, `--fail-on must be one of ${[...FAIL_ON_LEVELS].join(', ')}; got "${options.failOn}".`);
+  }
+  if (options.gateOn !== undefined && !GATE_ON_MODES.has(options.gateOn)) {
+    fail(EXIT.ENV_ERROR, `--gate-on must be one of ${[...GATE_ON_MODES].join(', ')}; got "${options.gateOn}".`);
   }
   if (options.pactMcp !== undefined && !PACT_MCP_VALUES.includes(options.pactMcp)) {
     fail(EXIT.ENV_ERROR, `--pact-mcp must be one of ${PACT_MCP_VALUES.join(', ')}; got "${options.pactMcp}".`);
@@ -525,17 +579,19 @@ function main() {
     throw error;
   }
 
-  /** Evaluate every verdict gate against a parsed report; returns failure reasons (empty = pass). */
+  /** Evaluate every verdict gate against the selected finding set; returns failure reasons (empty = pass). */
   function evaluateGates(parsed) {
     const failures = [];
     if (verdictFor(parsed.recommendation, options.failOn) === 'fail') {
-      failures.push(`Verdict "${parsed.recommendation}" fails --fail-on ${options.failOn}.`);
+      failures.push(`Verdict "${parsed.recommendation}" under --gate-on ${gateOn} fails --fail-on ${options.failOn}.`);
     }
-    if (minScore !== undefined && scoreFails(parsed.qualityScore, minScore)) {
-      failures.push(`Quality score ${parsed.qualityScore} fails --min-score ${minScore}.`);
+    if (minScore !== undefined && scoreFails(parsed.gatingQualityScore, minScore)) {
+      failures.push(`Gating quality score ${parsed.gatingQualityScore} under --gate-on ${gateOn} fails --min-score ${minScore}.`);
     }
-    if (maxCritical !== undefined && parsed.violations.critical > maxCritical) {
-      failures.push(`Critical violations ${parsed.violations.critical} exceeds --max-critical ${maxCritical}.`);
+    if (maxCritical !== undefined && parsed.gatingViolations.critical > maxCritical) {
+      failures.push(
+        `Critical violations ${parsed.gatingViolations.critical} exceeds --max-critical ${maxCritical} under --gate-on ${gateOn}.`,
+      );
     }
     if (parsed.reviewedFiles.length < minFiles) {
       failures.push(`insufficient evidence: ${parsed.reviewedFiles.length} files reviewed (${minFiles} required)`);
@@ -565,6 +621,13 @@ function main() {
   // An explicit --files list is authoritative user intent and never consults
   // git, so it produces a review set and no context.
   const filesProvided = options.files.length > 0;
+  const gateOn = options.gateOn ?? (filesProvided ? 'all' : 'introduced');
+  if (filesProvided && gateOn === 'introduced') {
+    fail(
+      EXIT.ENV_ERROR,
+      '--gate-on introduced requires git diff evidence; --files skips git. Drop --files and use --base, or use --gate-on all.',
+    );
+  }
   let allChangedFiles = null;
   let changedTestFiles;
   let contextFiles = [];
@@ -574,12 +637,14 @@ function main() {
   // a reviewed-files manifest that simply omits them reads as though the diff
   // held nothing else, so they are disclosed and carry the --test-glob remedy.
   let unscorableTestArtifacts = [];
+  let diffEvidence = new Map();
   try {
     if (filesProvided) {
       changedTestFiles = getChangedTestFiles({ files: options.files, projectRoot });
     } else {
       allChangedFiles = getChangedFiles({ base: options.base, projectRoot });
       changedTestFiles = allChangedFiles.filter((file) => isTestFile(file));
+      diffEvidence = getDiffEvidence({ base: options.base, projectRoot, files: changedTestFiles });
       ({ files: contextFiles, truncated: contextTruncated } = getContextFiles(allChangedFiles));
       unscorableTestArtifacts = getUnscorableTestArtifacts(allChangedFiles);
     }
@@ -590,6 +655,14 @@ function main() {
     throw error;
   }
   const contextBasis = contextBasisFor({ files: contextFiles, truncated: contextTruncated });
+  const reviewProvenance = buildReviewProvenance({
+    projectRoot,
+    skillRoot,
+    baseRef: options.base,
+    filesProvided,
+    modelIdentifier: resolvedModel,
+    gateMode: gateOn,
+  });
 
   // Files --test-glob forced in that no built-in rule recognizes. The CLI cannot
   // tell whether a registry row attached, so it names them to the agent rather
@@ -637,6 +710,8 @@ function main() {
       files: [],
       contextBasis,
       contextFiles,
+      gateOn,
+      reviewProvenance,
     };
     // The worst case for a silent scope cap: a diff whose ONLY test change is a
     // Maestro flow or a .feature file skips with "no changed test files", which
@@ -693,7 +768,15 @@ function main() {
     });
     console.log(prompt);
     if (jsonPath) {
-      writeJsonFile(jsonPath, { promptOnly: true, files: changedTestFiles, contextFiles, contextBasis, unscorableTestArtifacts });
+      writeJsonFile(jsonPath, {
+        promptOnly: true,
+        files: changedTestFiles,
+        contextFiles,
+        contextBasis,
+        unscorableTestArtifacts,
+        gateOn,
+        reviewProvenance,
+      });
     }
     process.exit(EXIT.PASS);
   }
@@ -856,11 +939,12 @@ function main() {
       throw error;
     }
 
+    const normalizedReport = normalizeReportScore(rawReport, parsed);
+    writeReportArtifact(outputPath, normalizedReportTemporaryPath, normalizedReport);
     if (parsed.reportedQualityScore !== undefined) {
-      const normalizedReport = normalizeReportScore(rawReport, parsed.qualityScore);
-      writeReportArtifact(outputPath, normalizedReportTemporaryPath, normalizedReport);
       console.error(
-        `tea-test-review: normalized agent Quality Score ${parsed.reportedQualityScore} to deterministic ledger score ${parsed.qualityScore}.`,
+        `tea-test-review: normalized agent Quality Score ${parsed.reportedQualityScore} to effective score ${parsed.qualityScore} ` +
+          `(raw deduction score ${parsed.rawQualityScore}; cap ${parsed.scoreCap}).`,
       );
     }
     // Loudly, because it is the gate that moved. The agent's recommendation is a
@@ -874,7 +958,26 @@ function main() {
           `${parsed.violations.medium} Medium / ${parsed.violations.low} Low at score ${parsed.qualityScore}.`,
       );
     }
-    gateFailures = evaluateGates(parsed);
+    const allFindingsRecommendation = parsed.recommendation;
+    parsed.findings = applyFindingProvenance(parsed.findings, diffEvidence, gateOn);
+    const advisoryFindings = parsed.findings.filter((finding) => !finding.verdict_impact);
+    const gatingViolations = subtractCounts(parsed.violations, advisoryFindings);
+    const gatingRawQualityScore = rawScoreForViolations(parsed.rawQualityScore, parsed.violations, gatingViolations);
+    const { qualityScore: gatingQualityScore } = effectiveScoreFor(gatingRawQualityScore, gatingViolations);
+    const gatingRecommendation = deriveRecommendation(gatingViolations, gatingQualityScore);
+    const gatingVerdictRule = verdictRuleFor(gatingViolations, gatingQualityScore);
+    if (gateOn === 'introduced') {
+      parsed.recommendation = gatingRecommendation;
+      parsed.verdictRule = gatingVerdictRule;
+      const currentReport = fs.readFileSync(outputPath, 'utf8');
+      writeReportArtifact(
+        outputPath,
+        normalizedReportTemporaryPath,
+        appendDeltaAdvisory(currentReport, parsed.findings, gatingRecommendation, gatingQualityScore),
+      );
+    }
+    const gated = { ...parsed, gatingQualityScore, gatingViolations };
+    gateFailures = evaluateGates(gated);
 
     // The verdict JSON files manifest is the report's own Reviewed Files
     // section — what the agent actually reviewed — never the input list.
@@ -888,8 +991,15 @@ function main() {
       files: parsed.reviewedFiles,
       agent: options.agent,
       model: resolvedModel,
+      gateOn,
+      gatingQualityScore,
+      gatingViolations,
+      reviewProvenance,
       ...parsed,
     };
+    if (allFindingsRecommendation !== gatingRecommendation) {
+      verdictPayload.allFindingsRecommendation = allFindingsRecommendation;
+    }
     // Also CLI-computed, so a consumer reading only the verdict learns that a
     // changed test artifact went unscored. parseReport separately refuses a
     // report that dropped any of these from its disclosure section.

@@ -257,7 +257,9 @@ Row M10. Gate closes and reports `PASS (n/a)` when the flag is false, when `@seo
 - [ ] **Executive Summary**:
   - [ ] Overall assessment (Excellent/Good/Needs Improvement/Critical)
   - [ ] Key strengths listed (3-5 bullet points)
-  - [ ] Key weaknesses listed (3-5 bullet points)
+  - [ ] Every Key Weakness is a scored finding and includes its `[row]`; omit the subsection when there are none
+  - [ ] Unscored suggestions appear only under Advisory Observations
+  - [ ] Key Weaknesses and Advisory Observations contain no empty or literal `n/a` items
   - [ ] Recommendation stated (Approve/Approve with comments/Request changes/Block)
 
 - [ ] **Quality Criteria Assessment**:
