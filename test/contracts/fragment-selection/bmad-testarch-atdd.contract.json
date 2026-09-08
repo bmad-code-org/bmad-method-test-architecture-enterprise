@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-atdd",
-  "sourceSpecDigest": "sha256:02902e80fe29188a065d8490c90cc5a478858f49cc31f9512d38985f9a4c2b1a",
+  "sourceSpecDigest": "sha256:dad26fe328ec684d2326f4660d84f5964ac327d2bcd3e3f3ddaeb33b5a5015c6",
   "behaviors": [
     {
       "id": "B-001",

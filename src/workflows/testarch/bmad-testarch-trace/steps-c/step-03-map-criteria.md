@@ -40,7 +40,10 @@ Create the traceability matrix linking the resolved oracle items to tests.
 For each resolved oracle item (formal requirement, endpoint/spec item, or synthetic journey):
 
 - Map to matching tests
-- Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY, defined in checklist.md's "Coverage Classification" section
+- Mark coverage status: FULL / PARTIAL / NONE / UNIT-ONLY / INTEGRATION-ONLY. `checklist.md`'s "Coverage Classification" section is the definition; **read it before classifying anything**, and apply the rule it turns on:
+  - Classification is decided by what the evidence **establishes** about the criterion. The number of levels the evidence spans does not set the status.
+  - **FULL** whenever every scenario the criterion states is established, whether that took one level or several. A criterion that one appropriate level establishes in full is FULL, not UNIT-ONLY and not INTEGRATION-ONLY.
+  - **UNIT-ONLY** and **INTEGRATION-ONLY** are for the case where a _missing_ level is what leaves the criterion unestablished: unit tests only, against a criterion stating an HTTP status or a rendered state; or API/component tests only, against a criterion stating branch-level logic that needs unit proof. "The only evidence is API-level" is not by itself INTEGRATION-ONLY.
 - Record test level and priority
 - Preserve each mapped test's stable identity fields (`id`, `title`, `file`, `line`, `level`, status flags) so Phase 1 can deduplicate unique tests before JSON export
 - Record heuristic signals:

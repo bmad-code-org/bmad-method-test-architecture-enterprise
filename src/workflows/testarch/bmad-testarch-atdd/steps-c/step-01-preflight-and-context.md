@@ -131,7 +131,7 @@ Then select the appropriate loading profile:
 
 ### Pact.js Utils Loading
 
-**If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`, or microservices indicators detected):
+**If `tea_use_pactjs_utils` is enabled** (and `{detected_stack}` is `backend` or `fullstack`, or a microservices layout is detected, `pactjs-utils-mandate.md`'s own definition: two or more independently deployable services in this repo that call each other):
 
 Load `pactjs-utils-mandate.md` FIRST. It is the binding rule for any Pact artifact this run produces, and it carries the relevance gate: the flag defaults to `true` and means "use these utilities when contract tests are written", never "add contract tests to this project".
 

@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-test-design",
-  "sourceSpecDigest": "sha256:bfd96c860bbd08b343eb36423144645edd9200e8cef90fb3b1806b6aebcc6402",
+  "sourceSpecDigest": "sha256:692833e909cf029e42051119f6cd4beee08261ad4327fd522ff29878a76d4951",
   "behaviors": [
     {
       "id": "B-001",
