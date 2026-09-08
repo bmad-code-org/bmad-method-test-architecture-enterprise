@@ -22,11 +22,13 @@
     "`lineTolerance` is kept for a reader that has no `admittedLines`. Every plant carries one,",
     "so nothing in this repository reads the fallback.",
     "",
-    "Precision is scored from the fixtures with an EMPTY planted array, not from the mustNotReport",
-    "key: a reviewer that reports everything scores 100% recall and is worthless, so precision is",
-    "measured on the same run. mustNotReport and negativeControls are documentation for whoever",
-    "reads a false positive later, and nothing in the harness branches on them. The pre-flight does",
-    "assert that a mustNotReport fixture plants nothing, so the prose and the scoring cannot drift.",
+    "The non-false-positive rate is scored from the fixtures with an EMPTY planted array, not from the",
+    "mustNotReport key, and from the file list itself: a finding against any file that is not in `files`",
+    "is outside the review set and is a definite false positive too. A reviewer that reports everything",
+    "scores 100% recall and is worthless, so the rate is measured on the same run. mustNotReport and",
+    "negativeControls are documentation for whoever reads a false positive later, and nothing in the",
+    "harness branches on them; the file list is what the scorer reads. The pre-flight does assert that a",
+    "mustNotReport fixture plants nothing, so the prose and the scoring cannot drift.",
     "",
     "`knownUnplanted` records defects that are really in the seeded fixtures, that the registry",
     "really fires on, and that nothing here plants. The first live run of this suite reported two",
@@ -175,8 +177,8 @@
       "id": "coverage-out-of-scope",
       "expectation": "A changed implementation with no accompanying test must NOT be reported by test-review.",
       "why": "Coverage is out of scope for this workflow and belongs to trace. Murat's original seeded-PR design listed 'an implementation change with no test' among the planted defects, but for THIS workflow finding it is a scope violation rather than a hit. Scored as a false positive, never as recall.",
-      "howToExercise": "Include a changed source file with no matching test in the context set, then assert the report raises no coverage violation.",
-      "status": "not exercised. No source file is bound into the review set, so nothing in this repository can make this control fail."
+      "howToExercise": "A finding whose file is not one of `files` above is out of scope. scoreVerdict in test/eval-test-review.js counts it as `outOfScope` and as a definite false positive, the contract's scope oracle (O-011 in test/contracts/test-review.contract.json) states the same rule over the verdict's findings, and test/test-contract-oracles.js checks the two agree on every stored verdict.",
+      "status": "exercised. test/replay/test-review/out-of-scope-finding stores a verdict carrying one finding against src/orders.service.ts, which the fixtures import and nobody asked the reviewer to look at; it scores outOfScope 1 and fails O-011."
     }
   ],
   "knownUnplanted": [

@@ -50,7 +50,61 @@
  * contract visible at the call site.
  */
 
-const TOOLS = 'Read,Write,Edit,Glob,Grep';
+/**
+ * What a runner may do to the filesystem, in the words test/evals/suite-manifest.json
+ * declares per suite. The three are tiers: `command-execution` includes
+ * `scoped-artifact-writes`, which includes `read-only`, because a runner that can
+ * run a shell can write with it, so granting the shell and withholding the write
+ * tools would be a declaration the argv does not honour.
+ *
+ * Each built-in adapter turns the strongest declared tier into its own vendor
+ * argv below. `custom` and `agy` receive no capability argv at all: the custom
+ * contract puts the tool policy on the caller's command line, and agy exposes
+ * no flag that narrows its tool set. A harness that declares `read-only` for one
+ * of those runners has to enforce it itself, which test/eval-fragment-selection.js
+ * does by running in an empty scratch directory and failing any run that leaves
+ * a file behind.
+ */
+const RUNNER_CAPABILITIES = ['read-only', 'scoped-artifact-writes', 'command-execution'];
+
+/** What a caller gets when it declares nothing: the tier the review CLI has always run at. */
+const DEFAULT_CAPABILITIES = ['scoped-artifact-writes'];
+
+const WRITE_TOOLS = ['Write', 'Edit'];
+const COMMAND_TOOLS = ['Bash'];
+
+/** The tier a capability list resolves to: the strongest one named. */
+function strongestCapability(capabilities = DEFAULT_CAPABILITIES) {
+  let strongest = 'read-only';
+  for (const capability of capabilities) {
+    if (RUNNER_CAPABILITIES.indexOf(capability) > RUNNER_CAPABILITIES.indexOf(strongest)) strongest = capability;
+  }
+  return strongest;
+}
+
+/** claude's `--tools` list for a capability tier; the default tier spells the list the CLI has always passed. */
+function claudeTools(capabilities) {
+  const tier = strongestCapability(capabilities);
+  return [
+    'Read',
+    ...(tier === 'read-only' ? [] : WRITE_TOOLS),
+    'Glob',
+    'Grep',
+    ...(tier === 'command-execution' ? COMMAND_TOOLS : []),
+  ].join(',');
+}
+
+/**
+ * codex's `--sandbox` mode for a capability tier. `workspace-write` grants
+ * read, write, and exec inside cwd, so it is the mode for both upper tiers;
+ * codex has no mode that writes without executing.
+ */
+function codexSandbox(capabilities) {
+  return strongestCapability(capabilities) === 'read-only' ? 'read-only' : 'workspace-write';
+}
+
+/** The tool list the review CLI runs with, kept under its historical name for the callers that read it. */
+const TOOLS = claudeTools(DEFAULT_CAPABILITIES);
 const MODEL_VALUE_PATTERN = /^[\w.:[\]/-]+$/;
 
 function modelArgumentError(code, message) {
@@ -141,16 +195,17 @@ const AGENT_ADAPTERS = {
     defaultModel: 'sonnet',
     modelFlags: ['--model'],
     // --safe-mode strips repo customizations for the review run; --tools/
-    // --allowedTools scope the run to the same read/write/search surface
-    // every adapter gets.
-    buildArgv: (extra = [], model) => [
+    // --allowedTools scope the run to the tool surface the caller's declared
+    // capabilities allow: search and read always, write only above read-only,
+    // the shell only under command-execution.
+    buildArgv: (extra = [], model, capabilities = DEFAULT_CAPABILITIES) => [
       '-p',
       '--output-format',
       'text',
       '--tools',
-      TOOLS,
+      claudeTools(capabilities),
       '--allowedTools',
-      TOOLS,
+      claudeTools(capabilities),
       '--safe-mode',
       ...modelArgv(AGENT_ADAPTERS.claude.modelFlags, model, extra),
       ...extra,
@@ -165,7 +220,9 @@ const AGENT_ADAPTERS = {
     // --sandbox workspace-write grants read/write/exec inside cwd without
     // needing --dangerously-bypass-approvals-and-sandbox: verified live that
     // a workspace-write file write completes with no approval prompt and no
-    // TTY, because approval is only for escalating past the sandbox.
+    // TTY, because approval is only for escalating past the sandbox. A caller
+    // declaring read-only gets --sandbox read-only instead, which is the
+    // vendor's own enforcement of that tier.
     // --skip-git-repo-check matters under --isolate, where the agent's cwd
     // is a fresh tmpdir with no .git.
     //
@@ -175,11 +232,11 @@ const AGENT_ADAPTERS = {
     // pinning it in this vendor-agnostic table would give the flag a meaning
     // no other adapter can honor. Set it per run with
     // --agent-arg -c --agent-arg model_reasoning_effort=low.
-    buildArgv: (extra = [], model) => [
+    buildArgv: (extra = [], model, capabilities = DEFAULT_CAPABILITIES) => [
       'exec',
       '--skip-git-repo-check',
       '--sandbox',
-      'workspace-write',
+      codexSandbox(capabilities),
       '--color',
       'never',
       ...modelArgv(AGENT_ADAPTERS.codex.modelFlags, model, extra),
@@ -194,7 +251,8 @@ const AGENT_ADAPTERS = {
     // The custom runner contract is intentionally small: read the complete
     // prompt from stdin, operate in cwd, write any requested artifact named in
     // the prompt, print the final response to stdout, and exit nonzero on
-    // failure. Every argv value is supplied explicitly with --agent-arg.
+    // failure. Every argv value is supplied explicitly with --agent-arg, so a
+    // declared capability adds nothing here; see RUNNER_CAPABILITIES.
     buildArgv: (extra = []) => [...extra],
     envNames: [],
   },
@@ -253,4 +311,15 @@ function resolveModel(agent, model, extra = []) {
   return passthroughModel || (hasExplicitModel ? validateModelValue(model, '--model') : adapter.defaultModel);
 }
 
-module.exports = { AGENT_ADAPTERS, TOOLS, resolveModel, modelFromArgs, validateModelValue };
+module.exports = {
+  AGENT_ADAPTERS,
+  DEFAULT_CAPABILITIES,
+  RUNNER_CAPABILITIES,
+  TOOLS,
+  claudeTools,
+  codexSandbox,
+  resolveModel,
+  modelFromArgs,
+  strongestCapability,
+  validateModelValue,
+};

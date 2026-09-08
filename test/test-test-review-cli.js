@@ -92,7 +92,7 @@ const { resolveSkill } = require('../cli/lib/resolve-skill');
 const { buildPrompt } = require('../cli/lib/build-prompt');
 const { buildSandboxProfile, buildBwrapPrefix, selectBackend, isolationAvailable } = require('../cli/lib/isolate');
 const { runAgent, buildMinimalEnv } = require('../cli/lib/run-agent');
-const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
+const { AGENT_ADAPTERS, resolveModel, strongestCapability } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS } = require('../cli/lib/resolve-tea-config');
 const { changedRanges, classifyFinding, applyFindingProvenance, subtractCounts } = require('../cli/lib/diff-evidence');
 const { TEA_CLI_VERSION, REVIEW_PROVENANCE_KEYS } = require('../cli/lib/review-provenance');
@@ -2321,6 +2321,57 @@ async function runTests() {
           );
         }
       }
+      // The suite manifest's runner capabilities reach the vendor argv here. The
+      // default tier is the one the review CLI has always run at, so a caller that
+      // declares nothing gets the historical argv byte for byte; read-only drops
+      // the write tools for claude and selects codex's read-only sandbox; the shell
+      // appears only under command-execution.
+      const claudeDefault = AGENT_ADAPTERS.claude.buildArgv([], 'sonnet');
+      assert(
+        JSON.stringify(claudeDefault) === JSON.stringify(AGENT_ADAPTERS.claude.buildArgv([], 'sonnet', ['scoped-artifact-writes'])) &&
+          claudeDefault[claudeDefault.indexOf('--tools') + 1] === 'Read,Write,Edit,Glob,Grep',
+        'claude adapter defaults to the scoped-artifact-writes tool list the CLI has always passed',
+        JSON.stringify(claudeDefault),
+      );
+      const claudeReadOnly = AGENT_ADAPTERS.claude.buildArgv([], 'sonnet', ['read-only']);
+      assert(
+        claudeReadOnly[claudeReadOnly.indexOf('--tools') + 1] === 'Read,Glob,Grep' &&
+          claudeReadOnly[claudeReadOnly.indexOf('--allowedTools') + 1] === 'Read,Glob,Grep',
+        'claude adapter grants no write tool under a read-only declaration',
+        JSON.stringify(claudeReadOnly),
+      );
+      const claudeCommands = AGENT_ADAPTERS.claude.buildArgv([], 'sonnet', ['command-execution']);
+      assert(
+        claudeCommands[claudeCommands.indexOf('--tools') + 1] === 'Read,Write,Edit,Glob,Grep,Bash' &&
+          !claudeDefault.join(' ').includes('Bash'),
+        'claude adapter grants the shell only under command-execution',
+        JSON.stringify(claudeCommands),
+      );
+      const codexReadOnly = AGENT_ADAPTERS.codex.buildArgv([], 'gpt-5.6-sol', ['read-only']);
+      const codexDefault = AGENT_ADAPTERS.codex.buildArgv([], 'gpt-5.6-sol');
+      assert(
+        codexReadOnly[codexReadOnly.indexOf('--sandbox') + 1] === 'read-only' &&
+          codexDefault[codexDefault.indexOf('--sandbox') + 1] === 'workspace-write',
+        'codex adapter selects the read-only sandbox under a read-only declaration and workspace-write otherwise',
+        `${JSON.stringify(codexReadOnly)} / ${JSON.stringify(codexDefault)}`,
+      );
+      assert(
+        strongestCapability(['read-only', 'command-execution', 'scoped-artifact-writes']) === 'command-execution' &&
+          strongestCapability(['read-only']) === 'read-only' &&
+          strongestCapability() === 'scoped-artifact-writes',
+        'strongestCapability resolves a capability list to its widest tier',
+      );
+      try {
+        runAgent('prompt', { agent: 'custom', agentCommand: process.execPath, capabilities: ['root'] });
+        assert(false, 'runAgent rejects a capability the manifest vocabulary does not name');
+      } catch (error) {
+        assert(
+          error.code === 'CAPABILITY_UNKNOWN',
+          'runAgent rejects a capability the manifest vocabulary does not name with CAPABILITY_UNKNOWN',
+          error.message,
+        );
+      }
+
       const customAdapter = AGENT_ADAPTERS.custom;
       assert(
         customAdapter.command === null &&

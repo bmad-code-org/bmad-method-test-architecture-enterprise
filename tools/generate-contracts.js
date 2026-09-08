@@ -114,9 +114,33 @@ function sortRows(rows) {
   });
 }
 
-/** A basename anchored so a finding may cite the fixture by any path that ends in it. */
+/**
+ * A basename anchored so a finding may cite the fixture by any path that ends in it.
+ *
+ * The directory prefix (DIRECTORY_PREFIX below) is an alternation with an empty
+ * branch, and no quantifier applies to the group. It was an optional group around a dot-star
+ * and a slash, which parses, compiles, and is then refused at evaluation time:
+ * eval-quality's regex operator rejects a quantifier nested inside a quantified
+ * group before matching anything, as a catastrophic-backtracking shape, and it
+ * reports the refusal as a `budget-exhausted` fault. Every regex oracle in the
+ * test-review contract carried that shape, so none of them could be evaluated,
+ * and nothing in this repository read an oracle until test/test-contract-oracles.js
+ * did. `npm run test:contracts` never saw it because the compiler does not run
+ * the operator; it only requires the `^` and `$` anchors, which both shapes have.
+ */
 function basenamePattern(basename) {
-  return `^(?:.*/)?${basename.replaceAll('.', String.raw`\.`)}$`;
+  return `^${DIRECTORY_PREFIX}${escapeRegex(basename)}$`;
+}
+
+/** One pattern that matches any of the basenames, under the same prefix as basenamePattern. */
+function basenamesPattern(basenames) {
+  return `^${DIRECTORY_PREFIX}(?:${basenames.map(escapeRegex).join('|')})$`;
+}
+
+const DIRECTORY_PREFIX = '(?:.*/|)';
+
+function escapeRegex(text) {
+  return text.replaceAll('.', String.raw`\.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -275,6 +299,7 @@ function buildTestReviewContract() {
 
   const scopeControl = groundTruth.negativeControls?.[0];
   assert(scopeControl, 'ground-truth.json declares no negative control, so the scope oracle has no requirement to link');
+  const reviewedBasenames = groundTruth.files.map((entry) => path.basename(entry.path));
 
   // The plant oracles come first and in corpus order, so O-00n and the nth plant
   // stay the same thing however the corpus is later reordered.
@@ -314,25 +339,28 @@ function buildTestReviewContract() {
       id: scopeOracleId,
       polarity: 'expects-hold',
       commentary:
-        'The scope control recorded as negativeControls[0] in ground-truth.json. A changed implementation with no accompanying test belongs to trace, so reporting it here is a scope violation scored as a false positive.',
+        'The scope control recorded as negativeControls[0] in ground-truth.json. A changed implementation with no accompanying test belongs to trace, so a finding against any file outside the review set is a scope violation scored as a false positive. ' +
+        'A finding with no file is left to the unlocated count, because nothing can say which file it meant.',
       direction: {
         polarity: 'expects-hold',
-        relation: 'not',
-        scope: 'Every finding the review reported, searched for one naming a source file outside the review set.',
-        negativeDomain: 'A review that raises a coverage violation against a changed implementation file.',
+        relation: 'for-all',
+        scope: `Every located finding the review reported, checked against the ${numberWord(reviewedBasenames.length)} files under review.`,
+        negativeDomain: 'A review that raises a finding, a coverage violation for example, against a file it was not asked to review.',
         evidenceTargets: [FINDINGS_POINTER],
       },
       check: {
-        op: 'not',
-        operands: [
-          {
-            op: 'for-any',
-            collection: { pointer: FINDINGS_POINTER },
-            // A reviewed test file always carries a .spec or .test segment, so a bare
-            // name with a .ts or .js extension is an implementation file and out of scope.
-            predicate: { op: 'regex', operands: [{ pointer: '@/file' }], pattern: String.raw`^(?:.*/)?[a-z0-9-]+\.(?:ts|js)$` },
-          },
-        ],
+        op: 'for-all',
+        collection: { pointer: FINDINGS_POINTER },
+        // The review set is the ground truth's own file list, so this is membership
+        // in that set. The pattern it replaced matched a bare name with a .ts or .js
+        // extension, which named neither orders.service.ts nor any file under src/.
+        predicate: {
+          op: 'any',
+          operands: [
+            { op: 'equality', operands: [{ pointer: '@/file' }, { literal: null }] },
+            { op: 'regex', operands: [{ pointer: '@/file' }], pattern: basenamesPattern(reviewedBasenames) },
+          ],
+        },
       },
     },
     {
@@ -416,9 +444,9 @@ function buildTestReviewContract() {
   behaviors.push(
     {
       id: 'B-005',
-      description: 'Coverage findings stay out of scope, because coverage belongs to the trace workflow.',
+      description: 'Findings stay inside the review set, because coverage belongs to the trace workflow.',
       severity: 'material',
-      observableSuccessCriterion: 'No finding in the verdict artifact names a source file outside the review set.',
+      observableSuccessCriterion: 'Every located finding in the verdict artifact names one of the files under review.',
       requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: scopeControl.id }],
       riskLinks: [{ scheme: 'tea-eval-risk', id: 'scope-creep-into-trace' }],
       oracles: [scopeOracleId],

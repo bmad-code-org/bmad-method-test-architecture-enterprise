@@ -14,7 +14,7 @@
   ],
   "id": "enclosing-declarations",
   "suite": "test-review",
-  "scorerVersion": 2,
+  "scorerVersion": 3,
   "storedOutput": {
     "origin": "constructed",
     "verdict": "verdict.json",
@@ -49,7 +49,9 @@
     "nonFalsePositiveRate (9 - 0)/9 = 1.00.",
     "",
     "score and recommendation come from the verdict, whose violation counts match full-recall's:",
-    "100 - 4x10 - 4x5 - 0x2 - 1x1 = 39, Block on Criticals."
+    "100 - 4x10 - 4x5 - 0x2 - 1x1 = 39, Block on Criticals.",
+    "",
+    "No finding names a file outside the review set, so outOfScope is 0 and falsePositives is unchanged by it."
   ],
   "result": {
     "score": 39,
@@ -61,6 +63,7 @@
     "criticalHits": 4,
     "reported": 9,
     "falsePositives": 0,
+    "outOfScope": 0,
     "unattributed": 0,
     "unlocated": 0
   }

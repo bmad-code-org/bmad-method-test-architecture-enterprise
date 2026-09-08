@@ -392,12 +392,13 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains nineteen checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Four of the nineteen keep the rules, guidance, hook, and eval data aligned:
+`npm test` chains twenty-one checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Five of the twenty-one keep the rules, guidance, hook, eval data, and eval contracts aligned:
 
 - `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:enforce-hook` fails when a new Absolute registry row appears in neither the hook's enforced list nor its deferred list. This prevents a rule from being added without an explicit write-time enforcement decision.
 - `test:eval-data` checks that all 24 fragment-selection cases are structurally usable: their workflow context files exist, every expected fragment exists and is indexed for that workflow, and the required and forbidden sets do not overlap. The expected sets come from the workflow step files. This check does not ask an agent to select anything.
-- `test:eval-schemas` checks `test/evals/suite-manifest.json` against its schema, confirms that every threshold it declares is the threshold the harness actually applies, and fails when a TEA skill has neither a behavioral suite nor a deferred declaration. A suite list that omits a skill reads as coverage, so the omission has to be an error rather than a silence.
+- `test:eval-schemas` checks `test/evals/suite-manifest.json` against its schema, confirms that every threshold it declares is the threshold the harness actually applies, that the runner capabilities it declares are the ones the harness grants its runner, and that the preflight argv it declares fails on a missing runner and passes on a present one, and fails when a TEA skill has neither a behavioral suite nor a deferred declaration. A suite list that omits a skill reads as coverage, so the omission has to be an error rather than a silence.
+- `test:contract-oracles` evaluates every oracle in every eval contract with `eval-quality`'s own evaluator, over the stored replay outputs and over constructed selections for all 24 fragment-selection cases, and fails when an oracle faults or disagrees with the harness scorer on the same evidence. The first run found that every regex oracle in the `test-review` contract was refused by the evaluator before it matched anything.
 
 These checks produce the same answer from the same repository state. They need no agent credential, network call, or model budget. `test:eval-data` runs through `npm test`, the local pre-commit hook, pull-request quality checks, and the publish workflow.
 
@@ -429,7 +430,7 @@ npm run eval:all -- --agent claude --preflight-only
 npm run eval:all -- --agent agy --preflight-only
 ```
 
-Output ending with `nothing measured` is expected in preflight mode. It means the static eval data is valid and the selected executable passed the available readiness checks. Some runners cannot expose session authentication to this probe, so a preflight pass does not guarantee that the later live call will authenticate. The flag intentionally exits before launching the agent.
+Output ending with `nothing measured` is expected in preflight mode. It means the static eval data is valid and, for every one of the three suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential. Some runners cannot expose session authentication to this probe, so a preflight pass does not guarantee that the later live call will authenticate. The flag intentionally exits before launching the agent. `npm run test:eval-schemas` runs each suite's preflight with a missing runner and with a present one, so a preflight that stopped probing the runner would fail `npm test`.
 
 ### A La Carte Live Evals
 

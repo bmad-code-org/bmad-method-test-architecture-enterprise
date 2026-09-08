@@ -11,7 +11,7 @@
   ],
   "id": "misses-two",
   "suite": "test-review",
-  "scorerVersion": 2,
+  "scorerVersion": 3,
   "storedOutput": {
     "origin": "constructed",
     "verdict": "verdict.json",
@@ -39,7 +39,9 @@
     "parser never turns it into a finding and reported stays 7. That is deliberate: it keeps a prose",
     "paragraph from inflating the denominator of the rate.",
     "",
-    "score and recommendation come from the verdict: 100 - 4x10 - 3x5 - 0x2 - 0x1 = 45, Block on Criticals."
+    "score and recommendation come from the verdict: 100 - 4x10 - 3x5 - 0x2 - 0x1 = 45, Block on Criticals.",
+    "",
+    "No finding names a file outside the review set, so outOfScope is 0 and falsePositives is unchanged by it."
   ],
   "result": {
     "score": 45,
@@ -51,6 +53,7 @@
     "criticalHits": 4,
     "reported": 7,
     "falsePositives": 0,
+    "outOfScope": 0,
     "unattributed": 0,
     "unlocated": 0
   }

@@ -79,14 +79,29 @@
  * deliverable the summary itself links. An absent or unparseable artifact is an
  * environment failure and exits 2, never a low score.
  *
- * TWO MODES
+ * THREE MODES
  *
- *   --validate-only  Static. No vendor, no cost, no network. Asserts the corpus is
- *                    internally consistent, that every span in the ground truth
- *                    resolves in the fixture it names, and that staging keeps the
- *                    ground truth out of the agent's workspace and prompt.
- *   default          Spends a vendor run per fixture set per repetition. It needs a
- *                    logged-in claude or codex.
+ *   --validate-only   Static. No vendor, no cost, no network. Asserts the corpus is
+ *                     internally consistent, that every span in the ground truth
+ *                     resolves in the fixture it names, and that staging keeps the
+ *                     ground truth out of the agent's workspace and prompt.
+ *   --preflight-only  The static checks, then the runner: is the agent executable
+ *                     on PATH, does it answer --version, does a built-in vendor
+ *                     have a credential. Exits before any model call. This is
+ *                     what `eval:all --preflight-only` runs, and the argv the
+ *                     suite manifest declares as preflightArgs.
+ *   default           Spends a vendor run per fixture set per repetition. It needs
+ *                     a logged-in claude or codex.
+ *
+ * THE RUNNER WRITES ONLY INTO ITS WORKSPACE
+ *
+ * The suite manifest declares `scoped-artifact-writes`, and RUNNER_CAPABILITIES
+ * below is what the harness applies: the agent runs in a staged, disposable
+ * workspace with write tools and no shell, codex under its workspace-write
+ * sandbox, and every run is followed by a check that the repository this harness
+ * lives in did not change. A run that wrote into the repository is an environment
+ * failure and is never scored. Writes inside the workspace are the run's
+ * deliverable, and the ones that touch the corpus are scored by maxFixtureMutations.
  *
  * EVERY DECLARED REPETITION MUST COMPLETE
  *
@@ -95,17 +110,20 @@
  *
  * Usage:
  *   node test/eval-trace.js --validate-only
+ *   node test/eval-trace.js --preflight-only --agent codex
  *   node test/eval-trace.js --agent claude --runs 2
  *   node test/eval-trace.js --agent codex --set seeded-tenant-data-export
  *   node test/eval-trace.js --agent custom --agent-cmd my-runner --agent-arg --headless
  *   node test/eval-trace.js --agent claude --json results/trace.json
  *
  * Exit codes:
- *   0  the corpus is valid (--validate-only), or every vendor met the thresholds
+ *   0  the corpus is valid (--validate-only), the runner is ready (--preflight-only),
+ *      or every vendor met the thresholds
  *   1  a threshold was missed, or the corpus is inconsistent (a real result)
  *   2  the environment could not run the eval (nothing was measured): a missing
- *      credential, a timeout, a transport error, a missing or unparseable artifact,
- *      or fewer completed runs than were declared
+ *      credential or executable, a timeout, a transport error, a missing or
+ *      unparseable artifact, a runner that wrote outside its workspace, or fewer
+ *      completed runs than were declared
  */
 
 'use strict';
@@ -132,6 +150,7 @@ const {
   writeSuiteResult,
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
+const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'trace-eval');
@@ -144,6 +163,13 @@ const SUITE_ID = 'trace';
 // bounds a hang without cutting off a slow but working run.
 const RUN_TIMEOUT_MINUTES = 20;
 const RUN_TIMEOUT_MS = RUN_TIMEOUT_MINUTES * 60_000;
+
+/**
+ * What the runner is allowed to do, checked against the manifest's declaration by
+ * tools/validate-eval-schemas.js the same way THRESHOLDS is. See THE RUNNER WRITES
+ * ONLY INTO ITS WORKSPACE in the header.
+ */
+const RUNNER_CAPABILITIES = ['scoped-artifact-writes'];
 
 // The summary contract this harness scores. The waivers block arrived in 0.3.0, so a
 // 0.2.x file would be missing an oracle rather than merely older.
@@ -268,6 +294,7 @@ function parseArgs(argv) {
   const envPass = [];
   let runs = 2;
   let validateOnly = false;
+  let preflightOnly = false;
   let agentCmd;
   let model;
   let jsonPath;
@@ -330,6 +357,10 @@ function parseArgs(argv) {
         validateOnly = true;
         break;
       }
+      case '--preflight-only': {
+        preflightOnly = true;
+        break;
+      }
       default: {
         fatal(2, `unknown argument: ${arg}`);
       }
@@ -343,11 +374,12 @@ function parseArgs(argv) {
   if (agents.length > 1 && (agentCmd || agentArgs.length > 0 || envPass.length > 0 || model)) {
     fatal(2, 'runner overrides require exactly one --agent; run separate commands for different runner configurations');
   }
+  if (validateOnly && preflightOnly) fatal(2, '--validate-only and --preflight-only name different modes; pass one');
   // Stability across one run is not a measurement. Say so rather than printing stable.
-  if (runs < 2 && !validateOnly) {
+  if (runs < 2 && !validateOnly && !preflightOnly) {
     console.error(`${colors.yellow}note${colors.reset}: --runs ${runs} cannot measure stability; use --runs 2 or more.`);
   }
-  return { agents, sets, runs, validateOnly, agentCmd, agentArgs, envPass, model, jsonPath };
+  return { agents, sets, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1538,6 +1570,7 @@ function runCase(set, options, agent, tolerance, pctTolerance) {
       return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
     }
 
+    const treeBefore = workingTreeState(PROJECT_ROOT);
     try {
       runAgent(buildPrompt(set), {
         agent,
@@ -1547,9 +1580,20 @@ function runCase(set, options, agent, tolerance, pctTolerance) {
         model: options.model,
         timeout: RUN_TIMEOUT_MS,
         cwd: workspace.dir,
+        capabilities: RUNNER_CAPABILITIES,
       });
     } catch (error) {
       return { ok: false, failureClass: classifyAgentError(error), reason: error.message };
+    }
+    // The declared scope is the workspace. A run that reached the repository
+    // instead is outside it, and its artifacts are not read.
+    const treeChanges = workingTreeChanges(treeBefore, workingTreeState(PROJECT_ROOT));
+    if (treeChanges.length > 0) {
+      return {
+        ok: false,
+        failureClass: 'environment-configuration',
+        reason: `the runner changed the repository under a scoped-artifact-writes declaration: ${treeChanges.join(', ')}`,
+      };
     }
 
     const summary = readSummary(workspace.projectDir);
@@ -1685,7 +1729,8 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
 function main() {
   const startedAt = Date.now();
   const options = parseArgs(process.argv.slice(2));
-  const { agents, runs, validateOnly } = options;
+  const { agents, runs, validateOnly, preflightOnly } = options;
+  const staticMode = validateOnly ? 'validate-only' : preflightOnly ? 'preflight-only' : 'live';
 
   console.log(`${colors.cyan}========================================`);
   console.log('tea trace eval harness');
@@ -1697,7 +1742,7 @@ function main() {
     finish({
       options,
       startedAt,
-      mode: validateOnly ? 'validate-only' : 'live',
+      mode: staticMode,
       sets: [],
       runners: [],
       suiteFailureClasses: ['environment-missing-artifact'],
@@ -1707,7 +1752,7 @@ function main() {
   const sets = selectSets(groundTruth, options.sets);
   if (sets.length === 0) {
     console.error(`${colors.red}eval: no fixture set matched ${options.sets.join(', ')}${colors.reset}`);
-    finish({ options, startedAt, mode: 'live', sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+    finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
   }
 
   const { problems, notices } = validateCorpus(groundTruth);
@@ -1720,7 +1765,7 @@ function main() {
     // a model call, so it keeps the exit 1 the sibling harnesses give the same case.
     // No sets are handed to the record: building prompts out of data that just failed
     // validation is how a reporting path turns into a second crash.
-    finish({ options, startedAt, mode: validateOnly ? 'validate-only' : 'live', sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
   }
 
   const criteriaCount = sets.reduce((sum, set) => sum + (set.criteria ?? []).length, 0);
@@ -1728,7 +1773,7 @@ function main() {
     `${colors.green}✓${colors.reset} ${sets.length} fixture set(s), ${criteriaCount} criteria; every span resolves and every number recomputes`,
   );
 
-  if (validateOnly) {
+  if (validateOnly || preflightOnly) {
     // Staging is exercised here because the ground truth staying out of the agent's
     // workspace is the measurement's validity, and a check that only runs when a model
     // runs is a check nobody runs.
@@ -1744,7 +1789,7 @@ function main() {
         if (leaked.length > 0) {
           console.error(`${colors.red}eval: ${set.id} would hand the agent the answers:${colors.reset}`);
           for (const problem of leaked) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
-          finish({ options, startedAt, mode: 'validate-only', sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+          finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
         }
         const artifacts = path.join(workspace.projectDir, 'test-artifacts');
         const inherited = ['live-verification-results.json', 'gate-waivers.md'].filter(
@@ -1754,15 +1799,17 @@ function main() {
           console.error(
             `${colors.red}eval: ${set.id} staged test-artifacts holds the wrong inputs: ${inherited.join(', ')}${colors.reset}`,
           );
-          finish({ options, startedAt, mode: 'validate-only', sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+          finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
         }
         console.log(`  ${colors.green}✓${colors.reset} ${set.id}: staged workspace carries no ground truth and the right test-artifacts`);
       } finally {
         fs.rmSync(workspace.dir, { recursive: true, force: true });
       }
     }
-    console.log(`\n${colors.green}corpus valid; nothing measured (--validate-only).${colors.reset}\n`);
-    finish({ options, startedAt, mode: 'validate-only', sets, runners: [] });
+    if (validateOnly) {
+      console.log(`\n${colors.green}corpus valid; nothing measured (--validate-only).${colors.reset}\n`);
+      finish({ options, startedAt, mode: 'validate-only', sets, runners: [] });
+    }
   }
 
   const { problems: readiness, versions } = preflight(options);
@@ -1770,7 +1817,19 @@ function main() {
     console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
     for (const problem of readiness) console.error(`  - ${problem.message}`);
     console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
-    finish({ options, startedAt, mode: 'live', sets, runners: [], suiteFailureClasses: readiness.map((problem) => problem.failureClass) });
+    finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      sets,
+      runners: [],
+      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+    });
+  }
+  if (preflightOnly) {
+    console.log(`${colors.green}✓${colors.reset} runner executable(s) answer --version; built-in credentials checked`);
+    console.log(`\n${colors.green}pre-flight only; nothing measured.${colors.reset}\n`);
+    finish({ options, startedAt, mode: 'preflight-only', sets, runners: [] });
   }
   console.log(`${colors.dim}${runs} run(s) per fixture set per agent${colors.reset}\n`);
 
@@ -2047,6 +2106,7 @@ module.exports = {
   readMatrix,
   scoreRun,
   signatureOf,
+  RUNNER_CAPABILITIES,
   THRESHOLDS,
   SUITE_ID,
 };

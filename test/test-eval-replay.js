@@ -39,8 +39,8 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Ten of the twelve cases
- * produce a number and eight of those ten are constructed. Two carry real
+ * produces a number was written by hand to be parsed. Eleven of the thirteen cases
+ * produce a number and nine of those eleven are constructed. Two carry real
  * captured bytes borrowed from the CLI parser fixtures, and both now score as a
  * measured miss rather than as unmeasurable: their reports document no finding
  * at all, and a verdict whose findings array is empty is a reviewer that named
@@ -139,8 +139,19 @@ const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'groun
  * unmeasurable now score real hits. Every result also grew an `unlocated` count,
  * because a finding naming no file is one no scorer can adjudicate and dropping
  * it silently is the defect this version exists to close.
+ *
+ * 3 is scoreVerdict counting a finding against a file outside the review set as
+ * a definite false positive, carried as `outOfScope` beside the total. The ground
+ * truth had declared that rule under negativeControls since the corpus was
+ * written and nothing scored it: such a finding landed in `unattributed`, which
+ * is the bucket for findings a human has yet to rule on, and this one needs no
+ * ruling. Every stored result grew the field at 0, and one new case,
+ * out-of-scope-finding, carries the one finding that makes it 1. File matching
+ * also became boundary-aware at the same version: a path ends in `/name` or is
+ * `name`, where a bare suffix match had admitted `notcheckout.spec.ts`. No stored
+ * case carries such a path, so no other number moved.
  */
-const SCORER_VERSION = 2;
+const SCORER_VERSION = 3;
 
 const colors = {
   reset: '[0m',
@@ -247,6 +258,7 @@ function projectReviewResult(scored) {
     criticalHits: scored.criticalHits,
     reported: scored.reported,
     falsePositives: scored.falsePositives,
+    outOfScope: scored.outOfScope,
     unattributed: scored.unattributed,
     unlocated: scored.unlocated,
   };

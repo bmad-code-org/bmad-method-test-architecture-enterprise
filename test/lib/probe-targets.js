@@ -233,10 +233,25 @@ async function probeCommand(port, request, signal) {
   }
 }
 
-/** Every registered target's script is present and executable, or the reason it is not. */
-function targetProblems(projectRoot = PROJECT_ROOT) {
+/**
+ * Every registered target's script is present and executable, or the reason it
+ * is not. `interfaceIds` narrows the question to the targets a caller actually
+ * spawns, which is how a harness's pre-flight asks about its own command and
+ * not about every command TEA ships.
+ *
+ * @param {string} [projectRoot]
+ * @param {string[]} [interfaceIds]
+ * @returns {string[]}
+ */
+function targetProblems(projectRoot = PROJECT_ROOT, interfaceIds) {
   const problems = [];
-  for (const target of EXECUTION_TARGETS) {
+  const selected =
+    interfaceIds === undefined ? EXECUTION_TARGETS : EXECUTION_TARGETS.filter((target) => interfaceIds.includes(target.interfaceId));
+  for (const id of interfaceIds ?? []) {
+    if (!EXECUTION_TARGETS.some((target) => target.interfaceId === id))
+      problems.push(`${id}: no execution target is registered for this interface`);
+  }
+  for (const target of selected) {
     const absolute = scriptPath(target, projectRoot);
     if (!fs.existsSync(absolute)) {
       problems.push(`${target.executable}: ${target.script} does not exist`);
