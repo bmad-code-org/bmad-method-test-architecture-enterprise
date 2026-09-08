@@ -31,7 +31,7 @@ A tenant administrator creates a token by supplying a name and an expiry date. T
 
 ### AC-4 (P1): A token past its expiry stops working and is marked expired
 
-A request presenting a token whose expiry has passed is rejected with `401`, and the console list shows that token in the expired state.
+A request presenting a token whose expiry has passed is rejected with `401`, and the token listing reports that token in the expired state.
 
 ### AC-5 (P2): The token list shows when each token was last used
 

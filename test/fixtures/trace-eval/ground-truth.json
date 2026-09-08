@@ -40,7 +40,16 @@
     "every percentage below.",
     "",
     "Skill citations are pinned to commit 7ba2130. The line numbers are the ones in that commit;",
-    "the section names are stable and should be preferred if the lines drift."
+    "the section names are stable and should be preferred if the lines drift.",
+    "",
+    "AC-4 of the clean set said the CONSOLE list shows an expired token, and its only evidence is",
+    "two api tests. Every other criterion here that names a rendered surface carries evidence at that",
+    "level: AC-5's listing claim has a component test, AC-3 has an e2e test. Three live runs classified",
+    "AC-4 as PARTIAL and INTEGRATION-ONLY against a declared FULL, which is the correct reading of the",
+    "text as it stood: an api assertion on GET /tenants/{tenant}/tokens establishes what the endpoint",
+    "returns and not what a console renders. The criterion now says the token listing reports the",
+    "expired state, which is what the corpus actually tests, so FULL is true. The alternative was a",
+    "component test for the console, which would have changed what the clean set measures."
   ],
   "evidenceLineTolerance": 1,
   "coveragePercentTolerance": 0,
