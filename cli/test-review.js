@@ -778,7 +778,14 @@ function main() {
         reviewProvenance,
       });
     }
-    process.exit(EXIT.PASS);
+    // `process.exit` here truncated the prompt. `console.log` on a pipe is
+    // asynchronous, and exiting discards whatever has not drained, so a caller
+    // capturing this output received the first 8 KB and nothing said so. The
+    // prompt is 15 KB, and the eval harness digests it to detect a prompt
+    // change, so every change past the 8 KB mark was invisible to the digest.
+    // Setting the code and returning lets the write finish.
+    process.exitCode = EXIT.PASS;
+    return;
   }
 
   // Control-plane guard: a PR that modifies the effective skill rewrites the

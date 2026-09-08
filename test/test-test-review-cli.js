@@ -2752,6 +2752,17 @@ async function runTests() {
         'prompt-only run prints the prompt bundle (JSON file block, write restriction, derived scope)',
         promptOnly.stdout,
       );
+      // The whole prompt, not the first pipe buffer of it. `console.log` on a
+      // pipe is asynchronous and `process.exit` discards what has not drained,
+      // so this run used to hand a Node parent 8176 characters of a 15 KB prompt
+      // and say nothing. The eval harness digests this output to detect a prompt
+      // change, so every change past that mark was invisible. The tail is the
+      // assertion: a prompt cut short cannot carry its last instruction.
+      assert(
+        promptOnly.stdout.trimEnd().endsWith("the CLI rejects a report that doesn't."),
+        'prompt-only output reaches the last line of the prompt rather than stopping at the pipe buffer',
+        `${promptOnly.stdout.length} characters, ending ${JSON.stringify(promptOnly.stdout.slice(-80))}`,
+      );
       const introducedWithoutDiff = runCli([
         '--agent',
         'none',

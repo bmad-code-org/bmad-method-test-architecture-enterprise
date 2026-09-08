@@ -79,8 +79,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { parse } = require('csv-parse/sync');
 
-const { runAgent } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
+const { failureClassForExit } = require('../cli/fragment-selection-runner');
 // The reply parser belongs to the command that produces the reply. It moved to
 // cli/lib/ when cli/fragment-selection-runner.js started producing one, and it
 // is re-exported below so test/test-eval-replay.js keeps scoring stored outputs
@@ -96,12 +96,12 @@ const {
   probeVersion,
   redactArgs,
   measured,
-  classifyAgentError,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
+const { createProbePort, hostEnvironment, probeCommand, probeRequest } = require('./lib/probe-targets');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVAL_ROOT = path.join(__dirname, 'evals');
@@ -503,7 +503,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
   };
 }
 
-function main() {
+async function main() {
   const startedAt = Date.now();
   const options = parseArgs(process.argv.slice(2));
   const { agents, workflows, runs, validateOnly, preflightOnly } = options;
@@ -567,6 +567,21 @@ function main() {
   }
   console.log(`${colors.dim}${runs} run(s) per case per agent${colors.reset}\n`);
 
+  // Everything about the request that does not change between runs. The vendor
+  // name is the one exception, so it is applied per run below; the port itself
+  // is built per run because each run gets its own working directory and the
+  // authorization is what pins that.
+  const runnerOption = {};
+  if (options.agentCmd) runnerOption['agent-cmd'] = options.agentCmd;
+  if (options.model) runnerOption.model = options.model;
+  if (options.agentArgs.length > 0) runnerOption['agent-arg'] = [...options.agentArgs];
+  if (options.envPass.length > 0) runnerOption['env-pass'] = [...options.envPass];
+  // The runner's own wall clock, which reports a timeout as an exit code. The
+  // authorization's maxElapsedMs is a minute longer and SIGKILLs, so the inner
+  // bound is the one that fires and the classification survives.
+  runnerOption['timeout-ms'] = String(RUN_TIMEOUT_MS);
+  const runnerEnvironment = hostEnvironment(options.envPass);
+
   const runners = [];
 
   for (const agent of agents) {
@@ -592,38 +607,45 @@ function main() {
         const caseScores = [];
 
         for (let runIndex = 0; runIndex < runs; runIndex += 1) {
-          let stdout = '';
           // The run's working directory is empty and disposable. The prompt carries
           // everything the case needs, so PROJECT_ROOT was never a requirement, and
           // pointing a runner with write tools at the repository made `read-only`
-          // a declaration with nothing behind it.
+          // a declaration with nothing behind it. Here it is also the authorization
+          // `cwd`, so the policy is what confines the run rather than a convention.
           const scratch = scratchDirectory('tea-eval-selection');
           const treeBefore = workingTreeState(PROJECT_ROOT);
+          let result;
           let written = [];
           let treeChanges = [];
           try {
-            ({ stdout } = runAgent(prompt, {
-              agent,
-              agentCommand: options.agentCmd,
-              agentArgs: options.agentArgs,
-              envPass: options.envPass,
-              model: options.model,
-              timeout: RUN_TIMEOUT_MS,
-              cwd: scratch,
-              capabilities: RUNNER_CAPABILITIES,
-            }));
+            const { port } = await createProbePort({ cwd: scratch, interfaceIds: ['tea-fragment-selection-runner'] });
+            result = await probeCommand(
+              port,
+              probeRequest({
+                probeId: `${item.id}-run-${runIndex + 1}`,
+                interfaceId: 'tea-fragment-selection-runner',
+                operationId: 'select-fragments',
+                option: { ...runnerOption, agent },
+                environment: runnerEnvironment,
+                stdin: { kind: 'text', value: prompt },
+              }),
+              new AbortController().signal,
+            );
             written = filesWritten(scratch);
             treeChanges = workingTreeChanges(treeBefore, workingTreeState(PROJECT_ROOT));
-          } catch (error) {
-            // The model never answered. That is an environment failure, and
-            // scoring the runs that did answer would turn it into a lower number.
-            console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: ${error.message}${colors.reset}`);
-            lostRunClasses.push(classifyAgentError(error));
-            unmeasuredRuns += 1;
-            continue;
           } finally {
             fs.rmSync(scratch, { recursive: true, force: true });
           }
+
+          // A thrown fault means the probe itself lost the run: a denial, a cap,
+          // an abort, or a process that never started.
+          if (!result.ok) {
+            console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: ${result.reason}${colors.reset}`);
+            lostRunClasses.push(result.failureClass);
+            unmeasuredRuns += 1;
+            continue;
+          }
+
           if (written.length > 0 || treeChanges.length > 0) {
             // The runner wrote when the suite declares it may not. The reply is
             // not scored: a run outside its declared envelope is a run the
@@ -635,9 +657,28 @@ function main() {
             unmeasuredRuns += 1;
             continue;
           }
-          const selected = parseSelection(stdout);
-          if (selected === null) {
-            console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: no parseable fragment list in the reply${colors.reset}`);
+
+          // A non-zero exit is an observation. The runner spells its own failure
+          // classes as exit codes for exactly this reason, so the class here is
+          // the one it derived from the thrown error, with no second table.
+          const { observation } = result;
+          if (observation.exitCode !== 0) {
+            const stderr = observation.stderr.kind === 'text' ? observation.stderr.value : JSON.stringify(observation.stderr.value);
+            console.error(
+              `    ${colors.red}${item.id} run ${runIndex + 1}: ${stderr.trim() || `exit ${observation.exitCode}`}${colors.reset}`,
+            );
+            lostRunClasses.push(failureClassForExit(observation.exitCode));
+            unmeasuredRuns += 1;
+            continue;
+          }
+
+          // The runner prints the response descriptor the contracts declare, so
+          // the reply is already parsed by the time it crosses the boundary. The
+          // harness parsing it a second time is what let the runner and the
+          // scorer disagree about a fenced spelling.
+          const selected = observation.stdout.kind === 'json' ? observation.stdout.value?.fragments : undefined;
+          if (!Array.isArray(selected)) {
+            console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: no fragment list in the runner's reply${colors.reset}`);
             lostRunClasses.push('environment-parser');
             unmeasuredRuns += 1;
             continue;
@@ -747,8 +788,14 @@ function main() {
   finish({ options, startedAt, mode: 'live', suites, runners });
 }
 
+// A rejected promise is exit 2 with the reason printed. `main` is asynchronous
+// because every entry point through eval-quality is, and an unhandled rejection
+// would otherwise end the process with no failure class and no record.
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    console.error(`${colors.red}eval: ${error?.stack ?? error}${colors.reset}`);
+    process.exit(2);
+  });
 }
 
 module.exports = {

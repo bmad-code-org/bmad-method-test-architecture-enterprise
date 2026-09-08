@@ -7,26 +7,34 @@
  * cli/lib/agent-adapters.js: read the complete prompt from stdin, print the
  * final response to stdout, exit nonzero on failure.
  *
- * STUB_MODE is `<mode>` or `<mode>:<comma-separated fragment list>`. The modes:
+ * STUB_MODE selects the behaviour and STUB_FRAGMENTS carries the comma-separated
+ * list the answering modes return. The modes:
  *   fragments  a bare JSON object, the shape the runner's parser prefers
  *   fenced     the same object inside a ```json fence with prose around it
  *   prose      no JSON at all, so the runner reports environment-parser
  *   slow       sleeps past every budget, so the caller reports a killed process
  *   fail       exits 3 without printing, so the runner reports environment-transport
  *
- * Mode and fragment list share one variable on purpose. eval-quality's
- * command-line adapter builds argv from a key map, so `--env-pass` cannot be
- * repeated through it and a probe can forward exactly one name. Splitting the
- * two would work from a shell and fail from the port, which is the harder
- * failure to notice.
+ * Two variables rather than one packed value, which is the point of the fixture
+ * beyond the modes themselves: reaching both means `--env-pass` arrived twice,
+ * so the probe path really does carry a repeated option through to the child.
  */
 
 'use strict';
 
 const fs = require('node:fs');
 
-const [mode = 'fragments', fragmentList] = (process.env.STUB_MODE || 'fragments').split(':');
-const fragments = (fragmentList || 'test-quality.md,data-factories.md').split(',').filter(Boolean);
+const mode = process.env.STUB_MODE || 'fragments';
+const fragments = (process.env.STUB_FRAGMENTS || 'test-quality.md,data-factories.md').split(',').filter(Boolean);
+
+// A real vendor CLI answers --version, and every harness pre-flight probes for
+// it before it will run anything. Answering it here is what lets the whole
+// harness be driven end to end against this stub with no credential: without it
+// the probe reads the empty stdin below and reports the vendor as broken.
+if (process.argv.includes('--version')) {
+  process.stdout.write('stub-agent 1.0.0\n');
+  process.exit(0);
+}
 
 // Read stdin to completion first. A child that exits without draining the pipe
 // makes the writer see EPIPE, which is a different failure from the one under
