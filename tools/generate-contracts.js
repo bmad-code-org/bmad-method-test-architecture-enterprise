@@ -12,7 +12,10 @@
  *   - each workflow's deciding step file for that contract's sourceSpecDigest,
  *   - each workflow's resources/tea-index.csv for the selection cardinality bound, and
  *   - cli/test-review.js's VERDICT_KEYS for the verdict response descriptor's key
- *     sets and types, and its DEFAULT_AGENT for the sensitivity-witness legs.
+ *     sets and types, and its DEFAULT_AGENT for the sensitivity-witness legs, and
+ *   - cli/fragment-selection-runner.js's SELECTION_REQUEST_KEYS for the request
+ *     shape of the command the eight fragment-selection contracts name, and its
+ *     DEFAULT_AGENT for their witness legs.
  *
  * The prose that is genuinely authored (an oracle's commentary, a behavior's lead
  * sentence, the risk ids) lives in the tables below, so the JSON on disk carries
@@ -54,6 +57,9 @@ const { parseRegistryRows, REGISTRY_PATH } = require('./validate-criteria-fragme
 // The CLI is the only authority on the shape of its own verdict, so the response
 // descriptor's key and type fields are read from it instead of written here.
 const { VERDICT_KEYS, DEFAULT_AGENT } = require('../cli/test-review');
+// Same rule for the command the fragment-selection contracts name: the runner
+// owns its own request shape and its own default agent, so both are read from it.
+const { SELECTION_REQUEST_KEYS, DEFAULT_AGENT: SELECTION_DEFAULT_AGENT } = require('../cli/fragment-selection-runner');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -641,12 +647,22 @@ function witnessLeg(legId, files) {
 // fragment-selection/<workflow>.contract.json
 // ---------------------------------------------------------------------------
 
-const SELECTION_REQUEST_SHAPE = {
-  argument: stringShape([], []),
-  option: stringShape([], ['model']),
-  environment: stringShape([], ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'OPENAI_API_KEY']),
-  stdin: stringShape(['prompt'], ['prompt']),
-};
+/**
+ * The request shape of the command these eight contracts name, read from that
+ * command instead of transcribed here.
+ *
+ * It was transcribed, against an executable nobody shipped, and it described a
+ * runner that took `--model` and nothing else. `cli/fragment-selection-runner.js`
+ * is that executable now, and it declares its own key sets, so the shape below
+ * moves when the command's option surface moves and `--check` fails until the
+ * contracts are regenerated. This is the idiom the verdict response descriptor
+ * already follows for `tea-test-review`, and the reason is the one recorded
+ * there: the transcribed version had drifted by seven keys before anybody
+ * measured it.
+ */
+const SELECTION_REQUEST_SHAPE = Object.fromEntries(
+  Object.entries(SELECTION_REQUEST_KEYS).map(([channel, keys]) => [channel, stringShape(keys.required, keys.permitted)]),
+);
 
 /**
  * The authored half of the eight fragment-selection contracts.
@@ -1135,7 +1151,10 @@ function buildFragmentSelectionContract(spec) {
       operationId: 'select-fragments',
       after: null,
       cardinality: 'exactly-one',
-      inputBinding: { argument: null, option: null, environment: null, stdin: { prompt: { matcher: 'any' } } },
+      // The agent is bound as `any` rather than pinned: which vendor answered is
+      // the runner record's to state, and a literal here would make every case
+      // in the plan a claim about one vendor.
+      inputBinding: { argument: null, option: { agent: { matcher: 'any' } }, environment: null, stdin: { prompt: { matcher: 'any' } } },
     })),
     scopedResources: null,
     forbiddenInputs: FORBIDDEN_INPUTS,
@@ -1225,14 +1244,15 @@ function buildSelectionWitness(spec, evals) {
     witnessId: invariant ? 'selection-is-invariant-under-the-prompt' : 'selection-follows-the-prompt',
     channel: 'stdin',
     // Built through witnessInputs for the same reason the test-review legs are:
-    // the required key list belongs to the request shape. This operation requires
-    // nothing on argument, option or environment today, so the three come back
-    // empty, and they stay correct if that ever stops being true.
+    // the required key list belongs to the request shape. The runner requires
+    // one option and the two legs hold it fixed, because the differential this
+    // witness asserts is over the prompt: a leg that also changed the agent
+    // would let a difference in the two selections come from the vendor.
     legs: legs.map(({ caseId, legId }) => ({
       legId,
       inputs: witnessInputs(
         SELECTION_REQUEST_SHAPE,
-        {},
+        { option: { agent: SELECTION_DEFAULT_AGENT } },
         {
           kind: 'text',
           value:

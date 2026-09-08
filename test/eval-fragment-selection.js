@@ -64,6 +64,11 @@ const { parse } = require('csv-parse/sync');
 
 const { runAgent } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
+// The reply parser belongs to the command that produces the reply. It moved to
+// cli/lib/ when cli/fragment-selection-runner.js started producing one, and it
+// is re-exported below so test/test-eval-replay.js keeps scoring stored outputs
+// through the same function the runner applies to a live one.
+const { parseSelection } = require('../cli/lib/parse-selection');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const {
@@ -336,41 +341,6 @@ function buildPrompt(suite, item) {
     '{"fragments": ["one-fragment-file-name.md", "..."]}',
     'Use the fragment file names exactly as they appear in the index, without the `knowledge/` prefix.',
   ].join('\n');
-}
-
-/**
- * The fragment list out of the agent's reply.
- *
- * Returns null when nothing parseable came back, so "the contract changed" never
- * reports as "the agent selected nothing", which would look like a real and very
- * bad result.
- */
-function parseSelection(stdout) {
-  const text = String(stdout || '');
-  const candidates = [];
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/g;
-  for (const match of text.matchAll(fenced)) candidates.push(match[1]);
-  const braced = /\{[\s\S]*"fragments"[\s\S]*\}/.exec(text);
-  if (braced) candidates.push(braced[0]);
-  candidates.push(text);
-
-  for (const candidate of candidates) {
-    try {
-      const parsed = JSON.parse(candidate.trim());
-      if (Array.isArray(parsed?.fragments)) {
-        return parsed.fragments
-          .map((name) =>
-            String(name)
-              .replace(/^knowledge\//, '')
-              .trim(),
-          )
-          .filter(Boolean);
-      }
-    } catch {
-      // try the next candidate
-    }
-  }
-  return null;
 }
 
 function scoreCase(item, selected) {

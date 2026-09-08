@@ -34,6 +34,12 @@ const LLM_EXCLUDE_PATTERNS = [
   'changelog',
   'downloads/',
   'reference/glossary/',
+  // Maintainer handoff documents. They record what this repository still owes
+  // itself and how its own evaluation surface is built, which is of no use to an
+  // agent consuming TEA to do testing work, and together they cost roughly 25k
+  // of a 600k budget that had four characters left.
+  'explanation/eval-quality-roadmap',
+  'explanation/eval-quality-command-adapter',
   // Note: Files/dirs starting with _ (like _STYLE_GUIDE.md, _archive/) are excluded in shouldExcludeFromLlm()
 ];
 

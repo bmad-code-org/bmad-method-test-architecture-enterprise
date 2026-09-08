@@ -157,8 +157,11 @@ jobs:
       - name: Check the eval contracts against the sources they are generated from
         run: npm run test:contract-sources
 
-      - name: Compile the eval contracts (always skips here, because eval-quality is deliberately not a dependency)
+      - name: Compile the eval contracts
         run: npm run test:contracts
+
+      - name: Probe both TEA command targets through the eval-quality adapter
+        run: npm run test:probe-targets
 
       - name: Test changelog stamping
         run: npm run test:changelog

@@ -210,20 +210,27 @@
               "types": {}
             },
             "option": {
-              "requiredKeys": [],
-              "permittedKeys": ["model"],
+              "requiredKeys": ["agent"],
+              "permittedKeys": ["agent", "agent-cmd", "agent-arg", "env-pass", "model", "timeout-ms"],
               "types": {
-                "model": "string"
+                "agent": "string",
+                "agent-cmd": "string",
+                "agent-arg": "string",
+                "env-pass": "string",
+                "model": "string",
+                "timeout-ms": "string"
               }
             },
             "environment": {
               "requiredKeys": [],
-              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "OPENAI_API_KEY"],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "HOME", "OPENAI_API_KEY", "USER"],
               "types": {
                 "ANTHROPIC_API_KEY": "string",
                 "ANTHROPIC_BASE_URL": "string",
                 "CLAUDE_CODE_OAUTH_TOKEN": "string",
-                "OPENAI_API_KEY": "string"
+                "HOME": "string",
+                "OPENAI_API_KEY": "string",
+                "USER": "string"
               }
             },
             "stdin": {
@@ -269,7 +276,9 @@
                 "legId": "witness-ci-gitlab-python",
                 "inputs": {
                   "argument": {},
-                  "option": {},
+                  "option": {
+                    "agent": "claude"
+                  },
                   "environment": {},
                   "stdin": {
                     "kind": "text",
@@ -281,7 +290,9 @@
                 "legId": "witness-ci-pact-consumer-pipeline",
                 "inputs": {
                   "argument": {},
-                  "option": {},
+                  "option": {
+                    "agent": "claude"
+                  },
                   "environment": {},
                   "stdin": {
                     "kind": "text",
@@ -324,7 +335,11 @@
       "cardinality": "exactly-one",
       "inputBinding": {
         "argument": null,
-        "option": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
         "environment": null,
         "stdin": {
           "prompt": {
@@ -340,7 +355,11 @@
       "cardinality": "exactly-one",
       "inputBinding": {
         "argument": null,
-        "option": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
         "environment": null,
         "stdin": {
           "prompt": {
