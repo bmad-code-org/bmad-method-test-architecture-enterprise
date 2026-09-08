@@ -7,21 +7,22 @@
  * because the format belongs to eval-quality and its compiler is the only
  * authority on it.
  *
- * Every contract is `blocked` today. eval-quality's contract language can
- * describe a system under test that speaks HTTP, and a TEA skill runs behind a
- * command, so each one fails to parse in the same handful of places.
- * test/contracts/README.md records that finding in full. A baseline is what
- * keeps a known failure from reading as a passing check, and what makes the day
- * they start compiling visible instead of silent: a contract whose status moves
- * in EITHER direction fails this check until the baseline is updated to say so.
+ * All nine contracts compile today. They did not when they were written: against
+ * eval-quality 0.2.0 the contract language could only describe a system under
+ * test that speaks HTTP, and a TEA skill runs behind a command, so every one of
+ * them failed to parse in the same handful of places. test/contracts/README.md
+ * records that finding and how it closed. A baseline is what keeps a known
+ * failure from reading as a passing check, and what makes a status move visible
+ * instead of silent: a contract whose status moves in EITHER direction fails
+ * this check until the baseline is updated to say so.
  *
  * The issue shapes in the baseline are locations with array indices collapsed,
  * so adding a case to a suite does not churn the file while a new KIND of
  * failure still does.
  *
- * This check never passes silently. eval-quality is deliberately not a declared
- * dependency yet, for the reason README.md gives, so an absent compiler is a
- * skip that says it skipped.
+ * This check never passes silently. eval-quality is a declared devDependency, so
+ * the compiler resolves in a normal install; a tree installed with --omit=dev
+ * gets a skip that says it skipped.
  *
  * Usage:
  *   node test/test-contracts.js

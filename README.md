@@ -362,7 +362,7 @@ cli/                     # tea-test-review: the headless CI gate
 docs/                    # source of truth for the docs site
 website/                 # Astro + Starlight, consumes docs/ through a symlink
 tools/                   # validators, doc build, changelog stamping
-test/                    # quality gate suites and the two eval harnesses
+test/                    # quality gate suites and the three eval harnesses
 ```
 
 ## How TEA Keeps Itself Honest
@@ -541,7 +541,7 @@ npm run eval:fragment-selection -- \
 
 ### What Has to Pass
 
-Every row below is a declared gate. No live eval run has been recorded in this repository, so there is no measured recall, citation, or stability number to quote, and `DESIGN-CRITERIA-REGISTRY.md` carries the rule that keeps it that way. The live thresholds are the ones `test/evals/suite-manifest.json` declares, and `npm run test:eval-schemas` fails when a harness constant and the manifest disagree.
+Every row below is a declared gate. All three suites were measured live for the first time on 2026-09-08 against `claude`/`sonnet`, and `docs/explanation/eval-quality-roadmap.md` records what each one returned; no result artifact is committed, so quote that section rather than a number from memory. The live thresholds are the ones `test/evals/suite-manifest.json` declares, and `npm run test:eval-schemas` fails when a harness constant and the manifest disagree.
 
 | Eval                              | Declared threshold                                                                                                                                                                                                                                                                                                                                | Declared volume                        |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |

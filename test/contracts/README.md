@@ -34,7 +34,7 @@ tripped its own declared-versus-attributed guard and scored the whole run unmeas
 against the CLI's two. It is gone. `scoreVerdict` returns null only for a verdict carrying no
 findings array at all, and `test/replay/test-review/verdict-without-findings/` covers that branch.
 
-## These contracts do not compile yet, and that is the finding
+## They did not compile against 0.2.0, and that was the finding
 
 Everything in this section is measured against the published `eval-quality` release, so a check run
 against a `dist/` built locally from a newer revision can disagree with every count below.
@@ -88,11 +88,11 @@ without the located issue list the table below breaks down. The list comes from 
 the renderer. The issues themselves are the same either way; only whether the tool prints them
 differs.
 
-## Nine of nine compile against 0.3.0
+## Nine of nine compile
 
-`package.json`'s `eval-quality` devDependency moved from `0.2.0` to `0.3.0` on 2026-09-08. All 58
+`package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08. All 58
 parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
-`0.2.0` findings: `0.3.0` closes the gap they describe, and every contract compiles now. `npm run
+`0.2.0` findings, and `0.3.0` closed the gap they describe. Every contract compiles now. `npm run
 test:contracts` and `test/contracts/expected-status.json` carry the current baseline; regenerate it
 with `--write` whenever the compiler version changes.
 
@@ -156,8 +156,9 @@ known failure from reading as a passing check, and what makes the day a contract
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.
 
-`eval-quality` is a declared devDependency, currently pinned at `1.0.0`, the version series whose
-`0.3.0` release first closed the gap the table above describes. Compile status hasn't moved since.
+`eval-quality` is a declared devDependency, pinned at an exact version. `0.3.0` is the release that
+closed the gap the table above describes, and the pin has moved forward since without the compile
+status changing.
 
 ## What the generator enforces
 
