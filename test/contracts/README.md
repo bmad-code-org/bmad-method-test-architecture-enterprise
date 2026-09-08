@@ -156,8 +156,8 @@ known failure from reading as a passing check, and what makes the day a contract
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.
 
-`eval-quality` is a declared devDependency, pinned at `0.3.0`, the version whose schema closed the
-gap the table above describes.
+`eval-quality` is a declared devDependency, currently pinned at `1.0.0`, the version series whose
+`0.3.0` release first closed the gap the table above describes. Compile status hasn't moved since.
 
 ## What the generator enforces
 
