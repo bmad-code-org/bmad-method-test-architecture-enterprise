@@ -13,7 +13,10 @@ inputDocuments:
 
 # Test Quality Review: profile-notifications.spec.ts
 
-**Quality Score**: 97/100 (A)
+**Quality Score**: 79/100 (C - Needs Improvement)
+**Raw Deduction Score**: 97/100
+**Score Cap**: 79/100
+**Score Override Rule**: Highest severity High caps effective score at 79: min(raw deduction score 97, 79) = 79.
 **Review Date**: 2026-08-17
 **Review Scope**: single
 **Reviewer**: TEA Agent
@@ -27,12 +30,13 @@ Note: This review audits existing tests. It does not generate tests or score req
 **Overall Assessment**: Needs Improvement
 
 **Recommendation**: Request Changes
+**Verdict Rule**: Critical = 0 and High > 0 => Request Changes (1 High).
 
 **Context Basis**: pr_diff
 
 **Context Waivers Applied**: 0
 
-The score remains high because the file is small, readable, and mostly deterministic. One HIGH finding still forces `Request Changes`: a fixed timer can pass or fail according to runner speed. The recommendation is computed from the deduplicated registry findings and is unchanged by the strong numeric score.
+The raw deduction score is 97: the file is small, readable, and mostly deterministic. The one HIGH finding caps the effective score at 79 and, on its own, still forces `Request Changes`: a fixed timer can pass or fail according to runner speed. The recommendation is computed from the deduplicated registry findings and is unchanged by how high the raw score is.
 
 ### Key Strengths
 
@@ -42,9 +46,9 @@ The score remains high because the file is small, readable, and mostly determini
 
 ### Key Weaknesses
 
-- One fixed `waitForTimeout` introduces timing-dependent behavior
-- One network observer is registered after navigation
-- One test omits the repository's established priority marker
+❌ [H1] One fixed `waitForTimeout` introduces timing-dependent behavior
+❌ [M1] One network observer is registered after navigation
+❌ [L2] One test omits the repository's established priority marker
 
 ## Quality Criteria Assessment
 
@@ -90,8 +94,10 @@ Bonus Points:
                          --------
 Total Bonus:             +5
 
-Final Score:             97/100
-Grade:                   A
+Raw Deduction Score:     97/100
+Score Cap:               79/100 (High)
+Effective Score:         79/100
+Grade:                   C
 ```
 
 The hard-wait finding appears in three assessment rows because H1 affects timing, duration, and flakiness. The ledger deduplicates the same row, file, and line into one HIGH violation.
@@ -270,7 +276,7 @@ Re-review after the HIGH finding is fixed. The computed recommendation remains `
 
 **Recommendation**: Request Changes
 
-**Rationale:** One HIGH hard-wait violation requires changes even though the deterministic score is 97. The two remaining findings are cheaper to fix in the same change and protect the queued-write transition introduced by this pull request.
+**Rationale:** One HIGH hard-wait violation requires changes even though the raw deduction score is 97; the High cap already holds the effective score at 79. The two remaining findings are cheaper to fix in the same change and protect the queued-write transition introduced by this pull request.
 
 ## Appendix
 

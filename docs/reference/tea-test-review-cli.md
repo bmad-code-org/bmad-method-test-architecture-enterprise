@@ -97,6 +97,7 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 | `--max-critical <n>`                                   | no cap                                                             | Fail when Critical violations exceed `n`.                                                                                         |
 | `--min-files <n>`                                      | `1`                                                                | Fail when fewer than `n` files are reviewed.                                                                                      |
 | `--fail-on <level>`                                    | `request-changes`                                                  | Weakest recommendation that fails CI.                                                                                             |
+| `--gate-on <mode>`                                     | `introduced` for git diff; `all` with `--files`                    | Gate on PR-owned findings (`introduced`) or every finding (`all`).                                                                |
 | `--fail-on-skip`                                       | off                                                                | Exit 1 instead of 0 on skip (no changed test files).                                                                              |
 | `--waive <reason>`                                     | -                                                                  | Waive a fail (exit 0), record the reason; requires `--waive-until`. Exit 2/3 never waivable.                                      |
 | `--waive-until <YYYY-MM-DD>`                           | -                                                                  | Waiver expiry; must be a real future calendar date.                                                                               |
@@ -127,6 +128,26 @@ Three rules hold the boundary. The prompt states them and the parser enforces th
 A report claiming more evidence than the run supplied (`pr_diff` when the CLI supplied `none`) is rejected as exit 3. Claiming less is allowed. The Executive Summary also declares `**Context Waivers Applied**: 0`; any nonzero value is rejected.
 
 Why the two lists are separated, and why context can never waive: [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md).
+
+### Delta-aware PR verdicts
+
+Git-diff reviews default to `--gate-on introduced`. The CLI reads local
+`<base>...HEAD` hunks and classifies every finding:
+
+- `introduced`: the finding is in a file added by the pull request or on a
+  reported line in a pure-addition hunk.
+- `modified`: its reported line is in a replacement hunk. A finding with no usable
+  line is treated as modified, so missing evidence cannot bypass the gate.
+- `pre_existing`: its reported line is outside the pull request's changed lines.
+
+Introduced and modified findings affect the PR verdict. Pre-existing findings stay
+in `findings`, carry `verdict_impact: false`, and appear in the report's
+`Pre-existing Findings (Advisory)` section. They do not affect the gating
+recommendation, gating severity counts, `--min-score`, or `--max-critical`.
+
+Use `--gate-on all` for a baseline audit. An explicit `--files` review skips git,
+so it defaults to `all`; combining `--files` with `--gate-on introduced` is
+rejected instead of guessing provenance.
 
 ## Which model does the reviewing
 
@@ -179,7 +200,7 @@ A missing `config.yaml` is normal: CI installs the skill without running the int
 
 ## JSON verdict schema
 
-A passing review (also written to `--json <file>` when given):
+A review verdict (also written to `--json <file>` when given):
 
 ```json
 {
@@ -187,19 +208,51 @@ A passing review (also written to `--json <file>` when given):
   "files": ["tests/checkout.spec.ts"],
   "agent": "claude",
   "model": "sonnet",
-  "recommendation": "Approve",
-  "qualityScore": 92,
+  "gateOn": "introduced",
+  "gatingQualityScore": 89,
+  "gatingViolations": { "critical": 0, "high": 0, "medium": 2, "low": 3 },
+  "recommendation": "Approve with Comments",
+  "rawQualityScore": 92,
+  "qualityScore": 79,
+  "scoreCap": 79,
+  "scoreOverrideRule": "Highest severity High caps effective score at 79: min(raw deduction score 92, 79) = 79.",
+  "verdictRule": "No Critical or High, effective score >= 70, and findings remain => Approve with Comments.",
   "violations": { "critical": 0, "high": 1, "medium": 2, "low": 3 },
   "findings": [
     {
+      "criterion_id": "H1",
       "severity": "High",
+      "path": "tests/checkout.spec.ts",
+      "line": 16,
+      "provenance": "pre_existing",
+      "changed_line_evidence": {
+        "fileStatus": "modified",
+        "changed": false,
+        "ranges": [{ "start": 40, "end": 52, "provenance": "modified" }],
+        "reason": "the reported line is outside every added-side diff hunk"
+      },
+      "deduction": 5,
+      "verdict_impact": false,
       "row": "H1",
       "file": "tests/checkout.spec.ts",
-      "line": 16,
       "section": "Recommendations (Should Fix)",
       "title": "Hard wait orders two steps"
     }
   ],
+  "reviewProvenance": {
+    "teaCliVersion": "1.24.0",
+    "skillRubricVersion": "4.0",
+    "modelIdentifier": "sonnet",
+    "baseSha": "0123456789abcdef0123456789abcdef01234567",
+    "headSha": "89abcdef0123456789abcdef0123456789abcdef",
+    "triggerComment": null,
+    "workflowRun": "https://github.com/example/project/actions/runs/123",
+    "gateMode": "introduced",
+    "sources": {
+      "teaCliVersion": "package.json",
+      "skillRubricVersion": "test-review-template.md Workflow metadata"
+    }
+  },
   "reviewedFiles": ["tests/checkout.spec.ts"],
   "contextBasis": "pr_diff",
   "contextFiles": ["docs/stories/checkout-decline.md", "src/checkout/payment.ts"],
@@ -220,9 +273,11 @@ A passing review (also written to `--json <file>` when given):
 }
 ```
 
-`findings` is one entry per finding block documented under `## Critical Issues (Must Fix)` and `## Recommendations (Should Fix)`, in report order. `violations` is four severity counts, so it says how many defects a review found and never which ones; `findings` carries the defects themselves, which is what a consumer scoring recall, opening a ticket, or annotating a line actually needs. `severity` is read from the cited row in `criteria-registry.md`, never from the finding's own prose, so a report cannot relabel a Critical row as a Low. `file` and `line` come from the finding's `**Location**:` line and are `null` when it is missing or unreadable: the finding still counts and still reaches the verdict, with nothing to say about where to look. Findings are never deduplicated here — `(file, line, row)` identity is applied by the workflow's own aggregation step, which runs before the report exists.
+`findings` is one entry per finding block documented under `## Critical Issues (Must Fix)` and `## Recommendations (Should Fix)`, in report order. The stable automation fields are `criterion_id`, `severity`, `path`, `line`, `provenance`, `deduction`, and `verdict_impact`. PR classification also adds `changed_line_evidence`. The old `row` and `file` names and the display-only `section` and `title` remain for compatibility. `provenance` is `introduced`, `modified`, or `pre_existing` when diff evidence is available; older or unclassified reports use `unknown`. `violations` and `qualityScore` remain the full-review values. `gatingViolations` and `gatingQualityScore` are used by the selected gate mode. When the delta gate changes the recommendation, `allFindingsRecommendation` preserves the full-review recommendation.
 
 Per severity, `findings` agrees with `violations`: exactly for Critical and High, and never exceeding it for Medium and Low, which a report may summarize in prose. A disagreement is a parse failure (exit 3), so the two fields can never describe different reviews.
+
+`reviewProvenance` records the TeA package version, rubric version, resolved model, base/head commits, GitHub trigger comment, workflow run, and gate mode. Unknown values are `null`. Its `sources` map names the source or fallback for every value, so a local run or custom adapter never invents CI or model metadata.
 
 `contextWaiversApplied` is strict and always `0`. `keyStrengths` and `keyWeaknesses` are best-effort, pulled from the report's Executive Summary bullet lists for PR-comment display; they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
 
@@ -234,7 +289,7 @@ The field is absent only when no baseline was computed for this run, such as a b
 
 A failing verdict adds `gateFailures` (machine-readable reasons, e.g. `"insufficient evidence: 1 files reviewed (3 required)"`); a waived failure adds `waived`, `waiveReason`, `waiveUntil`. A diff carrying changed test artifacts the ledger has no criteria for (Gherkin features, `.http` collections) adds `unscorableTestArtifacts` naming them, so a consumer reading only the verdict learns a changed test artifact went unscored. `reportedQualityScore` and `reportedRecommendation` carry what the agent stated whenever the derived ledger values replaced it.
 
-The full key set is declared as `VERDICT_KEYS` in [`cli/test-review.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/test-review.js): fourteen keys every verdict carries and eight the run's own outcome decides. Every published payload is asserted against it, and `test/contracts/test-review.contract.json` derives its response descriptor from it rather than restating it.
+The full key set is declared as `VERDICT_KEYS` in [`cli/test-review.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/test-review.js). Every published payload is asserted against it, and `test/contracts/test-review.contract.json` derives its response descriptor from it rather than restating it. `FINDING_KEYS` in `cli/lib/parse-report.js` declares each finding record.
 
 A skipped review (no changed test files):
 
@@ -246,7 +301,18 @@ A skipped review (no changed test files):
   "qualityScore": null,
   "files": [],
   "contextBasis": "none",
-  "contextFiles": []
+  "contextFiles": [],
+  "reviewProvenance": {
+    "teaCliVersion": "1.24.0",
+    "skillRubricVersion": "4.0",
+    "modelIdentifier": "sonnet",
+    "baseSha": null,
+    "headSha": null,
+    "triggerComment": null,
+    "workflowRun": null,
+    "gateMode": "all",
+    "sources": {}
+  }
 }
 ```
 
@@ -270,9 +336,9 @@ The report itself is strictly validated:
 
 Fenced code blocks are stripped first, so a quoted example can't spoof a verdict. Markdown emphasis is stripped only where it wraps a whole value, so `tests/user_profile.spec.ts` survives the manifest intact.
 
-The score is computed rather than trusted: the CLI evaluates `100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + Total Bonus` from the report's violation counts and bonus. That result becomes the verdict score, and the CLI normalizes the report's score and grade fields before publishing it. The original model value is retained as `reportedQualityScore` metadata when corrected. An invalid bonus total or missing breakdown still fails closed. The prompt states this same arithmetic.
+The score is computed rather than trusted. The CLI first evaluates the raw deduction score: `100 - (Critical × 10 + High × 5 + Medium × 2 + Low × 1) + Total Bonus`. It then caps the effective `qualityScore` by the highest finding severity: Critical 69, High 79, Medium 89, Low 99, or 100 with no findings. `rawQualityScore` preserves the uncapped ledger result. `scoreOverrideRule` and `verdictRule` state the exact rules used. The effective score controls the grade and `--min-score` gate.
 
-The bonus is read from the template's `Total Bonus:             +N` line, and a `| Total Bonus | N |` table row is accepted as well, because agents reflow the ledger into a table and a rendering choice should not decide a gate. Both forms normalize their `Final Score` and `Grade` fields, so the published ledger always agrees with the score the gate acted on. The prompt still pins the line form as the one to produce.
+The bonus is read from the template's `Total Bonus:             +N` line, and a `| Total Bonus | N |` table row is accepted as well, because agents reflow the ledger into a table and a rendering choice should not decide a gate. The published report is normalized to show the raw score, cap, effective score, grade, and verdict rule.
 
 A report declaring Critical violations alongside an approve-type recommendation is rejected as an inconsistent verdict (exit 3): Critical means Must Fix. Stale artifacts are never parsed, output files are deleted before the run and must be freshly written by it.
 
@@ -286,7 +352,7 @@ The finding blocks are read exactly once, and both this cross-check and the verd
 
 [Example CI workflow](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/pr-test-review.yml) is a copy-paste starting template: two jobs (review + PR comment), full-history checkout, skill and CLI installed from an exactly-pinned npm version, `--skill-root "$GITHUB_WORKSPACE/_bmad/tea/workflows/testarch/bmad-testarch-test-review"`, artifacts uploaded for both report and verdict JSON, and a find-and-update PR comment that distinguishes pass, fail, skip, and infrastructure failure. Make the `review` job a required status check to gate merges.
 
-The comment carries the score/recommendation/violations digest plus up to three `keyWeaknesses` bullets, and inlines the full report in a collapsed `<details>` block (falling back to an artifact link alone above ~40,000 characters, GitHub's comment body cap is 65,536) so a reviewer can paste it straight into an AI coding agent to apply the fixes.
+The comment carries the score/recommendation/violations digest, review provenance, and up to three `keyWeaknesses` bullets. It inlines the full report in a collapsed `<details>` block (falling back to an artifact link alone above ~40,000 characters, GitHub's comment body cap is 65,536) so a reviewer can paste it straight into an AI coding agent to apply the fixes.
 
 [Adapting it](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/examples/README.md) covers two common real-world shapes: a central reusable-workflows repo, and a repo already using a third-party review bot like CodeRabbit.
 

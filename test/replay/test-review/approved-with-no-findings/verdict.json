@@ -10,8 +10,40 @@
   "files": ["playwright/tests/home.spec.ts"],
   "agent": "codex",
   "model": null,
+  "gateOn": "all",
+  "gatingQualityScore": 98,
+  "gatingViolations": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 2
+  },
+  "reviewProvenance": {
+    "teaCliVersion": "1.24.0",
+    "skillRubricVersion": "4.0",
+    "modelIdentifier": null,
+    "baseSha": null,
+    "headSha": null,
+    "triggerComment": null,
+    "workflowRun": null,
+    "gateMode": "all",
+    "sources": {
+      "teaCliVersion": "package.json",
+      "skillRubricVersion": "test-review-template.md Workflow metadata",
+      "modelIdentifier": "unavailable: selected adapter does not expose a model identifier",
+      "baseSha": "unavailable: --files bypassed the git comparison base",
+      "headSha": "unavailable: static replay fixture, not tied to a live commit",
+      "triggerComment": "unavailable: run was not triggered by a readable GitHub comment event",
+      "workflowRun": "unavailable: GITHUB_RUN_ID is not set",
+      "gateMode": "--gate-on effective value"
+    }
+  },
   "recommendation": "Approve with Comments",
+  "rawQualityScore": 98,
   "qualityScore": 98,
+  "scoreCap": 99,
+  "scoreOverrideRule": "Highest severity Low caps effective score at 99: min(raw deduction score 98, 99) = 98.",
+  "verdictRule": "No Critical or High, effective score >= 70, and findings remain => Approve with Comments.",
   "violations": {
     "critical": 0,
     "high": 0,
@@ -24,5 +56,6 @@
   "contextFiles": [],
   "contextWaiversApplied": 0,
   "keyStrengths": [],
-  "keyWeaknesses": []
+  "keyWeaknesses": [],
+  "advisoryObservations": []
 }

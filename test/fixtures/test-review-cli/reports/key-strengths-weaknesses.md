@@ -30,9 +30,15 @@ stepsCompleted:
 
 ### Key Weaknesses
 
-❌ Missing explicit test IDs on two test cases
-❌ One assertion relies on implicit ordering instead of an explicit wait
-❌ Test file exceeds the 1000-line guideline by a small margin
+❌ [H1] Fixture stub High finding 1
+❌ Recommended library adoption that is not scored
+❌ n/a
+
+### Advisory Observations
+
+ℹ️ Consider extracting the setup into a shared helper
+ℹ️ n/a
+-
 
 ### Summary
 

@@ -42,13 +42,14 @@
  * "Convention Baseline" line before this cross-check existed. See
  * verifyConventionBaseline.
  *
- * Two more fields, `keyStrengths` and `keyWeaknesses`, are extracted best-effort
- * from the Executive Summary's "### Key Strengths" / "### Key Weaknesses"
- * bullet lists for PR-comment display. These are not part of the strict schema
- * above: a report that omits or reshapes them still parses and gates normally,
- * the fields just come back as `[]`. Never add a gating check on these without
- * also stating the requirement in build-prompt.js, per the same discipline that
- * governs everything else in this file.
+ * Three display fields are extracted best-effort from the Executive Summary:
+ * `keyStrengths`, `keyWeaknesses`, and `advisoryObservations`. A Key Weakness
+ * must begin with a registry row in square brackets and that row must occur in
+ * the report's scored finding blocks. This keeps free-form suggestions and
+ * inapplicable checks out of the weakness digest. Reports using the old bullet
+ * shape still parse and gate normally; their unverifiable weakness bullets are
+ * simply omitted from display enrichment. Advisory observations remain
+ * unscored. Empty and literal n/a bullets are omitted from both collections.
  *
  * The verdict also carries `findings`: one entry per finding block documented
  * under "## Critical Issues (Must Fix)" and "## Recommendations (Should Fix)",
@@ -99,6 +100,7 @@ const CONVENTION_BASELINE_UNAVAILABLE_PATTERN = /^unavailable:\s*(.+)$/i;
 // whether it lands in the criteria table's Basis column or in prose Notes.
 const CONVENTION_CITATION_PATTERN = /Convention:\s*([A-Za-z]+)\s*\(\s*(\d+)\s*of\s*(\d+)\s*sampled\s*\)/gi;
 const SEVERITY_DEDUCTIONS = { critical: 10, high: 5, medium: 2, low: 1 };
+const SEVERITY_SCORE_CAPS = { critical: 69, high: 79, medium: 89, low: 99 };
 const MAX_BONUS = 30; // six bonus categories, worth 0 or 5 each
 // Both renderings of the two normalized ledger fields, line form first. Held as
 // lists so normalization latches on the replacement that landed rather than on
@@ -136,7 +138,11 @@ const FINAL_GRADE_PATTERNS = [
 const PARSED_VERDICT_KEYS = {
   always: {
     recommendation: 'string',
+    rawQualityScore: 'number',
     qualityScore: 'number',
+    scoreCap: 'number',
+    scoreOverrideRule: 'string',
+    verdictRule: 'string',
     violations: 'object',
     findings: 'array',
     reviewedFiles: 'array',
@@ -145,6 +151,7 @@ const PARSED_VERDICT_KEYS = {
     contextWaiversApplied: 'number',
     keyStrengths: 'array',
     keyWeaknesses: 'array',
+    advisoryObservations: 'array',
   },
   conditional: {
     conventionBaseline: 'object',
@@ -277,6 +284,60 @@ function extractBullets(subsectionText, marker, maxItems = 5) {
     }
   }
   return bullets;
+}
+
+/** A literal placeholder is not a human-readable observation. */
+function isDisplayItem(line) {
+  return line.length > 0 && !/^n\s*\/?\s*a[.!]?$/i.test(line);
+}
+
+/**
+ * Extract advisory bullets in either the template's ℹ️ form or ordinary
+ * Markdown-list form. Advisory text is deliberately not tied to findings.
+ */
+function extractAdvisoryObservations(subsectionText, maxItems = 10) {
+  if (!subsectionText) {
+    return [];
+  }
+  const observations = [];
+  for (const rawLine of subsectionText.split('\n')) {
+    if (observations.length >= maxItems) break;
+    const match = rawLine.match(/^(?:ℹ️[ \t]*|[-*][ \t]+)(.+)$/);
+    if (!match) continue;
+    const line = match[1].trim();
+    if (isDisplayItem(line)) observations.push(line);
+  }
+  return observations;
+}
+
+/**
+ * Return only weakness bullets attributable to a scored finding.
+ *
+ * The row prefix is retained in the display text so a PR comment keeps the
+ * evidence link visible. Old free-form bullets are tolerated but cannot be
+ * proved scored, so they are not published as Key weaknesses.
+ */
+function extractScoredWeaknesses(subsectionText, findings, maxItems = 5) {
+  if (!subsectionText) {
+    return [];
+  }
+  const weaknesses = [];
+  const publishedFindingIndexes = new Set();
+  for (const rawLine of subsectionText.split('\n')) {
+    if (weaknesses.length >= maxItems) break;
+    const bullet = rawLine.match(/^(?:❌[ \t]*|[-*][ \t]+)(.+)$/);
+    if (!bullet) continue;
+    const line = bullet[1].trim();
+    if (!isDisplayItem(line)) continue;
+    const row = line.match(/^\[([A-Z]\d+)\](?:[ \t]+|$)/)?.[1];
+    const findingIndex = findings.findIndex((candidate, index) => candidate.row === row && !publishedFindingIndexes.has(index));
+    if (findingIndex !== -1) {
+      const finding = findings[findingIndex];
+      weaknesses.push(`[${finding.row}] ${finding.title}`);
+      publishedFindingIndexes.add(findingIndex);
+    }
+  }
+  return weaknesses;
 }
 
 /** Map a raw Recommendation value onto the canonical enum, or throw. */
@@ -745,6 +806,7 @@ const CRITICAL_ISSUES_HEADING = 'Critical Issues (Must Fix)';
 const RECOMMENDATIONS_HEADING = 'Recommendations (Should Fix)';
 const FINDING_HEADING_PATTERN = /^### /m;
 const FINDING_SEVERITY_LINE = /^\*\*Severity\*\*:\s*P([0-3])\s*\(([A-Za-z]+)\)/m;
+const FINDING_PROVENANCE_LINE = /^\*\*Provenance\*\*:\s*(introduced|modified|pre_existing)\s*$/im;
 // Captures whatever token follows, valid-looking or not, so a fabricated ID (e.g.
 // "Z9") is reported as "not a real row" rather than misread as "no Row line at all".
 const FINDING_ROW_LINE = /^\*\*Row\*\*:\s*(\S+)/m;
@@ -762,9 +824,37 @@ const SPACED_PATH_WITH_LINE = new RegExp(String.raw`^(.+?${PATH_EXTENSION}):(\d+
 const SPACED_PATH_ONLY = new RegExp(String.raw`^(.+?${PATH_EXTENSION})(?=$|[\s,;()])`);
 const ROW_ID_SHAPE = /^[CHML]\d+$/;
 const PRIORITY_TO_SEVERITY = { 0: 'Critical', 1: 'High', 2: 'Medium', 3: 'Low' };
+const FINDING_DEDUCTIONS = { Critical: 10, High: 5, Medium: 2, Low: 1 };
 // The title is display data for a human reading the verdict, so it is bounded the
 // same way keyStrengths is: a runaway heading must not bloat the stored payload.
 const MAX_FINDING_TITLE_LENGTH = 200;
+
+/** Stable finding wire shape. null means the field may safely carry JSON null. */
+const FINDING_KEYS = {
+  criterion_id: 'string',
+  severity: null,
+  path: null,
+  line: null,
+  provenance: 'string',
+  deduction: null,
+  verdict_impact: 'boolean',
+  row: 'string',
+  file: null,
+  section: 'string',
+  title: 'string',
+  // Added by diff-evidence.js's applyFindingProvenance for a PR review; stays
+  // null for a baseline (--gate-on all, or --files) run that never classifies
+  // findings against changed lines.
+  changed_line_evidence: null,
+};
+
+function findingRecord(values) {
+  const keys = Object.keys(values);
+  if (keys.length !== Object.keys(FINDING_KEYS).length || keys.some((key) => !Object.hasOwn(FINDING_KEYS, key))) {
+    undeclaredKey(`finding keys ${JSON.stringify(keys)} disagree with FINDING_KEYS`);
+  }
+  return Object.fromEntries(Object.keys(FINDING_KEYS).map((key) => [key, values[key]]));
+}
 
 /** Split a section's text into its "### N. Title" finding blocks (empty when none). */
 function splitFindingBlocks(sectionText) {
@@ -938,8 +1028,29 @@ function parseFindingBlock(block, sectionLabel, registryRowSeverities) {
   // a defect nobody found. The entry still counts toward its severity; only the
   // place to look is missing, and the null says so.
   const { file, line } = parseFindingLocation(locationMatch ? locationMatch[1] : null);
+  const provenance = block.match(FINDING_PROVENANCE_LINE)?.[1].toLowerCase() ?? 'unknown';
+  const deduction = severity === null ? null : FINDING_DEDUCTIONS[severity];
 
-  return { severity, row, file, line, section: sectionLabel, title: findingTitle(block) };
+  return findingRecord({
+    // Stable automation fields. `unknown` is deliberate when an older report
+    // has no changed-line classification; inferring one from a file-level diff
+    // would fabricate evidence.
+    criterion_id: row,
+    severity,
+    path: file,
+    line,
+    provenance,
+    deduction,
+    verdict_impact: true,
+    // Compatibility aliases and display data used by existing consumers.
+    row,
+    file,
+    section: sectionLabel,
+    title: findingTitle(block),
+    // Set for real by applyFindingProvenance on a PR review; parseReport itself
+    // never sees a diff, so this stays null until that later enrichment step.
+    changed_line_evidence: null,
+  });
 }
 
 /**
@@ -963,8 +1074,10 @@ function parseFindingBlock(block, sectionLabel, registryRowSeverities) {
  *   criteria-registry.md) — row IDs are still required and shape-validated, but the
  *   "does this row really exist, and is its real severity what the finding claims"
  *   cross-check is skipped without it, and severity falls back to the declared value.
- * @returns {Array<{severity: string|null, row: string, file: string|null, line: number|null,
- *   section: string, title: string}>}
+ * @returns {Array<{criterion_id: string, severity: string|null, path: string|null,
+ *   line: number|null, provenance: string, deduction: number|null,
+ *   verdict_impact: boolean, row: string, file: string|null, section: string,
+ *   title: string}>}
  */
 function extractFindings(text, registryRowSeverities) {
   const findings = [];
@@ -1100,11 +1213,38 @@ function deriveQualityScore(rawText, violations) {
       `Report Total Bonus +${bonus} is not a multiple of 5 within 0-${MAX_BONUS}; each of the six bonus categories is worth 0 or 5`,
     );
   }
-  const deductions = VIOLATION_LEVELS.reduce((sum, level) => {
+  return Math.max(0, Math.min(100, 100 - deductionsFor(violations) + bonus));
+}
+
+/** Sum of severity deductions for a {critical, high, medium, low} count. */
+function deductionsFor(violations) {
+  return VIOLATION_LEVELS.reduce((sum, level) => {
     const key = level.toLowerCase();
     return sum + violations[key] * SEVERITY_DEDUCTIONS[key];
   }, 0);
-  return Math.max(0, Math.min(100, 100 - deductions + bonus));
+}
+
+/**
+ * Recompute the raw deduction score for a smaller violation count than the one
+ * a report's own ledger describes (e.g. after excluding pre-existing findings
+ * from a PR gate), using only what the ledger already proves.
+ *
+ * `rawQualityScore` is floor/ceiling-clamped to 0-100, so the bonus behind it
+ * is exactly recoverable unless it was floor-clamped (`rawQualityScore === 0`):
+ * a clamped 0 could mean "exactly 0" or "-400 before clamping", and only the
+ * true bonus tells them apart. When it is floor-clamped the true bonus is
+ * unrecoverable, so 0 is assumed instead: the smallest legal bonus, which
+ * never scores the reduced violation count more leniently than the evidence
+ * supports.
+ *
+ * @param {number} rawQualityScore - This report's own clamped raw score.
+ * @param {object} fullViolations - The {critical, high, medium, low} counts rawQualityScore was computed from.
+ * @param {object} targetViolations - The smaller counts to recompute a raw score for.
+ * @returns {number} A raw score in 0-100, clamped the same way rawQualityScore was.
+ */
+function rawScoreForViolations(rawQualityScore, fullViolations, targetViolations) {
+  const bonus = rawQualityScore > 0 ? rawQualityScore - 100 + deductionsFor(fullViolations) : 0;
+  return Math.max(0, Math.min(100, 100 - deductionsFor(targetViolations) + bonus));
 }
 
 function gradeForScore(score) {
@@ -1113,6 +1253,59 @@ function gradeForScore(score) {
   if (score >= 70) return 'C';
   if (score >= 60) return 'D';
   return 'F';
+}
+
+function effectiveScoreFor(rawQualityScore, violations) {
+  const highestSeverity = Object.keys(SEVERITY_SCORE_CAPS).find((severity) => violations[severity] > 0);
+  if (!highestSeverity) {
+    return {
+      qualityScore: rawQualityScore,
+      scoreCap: 100,
+      scoreOverrideRule: `No severity cap: no findings; effective score equals raw deduction score ${rawQualityScore}.`,
+    };
+  }
+
+  const scoreCap = SEVERITY_SCORE_CAPS[highestSeverity];
+  const qualityScore = Math.min(rawQualityScore, scoreCap);
+  const severity = highestSeverity[0].toUpperCase() + highestSeverity.slice(1);
+  return {
+    qualityScore,
+    scoreCap,
+    scoreOverrideRule: `Highest severity ${severity} caps effective score at ${scoreCap}: min(raw deduction score ${rawQualityScore}, ${scoreCap}) = ${qualityScore}.`,
+  };
+}
+
+/**
+ * @param {object} violations - {critical, high, medium, low} the rule is judged against.
+ * @param {number} qualityScore - The effective score paired with `violations`.
+ * @param {number} [excludedAdvisoryCount] - Findings this call's `violations` deliberately
+ *   excludes (advisory, non-gating). Only changes the zero-violations wording: "No findings"
+ *   would misstate a run under --gate-on introduced that excluded a real pre-existing finding,
+ *   which is exactly the self-contradiction a derived, machine-checked rule exists to prevent.
+ */
+function verdictRuleFor(violations, qualityScore, excludedAdvisoryCount = 0) {
+  if (violations.critical > 0) {
+    return `Critical > 0 => Block (${violations.critical} Critical).`;
+  }
+  if (violations.high > 0) {
+    return `Critical = 0 and High > 0 => Request Changes (${violations.high} High).`;
+  }
+  if (qualityScore < 70) {
+    return `Critical = 0, High = 0, and effective score < 70 => Request Changes (${qualityScore}).`;
+  }
+  if (violations.medium + violations.low > 0) {
+    return `No Critical or High, effective score >= 70, and findings remain => Approve with Comments.`;
+  }
+  return excludedAdvisoryCount > 0
+    ? `No Critical or High and no gating findings (${excludedAdvisoryCount} pre-existing, advisory) => Approve.`
+    : 'No findings => Approve.';
+}
+
+function assessmentForRecommendation(recommendation, qualityScore) {
+  if (recommendation === 'Block') return 'Critical Issues';
+  if (recommendation === 'Request Changes') return 'Needs Improvement';
+  if (recommendation === 'Approve with Comments') return 'Acceptable';
+  return qualityScore >= 90 ? 'Excellent' : 'Good';
 }
 
 /**
@@ -1133,8 +1326,10 @@ function replaceFirstMatch(line, patterns, replacement) {
 }
 
 /** Normalize the report's schema-owned score and grade fields to CLI arithmetic. */
-function normalizeReportScore(reportText, qualityScore) {
+function normalizeReportScore(reportText, parsed) {
+  const { recommendation, qualityScore, rawQualityScore, scoreCap, scoreOverrideRule, verdictRule } = parsed;
   const grade = gradeForScore(qualityScore);
+  const assessment = assessmentForRecommendation(recommendation, qualityScore);
   let inFence = false;
   let section = null;
   let summaryNormalized = false;
@@ -1151,6 +1346,9 @@ function normalizeReportScore(reportText, qualityScore) {
       }
 
       if (!inFence) {
+        if (/^[ \t]*\*\*(?:Raw Deduction Score|Score Cap|Score Override Rule|Verdict Rule)\*\*:/.test(line)) {
+          return null;
+        }
         const heading = /^##[ \t]+([^\r\n]+?)[ \t]*\r?$/.exec(line);
         if (heading) {
           section = heading[1];
@@ -1158,7 +1356,13 @@ function normalizeReportScore(reportText, qualityScore) {
         if (!summaryNormalized && /^[ \t]*\*\*Quality Score\*\*:/.test(line)) {
           line = line
             .replace(/^([ \t]*\*\*Quality Score\*\*:[ \t]*)\d+([ \t]*\/[ \t]*100)/, `$1${qualityScore}$2`)
-            .replace(/^([ \t]*\*\*Quality Score\*\*:[^\r\n]*\([ \t]*)[A-F](?=[ \t)-])/, `$1${grade}`);
+            .replace(/^([ \t]*\*\*Quality Score\*\*:[^\r\n]*\([ \t]*)[A-F](?=[ \t)-])/, `$1${grade}`)
+            .replace(/^([ \t]*\*\*Quality Score\*\*:[^\r\n]*\([ \t]*[A-F][ \t]*-[ \t]*)[^)]*(\))/, `$1${assessment}$2`);
+          line +=
+            `\n**Raw Deduction Score**: ${rawQualityScore}/100\n` +
+            `**Score Cap**: ${scoreCap}/100\n` +
+            `**Score Override Rule**: ${scoreOverrideRule}\n` +
+            `**Verdict Rule**: ${verdictRule}`;
           summaryNormalized = true;
         }
       }
@@ -1172,8 +1376,12 @@ function normalizeReportScore(reportText, qualityScore) {
       // self-contradicting report the derived score exists to prevent.
       if (section === 'Quality Score Breakdown') {
         if (!finalScoreNormalized) {
-          const scored = replaceFirstMatch(line, FINAL_SCORE_PATTERNS, `$1${qualityScore}$2`);
-          line = scored.line;
+          const scored = replaceFirstMatch(line, FINAL_SCORE_PATTERNS, `$1${rawQualityScore}$2`);
+          line = scored.matched
+            ? scored.line
+                .replace(/^([ \t]*)Final Score[ \t]*:[ \t]*/i, '$1Raw Deduction Score:     ')
+                .replace(/(\|[ \t]*)Final Score([ \t]*\|)/i, '$1Raw Deduction Score$2')
+            : scored.line;
           finalScoreNormalized = scored.matched;
         }
         if (!finalGradeNormalized) {
@@ -1184,6 +1392,7 @@ function normalizeReportScore(reportText, qualityScore) {
       }
       return line;
     })
+    .filter((line) => line !== null)
     .join('\n');
 }
 
@@ -1226,7 +1435,8 @@ function parseReport(reportText, runContract = {}) {
   }
   const findings = verifyFindingSeverityCounts(text, violations, runContract.registryRowSeverities ?? null);
 
-  const qualityScore = deriveQualityScore(reportText, violations);
+  const rawQualityScore = deriveQualityScore(reportText, violations);
+  const { qualityScore, scoreCap, scoreOverrideRule } = effectiveScoreFor(rawQualityScore, violations);
 
   const reviewedFiles = parseReviewedFiles(text);
   const contextBasis = parseContextBasis(text);
@@ -1258,15 +1468,21 @@ function parseReport(reportText, runContract = {}) {
 
   const executiveSection = extractSection(text, 'Executive Summary');
   const keyStrengths = extractBullets(extractSubsection(executiveSection, 'Key Strengths'), '✅');
-  const keyWeaknesses = extractBullets(extractSubsection(executiveSection, 'Key Weaknesses'), '❌');
+  const keyWeaknesses = extractScoredWeaknesses(extractSubsection(executiveSection, 'Key Weaknesses'), findings);
+  const advisoryObservations = extractAdvisoryObservations(extractSubsection(executiveSection, 'Advisory Observations'));
 
   // Same treatment the score already gets: derive it, publish the derived value, and
   // keep what the agent said so the substitution is visible rather than silent.
   const derivedRecommendation = deriveRecommendation(violations, qualityScore);
+  const verdictRule = verdictRuleFor(violations, qualityScore);
 
   const parsed = projectAlwaysKeys({
     recommendation: derivedRecommendation,
+    rawQualityScore,
     qualityScore,
+    scoreCap,
+    scoreOverrideRule,
+    verdictRule,
     violations,
     findings,
     reviewedFiles,
@@ -1275,6 +1491,7 @@ function parseReport(reportText, runContract = {}) {
     contextWaiversApplied,
     keyStrengths,
     keyWeaknesses,
+    advisoryObservations,
   });
   // Surfaced (not just used to gate) so a stored verdict JSON says what this run
   // actually measured, the same reasoning as attaching agent/model: a fabricated
@@ -1350,6 +1567,8 @@ module.exports = {
   parseReport,
   normalizeReportScore,
   deriveRecommendation,
+  effectiveScoreFor,
+  verdictRuleFor,
   verdictFor,
   scoreFails,
   PARSED_VERDICT_KEYS,
@@ -1358,4 +1577,6 @@ module.exports = {
   parseConventionCitations,
   verifyFindingSeverityCounts,
   extractFindings,
+  FINDING_KEYS,
+  rawScoreForViolations,
 };

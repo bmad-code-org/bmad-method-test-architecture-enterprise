@@ -8,8 +8,40 @@
   ],
   "agent": "codex",
   "model": "gpt-5.6-sol",
+  "gateOn": "all",
+  "gatingQualityScore": 45,
+  "gatingViolations": {
+    "critical": 4,
+    "high": 3,
+    "medium": 0,
+    "low": 0
+  },
+  "reviewProvenance": {
+    "teaCliVersion": "1.24.0",
+    "skillRubricVersion": "4.0",
+    "modelIdentifier": "gpt-5.6-sol",
+    "baseSha": null,
+    "headSha": null,
+    "triggerComment": null,
+    "workflowRun": null,
+    "gateMode": "all",
+    "sources": {
+      "teaCliVersion": "package.json",
+      "skillRubricVersion": "test-review-template.md Workflow metadata",
+      "modelIdentifier": "resolved agent adapter model",
+      "baseSha": "unavailable: --files bypassed the git comparison base",
+      "headSha": "unavailable: static replay fixture, not tied to a live commit",
+      "triggerComment": "unavailable: run was not triggered by a readable GitHub comment event",
+      "workflowRun": "unavailable: GITHUB_RUN_ID is not set",
+      "gateMode": "--gate-on effective value"
+    }
+  },
   "recommendation": "Block",
+  "rawQualityScore": 45,
   "qualityScore": 45,
+  "scoreCap": 69,
+  "scoreOverrideRule": "Highest severity Critical caps effective score at 69: min(raw deduction score 45, 69) = 45.",
+  "verdictRule": "Critical > 0 => Block (4 Critical).",
   "violations": {
     "critical": 4,
     "high": 3,
@@ -18,60 +50,102 @@
   },
   "findings": [
     {
+      "criterion_id": "C1",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 38,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C1",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 38,
       "section": "Critical Issues (Must Fix)",
-      "title": "The tenant-boundary test is skipped with no reason"
+      "title": "The tenant-boundary test is skipped with no reason",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C3",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 17,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C3",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 17,
       "section": "Critical Issues (Must Fix)",
-      "title": "Tautological assertion that can never fail"
+      "title": "Tautological assertion that can never fail",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C4",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 23,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C4",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 23,
       "section": "Critical Issues (Must Fix)",
-      "title": "Test body has no assertion"
+      "title": "Test body has no assertion",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "C5",
       "severity": "Critical",
+      "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+      "line": 31,
+      "provenance": "unknown",
+      "deduction": 10,
+      "verdict_impact": true,
       "row": "C5",
       "file": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
-      "line": 31,
       "section": "Critical Issues (Must Fix)",
-      "title": "Asserts a mock the same test configured"
+      "title": "Asserts a mock the same test configured",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H1",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 16,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H1",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 16,
       "section": "Recommendations (Should Fix)",
-      "title": "Hard wait used to order two steps"
+      "title": "Hard wait used to order two steps",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H3",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 31,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H3",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 31,
       "section": "Recommendations (Should Fix)",
-      "title": "Conditional decides whether anything is asserted"
+      "title": "Conditional decides whether anything is asserted",
+      "changed_line_evidence": null
     },
     {
+      "criterion_id": "H4",
       "severity": "High",
+      "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+      "line": 22,
+      "provenance": "unknown",
+      "deduction": 5,
+      "verdict_impact": true,
       "row": "H4",
       "file": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
-      "line": 22,
       "section": "Recommendations (Should Fix)",
-      "title": "Module-level mutable state written in a test with no reset"
+      "title": "Module-level mutable state written in a test with no reset",
+      "changed_line_evidence": null
     }
   ],
   "reviewedFiles": [
@@ -83,5 +157,6 @@
   "contextFiles": [],
   "contextWaiversApplied": 0,
   "keyStrengths": [],
-  "keyWeaknesses": []
+  "keyWeaknesses": [],
+  "advisoryObservations": []
 }
