@@ -122,6 +122,9 @@ jobs:
       - name: Run agent schema validation tests
         run: npm run test:schemas
 
+      - name: Check that every npm test step runs in CI
+        run: npm run test:ci-coverage
+
       - name: Validate release metadata
         run: npm run test:release-metadata
 
@@ -140,8 +143,20 @@ jobs:
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
 
+      - name: Validate trace eval corpus
+        run: npm run test:eval-trace-data
+
       - name: Validate the eval suite manifest and result schema
         run: npm run test:eval-schemas
+
+      - name: Replay stored eval outputs against the scorers
+        run: npm run test:eval-replay
+
+      - name: Check the eval contracts against the sources they are generated from
+        run: npm run test:contract-sources
+
+      - name: Compile the eval contracts
+        run: npm run test:contracts
 
       - name: Test changelog stamping
         run: npm run test:changelog

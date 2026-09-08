@@ -114,7 +114,7 @@
     "coverageArithmetic": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-04-analyze-gaps.md",
       "section": "4. Calculate Coverage Statistics",
-      "lines": "450-474",
+      "lines": "458-485",
       "rule": "Only FULL counts toward a coverage percentage. Each percentage is Math.round(covered / total * 100), and a priority with no criteria resolves to 100."
     },
     "singleLevelFullPrecedent": {
@@ -126,19 +126,19 @@
     "waiverContract": {
       "file": "src/workflows/testarch/bmad-testarch-trace/trace-template.md",
       "section": "Waiver Details (For WAIVED only)",
-      "lines": "458-491",
+      "lines": "488-522",
       "rule": "A waiver must carry a business justification, a named approver with a role, an approval date, an expiry date that does not carry into the next release, a monitoring plan, and a remediation plan with a fix target, a due date, an owner, and a verification step."
     },
     "waiverScenarios": {
       "file": "src/workflows/testarch/bmad-testarch-trace/checklist.md",
       "section": "Waiver Scenarios",
-      "lines": "577-584",
+      "lines": "585-605",
       "rule": "A waiver applies only to a FAIL decision. Its justification must be business, not technical convenience. Its approver must hold authority such as VP, CTO, or PO. It must have an expiry date and a remediation plan with a concrete due date. Security vulnerabilities are not waived."
     },
     "decisionIntegrity": {
       "file": "src/workflows/testarch/bmad-testarch-trace/checklist.md",
       "section": "Decision Integrity",
-      "lines": "478-484",
+      "lines": "486-493",
       "rule": "The decision follows the rules rather than judgment. P0 failures produce FAIL unless waived. Security issues produce FAIL and should never be waived. A waiver needs a business justification and an approver."
     },
     "p0IsSecurityCritical": {

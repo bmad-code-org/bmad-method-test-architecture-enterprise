@@ -45,11 +45,11 @@ const CONTRACT_ROOT = path.join(__dirname, 'contracts');
 const BASELINE = path.join(CONTRACT_ROOT, 'expected-status.json');
 
 const colors = {
-  reset: '[0m',
-  red: '[31m',
-  green: '[32m',
-  yellow: '[33m',
-  dim: '[2m',
+  reset: '\u001B[0m',
+  red: '\u001B[31m',
+  green: '\u001B[32m',
+  yellow: '\u001B[33m',
+  dim: '\u001B[2m',
 };
 
 /** Every *.contract.json under test/contracts, at any depth, in a stable order. */
