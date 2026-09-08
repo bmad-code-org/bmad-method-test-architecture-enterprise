@@ -1,0 +1,76 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the gate matched, so the waiver oracle is scored, and the run turned",
+    "W-2 down for the wrong reasons. It named the two deterministic field checks, expiry_present and",
+    "remediation_due_date, and none of the four that need a reading of the register: business",
+    "justification, approver authority, the security nature of a P0 authorization criterion, and the",
+    "missing monitoring plan. It also named fail_only, which cannot fail here: W-2 names a FAIL and this",
+    "run derived FAIL. The ground truth's expectedTreatment for W-2 asks for at least the missing expiry,",
+    "the approver and the security nature to be named, and scoreWaivers holds the run to every check the",
+    "corpus records a violation against, so a waiver turned down for two reasons out of six is scored as",
+    "four misses plus one for the check that should have held.",
+    "",
+    "The artifacts are CONSTRUCTED, as seeded-correct-run's with W-2's failed_checks replaced."
+  ],
+  "id": "seeded-waiver-misjudged",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "Everything but the waiver block is seeded-correct-run's and derives the same way.",
+    "",
+    "Waivers, 12 checks in scorer order: filed 2, valid 1 and invalid 1 match (3). W-1 is reported valid (1).",
+    "W-2 is reported invalid (1). Then the six check ids EXPECTED_FAILED_WAIVER_CHECKS lists for W-2, in its",
+    "order: business_justification missing, approver_authority missing, expiry_present named,",
+    "remediation_due_date named, not_security missing, contract_complete missing (4 fail, 2 pass). Last,",
+    "fail_only must not be among the failed checks, and it is (1 fails). 7 of 12."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "NONE",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "FAIL", "reported": "FAIL", "ok": true },
+    "citations": { "total": 10, "resolved": 10, "misattributed": [], "unresolved": [] },
+    "arithmetic": { "checks": 40, "passed": 40, "failed": [] },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 3, "passed": 3, "failed": [] },
+    "waivers": {
+      "scored": true,
+      "checks": 12,
+      "passed": 7,
+      "failed": [
+        { "field": "waiver W-2 names failed check business_justification", "expected": true, "actual": false },
+        { "field": "waiver W-2 names failed check approver_authority", "expected": true, "actual": false },
+        { "field": "waiver W-2 names failed check not_security", "expected": true, "actual": false },
+        { "field": "waiver W-2 names failed check contract_complete", "expected": true, "actual": false },
+        { "field": "waiver W-2 does not fail fail_only", "expected": false, "actual": true }
+      ]
+    },
+    "live": { "checks": 13, "passed": 13, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}

@@ -115,9 +115,26 @@ names prints as a drift notice rather than failing.
 with no model call and no network, so a change to how an eval parses a reply or
 scores it has to reproduce the recorded result or declare itself. The corpus is
 one directory per case under `replay/<suite>/<case>/`: a verdict and the report
-it points at for `test-review`, a captured stdout for `fragment-selection`, and
-an `expected.json` holding the result, the arithmetic that produced it by hand,
-and whether the stored output is a real capture or was constructed.
+it points at for `test-review`, a captured stdout for `fragment-selection`, the
+`e2e-trace-summary.json` and `traceability-matrix.md` a run leaves in
+`test-artifacts/` for `trace`, and an `expected.json` holding the result, the
+arithmetic that produced it by hand, and whether the stored output is a real
+capture or was constructed.
+
+A `trace` case names the fixture set it is scored against and digests that set's
+scoring inputs, so an edit to one set fails no case of the other. Its result is
+the scored object reduced to what can be checked by hand: the reported status per
+criterion, the gate, the citation tally, and for each check group its size, the
+number that passed, and the field, expected and actual of each check that did
+not. Fourteen cases cover both sets: a correct run of each, the two discriminating
+false positives with the gate flipping, a wrong percentage, a missing oracle
+source, an omitted `rejected_evidence` array, a waiver turned down for the wrong
+reasons, a matrix full of lines the parser must ignore, an invented and a
+duplicated criterion section, an empty `waivers` block on the set that has no
+register, and two artifacts the harness must refuse to score at all. The same
+cases hold `signatureOf` to its contract: two cases of one set sign identically
+exactly when their results are identical, and a counted fixture mutation always
+changes the signature.
 
 Each stored result carries the scorer version it was recorded at. A result that
 still reproduces passes whatever its stamp says; one that moves at an unchanged
@@ -128,13 +145,14 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every case that produces a number was written by hand to be parsed, so a green
 run proves the scorers are deterministic and reproduce history, and proves
-nothing about whether they handle real agent output correctly. Eleven of the thirteen
-cases produce a number and nine of those eleven are constructed. Two carry real
-captured bytes, both borrowed from `fixtures/test-review-cli/`, and both score
-zero recall: their reports document no finding at all. The live runs of
+nothing about whether they handle real agent output correctly. Twenty-three of the
+twenty-seven cases produce a number and twenty-one of those are constructed. Two carry
+real captured bytes, both borrowed from `fixtures/test-review-cli/`, and both
+score zero recall: their reports document no finding at all. The live runs of
 2026-09-08 produced real numbers for all three suites, and none of their output
 was committed, so this repository still holds no captured output the replay
-suite can turn into a number a vendor earned.
+suite can turn into a number a vendor earned, and every `trace` case is
+constructed.
 
 The suite also runs the `test/lib/eval-record.js` checks that need no stored
 case, because it is the only entry point in the pull-request gate that executes

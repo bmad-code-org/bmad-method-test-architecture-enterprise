@@ -1,0 +1,69 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is a calculation defect with every judgment right. The statuses,",
+    "the gate and every count are seeded-correct-run's, and the overall percentage is printed as 75 where 7",
+    "of 10 rounds to 70. The ground truth's coveragePercentTolerance is 0 for exactly this reason: the",
+    "workflow computes each percentage as Math.round(covered / total * 100), so a tolerance would only hide",
+    "a wrong number. One wrong digit fails two checks, the comparison with the recomputed 70 and the",
+    "internal check that the printed pct is the rounding of the printed counts, and the second is the one",
+    "that would still fire if the ground truth had the same wrong number in it.",
+    "",
+    "The artifacts are CONSTRUCTED, as seeded-correct-run's with one field changed."
+  ],
+  "id": "seeded-arithmetic-off",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "Everything but coverage.inventory.pct is seeded-correct-run's and derives the same way.",
+    "",
+    "Arithmetic: coverage.inventory.pct is the third check and reads 75 against a recomputed 70 at tolerance",
+    "0, so it fails. The internal check for coverage.inventory is the first of the five pct-equals-round",
+    "checks and compares round(7 / 10 * 100), which is 70, with the printed 75, so it fails too. The two",
+    "appear in that order because the internal group comes after the level and test counts. 38 of 40."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "NONE",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "FAIL", "reported": "FAIL", "ok": true },
+    "citations": { "total": 10, "resolved": 10, "misattributed": [], "unresolved": [] },
+    "arithmetic": {
+      "checks": 40,
+      "passed": 38,
+      "failed": [
+        { "field": "coverage.inventory.pct", "expected": 70, "actual": 75 },
+        { "field": "coverage.inventory.pct is round(covered/total*100)", "expected": 70, "actual": 75 }
+      ]
+    },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 3, "passed": 3, "failed": [] },
+    "waivers": { "scored": true, "checks": 12, "passed": 12, "failed": [] },
+    "live": { "checks": 13, "passed": 13, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}

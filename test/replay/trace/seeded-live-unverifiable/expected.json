@@ -1,0 +1,64 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is seeded-correct-run with the one difference the ground truth calls",
+    "environment-dependent. The workspace could not resolve a current commit sha, so record 4-LIVE-001 lands",
+    "as unverifiable, freshness reads unverifiable, and source_sha is empty. The ground",
+    "truth's environmentDependentPair says both outcomes mean the same thing, and scoreLiveEvidence scores",
+    "the pair as a sum so that they do. This case is what proves that: its result is identical to",
+    "seeded-correct-run's, and checkTraceSignatures requires the two to sign identically, which is the",
+    "property main() depends on when it calls a case stable across repetitions on different machines.",
+    "",
+    "The artifacts are CONSTRUCTED, as a copy of seeded-correct-run's with the live block, the blocker",
+    "reason and source_sha changed."
+  ],
+  "id": "seeded-live-unverifiable",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "Everything outside the live block is seeded-correct-run's and derives the same way.",
+    "",
+    "Live: present is true, so freshness is not checked at all. counted 0, requirements_live_only 0, failed 0,",
+    "contradicted 0, blocked 0, skipped 0, unmatched 0 and invalid 1 match. The pair check reads stale plus",
+    "unverifiable, which is 0 plus 1 here and 1 plus 0 in seeded-correct-run, and the expected sum is 1 either",
+    "way. Blocker 4-LIVE-001 is still high, because unverifiable is in step-04 section 2b's high list beside",
+    "stale. 13 of 13, the same 13 as the stale twin, so the two results are identical."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "NONE",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "FAIL", "reported": "FAIL", "ok": true },
+    "citations": { "total": 10, "resolved": 10, "misattributed": [], "unresolved": [] },
+    "arithmetic": { "checks": 40, "passed": 40, "failed": [] },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 3, "passed": 3, "failed": [] },
+    "waivers": { "scored": true, "checks": 12, "passed": 12, "failed": [] },
+    "live": { "checks": 13, "passed": 13, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}

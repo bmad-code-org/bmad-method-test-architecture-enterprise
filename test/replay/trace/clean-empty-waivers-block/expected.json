@@ -1,0 +1,61 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is clean-correct-run with a waivers block that reads filed 0,",
+    "valid 0, invalid 0 and no entries. Step-05 emits the block only when a register was found, so a run",
+    "that emits an empty one claims to have read a register the workspace does not hold. Beside",
+    "clean-correct-run, this is the absent-versus-present-and-empty pair: the counts inside the block are",
+    "all correct and the block is still wrong, so the check has to be on presence and the clean set has to",
+    "count it as a false positive.",
+    "",
+    "The artifacts are CONSTRUCTED, as clean-correct-run's with one key added."
+  ],
+  "id": "clean-empty-waivers-block",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "clean-api-token-lifecycle",
+    "scoringInputsDigest": "sha256:3255d58babf67a05a33fc38a61c658518dd2c9742e42d3a67a1fa4c3c5d699ac"
+  },
+  "derivation": [
+    "Everything but the waivers block is clean-correct-run's and derives the same way.",
+    "",
+    "Waivers: the gate matched and the set has no register, so the one check expects summary.waivers to be",
+    "undefined. It is an object, so the check fails and the stored failure carries the object as actual and",
+    "no expected key, because the expectation was undefined. 0 of 1.",
+    "",
+    "cleanFalsePositives: the summary.waivers term adds 1 and every other term stays 0. 1."
+  ],
+  "result": {
+    "isCleanSet": true,
+    "statuses": { "AC-1": "FULL", "AC-2": "FULL", "AC-3": "FULL", "AC-4": "FULL", "AC-5": "FULL" },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "PASS", "reported": "PASS", "ok": true },
+    "citations": { "total": 6, "resolved": 6, "misattributed": [], "unresolved": [] },
+    "arithmetic": { "checks": 38, "passed": 38, "failed": [] },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 2, "passed": 2, "failed": [] },
+    "waivers": {
+      "scored": true,
+      "checks": 1,
+      "passed": 0,
+      "failed": [
+        {
+          "field": "waivers block absent when no register exists",
+          "actual": { "filed": 0, "valid": 0, "invalid": 0, "entries": [] }
+        }
+      ]
+    },
+    "live": { "checks": 3, "passed": 3, "failed": [] },
+    "cleanFalsePositives": 1
+  }
+}

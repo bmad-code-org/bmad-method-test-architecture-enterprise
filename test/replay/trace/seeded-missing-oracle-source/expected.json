@@ -1,0 +1,64 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the summary's oracle.sources is an empty array. Every other oracle",
+    "field is right, so the run resolved the epic and then failed to say which document it resolved, and",
+    "the one check that reads sources is the one that fails. It pins the basename match: the check asks",
+    "whether any source's basename is the epic's, so an empty list is a miss and no path convention could",
+    "have rescued it.",
+    "",
+    "The artifacts are CONSTRUCTED, as seeded-correct-run's with one field emptied."
+  ],
+  "id": "seeded-missing-oracle-source",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "Everything but oracle.sources is seeded-correct-run's and derives the same way.",
+    "",
+    "Oracle resolution is seven checks: collection_mode, inventory_basis, oracle.resolution_mode,",
+    "oracle.confidence, the sources check, oracle.external_pointer_status and oracle.synthetic. The sources",
+    "check expects true and computes whether some entry's basename equals",
+    "epic-4-tenant-data-export-and-erasure.md; over an empty array that is false. 6 of 7."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "NONE",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "FAIL", "reported": "FAIL", "ok": true },
+    "citations": { "total": 10, "resolved": 10, "misattributed": [], "unresolved": [] },
+    "arithmetic": { "checks": 40, "passed": 40, "failed": [] },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": {
+      "checks": 7,
+      "passed": 6,
+      "failed": [{ "field": "oracle.sources names the oracle document", "expected": true, "actual": false }]
+    },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 3, "passed": 3, "failed": [] },
+    "waivers": { "scored": true, "checks": 12, "passed": 12, "failed": [] },
+    "live": { "checks": 13, "passed": 13, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}

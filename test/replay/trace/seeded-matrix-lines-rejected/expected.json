@@ -1,0 +1,76 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is seeded-correct-run's matrix with five kinds of line a real report",
+    "carries and readMatrix must not read as evidence. Under AC-1, a citation of the epic document at",
+    "`.md:20`, whose extension is not a test file's. Under AC-2, the rejected test cited twice, once on the",
+    "Considered and rejected label line and once in the bullet beneath it. Under AC-3, two test paths",
+    "written with no line number. Under Gap Analysis, after the last criterion section has ended, the AC-2",
+    "test cited again by file and line in the prose of the critical-gap entry. And after that, two W-1 and",
+    "W-2 sections whose headings have the criterion shape, one of them citing AC-8's test, which is the",
+    "shape the workflow legitimately gives waiver requests and must not be counted as an invented criterion.",
+    "",
+    "The Gap Analysis line is the one that found a defect. readMatrix closed a criterion section only at",
+    "the next criterion-shaped heading, so `### Gap Analysis` left AC-10's section open and the citation",
+    "under Critical Gaps was recorded as AC-10's, where it resolved to nothing: 11 citations with one",
+    "unresolved, against the 10 derived here. Scorer version 3 closes a section at any heading of the same",
+    "depth or shallower, and this case is what holds it there.",
+    "",
+    "The artifacts are CONSTRUCTED. The summary is seeded-correct-run's."
+  ],
+  "id": "seeded-matrix-lines-rejected",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "Citations, line by line. The `.md:20` span under AC-1 matches neither the delimited pattern, whose",
+    "extension list holds only source and test extensions, nor the prose pattern, so AC-1 keeps its two",
+    "citations. Both line-30 mentions under AC-2 sit in a Considered and rejected block: the label line sets",
+    "the block and is skipped with it, the bullet beneath is skipped, and the next label ends the block; AC-2",
+    "contributes nothing. The two bare paths under AC-3 carry no `:line`, so AC-3 keeps its two. The",
+    "`### Gap Analysis` heading is shallower than the `####` criterion headings and closes AC-10's section,",
+    "so the line-30 citation in the critical-gap entry belongs to no criterion. The `#### W-1:` heading has",
+    "the criterion shape, its prefix W is not one the oracle's ids use, so it is neither a section nor an",
+    "invented id, and the audit-log citation beneath it is attributed to nothing. Total 10, resolved 10,",
+    "as in seeded-correct-run; invented and duplicates stay empty.",
+    "",
+    "Every status, the gate, and every summary check are seeded-correct-run's and derive the same way, so",
+    "the whole result is identical to that case's and checkTraceSignatures requires the two to sign the same."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "NONE",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "FAIL", "reported": "FAIL", "ok": true },
+    "citations": { "total": 10, "resolved": 10, "misattributed": [], "unresolved": [] },
+    "arithmetic": { "checks": 40, "passed": 40, "failed": [] },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 3, "passed": 3, "failed": [] },
+    "waivers": { "scored": true, "checks": 12, "passed": 12, "failed": [] },
+    "live": { "checks": 13, "passed": 13, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}
