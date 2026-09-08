@@ -1200,14 +1200,16 @@ function scoreOracleResolution(summary, set) {
     check('inventory_basis', set.oracle?.coverageBasis, summary.inventory_basis),
     check('oracle.resolution_mode', set.oracle?.oracleResolutionMode, summary.oracle?.resolution_mode),
     check('oracle.confidence', set.oracle?.oracleConfidence, summary.oracle?.confidence),
-    // Matched by basename rather than pinned to an exact path string, the same way
-    // readMatrix's citations, rejected_evidence, and waivers resolve an agent-reported
-    // path: this harness has no fixed convention for how one is rendered (relative to
-    // the project root, prefixed with `./`, and so on), only for which file it names.
+    // Matched by basename rather than pinned to an exact path string: this harness has
+    // no fixed convention for how the agent renders one (relative to the project root,
+    // prefixed with `./`, and so on), only for which file it names. path.basename()
+    // extracts each source's own basename for an exact comparison rather than a suffix
+    // match, which would wrongly accept a longer name ending in the same substring,
+    // e.g. a reported `epic-settlement.md` satisfying a required `settlement.md`.
     check(
       'oracle.sources names the oracle document',
       true,
-      oracleDocBasename !== null && sources.some((entry) => String(entry).endsWith(oracleDocBasename)),
+      oracleDocBasename !== null && sources.some((entry) => path.basename(String(entry)) === oracleDocBasename),
     ),
     check('oracle.external_pointer_status', set.oracle?.externalPointerStatus, summary.oracle?.external_pointer_status),
     check('oracle.synthetic', false, summary.oracle?.synthetic),
