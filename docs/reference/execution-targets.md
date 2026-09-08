@@ -94,8 +94,8 @@ All shipped templates are written around a Node and browser toolchain and are ad
 
 Published deliberately, so an evaluation does not have to discover them:
 
-- **No knowledge fragments exist for any backend test framework.** 40 of 59 fragments name Playwright or Cypress and 3 cover mobile; zero cover pytest, JUnit, Go test, xUnit, or RSpec. Generation for those stacks relies on inline workflow conventions rather than a curated pattern library.
-- **Review criteria are still mostly JavaScript-shaped.** The registry carries 36 rows: 7 are portable across languages, 4 are mobile-specific, 2 are playwright-utils adoption rows gated on `tea_use_playwright_utils` plus the package being installed, and the rest key on browser, Testing Library, Vitest, or Pact constructs. Scores on non-JavaScript, non-Maestro suites are directionally useful and not comparable to scores on a JavaScript suite.
+- **No knowledge fragments exist for any backend test framework.** 41 of 59 fragments name Playwright or Cypress and 3 cover mobile; zero cover pytest, JUnit, Go test, xUnit, or RSpec. Generation for those stacks relies on inline workflow conventions rather than a curated pattern library.
+- **Review criteria are still mostly JavaScript-shaped.** The registry carries 36 rows. Four are mobile-specific (`C7`, `H9`, `M8`, `L8`) and two are playwright-utils adoption rows gated on `tea_use_playwright_utils` plus the package being installed (`M9`, `L9`). The remaining thirty split between rows whose rule is language-portable, such as a skipped test or an assertion that cannot fail, and rows keying on browser, Testing Library, Vitest, or Pact constructs. That split is a judgment per row and no check derives it, so this sentence names the two gated groups it can count and does not assert a number for the other two. Scores on non-JavaScript, non-Maestro suites are directionally useful and not comparable to scores on a JavaScript suite.
 - **Rust is declared but incomplete.** See the generation table above.
 - **CI templates are Node-first.** See the CI section above.
 

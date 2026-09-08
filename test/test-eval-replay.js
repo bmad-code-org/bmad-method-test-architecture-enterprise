@@ -44,9 +44,9 @@
  * captured bytes borrowed from the CLI parser fixtures, and both now score as a
  * measured miss rather than as unmeasurable: their reports document no finding
  * at all, and a verdict whose findings array is empty is a reviewer that named
- * nothing. No live run of either eval has ever been recorded, so this repository
- * holds no captured output that this suite can turn into a number a vendor
- * actually earned.
+ * nothing. The live runs of 2026-09-08 measured all three suites and none of
+ * their output was committed, so this repository still holds no captured output
+ * that this suite can turn into a number a vendor actually earned.
  *
  * Two more things sit outside what a green run covers:
  *

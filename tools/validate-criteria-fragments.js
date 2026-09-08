@@ -29,7 +29,7 @@
  * deleted. Failing on an UNDECLARED one is the part that matters, and a new
  * registry row cannot land until someone either points at the fragment that
  * teaches it or writes down that nothing does. GAPS is empty today (coverage is
- * 35/35), so `main` feeds the classifier a synthetic unmapped row on every run to
+ * 36/36), so `main` feeds the classifier a synthetic unmapped row on every run to
  * prove that path is still live.
  *
  * Usage: node tools/validate-criteria-fragments.js
@@ -260,7 +260,7 @@ const MANIFEST = {
 /**
  * Registry rows with no fragment teaching them.
  *
- * Empty, and the empty state is the point: coverage is 35/35. It was 21/35 when
+ * Empty, and the empty state is the point: coverage is 36/36. It was 21/35 when
  * this tool was written, and the fourteen rows it named — a rule the reviewer
  * deducts for that the generator was never taught, so the model has to supply it
  * from prior, which is exactly what TEA exists to override — were closed in the
@@ -344,7 +344,7 @@ function main() {
   const gapped = new Set(Object.keys(GAPS));
 
   // Self-check. The valuable behaviour of this tool is that an UNDECLARED row
-  // fails the build. With coverage at 35/35 and GAPS empty, no real input
+  // fails the build. With coverage at 36/36 and GAPS empty, no real input
   // exercises that path any more, so a refactor could quietly kill it and every
   // run would still be green. Feed it a row that exists in neither map and
   // require it to be caught.

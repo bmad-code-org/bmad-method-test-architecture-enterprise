@@ -160,9 +160,10 @@ measures nothing.
 - `node test/eval-test-review.js --preflight-only` — exit 2 with no credential naming
   the missing variable, exit 0 with one. Fixture paths and every ground-truth line
   number validated against the files.
-- **Not run: a live end-to-end eval.** That needs a real vendor credential and a paid
-  agent run. The harness is proven to load, validate, and gate; it has not yet
-  produced a recall number. Do not quote one until it has.
+- **Run, on 2026-09-08: a live end-to-end eval.** All three suites were measured
+  against `claude`/`sonnet`. `docs/explanation/eval-quality-roadmap.md` records what
+  each returned. No result artifact is committed, so cite that section rather than a
+  remembered number.
 
 ## The CLI now enforces the derived recommendation — approved, shipped
 
