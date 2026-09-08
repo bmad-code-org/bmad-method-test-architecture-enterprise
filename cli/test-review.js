@@ -965,7 +965,7 @@ function main() {
     const gatingRawQualityScore = rawScoreForViolations(parsed.rawQualityScore, parsed.violations, gatingViolations);
     const { qualityScore: gatingQualityScore } = effectiveScoreFor(gatingRawQualityScore, gatingViolations);
     const gatingRecommendation = deriveRecommendation(gatingViolations, gatingQualityScore);
-    const gatingVerdictRule = verdictRuleFor(gatingViolations, gatingQualityScore);
+    const gatingVerdictRule = verdictRuleFor(gatingViolations, gatingQualityScore, advisoryFindings.length);
     if (gateOn === 'introduced') {
       parsed.recommendation = gatingRecommendation;
       parsed.verdictRule = gatingVerdictRule;

@@ -141,7 +141,7 @@ Git-diff reviews default to `--gate-on introduced`. The CLI reads local
 - `pre_existing`: its reported line is outside the pull request's changed lines.
 
 Introduced and modified findings affect the PR verdict. Pre-existing findings stay
-in `findings`, carry `verdictImpact: false`, and appear in the report's
+in `findings`, carry `verdict_impact: false`, and appear in the report's
 `Pre-existing Findings (Advisory)` section. They do not affect the gating
 recommendation, gating severity counts, `--min-score`, or `--max-critical`.
 

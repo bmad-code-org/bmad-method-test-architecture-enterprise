@@ -194,7 +194,7 @@ jobs:
                     `- **TeA CLI / skill rubric**: ${shown(provenance.teaCliVersion)} / ${shown(provenance.skillRubricVersion)}`,
                     `- **Model**: ${shown(provenance.modelIdentifier)}`,
                     `- **Base / head SHA**: ${shown(provenance.baseSha)} / ${shown(provenance.headSha)}`,
-                    `- **Gate mode**: ${shown(provenance.gateMode)}`,
+                    `- **Provenance gate mode**: ${shown(provenance.gateMode)}`,
                   );
                   if (provenance.triggerComment) {
                     lines.push(`- **Trigger comment**: ${shown(provenance.triggerComment)}`);

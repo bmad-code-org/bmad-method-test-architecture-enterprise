@@ -295,7 +295,7 @@ function isDisplayItem(line) {
  * Extract advisory bullets in either the template's ℹ️ form or ordinary
  * Markdown-list form. Advisory text is deliberately not tied to findings.
  */
-function extractAdvisoryObservations(subsectionText, maxItems = 5) {
+function extractAdvisoryObservations(subsectionText, maxItems = 10) {
   if (!subsectionText) {
     return [];
   }
@@ -1275,7 +1275,15 @@ function effectiveScoreFor(rawQualityScore, violations) {
   };
 }
 
-function verdictRuleFor(violations, qualityScore) {
+/**
+ * @param {object} violations - {critical, high, medium, low} the rule is judged against.
+ * @param {number} qualityScore - The effective score paired with `violations`.
+ * @param {number} [excludedAdvisoryCount] - Findings this call's `violations` deliberately
+ *   excludes (advisory, non-gating). Only changes the zero-violations wording: "No findings"
+ *   would misstate a run under --gate-on introduced that excluded a real pre-existing finding,
+ *   which is exactly the self-contradiction a derived, machine-checked rule exists to prevent.
+ */
+function verdictRuleFor(violations, qualityScore, excludedAdvisoryCount = 0) {
   if (violations.critical > 0) {
     return `Critical > 0 => Block (${violations.critical} Critical).`;
   }
@@ -1288,7 +1296,9 @@ function verdictRuleFor(violations, qualityScore) {
   if (violations.medium + violations.low > 0) {
     return `No Critical or High, effective score >= 70, and findings remain => Approve with Comments.`;
   }
-  return 'No findings => Approve.';
+  return excludedAdvisoryCount > 0
+    ? `No Critical or High and no gating findings (${excludedAdvisoryCount} pre-existing, advisory) => Approve.`
+    : 'No findings => Approve.';
 }
 
 function assessmentForRecommendation(recommendation, qualityScore) {

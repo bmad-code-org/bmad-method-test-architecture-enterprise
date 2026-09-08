@@ -17,8 +17,10 @@ name: Quality & Validation
 # silently diverging from the agent's.
 #
 # test:cli is the deliberate exception in the other direction: it runs here and
-# NOT in `npm test`, because it takes ~12 minutes (measured: 12m21s) and `npm test`
-# runs on every commit through the pre-commit hook.
+# NOT in `npm test`, because a full unsharded run takes 12-15 minutes and
+# `npm test` runs on every commit through the pre-commit hook. The `cli` job
+# below shards that one file three ways (see its own comment) so CI's wall
+# time is the slowest shard, not the sum of all three.
 
 "on":
   pull_request:
@@ -164,10 +166,29 @@ jobs:
       - name: Validate TEA workflow descriptions
         run: npm run test:tea-workflow-descriptions
 
-  # Split out of `validate` on its own: it takes ~12 minutes, and leaving it in
-  # line meant every fast check behind it reported 12 minutes late.
+  # Split out of `validate` on its own: it takes ~12-15 minutes, and leaving it
+  # in line meant every fast check behind it reported that late.
+  #
+  # test/test-test-review-cli.js is itself further split across this matrix by
+  # its 13 numbered suites (TEA_CLI_TEST_SUITES), so the three shards run in
+  # parallel instead of one job serializing all thirteen. Suite 7 (CLI
+  # end-to-end) alone accounts for ~59 of the file's ~90 child-process spawns
+  # (measured on 2026-09-08), so it runs alone rather than beside the other
+  # spawn-heavy suites; "unit" bundles every suite that spawns no subprocess at
+  # all plus the two that spawn only a handful. TEA_CLI_TEST_SUITES unset (any
+  # local run, and the pre-commit hook) still runs all thirteen, unchanged.
   cli:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard:
+          - name: unit
+            suites: "1,2,3,4,5,6,10,11,12,13"
+          - name: e2e
+            suites: "7"
+          - name: git
+            suites: "8,9"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -185,5 +206,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Test TEA test-review CLI
+      - name: Test TEA test-review CLI (${{ matrix.shard.name }})
         run: npm run test:cli
+        env:
+          TEA_CLI_TEST_SUITES: ${{ matrix.shard.suites }}
