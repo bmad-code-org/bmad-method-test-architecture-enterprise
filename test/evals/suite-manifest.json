@@ -111,7 +111,8 @@
         "criticalRecall": 1,
         "recall": 0.7,
         "nonFalsePositiveRate": 0.8,
-        "maxScoreStdev": 3
+        "maxScoreStdev": 3,
+        "maxDistinctVerdicts": 1
       },
       "repetitions": 3,
       "caseCount": 3,

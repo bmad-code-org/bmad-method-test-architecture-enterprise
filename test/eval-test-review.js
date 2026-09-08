@@ -10,8 +10,12 @@
  *                           DEFINITE false positive, where definite means reported
  *                           against the clean fixture, which has no defects by
  *                           construction
- *   unattributed          — findings on a seeded fixture that match no planted row,
- *                           carried beside the rate and never folded into it
+ *   unattributed          — findings on a seeded fixture that match no planted row
+ *                           and that nobody has ruled on, carried beside the rate
+ *                           and never folded into it
+ *   knownUnplantedHits    — findings matching a row the ground truth's
+ *                           `knownUnplanted` list already adjudicated as a real
+ *                           defect the corpus carries and does not plant
  *   unlocated             — findings the reviewer gave no file for, which nothing
  *                           can adjudicate, carried beside the rate as well
  *   variance              — spread of the quality score across repeated runs of
@@ -96,6 +100,10 @@ const THRESHOLDS = {
   // seeded fixture cannot be counted as either correct or incorrect.
   nonFalsePositiveRate: 0.8,
   maxScoreStdev: 3, // a wider spread than one MEDIUM violation means the score is not reproducible
+  // A gate whose verdict moves between identical runs is not a gate. This was
+  // enforced without being declared, which is exactly the drift the manifest
+  // check exists to catch.
+  maxDistinctVerdicts: 1,
 };
 
 const colors = {
@@ -490,7 +498,25 @@ function scoreVerdict(verdict, groundTruth) {
   const isCleanFixture = (file) => [...cleanPaths].some((clean) => String(file).endsWith(path.basename(clean)));
 
   const falsePositives = reported.filter((actual, actualIndex) => !matched.has(actualIndex) && isCleanFixture(actual.file));
-  const unattributed = reported.filter((actual, actualIndex) => !matched.has(actualIndex) && !isCleanFixture(actual.file));
+
+  // `knownUnplanted` in the ground truth is the standing adjudication of defects
+  // the seeded fixtures really carry and nothing plants. Without it every run
+  // reports the same findings as unattributed and asks a human to adjudicate
+  // them again, which is a question this repository has already answered in
+  // writing. A finding matching one of those rows at that file is counted here
+  // and kept out of the unattributed total, so that number means what it says:
+  // findings nobody has ruled on yet.
+  const knownUnplanted = groundTruth.knownUnplanted ?? [];
+  const matchesKnownUnplanted = (actual) =>
+    knownUnplanted.some(
+      (known) =>
+        String(actual.row ?? actual.criterion_id ?? '').toUpperCase() === String(known.row).toUpperCase() &&
+        String(actual.file ?? actual.path ?? '').endsWith(path.basename(known.file)),
+    );
+
+  const unmatchedOnSeeded = reported.filter((actual, actualIndex) => !matched.has(actualIndex) && !isCleanFixture(actual.file));
+  const knownUnplantedHits = unmatchedOnSeeded.filter((actual) => matchesKnownUnplanted(actual));
+  const unattributed = unmatchedOnSeeded.filter((actual) => !matchesKnownUnplanted(actual));
 
   const criticalPlanted = planted.filter((p) => p.row.startsWith('C'));
   const criticalHits = hits.filter((p) => p.row.startsWith('C'));
@@ -506,6 +532,7 @@ function scoreVerdict(verdict, groundTruth) {
     reported: reported.length,
     falsePositives: falsePositives.length,
     unattributed: unattributed.length,
+    knownUnplantedHits: knownUnplantedHits.length,
     unlocated,
   };
 }
@@ -669,7 +696,7 @@ function main() {
       console.log(
         `  run ${runIndex + 1}: score ${scored.score}, ${scored.recommendation}, ` +
           `recall ${scored.hits}/${scored.planted}, false positives ${scored.falsePositives}, ` +
-          `unattributed ${scored.unattributed}, unlocated ${scored.unlocated}`,
+          `unattributed ${scored.unattributed}, known-unplanted ${scored.knownUnplantedHits}, unlocated ${scored.unlocated}`,
       );
     }
 
@@ -777,7 +804,7 @@ function main() {
       else if (value < threshold) failures.push(label);
     }
     if (!Number.isNaN(scoreSpread) && scoreSpread > THRESHOLDS.maxScoreStdev) failures.push('score variance');
-    if (verdicts.size > 1) failures.push('verdict stability');
+    if (verdicts.size > THRESHOLDS.maxDistinctVerdicts) failures.push('verdict stability');
 
     if (failures.length > 0) {
       console.log(`  ${colors.red}below threshold: ${failures.join(', ')}${colors.reset}\n`);
