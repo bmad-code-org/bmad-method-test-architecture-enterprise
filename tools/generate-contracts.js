@@ -1176,12 +1176,16 @@ function buildFragmentSelectionContract(spec) {
 }
 
 /**
- * The two-leg differential over the prompt, or null.
+ * The two-leg witness over the prompt: a differential between two named cases
+ * that mandate different fragment sets, or, for a workflow whose cases all
+ * mandate the same one, an invariance claim over the first two of them.
  *
- * The witness demands that two cases produce different selections, so it is only
- * meaningful between two cases that mandate different sets. A workflow whose cases
- * all mandate the same set gets no witness, and declaring one anyway would be a
- * demand the runner could satisfy by accident.
+ * `SELECTION_REQUEST_SHAPE` declares request keys on every fragment-selection
+ * operation, so AD-10 requires a witness here whether or not the suite has
+ * anything to differentiate. The relation is the author's to choose: a
+ * workflow insensitive to its declared inputs by design gets a witness whose
+ * relation says so, a true and checkable claim, and the weaker guarantee that
+ * follows from it rather than the one a differential establishes.
  *
  * The relation addresses the legs this witness declares. A leg is its own
  * interaction: it runs with its own input and its evidence lands under its own leg
@@ -1191,23 +1195,34 @@ function buildFragmentSelectionContract(spec) {
  */
 function buildSelectionWitness(spec, evals) {
   const mustLoadOf = new Map(evals.cases.map((entry) => [entry.id, JSON.stringify(entry.expect.mustLoad)]));
+  let first;
+  let second;
+  let invariant;
   if (spec.witnessCases === null) {
     const distinct = new Set(mustLoadOf.values());
     assert(
       distinct.size === 1,
-      `${spec.workflow}: declares no sensitivity witness, but its cases mandate ${distinct.size} different fragment sets`,
+      `${spec.workflow}: declares no differential witness, but its cases mandate ${distinct.size} different fragment sets`,
     );
-    return null;
+    assert(evals.cases.length >= 2, `${spec.workflow}: an invariance witness needs at least two cases to compare`);
+    [first, second] = evals.cases.map((entry) => entry.id);
+    invariant = true;
+  } else {
+    [first, second] = spec.witnessCases;
+    assert(mustLoadOf.has(first) && mustLoadOf.has(second), `${spec.workflow}: the witness names a case evals.json does not carry`);
+    assert(
+      mustLoadOf.get(first) !== mustLoadOf.get(second),
+      `${spec.workflow}: the witness compares ${first} and ${second}, which mandate the same fragment set`,
+    );
+    invariant = false;
   }
-  const [first, second] = spec.witnessCases;
-  assert(mustLoadOf.has(first) && mustLoadOf.has(second), `${spec.workflow}: the witness names a case evals.json does not carry`);
-  assert(
-    mustLoadOf.get(first) !== mustLoadOf.get(second),
-    `${spec.workflow}: the witness compares ${first} and ${second}, which mandate the same fragment set`,
-  );
   const legs = [first, second].map((caseId) => ({ caseId, legId: `witness-${caseId}` }));
+  const equality = {
+    op: 'deep-equality',
+    operands: legs.map(({ legId }) => ({ pointer: `/interactions/${legId}/stdout/fragments` })),
+  };
   return {
-    witnessId: 'selection-follows-the-prompt',
+    witnessId: invariant ? 'selection-is-invariant-under-the-prompt' : 'selection-follows-the-prompt',
     channel: 'stdin',
     // Built through witnessInputs for the same reason the test-review legs are:
     // the required key list belongs to the request shape. This operation requires
@@ -1226,15 +1241,9 @@ function buildSelectionWitness(spec, evals) {
         },
       ),
     })),
-    relation: {
-      op: 'not',
-      operands: [
-        {
-          op: 'deep-equality',
-          operands: legs.map(({ legId }) => ({ pointer: `/interactions/${legId}/stdout/fragments` })),
-        },
-      ],
-    },
+    // A differential asserts the two legs disagree; an invariance claim asserts
+    // they agree. Same equality expression, negated only in the first case.
+    relation: invariant ? equality : { op: 'not', operands: [equality] },
   };
 }
 

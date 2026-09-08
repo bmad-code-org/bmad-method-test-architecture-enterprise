@@ -88,6 +88,30 @@ without the located issue list the table below breaks down. The list comes from 
 the renderer. The issues themselves are the same either way; only whether the tool prints them
 differs.
 
+## Nine of nine compile against 0.3.0
+
+`package.json`'s `eval-quality` devDependency moved from `0.2.0` to `0.3.0` on 2026-09-08. All 58
+parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
+`0.2.0` findings: `0.3.0` closes the gap they describe, and every contract compiles now. `npm run
+test:contracts` and `test/contracts/expected-status.json` carry the current baseline; regenerate it
+with `--write` whenever the compiler version changes.
+
+`fragment-selection/bmad-testarch-trace.contract.json` needed one more change to get there.
+Its selection operation declares request keys, the prompt, the stack, and the TEA config, and AD-10
+requires a witness on any operation that does, but trace's own eval deliberately keeps both cases'
+`mustLoad` sets identical: traceability is a mapping problem, not a framework problem, and the
+workflow's step file states no stack branch. A differential witness, the kind the other eight
+contracts declare, asserts two cases produce different selections, which is false here by design, so
+`buildSelectionWitness` in `tools/generate-contracts.js` used to return no witness at all for an
+operation like this, which was legal under `0.2.0`. `0.3.0` requires one anyway and names the path:
+an operation insensitive to its declared inputs by design declares a witness whose relation says so,
+a true and checkable claim, and gets the weaker guarantee that follows from it rather than the one a
+differential establishes. `buildSelectionWitness` now authors that invariance witness whenever a
+workflow's cases all mandate one fragment set, the same equality expression a differential uses,
+un-negated. It is a decision recorded here rather than a defect fixed: trace's selection is
+input-insensitive by design, and the contract now states that as its own claim instead of stating
+nothing.
+
 ## What the operator vocabulary cannot say
 
 Two limits surfaced while writing the oracles, and neither is about transport.
@@ -127,14 +151,13 @@ absent, so the deterministic gate stays credential-free and runs with no network
 silently: a skip says it skipped.
 
 When the compiler is available, the check compares each contract against the status
-`expected-status.json` records for it. Every contract is `blocked` today. A baseline is what keeps a
-known failure from reading as a passing check, and what makes the day they start compiling visible
-instead of silent, so a contract whose status moves in either direction fails the check until the
-baseline is updated to say so. Regenerate it with `--write` once you have read why something moved.
+`expected-status.json` records for it. All nine contracts `compile` today. A baseline is what keeps a
+known failure from reading as a passing check, and what makes the day a contract's status moves
+visible instead of silent, so any movement in either direction fails the check until the baseline is
+updated to say so. Regenerate it with `--write` once you have read why something moved.
 
-`eval-quality` is deliberately not a declared dependency. Adding it pins TEA to a version whose
-schema cannot express these contracts. The dependency lands in the same change that makes them
-compile.
+`eval-quality` is a declared devDependency, pinned at `0.3.0`, the version whose schema closed the
+gap the table above describes.
 
 ## What the generator enforces
 
