@@ -82,9 +82,11 @@ const suiteEntrySchema = z
     // because a suite whose oracle is also its input has to say so rather than
     // let a reader assume the two were written independently.
     groundTruth: z.array(repositoryPath('suites[].groundTruth[]')).min(1),
-    // Null until the eval-quality contract layer exists and this suite is
-    // expressed as one. Nullable rather than optional so the gap is visible.
-    contract: repositoryPath('suites[].contract').nullable(),
+    // The eval contracts this suite is expressed as. A list because a suite can
+    // hold more than one: fragment-selection is one suite across eight workflows
+    // and carries one contract per workflow. Required and possibly empty, so a
+    // suite with no contract yet says so rather than omitting the field.
+    contracts: z.array(repositoryPath('suites[].contracts[]')),
     thresholds: z.record(z.number()),
     repetitions: z.number().int().positive(),
     caseCount: z.number().int().positive(),

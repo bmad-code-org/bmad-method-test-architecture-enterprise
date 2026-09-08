@@ -1,11 +1,16 @@
 /**
  * Every script in the `npm test` chain runs somewhere in CI.
  *
- * `package.json`'s `test` script chains eighteen checks. The GitHub Actions
- * workflow does not run that chain: it runs each check as its own step so a
- * failure names itself in the job list instead of hiding behind whichever check
- * happened to be first. That is worth keeping, and it means the workflow is a
- * transcription of the chain, and a transcription drifts.
+ * How many checks that is belongs in the output. `chainedScripts` reads them
+ * off `package.json` and `main` prints the count, so a comment here naming that
+ * number beside the code computing it would be exactly the drift this file
+ * exists to catch.
+ *
+ * The GitHub Actions workflow does not run that chain: it runs each check as
+ * its own step so a failure names itself in the job list instead of hiding
+ * behind whichever check happened to be first. That is worth keeping, and it
+ * means the workflow is a transcription of the chain, and a transcription
+ * drifts.
  *
  * It already did. Four checks added in one change reached `npm test` and never
  * reached the workflow, so contract drift, a broken replay record and a

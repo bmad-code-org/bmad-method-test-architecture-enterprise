@@ -206,16 +206,51 @@ function buildInvocations(options, manifest, jsonDirectory = null) {
   });
 }
 
-function aggregateExitCodes(codes) {
-  if (codes.some((code) => code === null || code === 2 || code > 2)) return 2;
-  return codes.includes(1) ? 1 : 0;
-}
-
 /** The failure class that matches an exit code, for a child that recorded none. */
 function failureClassForExitCode(code) {
   if (code === 0) return 'none';
   if (code === 1) return 'quality';
   return 'environment-configuration';
+}
+
+/**
+ * The failure class one child carries.
+ *
+ * Its own record is the more specific answer and stands whenever it lands on the code
+ * the child actually exited with. The exit code takes over only when the record cannot
+ * account for it, which is a defect in that harness: a suite that exits 0 while
+ * recording a quality failure, or one that exits 2 having recorded nothing worse than
+ * a threshold miss.
+ *
+ * @param {{failureClass: string}|null} record The child's result record, null when --json was not asked for.
+ * @param {number|null} exitCode What the child process exited with.
+ * @returns {string}
+ */
+function childFailureClass(record, exitCode) {
+  const recorded = record ? record.failureClass : failureClassForExitCode(exitCode);
+  if (exitCodeForFailureClass(recorded) === exitCode) return recorded;
+  return worstFailureClass([recorded, failureClassForExitCode(exitCode)]);
+}
+
+/**
+ * The failure class a whole run carries: the worst of its children's.
+ *
+ * @param {Array<{record?: object|null, exitCode: number|null}>} children One entry per child, in the order they ran.
+ * @returns {string}
+ */
+function runFailureClass(children) {
+  return worstFailureClass(children.map((child) => childFailureClass(child.record ?? null, child.exitCode)));
+}
+
+/**
+ * The exit code a set of child exit codes implies on its own.
+ *
+ * main() does not call this: the code it exits with is read off the run summary, which
+ * is what keeps the artifact and the process exit from disagreeing. It stays as the
+ * statement of the exit-code half of that policy.
+ */
+function aggregateExitCodes(codes) {
+  return exitCodeForFailureClass(runFailureClass(codes.map((exitCode) => ({ exitCode }))));
 }
 
 /**
@@ -300,8 +335,10 @@ function main() {
   // one --json path produces one file rather than a directory of fragments.
   const jsonDirectory = options.jsonPath ? fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-all-')) : null;
 
-  const exitCodes = [];
-  const records = [];
+  // One entry per child: what it exited with, and the record it wrote when --json
+  // asked for one. Keeping the pair together is what lets each child's class be
+  // settled from its own two halves.
+  const children = [];
   // process.exit does not run a finally block, so the temp directory is removed
   // before the exit rather than around it.
   let aggregate = 2;
@@ -322,29 +359,27 @@ function main() {
         console.error(`eval:all: ${invocation.label} could not start: ${result.error.message}`);
         status = 2;
       }
-      exitCodes.push(status);
-      if (options.jsonPath) records.push(readChildRecord(invocation, options, status, durationMs));
+      children.push({ exitCode: status, record: options.jsonPath ? readChildRecord(invocation, options, status, durationMs) : null });
     }
 
-    aggregate = aggregateExitCodes(exitCodes);
+    // The summary is built whether or not one was asked for, and the process exits
+    // with the code that summary carries. The two cannot disagree because there is
+    // only one decision: each child's class is settled from its record and its exit
+    // code, the run takes the worst of those, and the exit code is derived from that
+    // class. The earlier shape decided the exit code first and then reconciled the
+    // record against it, and a child that exited 0 while recording a quality failure
+    // came out of it as exit 0 beside an artifact reading exitCode 1.
+    const summary = runSummaryRecord({
+      repository: repositoryState(PROJECT_ROOT),
+      suites: children.map((child) => child.record).filter(Boolean),
+      unaccountedSkills: [],
+      durationMs: Date.now() - startedAt,
+      runFailureClasses: children.map((child) => childFailureClass(child.record, child.exitCode)),
+    });
+    aggregate = summary.exitCode;
 
     if (options.jsonPath) {
-      // The summary's failure class comes from the child records. When their
-      // worst class does not carry the exit code the children actually returned,
-      // the aggregate wins: the run summary must never disagree with the code
-      // this process exits with.
-      const recorded = worstFailureClass(records.map((record) => record.failureClass));
-      const runFailureClasses = exitCodeForFailureClass(recorded) === aggregate ? [] : [failureClassForExitCode(aggregate)];
-      writeRunSummary(
-        options.jsonPath,
-        runSummaryRecord({
-          repository: repositoryState(PROJECT_ROOT),
-          suites: records,
-          unaccountedSkills: [],
-          durationMs: Date.now() - startedAt,
-          runFailureClasses,
-        }),
-      );
+      writeRunSummary(options.jsonPath, summary);
       console.log(`\nrun summary written to ${options.jsonPath}`);
     }
   } finally {
@@ -356,4 +391,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { parseArgs, sharedRunnerArgs, buildInvocations, aggregateExitCodes, repetitionsFor, USAGE };
+module.exports = { parseArgs, sharedRunnerArgs, buildInvocations, aggregateExitCodes, runFailureClass, repetitionsFor, USAGE };

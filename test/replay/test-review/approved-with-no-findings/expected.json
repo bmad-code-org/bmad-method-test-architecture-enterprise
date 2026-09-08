@@ -1,0 +1,74 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the second REAL CAPTURE, and it makes a point the first one",
+    "cannot. This review scored 98 and recommended Approve with Comments, and it found exactly as many of",
+    "the nine planted defects as the review that reported ten problems: none. A high score and an",
+    "approving verdict are not evidence about recall, and this is the case that says so with numbers.",
+    "",
+    "That matters for the failure class. A reviewer that returns an approving verdict with an empty",
+    "findings array is the shape most likely to be mistaken for a clean pass, and this case pins that the",
+    "harness reads it as 0 of 9 rather than as a pass.",
+    "",
+    "The directory was called approved-and-unscoreable until scorer v2, when the eval stopped re-parsing",
+    "the markdown and started reading the verdict. Nothing about this input is unscoreable now: the CLI",
+    "parsed the report, published an empty findings array, and an empty array is a measured zero. The name",
+    "moved with the meaning.",
+    "",
+    "The report stays at its original path, for the reason unattributed-violations gives."
+  ],
+  "id": "approved-with-no-findings",
+  "suite": "test-review",
+  "scorerVersion": 2,
+  "storedOutput": {
+    "origin": "real-capture",
+    "verdict": "verdict.json",
+    "report": "test/fixtures/test-review-cli/reports/plain-bullets-key-strengths.md",
+    "capturedBy": "a real `--agent codex` run; test/README.md records that this fixture exists because codex wrote plain `- ` bullets under Key Strengths where claude writes the emoji-prefixed form"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The verdict declares 0 Critical, 0 High, 0 Medium and 2 Low, which sums to 2, and its findings array",
+    "is empty. The two Low findings are prose bullets under Key Weaknesses rather than finding blocks, so",
+    "the report carries no Severity or Row line anywhere and the CLI parser produced no finding.",
+    "",
+    "Zero findings means reported is 0, hits is 0, misses holds all nine plants in ground-truth order, and",
+    "criticalHits is 0 of 4. falsePositives, unattributed and unlocated are all 0, because each is counted",
+    "over reported findings and there are none.",
+    "",
+    "The counts the harness derives from these: recall 0/9 = 0.00, CRITICAL recall 0/4 = 0.00, and",
+    "nonFalsePositiveRate 0/0 = NaN, which the harness fails as unmeasurable rather than passing silently.",
+    "",
+    "Two undocumented violations is a much smaller shortfall than the ten in unattributed-violations and",
+    "the two cases score the same recall, which is the point: recall counts what the review named, and",
+    "neither review named anything.",
+    "",
+    "score and recommendation come from the verdict: 100 - 0x10 - 0x5 - 0x2 - 2x1 = 98, Approve with",
+    "Comments."
+  ],
+  "result": {
+    "score": 98,
+    "recommendation": "Approve with Comments",
+    "planted": 9,
+    "hits": 0,
+    "misses": [
+      "H4 seeded/checkout.spec.ts:22",
+      "H1 seeded/checkout.spec.ts:16",
+      "L1 seeded/checkout.spec.ts:19",
+      "H3 seeded/checkout.spec.ts:31",
+      "C1 seeded/checkout.spec.ts:38",
+      "C3 seeded/orders.service.spec.ts:17",
+      "C4 seeded/orders.service.spec.ts:23",
+      "C5 seeded/orders.service.spec.ts:31",
+      "H10 seeded/orders.service.spec.ts:39"
+    ],
+    "criticalPlanted": 4,
+    "criticalHits": 0,
+    "reported": 0,
+    "falsePositives": 0,
+    "unattributed": 0,
+    "unlocated": 0
+  }
+}

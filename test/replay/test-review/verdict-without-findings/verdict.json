@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "This verdict is CONSTRUCTED, and the shape is the point: it carries no `findings` key at all.",
+    "That is what a verdict written before cli/lib/parse-report.js published the findings array looks",
+    "like, and it is the only input scoreVerdict can no longer score, so it returns null.",
+    "",
+    "It points at the same real capture unattributed-violations uses. Every other field is what",
+    "cli/lib/parse-report.js derives from those bytes today, so the verdict is honest about the report",
+    "beside it and the drift check passes; only the field that decides scoreability is absent."
+  ],
+  "report": "test/fixtures/test-review-cli/reports/wrapped-steps-flow.md",
+  "files": ["playwright/tests/api/auth-signup-age-gate.spec.ts", "packages/db/test/rls-policies.spec.ts"],
+  "agent": null,
+  "model": null,
+  "recommendation": "Approve with Comments",
+  "qualityScore": 83,
+  "violations": {
+    "critical": 0,
+    "high": 0,
+    "medium": 7,
+    "low": 3
+  },
+  "reviewedFiles": ["playwright/tests/api/auth-signup-age-gate.spec.ts", "packages/db/test/rls-policies.spec.ts"],
+  "contextBasis": "none",
+  "contextFiles": [],
+  "contextWaiversApplied": 0,
+  "keyStrengths": [],
+  "keyWeaknesses": []
+}

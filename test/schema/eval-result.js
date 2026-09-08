@@ -23,7 +23,10 @@
 const { z } = require('zod');
 const { EVAL_TYPES, CI_TIERS, RUNNER_CAPABILITIES } = require('./suite-manifest');
 
-const SCHEMA_VERSION = '1.0.0';
+// 1.1.0 replaced the suite record's single `contract` path and its lone
+// `contractVersion` with a `contracts` list, because a suite can be expressed as
+// more than one contract: fragment-selection is one suite across eight workflows.
+const SCHEMA_VERSION = '1.1.0';
 
 /**
  * Failure classes in ascending severity. `worstFailureClass` picks the highest
@@ -103,13 +106,16 @@ const runnerResultSchema = z
   })
   .strict();
 
+// One entry per eval contract the suite is expressed as. `version` is the
+// contract's own revision once something reads one; null says nothing has.
+const suiteContractSchema = z.object({ path: nonEmptyString, version: z.string().nullable() }).strict();
+
 const suiteResultSchema = z
   .object({
     id: nonEmptyString,
     evalType: z.enum(EVAL_TYPES),
     skills: z.array(nonEmptyString).min(1),
-    contract: z.string().nullable(),
-    contractVersion: z.string().nullable(),
+    contracts: z.array(suiteContractSchema),
     ciTier: z.enum(CI_TIERS),
     runnerCapabilities: z.array(z.enum(RUNNER_CAPABILITIES)).min(1),
     fixtureDigest: digestString,

@@ -752,6 +752,14 @@ const FINDING_ROW_LINE = /^\*\*Row\*\*:\s*(\S+)/m;
 // variant and a dropped pair of backticks are the two shapes live runs drift into,
 // and the value itself is read leniently (see parseFindingLocation).
 const FINDING_LOCATION_LINE = /^\*\*Location:?\*\*:?[ \t]*([^\r\n]+?)[ \t]*$/m;
+// A file extension, spelled the way looksLikeFilePath spells it, so the two
+// places that decide "is this spaced token a path" decide it the same way.
+const PATH_EXTENSION = String.raw`\.[A-Za-z0-9_+-]{1,12}`;
+// A path that may contain spaces, ended by its extension. The first form needs a
+// ":<line>" after it; the second needs the value to end or to continue with a
+// separator. See parseFindingLocation for why each one is a fallback.
+const SPACED_PATH_WITH_LINE = new RegExp(String.raw`^(.+?${PATH_EXTENSION}):(\d+)`);
+const SPACED_PATH_ONLY = new RegExp(String.raw`^(.+?${PATH_EXTENSION})(?=$|[\s,;()])`);
 const ROW_ID_SHAPE = /^[CHML]\d+$/;
 const PRIORITY_TO_SEVERITY = { 0: 'Critical', 1: 'High', 2: 'Medium', 3: 'Low' };
 // The title is display data for a human reading the verdict, so it is bounded the
@@ -790,6 +798,19 @@ function findingTitle(block) {
  * Each half comes back null on its own, so a consumer can tell "the report named no
  * line" from "the report said line 0".
  *
+ * A path may contain a space. `looksLikeFilePath` already admits one in the
+ * Reviewed Files manifest, on the rule that a spaced token is a path when it ends
+ * in an extension, and the same rule applies here. Until it did, the value
+ * `tests/checkout flow.spec.ts:38` published a finding against `tests/checkout`
+ * with no line at all: a real file name, a real severity, a real contribution to
+ * the gate, and a path nobody can open. A wrong file is worse than a missing one.
+ *
+ * The space-tolerant read runs only where the whitespace-free read fails, so every
+ * value that already parsed still parses the same way. What it costs is a Location
+ * line written as prose around a filename, which now yields the whole phrase as
+ * the file where it used to yield none; that value is a malformed report either
+ * way, and it reaches the verdict marked with the line it claims.
+ *
  * @param {string|null} rawValue - The captured "**Location**:" value, or null.
  * @returns {{file: string|null, line: number|null}}
  */
@@ -804,13 +825,16 @@ function parseFindingLocation(rawValue) {
     const cleaned = stripWrappers(token);
     return /[./]/.test(cleaned) ? cleaned : null;
   };
-  const pathWithLine = /^([^\s:]+):(\d+)/.exec(value);
+  const pathWithLine = /^([^\s:]+):(\d+)/.exec(value) ?? SPACED_PATH_WITH_LINE.exec(value);
   if (pathWithLine) {
     return { file: asPath(pathWithLine[1]), line: Number.parseInt(pathWithLine[2], 10) };
   }
   // Backticks are stripped again here: emphasis that wraps only the path survives
   // the whole-value strip above, as in "`tests/x.spec.ts` (line 12)".
-  const pathOnly = /^([^\s,;()]+)/.exec(value);
+  // The extension-anchored read comes first here, because the loose one matches
+  // almost anything and would never yield to it. The loose one still runs for a
+  // value the anchored one cannot end, such as a path wrapped in backticks.
+  const pathOnly = SPACED_PATH_ONLY.exec(value) ?? /^([^\s,;()]+)/.exec(value);
   const spelledLine = /\blines?\s*:?\s*(\d+)/i.exec(value);
   return {
     file: pathOnly ? asPath(pathOnly[1]) : null,

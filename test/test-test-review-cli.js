@@ -93,8 +93,9 @@ const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { resolveTeaConfig, MODULE_DEFAULTS } = require('../cli/lib/resolve-tea-config');
 const { parseArgs: parseReviewEvalArgs, missingCredential } = require('./eval-test-review');
 const { parseArgs: parseFragmentEvalArgs } = require('./eval-fragment-selection');
-const { parseArgs: parseAllEvalArgs, buildInvocations, aggregateExitCodes } = require('./eval-all');
+const { parseArgs: parseAllEvalArgs, buildInvocations, aggregateExitCodes, runFailureClass } = require('./eval-all');
 const { loadSuiteManifest } = require('./lib/suite-manifest');
+const { exitCodeForFailureClass } = require('./schema/eval-result');
 
 // ANSI colors
 const colors = {
@@ -2221,6 +2222,56 @@ async function runTests() {
     assert(
       aggregateExitCodes([0, 0]) === 0 && aggregateExitCodes([1, 0]) === 1 && aggregateExitCodes([1, 2]) === 2,
       'eval:all preserves pass, measured-failure, and environment-failure exit classes',
+    );
+    // eval:all exits with the code its own run summary carries, and that code comes
+    // from this one class. A child that exits 0 while its record says it failed a
+    // threshold used to leave the process on 0 beside an artifact reading exitCode 1.
+    const childOutcomes = [
+      { children: [{ record: { failureClass: 'quality' }, exitCode: 0 }], expected: 'quality' },
+      { children: [{ record: { failureClass: 'none' }, exitCode: 2 }], expected: 'environment-configuration' },
+      { children: [{ record: { failureClass: 'environment-timeout' }, exitCode: 2 }], expected: 'environment-timeout' },
+      { children: [{ record: { failureClass: 'environment-timeout' }, exitCode: 0 }], expected: 'environment-timeout' },
+      {
+        children: [
+          { record: { failureClass: 'none' }, exitCode: 0 },
+          { record: { failureClass: 'quality' }, exitCode: 1 },
+        ],
+        expected: 'quality',
+      },
+      { children: [{ record: null, exitCode: 1 }], expected: 'quality' },
+      { children: [{ record: { failureClass: 'none' }, exitCode: 0 }], expected: 'none' },
+    ];
+    assert(
+      childOutcomes.every(({ children, expected }) => runFailureClass(children) === expected),
+      'eval:all settles each child from its own record and exit code, and a contradiction takes the worse of the two',
+      JSON.stringify(childOutcomes.map(({ children }) => runFailureClass(children))),
+    );
+    // The end-to-end half: a preflight run where one suite reports an environment
+    // failure and the others pass. The process exit and the exit code inside the
+    // summary it wrote are read back and compared.
+    const summaryPath = path.join(tmpRoot, 'eval-all-run-summary.json');
+    const reconciledRun = spawnSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'test', 'eval-all.js'),
+        '--agent',
+        'custom',
+        '--agent-cmd',
+        versionFailRunner,
+        '--preflight-only',
+        '--json',
+        summaryPath,
+      ],
+      { cwd: repoRoot, encoding: 'utf8' },
+    );
+    const writtenSummary = fs.existsSync(summaryPath) ? JSON.parse(fs.readFileSync(summaryPath, 'utf8')) : null;
+    assert(
+      writtenSummary !== null &&
+        writtenSummary.exitCode === reconciledRun.status &&
+        exitCodeForFailureClass(writtenSummary.failureClass) === reconciledRun.status &&
+        writtenSummary.failureClass === 'environment-transport',
+      'eval:all exits with the code its own run summary carries, and keeps the class the failing child recorded',
+      `status=${reconciledRun.status} summary=${JSON.stringify(writtenSummary && { failureClass: writtenSummary.failureClass, exitCode: writtenSummary.exitCode })}`,
     );
     assert(resolveModel('not-a-real-vendor') === null, 'resolveModel returns null for an unknown adapter');
     try {
@@ -5079,6 +5130,28 @@ async function runTests() {
       );
     } catch (error) {
       assert(false, 'finding-without-location fixture parses', error.message);
+    }
+
+    // A path with a space is a supported input: the Reviewed Files manifest already
+    // admits one, on looksLikeFilePath's rule that a spaced token is a path when it
+    // ends in an extension. The location parse bounded the path at the first space
+    // instead, so `tests/checkout flow.spec.ts:38` published a finding against
+    // `tests/checkout` with no line, keeping its severity and its weight in the gate
+    // while naming a file nobody can open.
+    try {
+      const spaced = parseReport(readFixture('reports', 'spaced-path-location.md'), { registryRowSeverities });
+      assert(
+        spaced.findings.length === 2 && spaced.findings[0].file === 'tests/checkout flow.spec.ts' && spaced.findings[0].line === 38,
+        'spaced-path-location: a path containing a space survives the location parse with its line',
+        JSON.stringify(spaced.findings[0]),
+      );
+      assert(
+        spaced.findings[1].file === 'tests/checkout flow.spec.ts' && spaced.findings[1].line === null,
+        'the same path with no line keeps the whole path and reports the missing line as null',
+        JSON.stringify(spaced.findings[1]),
+      );
+    } catch (error) {
+      assert(false, 'spaced-path-location fixture parses', error.message);
     }
 
     // The `(file, line, row)` identity is deduplicated by the workflow's own

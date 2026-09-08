@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-fragment-selection-test-review",
-  "sourceSpecDigest": "sha256:57114ed5f2c2d178216dbf558bb13144401f09dbb711dfae0b004135b82327f4",
+  "sourceSpecDigest": "sha256:b737b72056174d86bb3b9b8e5c3d33789ad8d5d0a4bf9a94a13098c7208838e7",
   "behaviors": [
     {
       "id": "B-001",

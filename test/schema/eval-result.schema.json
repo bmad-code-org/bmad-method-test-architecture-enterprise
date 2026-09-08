@@ -6,7 +6,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.0.0"
+          "const": "1.1.0"
         },
         "kind": {
           "type": "string",
@@ -64,17 +64,27 @@
               },
               "minItems": 1
             },
-            "contract": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "contractVersion": {
-              "type": [
-                "string",
-                "null"
-              ]
+            "contracts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+                  },
+                  "version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "path",
+                  "version"
+                ],
+                "additionalProperties": false
+              }
             },
             "ciTier": {
               "type": "string",
@@ -157,8 +167,7 @@
             "id",
             "evalType",
             "skills",
-            "contract",
-            "contractVersion",
+            "contracts",
             "ciTier",
             "runnerCapabilities",
             "fixtureDigest",
@@ -398,7 +407,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.0.0"
+          "const": "1.1.0"
         },
         "kind": {
           "type": "string",

@@ -12,7 +12,7 @@
  *   - each workflow's deciding step file for that contract's sourceSpecDigest,
  *   - each workflow's resources/tea-index.csv for the selection cardinality bound, and
  *   - cli/test-review.js's VERDICT_KEYS for the verdict response descriptor's key
- *     sets and types.
+ *     sets and types, and its DEFAULT_AGENT for the sensitivity-witness legs.
  *
  * The prose that is genuinely authored (an oracle's commentary, a behavior's lead
  * sentence, the risk ids) lives in the tables below, so the JSON on disk carries
@@ -38,9 +38,14 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { createHash } = require('node:crypto');
 const { parse } = require('csv-parse/sync');
 const prettier = require('prettier');
+
+// One digest function serves every caller in this repository, for the reason
+// test/lib/eval-record.js gives: two implementations produce two answers for the
+// same bytes, and a digest exists so a later run can decide whether it looked at
+// the same input.
+const { digest } = require('../test/lib/eval-record');
 
 // The registry table parser is imported from the module that owns it, for the
 // reason that module gives: two copies of the cell-count and id-shape rules would
@@ -48,7 +53,7 @@ const prettier = require('prettier');
 const { parseRegistryRows, REGISTRY_PATH } = require('./validate-criteria-fragments');
 // The CLI is the only authority on the shape of its own verdict, so the response
 // descriptor's key and type fields are read from it instead of written here.
-const { VERDICT_KEYS } = require('../cli/test-review');
+const { VERDICT_KEYS, DEFAULT_AGENT } = require('../cli/test-review');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -82,11 +87,16 @@ function numberWord(count) {
   return NUMBER_WORDS[count];
 }
 
-/** `sha256:<hex>` over the named files concatenated in the order given. */
+/**
+ * `sha256:<hex>` over the named files, in the order given.
+ *
+ * The hashing is the shared helper's, which length-prefixes each part. Plain
+ * concatenation collided across a file boundary: moving a byte from the tail of
+ * one step file to the head of the next left the digest unchanged, and
+ * bmad-testarch-ci's contract pins a multi-file contextFiles list.
+ */
 function digestOf(absolutePaths) {
-  const hash = createHash('sha256');
-  for (const file of absolutePaths) hash.update(fs.readFileSync(file));
-  return `sha256:${hash.digest('hex')}`;
+  return digest(absolutePaths.map((file) => fs.readFileSync(file)));
 }
 
 /** Registry row ids sorted by their letter class and then numerically, so H10 follows H4. */
@@ -119,13 +129,35 @@ const VERDICT_POINTERS = ['findings', 'violations', 'qualityScore', 'recommendat
  * The membership of each group is derived from the registry's severity for the
  * rows the corpus actually plants, so a plant that changes row cannot leave a
  * behavior pointing at a row nobody plants any more. Everything here is the prose
- * around that: which risk the group names and how hard a miss counts.
+ * around that: which risk the group names.
  */
 const PLANT_GROUPS = [
-  { id: 'B-001', severities: ['CRITICAL'], label: 'CRITICAL', severity: 'critical', risk: 'missed-critical-defect' },
-  { id: 'B-003', severities: ['HIGH'], label: 'HIGH', severity: 'low', risk: 'missed-high-defect' },
-  { id: 'B-004', severities: ['MEDIUM', 'LOW'], label: 'MEDIUM or LOW', severity: 'low', risk: 'missed-minor-defect' },
+  { id: 'B-001', severities: ['CRITICAL'], label: 'CRITICAL', risk: 'missed-critical-defect' },
+  { id: 'B-003', severities: ['HIGH'], label: 'HIGH', risk: 'missed-high-defect' },
+  { id: 'B-004', severities: ['MEDIUM', 'LOW'], label: 'MEDIUM or LOW', risk: 'missed-minor-defect' },
 ];
+
+/**
+ * How hard a missed plant grades, read off the registry severity of the rows in
+ * the group.
+ *
+ * The corpus supports two grades and no more, because the harness gates CRITICAL
+ * recall on its own threshold of 1 and pools every other severity into a single
+ * recall threshold of 0.7. A group whose rows carry their own gate grades
+ * critical; a group that feeds the pooled gate grades material.
+ *
+ * Nothing grades below material. The HIGH group and the MEDIUM-or-LOW group were
+ * both hand-assigned `low`, which put missing every planted HIGH defect below one
+ * out-of-scope finding (B-005, material). Missing a planted defect is the failure
+ * this suite exists to catch, so that ordering was inverted. `low` is now unused
+ * here, which is the honest reading of a corpus with two tiers.
+ *
+ * @param {{severities: string[]}} group
+ * @returns {string}
+ */
+function plantGroupSeverity(group) {
+  return group.severities.includes('CRITICAL') ? 'critical' : 'material';
+}
 
 /** The JSON type names a response descriptor may declare; `null` means "declared, type not stated". */
 const JSON_TYPE_NAMES = new Set(['string', 'number', 'boolean', 'object', 'array', 'null']);
@@ -356,7 +388,7 @@ function buildTestReviewContract() {
     behaviors.push({
       id: group.id,
       description: `Every planted ${group.label} defect is named at its registry row, in the right file, within the declared line window.`,
-      severity: group.severity,
+      severity: plantGroupSeverity(group),
       observableSuccessCriterion:
         `The verdict artifact carries one finding per planted ${group.label} row, each citing the fixture the defect was ` +
         `planted in and a line inside that row's declared window.`,
@@ -443,15 +475,7 @@ function buildTestReviewContract() {
             operationId: 'review-test-files',
             invocation: { executable: 'tea-test-review', subcommandPath: [] },
             stateChangeMarker: true,
-            requestShape: {
-              argument: stringShape([], []),
-              option: stringShape(
-                ['files', 'json', 'agent'],
-                ['files', 'json', 'agent', 'model', 'output', 'project-root', 'skill-root', 'test-dir'],
-              ),
-              environment: stringShape([], ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']),
-              stdin: stringShape([], []),
-            },
+            requestShape: REVIEW_REQUEST_SHAPE,
             artifacts: ['verdict', 'report'],
             // One response descriptor per operation, with one field naming the
             // channel it describes. A descriptor per artifact would leave the
@@ -552,16 +576,77 @@ function stringShape(required, permitted) {
   };
 }
 
+/**
+ * One sensitivity-witness leg's supplied inputs, built from the operation's own
+ * request shape.
+ *
+ * A leg is a request the port has to be able to issue, so it supplies every key
+ * the shape requires. The key list is read from the shape rather than restated
+ * here, which is the rule the verdict response descriptor already follows. The
+ * test-review legs restated it and supplied only `files` against a shape
+ * requiring `files`, `json` and `agent`, so the contract parsed and then failed
+ * compilation under `undeclared-mandatory-input`.
+ *
+ * `stdin` stays the caller's. The request shape spells it as a key map and a leg
+ * spells it as one tagged value, because a leg has to tell an absent standard
+ * input from one carrying an empty string, and the compiler bridges the two
+ * spellings itself.
+ *
+ * @param {object} requestShape - The operation's requestShape.
+ * @param {object} values - Per-channel value maps covering every required key.
+ * @param {object} stdin - The leg's tagged stdin value.
+ * @returns {object}
+ */
+function witnessInputs(requestShape, values, stdin) {
+  const inputs = { argument: {}, option: {}, environment: {}, stdin };
+  for (const channel of ['argument', 'option', 'environment']) {
+    for (const key of requestShape[channel].requiredKeys) {
+      const supplied = values[channel] ?? {};
+      assert(Object.hasOwn(supplied, key), `a witness leg supplies no value for the required ${channel} key "${key}"`);
+      inputs[channel][key] = supplied[key];
+    }
+  }
+  return inputs;
+}
+
+/**
+ * The verdict path a witness leg asks for.
+ *
+ * Authored, and the same on both legs on purpose: the differential this witness
+ * asserts is over `files`, so every other input has to be held fixed or the two
+ * legs differ in more than the one thing the relation reads. It matches the name
+ * test/eval-test-review.js writes into its run directory.
+ */
+const WITNESS_VERDICT_FILE = 'verdict.json';
+
+const REVIEW_REQUEST_SHAPE = {
+  argument: stringShape([], []),
+  option: stringShape(['files', 'json', 'agent'], ['files', 'json', 'agent', 'model', 'output', 'project-root', 'skill-root', 'test-dir']),
+  environment: stringShape([], ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']),
+  stdin: stringShape([], []),
+};
+
 function witnessLeg(legId, files) {
   return {
     legId,
-    inputs: { argument: {}, option: { files }, environment: {}, stdin: { kind: 'absent' } },
+    inputs: witnessInputs(
+      REVIEW_REQUEST_SHAPE,
+      { option: { files, json: WITNESS_VERDICT_FILE, agent: DEFAULT_AGENT } },
+      { kind: 'absent' },
+    ),
   };
 }
 
 // ---------------------------------------------------------------------------
 // fragment-selection/<workflow>.contract.json
 // ---------------------------------------------------------------------------
+
+const SELECTION_REQUEST_SHAPE = {
+  argument: stringShape([], []),
+  option: stringShape([], ['model']),
+  environment: stringShape([], ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'OPENAI_API_KEY']),
+  stdin: stringShape(['prompt'], ['prompt']),
+};
 
 /**
  * The authored half of the eight fragment-selection contracts.
@@ -1024,12 +1109,7 @@ function buildFragmentSelectionContract(spec) {
             operationId: 'select-fragments',
             invocation: { executable: 'tea-fragment-selection-runner', subcommandPath: [] },
             stateChangeMarker: false,
-            requestShape: {
-              argument: stringShape([], []),
-              option: stringShape([], ['model']),
-              environment: stringShape([], ['ANTHROPIC_API_KEY', 'ANTHROPIC_BASE_URL', 'CLAUDE_CODE_OAUTH_TOKEN', 'OPENAI_API_KEY']),
-              stdin: stringShape(['prompt'], ['prompt']),
-            },
+            requestShape: SELECTION_REQUEST_SHAPE,
             artifacts: [],
             descriptorChannel: { kind: 'stream', channel: 'stdout' },
             responseDescriptor: {
@@ -1129,19 +1209,22 @@ function buildSelectionWitness(spec, evals) {
   return {
     witnessId: 'selection-follows-the-prompt',
     channel: 'stdin',
+    // Built through witnessInputs for the same reason the test-review legs are:
+    // the required key list belongs to the request shape. This operation requires
+    // nothing on argument, option or environment today, so the three come back
+    // empty, and they stay correct if that ever stops being true.
     legs: legs.map(({ caseId, legId }) => ({
       legId,
-      inputs: {
-        argument: {},
-        option: {},
-        environment: {},
-        stdin: {
+      inputs: witnessInputs(
+        SELECTION_REQUEST_SHAPE,
+        {},
+        {
           kind: 'text',
           value:
             `The prompt the harness assembles for case ${caseId}: the workflow's own step file or files, its resources/tea-index.csv, ` +
             `and that case's task, repository facts, and TEA config.`,
         },
-      },
+      ),
     })),
     relation: {
       op: 'not',

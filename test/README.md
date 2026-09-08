@@ -127,8 +127,13 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every case that produces a number was written by hand to be parsed, so a green
 run proves the scorers are deterministic and reproduce history, and proves
-nothing about whether they handle real agent output correctly. Six of the eleven
-cases produce a number and all six are constructed. Two carry real captured
-bytes, both borrowed from `fixtures/test-review-cli/`, and both score as
-unmeasurable. No live run of either eval has been recorded, so this repository
-holds no captured output that the suite can turn into a number.
+nothing about whether they handle real agent output correctly. Ten of the twelve
+cases produce a number and eight of those ten are constructed. Two carry real
+captured bytes, both borrowed from `fixtures/test-review-cli/`, and both score
+zero recall: their reports document no finding at all. No live run of either
+eval has been recorded, so this repository holds no captured output that the
+suite can turn into a number a vendor earned.
+
+The suite also runs the `test/lib/eval-record.js` checks that need no stored
+case, because it is the only entry point in the pull-request gate that executes
+that module.

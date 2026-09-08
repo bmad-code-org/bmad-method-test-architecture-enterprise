@@ -72,6 +72,11 @@ const ENV_PASS_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const AGENT_OUTPUT_TAIL_LINES = 20;
 const AGENT_OUTPUT_TAIL_CHARS = 8000;
 
+// The adapter a run uses when --agent is not given. Named because
+// tools/generate-contracts.js supplies it on the contract's sensitivity-witness
+// legs, and a leg has to be a request this CLI could actually be handed.
+const DEFAULT_AGENT = 'claude';
+
 /**
  * Every key the verdict payload can carry, with the JSON type of each.
  *
@@ -325,7 +330,7 @@ function main() {
     .option(
       '--agent <agent>',
       `review executor: ${[...Object.keys(AGENT_ADAPTERS), 'none'].join('|')} (none prints the prompt bundle only)`,
-      'claude',
+      DEFAULT_AGENT,
     )
     .option(
       '--model <model>',
@@ -969,4 +974,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { VERDICT_KEYS, SKIP_KEYS };
+module.exports = { VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT };

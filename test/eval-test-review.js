@@ -12,8 +12,14 @@
  *                           construction
  *   unattributed          — findings on a seeded fixture that match no planted row,
  *                           carried beside the rate and never folded into it
+ *   unlocated             — findings the reviewer gave no file for, which nothing
+ *                           can adjudicate, carried beside the rate as well
  *   variance              — spread of the quality score across repeated runs of
  *                           IDENTICAL input
+ *
+ * Every one of those is scored from the verdict's own `findings` array. The verdict
+ * is the contract, so the numbers come from the same parse the CLI gated the report
+ * on; see scoreVerdict for the two ways a second parser here answered differently.
  *
  * The variance number is the one nobody had. Two reviewers scoring the same four
  * files 82 and 85 tells you the spread across vendors; it says nothing about whether
@@ -315,6 +321,22 @@ function reviewFilePaths() {
 }
 
 /**
+ * The ids of the cases this suite scores, in the order the result record writes
+ * them. One review call covers the whole corpus and each reviewed file is scored
+ * on its own, so a case here is a file.
+ *
+ * tools/validate-eval-schemas.js checks the manifest's `caseCount` against the
+ * length of this, the same way it checks its thresholds against THRESHOLDS. It
+ * has to come from the harness: deriving the count from the manifest's own
+ * fixture list makes the check compare the manifest with itself.
+ *
+ * @returns {string[]}
+ */
+function caseIds() {
+  return reviewFilePaths();
+}
+
+/**
  * One review of the whole fixture corpus.
  *
  * Returns `{ ok: true, verdict }`, or `{ ok: false, failureClass }` naming why
@@ -369,49 +391,6 @@ function runReview(agent, runIndex, runner = {}) {
 }
 
 /**
- * The per-finding list, read out of the report the verdict points at.
- *
- * The verdict's own `violations` field is four severity COUNTS, not findings, so
- * recall cannot be scored from it. The report is the contract, and it renders each
- * finding with a `**Row**:` identity beside its `**Location**:` line ; matching on
- * the registry row is what makes a hit comparable across vendors, since prose
- * descriptions of the same defect differ and row identities do not.
- *
- * Returns null when the report cannot be read, or when it declares findings it did
- * not attribute to rows, so a contract change surfaces as "unmeasurable" instead of
- * as a confident 0% recall. A report that genuinely found nothing returns [], which
- * IS a measured miss on a corpus with planted defects.
- */
-function findingsFromReport(verdict) {
-  const reportPath = path.resolve(PROJECT_ROOT, String(verdict.report ?? ''));
-  if (!verdict.report || !fs.existsSync(reportPath)) return null;
-  const counts = verdict.violations ?? {};
-  const declared = ['critical', 'high', 'medium', 'low'].reduce((sum, key) => sum + (Number(counts[key]) || 0), 0);
-
-  const findings = [];
-  let location = null;
-  for (const line of fs.readFileSync(reportPath, 'utf8').split('\n')) {
-    const locationMatch = /^\*\*Location\*\*:\s*`?([^`\s]+):(\d+)`?/.exec(line.trim());
-    if (locationMatch) {
-      location = { file: locationMatch[1], line: Number.parseInt(locationMatch[2], 10) };
-      continue;
-    }
-    const rowMatch = /^\*\*Row\*\*:\s*`?([A-Za-z]\d+)`?/.exec(line.trim());
-    if (rowMatch && location) {
-      findings.push({ ...location, row: rowMatch[1] });
-      location = null;
-    }
-  }
-  if (findings.length < declared) {
-    console.error(
-      `  ${colors.yellow}report declares ${declared} violation(s) but attributes ${findings.length} to a registry row${colors.reset}`,
-    );
-    return null;
-  }
-  return findings;
-}
-
-/**
  * The lines a reviewer may cite for one planted defect and still be scored as
  * having found it.
  *
@@ -437,18 +416,37 @@ function admittedLinesFor(planted, tolerance) {
 /**
  * Score one verdict against ground truth.
  *
+ * The findings come from the verdict's own `findings` array, which the CLI builds
+ * once from the report's finding blocks and gates the report on. That is what
+ * makes the verdict the contract rather than the markdown beside it.
+ *
+ * This used to re-parse the report here with two regular expressions of its own,
+ * and the second parser answered differently in both directions. It read raw
+ * lines, so a finding quoted inside a fenced example report counted as real,
+ * which is the spoof cli/lib/parse-report.js strips fences to prevent. And it
+ * dropped a finding whose location line it could not read, which then tripped a
+ * declared-versus-attributed guard and scored the whole run unmeasurable.
+ *
  * A planted defect counts as found when a reported finding cites the same
  * registry row at one of the lines admitted for it. Matching on the row is
  * what makes this comparable across vendors: prose descriptions of the same defect
  * differ, row identities do not.
  *
- * Returns null when the run produced no attributed findings to score against, so
- * "the contract changed" never reports as "the reviewer found nothing".
+ * Returns null when the verdict carries no findings array, which is a verdict
+ * written by something other than this CLI, so there is nothing to score.
  */
 function scoreVerdict(verdict, groundTruth) {
   const tolerance = groundTruth.lineTolerance ?? 0;
-  const reported = findingsFromReport(verdict);
-  if (reported === null) return null;
+  if (!Array.isArray(verdict.findings)) return null;
+
+  // A finding the report gave no file for is kept in the verdict deliberately, and
+  // nothing here can judge it: it matches no plant, it names no fixture, so it is
+  // neither a definite false positive nor an unattributed finding. It is counted on
+  // its own and left out of the rate's denominator, which is a rate over the
+  // findings that can be adjudicated at all. Folding it in would dilute the
+  // false-positive share with findings nobody can check.
+  const reported = verdict.findings.filter((finding) => typeof finding.file === 'string' && finding.file.length > 0);
+  const unlocated = verdict.findings.length - reported.length;
   const cleanPaths = new Set((groundTruth.files ?? []).filter((f) => (f.planted ?? []).length === 0).map((f) => f.path));
 
   const planted = [];
@@ -503,6 +501,7 @@ function scoreVerdict(verdict, groundTruth) {
     reported: reported.length,
     falsePositives: falsePositives.length,
     unattributed: unattributed.length,
+    unlocated,
   };
 }
 
@@ -572,7 +571,7 @@ function finish({ options, startedAt, mode, runners, suiteFailureClasses = [] })
         repository: repositoryState(PROJECT_ROOT),
         fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
         promptDigest,
-        cases: suite.fixtures.map((fixture) => ({ id: fixture, promptDigest })),
+        cases: caseIds().map((id) => ({ id, promptDigest })),
         runners,
         durationMs: Date.now() - startedAt,
         suiteFailureClasses,
@@ -655,14 +654,17 @@ function main() {
       }
       const scored = scoreVerdict(outcome.verdict, groundTruth);
       if (!scored) {
-        console.error(`  ${colors.red}run ${runIndex + 1}: findings could not be scored against ground truth${colors.reset}`);
+        console.error(
+          `  ${colors.red}run ${runIndex + 1}: the verdict carries no findings array, so nothing could be scored${colors.reset}`,
+        );
         lostRunClasses.push('environment-parser');
         continue;
       }
       results.push(scored);
       console.log(
         `  run ${runIndex + 1}: score ${scored.score}, ${scored.recommendation}, ` +
-          `recall ${scored.hits}/${scored.planted}, false positives ${scored.falsePositives}, unattributed ${scored.unattributed}`,
+          `recall ${scored.hits}/${scored.planted}, false positives ${scored.falsePositives}, ` +
+          `unattributed ${scored.unattributed}, unlocated ${scored.unlocated}`,
       );
     }
 
@@ -685,6 +687,7 @@ function main() {
     const criticalRecall = mean(results.map((r) => ratio(r.criticalHits, r.criticalPlanted)));
     const nonFalsePositiveRate = mean(results.map((r) => ratio(r.reported - r.falsePositives, r.reported)));
     const unattributedMean = mean(results.map((r) => r.unattributed));
+    const unlocatedMean = mean(results.map((r) => r.unlocated));
     const scoreSpread = stdev(results.map((r) => r.score));
     const verdicts = new Set(results.map((r) => r.recommendation));
 
@@ -701,6 +704,11 @@ function main() {
         .padStart(
           5,
         )}   ${colors.dim}findings on seeded fixtures matching no planted row; review these by hand, they may be real${colors.reset}`,
+    );
+    console.log(
+      `  unlocated         ${unlocatedMean
+        .toFixed(1)
+        .padStart(5)}   ${colors.dim}findings naming no file, so no scorer can judge them either way${colors.reset}`,
     );
     console.log(
       `  score stdev       ${Number.isNaN(scoreSpread) ? ' n/a' : scoreSpread.toFixed(2).padStart(5)}   (max ${THRESHOLDS.maxScoreStdev})`,
@@ -720,6 +728,7 @@ function main() {
       criticalRecall: measured(criticalRecall),
       nonFalsePositiveRate: measured(nonFalsePositiveRate),
       unattributedMean: measured(unattributedMean),
+      unlocatedMean: measured(unlocatedMean),
       scoreStdev: measured(scoreSpread),
       distinctVerdicts: verdicts.size,
       meanScore: measured(mean(results.map((r) => r.score))),
@@ -793,12 +802,12 @@ if (require.main === module) {
 }
 
 module.exports = {
-  findingsFromReport,
   admittedLinesFor,
   scoreVerdict,
   missingCredential,
   parseArgs,
   reviewFilePaths,
+  caseIds,
   THRESHOLDS,
   SUITE_ID,
 };

@@ -15,7 +15,11 @@
     "",
     "Thresholds are declared here and checked against the harness constants by tools/validate-eval-schemas.js.",
     "Editing one side alone fails `npm test`, so the manifest cannot drift into describing a gate that is not the",
-    "gate being run."
+    "gate being run. `caseCount` is checked the same way, against the case-id list each harness exports.",
+    "",
+    "`contracts` names the eval contracts under test/contracts/ that express a suite. The same check fails when a",
+    "listed path is missing and when a generated contract is claimed by no suite, so the link cannot rot in either",
+    "direction."
   ],
   "manifestVersion": 1,
   "suites": [
@@ -63,7 +67,16 @@
         "test/evals/bmad-testarch-test-review/evals.json",
         "test/evals/bmad-testarch-trace/evals.json"
       ],
-      "contract": null,
+      "contracts": [
+        "test/contracts/fragment-selection/bmad-testarch-atdd.contract.json",
+        "test/contracts/fragment-selection/bmad-testarch-automate.contract.json",
+        "test/contracts/fragment-selection/bmad-testarch-ci.contract.json",
+        "test/contracts/fragment-selection/bmad-testarch-framework.contract.json",
+        "test/contracts/fragment-selection/bmad-testarch-nfr.contract.json",
+        "test/contracts/fragment-selection/bmad-testarch-test-design.contract.json",
+        "test/contracts/fragment-selection/bmad-testarch-test-review.contract.json",
+        "test/contracts/fragment-selection/bmad-testarch-trace.contract.json"
+      ],
       "thresholds": {
         "requiredRecall": 0.9,
         "forbiddenRate": 0.1
@@ -93,7 +106,7 @@
         "test/fixtures/test-review-eval/clean/profile.spec.ts"
       ],
       "groundTruth": ["test/fixtures/test-review-eval/ground-truth.json"],
-      "contract": null,
+      "contracts": ["test/contracts/test-review.contract.json"],
       "thresholds": {
         "criticalRecall": 1,
         "recall": 0.7,
@@ -113,9 +126,9 @@
         "`fixtures` lists every file the agent is given and `groundTruth` names the file it must never see.",
         "The harness asserts that separation on the staged workspace and on the prompt before it spends a call.",
         "",
-        "`caseCount` is 14 because tools/validate-eval-schemas.js derives a behavioral suite's case count as",
-        "one case per fixture file. This suite scores two cases, one per fixture set, and each case reads seven",
-        "or so files. The declared count is the file count that check computes, not the number of scored cases.",
+        "`caseCount` is 2: one case per fixture set, which is one staged workspace and one agent call. The",
+        "fourteen fixture files are the inputs those two cases read, and the harness exports the case ids so",
+        "tools/validate-eval-schemas.js checks this number against the list the run actually scores.",
         "",
         "Two repetitions. A full trace is a five-step run over a whole project tree, so it costs far more than a",
         "fragment selection, and two is the smallest number that can say whether the answer is reproducible."
@@ -146,7 +159,7 @@
         "test/fixtures/trace-eval/clean/tests/e2e/token-management.spec.ts"
       ],
       "groundTruth": ["test/fixtures/trace-eval/ground-truth.json"],
-      "contract": null,
+      "contracts": [],
       "thresholds": {
         "criterionStatusAccuracy": 0.9,
         "discriminatingCriterionAccuracy": 1,
@@ -159,11 +172,13 @@
         "waiverOracleAccuracy": 1,
         "liveEvidenceAccuracy": 1,
         "maxCleanFalsePositives": 0,
+        "maxInventedCriteria": 0,
+        "maxDuplicateCriteria": 0,
         "maxUnstableCases": 0,
         "maxFixtureMutations": 0
       },
       "repetitions": 2,
-      "caseCount": 14,
+      "caseCount": 2,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["scoped-artifact-writes"]
     }

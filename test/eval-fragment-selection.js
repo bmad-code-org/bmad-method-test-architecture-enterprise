@@ -431,6 +431,18 @@ function caseIndex(suites) {
 }
 
 /**
+ * The ids of every case this suite scores, across all eight workflows.
+ *
+ * tools/validate-eval-schemas.js checks the manifest's `caseCount` against the
+ * length of this, the same way it checks its thresholds against THRESHOLDS.
+ *
+ * @returns {string[]}
+ */
+function caseIds() {
+  return caseIndex(loadSuites([])).map((item) => item.id);
+}
+
+/**
  * Write the machine-readable record when --json asked for one, then exit with
  * the code the failure class carries.
  */
@@ -708,4 +720,15 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { loadSuites, validateSuites, parseSelection, scoreCase, buildPrompt, caseIndex, parseArgs, THRESHOLDS, SUITE_ID };
+module.exports = {
+  loadSuites,
+  validateSuites,
+  parseSelection,
+  scoreCase,
+  buildPrompt,
+  caseIndex,
+  caseIds,
+  parseArgs,
+  THRESHOLDS,
+  SUITE_ID,
+};

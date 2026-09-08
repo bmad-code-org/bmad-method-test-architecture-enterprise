@@ -9,7 +9,7 @@
   ],
   "id": "full-recall",
   "suite": "test-review",
-  "scorerVersion": 1,
+  "scorerVersion": 2,
   "storedOutput": {
     "origin": "constructed",
     "verdict": "verdict.json",
@@ -24,13 +24,14 @@
     "then C3@17, C4@23, C5@31 and H10@39 in seeded/orders.service.spec.ts. Four of the nine rows start",
     "with C, so criticalPlanted is 4.",
     "",
-    "The report cites all nine rows at exactly those lines, so every planted row finds an unmatched",
-    "report finding with the same basename, the same row and a line inside its admitted set: hits 9,",
-    "criticalHits 4, misses empty.",
+    "The verdict carries nine findings, one per planted row, each naming the fixture the row was planted",
+    "in at exactly the line the rule fires on. Every planted row therefore finds an unmatched finding",
+    "with the same basename, the same row and a line inside its admitted set: hits 9, criticalHits 4,",
+    "misses empty.",
     "",
     "Nothing is reported against clean/profile.spec.ts, so falsePositives is 0, and every one of the nine",
-    "findings matched a plant, so unattributed is 0. reported is the count of Row lines paired with a",
-    "Location line, which is 9.",
+    "findings matched a plant, so unattributed is 0. All nine name a file, so unlocated is 0 and reported",
+    "is 9.",
     "",
     "The counts the harness derives from these: recall 9/9 = 1.00 against a 0.70 floor, CRITICAL recall",
     "4/4 = 1.00 against a 1.00 floor, nonFalsePositiveRate (9 - 0)/9 = 1.00 against a 0.80 floor.",
@@ -48,6 +49,7 @@
     "criticalHits": 4,
     "reported": 9,
     "falsePositives": 0,
-    "unattributed": 0
+    "unattributed": 0,
+    "unlocated": 0
   }
 }

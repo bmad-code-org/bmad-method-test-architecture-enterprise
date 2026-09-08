@@ -88,9 +88,9 @@ function resolveCompiler(argv) {
     return value;
   }
   try {
-    // eval-quality is deliberately absent from package.json until its schema can
-    // express these contracts, so this specifier is expected not to resolve.
-    // eslint-disable-next-line n/no-missing-require
+    // eval-quality is a declared devDependency, so this resolves in a normal
+    // install. The catch below is for a tree installed with --omit=dev, where
+    // the honest answer is a skip that says it skipped.
     const manifest = require.resolve('eval-quality/package.json', { paths: [PROJECT_ROOT] });
     return path.join(path.dirname(manifest), 'dist', 'cli', 'main.js');
   } catch {

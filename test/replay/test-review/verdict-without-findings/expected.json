@@ -1,0 +1,39 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the only one that reaches scoreVerdict's unmeasurable branch,",
+    "and without it that branch is unreachable from the corpus and nothing would notice it being deleted.",
+    "",
+    "The branch used to fire whenever a report declared more violations than it attributed to registry",
+    "rows, which is a shape the CLI parser explicitly permits for Medium and Low, so four cases sat on it",
+    "for the wrong reason. Now it fires on one condition only: the verdict carries no findings array, so",
+    "there is no reported list to compare with the plants.",
+    "",
+    "The verdict is CONSTRUCTED. The report it names is the same real capture unattributed-violations",
+    "reads, and this verdict differs from that one by exactly the absent key."
+  ],
+  "id": "verdict-without-findings",
+  "suite": "test-review",
+  "scorerVersion": 2,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "test/fixtures/test-review-cli/reports/wrapped-steps-flow.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "scoreVerdict tests Array.isArray(verdict.findings) before it reads anything else. The key is absent,",
+    "so the test is false and it returns null. Nothing about the ground truth enters the arithmetic: no",
+    "plant is consulted, no line is compared, and the run is unscoreable before matching begins.",
+    "",
+    "An empty findings array is a different answer and unattributed-violations records it: [] is a",
+    "reviewer that named nothing, which is a measured miss on a corpus with nine planted defects. Absent",
+    "is a verdict this CLI did not write. The distinction is the whole case.",
+    "",
+    "The harness that owns this branch treats it as environment-parser and refuses to fold it into a",
+    "score."
+  ],
+  "result": null
+}

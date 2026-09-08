@@ -28,7 +28,10 @@
  *   waiver oracle          filed 2, valid 1, invalid 1, scored only where the gate matched
  *   live evidence          two records, no coverage, at the declared severities
  *   clean false positives  anything reported against the set that has no defects
- *   stability              the same scored answer on identical input
+ *   invented criteria      a matrix section for an id the epic does not state
+ *   duplicate sections     a second, contradictory section for one criterion
+ *   stability              the same scored answer on identical input, over everything
+ *                          above rather than over a chosen part of it
  *   fixture mutations      the run must not write tests into the corpus it was given
  *
  * THE GATE IS ONE BIT AND IT IS NOT THE HEADLINE
@@ -213,6 +216,16 @@ const THRESHOLDS = {
   // The clean set has adequate evidence for every criterion, so any gap, blocker,
   // waiver, or live-evidence claim against it is invented.
   maxCleanFalsePositives: 0,
+  // A section for a criterion id the epic does not state. The oracle is a closed list
+  // read out of the epic, so there is no reading under which a run discovers a
+  // sixteenth criterion, and a matrix carrying one is wrong about what was traced no
+  // matter how well it scored on the fifteen. Both sets name this under mustNotReport.
+  maxInventedCriteria: 0,
+  // A second section for a criterion that already has one. The two state the coverage
+  // answer twice and the deliverable no longer says which answer the gate came from,
+  // which is a defect in the artifact rather than a disagreement about a judgment. The
+  // bar is 0 for the same reason the mutation bar is: there is nothing to admit.
+  maxDuplicateCriteria: 0,
   // Identical input must produce the identical scored answer. A gate whose verdict
   // moves on re-run is not a gate.
   maxUnstableCases: 0,
@@ -953,6 +966,22 @@ function caseIndex(sets) {
   return sets.map((set) => ({ id: set.id, prompt: buildPrompt(set) }));
 }
 
+/**
+ * The ids of the cases this suite scores: one per fixture set, which is one
+ * staged workspace and one agent call.
+ *
+ * A case here is not a fixture file. The two sets read seven files each, and
+ * combining them changes every percentage, so the set is the unit that gets a
+ * gate decision and a score. tools/validate-eval-schemas.js checks the manifest's
+ * `caseCount` against the length of this, the same way it checks its thresholds
+ * against THRESHOLDS.
+ *
+ * @returns {string[]}
+ */
+function caseIds() {
+  return (loadGroundTruth()?.fixtureSets ?? []).map((set) => set.id);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Artifact parsing                                                            */
 /* -------------------------------------------------------------------------- */
@@ -997,20 +1026,28 @@ function readSummary(projectDir) {
  *
  * Returns null when the document declares no section for any criterion the oracle
  * names, so a template change surfaces as unmeasurable instead of as a run that
- * classified every criterion wrong.
+ * classified every criterion wrong. A document carrying only sections for ids the
+ * oracle does not state reads the same way: nothing it says can be scored.
+ *
+ * A heading is read as a criterion claim when its id shares a prefix with the ids the
+ * oracle states. That is what separates a made-up `AC-99` from the sections a run may
+ * legitimately give the waiver requests, whose ids `W-1` and `W-2` are the same shape.
  *
  * @param {string} projectDir
  * @param {object} set
- * @returns {{byCriterion: Map<string, {status: string|null, citations: Array<{file: string, line: number}>}>, duplicates: string[]}|null}
+ * @returns {{byCriterion: Map<string, {status: string|null, citations: Array<{file: string, line: number}>}>, invented: string[], duplicates: string[]}|null}
  */
 function readMatrix(projectDir, set) {
   const matrixPath = path.join(projectDir, 'test-artifacts', 'traceability-matrix.md');
   if (!fs.existsSync(matrixPath)) return null;
   const ids = new Set((set.criteria ?? []).map((item) => item.id));
+  const prefixes = new Set([...ids].map((id) => id.split('-')[0]));
   const lines = fs.readFileSync(matrixPath, 'utf8').split('\n');
 
   const byCriterion = new Map();
+  const invented = [];
   const duplicates = [];
+  const seen = new Set();
   let current = null;
   // A criterion section lists the tests that establish it and, under its own label,
   // the tests it considered and turned down. Citations under the second label are the
@@ -1021,13 +1058,27 @@ function readMatrix(projectDir, set) {
     if (heading) {
       const id = heading[1].toUpperCase();
       inRejectedBlock = false;
-      current = ids.has(id) ? id : null;
-      if (current && byCriterion.has(current)) {
-        duplicates.push(current);
-        current = null;
+      // Any heading of this shape closes the section above it, whether or not the id
+      // is one this harness goes on to record.
+      current = null;
+      if (!ids.has(id) && !prefixes.has(id.split('-')[0])) continue;
+      if (seen.has(id)) {
+        // A second section for an id that already has one. The two state the run's
+        // coverage answer twice, and a reader cannot tell which answer the gate was
+        // derived from, so the first section keeps the floor and this one is recorded
+        // for scoreRun rather than dropped.
+        duplicates.push(id);
         continue;
       }
-      if (current) byCriterion.set(current, { status: null, citations: [] });
+      seen.add(id);
+      // A section for an id the oracle never states is a criterion the run invented.
+      // It is kept here instead of discarded, which is what lets it reach a threshold.
+      if (!ids.has(id)) {
+        invented.push(id);
+        continue;
+      }
+      current = id;
+      byCriterion.set(id, { status: null, citations: [] });
       continue;
     }
     if (!current) continue;
@@ -1039,13 +1090,24 @@ function readMatrix(projectDir, set) {
       entry.status = status ? status[1] : null;
     }
     if (inRejectedBlock) continue;
+    // This is the repository's other reader of a `file:line` pair, and it shares
+    // the assumption cli/lib/parse-report.js was fixed for: a path holds no space.
+    // Here the assumption is load-bearing. The scan runs over free prose, so a
+    // space-tolerant path would swallow the words in front of a citation, and the
+    // extension anchor is the only boundary available. A cited path containing a
+    // space is truncated to its last space-free segment and then fails to resolve
+    // against a recorded span, which lowers evidenceCitationPrecision for a
+    // citation that was correct. No fixture path in test/fixtures/trace-eval
+    // carries a space, and --validate-only pins every ground-truth span to the
+    // fixture it names, so nothing in the corpus reaches it. Closing it properly
+    // needs the matrix template to delimit citations, which is a workflow change.
     for (const match of line.matchAll(/([\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|rb|go|java|kt|cs)):(\d+)/g)) {
       entry.citations.push({ file: match[1], line: Number.parseInt(match[2], 10) });
     }
   }
 
   if (byCriterion.size === 0) return null;
-  return { byCriterion, duplicates };
+  return { byCriterion, invented, duplicates };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1267,8 +1329,10 @@ function scoreRun(set, summary, matrix, tolerance, pctTolerance) {
   });
 
   // A section for an id the epic never states is a criterion the run invented, and
-  // the corpus names that as something it must not report.
-  const invented = [...matrix.byCriterion.keys()].filter((id) => !criteria.some((item) => item.id === id));
+  // the corpus names that as something it must not report. readMatrix collects those
+  // ids; deriving them from byCriterion here was the defect, because byCriterion only
+  // ever held ids the oracle states and so the list was always empty.
+  const invented = matrix.invented;
 
   // Every citation the run made, resolved against the spans recorded for the criterion
   // it made them under. A citation landing on a falseEvidence span is counted apart:
@@ -1335,19 +1399,41 @@ function scoreRun(set, summary, matrix, tolerance, pctTolerance) {
 /**
  * The scored answer as one string, for stability.
  *
- * It carries the judgments and nothing that moves for environmental reasons: the
- * stale-versus-unverifiable pair and every timestamp are left out, because a run that
- * differs only there gave the same answer.
+ * Every measurement that reaches a threshold is in here. A signature that covers less
+ * than the scoring does lets the answer move between repetitions while unstableCases
+ * reads zero, which makes maxUnstableCases a claim about the part of the answer the
+ * signature happened to include. Citations, gate criteria, oracle resolution, live
+ * evidence, invented ids, duplicated sections, and the mutation count were all outside
+ * it, so a run could change its citation resolution and its live dispositions between
+ * repetitions and still report stable.
+ *
+ * Nothing scored is excluded. Nothing environmental is included either: the scored
+ * object carries no run identifier and no timestamp, and the one environment-dependent
+ * pair the corpus names, stale versus unverifiable, reaches this only through the sum
+ * scoreLiveEvidence already collapses it into, so a workspace that resolves a commit
+ * sha and one that does not still sign the same.
+ *
+ * @param {object} scored One entry from scoreRun.
+ * @param {number} mutations Corpus files the run changed or added, which maxFixtureMutations scores.
+ * @returns {string}
  */
-function signatureOf(scored) {
+function signatureOf(scored, mutations) {
+  const actuals = (checks) => checks.map((item) => `${item.field}=${JSON.stringify(item.actual)}`);
   return JSON.stringify([
     scored.caseId,
     scored.statusResults.map((item) => `${item.id}=${item.reported}`),
+    scored.invented,
+    scored.duplicates,
     scored.gate.reported,
-    scored.arithmetic.map((item) => `${item.field}=${JSON.stringify(item.actual)}`),
-    scored.rejectedEvidence.map((item) => `${item.field}=${JSON.stringify(item.actual)}`),
-    scored.waivers.checks.map((item) => `${item.field}=${JSON.stringify(item.actual)}`),
+    actuals(scored.arithmetic),
+    actuals(scored.gateCriteria),
+    actuals(scored.oracleResolution),
+    actuals(scored.rejectedEvidence),
+    [scored.citations.total, scored.citations.resolved, scored.citations.misattributed, scored.citations.unresolved],
+    [scored.waivers.scored, actuals(scored.waivers.checks)],
+    actuals(scored.live),
     scored.cleanFalsePositives,
+    mutations,
   ]);
 }
 
@@ -1634,6 +1720,8 @@ function main() {
       liveTotal: 0,
       liveHits: 0,
       cleanFalsePositives: 0,
+      invented: 0,
+      duplicates: 0,
       mutations: 0,
     };
     let completedRuns = 0;
@@ -1655,7 +1743,7 @@ function main() {
         }
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
-        signatures.add(signatureOf(outcome.scored));
+        signatures.add(signatureOf(outcome.scored, outcome.mutations));
       }
 
       completedRuns += caseScores.length;
@@ -1692,6 +1780,8 @@ function main() {
         totals.liveTotal += scored.live.length;
         totals.liveHits += passed(scored.live);
         totals.cleanFalsePositives += scored.cleanFalsePositives;
+        totals.invented += scored.invented.length;
+        totals.duplicates += scored.duplicates.length;
       }
 
       const first = caseScores[0];
@@ -1713,6 +1803,7 @@ function main() {
         );
       }
       for (const entry of first.invented) console.log(`        ${colors.red}invented criterion:${colors.reset} ${entry}`);
+      for (const entry of first.duplicates) console.log(`        ${colors.red}second section for:${colors.reset} ${entry}`);
       for (const entry of first.citations.misattributed)
         console.log(`        ${colors.red}cited rejected evidence:${colors.reset} ${entry}`);
       if (!first.waivers.scored) {
@@ -1739,6 +1830,8 @@ function main() {
       waiverOracleAccuracy: measured(ratio(totals.waiverHits, totals.waiverTotal)),
       liveEvidenceAccuracy: measured(ratio(totals.liveHits, totals.liveTotal)),
       cleanFalsePositives: totals.cleanFalsePositives,
+      inventedCriteria: totals.invented,
+      duplicateCriteria: totals.duplicates,
       unstableCases,
       incompleteCases,
       fixtureMutations: totals.mutations,
@@ -1762,6 +1855,8 @@ function main() {
       console.log(`  ${label} ${pct(value)}   (threshold ${pct(THRESHOLDS[key])})`);
     }
     console.log(`  clean false pos.    ${String(totals.cleanFalsePositives).padStart(4)}   (max ${THRESHOLDS.maxCleanFalsePositives})`);
+    console.log(`  invented criteria   ${String(totals.invented).padStart(4)}   (max ${THRESHOLDS.maxInventedCriteria})`);
+    console.log(`  duplicate sections  ${String(totals.duplicates).padStart(4)}   (max ${THRESHOLDS.maxDuplicateCriteria})`);
     console.log(`  fixture mutations   ${String(totals.mutations).padStart(4)}   (max ${THRESHOLDS.maxFixtureMutations})`);
     if (totals.waiverSkippedRuns > 0) {
       console.log(
@@ -1794,6 +1889,8 @@ function main() {
       failures.push('waiverOracleAccuracy');
     }
     if (totals.cleanFalsePositives > THRESHOLDS.maxCleanFalsePositives) failures.push('clean false positives');
+    if (totals.invented > THRESHOLDS.maxInventedCriteria) failures.push(`${totals.invented} invented criterion section(s)`);
+    if (totals.duplicates > THRESHOLDS.maxDuplicateCriteria) failures.push(`${totals.duplicates} duplicate criterion section(s)`);
     if (totals.mutations > THRESHOLDS.maxFixtureMutations) failures.push('fixture mutations');
     if (unstableCases > THRESHOLDS.maxUnstableCases) failures.push(`${unstableCases} unstable case(s)`);
 
@@ -1854,6 +1951,7 @@ module.exports = {
   assertGroundTruthAbsent,
   buildPrompt,
   caseIndex,
+  caseIds,
   readSummary,
   readMatrix,
   scoreRun,

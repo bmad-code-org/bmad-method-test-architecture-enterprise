@@ -155,7 +155,7 @@ jobs:
       - name: Check the eval contracts against the sources they are generated from
         run: npm run test:contract-sources
 
-      - name: Compile the eval contracts
+      - name: Compile the eval contracts (always skips here, because eval-quality is deliberately not a dependency)
         run: npm run test:contracts
 
       - name: Test changelog stamping

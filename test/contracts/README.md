@@ -22,8 +22,17 @@ edit made here by hand is overwritten by the next run and fails the gate in the 
 `test-review.contract.json` addresses `verdict.findings`, which is a field the `tea-test-review` CLI
 did not carry until the change that added these contracts. Before it, the only way to learn which
 defects a review reported was to re-parse the markdown report with two regular expressions, which is
-what `findingsFromReport` in `test/eval-test-review.js` still did. The report was the contract; now
-the verdict is.
+what `findingsFromReport` in `test/eval-test-review.js` did. The report was the contract; now the
+verdict is, and `scoreVerdict` reads the same array this contract asserts against.
+
+That second parser had already answered differently in both directions, on fixtures this repository
+keeps. It read raw lines and never stripped fenced blocks, so the Critical finding quoted inside the
+fenced example in `fixtures/test-review-cli/reports/fenced-fake-finding.md` counted as real: two
+findings against the CLI's one. And it dropped the finding in
+`fixtures/test-review-cli/reports/finding-without-location.md` whose location line is missing, which
+tripped its own declared-versus-attributed guard and scored the whole run unmeasurable: one finding
+against the CLI's two. It is gone. `scoreVerdict` returns null only for a verdict carrying no
+findings array at all, and `test/replay/test-review/verdict-without-findings/` covers that branch.
 
 ## These contracts do not compile yet, and that is the finding
 
@@ -38,7 +47,8 @@ against a `dist/` built locally from a newer revision can disagree with every co
 > finding, and it names which part of the schema or which failure code did not carry enough
 > information to author against.
 
-These are those contracts and this is that finding. Reproduce it with the published package:
+These are those contracts and this is that finding. Reproduce it with the published package, which
+is now a declared devDependency so `npm run test:contracts` runs in CI rather than skipping:
 
 ```bash
 npx eval-quality compile --in test/contracts/test-review.contract.json
@@ -72,6 +82,11 @@ The evidence side is already command-aware and the declaration side is not. `EVI
 `eval-quality`'s `src/core/schemas/pointer.ts` already carries `stdout`, `stderr`, and `exit-code`,
 and `SealedRunRecord`'s observation already records all three. Only `Interface` and `Operation` are
 HTTP-only, which is what makes the gap closeable rather than structural.
+
+`0.2.0` prints the failure code and the artifact and stops there, so a run against it shows the code
+without the located issue list the table below breaks down. The list comes from a later revision of
+the renderer. The issues themselves are the same either way; only whether the tool prints them
+differs.
 
 ## What the operator vocabulary cannot say
 
@@ -131,10 +146,19 @@ What that covers:
 
 - every planted row, its file, and its admitted-line set, read from `ground-truth.json`;
 - which behavior a planted row belongs to, read from the row's severity in `criteria-registry.md`,
-  so a plant that changes row cannot leave a behavior linked to a row nobody plants;
+  so a plant that changes row cannot leave a behavior linked to a row nobody plants, and how hard that
+  behavior grades, derived from the same severity: a group whose rows carry their own gate is
+  `critical`, a group that feeds the pooled recall gate is `material`, and nothing grades below
+  `material`, because missing a planted defect must not rank under one out-of-scope finding;
 - every required and forbidden fragment list, the case ids, the plan steps, the witness legs, and the
   per-case counts in the oracle scopes, read from each `evals.json`;
-- both `sourceSpecDigest` values, recomputed from the files they pin;
+- both `sourceSpecDigest` values, recomputed from the files they pin, through the one digest helper
+  in `test/lib/eval-record.js`, which length-prefixes each file so a byte moved from the tail of one
+  step file to the head of the next changes the answer;
+- every key a sensitivity-witness leg supplies, read from the operation's own `requestShape`, so a
+  leg is always a request the port could issue. The test-review legs restated that list and supplied
+  only `files` against a shape requiring `files`, `json` and `agent`, which parses and then fails
+  compilation under `undeclared-mandatory-input`;
 - the selection cardinality bound, counted from each workflow's `tea-index.csv`;
 - the budgets and the probe-step bound, scaled from the case count; and
 - the verdict response descriptor's `requiredKeys`, `permittedKeys` and `types`, read from

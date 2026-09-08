@@ -26,12 +26,11 @@
  * Each stored verdict is also re-derived from its own report through
  * cli/lib/parse-report.js and has to reproduce. Without that, a stored verdict
  * and the report beside it can disagree and nothing notices: scoreVerdict reads
- * qualityScore straight off the verdict and re-parses the markdown with two
- * regexes of its own, so editing a stored score and its expected result together
- * leaves the suite green around a verdict no run could have produced. The same
- * check settles whether the ledger arithmetic is real, since parse-report.js
- * derives the score and the recommendation rather than trusting what a report
- * claims about itself.
+ * the verdict's own qualityScore and findings, so editing a stored verdict and
+ * its expected result together leaves the suite green around a verdict no run
+ * could have produced. The same check settles whether the ledger arithmetic is
+ * real, since parse-report.js derives the score and the recommendation rather
+ * than trusting what a report claims about itself.
  *
  * WHAT A GREEN RUN PROVES, AND WHAT IT DOES NOT
  *
@@ -40,11 +39,14 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Six of the eleven cases
- * produce a number and all six are constructed. Two carry real captured bytes,
- * both borrowed from the CLI parser fixtures, and both score as unmeasurable. No
- * live run of either eval has ever been recorded, so this repository holds no
- * captured output that this suite can turn into a number.
+ * produces a number was written by hand to be parsed. Ten of the twelve cases
+ * produce a number and eight of those ten are constructed. Two carry real
+ * captured bytes borrowed from the CLI parser fixtures, and both now score as a
+ * measured miss rather than as unmeasurable: their reports document no finding
+ * at all, and a verdict whose findings array is empty is a reviewer that named
+ * nothing. No live run of either eval has ever been recorded, so this repository
+ * holds no captured output that this suite can turn into a number a vendor
+ * actually earned.
  *
  * Two more things sit outside what a green run covers:
  *
@@ -89,6 +91,10 @@
  * outright: a moved plant needs its expected result re-derived by hand, which is
  * the same work that produced the corpus in the first place.
  *
+ * It also carries the checks on test/lib/eval-record.js that need no corpus. That
+ * module writes the result file the harnesses upload, and this is the only entry
+ * point in the pull-request gate that executes any of it; see checkRecordHygiene.
+ *
  * Usage:
  *   node test/test-eval-replay.js
  *   node test/test-eval-replay.js --accept                     # every moved case
@@ -108,7 +114,7 @@ const path = require('node:path');
 const { parseReport } = require('../cli/lib/parse-report');
 const { scoreVerdict } = require('./eval-test-review');
 const { parseSelection, scoreCase } = require('./eval-fragment-selection');
-const { digest } = require('./lib/eval-record');
+const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REPLAY_ROOT = path.join(__dirname, 'replay');
@@ -116,16 +122,25 @@ const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'groun
 
 /**
  * The version of the parsing and scoring behaviour this corpus was recorded
- * against. It covers findingsFromReport, admittedLinesFor and scoreVerdict in
- * eval-test-review.js, and parseSelection and scoreCase in
- * eval-fragment-selection.js. It does not cover the aggregation those feed or
- * the thresholds it is compared against; see the header for why.
+ * against. It covers admittedLinesFor and scoreVerdict in eval-test-review.js,
+ * and parseSelection and scoreCase in eval-fragment-selection.js. It does not
+ * cover the aggregation those feed or the thresholds it is compared against; see
+ * the header for why.
  *
- * Bump it in the same commit as a deliberate change to any of those five, then
+ * Bump it in the same commit as a deliberate change to any of those four, then
  * re-record with --accept. Leaving it alone is what makes an accidental change
  * fail.
+ *
+ * 2 is scoreVerdict reading the verdict's own `findings` array. Until then it
+ * re-parsed the report with two regexes of its own, which counted a finding
+ * quoted inside a fenced example as real and refused to score a run whose report
+ * counted a violation it summarized in prose. Four cases moved with it: two that
+ * had scored unmeasurable now score a measured miss, and two that had scored
+ * unmeasurable now score real hits. Every result also grew an `unlocated` count,
+ * because a finding naming no file is one no scorer can adjudicate and dropping
+ * it silently is the defect this version exists to close.
  */
-const SCORER_VERSION = 1;
+const SCORER_VERSION = 2;
 
 const colors = {
   reset: '[0m',
@@ -233,6 +248,7 @@ function projectReviewResult(scored) {
     reported: scored.reported,
     falsePositives: scored.falsePositives,
     unattributed: scored.unattributed,
+    unlocated: scored.unlocated,
   };
 }
 
@@ -306,10 +322,10 @@ function differences(before, after, labels = ['recorded', 'now']) {
 function loadReviewVerdict(item) {
   const verdict = readJson(path.join(item.directory, 'verdict.json'), `${item.id} verdict`);
   const reportPath = path.resolve(PROJECT_ROOT, String(verdict.report ?? ''));
-  // findingsFromReport answers null for a report it cannot open, which is the same
-  // answer it gives for a report that attributes no findings. A missing stored
-  // report would therefore reproduce the unmeasurable cases exactly, so it is
-  // caught here instead of scoring as one.
+  // The report is no longer what scoreVerdict reads, and it is still what proves
+  // the verdict beside it is one a run could have produced. A stored report that
+  // is not on disk would skip that check silently, so it is an unreadable corpus
+  // rather than a case.
   if (!verdict.report || !fs.existsSync(reportPath)) {
     unreadable(`${item.id}: verdict.report points at ${verdict.report ?? '(nothing)'}, which does not exist`);
   }
@@ -319,10 +335,20 @@ function loadReviewVerdict(item) {
 /**
  * Where a stored verdict disagrees with the report it points at.
  *
- * The CLI derives all three of these from the report rather than trusting it, so
+ * The CLI derives every one of these from the report rather than trusting it, so
  * re-deriving them is what keeps a stored verdict honest: a hand-edited score, a
  * recommendation that its own violation counts do not support, or a Total
  * Violations line that drifted away from the findings under it all surface here.
+ *
+ * `findings` is checked because scoreVerdict reads it. While the scorer re-parsed
+ * the markdown, emptying a stored findings array changed no number and this check
+ * saw nothing, and the array was still what test-review.contract.json asserted
+ * against. Now the scorer reads it, so an edit to it moves every count in the
+ * stored result, and this is the check that says the report never supported it.
+ *
+ * A verdict carrying no findings array at all is exempt, because that is a real
+ * shape the corpus stores: a verdict written before the CLI published the field.
+ * It scores null, so there is no number for a coordinated edit to launder.
  *
  * @returns {string[]} Empty when the verdict is exactly what the report produces.
  */
@@ -335,6 +361,10 @@ function verdictDriftFromReport(verdict, reportPath) {
   }
   const stored = { recommendation: verdict.recommendation, qualityScore: verdict.qualityScore, violations: verdict.violations };
   const fresh = { recommendation: derived.recommendation, qualityScore: derived.qualityScore, violations: derived.violations };
+  if (Array.isArray(verdict.findings)) {
+    stored.findings = verdict.findings;
+    fresh.findings = derived.findings;
+  }
   return differences(stored, fresh, ['the verdict says', 'the report derives']);
 }
 
@@ -368,6 +398,47 @@ function acceptCase(item, expected, observed) {
   const rewritten = { ...expected, scorerVersion: SCORER_VERSION, result: observed };
   fs.writeFileSync(path.join(item.directory, 'expected.json'), `${JSON.stringify(rewritten, null, 2)}\n`, 'utf8');
   return true;
+}
+
+/**
+ * The result-record checks that need no stored case.
+ *
+ * redactArgs decides what of a passthrough argv reaches a result file, and a
+ * result file is an artifact CI uploads, so anything it lets through is a
+ * published credential. It let four shapes through. The token pattern was applied
+ * to bare arguments and to a flag NAME and never to the value half of
+ * `--flag=value`, and it was start-anchored on top of that, so a token anywhere
+ * past the first character of a value was invisible as well.
+ *
+ * The last assertion is the other half of all four: a flag whose name and value
+ * are both innocuous has to survive. Redaction that erases the runner
+ * configuration destroys the reason the record carries argv at all, and `sk-`
+ * searched with no boundary in front of it sits inside "risk-based" and
+ * "task-runner".
+ */
+function checkRecordHygiene() {
+  const leaks = [
+    [
+      ['--api-key', 'sk-secret123', '--model=gpt', '--extra=sk-live-abc', 'sk-bare-xyz', '--auth', 'tok'],
+      ['--api-key', '[redacted]', '--model=gpt', '--extra=[redacted]', '[redacted]', '--auth', '[redacted]'],
+      'a token-shaped value in --flag=value form',
+    ],
+    [['--header=ghp_exampleSecret'], ['--header=[redacted]'], 'a token under a flag whose name says nothing about credentials'],
+    [
+      ['--header', 'Authorization: Bearer ghp_exampleSecret'],
+      ['--header', '[redacted]'],
+      'a token in the middle of a separate value argument',
+    ],
+    [['--extra=https://example.test?token=ghp_exampleSecret'], ['--extra=[redacted]'], 'a token in a query string inside a value'],
+  ];
+  for (const [argv, wanted, what] of leaks) {
+    const redacted = redactArgs(argv);
+    assert(same(redacted, wanted), `redactArgs drops ${what}`, `got ${JSON.stringify(redacted)}`);
+  }
+
+  const innocuous = ['--model=risk-based-v2', '--profile=task-runner', '--tag=disk-cache', '--agent-arg=--dangerously-skip-permissions'];
+  const kept = redactArgs(innocuous);
+  assert(same(kept, innocuous), 'redactArgs keeps a value that merely contains a token prefix inside a word', JSON.stringify(kept));
 }
 
 function main(argv) {
@@ -495,6 +566,8 @@ function main(argv) {
     assert(false, item.id, detail);
   }
 
+  checkRecordHygiene();
+
   console.log(`\n${colors.cyan}========================================${colors.reset}`);
   if (accepted.length > 0) {
     console.log(
@@ -502,7 +575,7 @@ function main(argv) {
         'Their "derivation" text is now stale; rewrite it before committing.',
     );
   }
-  console.log(`${colors.green}${passed} reproduced${colors.reset}, ${failed > 0 ? colors.red : ''}${failed} moved${colors.reset}`);
+  console.log(`${colors.green}${passed} passed${colors.reset}, ${failed > 0 ? colors.red : ''}${failed} moved${colors.reset}`);
   return failed > 0 ? 1 : 0;
 }
 
