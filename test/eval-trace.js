@@ -1102,18 +1102,25 @@ function readMatrix(projectDir, set) {
       entry.status = status ? status[1] : null;
     }
     if (inRejectedBlock) continue;
-    // This is the repository's other reader of a `file:line` pair, and it shares
-    // the assumption cli/lib/parse-report.js was fixed for: a path holds no space.
-    // Here the assumption is load-bearing. The scan runs over free prose, so a
-    // space-tolerant path would swallow the words in front of a citation, and the
-    // extension anchor is the only boundary available. A cited path containing a
-    // space is truncated to its last space-free segment and then fails to resolve
-    // against a recorded span, which lowers evidenceCitationPrecision for a
-    // citation that was correct. No fixture path in test/fixtures/trace-eval
-    // carries a space, and --validate-only pins every ground-truth span to the
-    // fixture it names, so nothing in the corpus reaches it. Closing it properly
-    // needs the matrix template to delimit citations, which is a workflow change.
-    for (const match of line.matchAll(/([\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|rb|go|java|kt|cs)):(\d+)/g)) {
+    // A citation is read in two forms, and the delimited one is what the workflow
+    // asks for. Inside backticks the span itself is the boundary, so the path may
+    // hold a space and is taken whole; trace-template.md and step-03 both write
+    // citations that way, and resources/traceability-matrix.example.md always did.
+    // A bare pair in free prose has no delimiter, so the extension anchor is the
+    // only boundary available there and a spaced path is still truncated to its
+    // last space-free segment. That is why the delimited form is the one the
+    // workflow mandates. Delimited spans are cut out before the prose scan runs,
+    // so a citation inside backticks is never counted a second time.
+    let prose = '';
+    let cursor = 0;
+    for (const span of line.matchAll(/`([^`]+)`/g)) {
+      prose += line.slice(cursor, span.index);
+      cursor = span.index + span[0].length;
+      const delimited = /^\s*(\S.*\.(?:ts|tsx|js|jsx|mjs|cjs|py|rb|go|java|kt|cs)):(\d+)\s*$/.exec(span[1]);
+      if (delimited) entry.citations.push({ file: delimited[1], line: Number.parseInt(delimited[2], 10) });
+    }
+    prose += line.slice(cursor);
+    for (const match of prose.matchAll(/([\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|rb|go|java|kt|cs)):(\d+)/g)) {
       entry.citations.push({ file: match[1], line: Number.parseInt(match[2], 10) });
     }
   }

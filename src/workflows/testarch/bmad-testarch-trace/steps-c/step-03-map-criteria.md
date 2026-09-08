@@ -44,6 +44,7 @@ For each resolved oracle item (formal requirement, endpoint/spec item, or synthe
   - Classification is decided by what the evidence **establishes** about the criterion. The number of levels the evidence spans does not set the status.
   - **FULL** whenever every scenario the criterion states is established, whether that took one level or several. A criterion that one appropriate level establishes in full is FULL, not UNIT-ONLY and not INTEGRATION-ONLY.
   - **UNIT-ONLY** and **INTEGRATION-ONLY** are for the case where a _missing_ level is what leaves the criterion unestablished: unit tests only, against a criterion stating an HTTP status or a rendered state; or API/component tests only, against a criterion stating branch-level logic that needs unit proof. "The only evidence is API-level" is not by itself INTEGRATION-ONLY.
+- Cite every mapped test as a backticked `` `path:line` `` pair, the form `trace-template.md` and `resources/traceability-matrix.example.md` both use. The backticks are the delimiter, so a path holding a space survives whole. An undelimited pair written into prose has no boundary but the file extension, and a path with a space in it is then read only from its last space-free segment onward.
 - Record test level and priority
 - Preserve each mapped test's stable identity fields (`id`, `title`, `file`, `line`, `level`, status flags) so Phase 1 can deduplicate unique tests before JSON export
 - Record heuristic signals:

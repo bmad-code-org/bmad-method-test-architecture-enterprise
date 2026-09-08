@@ -74,11 +74,11 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-testarch-
 
 - **Coverage:** FULL ✅
 - **Tests:**
-  - `1.3-E2E-001` - tests/e2e/auth.spec.ts:12
+  - `1.3-E2E-001` - `tests/e2e/auth.spec.ts:12`
     - **Given:** User has valid credentials
     - **When:** User submits login form
     - **Then:** User is redirected to dashboard
-  - `1.3-UNIT-001` - tests/unit/auth-service.spec.ts:8
+  - `1.3-UNIT-001` - `tests/unit/auth-service.spec.ts:8`
     - **Given:** Valid email and password hash
     - **When:** validateCredentials is called
     - **Then:** Returns user object
@@ -89,7 +89,7 @@ Note: This workflow does not generate tests. If gaps exist, run `/bmad-testarch-
 
 - **Coverage:** PARTIAL ⚠️
 - **Tests:**
-  - `1.3-E2E-003` - tests/e2e/auth.spec.ts:44
+  - `1.3-E2E-003` - `tests/e2e/auth.spec.ts:44`
     - **Given:** User requests password reset
     - **When:** User clicks reset link in email
     - **Then:** User can set new password
