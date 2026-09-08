@@ -18,7 +18,7 @@
   ],
   "id": "approved-with-no-findings",
   "suite": "test-review",
-  "scorerVersion": 2,
+  "scorerVersion": 3,
   "storedOutput": {
     "origin": "real-capture",
     "verdict": "verdict.json",
@@ -46,7 +46,9 @@
     "neither review named anything.",
     "",
     "score and recommendation come from the verdict: 100 - 0x10 - 0x5 - 0x2 - 2x1 = 98, Approve with",
-    "Comments."
+    "Comments.",
+    "",
+    "No finding names a file outside the review set, so outOfScope is 0 and falsePositives is unchanged by it."
   ],
   "result": {
     "score": 98,
@@ -68,6 +70,7 @@
     "criticalHits": 0,
     "reported": 0,
     "falsePositives": 0,
+    "outOfScope": 0,
     "unattributed": 0,
     "unlocated": 0
   }

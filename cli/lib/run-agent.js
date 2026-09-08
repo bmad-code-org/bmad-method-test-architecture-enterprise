@@ -16,11 +16,12 @@
  * - options.spawnPrefix wraps the agent command for filesystem isolation
  *   (sandbox-exec/bwrap from isolate.js); with the chmod fallback it is empty.
  * - Each adapter's argv is responsible for scoping tool access and approval
- *   behavior for its own vendor (see agent-adapters.js).
+ *   behavior for its own vendor (see agent-adapters.js). The caller's declared
+ *   capabilities decide how wide that scope is; the default is the review CLI's.
  */
 
 const { spawnSync } = require('node:child_process');
-const { AGENT_ADAPTERS, resolveModel } = require('./agent-adapters');
+const { AGENT_ADAPTERS, DEFAULT_CAPABILITIES, RUNNER_CAPABILITIES, resolveModel } = require('./agent-adapters');
 
 const STDERR_TAIL_LINES = 20;
 const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
@@ -65,9 +66,14 @@ function buildMinimalEnv(envPass = [], sourceEnv = process.env, adapterEnvNames 
  * @param {string} [options.cwd] - Working directory for the agent.
  * @param {string[]} [options.envPass] - Extra env var names allowed through to the child.
  * @param {string[]} [options.spawnPrefix] - Isolation wrapper (e.g. sandbox-exec -f profile).
+ * @param {string[]} [options.capabilities] - What the run may do to the filesystem, in the
+ *   suite manifest's words (RUNNER_CAPABILITIES in agent-adapters.js). The built-in adapters
+ *   turn the strongest one into vendor argv; the default is the tier the review CLI has
+ *   always run at, so a caller that declares nothing gets the same run as before.
  * @returns {{ stdout: string, stderr: string }} Captured output from a successful agent run.
  * @throws {Error} AGENT_NOT_FOUND when the executable is missing, AGENT_FAILED
- *   on spawn error, timeout, or non-zero exit.
+ *   on spawn error, timeout, or non-zero exit, CAPABILITY_UNKNOWN when a declared
+ *   capability is not one the manifest vocabulary names.
  */
 function runAgent(
   prompt,
@@ -80,6 +86,7 @@ function runAgent(
     cwd = process.cwd(),
     envPass = [],
     spawnPrefix = [],
+    capabilities = DEFAULT_CAPABILITIES,
   } = {},
 ) {
   const adapter = AGENT_ADAPTERS[agent];
@@ -88,13 +95,24 @@ function runAgent(
     error.code = 'AGENT_UNKNOWN';
     throw error;
   }
+  if (
+    !Array.isArray(capabilities) ||
+    capabilities.length === 0 ||
+    capabilities.some((capability) => !RUNNER_CAPABILITIES.includes(capability))
+  ) {
+    const error = new Error(
+      `runner capabilities must be a non-empty list drawn from ${RUNNER_CAPABILITIES.join(', ')}; got ${JSON.stringify(capabilities)}.`,
+    );
+    error.code = 'CAPABILITY_UNKNOWN';
+    throw error;
+  }
   const resolvedCommand = agentCommand || adapter.command;
   if (!resolvedCommand) {
     const error = new Error(`agent "${agent}" requires an explicit --agent-cmd executable.`);
     error.code = 'AGENT_COMMAND_REQUIRED';
     throw error;
   }
-  let agentArgv = adapter.buildArgv(agentArgs, resolveModel(agent, model, agentArgs));
+  let agentArgv = adapter.buildArgv(agentArgs, resolveModel(agent, model, agentArgs), capabilities);
   let input = prompt;
   if (adapter.promptViaArgv) {
     agentArgv = agentArgv.map((arg) => (arg === '__PROMPT__' ? prompt : arg));

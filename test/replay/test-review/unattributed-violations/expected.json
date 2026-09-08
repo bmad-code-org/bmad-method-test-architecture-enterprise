@@ -20,7 +20,7 @@
   ],
   "id": "unattributed-violations",
   "suite": "test-review",
-  "scorerVersion": 2,
+  "scorerVersion": 3,
   "storedOutput": {
     "origin": "real-capture",
     "verdict": "verdict.json",
@@ -50,7 +50,9 @@
     "",
     "score and recommendation come from the verdict: 100 - 0x10 - 0x5 - 7x2 - 3x1 = 83, and with no",
     "Critical and no High the ledger derives Approve with Comments. An approving verdict at 83 that found",
-    "none of the nine planted defects is the pairing this case exists to record."
+    "none of the nine planted defects is the pairing this case exists to record.",
+    "",
+    "No finding names a file outside the review set, so outOfScope is 0 and falsePositives is unchanged by it."
   ],
   "result": {
     "score": 83,
@@ -72,6 +74,7 @@
     "criticalHits": 0,
     "reported": 0,
     "falsePositives": 0,
+    "outOfScope": 0,
     "unattributed": 0,
     "unlocated": 0
   }

@@ -22,7 +22,11 @@
  * The agent call is TEA's own (cli/lib/run-agent.js), so vendor argv, the
  * minimal child environment, the model pin, and the credential shape are all
  * decided in the one place that already decides them for tea-test-review. This
- * file adds no vendor knowledge.
+ * file adds no vendor knowledge. It does declare the one capability the
+ * operation needs, `read-only`: the reply is a JSON object on standard output
+ * and nothing about it requires a file, so claude runs with no write tool and
+ * codex under its read-only sandbox, which is what the fragment-selection suite
+ * declares in test/evals/suite-manifest.json.
  *
  * Two nested wall clocks are in play when this runs behind eval-quality's
  * command-line adapter, and the inner one has to be the shorter of the two:
@@ -55,6 +59,9 @@ const DEFAULT_AGENT = 'claude';
 
 /** Five minutes, matching RUN_TIMEOUT_MS in test/eval-fragment-selection.js, which is the only caller that measures. */
 const DEFAULT_TIMEOUT_MS = 5 * 60_000;
+
+/** A selection is a reply, so the runner needs to write nothing; see the header. */
+const RUNNER_CAPABILITIES = ['read-only'];
 
 /**
  * Exit code per outcome, and the single source of truth for it.
@@ -193,6 +200,7 @@ function main(argv) {
       model: options.model,
       timeout,
       cwd: process.cwd(),
+      capabilities: RUNNER_CAPABILITIES,
     }));
   } catch (error) {
     fail(classOfAgentError(error), error.message);
@@ -215,4 +223,12 @@ if (require.main === module) {
   main(process.argv);
 }
 
-module.exports = { DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, EXIT_CODES, SELECTION_REQUEST_KEYS, classOfAgentError, failureClassForExit };
+module.exports = {
+  DEFAULT_AGENT,
+  DEFAULT_TIMEOUT_MS,
+  EXIT_CODES,
+  RUNNER_CAPABILITIES,
+  SELECTION_REQUEST_KEYS,
+  classOfAgentError,
+  failureClassForExit,
+};

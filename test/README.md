@@ -40,6 +40,7 @@ npm run test:eval-trace-data   # eval-trace.js --validate-only
 npm run test:eval-schemas      # tools/validate-eval-schemas.js
 npm run test:eval-replay       # test-eval-replay.js
 npm run test:contracts         # test-contracts.js
+npm run test:contract-oracles  # test-contract-oracles.js
 
 # Are the eval contracts still what their sources generate?
 node tools/generate-contracts.js --check
@@ -127,8 +128,8 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every case that produces a number was written by hand to be parsed, so a green
 run proves the scorers are deterministic and reproduce history, and proves
-nothing about whether they handle real agent output correctly. Ten of the twelve
-cases produce a number and eight of those ten are constructed. Two carry real
+nothing about whether they handle real agent output correctly. Eleven of the thirteen
+cases produce a number and nine of those eleven are constructed. Two carry real
 captured bytes, both borrowed from `fixtures/test-review-cli/`, and both score
 zero recall: their reports document no finding at all. The live runs of
 2026-09-08 produced real numbers for all three suites, and none of their output
@@ -138,3 +139,28 @@ suite can turn into a number a vendor earned.
 The suite also runs the `test/lib/eval-record.js` checks that need no stored
 case, because it is the only entry point in the pull-request gate that executes
 that module.
+
+## contract oracle suite
+
+`test-contract-oracles.js` evaluates every oracle in every contract under
+`contracts/` with `eval-quality`'s own evaluator and compares each answer with the
+harness scorer's on the same evidence: every stored `test-review` verdict is one
+observation of the contract's `review-corpus` step, and every fragment-selection
+case is evaluated over three constructed selections plus the stored captures.
+An oracle that faults, or that holds where the scorer fails, or fails where the
+scorer holds, fails the suite. Its first run found that every regex oracle in
+`test-review.contract.json` was refused by the evaluator as a
+catastrophic-backtracking shape, which `compile` never checks. The one admitted
+divergence is AD-4's reading of an empty collection, recorded in
+`contracts/README.md`.
+
+## preflight
+
+Each eval harness accepts `--preflight-only` beside `--validate-only`. The
+first runs the static checks and then probes the runner: the executable is on
+`PATH`, answers `--version`, and a built-in vendor has a credential. It exits
+before any model call, and it is what `eval:all --preflight-only` passes each
+suite through the manifest's `preflightArgs`. `tools/validate-eval-schemas.js`
+runs that argv once with a missing runner and once with `node` standing in as a
+custom runner, and both the exit code and the result record have to match, so a
+preflight that stops reaching the runner fails `npm test`.

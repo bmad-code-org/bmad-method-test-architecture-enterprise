@@ -10,12 +10,16 @@
     "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so the eight",
     "skills it spans are still listed under `deferred`.",
     "",
-    "`ciTier` is the tier at which a suite runs in full. The deterministic pull-request tier runs each suite's",
-    "`harnessOptions.preflightArgs` instead, which validates the data and the runner without a model call.",
+    "`ciTier` is the tier at which a suite runs in full. `npm run eval:all -- --preflight-only` runs each suite's",
+    "`harnessOptions.preflightArgs` instead, which validates the data and then probes the runner: the executable",
+    "answers --version and a built-in vendor has a credential. No model call is made. tools/validate-eval-schemas.js",
+    "drives that argv once with a missing runner and once with a present one, so a preflight that never reaches the",
+    "runner fails `npm test`. The deterministic pull-request tier runs the data half alone, through --validate-only.",
     "",
     "Thresholds are declared here and checked against the harness constants by tools/validate-eval-schemas.js.",
     "Editing one side alone fails `npm test`, so the manifest cannot drift into describing a gate that is not the",
-    "gate being run. `caseCount` is checked the same way, against the case-id list each harness exports.",
+    "gate being run. `caseCount` is checked the same way, against the case-id list each harness exports, and",
+    "`runnerCapabilities` against the RUNNER_CAPABILITIES each harness exports and hands to its runner.",
     "",
     "`contracts` names the eval contracts under test/contracts/ that express a suite. The same check fails when a",
     "listed path is missing and when a generated contract is claimed by no suite, so the link cannot rot in either",
@@ -44,7 +48,7 @@
       "harness": "test/eval-fragment-selection.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": ["--validate-only"],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": true
       },
       "fixtures": [
@@ -140,7 +144,7 @@
       "harness": "test/eval-trace.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": ["--validate-only"],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [

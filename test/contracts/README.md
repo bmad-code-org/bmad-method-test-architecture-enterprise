@@ -127,6 +127,22 @@ cases differ only in the prompt sent to the runner, and that is the property tha
 mean anything. `sensitivityWitness` expresses a two-leg version of this inside one operation and
 nothing expresses it across plan steps.
 
+**An empty collection is no evidence.** AD-4 resolves a quantifier over an
+empty collection to `insufficient-evidence` with an `empty-collection` introduction condition. The
+`test-review` harness reads a verdict whose findings array is empty as a reviewer that named nothing,
+which is a measured miss of every plant; the contract abstains on the same verdict. Both readings
+are stated, and `test/test-contract-oracles.js` accepts the abstention exactly when the resolution
+tree records that condition, and nowhere else.
+
+**A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator
+refuses a quantifier nested inside a quantified group before matching anything, as a
+catastrophic-backtracking risk, and reports it as a `budget-exhausted` fault. Every regex oracle in
+`test-review.contract.json` carried that shape, an optional group around a dot-star and a slash, so
+eleven of its thirteen oracles could never resolve. The compiler requires only the `^` and `$`
+anchors, which both shapes have, and every contract compiled clean throughout. The generator now
+spells the directory prefix as an alternation with an empty branch, and the oracle suite below is
+what would catch the next such pattern.
+
 Two more limits are worth recording as answered rather than open. "None of these appear in this
 collection" over plain strings IS expressible, as
 `not(for-any(collection, set-membership({pointer: "@/"}, {literal: [...]})))`: the bare `@/` spelling
@@ -141,10 +157,21 @@ runs, and every oracle here is a predicate over one interaction's evidence.
 node tools/generate-contracts.js --check   # are the contracts what their sources generate?
 npm run test:contracts                     # does the compiler still say what the baseline records?
 npm run test:contracts -- --cli /path/to/eval-quality/dist/cli/main.js
+npm run test:contract-oracles              # does every oracle resolve, and agree with the harness scorer?
 ```
 
-The two answer different questions and neither substitutes for the other. The generator check is the
-one that runs unconditionally; the compile check needs `eval-quality` on disk.
+The three answer different questions and none substitutes for another. The generator check is the
+one that runs unconditionally; the compile check and the oracle check need `eval-quality` on disk.
+
+The oracle check is the one that reads the oracles. It evaluates every oracle in every contract with
+`eval-quality`'s own evaluator, loaded from the installed package, over evidence this repository
+already holds: each stored verdict under `test/replay/test-review/` as one observation of the
+`review-corpus` step, and each fragment-selection case over three constructed selections and the
+stored captures. Each answer is compared with the harness scorer's on the same evidence: a plant
+oracle holds exactly when `scoreVerdict` counts the plant as a hit, the scope oracle exactly when it
+counts no finding as out of scope, a containment oracle exactly when `scoreCase` misses nothing. An
+oracle that faults, or that contradicts the scorer, fails `npm test`. Nothing read an oracle before
+it, and the section above records what its first run found.
 
 The compile check resolves `eval-quality` from `node_modules` and skips with an explicit message when it is
 absent, so the deterministic gate stays credential-free and runs with no network. It never passes
@@ -229,7 +256,8 @@ is a third shape and is likewise outside the descriptor.
 
 ## What is still not enforced
 
-Two things.
+Two things. A third, whether an oracle can be evaluated at all and whether it agrees with the harness
+scorer, is enforced by `npm run test:contract-oracles` and is described under Validating them here.
 
 **A behavior's success criterion is authored prose that names a set in words.** "names all seven
 mandated fragments" is written in the generator, because the eight workflows name their required

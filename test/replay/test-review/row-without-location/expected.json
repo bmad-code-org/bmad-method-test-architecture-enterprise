@@ -20,7 +20,7 @@
   ],
   "id": "row-without-location",
   "suite": "test-review",
-  "scorerVersion": 2,
+  "scorerVersion": 3,
   "storedOutput": {
     "origin": "constructed",
     "verdict": "verdict.json",
@@ -48,7 +48,9 @@
     "",
     "The verdict's own numbers come from cli/lib/parse-report.js reading this report:",
     "100 - 4x10 - 4x5 - 1x2 - 1x1 = 37, and any Critical at all forces Block. The M3 deducts two points",
-    "and contributes nothing to recall, which is the same split partially-attributed records."
+    "and contributes nothing to recall, which is the same split partially-attributed records.",
+    "",
+    "No finding names a file outside the review set, so outOfScope is 0 and falsePositives is unchanged by it."
   ],
   "result": {
     "score": 37,
@@ -60,6 +62,7 @@
     "criticalHits": 4,
     "reported": 9,
     "falsePositives": 0,
+    "outOfScope": 0,
     "unattributed": 0,
     "unlocated": 1
   }

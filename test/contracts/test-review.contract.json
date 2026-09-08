@@ -107,9 +107,9 @@
     },
     {
       "id": "B-005",
-      "description": "Coverage findings stay out of scope, because coverage belongs to the trace workflow.",
+      "description": "Findings stay inside the review set, because coverage belongs to the trace workflow.",
       "severity": "material",
-      "observableSuccessCriterion": "No finding in the verdict artifact names a source file outside the review set.",
+      "observableSuccessCriterion": "Every located finding in the verdict artifact names one of the files under review.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -182,7 +182,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -236,7 +236,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -290,7 +290,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -344,7 +344,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -398,7 +398,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?checkout\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -452,7 +452,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?orders\\.service\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -506,7 +506,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?orders\\.service\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -560,7 +560,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?orders\\.service\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -614,7 +614,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?orders\\.service\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
             },
             {
               "op": "set-membership",
@@ -657,7 +657,7 @@
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?profile\\.spec\\.ts$"
+              "pattern": "^(?:.*/|)profile\\.spec\\.ts$"
             }
           }
         ]
@@ -666,33 +666,44 @@
     {
       "id": "O-011",
       "polarity": "expects-hold",
-      "commentary": "The scope control recorded as negativeControls[0] in ground-truth.json. A changed implementation with no accompanying test belongs to trace, so reporting it here is a scope violation scored as a false positive.",
+      "commentary": "The scope control recorded as negativeControls[0] in ground-truth.json. A changed implementation with no accompanying test belongs to trace, so a finding against any file outside the review set is a scope violation scored as a false positive. A finding with no file is left to the unlocated count, because nothing can say which file it meant.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "not",
-        "scope": "Every finding the review reported, searched for one naming a source file outside the review set.",
-        "negativeDomain": "A review that raises a coverage violation against a changed implementation file.",
+        "relation": "for-all",
+        "scope": "Every located finding the review reported, checked against the three files under review.",
+        "negativeDomain": "A review that raises a finding, a coverage violation for example, against a file it was not asked to review.",
         "evidenceTargets": ["/interactions/review-corpus/artifact/verdict/findings"]
       },
       "check": {
-        "op": "not",
-        "operands": [
-          {
-            "op": "for-any",
-            "collection": {
-              "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        "op": "for-all",
+        "collection": {
+          "pointer": "/interactions/review-corpus/artifact/verdict/findings"
+        },
+        "predicate": {
+          "op": "any",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                },
+                {
+                  "literal": null
+                }
+              ]
             },
-            "predicate": {
+            {
               "op": "regex",
               "operands": [
                 {
                   "pointer": "@/file"
                 }
               ],
-              "pattern": "^(?:.*/)?[a-z0-9-]+\\.(?:ts|js)$"
+              "pattern": "^(?:.*/|)(?:checkout\\.spec\\.ts|orders\\.service\\.spec\\.ts|profile\\.spec\\.ts)$"
             }
-          }
-        ]
+          ]
+        }
       }
     },
     {

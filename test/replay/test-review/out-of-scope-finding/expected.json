@@ -1,0 +1,54 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the only one that exercises the scope control ground-truth.json",
+    "records under negativeControls. The verdict names a file that was never under review, and both the",
+    "harness scorer and the contract's scope oracle have to call that a false positive. Before this case",
+    "the rule was declared twice and scored nowhere: such a finding landed in unattributed, the bucket for",
+    "findings a human has yet to rule on, and this one needs no ruling.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "out-of-scope-finding",
+  "suite": "test-review",
+  "scorerVersion": 3,
+  "storedOutput": {
+    "origin": "constructed",
+    "verdict": "verdict.json",
+    "report": "report.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-review-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:217a17595ed39fbee4f8c6a9a50519927852c035ccef42bd6b4bede51fe38aff"
+  },
+  "derivation": [
+    "The verdict carries ten findings: the nine planted rows at their firing lines, and an M6 against",
+    "src/orders.service.ts:14, the implementation the seeded spec imports and nobody asked the reviewer to",
+    "read. All ten name a file, so unlocated is 0 and reported is 10. The nine plants each find their",
+    "finding, so hits is 9, criticalHits 4 of 4, and misses is empty.",
+    "",
+    "The M6 matches no plant. Its file ends in none of the three review-set basenames, so it is neither a",
+    "seeded fixture nor the clean control: it is out of scope. outOfScope is 1, and because an out-of-scope",
+    "finding is a definite false positive, falsePositives is 1 as well. Nothing lands in unattributed,",
+    "which is reserved for findings on a seeded fixture that match no plant.",
+    "",
+    "The counts the harness derives from these: recall 9/9 = 1.00, CRITICAL recall 4/4 = 1.00,",
+    "nonFalsePositiveRate (10 - 1)/10 = 0.90 against a 0.80 floor. Counting the finding as unattributed",
+    "instead would give 10/10 = 1.00, which is the difference this case exists to pin.",
+    "",
+    "score and recommendation come from the verdict: 100 - 4x10 - 4x5 - 1x2 - 1x1 = 37, Block on Criticals."
+  ],
+  "result": {
+    "score": 37,
+    "recommendation": "Block",
+    "planted": 9,
+    "hits": 9,
+    "misses": [],
+    "criticalPlanted": 4,
+    "criticalHits": 4,
+    "reported": 10,
+    "falsePositives": 1,
+    "outOfScope": 1,
+    "unattributed": 0,
+    "unlocated": 0
+  }
+}

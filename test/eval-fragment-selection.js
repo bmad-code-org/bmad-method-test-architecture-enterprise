@@ -25,14 +25,28 @@
  * knowledge index and why a step-file rewrite that drops a fragment shows up here
  * as a failing case rather than as nothing at all.
  *
- * TWO MODES
+ * THREE MODES
  *
- *   --validate-only  Static. No vendor, no cost, no network. Asserts the eval
- *                    data is internally consistent and that every fragment it
- *                    names exists and is indexed for that workflow. This is the
- *                    mode `npm test` and CI run.
- *   default          Spends a vendor run per case per repetition. Run it by hand
- *                    or on a schedule; it needs a logged-in claude or codex.
+ *   --validate-only   Static. No vendor, no cost, no network. Asserts the eval
+ *                     data is internally consistent and that every fragment it
+ *                     names exists and is indexed for that workflow. This is the
+ *                     mode `npm test` and CI run.
+ *   --preflight-only  The static checks, then the runner: is the agent
+ *                     executable on PATH, does it answer --version, does a
+ *                     built-in vendor have a credential. Exits before any model
+ *                     call. This is what `eval:all --preflight-only` runs, and
+ *                     the argv the suite manifest declares as preflightArgs.
+ *   default           Spends a vendor run per case per repetition. Run it by
+ *                     hand or on a schedule; it needs a logged-in claude or codex.
+ *
+ * THE RUNNER IS READ-ONLY
+ *
+ * A selection is a reply, so the run needs no file. The suite manifest declares
+ * `read-only` for it and RUNNER_CAPABILITIES below is what the harness applies:
+ * claude runs with no write tool, codex under its read-only sandbox, and every
+ * runner in an empty scratch directory that is checked afterwards. A run that
+ * left a file there, or changed the repository, is an environment failure and
+ * is never scored.
  *
  * EVERY DECLARED REPETITION MUST COMPLETE
  *
@@ -42,17 +56,20 @@
  *
  * Usage:
  *   node test/eval-fragment-selection.js --validate-only
+ *   node test/eval-fragment-selection.js --preflight-only --agent codex
  *   node test/eval-fragment-selection.js --agent claude --runs 3
  *   node test/eval-fragment-selection.js --agent codex --workflow bmad-testarch-automate
  *   node test/eval-fragment-selection.js --agent custom --agent-cmd my-runner --agent-arg --headless
  *   node test/eval-fragment-selection.js --agent claude --json results/fragment-selection.json
  *
  * Exit codes:
- *   0  data is valid (--validate-only), or every vendor met the thresholds
+ *   0  data is valid (--validate-only), the runner is ready (--preflight-only),
+ *      or every vendor met the thresholds
  *   1  a threshold was missed, or the eval data is inconsistent (a real result)
  *   2  the environment could not run the eval (nothing was measured): a missing
- *      credential, a timeout, a transport error, an unparseable reply, or fewer
- *      completed runs than were declared
+ *      credential or executable, a timeout, a transport error, an unparseable
+ *      reply, a runner outside its declared capability, or fewer completed runs
+ *      than were declared
  */
 
 'use strict';
@@ -84,6 +101,7 @@ const {
   writeSuiteResult,
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
+const { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVAL_ROOT = path.join(__dirname, 'evals');
@@ -91,6 +109,13 @@ const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch');
 const SUITE_ID = 'fragment-selection';
 
 const RUN_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * What the runner is allowed to do, and what tools/validate-eval-schemas.js checks
+ * the manifest's `runnerCapabilities` against, the same way it checks THRESHOLDS.
+ * See THE RUNNER IS READ-ONLY in the header.
+ */
+const RUNNER_CAPABILITIES = ['read-only'];
 
 /**
  * Deliberately conservative, same reasoning as the test-review harness: a bar
@@ -124,6 +149,7 @@ function parseArgs(argv) {
   const envPass = [];
   let runs = 2;
   let validateOnly = false;
+  let preflightOnly = false;
   let agentCmd;
   let model;
   let jsonPath;
@@ -186,6 +212,10 @@ function parseArgs(argv) {
         validateOnly = true;
         break;
       }
+      case '--preflight-only': {
+        preflightOnly = true;
+        break;
+      }
       default: {
         fatal(2, `unknown argument: ${arg}`);
       }
@@ -199,7 +229,8 @@ function parseArgs(argv) {
   if (agents.length > 1 && (agentCmd || agentArgs.length > 0 || envPass.length > 0 || model)) {
     fatal(2, 'runner overrides require exactly one --agent; run separate commands for different runner configurations');
   }
-  return { agents, workflows, runs, validateOnly, agentCmd, agentArgs, envPass, model, jsonPath };
+  if (validateOnly && preflightOnly) fatal(2, '--validate-only and --preflight-only name different modes; pass one');
+  return { agents, workflows, runs, validateOnly, preflightOnly, agentCmd, agentArgs, envPass, model, jsonPath };
 }
 
 /** Every evals.json under test/evals, or only the requested workflows. */
@@ -475,7 +506,8 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
 function main() {
   const startedAt = Date.now();
   const options = parseArgs(process.argv.slice(2));
-  const { agents, workflows, runs, validateOnly } = options;
+  const { agents, workflows, runs, validateOnly, preflightOnly } = options;
+  const staticMode = validateOnly ? 'validate-only' : preflightOnly ? 'preflight-only' : 'live';
 
   console.log(`${colors.cyan}========================================`);
   console.log('tea fragment-selection eval harness');
@@ -498,7 +530,7 @@ function main() {
     finish({
       options,
       startedAt,
-      mode: validateOnly ? 'validate-only' : 'live',
+      mode: staticMode,
       suites: [],
       runners: [],
       suiteFailureClasses: ['quality'],
@@ -522,11 +554,16 @@ function main() {
     finish({
       options,
       startedAt,
-      mode: 'live',
+      mode: staticMode,
       suites,
       runners: [],
       suiteFailureClasses: readiness.map((problem) => problem.failureClass),
     });
+  }
+  if (preflightOnly) {
+    console.log(`${colors.green}✓${colors.reset} runner executable(s) answer --version; built-in credentials checked`);
+    console.log(`\n${colors.green}pre-flight only; nothing measured.${colors.reset}\n`);
+    finish({ options, startedAt, mode: 'preflight-only', suites, runners: [] });
   }
   console.log(`${colors.dim}${runs} run(s) per case per agent${colors.reset}\n`);
 
@@ -556,6 +593,14 @@ function main() {
 
         for (let runIndex = 0; runIndex < runs; runIndex += 1) {
           let stdout = '';
+          // The run's working directory is empty and disposable. The prompt carries
+          // everything the case needs, so PROJECT_ROOT was never a requirement, and
+          // pointing a runner with write tools at the repository made `read-only`
+          // a declaration with nothing behind it.
+          const scratch = scratchDirectory('tea-eval-selection');
+          const treeBefore = workingTreeState(PROJECT_ROOT);
+          let written = [];
+          let treeChanges = [];
           try {
             ({ stdout } = runAgent(prompt, {
               agent,
@@ -564,13 +609,29 @@ function main() {
               envPass: options.envPass,
               model: options.model,
               timeout: RUN_TIMEOUT_MS,
-              cwd: PROJECT_ROOT,
+              cwd: scratch,
+              capabilities: RUNNER_CAPABILITIES,
             }));
+            written = filesWritten(scratch);
+            treeChanges = workingTreeChanges(treeBefore, workingTreeState(PROJECT_ROOT));
           } catch (error) {
             // The model never answered. That is an environment failure, and
             // scoring the runs that did answer would turn it into a lower number.
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: ${error.message}${colors.reset}`);
             lostRunClasses.push(classifyAgentError(error));
+            unmeasuredRuns += 1;
+            continue;
+          } finally {
+            fs.rmSync(scratch, { recursive: true, force: true });
+          }
+          if (written.length > 0 || treeChanges.length > 0) {
+            // The runner wrote when the suite declares it may not. The reply is
+            // not scored: a run outside its declared envelope is a run the
+            // measurement does not describe, so it is an environment failure.
+            console.error(
+              `    ${colors.red}${item.id} run ${runIndex + 1}: the runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration${colors.reset}`,
+            );
+            lostRunClasses.push('environment-configuration');
             unmeasuredRuns += 1;
             continue;
           }
@@ -699,6 +760,7 @@ module.exports = {
   caseIndex,
   caseIds,
   parseArgs,
+  RUNNER_CAPABILITIES,
   THRESHOLDS,
   SUITE_ID,
 };

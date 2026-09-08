@@ -8,6 +8,8 @@
  * - every path the manifest declares exists,
  * - the thresholds it declares are the thresholds the harnesses actually apply,
  * - the case count it declares is the number of cases the harness scores,
+ * - the runner capabilities it declares are the ones the harness grants its runner,
+ * - the preflight argv it declares really probes the runner, in both directions,
  * - every generated contract under test/contracts is claimed by a suite,
  * - every TEA skill has a behavioral suite or a deferred declaration, and
  * - test/schema/eval-result.schema.json is what the Zod source generates.
@@ -15,7 +17,19 @@
  * The threshold check is the one that earns its place. A manifest that declares
  * a gate nobody runs is worse than no manifest: it reads as a specification and
  * is actually a comment. The case-count check follows the same rule, which is why
- * it asks the harness rather than counting the manifest's own fixture list.
+ * it asks the harness rather than counting the manifest's own fixture list, and
+ * the capability check follows it too: the harness exports the list it hands to
+ * its runner, and the manifest has to say the same thing.
+ *
+ * The preflight check is the one that spawns a process. `runnerCapabilities` and
+ * `preflightArgs` were both declared for months with nothing reading them, and a
+ * comparison of two constants cannot tell whether a preflight argv reaches the
+ * runner at all. So each suite's declared argv is run twice through the real
+ * harness, once with a runner that does not exist and once with one that does,
+ * and both the exit code and the result record have to say the right thing.
+ * That costs a few seconds and no credential, and it is the only way to know
+ * that `eval:all --preflight-only` fails before money is spent when the runner
+ * is missing.
  *
  * Usage: node tools/validate-eval-schemas.js [--write]
  * Exit codes: 0 = valid, 1 = validation failures, 2 = the check could not run
@@ -26,7 +40,9 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { zodToJsonSchema } = require('zod-to-json-schema');
 
 const { loadSuiteManifest, skillsOf, unaccountedSkills, MANIFEST_RELATIVE_PATH } = require('../test/lib/suite-manifest');
@@ -114,6 +130,93 @@ function compareThresholds(entry, problems) {
   }
 }
 
+/**
+ * The capabilities the harness grants its runner, against the ones the manifest
+ * declares. Exact set equality: a harness that grants more than it declares is
+ * the defect this check exists for, and one that grants less is a manifest that
+ * overstates what the runner can do.
+ */
+function compareRunnerCapabilities(entry, problems) {
+  const harness = loadHarness(entry, problems);
+  if (!harness) return;
+  const granted = harness.RUNNER_CAPABILITIES;
+  if (!Array.isArray(granted)) {
+    problems.push(`${entry.id}: ${entry.harness} exports no RUNNER_CAPABILITIES, so the manifest's runnerCapabilities cannot be checked`);
+    return;
+  }
+  const declared = [...entry.runnerCapabilities].sort().join(', ');
+  const applied = [...granted].sort().join(', ');
+  if (declared !== applied) {
+    problems.push(`${entry.id}: manifest declares runnerCapabilities [${declared}] and ${entry.harness} grants [${applied}]`);
+  }
+}
+
+/**
+ * Two probes per suite, through the declared preflight argv, and what each must
+ * produce. A runner that does not exist is a transport failure with exit 2, and
+ * `node` itself standing in as a custom runner answers --version and passes. The
+ * result record is read as well as the exit code, because the mode it carries is
+ * the harness saying it knew this was a preflight, and the class it carries is
+ * the harness saying what the probe found.
+ */
+const PREFLIGHT_PROBES = [
+  {
+    label: 'a missing runner',
+    agentCmd: (runDir) => path.join(runDir, 'no-such-runner'),
+    exitCode: 2,
+    failureClass: 'environment-transport',
+  },
+  { label: 'a present runner', agentCmd: () => process.execPath, exitCode: 0, failureClass: 'none' },
+];
+
+function checkPreflightProbesRunner(entry, problems) {
+  const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-preflight-check-'));
+  const argv = entry.harnessOptions.preflightArgs;
+  try {
+    for (const probe of PREFLIGHT_PROBES) {
+      const jsonPath = path.join(runDir, `${entry.id}-${probe.failureClass}.json`);
+      const result = spawnSync(
+        process.execPath,
+        [path.join(PROJECT_ROOT, entry.harness), ...argv, '--agent', 'custom', '--agent-cmd', probe.agentCmd(runDir), '--json', jsonPath],
+        { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 180_000 },
+      );
+      const where = `${entry.id}: preflightArgs [${argv.join(' ')}] with ${probe.label}`;
+      if (result.error) {
+        problems.push(`${where} could not run: ${result.error.message}`);
+        continue;
+      }
+      if (result.status !== probe.exitCode) {
+        const tail = String(result.stderr || result.stdout || '')
+          .trim()
+          .split('\n')
+          .slice(-3)
+          .join(' | ');
+        problems.push(`${where} exited ${result.status}, expected ${probe.exitCode}; the preflight does not probe the runner (${tail})`);
+        continue;
+      }
+      if (!fs.existsSync(jsonPath)) {
+        problems.push(`${where} wrote no result record to --json`);
+        continue;
+      }
+      let record;
+      try {
+        record = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+      } catch (error) {
+        problems.push(`${where} wrote an unreadable result record: ${error.message}`);
+        continue;
+      }
+      if (record.mode !== 'preflight-only') {
+        problems.push(`${where} recorded mode "${record.mode}", expected "preflight-only"`);
+      }
+      if (record.failureClass !== probe.failureClass) {
+        problems.push(`${where} recorded failureClass "${record.failureClass}", expected "${probe.failureClass}"`);
+      }
+    }
+  } finally {
+    fs.rmSync(runDir, { recursive: true, force: true });
+  }
+}
+
 function checkPaths(entry, problems) {
   for (const relative of [entry.harness, ...entry.fixtures, ...entry.groundTruth, ...entry.contracts]) {
     if (!fs.existsSync(path.join(PROJECT_ROOT, relative))) {
@@ -173,6 +276,8 @@ function main() {
   for (const entry of manifest.suites) {
     checkPaths(entry, problems);
     compareThresholds(entry, problems);
+    compareRunnerCapabilities(entry, problems);
+    checkPreflightProbesRunner(entry, problems);
 
     const ids = harnessCaseIds(entry, problems);
     if (ids && ids.length !== entry.caseCount) {
@@ -217,6 +322,10 @@ function main() {
   console.log(
     `✅ ${MANIFEST_RELATIVE_PATH}: ${manifest.suites.length} suite(s) (${covered} behavioral), ` +
       `${manifest.deferred.length} deferred, ${skills.length} TEA skill(s) accounted for`,
+  );
+  console.log(
+    `✅ every suite's thresholds, case count, and runner capabilities match its harness; ` +
+      `every declared preflight fails on a missing runner and passes on a present one`,
   );
   console.log(`✅ ${RESULT_SCHEMA_RELATIVE_PATH} matches test/schema/eval-result.js`);
 }

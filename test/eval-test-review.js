@@ -9,7 +9,12 @@
  *   nonFalsePositiveRate  — the share of everything it reported that is not a
  *                           DEFINITE false positive, where definite means reported
  *                           against the clean fixture, which has no defects by
- *                           construction
+ *                           construction, or against a file outside the review
+ *                           set, which the reviewer was never asked about
+ *   outOfScope            — the second kind of definite false positive, carried on
+ *                           its own as well: a finding naming a file that was not
+ *                           under review, which is the scope violation the ground
+ *                           truth's negative control describes
  *   unattributed          — findings on a seeded fixture that match no planted row
  *                           and that nobody has ruled on, carried beside the rate
  *                           and never folded into it
@@ -43,6 +48,15 @@
  * Every declared repetition must complete. Variance across two of three runs is not
  * variance, so a lost run makes stability unmeasurable and exits 2.
  *
+ * THE RUNNER WRITES ONLY ITS ARTIFACTS
+ *
+ * The suite manifest declares `scoped-artifact-writes`, and RUNNER_CAPABILITIES
+ * below is what the harness applies: every review runs the CLI with --isolate, so
+ * the agent may read the project and may write only the report, the verdict, and
+ * the temp files the workflow's own steps declare, under sandbox-exec, bwrap, or
+ * the chmod fallback. The pre-flight fails when no isolation backend exists, so
+ * a machine that cannot honour the declaration finds out before it spends a call.
+ *
  * Usage:
  *   node test/eval-test-review.js --agent codex --runs 3
  *   node test/eval-test-review.js --agent claude --agent codex --runs 5
@@ -65,7 +79,9 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
+const { isolationAvailable } = require('../cli/lib/isolate');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const { targetProblems } = require('./lib/probe-targets');
 const {
   digest,
   digestFiles,
@@ -91,6 +107,13 @@ const SUITE_ID = 'test-review';
  */
 const RUN_TIMEOUT_MINUTES = 15;
 const RUN_TIMEOUT_MS = RUN_TIMEOUT_MINUTES * 60_000;
+
+/**
+ * What the runner is allowed to do, checked against the manifest's declaration by
+ * tools/validate-eval-schemas.js the same way THRESHOLDS is. Applied through the
+ * CLI's --isolate flag; see THE RUNNER WRITES ONLY ITS ARTIFACTS in the header.
+ */
+const RUNNER_CAPABILITIES = ['scoped-artifact-writes'];
 
 const THRESHOLDS = {
   criticalRecall: 1, // every CRITICAL row must be found. A missed .skip is the whole failure mode.
@@ -241,8 +264,24 @@ function preflight({ agents, agentCmd }) {
   // instead of collapsing into one "could not run".
   const report = (failureClass, message) => problems.push({ failureClass, message });
 
-  if (!fs.existsSync(CLI)) report('environment-missing-artifact', `CLI not found at ${CLI}`);
+  // The command this harness spawns, as the execution-target registry knows it:
+  // present, and with its executable bit, which the registry checks because the
+  // eval-quality adapter spawns the file itself.
+  for (const problem of targetProblems(PROJECT_ROOT, ['tea-test-review'])) report('environment-missing-artifact', problem);
   if (!fs.existsSync(GROUND_TRUTH)) report('environment-missing-artifact', `ground truth not found at ${GROUND_TRUTH}`);
+
+  // Every run passes --isolate, and the CLI exits 2 without a backend. Finding
+  // that out here costs nothing; finding it out in the matrix costs the run.
+  try {
+    if (!isolationAvailable()) {
+      report(
+        'environment-configuration',
+        'no filesystem isolation backend (sandbox-exec, bwrap, chmod) is available, and the suite declares scoped-artifact-writes',
+      );
+    }
+  } catch (error) {
+    report('environment-configuration', error.message);
+  }
 
   let groundTruth = null;
   if (fs.existsSync(GROUND_TRUTH)) {
@@ -315,7 +354,7 @@ function preflight({ agents, agentCmd }) {
 
   if (problems.length === 0) {
     console.log(
-      `${colors.green}✓${colors.reset} pre-flight: CLI, fixtures, ground truth, and runner executable(s) available; built-in credentials checked`,
+      `${colors.green}✓${colors.reset} pre-flight: CLI, fixtures, ground truth, isolation backend, and runner executable(s) available; built-in credentials checked`,
     );
   }
   return { problems, groundTruth, versions };
@@ -372,7 +411,11 @@ function runReview(agent, runIndex, runner = {}) {
     //
     // Every run is bounded. An agent that hangs would otherwise stall the whole
     // matrix with no output and no way to tell a hang from a slow model.
-    const cliArgs = [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath, '--output', reportPath];
+    // --isolate is how RUNNER_CAPABILITIES reaches the agent: the CLI wraps the
+    // run so nothing outside the two artifacts and the workflow's own temp files
+    // can be written, whichever vendor is running. Without the flag isolation is
+    // on only under CI, so a laptop run handed the agent a writable checkout.
+    const cliArgs = [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath, '--output', reportPath, '--isolate'];
     if (runner.agentCmd) cliArgs.push('--agent-cmd', runner.agentCmd);
     if (runner.model) cliArgs.push('--model', runner.model);
     for (const value of runner.agentArgs ?? []) cliArgs.push(`--agent-arg=${value}`);
@@ -390,7 +433,10 @@ function runReview(agent, runIndex, runner = {}) {
     if (!fs.existsSync(jsonPath)) {
       console.error(`  ${colors.red}run ${runIndex + 1}: no verdict written${colors.reset} (exit ${result.status})`);
       if (result.stderr) console.error(`  ${colors.dim}${result.stderr.trim().split('\n').slice(-3).join('\n  ')}${colors.reset}`);
-      return { ok: false, failureClass: 'environment-missing-artifact' };
+      // Exit 2 is the CLI's own environment class: a missing skill, an unusable
+      // option, or no isolation backend. It never started the agent, so no
+      // verdict was ever going to exist.
+      return { ok: false, failureClass: result.status === 2 ? 'environment-configuration' : 'environment-missing-artifact' };
     }
     try {
       return { ok: true, verdict: JSON.parse(fs.readFileSync(jsonPath, 'utf8')) };
@@ -427,6 +473,17 @@ function admittedLinesFor(planted, tolerance) {
 }
 
 /**
+ * Whether a reported path names one of the ground truth's files: the same file
+ * name, on its own or at the end of a longer path. Comparing bare suffixes admitted
+ * `notcheckout.spec.ts` as `checkout.spec.ts`, so the boundary is required.
+ */
+function namesFile(reported, relativePath) {
+  const basename = path.basename(relativePath);
+  const file = String(reported ?? '');
+  return file === basename || file.endsWith(`/${basename}`);
+}
+
+/**
  * Score one verdict against ground truth.
  *
  * The findings come from the verdict's own `findings` array, which the CLI builds
@@ -460,7 +517,8 @@ function scoreVerdict(verdict, groundTruth) {
   // false-positive share with findings nobody can check.
   const reported = verdict.findings.filter((finding) => typeof finding.file === 'string' && finding.file.length > 0);
   const unlocated = verdict.findings.length - reported.length;
-  const cleanPaths = new Set((groundTruth.files ?? []).filter((f) => (f.planted ?? []).length === 0).map((f) => f.path));
+  const reviewedPaths = (groundTruth.files ?? []).map((f) => f.path);
+  const cleanPaths = (groundTruth.files ?? []).filter((f) => (f.planted ?? []).length === 0).map((f) => f.path);
 
   const planted = [];
   for (const entry of groundTruth.files ?? []) {
@@ -471,7 +529,7 @@ function scoreVerdict(verdict, groundTruth) {
   const hits = planted.filter((expected) => {
     const found = reported.find((actual, actualIndex) => {
       if (matched.has(actualIndex)) return false;
-      const samePath = String(actual.file ?? '').endsWith(path.basename(expected.path));
+      const samePath = namesFile(actual.file, expected.path);
       const sameRow = String(actual.row ?? '').toUpperCase() === expected.row;
       const closeEnough = admittedLinesFor(expected, tolerance).has(Number(actual.line ?? -1));
       if (samePath && sameRow && closeEnough) {
@@ -483,10 +541,17 @@ function scoreVerdict(verdict, groundTruth) {
     return Boolean(found);
   });
 
-  // Two different things, kept apart on purpose.
+  // Three different things, kept apart on purpose.
   //
   // A violation against the clean fixture is a definite false positive: that file
   // has no defects by construction, so anything reported there is invented.
+  //
+  // A violation against a file that was not under review at all is the other
+  // definite false positive, and it is counted on its own as `outOfScope` as well.
+  // It is the scope control ground-truth.json records under negativeControls: a
+  // coverage complaint about a changed implementation belongs to trace, and a
+  // reviewer that raises one here has left its brief. The contract's scope oracle
+  // states the same rule over the same array.
   //
   // A violation on a SEEDED fixture that matched no planted row is unattributed, not
   // necessarily wrong. A fixture can carry an incidental real defect nobody planted.
@@ -495,9 +560,12 @@ function scoreVerdict(verdict, groundTruth) {
   // separately and nonFalsePositiveRate is computed from the definite ones. That is
   // also why the metric is not called precision: precision would require every
   // reported finding to be adjudicated, and these are not.
-  const isCleanFixture = (file) => [...cleanPaths].some((clean) => String(file).endsWith(path.basename(clean)));
+  const isReviewedFile = (file) => reviewedPaths.some((reviewed) => namesFile(file, reviewed));
+  const isCleanFixture = (file) => cleanPaths.some((clean) => namesFile(file, clean));
 
-  const falsePositives = reported.filter((actual, actualIndex) => !matched.has(actualIndex) && isCleanFixture(actual.file));
+  const unmatched = reported.filter((actual, actualIndex) => !matched.has(actualIndex));
+  const outOfScope = unmatched.filter((actual) => !isReviewedFile(actual.file));
+  const falsePositives = [...unmatched.filter((actual) => isCleanFixture(actual.file)), ...outOfScope];
 
   // `knownUnplanted` in the ground truth is the standing adjudication of defects
   // the seeded fixtures really carry and nothing plants. Without it every run
@@ -511,10 +579,10 @@ function scoreVerdict(verdict, groundTruth) {
     knownUnplanted.some(
       (known) =>
         String(actual.row ?? actual.criterion_id ?? '').toUpperCase() === String(known.row).toUpperCase() &&
-        String(actual.file ?? actual.path ?? '').endsWith(path.basename(known.file)),
+        namesFile(actual.file ?? actual.path, known.file),
     );
 
-  const unmatchedOnSeeded = reported.filter((actual, actualIndex) => !matched.has(actualIndex) && !isCleanFixture(actual.file));
+  const unmatchedOnSeeded = unmatched.filter((actual) => isReviewedFile(actual.file) && !isCleanFixture(actual.file));
   const knownUnplantedHits = unmatchedOnSeeded.filter((actual) => matchesKnownUnplanted(actual));
   const unattributed = unmatchedOnSeeded.filter((actual) => !matchesKnownUnplanted(actual));
 
@@ -531,6 +599,7 @@ function scoreVerdict(verdict, groundTruth) {
     criticalHits: criticalHits.length,
     reported: reported.length,
     falsePositives: falsePositives.length,
+    outOfScope: outOfScope.length,
     unattributed: unattributed.length,
     knownUnplantedHits: knownUnplantedHits.length,
     unlocated,
@@ -695,7 +764,7 @@ function main() {
       results.push(scored);
       console.log(
         `  run ${runIndex + 1}: score ${scored.score}, ${scored.recommendation}, ` +
-          `recall ${scored.hits}/${scored.planted}, false positives ${scored.falsePositives}, ` +
+          `recall ${scored.hits}/${scored.planted}, false positives ${scored.falsePositives} (${scored.outOfScope} out of scope), ` +
           `unattributed ${scored.unattributed}, known-unplanted ${scored.knownUnplantedHits}, unlocated ${scored.unlocated}`,
       );
     }
@@ -719,6 +788,7 @@ function main() {
     const criticalRecall = mean(results.map((r) => ratio(r.criticalHits, r.criticalPlanted)));
     const nonFalsePositiveRate = mean(results.map((r) => ratio(r.reported - r.falsePositives, r.reported)));
     const unattributedMean = mean(results.map((r) => r.unattributed));
+    const outOfScopeMean = mean(results.map((r) => r.outOfScope));
     const unlocatedMean = mean(results.map((r) => r.unlocated));
     const scoreSpread = stdev(results.map((r) => r.score));
     const verdicts = new Set(results.map((r) => r.recommendation));
@@ -728,7 +798,12 @@ function main() {
     console.log(`  CRITICAL recall   ${pct(criticalRecall)}   (threshold ${pct(THRESHOLDS.criticalRecall)})`);
     console.log(
       `  non-false-positive${pct(nonFalsePositiveRate)}   (threshold ${pct(THRESHOLDS.nonFalsePositiveRate)}, ` +
-        'clean-fixture findings are the only definite false positives)',
+        'clean-fixture and out-of-scope findings are the definite false positives)',
+    );
+    console.log(
+      `  out of scope      ${outOfScopeMean
+        .toFixed(1)
+        .padStart(5)}   ${colors.dim}findings naming a file that was not under review; counted among the false positives${colors.reset}`,
     );
     console.log(
       `  unattributed      ${unattributedMean
@@ -760,6 +835,7 @@ function main() {
       criticalRecall: measured(criticalRecall),
       nonFalsePositiveRate: measured(nonFalsePositiveRate),
       unattributedMean: measured(unattributedMean),
+      outOfScopeMean: measured(outOfScopeMean),
       unlocatedMean: measured(unlocatedMean),
       scoreStdev: measured(scoreSpread),
       distinctVerdicts: verdicts.size,
@@ -840,6 +916,7 @@ module.exports = {
   parseArgs,
   reviewFilePaths,
   caseIds,
+  RUNNER_CAPABILITIES,
   THRESHOLDS,
   SUITE_ID,
 };

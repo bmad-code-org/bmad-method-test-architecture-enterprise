@@ -160,6 +160,9 @@ jobs:
       - name: Compile the eval contracts
         run: npm run test:contracts
 
+      - name: Evaluate every contract oracle against the stored outputs and the harness scorers
+        run: npm run test:contract-oracles
+
       - name: Probe both TEA command targets through the eval-quality adapter
         run: npm run test:probe-targets
 

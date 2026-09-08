@@ -20,7 +20,7 @@
   ],
   "id": "partially-attributed",
   "suite": "test-review",
-  "scorerVersion": 2,
+  "scorerVersion": 3,
   "storedOutput": {
     "origin": "constructed",
     "verdict": "verdict.json",
@@ -51,7 +51,9 @@
     "nonFalsePositiveRate (7 - 0)/7 = 1.00.",
     "",
     "The verdict's own numbers come from cli/lib/parse-report.js reading this report:",
-    "100 - 4x10 - 3x5 - 1x2 - 0x1 = 43, and any Critical at all forces Block."
+    "100 - 4x10 - 3x5 - 1x2 - 0x1 = 43, and any Critical at all forces Block.",
+    "",
+    "No finding names a file outside the review set, so outOfScope is 0 and falsePositives is unchanged by it."
   ],
   "result": {
     "score": 43,
@@ -63,6 +65,7 @@
     "criticalHits": 4,
     "reported": 7,
     "falsePositives": 0,
+    "outOfScope": 0,
     "unattributed": 0,
     "unlocated": 0
   }

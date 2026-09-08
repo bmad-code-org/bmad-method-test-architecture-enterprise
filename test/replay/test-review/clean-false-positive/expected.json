@@ -9,7 +9,7 @@
   ],
   "id": "clean-false-positive",
   "suite": "test-review",
-  "scorerVersion": 2,
+  "scorerVersion": 3,
   "storedOutput": {
     "origin": "constructed",
     "verdict": "verdict.json",
@@ -38,7 +38,9 @@
     "nonFalsePositiveRate (11 - 1)/11 = 0.9091 against a 0.80 floor. Folding the unattributed M3 into the",
     "numerator would give (11 - 2)/11 = 0.8182 instead, which is the difference this case exists to pin.",
     "",
-    "score and recommendation come from the verdict: 100 - 4x10 - 5x5 - 1x2 - 1x1 = 32, Block on Criticals."
+    "score and recommendation come from the verdict: 100 - 4x10 - 5x5 - 1x2 - 1x1 = 32, Block on Criticals.",
+    "",
+    "No finding names a file outside the review set, so outOfScope is 0 and falsePositives is unchanged by it."
   ],
   "result": {
     "score": 32,
@@ -50,6 +52,7 @@
     "criticalHits": 4,
     "reported": 11,
     "falsePositives": 1,
+    "outOfScope": 0,
     "unattributed": 1,
     "unlocated": 0
   }
