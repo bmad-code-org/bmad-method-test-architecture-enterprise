@@ -51,7 +51,14 @@ const {
   targetFor,
   targetProblems,
 } = require('./lib/probe-targets');
-const { EXIT_CODES, SELECTION_REQUEST_KEYS, classOfAgentError, failureClassForExit } = require('../cli/fragment-selection-runner');
+const {
+  EXIT_CODES,
+  RUNNER_CAPABILITIES: RUNNER_DECLARED_CAPABILITIES,
+  SELECTION_REQUEST_KEYS,
+  classOfAgentError,
+  failureClassForExit,
+} = require('../cli/fragment-selection-runner');
+const { RUNNER_CAPABILITIES: HARNESS_DECLARED_CAPABILITIES } = require('./eval-fragment-selection');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -443,6 +450,17 @@ function checkRunnerDeclarations() {
   assert(
     SELECTION_REQUEST_KEYS.environment.permitted.includes('HOME'),
     'HOME is a permitted environment key, because the adapter passes the child nothing else that could reach a stored login',
+  );
+
+  // The suite's capability declaration is checked against the harness constant by
+  // tools/validate-eval-schemas.js, and the command is what actually hands the
+  // capability to the vendor now that the harness probes rather than spawns. So
+  // the two constants have to agree, or the manifest describes a confinement the
+  // run does not get.
+  assert(
+    JSON.stringify([...HARNESS_DECLARED_CAPABILITIES].sort()) === JSON.stringify([...RUNNER_DECLARED_CAPABILITIES].sort()),
+    'the harness and the command declare the same runner capabilities',
+    `harness ${JSON.stringify(HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(RUNNER_DECLARED_CAPABILITIES)}`,
   );
 
   // cli/fragment-selection-runner.js restates test/lib/eval-record.js's error

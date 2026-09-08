@@ -42,9 +42,11 @@
  * THE RUNNER IS READ-ONLY
  *
  * A selection is a reply, so the run needs no file. The suite manifest declares
- * `read-only` for it and RUNNER_CAPABILITIES below is what the harness applies:
- * claude runs with no write tool, codex under its read-only sandbox, and every
- * runner in an empty scratch directory that is checked afterwards. A run that
+ * `read-only` for it, RUNNER_CAPABILITIES below is what the manifest is checked
+ * against, and `cli/fragment-selection-runner.js` declares the same list and is
+ * what hands it to the vendor: claude runs with no write tool, codex under its
+ * read-only sandbox, and every runner in the empty scratch directory that is both
+ * the authorization's working directory and checked afterwards. A run that
  * left a file there, or changed the repository, is an environment failure and
  * is never scored.
  *
@@ -113,7 +115,9 @@ const RUN_TIMEOUT_MS = 5 * 60_000;
 /**
  * What the runner is allowed to do, and what tools/validate-eval-schemas.js checks
  * the manifest's `runnerCapabilities` against, the same way it checks THRESHOLDS.
- * See THE RUNNER IS READ-ONLY in the header.
+ * It must equal the list `cli/fragment-selection-runner.js` declares, because that
+ * command is what applies it to the vendor call now that the harness probes rather
+ * than spawns. See THE RUNNER IS READ-ONLY in the header.
  */
 const RUNNER_CAPABILITIES = ['read-only'];
 
