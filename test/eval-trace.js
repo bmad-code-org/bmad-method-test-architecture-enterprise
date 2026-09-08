@@ -24,6 +24,12 @@
  *                          summary as one per-criterion status
  *   coverage arithmetic    every count and percentage, recomputed from trueCoverage
  *   evidence citations     each cited file and line resolving to a recorded span
+ *   oracle resolution      collection mode, inventory basis, and the oracle block:
+ *                          resolution mode, confidence, sources, external pointer
+ *                          status, and synthetic
+ *   run metadata           decision_mode, links, test hygiene counts, and the two UI
+ *                          heuristics: fields with one correct value regardless of
+ *                          which criterion statuses the run derives
  *   rejected evidence      the AC-2 test named as considered and turned down
  *   waiver oracle          filed 2, valid 1, invalid 1, scored only where the gate matched
  *   live evidence          two records, no coverage, at the declared severities
@@ -196,10 +202,16 @@ const THRESHOLDS = {
   // Integer arithmetic over statuses the run itself reported, at the corpus's declared
   // tolerance of 0. A mismatch is a calculation defect with no defensible reading.
   coverageArithmeticAccuracy: 1,
-  // collection_mode, collection_status, inventory_basis, and the oracle block. Both
+  // collection_mode, collection_status, inventory_basis, and the oracle block
+  // (resolution_mode, confidence, sources, external_pointer_status, synthetic). Both
   // epics state numbered criteria with priorities, so the formal-requirements branch
   // resolves first and nothing here is a judgment call.
   oracleResolutionAccuracy: 1,
+  // decision_mode, links, tests.skipped_cases/fixme_cases/pending_cases, and the two
+  // UI heuristics. See scoreRunMetadata for why each of these has exactly one correct
+  // value over this corpus and why target, evaluator, source_sha, and recommendations
+  // text are not in this list.
+  runMetadataAccuracy: 1,
   // The corpus records a full line span for every test, so a citation anywhere inside
   // one already resolves. 0.9 admits a single citation of a helper or a describe block
   // across the roughly sixteen the two sets invite, and no more.
@@ -1090,18 +1102,25 @@ function readMatrix(projectDir, set) {
       entry.status = status ? status[1] : null;
     }
     if (inRejectedBlock) continue;
-    // This is the repository's other reader of a `file:line` pair, and it shares
-    // the assumption cli/lib/parse-report.js was fixed for: a path holds no space.
-    // Here the assumption is load-bearing. The scan runs over free prose, so a
-    // space-tolerant path would swallow the words in front of a citation, and the
-    // extension anchor is the only boundary available. A cited path containing a
-    // space is truncated to its last space-free segment and then fails to resolve
-    // against a recorded span, which lowers evidenceCitationPrecision for a
-    // citation that was correct. No fixture path in test/fixtures/trace-eval
-    // carries a space, and --validate-only pins every ground-truth span to the
-    // fixture it names, so nothing in the corpus reaches it. Closing it properly
-    // needs the matrix template to delimit citations, which is a workflow change.
-    for (const match of line.matchAll(/([\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|rb|go|java|kt|cs)):(\d+)/g)) {
+    // A citation is read in two forms, and the delimited one is what the workflow
+    // asks for. Inside backticks the span itself is the boundary, so the path may
+    // hold a space and is taken whole; trace-template.md and step-03 both write
+    // citations that way, and resources/traceability-matrix.example.md always did.
+    // A bare pair in free prose has no delimiter, so the extension anchor is the
+    // only boundary available there and a spaced path is still truncated to its
+    // last space-free segment. That is why the delimited form is the one the
+    // workflow mandates. Delimited spans are cut out before the prose scan runs,
+    // so a citation inside backticks is never counted a second time.
+    let prose = '';
+    let cursor = 0;
+    for (const span of line.matchAll(/`([^`]+)`/g)) {
+      prose += line.slice(cursor, span.index);
+      cursor = span.index + span[0].length;
+      const delimited = /^\s*(\S.*\.(?:ts|tsx|js|jsx|mjs|cjs|py|rb|go|java|kt|cs)):(\d+)\s*$/.exec(span[1]);
+      if (delimited) entry.citations.push({ file: delimited[1], line: Number.parseInt(delimited[2], 10) });
+    }
+    prose += line.slice(cursor);
+    for (const match of prose.matchAll(/([\w./-]+\.(?:ts|tsx|js|jsx|mjs|cjs|py|rb|go|java|kt|cs)):(\d+)/g)) {
       entry.citations.push({ file: match[1], line: Number.parseInt(match[2], 10) });
     }
   }
@@ -1181,12 +1200,75 @@ function scoreGateCriteria(summary, set) {
 
 /** How the oracle was resolved, which both epics make a formal-requirements answer. */
 function scoreOracleResolution(summary, set) {
+  const sources = Array.isArray(summary.oracle?.sources) ? summary.oracle.sources : [];
+  const oracleDocBasename = set.oracle?.document ? path.basename(set.oracle.document) : null;
   return [
     check('collection_mode', set.collection?.collectionMode, summary.collection_mode),
     check('inventory_basis', set.oracle?.coverageBasis, summary.inventory_basis),
     check('oracle.resolution_mode', set.oracle?.oracleResolutionMode, summary.oracle?.resolution_mode),
+    check('oracle.confidence', set.oracle?.oracleConfidence, summary.oracle?.confidence),
+    // Matched by basename rather than pinned to an exact path string: this harness has
+    // no fixed convention for how the agent renders one (relative to the project root,
+    // prefixed with `./`, and so on), only for which file it names. path.basename()
+    // extracts each source's own basename for an exact comparison rather than a suffix
+    // match, which would wrongly accept a longer name ending in the same substring,
+    // e.g. a reported `epic-settlement.md` satisfying a required `settlement.md`.
+    check(
+      'oracle.sources names the oracle document',
+      true,
+      oracleDocBasename !== null && sources.some((entry) => path.basename(String(entry)) === oracleDocBasename),
+    ),
     check('oracle.external_pointer_status', set.oracle?.externalPointerStatus, summary.oracle?.external_pointer_status),
     check('oracle.synthetic', false, summary.oracle?.synthetic),
+  ];
+}
+
+/**
+ * Metadata the run must report correctly regardless of which criterion statuses it
+ * derives: the workflow's decision mode, the artifact links it emits, the hygiene of
+ * the tests it counted, and the two UI heuristics that state whether they applied.
+ *
+ * Every field here has exactly one correct value for a formal-requirements run over
+ * this corpus, the same "no defensible second reading" bar gate_criteria is held to.
+ * decision_mode is workflow.yaml's own default, stated to the agent verbatim in
+ * buildPrompt's run-configuration block, and neither fixture set's config overrides it.
+ * links.trace_report_path is that same block's `{test_artifacts}` (`project/test-artifacts`,
+ * prefixed for the agent's actual working directory, which is the workspace root rather
+ * than `project/`) joined with the template's default filename; the other three link
+ * fields are hardcoded to the empty string in step-05's own template outside of a CI/CD
+ * run that populates them after upload. Neither fixture set plants a
+ * skipped, fixme, or pending test, so tests.skipped_cases, tests.fixme_cases, and
+ * tests.pending_cases are 0. Neither set's oracle is synthetic, and step-05's own
+ * mapOptionalHeuristicStatus returns 'not_applicable' unconditionally when the oracle is
+ * not synthetic, before it ever inspects a gap count, so both UI heuristics read
+ * 'not_applicable' no matter how many UI gaps the run finds.
+ *
+ * target, evaluator, source_sha, and recommendations text are deliberately not scored
+ * here. target.id and target.label come from a runtime extraction step-04 describes
+ * only in prose ("story_id / epic_num / release_version / hotfix identifier from Step
+ * 1"), with no fixed algorithm this harness can reproduce and check against; evaluator
+ * is the operator's own identity; source_sha is the workspace's git commit, which
+ * changes on every run; and recommendations is free text, which
+ * nonDeterministicReportedValues already excludes by name, scoring only the requirement
+ * ids a recommendation names. Each would need either a semantic grader or a
+ * fixture-carried fact that does not exist, and a wrong guess would fail a correct run,
+ * which this corpus treats as the one unaffordable mistake.
+ */
+function scoreRunMetadata(summary) {
+  const links = summary.links ?? {};
+  const tests = summary.tests ?? {};
+  const heuristics = summary.heuristics ?? {};
+  return [
+    check('decision_mode', 'deterministic', summary.decision_mode),
+    check('links.trace_report_path', 'project/test-artifacts/traceability-matrix.md', links.trace_report_path),
+    check('links.trace_report_url', '', links.trace_report_url),
+    check('links.artifact_url', '', links.artifact_url),
+    check('links.journey_evidence_url', '', links.journey_evidence_url),
+    check('tests.skipped_cases', 0, tests.skipped_cases),
+    check('tests.fixme_cases', 0, tests.fixme_cases),
+    check('tests.pending_cases', 0, tests.pending_cases),
+    check('heuristics.ui_journey_status', 'not_applicable', heuristics.ui_journey_status),
+    check('heuristics.ui_state_status', 'not_applicable', heuristics.ui_state_status),
   ];
 }
 
@@ -1389,6 +1471,7 @@ function scoreRun(set, summary, matrix, tolerance, pctTolerance) {
     arithmetic: scoreArithmetic(summary, expected, pctTolerance),
     gateCriteria: scoreGateCriteria(summary, set),
     oracleResolution: scoreOracleResolution(summary, set),
+    runMetadata: scoreRunMetadata(summary),
     rejectedEvidence: scoreRejectedEvidence(summary, set, tolerance),
     waivers,
     live: scoreLiveEvidence(summary, set),
@@ -1428,6 +1511,7 @@ function signatureOf(scored, mutations) {
     actuals(scored.arithmetic),
     actuals(scored.gateCriteria),
     actuals(scored.oracleResolution),
+    actuals(scored.runMetadata),
     actuals(scored.rejectedEvidence),
     [scored.citations.total, scored.citations.resolved, scored.citations.misattributed, scored.citations.unresolved],
     [scored.waivers.scored, actuals(scored.waivers.checks)],
@@ -1710,6 +1794,8 @@ function main() {
       gateCriteriaHits: 0,
       oracleTotal: 0,
       oracleHits: 0,
+      runMetadataTotal: 0,
+      runMetadataHits: 0,
       citationTotal: 0,
       citationHits: 0,
       rejectedTotal: 0,
@@ -1767,6 +1853,8 @@ function main() {
         totals.gateCriteriaHits += passed(scored.gateCriteria);
         totals.oracleTotal += scored.oracleResolution.length;
         totals.oracleHits += passed(scored.oracleResolution);
+        totals.runMetadataTotal += scored.runMetadata.length;
+        totals.runMetadataHits += passed(scored.runMetadata);
         totals.citationTotal += scored.citations.total;
         totals.citationHits += scored.citations.resolved;
         totals.rejectedTotal += scored.rejectedEvidence.length;
@@ -1825,6 +1913,7 @@ function main() {
       gateCriteriaAccuracy: measured(ratio(totals.gateCriteriaHits, totals.gateCriteriaTotal)),
       coverageArithmeticAccuracy: measured(ratio(totals.arithmeticHits, totals.arithmeticTotal)),
       oracleResolutionAccuracy: measured(ratio(totals.oracleHits, totals.oracleTotal)),
+      runMetadataAccuracy: measured(ratio(totals.runMetadataHits, totals.runMetadataTotal)),
       evidenceCitationPrecision: measured(ratio(totals.citationHits, totals.citationTotal)),
       rejectedEvidenceAccuracy: measured(ratio(totals.rejectedHits, totals.rejectedTotal)),
       waiverOracleAccuracy: measured(ratio(totals.waiverHits, totals.waiverTotal)),
@@ -1846,6 +1935,7 @@ function main() {
       ['gate criteria      ', 'gateCriteriaAccuracy'],
       ['coverage arithmetic', 'coverageArithmeticAccuracy'],
       ['oracle resolution  ', 'oracleResolutionAccuracy'],
+      ['run metadata       ', 'runMetadataAccuracy'],
       ['evidence citations ', 'evidenceCitationPrecision'],
       ['rejected evidence  ', 'rejectedEvidenceAccuracy'],
       ['waiver oracle      ', 'waiverOracleAccuracy'],
@@ -1872,6 +1962,7 @@ function main() {
       'gateCriteriaAccuracy',
       'coverageArithmeticAccuracy',
       'oracleResolutionAccuracy',
+      'runMetadataAccuracy',
       'evidenceCitationPrecision',
       'rejectedEvidenceAccuracy',
       'liveEvidenceAccuracy',

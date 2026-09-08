@@ -251,7 +251,47 @@
             ]
           },
           "volatilePointers": [],
-          "sensitivityWitness": null
+          "sensitivityWitness": {
+            "witnessId": "selection-is-invariant-under-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-trace-go-service-no-js",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case trace-go-service-no-js: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              },
+              {
+                "legId": "witness-trace-mobile-epic",
+                "inputs": {
+                  "argument": {},
+                  "option": {},
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "The prompt the harness assembles for case trace-mobile-epic: the workflow's own step file or files, its resources/tea-index.csv, and that case's task, repository facts, and TEA config."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "deep-equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/witness-trace-go-service-no-js/stdout/fragments"
+                },
+                {
+                  "pointer": "/interactions/witness-trace-mobile-epic/stdout/fragments"
+                }
+              ]
+            }
+          }
         }
       ]
     }

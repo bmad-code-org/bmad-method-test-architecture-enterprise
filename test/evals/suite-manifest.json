@@ -167,6 +167,7 @@
         "gateCriteriaAccuracy": 1,
         "coverageArithmeticAccuracy": 1,
         "oracleResolutionAccuracy": 1,
+        "runMetadataAccuracy": 1,
         "evidenceCitationPrecision": 0.9,
         "rejectedEvidenceAccuracy": 1,
         "waiverOracleAccuracy": 1,

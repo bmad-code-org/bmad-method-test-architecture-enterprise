@@ -246,7 +246,7 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
 
 **If `{detected_stack}` is `frontend`, `fullstack`, or `backend`:**
 
-- **If Playwright Utils enabled:**
+- **If Playwright Utils enabled AND the project can install an npm package** (a `package.json` exists, or this scaffold is creating one for a JS/TS project). The flag defaults to `true` regardless of stack; a Python, Go, Java, Ruby, or other non-Node backend has no `package.json` to install into, so the flag is inert there and the disabled branch below applies instead, whatever the flag says:
   - `playwright-utils-mandate.md` (load first — it is the binding rule for everything this workflow scaffolds)
   - `overview.md`, `fixtures-composition.md`, `auth-session.md`, `api-request.md`, `recurse.md`, `log.md`, `burn-in.md`, `network-error-monitor.md`, `data-factories.md`
   - If `{detected_stack}` is `frontend` or `fullstack`, also load `intercept-network-call.md`
@@ -263,7 +263,8 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
   - The install is not optional decoration once accepted: the framework this workflow produces is the playwright-utils framework, and every downstream workflow generates against it. **If the user declines, record it and fall through to the disabled branch for the whole scaffold.** Do not scaffold imports against a package the project does not have.
 
 - **If disabled:**
-  - `fixture-architecture.md`, `data-factories.md`, `network-first.md`, `playwright-config.md`, `test-quality.md`
+  - Always: `fixture-architecture.md`, `data-factories.md`, `test-quality.md`
+  - Also `network-first.md` and `playwright-config.md`, but only when the project runs a browser through Playwright. Both describe a `playwright.config.*` and a request interceptor. A Python, Go, Java, or Ruby service has neither, and scaffolding against them writes sample files that project cannot run, which is the same failure the mandate branch above guards against.
 
 **If Pact.js Utils enabled** (`config.tea_use_pactjs_utils`) **and the relevance gate in section 1 opened**:
 

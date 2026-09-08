@@ -131,8 +131,8 @@ function writeBaseline(observed) {
     $comment: [
       'The status this repository expects from each contract under test/contracts/.',
       '',
-      'Every entry is `blocked` today, because eval-quality cannot yet describe a command-line system',
-      'under test. test/contracts/README.md records that finding with its evidence.',
+      'test/contracts/README.md records the finding behind whatever a contract here is not',
+      '`compiles`: which failure code it carries against the pinned eval-quality release, and why.',
       '',
       'A contract whose status moves in either direction fails test/test-contracts.js. Moving to',
       '`compiles` is the good direction and still fails, on purpose: a baseline nobody has to update is',

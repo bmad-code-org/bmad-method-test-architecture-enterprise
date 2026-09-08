@@ -349,6 +349,11 @@ function caseIds() {
 function runReview(agent, runIndex, runner = {}) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-'));
   const jsonPath = path.join(runDir, 'verdict.json');
+  // `--output` defaults to `test-review.md` resolved against cwd, which this call sets to
+  // PROJECT_ROOT, so an unredirected run writes its report into the real repo tree. Only
+  // the JSON verdict is ever scored; the markdown report is redirected into the same
+  // disposable runDir the JSON already uses, purely so nothing lands outside it.
+  const reportPath = path.join(runDir, 'test-review.md');
   const reviewFiles = reviewFilePaths();
 
   try {
@@ -359,7 +364,7 @@ function runReview(agent, runIndex, runner = {}) {
     //
     // Every run is bounded. An agent that hangs would otherwise stall the whole
     // matrix with no output and no way to tell a hang from a slow model.
-    const cliArgs = [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath];
+    const cliArgs = [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath, '--output', reportPath];
     if (runner.agentCmd) cliArgs.push('--agent-cmd', runner.agentCmd);
     if (runner.model) cliArgs.push('--model', runner.model);
     for (const value of runner.agentArgs ?? []) cliArgs.push(`--agent-arg=${value}`);
