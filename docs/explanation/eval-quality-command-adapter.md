@@ -249,8 +249,9 @@ spelling to have committed to.
 
 One limit is worth knowing before writing a new oracle. Every quantifier still abstains over an empty
 collection, which is AD-4's whole purpose and is why `trace`'s five `for-any` oracles over the seeded
-export still abstain on a clean run: they ask whether some element exists, and an empty collection is
-an honest "nothing was checked". `deep-equality` against a literal `[]` also still abstains, so the
+export abstained on the clean control for as long as they were resolved against the clean set's
+summary: they ask whether some element exists, and an empty collection is an honest "nothing was
+checked". `deep-equality` against a literal `[]` also still abstains, so the
 two spellings of "this collection is empty" disagree. eval-quality records that disagreement in AD-4
 rather than hiding it. The bare `count-tolerance` assertion is the one to write.
 
@@ -273,33 +274,47 @@ Three findings, all measured, none of them tuned away.
   before. `test-review` leaves `whole-body`, `malformed-input` and `state-change-read-back`
   unsatisfied; every fragment-selection contract leaves `malformed-input` unsatisfied. Each scores the
   run down to CONCERNS without blocking it, which is exactly the weight AD-20 gives a coverage gap.
-- **`trace`'s clean control scores FAIL, and what remains of it is one thing.** Measured on the
-  stored replay, five of its twenty-six oracles abstain on `P-004`: `O-009`, `O-010`, `O-011`,
+- **`trace`'s clean control scored FAIL. Closed, and the two halves that closed it work only
+  together.** Five of its twenty-six oracles abstained on `P-004`: `O-009`, `O-010`, `O-011`,
   `O-013` and `O-014`, every one a `for-any` quantifier over the seeded export, and every one named
   in the artifact's `verdictBasis`. It was seven. `O-023` and `O-024`, the two asserting that a
   collection is empty, moved to `passed-clean-control` when `eval-quality` 1.4.0 gave that claim a
   spelling.
 
-  The five abstain because the record carries only the clean set's observation and both plan steps
-  select it. The reason recorded here used to be that no request shape names a fixture set; that is
-  no longer true, since each set is staged under its own project root and the prompt is written
-  against it. What is left is the binding: `stdin.prompt` is bound `{matcher: 'any'}`, so one
-  observation is selected by both steps, which is the same limit as the bullet below. The trace
-  prompt is 1.8 kilobytes rather than fragment selection's 28, so the size argument against a literal
-  does not apply here either. What a literal binding needs beside it is a record carrying both sets'
-  observations, and whether one probe's record may carry the run of a set it did not seed is a
-  question about what a clean control means rather than a mechanical change, so it is not made here.
-  Neither half is a case for giving the clean set a member so an oracle has something to read: that
-  would mutate a control to make the instrument work.
+  The five abstained because the record carried one observation and both plan steps selected it, so
+  the seeded set's oracles quantified over the clean summary's empty or absent collections. Each
+  step binds its own set's prompt as a literal now, and the clean control's record carries both
+  sets' runs, so the seeded step selects the seeded run and the clean step selects the clean one.
+  Measured on the stored replay, all twenty-six oracles resolve `passed-clean-control` and `P-004`
+  moves from FAIL at exit 2 to CONCERNS at exit 0. What holds it at CONCERNS is the four unsatisfied
+  AD-20 coverage rules the bullet above describes, which is separate work.
+
+  Either half on its own is worse than neither, which is why they landed together. Two observations
+  under the old matcher bindings leave every observation satisfying both steps, and `exactly-one`
+  then reports selector ambiguity on all twenty-six oracles at exit 3. Literals over one observation
+  select nothing: all twenty-six resolve `unreached` and the run reports CONCERNS at exit 0 having
+  examined no evidence at all, which is a silent green and is worse than the FAIL it replaces. A
+  literal is compared with `deepEquals`, so the contract's literal and the record's prompt are both
+  `buildPrompt` from `test/eval-trace.js`, and `traceEvidence` in `test/lib/probe-scoring.js` throws
+  when the contract on disk binds any other bytes. Both states above were run before the change was
+  accepted, so the failure mode is one somebody has seen.
 
 - **A plan cannot tell two steps apart when both bind their inputs by matcher.** Each
   fragment-selection contract declares one plan step per case, distinguished only by the prompt, and
-  the prompt is bound `{matcher: 'any'}` because the alternative is a 28-kilobyte literal per step. A
-  record carrying one observation is therefore selected by every step, and the oracles of the other
-  cases resolve against evidence that is not theirs. The designated oracle still votes correctly, so
-  the strength vector is unaffected, and the surrounding outcome rows are noise. This is the limit
-  `test/contracts/README.md` records as "a plan cannot declare that two steps must receive different
-  inputs", with its consequence now measured.
+  the prompt is bound `{matcher: 'any'}`. A record carrying one observation is therefore selected by
+  every step, and the oracles of the other cases resolve against evidence that is not theirs. The
+  designated oracle still votes correctly, so the strength vector is unaffected, and the surrounding
+  outcome rows are noise. This is the limit `test/contracts/README.md` records as "a plan cannot
+  declare that two steps must receive different inputs", with its consequence now measured.
+
+  The trace contract closed this with literals; the eight fragment-selection contracts keep the
+  matcher, and the reason is size. Their prompts carry the workflow's knowledge-loading rules and its
+  whole fragment index, 21 to 43 kilobytes per step, so binding each step's prompt as a literal adds
+  between 42 and 143 kilobytes to a contract and roughly doubles every one of the eight files: 1.7x
+  for `bmad-testarch-nfr`, 2.7x for `bmad-testarch-automate`, measured from the prompts those
+  contracts already carry on their witness legs. Trace pays 3.6 kilobytes on 108 for the same fix,
+  because its two prompts are 1.8 kilobytes each, the size of the prompt the file already carries on
+  each of its two witness legs.
 
 ### What the live pre-flight measured
 

@@ -41,6 +41,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { digest } = require('./eval-record');
+// The prompt a trace observation carries is the prompt the harness assembles, and
+// tools/generate-contracts.js binds the same function's output as each trace plan
+// step's stdin literal. One function on both sides is the whole guard; `legs` in
+// traceEvidence says what a restated prompt would cost.
+const { buildPrompt: buildTracePrompt } = require('../eval-trace');
 const {
   evaluatorConfiguration,
   isolationManifest,
@@ -276,12 +281,42 @@ function traceArtifacts(caseId) {
 function traceEvidence(contract) {
   const [seededStep, cleanStep] = contract.interactionPlan;
   const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json'));
+
+  /**
+   * One entry per fixture set: the plan step that selects it, the stored run its
+   * project root names, and the prompt the harness assembles for it.
+   *
+   * `buildTracePrompt` is test/eval-trace.js's own `buildPrompt`, which is also
+   * what tools/generate-contracts.js calls to build each step's stdin literal. A
+   * literal is compared with `deepEquals`, so a prompt restated here in any other
+   * form would select nothing, all twenty-six oracles would resolve `unreached`,
+   * and the run would report clean at exit 0 having examined no evidence. The
+   * equality below is the tripwire: the prompt this record will carry is checked
+   * against the literal the contract on disk binds, so a divergence fails the run
+   * where it would otherwise pass it silently.
+   */
+  const legs = groundTruth.fixtureSets.map((set) => {
+    const seeded = set.id.startsWith('seeded');
+    const step = seeded ? seededStep : cleanStep;
+    const prompt = buildTracePrompt(set);
+    if (step.inputBinding.stdin?.prompt?.literal !== prompt) {
+      throw new Error(
+        `${step.stepId} binds a stdin literal that is not the prompt the harness assembles for ${set.id}; run node tools/generate-contracts.js`,
+      );
+    }
+    return {
+      caseId: seeded ? 'seeded-correct-run' : 'clean-correct-run',
+      observationId: seeded ? 'trace-seeded-run' : 'trace-clean-run',
+      projectRoot: set.projectRoot,
+      step,
+      prompt,
+    };
+  });
+
   // The stored run each fixture set's project root names. A trace prompt is written
   // against one project root, and that root is the only thing in the request that
   // says which set the leg is asking for, so it is what the port stages against.
-  const caseByProjectRoot = new Map(
-    groundTruth.fixtureSets.map((set) => [set.projectRoot, set.id.startsWith('seeded') ? 'seeded-correct-run' : 'clean-correct-run']),
-  );
+  const caseByProjectRoot = new Map(legs.map((leg) => [leg.projectRoot, leg.caseId]));
 
   return {
     /**
@@ -313,41 +348,61 @@ function traceEvidence(contract) {
     },
     recordInputs(probe) {
       const clean = probe.expectedClean;
-      const caseId = clean ? 'clean-correct-run' : 'seeded-correct-run';
-      // One observation, and the other step's oracles then have nothing of their
-      // own to read. Both steps declare the same operation and send the same
-      // prompt, because what makes a trace run the seeded set or the clean set is
-      // the staged workspace and no request shape names one, so a record carrying
-      // both runs is ambiguous under `exactly-one` and a record carrying one
-      // leaves five seeded-set oracles quantifying over an absent collection. The
-      // clean control's FAIL is that, plus two oracles asserting an empty array.
-      const step = clean ? cleanStep : seededStep;
-      const observationId = clean ? 'trace-clean-run' : 'trace-seeded-run';
-      const observations = [
+      // The clean control's record carries both runs. Each step binds its own set's
+      // prompt as a literal, so the seeded step selects the seeded observation and
+      // the clean step selects the clean one, and the oracles of each quantify over
+      // the summary their own set produced. With one observation both steps selected
+      // it, so five of the seeded step's `for-any` oracles quantified over the clean
+      // summary's empty or absent collections and abstained, which was the control's
+      // FAIL at exit 2. Two observations under a matcher binding are worse: every
+      // observation satisfies both steps, and `exactly-one` then reports selector
+      // ambiguity on all twenty-six oracles. The literals and the second observation
+      // work only together.
+      //
+      // A defect probe carries its seeded run alone. AD-9's qualification gate
+      // resolves every one of its oracles before a selection is read, so a second
+      // observation would add evidence nothing reaches.
+      //
+      // Two things this record still states loosely, and nothing reads either today.
+      // `conditionArm` stays `clean-correct-run` for a record that now carries two
+      // runs, and P-004's `baselinePassEvidence` in test/probes/trace.probes.json
+      // names the clean summary's digest alone.
+      const selected = clean ? legs : legs.filter((leg) => leg.caseId === 'seeded-correct-run');
+      const observations = selected.map((leg, index) =>
         recordObservation({
-          observationId,
-          sequence: 1,
-          operationId: step.operationId,
-          callInputs: { option: { agent: 'claude' }, stdin: { prompt: `The prompt the trace harness assembles for ${caseId}.` } },
+          observationId: leg.observationId,
+          sequence: index + 1,
+          operationId: leg.step.operationId,
+          callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
           stdout: { kind: 'text', value: '' },
           stderr: { kind: 'text', value: '' },
           exitCode: 0,
-          artifacts: traceArtifacts(caseId),
+          artifacts: traceArtifacts(leg.caseId),
         }),
-      ];
+      );
+      // Every trace oracle reads one step's interaction, so its disposition cites
+      // that step's observation. A record carrying one run has nothing of the other
+      // step's to cite, and a `held` disposition citing nothing is scored as an
+      // unsupported claim, so those oracles cite the run the record does carry.
+      const observationIdByStep = new Map(selected.map((leg) => [leg.step.stepId, leg.observationId]));
+      const stepOf = (pointer) => String(pointer).split('/')[2];
+      const citedObservationId = (oracle) => {
+        const target = (oracle.direction?.evidenceTargets ?? []).find((pointer) => observationIdByStep.has(stepOf(pointer)));
+        return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
+      };
       return {
         observations,
         findings: [],
-        // Both stored runs are recorded as scoring every check they were given,
-        // so every oracle held on the evidence the harness read.
+        // Every stored run in this record is recorded as scoring every check it was
+        // given, so every oracle held on the evidence the harness read.
         oracleDispositions: contract.oracles.map((oracle) => ({
           oracleId: oracle.id,
           disposition: 'held',
-          observationIds: [observationId],
+          observationIds: [citedObservationId(oracle)],
           note: null,
         })),
         evaluatorRecommendation: 'PASS',
-        conditionArm: caseId,
+        conditionArm: clean ? 'clean-correct-run' : 'seeded-correct-run',
       };
     },
   };
