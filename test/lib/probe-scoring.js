@@ -275,17 +275,31 @@ function traceArtifacts(caseId) {
 
 function traceEvidence(contract) {
   const [seededStep, cleanStep] = contract.interactionPlan;
+  const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json'));
+  // The stored run each fixture set's project root names. A trace prompt is written
+  // against one project root, and that root is the only thing in the request that
+  // says which set the leg is asking for, so it is what the port stages against.
+  const caseByProjectRoot = new Map(
+    groundTruth.fixtureSets.map((set) => [set.projectRoot, set.id.startsWith('seeded') ? 'seeded-correct-run' : 'clean-correct-run']),
+  );
 
   return {
     /**
-     * The witness differentiates on one prompt value, `allow_gate`. A leg that
-     * allows the gate gets the run that evaluated one; a leg that withholds it
-     * gets a summary whose `gate_basis` is `none`, which is what step-05 writes
+     * Two things decide a leg's answer, and both are in its request. The project
+     * root the prompt is written against says which fixture set was staged, so a
+     * leg naming the seeded set's root gets the seeded run and a leg naming the
+     * clean set's root gets the clean run. Then `allow_gate` decides the gate: a
+     * leg that allows one gets the run that evaluated it, and a leg that withholds
+     * it gets a summary whose `gate_basis` is `none`, which is what step-05 writes
      * when the gate is not evaluated.
      */
     answer(request) {
       const prompt = String(request.channels.stdin?.value ?? '');
-      const artifacts = traceArtifacts('seeded-correct-run');
+      const matched = [...caseByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
+      if (matched === undefined) {
+        throw new Error('a trace leg sent a prompt naming no fixture set project root, so no staged run answers it');
+      }
+      const artifacts = traceArtifacts(matched[1]);
       if (/allow_gate`?: `?false/.test(prompt)) {
         const withheld = { ...artifacts.summary.value, gate_basis: 'none', gate_status: 'NOT_EVALUATED' };
         return {

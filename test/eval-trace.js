@@ -183,17 +183,52 @@ const RUNNER_CAPABILITIES = ['scoped-artifact-writes'];
 
 /**
  * The command this harness probes, by the names test/lib/probe-targets.js and the
- * trace contract share, and the two artifacts it reads off each observation. The
- * paths are relative to the authorization's working directory, which is the staged
- * workspace, so they name `project/test-artifacts/` rather than the workflow's own
- * default of `test-artifacts/` under a project root that is the working directory.
+ * trace contract share.
  */
 const TRACE_INTERFACE = 'tea-trace-runner';
 const TRACE_OPERATION = 'trace-fixture-set';
-const TRACE_ARTIFACTS = {
-  summary: path.join('project', 'test-artifacts', 'e2e-trace-summary.json'),
-  matrix: path.join('project', 'test-artifacts', 'traceability-matrix.md'),
-};
+
+/**
+ * The directory one fixture set is staged under, inside the workspace.
+ *
+ * Every set gets its own name, and that is the one thing in the request that says
+ * which set a run traces. The staged workspace is the run's real input and the
+ * request shape cannot name a working directory, so with one shared `project/` the
+ * two sets sent byte-identical prompts and no leg could ask for the set without the
+ * plant. The trace contract's `seeded-faults-scoped` check reads that directly: it
+ * asks whether a seeded fault manifests on any other leg of the operation, and every
+ * other leg was a run of the seeded set, so the fault manifested on all of them.
+ *
+ * The names carry the epic each set traces and not the set's role. `seeded` and
+ * `clean` in a path the agent works in would hand it the answer, which is the same
+ * rule the corpus follows when it keeps every inline label out of the fixtures.
+ *
+ * @param {object} set
+ * @returns {string}
+ */
+function projectRootOf(set) {
+  return set.projectRoot;
+}
+
+/**
+ * The two artifacts the runner leaves behind, as the authorization's artifact map
+ * names them.
+ *
+ * The paths are relative to the authorization's working directory, which is the
+ * staged workspace, so they name the set's own project root rather than the
+ * workflow's default of `test-artifacts/` under a project root that is the working
+ * directory.
+ *
+ * @param {object} set
+ * @returns {{summary: string, matrix: string}}
+ */
+function traceArtifactPaths(set) {
+  const root = projectRootOf(set);
+  return {
+    summary: path.join(root, 'test-artifacts', 'e2e-trace-summary.json'),
+    matrix: path.join(root, 'test-artifacts', 'traceability-matrix.md'),
+  };
+}
 
 // The summary contract this harness scores. The waivers block arrived in 0.3.0, so a
 // 0.2.x file would be missing an oracle rather than merely older.
@@ -209,6 +244,13 @@ const LEVELS = ['e2e', 'api', 'component', 'unit', 'live', 'other'];
 // Keys that appear only in ground-truth.json. Finding one in a staged file or in the
 // prompt means the answers reached the agent, which invalidates the measurement.
 const GROUND_TRUTH_ONLY_TOKENS = ['trueCoverage', 'isDiscriminatingCase', 'commonFalsePositives', 'mustNotReport', 'expectedGate'];
+
+/**
+ * The words that say what a fixture set is for. None of them may appear in a
+ * project root, because the root is a directory the agent works in and a run that
+ * reads `clean` in its own path has been told the answer.
+ */
+const ROLE_WORDS = ['seeded', 'clean', 'control', 'planted', 'gap'];
 
 /**
  * The waiver check ids an invalid waiver must be reported as failing, keyed by waiver
@@ -721,11 +763,30 @@ function validateCorpus(groundTruth) {
   }
 
   const seenSetIds = new Set();
+  const seenProjectRoots = new Set();
   for (const set of groundTruth.fixtureSets) {
     const label = `fixtureSets[${set.id || '(no id)'}]`;
     if (!set.id) problems.push(`${label}: no id`);
     if (seenSetIds.has(set.id)) problems.push(`${label}: duplicate id`);
     seenSetIds.add(set.id);
+
+    // The project root is what makes the fixture set an addressable input: the prompt
+    // is written against it, so a leg that names one is asking for that set. Two sets
+    // sharing a root would send one prompt again and nothing would tell their legs
+    // apart. A root naming the set's role would hand the run the answer, which is the
+    // rule the corpus already follows for its inline labels.
+    if (set.projectRoot) {
+      if (seenProjectRoots.has(set.projectRoot)) problems.push(`${label}: duplicate projectRoot "${set.projectRoot}"`);
+      seenProjectRoots.add(set.projectRoot);
+      if (!/^[a-z\d]+(?:-[a-z\d]+)*$/.test(set.projectRoot)) {
+        problems.push(`${label}: projectRoot "${set.projectRoot}" is not a lowercase hyphenated directory name`);
+      }
+      for (const role of ROLE_WORDS) {
+        if (set.projectRoot.includes(role)) problems.push(`${label}: projectRoot "${set.projectRoot}" names the set's role ("${role}")`);
+      }
+    } else {
+      problems.push(`${label}: projectRoot is not declared`);
+    }
 
     // The oracle document, the test root, and the source root have to be there, and
     // the two optional inputs have to be present exactly when the set declares them.
@@ -1042,10 +1103,13 @@ function configYaml() {
  *
  * Layout, with the workspace itself as the agent's working directory:
  *
- *   project/   the fixture set, plus a resolved _bmad/tea/config.yaml
- *   skill/     the bmad-testarch-trace workflow, copied verbatim
+ *   <projectRoot>/   the fixture set, plus a resolved _bmad/tea/config.yaml
+ *   skill/           the bmad-testarch-trace workflow, copied verbatim
  *
- * The skill sits outside `project/` on purpose. Its step files and knowledge
+ * The project root is the set's own, so the prompt that names it says which set the
+ * run traces. See projectRootOf for what that buys and why the names carry no role.
+ *
+ * The skill sits outside the project root on purpose. Its step files and knowledge
  * fragments carry example test snippets, and a source tree that contained them would
  * feed the discovery pass tests that are not part of the corpus.
  *
@@ -1054,7 +1118,7 @@ function configYaml() {
  */
 function stageWorkspace(set) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-eval-'));
-  const projectDir = path.join(dir, 'project');
+  const projectDir = path.join(dir, projectRootOf(set));
   const setRoot = path.join(FIXTURE_ROOT, set.root);
 
   for (const relative of filesUnder(setRoot)) {
@@ -1126,6 +1190,12 @@ function assertGroundTruthAbsent(dir) {
  * named, no coverage status is suggested, and the oracle document is left to be
  * discovered the way step-01 discovers one.
  *
+ * The one fact about the set the prompt does carry is its project root, which the
+ * whole prompt is written against. That is what makes the fixture set an addressable
+ * input: two sets now send two prompts, so a leg can ask for the set it means and
+ * the harness stages the set the leg asked for. The name carries the epic and not
+ * the set's role, so it suggests no coverage status; see projectRootOf.
+ *
  * `allowGate` is the one configuration value a caller may flip. The harness never
  * does; the trace contract's sensitivity witness does, because step-05 evaluates a
  * gate only when `allow_gate` is true, so two prompts differing in that one value
@@ -1136,8 +1206,9 @@ function assertGroundTruthAbsent(dir) {
  * @returns {string}
  */
 function buildPrompt(set, { allowGate = true } = {}) {
+  const root = projectRootOf(set);
   return [
-    'You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.',
+    `You are running the TEA workflow \`bmad-testarch-trace\` against the project in \`${root}/\`.`,
     '',
     'The workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it',
     'names in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.',
@@ -1145,11 +1216,11 @@ function buildPrompt(set, { allowGate = true } = {}) {
     '----- run configuration -----',
     'Resolve the workflow placeholders to these values:',
     '',
-    '- `{project-root}`: `project`',
-    '- `{config_source}`: `project/_bmad/tea/config.yaml`',
-    '- `{test_artifacts}`: `project/test-artifacts`',
-    '- `{test_dir}`: `project/tests`',
-    '- `{source_dir}`: `project/src`',
+    `- \`{project-root}\`: \`${root}\``,
+    `- \`{config_source}\`: \`${root}/_bmad/tea/config.yaml\``,
+    `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
+    `- \`{test_dir}\`: \`${root}/tests\``,
+    `- \`{source_dir}\`: \`${root}/src\``,
     '- `{skill-root}`: `skill`',
     '- `gate_type`: `epic`',
     '- `decision_mode`: `deterministic`',
@@ -1159,19 +1230,19 @@ function buildPrompt(set, { allowGate = true } = {}) {
     '- `summary_confidence`: `auto`',
     '- `coverage_levels`: `e2e,api,component,unit,live`',
     '',
-    'The trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the',
+    `The trace target is the epic under \`${root}/docs/epics/\`. Resolve the coverage oracle from it the`,
     'way step-01 says to.',
     '',
     '----- what to produce -----',
     'Write both deliverables the workflow declares:',
     '',
-    '- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the',
+    `- \`${root}/test-artifacts/traceability-matrix.md\`, from \`skill/trace-template.md\`, carrying the`,
     '  detailed mapping with one section per criterion, each stating its coverage status and the tests',
     '  that establish it as `file:line`.',
-    '- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as',
+    `- \`${root}/test-artifacts/e2e-trace-summary.json\` at schema_version 0.3.0, exactly as`,
     '  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.',
     '',
-    'Do not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.',
+    `Do not add, edit, or delete any file under \`${root}/docs/\`, \`${root}/src/\`, or \`${root}/tests/\`.`,
     'This workflow does not generate tests.',
     '',
     'When you are done, print one line naming the two files you wrote. Nothing else you print is read.',
@@ -1504,9 +1575,10 @@ function scoreOracleResolution(summary, set) {
  * this corpus, the same "no defensible second reading" bar gate_criteria is held to.
  * decision_mode is workflow.yaml's own default, stated to the agent verbatim in
  * buildPrompt's run-configuration block, and neither fixture set's config overrides it.
- * links.trace_report_path is that same block's `{test_artifacts}` (`project/test-artifacts`,
- * prefixed for the agent's actual working directory, which is the workspace root rather
- * than `project/`) joined with the template's default filename; the other three link
+ * links.trace_report_path is that same block's `{test_artifacts}` (the set's own project
+ * root plus `test-artifacts`, prefixed for the agent's actual working directory, which is
+ * the workspace root rather than the project root) joined with the template's default
+ * filename; the other three link
  * fields are hardcoded to the empty string in step-05's own template outside of a CI/CD
  * run that populates them after upload. Neither fixture set plants a
  * skipped, fixme, or pending test, so tests.skipped_cases, tests.fixme_cases, and
@@ -1526,13 +1598,13 @@ function scoreOracleResolution(summary, set) {
  * fact that does not exist, and a wrong guess would fail a correct run, which this
  * corpus treats as the one unaffordable mistake.
  */
-function scoreRunMetadata(summary) {
+function scoreRunMetadata(summary, set) {
   const links = summary.links ?? {};
   const tests = summary.tests ?? {};
   const heuristics = summary.heuristics ?? {};
   return [
     check('decision_mode', 'deterministic', summary.decision_mode),
-    check('links.trace_report_path', 'project/test-artifacts/traceability-matrix.md', links.trace_report_path),
+    check('links.trace_report_path', `${projectRootOf(set)}/test-artifacts/traceability-matrix.md`, links.trace_report_path),
     check('links.trace_report_url', '', links.trace_report_url),
     check('links.artifact_url', '', links.artifact_url),
     check('links.journey_evidence_url', '', links.journey_evidence_url),
@@ -1743,7 +1815,7 @@ function scoreRun(set, summary, matrix, tolerance, pctTolerance) {
     arithmetic: scoreArithmetic(summary, expected, pctTolerance),
     gateCriteria: scoreGateCriteria(summary, set),
     oracleResolution: scoreOracleResolution(summary, set),
-    runMetadata: scoreRunMetadata(summary),
+    runMetadata: scoreRunMetadata(summary, set),
     rejectedEvidence: scoreRejectedEvidence(summary, set, tolerance),
     waivers,
     live: scoreLiveEvidence(summary, set),
@@ -1842,7 +1914,7 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
     const { port } = await createProbePort({
       cwd: workspace.dir,
       interfaceIds: [TRACE_INTERFACE],
-      artifacts: { [TRACE_INTERFACE]: TRACE_ARTIFACTS },
+      artifacts: { [TRACE_INTERFACE]: traceArtifactPaths(set) },
     });
     const result = await probeCommand(
       port,
@@ -2410,6 +2482,7 @@ module.exports = {
   deriveGate,
   expectedRejectedEvidence,
   stageWorkspace,
+  traceArtifactPaths,
   assertGroundTruthAbsent,
   buildPrompt,
   caseIndex,

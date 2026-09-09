@@ -2180,7 +2180,14 @@ function buildTraceContract() {
   }
 
   const maxCriteria = Math.max(...sets.map((set) => (set.criteria ?? []).length));
-  const witnessSet = seeded[0];
+  // The sensitivity witness runs the clean set. AD-10 treats every other leg of an
+  // operation as a clean leg when it asks whether a seeded fault is scoped to its
+  // own leg, and these two legs are the only other legs `trace-fixture-set` has, so
+  // whatever set they trace is what "clean leg" means for this contract. Run on the
+  // seeded set they were seeded runs, and the manifestation witness of every defect
+  // probe fired on them, which is exactly what `seeded-faults-scoped` reported. See
+  // the sensitivityWitness comment below for why the differential still holds here.
+  const witnessSet = clean[0];
 
   return {
     schemaVersion: 4,
@@ -2213,21 +2220,20 @@ function buildTraceContract() {
             responseDescriptor: traceSummaryDescriptor(summaryKeys, maxCriteria),
             volatilePointers: ['/matrix'],
             sensitivityWitness: {
-              // The two fixture sets are traced from one prompt, because
-              // test/eval-trace.js deliberately names no set-specific fact in it,
-              // so a differential between the two plan steps over stdin would
-              // attribute to the prompt a difference the staged workspace
-              // produced, and an invariance claim would be false because the two
-              // summaries differ. The one prompt value the corpus does establish
-              // an effect for is allow_gate: skillRuleCitations.gateEligibility
-              // says a gate is evaluated only when it is true, and step-05 sets
+              // The differential is allow_gate, the one prompt value the corpus
+              // establishes an effect for: skillRuleCitations.gateEligibility says
+              // a gate is evaluated only when it is true, and step-05 sets
               // gate_basis to `none` otherwise. Two prompts differing in that
-              // value, in one staged workspace, must therefore produce two
+              // value, over one staged fixture set, must therefore produce two
               // gate_basis values, which is a true and checkable claim that the
-              // command reads its standard input. The legs are runnable only
-              // against a staged workspace of the seeded set, which is the
-              // coupling docs/explanation/eval-quality-command-adapter.md records
-              // for artifact-writing commands.
+              // command reads its standard input. It holds over either set: the
+              // clean set's allow_gate run writes `priority_thresholds` and its
+              // withheld run writes `none`, the same pair the seeded set writes.
+              //
+              // The legs run against a staged workspace, which is the coupling
+              // docs/explanation/eval-quality-command-adapter.md records for
+              // artifact-writing commands, and the prompt names which set that
+              // workspace holds through its project root.
               witnessId: 'gate-follows-allow-gate',
               channel: 'stdin',
               legs: [
@@ -2277,30 +2283,33 @@ function buildTraceContract() {
       // the fragment-selection contracts give: its bytes are evidence, and the
       // sealed record carries their digest.
       //
-      // Binding it to its literal bytes was tried, to let one record carry both
-      // steps' observations and stop each step selecting every observation of the
-      // operation. It cannot work here: the two steps send the same prompt on
-      // purpose, because what makes a trace run the seeded set or the clean set is
-      // the staged workspace and no request shape names one. So nothing in the
-      // plan tells these two steps apart, and a record scoring one set leaves the
-      // other set's oracles quantifying over evidence that is not theirs.
+      // The two steps no longer send the same prompt. Each fixture set is staged
+      // under its own project root and the prompt is written against it, so the
+      // request now says which set a run traces. What the matcher leaves open is
+      // which observation a step selects: a record carrying one observation is
+      // selected by both steps, so the other set's oracles quantify over evidence
+      // that is not theirs. That is the limit test/contracts/README.md records as
+      // "a plan cannot declare that two steps must receive different inputs", and
+      // it is a property of the matcher rather than of the prompts.
       inputBinding: { argument: null, option: { agent: { matcher: 'any' } }, environment: null, stdin: { prompt: { matcher: 'any' } } },
     })),
     scopedResources: null,
     forbiddenInputs: FORBIDDEN_INPUTS,
     testData: {
       setup:
-        `Each plan step stages one fixture set from test/fixtures/trace-eval/ into a disposable workspace: the set's files under project/, ` +
-        `a resolved _bmad/tea/config.yaml whose test_artifacts points inside that workspace, and the bmad-testarch-trace workflow under skill/. ` +
-        `ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. ` +
-        `The workspace is the authorization's working directory, and the prompt on standard input names project/ and skill/ and resolves every placeholder; ` +
-        `it is the same text for both steps, because it names no fact about either set. That shared prompt is why the sensitivity witness differs its two legs ` +
-        `on allow_gate rather than between the two steps: the seeded and clean summaries differ because of the staged workspace, so a differential between the ` +
-        `steps would attribute to the prompt a difference the prompt did not cause, and an invariance claim would be false. allow_gate is the one prompt value ` +
-        `the ground truth establishes an effect for, through skillRuleCitations.gateEligibility: step-05 evaluates a gate only when it is true and writes ` +
-        `gate_basis as none otherwise, so two prompts differing in that value, in one staged workspace, produce two gate_basis values. That is the same ` +
-        `reasoning that gives the fragment-selection contract for this workflow an invariance witness: the claim is moved onto an input the run demonstrably ` +
-        `reads, and stated as what it is.`,
+        `Each plan step stages one fixture set from test/fixtures/trace-eval/ into a disposable workspace: the set's files under its own project root ` +
+        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/tea/config.yaml whose test_artifacts points inside that ` +
+        `workspace, and the bmad-testarch-trace workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries ` +
+        `its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root ` +
+        `and skill/ and resolves every placeholder against them. The project root is the one fact about the set the prompt carries, and it carries the epic the ` +
+        `set traces rather than the set's role, so it says which set a leg is asking for and suggests no coverage status. ` +
+        `The sensitivity witness differs its two legs on allow_gate rather than between the two sets: the seeded and clean summaries differ because of the ` +
+        `staged workspace, so a differential between the sets would attribute to the prompt a difference the staged files produced, and an invariance claim ` +
+        `would be false. allow_gate is the one prompt value the ground truth establishes an effect for, through skillRuleCitations.gateEligibility: step-05 ` +
+        `evaluates a gate only when it is true and writes gate_basis as none otherwise, so two prompts differing in that value, over one staged fixture set, ` +
+        `produce two gate_basis values. That is the same reasoning that gives the fragment-selection contract for this workflow an invariance witness: the ` +
+        `claim is moved onto an input the run demonstrably reads, and stated as what it is. Both witness legs stage the clean set, because they are the only ` +
+        `other legs this operation has and AD-10 reads them as its clean legs when it asks whether a seeded fault is scoped to its own leg.`,
       cleanup:
         'Delete the workspace. The corpus under test/fixtures/trace-eval/ is read-only and the harness digests it before and after every run.',
       principals: null,
@@ -2315,8 +2324,8 @@ function buildTraceContract() {
       maxCostUsd: (4 * sets.length).toFixed(2),
     },
     safetyLimits: [
-      'The runner writes only inside the staged workspace, and only its two deliverables under project/test-artifacts/; the harness fails a run that changed the repository or the staged corpus.',
-      'The run adds, edits, and deletes nothing under project/docs/, project/src/, or project/tests/. The workflow does not generate tests, and a run that did has moved the benchmark.',
+      "The runner writes only inside the staged workspace, and only its two deliverables under the fixture set's own test-artifacts/; the harness fails a run that changed the repository or the staged corpus.",
+      "The run adds, edits, and deletes nothing under the fixture set's docs/, src/, or tests/. The workflow does not generate tests, and a run that did has moved the benchmark.",
       'No credential value appears in a prompt, an artifact, a log, or a result file.',
     ],
     requiredEvidence: [

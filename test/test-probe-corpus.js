@@ -15,13 +15,15 @@
  * WHAT THE BASELINE IS FOR
  *
  * `test/probes/expected-strength.json` records what each probe scores today,
- * including the ones nothing can score yet. Two blockers are recorded rather than
- * avoided: a defect probe cannot declare a manifestation witness against a
- * command, so its pre-flight fails, and a defect signature cannot address a file
- * a command wrote, so a probe carrying one is refused by the qualification gate.
- * tools/generate-probes.js states both in full. A baseline is what makes the day
- * either of them closes visible instead of silent, so movement in either
- * direction fails this check until somebody has read why and regenerated it.
+ * including the ones nothing can score yet. One blocker is left, recorded rather
+ * than avoided: a defect signature cannot address a file a command wrote, so a
+ * probe carrying one is refused by the qualification gate, which is why
+ * test-review's gameability probe and trace's three defect probes score nothing.
+ * tools/generate-probes.js states it in full. The other blocker was a defect
+ * probe whose manifestation witness fired on a leg the contract called clean;
+ * every probe pre-flights now. A baseline is what makes the day one of them
+ * closes visible instead of silent, so movement in either direction fails this
+ * check until somebody has read why and regenerated it.
  *
  * Usage:
  *   node test/test-probe-corpus.js

@@ -18,7 +18,7 @@
   "oracle": {
     "resolution_mode": "formal_requirements",
     "confidence": "high",
-    "sources": ["project/docs/epics/epic-5-api-token-lifecycle.md"],
+    "sources": ["api-token-lifecycle/docs/epics/epic-5-api-token-lifecycle.md"],
     "external_pointer_status": "not_used",
     "synthetic": false
   },
@@ -125,7 +125,7 @@
     }
   ],
   "links": {
-    "trace_report_path": "project/test-artifacts/traceability-matrix.md",
+    "trace_report_path": "api-token-lifecycle/test-artifacts/traceability-matrix.md",
     "trace_report_url": "",
     "artifact_url": "",
     "journey_evidence_url": ""

@@ -18,7 +18,7 @@
   "oracle": {
     "resolution_mode": "formal_requirements",
     "confidence": "high",
-    "sources": ["project/docs/epics/epic-4-tenant-data-export-and-erasure.md"],
+    "sources": ["tenant-data-export/docs/epics/epic-4-tenant-data-export-and-erasure.md"],
     "external_pointer_status": "not_used",
     "synthetic": false
   },
@@ -99,7 +99,7 @@
   },
   "live_evidence": {
     "present": true,
-    "results_file": "project/test-artifacts/live-verification-results.json",
+    "results_file": "tenant-data-export/test-artifacts/live-verification-results.json",
     "freshness": "stale",
     "recorded_source_sha": "0123456789abcdef0123456789abcdef01234567",
     "current_source_sha": "8f0c2a1d9e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a",
@@ -135,7 +135,7 @@
     {
       "requirement_id": "AC-2",
       "test_id": "4-API-002",
-      "file": "project/tests/api/tenant-export.api.spec.ts",
+      "file": "tenant-data-export/tests/api/tenant-export.api.spec.ts",
       "line": 30,
       "level": "api",
       "title": "AC-2 rejects export requests from members without the admin role",
@@ -165,13 +165,13 @@
     }
   ],
   "links": {
-    "trace_report_path": "project/test-artifacts/traceability-matrix.md",
+    "trace_report_path": "tenant-data-export/test-artifacts/traceability-matrix.md",
     "trace_report_url": "",
     "artifact_url": "",
     "journey_evidence_url": ""
   },
   "waivers": {
-    "register": "project/test-artifacts/gate-waivers.md",
+    "register": "tenant-data-export/test-artifacts/gate-waivers.md",
     "filed": 2,
     "valid": 1,
     "invalid": 1,

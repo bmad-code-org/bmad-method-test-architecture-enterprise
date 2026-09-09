@@ -87,7 +87,18 @@ if (mode === 'nothing') {
   process.exit(0);
 }
 
-const projectRoot = fs.existsSync(path.join(process.cwd(), 'project')) ? path.join(process.cwd(), 'project') : process.cwd();
+// The prompt names the project root, the same line a real agent resolves
+// `{project-root}` from, and each fixture set has its own. A prompt that names none
+// is test/test-probe-targets.js probing the adapter rather than the corpus, so the
+// stub keeps the older reading there: `project/` when the caller staged one, and the
+// working directory otherwise.
+const named = /^- `\{project-root\}`: `([^`]+)`$/m.exec(prompt)?.[1] ?? null;
+const projectRoot =
+  named !== null
+    ? path.join(process.cwd(), named)
+    : fs.existsSync(path.join(process.cwd(), 'project'))
+      ? path.join(process.cwd(), 'project')
+      : process.cwd();
 const epicsDir = path.join(projectRoot, 'docs', 'epics');
 const epics = fs.existsSync(epicsDir) ? fs.readdirSync(epicsDir) : [];
 const fixtureSet = epics.some((name) => name.startsWith('epic-5-')) ? 'clean' : 'seeded';
