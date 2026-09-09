@@ -77,7 +77,6 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { isolationAvailable } = require('../cli/lib/isolate');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
@@ -94,6 +93,7 @@ const {
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { createProbePort, hostEnvironment, probeCommand, probeRequest } = require('./lib/probe-targets');
+const { boundedProbe } = require('./lib/bounded-probe');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
@@ -239,8 +239,7 @@ function missingCredential(agent) {
   if (agent === 'claude') {
     if (process.env.ANTHROPIC_API_KEY || process.env.CLAUDE_CODE_OAUTH_TOKEN) return null;
     if (fs.existsSync(path.join(home, '.claude', '.credentials.json'))) return null;
-    const keychain = spawnSync('security', ['find-generic-password', '-s', 'Claude Code-credentials'], { encoding: 'utf8' });
-    if (!keychain.error && keychain.status === 0) return null;
+    if (boundedProbe('security', ['find-generic-password', '-s', 'Claude Code-credentials']).ok) return null;
     return 'claude needs ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN, or a stored login (keychain / ~/.claude/.credentials.json)';
   }
   if (agent === 'codex') {
@@ -341,14 +340,15 @@ function preflight({ agents, agentCmd }) {
       continue;
     }
     const executable = agent === 'custom' ? agentCmd : agent;
-    const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
-    if (probe.error) report('environment-transport', `agent CLI "${executable}" is not on PATH (${probe.error.code})`);
-    else if (probe.status === 0)
+    const probe = boundedProbe(executable, ['--version']);
+    if (probe.ok) {
       versions[agent] =
         String(probe.stdout || '')
           .trim()
           .split('\n')[0] || null;
-    else report('environment-transport', `agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
+    } else {
+      report('environment-transport', `agent CLI "${executable}": ${probe.detail}`);
+    }
     const credential = agent === 'custom' ? null : missingCredential(agent);
     if (credential) report('environment-authentication', credential);
   }

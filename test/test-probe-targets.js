@@ -59,6 +59,7 @@ const {
   failureClassForExit,
 } = require('../cli/fragment-selection-runner');
 const { RUNNER_CAPABILITIES: HARNESS_DECLARED_CAPABILITIES } = require('./eval-fragment-selection');
+const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -488,12 +489,66 @@ function checkRunnerDeclarations() {
   }
 }
 
+// ---------------------------------------------------------------------------
+// 5. the environment probes are bounded
+// ---------------------------------------------------------------------------
+
+/**
+ * The `--version`, `git`, and keychain probes are not systems under test, so
+ * eval-quality's adapter does not cover them and they stayed hand-rolled. Each
+ * one ran with no timeout, and a pre-flight exists to fail before a paid matrix
+ * starts: one that blocks forever shows CI a running job rather than a broken
+ * one. This proves the bound is real by running something that never returns.
+ */
+function checkBoundedProbes(runDir) {
+  console.log('\nthe environment probes are bounded');
+
+  const hang = path.join(runDir, 'hang.js');
+  // A child that ignores SIGTERM, so a bound that only asks politely would wait
+  // out the full run rather than end it. boundedProbe sends SIGKILL.
+  fs.writeFileSync(hang, "process.on('SIGTERM', () => {});\nsetInterval(() => {}, 1000);\n");
+
+  const started = Date.now();
+  const timedOut = boundedProbe(process.execPath, [hang], { timeoutMs: 1500 });
+  const elapsed = Date.now() - started;
+  assert(!timedOut.ok && timedOut.reason === 'timeout', 'a probe that never returns is reported as a timeout', JSON.stringify(timedOut));
+  assert(elapsed < 15_000, 'the probe is killed at its deadline rather than waited out', `${elapsed}ms`);
+
+  const missing = boundedProbe(path.join(runDir, 'no-such-executable'), ['--version']);
+  assert(
+    !missing.ok && missing.reason === 'not-found',
+    'an executable that is not there is reported as not-found',
+    JSON.stringify(missing),
+  );
+
+  const failed = boundedProbe(process.execPath, ['-e', 'process.exit(3)']);
+  assert(
+    !failed.ok && failed.reason === 'failed' && failed.status === 3,
+    'a non-zero exit is reported with its code',
+    JSON.stringify(failed),
+  );
+
+  const answered = boundedProbe(process.execPath, ['--version']);
+  assert(
+    answered.ok && /^v\d+\./.test(answered.stdout.trim()),
+    'a probe that answers returns its output',
+    JSON.stringify(answered).slice(0, 120),
+  );
+
+  assert(
+    PROBE_TIMEOUT_MS > 0 && PROBE_TIMEOUT_MS <= 60_000,
+    'the default deadline is a bound a person would wait out',
+    `${PROBE_TIMEOUT_MS}ms`,
+  );
+}
+
 async function main() {
   console.log('probe targets and the eval-quality command-line adapter');
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-probe-'));
   try {
     checkContractsAgainstRegistry();
     checkRunnerDeclarations();
+    checkBoundedProbes(runDir);
     await checkDefaultDeny(runDir);
     await checkTestReviewProbe(runDir);
     await checkFragmentSelectionProbe(runDir);
