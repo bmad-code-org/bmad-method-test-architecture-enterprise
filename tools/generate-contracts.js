@@ -15,7 +15,15 @@
  *     sets and types, and its DEFAULT_AGENT for the sensitivity-witness legs, and
  *   - cli/fragment-selection-runner.js's SELECTION_REQUEST_KEYS for the request
  *     shape of the command the eight fragment-selection contracts name, and its
- *     DEFAULT_AGENT for their witness legs.
+ *     DEFAULT_AGENT for their witness legs,
+ *   - test/fixtures/trace-eval/ground-truth.json for trace.contract.json: every
+ *     expected gate, count, percentage, disposition, blocker, rejected span, and
+ *     waiver verdict its oracles state, and the skill files its rule citations
+ *     name for that contract's sourceSpecDigest,
+ *   - cli/trace-runner.js's TRACE_REQUEST_KEYS and DEFAULT_AGENT for that
+ *     contract's request shape and witness legs, and test/eval-trace.js's
+ *     buildPrompt for the two prompts the witness legs send, and
+ *   - the trace workflow's step-05 for the key set of the summary the run writes.
  *
  * The prose that is genuinely authored (an oracle's commentary, a behavior's lead
  * sentence, the risk ids) lives in the tables below, so the JSON on disk carries
@@ -60,6 +68,16 @@ const { VERDICT_KEYS, DEFAULT_AGENT } = require('../cli/test-review');
 // Same rule for the command the fragment-selection contracts name: the runner
 // owns its own request shape and its own default agent, so both are read from it.
 const { SELECTION_REQUEST_KEYS, DEFAULT_AGENT: SELECTION_DEFAULT_AGENT } = require('../cli/fragment-selection-runner');
+// And for the trace command: its request shape and default agent are its own, and
+// the prompt its witness legs send is the harness's, because the harness is the
+// only thing that assembles one.
+const { TRACE_REQUEST_KEYS, DEFAULT_AGENT: TRACE_DEFAULT_AGENT, EXIT_CODES: TRACE_EXIT_CODES } = require('../cli/trace-runner');
+const {
+  buildPrompt: buildTracePrompt,
+  SUMMARY_SCHEMA_MAJOR_MINOR: TRACE_SUMMARY_SCHEMA,
+  TRACE_INTERFACE,
+  TRACE_OPERATION,
+} = require('../test/eval-trace');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -68,6 +86,9 @@ const WORKFLOW_ROOT = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch');
 const FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval');
 const GROUND_TRUTH_PATH = path.join(FIXTURE_ROOT, 'ground-truth.json');
 const FIXTURE_PREFIX = 'test/fixtures/test-review-eval/';
+const TRACE_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval');
+const TRACE_GROUND_TRUTH_PATH = path.join(TRACE_FIXTURE_ROOT, 'ground-truth.json');
+const TRACE_STEP_05 = path.join(WORKFLOW_ROOT, 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
 
 /** The forbidden-input list is fixed by the contract schema and is the same for every contract here. */
 const FORBIDDEN_INPUTS = [
@@ -1296,6 +1317,938 @@ function buildSelectionWitness(spec, evals) {
 }
 
 // ---------------------------------------------------------------------------
+// trace.contract.json
+// ---------------------------------------------------------------------------
+
+// The interface and operation ids are the harness's, imported above, so the
+// request the harness issues and the operation the contract declares cannot
+// spell them differently.
+
+/** The plan step one fixture set is traced under, and the root of every pointer into what that step wrote. */
+function traceStepId(set) {
+  return `trace-${set.id}`;
+}
+
+function traceSummaryPointer(set, field) {
+  return `/interactions/${traceStepId(set)}/artifact/summary${field}`;
+}
+
+/** The six coverage levels step-04 buckets tests into, in the order the summary lists them. */
+const TRACE_LEVELS = ['e2e', 'api', 'component', 'unit', 'live', 'other'];
+const TRACE_PRIORITIES = ['P0', 'P1', 'P2', 'P3'];
+
+const TRACE_REQUEST_SHAPE = Object.fromEntries(
+  Object.entries(TRACE_REQUEST_KEYS).map(([channel, keys]) => [channel, stringShape(keys.required, keys.permitted)]),
+);
+
+function equalsPointer(pointer, literal) {
+  return { op: 'equality', operands: [{ pointer }, { literal }] };
+}
+
+function allOf(operands) {
+  return operands.length === 1 ? operands[0] : { op: 'all', operands };
+}
+
+/**
+ * The key set of `e2e-trace-summary.json`, read out of step-05's own object
+ * literal rather than transcribed here.
+ *
+ * Step-05 section 3b builds the summary as one `const e2eTraceSummary = {...}`
+ * whose top-level keys sit at a two-space indent, then adds `waivers` when a
+ * register exists and `gate_status` and `gate_criteria` when the gate was
+ * eligible, by assignment. The always-present keys are the literal's; the
+ * conditional ones are the assignment targets. A key the workflow gains lands
+ * here without an edit and `--check` fails until the contract is regenerated,
+ * which is the rule the verdict descriptor already follows for tea-test-review.
+ */
+function summaryKeysFromStep05() {
+  const text = fs.readFileSync(TRACE_STEP_05, 'utf8');
+  const start = text.indexOf('const e2eTraceSummary = {');
+  assert(start !== -1, 'step-05 no longer declares `const e2eTraceSummary = {`, so the summary key set cannot be read');
+  const end = text.indexOf('\n};', start);
+  assert(end !== -1, 'step-05 declares `const e2eTraceSummary = {` and never closes it');
+  const always = [];
+  for (const line of text.slice(start, end).split('\n')) {
+    const key = /^ {2}([a-z_]+):/.exec(line);
+    if (key) always.push(key[1]);
+  }
+  const conditional = [...new Set([...text.matchAll(/^\s*e2eTraceSummary\.([a-z_]+) = /gm)].map((match) => match[1]))];
+  assert(always.length > 0, "no top-level key was read off step-05's summary literal");
+  for (const key of conditional) {
+    assert(!always.includes(key), `step-05 both declares "${key}" in the summary literal and assigns it afterwards`);
+  }
+  return { always, conditional };
+}
+
+/**
+ * Authored: the JSON type of each summary key an oracle here reads, for the
+ * response descriptor. Every other key is declared with its type unstated, which
+ * the descriptor permits, because the contract asserts nothing about it and a
+ * transcribed type nobody checks is the drift this generator exists to refuse.
+ */
+const TRACE_SUMMARY_TYPES = {
+  schema_version: 'string',
+  collection_mode: 'string',
+  collection_status: 'string',
+  inventory_basis: 'string',
+  gate_basis: 'string',
+  oracle: 'object',
+  coverage: 'object',
+  risk_summary: 'object',
+  live_evidence: 'object',
+  blockers: 'array',
+  rejected_evidence: 'array',
+  waivers: 'object',
+  gate_status: 'string',
+  gate_criteria: 'object',
+};
+
+function traceSummaryDescriptor(keys, cardinalityBound) {
+  return {
+    requiredKeys: keys.always,
+    permittedKeys: [...keys.always, ...keys.conditional],
+    types: Object.fromEntries([...keys.always, ...keys.conditional].map((key) => [key, TRACE_SUMMARY_TYPES[key] ?? null])),
+    successIndicator: '/gate_status',
+    channelRoles: {
+      '/gate_status': 'success-indicator',
+      '/blockers': 'collection',
+      '/rejected_evidence': 'collection',
+      '/coverage': 'payload',
+      '/gate_criteria': 'payload',
+      '/live_evidence': 'payload',
+      '/waivers': 'payload',
+    },
+    // A blocker is a live record or a skipped test and a rejection is a test, so
+    // neither collection can plausibly outgrow the corpus's own test count by an
+    // order of magnitude. The bound is authored as that: a plausibility ceiling,
+    // scaled from the largest criterion set.
+    collectionLocations: ['/blockers', '/rejected_evidence'].map((pointer) => ({
+      pointer,
+      referenceSet: null,
+      expectedCardinality: { mode: 'at-most', max: cardinalityBound },
+    })),
+  };
+}
+
+/** The lines a citation may land on and still resolve to a recorded span, at the corpus's declared tolerance. */
+function admittedLines(entry, tolerance) {
+  const lines = [];
+  for (let line = entry.line - tolerance; line <= entry.lineEnd + tolerance; line += 1) lines.push(line);
+  return lines;
+}
+
+/**
+ * Every oracle the trace contract states, one spec per claim, in the order they
+ * are numbered.
+ *
+ * Each spec carries the oracle as the contract will render it and, beside it, the
+ * scorer's answer for the same evidence as a function over one `scoreRun` result.
+ * test/test-contract-oracles.js reads the second half: an oracle here may never
+ * contradict `scoreRun` on the same summary and matrix, and this is the one place
+ * the correspondence between an oracle and the check it restates is written.
+ * `scorer` returns true where the harness passed the check, false where it
+ * failed, and undefined where the harness did not score it at all, which is how
+ * the waiver oracles behave when the gate did not match: scoreWaivers skips them
+ * so that one wrong gate is not scored three times, and the oracle check skips
+ * them with it.
+ *
+ * Every claim is something ground-truth.json states. The one derivation is
+ * `gate_basis`, which step-05 sets from the gate eligibility the ground truth
+ * records under `collection`, and the one restated rule is `oracle.synthetic`,
+ * which step-01 sets only for an inferred oracle and every set here resolved
+ * formal requirements.
+ *
+ * @returns {Array<{id: string, kind: string, setId: string, oracle: object, scorer: Function}>}
+ */
+function traceOracleSpecs(groundTruth) {
+  const tolerance = groundTruth.evidenceLineTolerance;
+  assert(Number.isInteger(tolerance), 'ground-truth.json declares no integer evidenceLineTolerance');
+  const specs = [];
+  const push = (setId, kind, oracle, scorer) =>
+    specs.push({ id: `O-${String(specs.length + 1).padStart(3, '0')}`, kind, setId, oracle, scorer });
+  const okOf = (checks, fields) => {
+    const named = checks.filter((item) => fields.includes(item.field));
+    return named.length === fields.length && named.every((item) => item.ok);
+  };
+
+  for (const set of groundTruth.fixtureSets) {
+    const at = (field) => traceSummaryPointer(set, field);
+    const label = set.id;
+    const arithmetic = set.coverageArithmetic;
+    const gate = set.expectedGate;
+    assert(gate?.decision && gate.gateCriteria, `${label}: expectedGate declares no decision or no gateCriteria`);
+    assert(
+      arithmetic?.overall && arithmetic.priority && arithmetic.riskSummary && arithmetic.byLevelCriteriaCovered,
+      `${label}: coverageArithmetic is incomplete`,
+    );
+
+    // The gate, and the criteria it was derived from. The single bit the corpus
+    // exists to get right, and the ten fields that say why.
+    push(
+      set.id,
+      'gate-decision',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: the gate is ${gate.decision}, produced by ${gate.producedBy}. ${gate.derivation}`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'equality',
+          scope: `gate_status in the summary written for ${label}.`,
+          negativeDomain: `A run deriving any decision other than ${gate.decision} for ${label}.`,
+          evidenceTargets: [at('/gate_status')],
+        },
+        check: equalsPointer(at('/gate_status'), gate.decision),
+      },
+      (scored) => scored.gate.ok,
+    );
+    const criteriaFields = Object.keys(gate.gateCriteria);
+    push(
+      set.id,
+      'gate-criteria',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: the ${numberWord(criteriaFields.length)} gate_criteria fields, as expectedGate.gateCriteria records them. Each is a threshold the skill states or a percentage recomputed from trueCoverage, so a run reporting a different required minimum has changed the gate it claims to be.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `Every gate_criteria field in the summary written for ${label}.`,
+          negativeDomain:
+            'A run reporting a different threshold, a different actual percentage, or a different MET/NOT_MET status on any field.',
+          evidenceTargets: criteriaFields.map((field) => at(`/gate_criteria/${field}`)),
+        },
+        check: allOf(criteriaFields.map((field) => equalsPointer(at(`/gate_criteria/${field}`), gate.gateCriteria[field]))),
+      },
+      (scored) =>
+        okOf(
+          scored.gateCriteria,
+          criteriaFields.map((field) => `gate_criteria.${field}`),
+        ),
+    );
+
+    // Coverage arithmetic: the inventory, the priority breakdown, the risk summary,
+    // and the per-level criteria counts, each recomputed from trueCoverage by the
+    // corpus and typed beside the formula that produced it.
+    push(
+      set.id,
+      'coverage-inventory',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: ${arithmetic.overall.full} of ${arithmetic.overall.total} criteria are FULL, which is ${arithmetic.overall.formula} = ${arithmetic.overall.expectedPct}. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `coverage.inventory in the summary written for ${label}.`,
+          negativeDomain: 'A run whose covered count, total, or percentage disagrees with the recomputed values.',
+          evidenceTargets: ['covered', 'total', 'pct'].map((field) => at(`/coverage/inventory/${field}`)),
+        },
+        check: allOf([
+          equalsPointer(at('/coverage/inventory/covered'), arithmetic.overall.full),
+          equalsPointer(at('/coverage/inventory/total'), arithmetic.overall.total),
+          equalsPointer(at('/coverage/inventory/pct'), arithmetic.overall.expectedPct),
+        ]),
+      },
+      (scored) => okOf(scored.arithmetic, ['coverage.inventory.covered', 'coverage.inventory.total', 'coverage.inventory.pct']),
+    );
+    push(
+      set.id,
+      'priority-breakdown',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: ${TRACE_PRIORITIES.map((name) => `${name} ${arithmetic.priority[name].full}/${arithmetic.priority[name].total} = ${arithmetic.priority[name].expectedPct}%`).join(', ')}. An empty priority resolves to 100, per step-04's safePct.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `coverage.priority_breakdown, all four priorities, in the summary written for ${label}.`,
+          negativeDomain: 'A run whose total, covered count, or percentage for any priority disagrees with the recomputed values.',
+          evidenceTargets: TRACE_PRIORITIES.flatMap((name) =>
+            ['total', 'covered', 'pct'].map((field) => at(`/coverage/priority_breakdown/${name}/${field}`)),
+          ),
+        },
+        check: allOf(
+          TRACE_PRIORITIES.flatMap((name) => [
+            equalsPointer(at(`/coverage/priority_breakdown/${name}/total`), arithmetic.priority[name].total),
+            equalsPointer(at(`/coverage/priority_breakdown/${name}/covered`), arithmetic.priority[name].full),
+            equalsPointer(at(`/coverage/priority_breakdown/${name}/pct`), arithmetic.priority[name].expectedPct),
+          ]),
+        ),
+      },
+      (scored) =>
+        okOf(
+          scored.arithmetic,
+          TRACE_PRIORITIES.flatMap((name) => ['total', 'covered', 'pct'].map((field) => `priority_breakdown.${name}.${field}`)),
+        ),
+    );
+    const riskKeys = Object.keys(arithmetic.riskSummary);
+    push(
+      set.id,
+      'risk-summary',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: ${riskKeys.map((key) => `${key} ${arithmetic.riskSummary[key]}`).join(', ')}, from the gap buckets step-04 builds out of criteria whose coverage is exactly NONE.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `risk_summary in the summary written for ${label}.`,
+          negativeDomain: 'A run counting a gap the corpus does not declare, or missing one it does.',
+          evidenceTargets: riskKeys.map((key) => at(`/risk_summary/${key}`)),
+        },
+        check: allOf(riskKeys.map((key) => equalsPointer(at(`/risk_summary/${key}`), arithmetic.riskSummary[key]))),
+      },
+      (scored) =>
+        okOf(
+          scored.arithmetic,
+          riskKeys.map((key) => `risk_summary.${key}`),
+        ),
+    );
+    push(
+      set.id,
+      'criteria-covered-by-level',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: criteria with a mapped test per level, ${TRACE_LEVELS.map((level) => `${level} ${arithmetic.byLevelCriteriaCovered[level]}`).join(', ')}. Invariant across the test-count ambiguity the corpus describes, because a NONE criterion has no level.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `coverage.by_level.*.criteria_covered for all six levels in the summary written for ${label}.`,
+          negativeDomain: 'A run attributing a criterion to a level its evidence does not carry.',
+          evidenceTargets: TRACE_LEVELS.map((level) => at(`/coverage/by_level/${level}/criteria_covered`)),
+        },
+        check: allOf(
+          TRACE_LEVELS.map((level) =>
+            equalsPointer(at(`/coverage/by_level/${level}/criteria_covered`), arithmetic.byLevelCriteriaCovered[level]),
+          ),
+        ),
+      },
+      (scored) =>
+        okOf(
+          scored.arithmetic,
+          TRACE_LEVELS.map((level) => `by_level.${level}.criteria_covered`),
+        ),
+    );
+
+    // How the run collected and resolved its oracle. Both sets resolve formal
+    // requirements from an epic with numbered criteria, and gate_basis follows
+    // from the eligibility the corpus records.
+    const oracleDocBasename = path.basename(set.oracle.document);
+    const gateBasis = set.collection.gateEligible ? 'priority_thresholds' : 'none';
+    push(
+      set.id,
+      'collection-and-oracle',
+      {
+        polarity: 'expects-hold',
+        commentary:
+          `${label}: collection ${set.collection.collectionMode}/${set.collection.collectionStatus}, gate_basis ${gateBasis} because the corpus records the set gate-eligible and step-05 sets the basis from eligibility (skillRuleCitations.gateEligibility), and an oracle resolved as ${set.oracle.oracleResolutionMode} at ${set.oracle.oracleConfidence} confidence from ${oracleDocBasename} with external pointers ${set.oracle.externalPointerStatus}. ` +
+          'oracle.synthetic is false because step-01 marks an oracle synthetic only when it was inferred, and this one was read off numbered criteria.',
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `collection_mode, collection_status, gate_basis, inventory_basis, and the oracle block in the summary written for ${label}.`,
+          negativeDomain:
+            'A run reporting a non-collecting mode, a skipped gate, a synthetic or heuristic oracle, or an oracle document other than the epic.',
+          evidenceTargets: [
+            at('/collection_mode'),
+            at('/collection_status'),
+            at('/gate_basis'),
+            at('/inventory_basis'),
+            at('/oracle/resolution_mode'),
+            at('/oracle/confidence'),
+            at('/oracle/external_pointer_status'),
+            at('/oracle/synthetic'),
+            at('/oracle/sources'),
+          ],
+        },
+        check: allOf([
+          equalsPointer(at('/collection_mode'), set.collection.collectionMode),
+          equalsPointer(at('/collection_status'), set.collection.collectionStatus),
+          equalsPointer(at('/gate_basis'), gateBasis),
+          equalsPointer(at('/inventory_basis'), set.oracle.coverageBasis),
+          equalsPointer(at('/oracle/resolution_mode'), set.oracle.oracleResolutionMode),
+          equalsPointer(at('/oracle/confidence'), set.oracle.oracleConfidence),
+          equalsPointer(at('/oracle/external_pointer_status'), set.oracle.externalPointerStatus),
+          equalsPointer(at('/oracle/synthetic'), false),
+          {
+            op: 'for-any',
+            collection: { pointer: at('/oracle/sources') },
+            predicate: { op: 'regex', operands: [{ pointer: '@/' }], pattern: basenamePattern(oracleDocBasename) },
+          },
+        ]),
+      },
+      (scored) => scored.oracleResolution.every((item) => item.ok) && okOf(scored.gateCriteria, ['collection_status', 'gate_basis']),
+    );
+
+    // Live evidence. The seeded set carries two records that count as nothing at
+    // two severities; the clean set carries no file and so no blocker.
+    const live = set.expectedLiveEvidence;
+    assert(typeof live?.present === 'boolean', `${label}: expectedLiveEvidence declares no present flag`);
+    if (live.present) {
+      const dispositionKeys = [
+        'counted',
+        'requirements_live_only',
+        'failed',
+        'contradicted',
+        'blocked',
+        'skipped',
+        'unmatched',
+        'invalid',
+      ].filter((key) => live[key] !== undefined);
+      push(
+        set.id,
+        'live-dispositions',
+        {
+          polarity: 'expects-hold',
+          commentary: `${label}: ${live.invariant} Dispositions: ${dispositionKeys.map((key) => `${key} ${live[key]}`).join(', ')}. stale and unverifiable are left to the harness, which scores their sum, because which one a record lands on depends on whether the workspace resolves a commit sha.`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: 'all',
+            scope: `live_evidence.present and the ${numberWord(dispositionKeys.length)} environment-independent disposition counts in the summary written for ${label}.`,
+            negativeDomain:
+              'A run counting a recorded live pass as coverage, or classifying the unrecognised status as anything but invalid.',
+            evidenceTargets: [at('/live_evidence/present'), ...dispositionKeys.map((key) => at(`/live_evidence/${key}`))],
+          },
+          check: allOf([
+            equalsPointer(at('/live_evidence/present'), true),
+            ...dispositionKeys.map((key) => equalsPointer(at(`/live_evidence/${key}`), live[key])),
+          ]),
+        },
+        (scored) => okOf(scored.live, ['live_evidence.present', ...dispositionKeys.map((key) => `live_evidence.${key}`)]),
+      );
+      for (const blocker of live.expectedBlockers ?? []) {
+        push(
+          set.id,
+          `live-blocker-${blocker.id}`,
+          {
+            polarity: 'expects-hold',
+            commentary: `${label}: record ${blocker.id} is raised as a ${blocker.severity} severity blocker. ${blocker.why}`,
+            direction: {
+              polarity: 'expects-hold',
+              relation: 'for-any',
+              scope: `Every blocker in the summary written for ${label}, searched for one naming ${blocker.id}.`,
+              negativeDomain: `A run raising no blocker for ${blocker.id}, or raising it at another severity.`,
+              evidenceTargets: [at('/blockers')],
+            },
+            check: {
+              op: 'for-any',
+              collection: { pointer: at('/blockers') },
+              predicate: {
+                op: 'all',
+                operands: [
+                  { op: 'equality', operands: [{ pointer: '@/id' }, { literal: blocker.id }] },
+                  { op: 'equality', operands: [{ pointer: '@/severity' }, { literal: blocker.severity }] },
+                ],
+              },
+            },
+          },
+          (scored) => okOf(scored.live, [`blocker ${blocker.id} at severity ${blocker.severity}`]),
+        );
+      }
+    } else {
+      push(
+        set.id,
+        'live-absent',
+        {
+          polarity: 'expects-hold',
+          commentary: `${label}: ${live.invariant}`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: 'all',
+            scope: `live_evidence.present, live_evidence.freshness, and the blockers array in the summary written for ${label}.`,
+            negativeDomain:
+              'A run reporting live evidence where the set has no live file, or raising any blocker against a set with no skipped test.',
+            evidenceTargets: [at('/live_evidence/present'), at('/live_evidence/freshness'), at('/blockers')],
+          },
+          check: allOf([
+            equalsPointer(at('/live_evidence/present'), false),
+            equalsPointer(at('/live_evidence/freshness'), live.freshness),
+            { op: 'deep-equality', operands: [{ pointer: at('/blockers') }, { literal: [] }] },
+          ]),
+        },
+        (scored) => okOf(scored.live, ['live_evidence.present', 'live_evidence.freshness', 'blockers is empty']),
+      );
+    }
+
+    // Rejected evidence: the tests whose names claim a criterion their assertions
+    // do not establish. The seeded set owes exactly the AC-2 test; the clean set
+    // owes none, and reporting one there is a false positive.
+    const rejected = (set.criteria ?? []).flatMap((item) =>
+      (item.falseEvidence ?? []).filter((entry) => entry.level !== 'live').map((entry) => ({ requirementId: item.id, ...entry })),
+    );
+    if (rejected.length > 0) {
+      for (const entry of rejected) {
+        const basename = path.basename(entry.file);
+        push(
+          set.id,
+          `rejected-evidence-${entry.requirementId}`,
+          {
+            polarity: 'expects-hold',
+            commentary: `${label}: ${basename}:${entry.line}-${entry.lineEnd} is named as considered for ${entry.requirementId} and turned down. ${entry.whyItIsNotEvidence}`,
+            direction: {
+              polarity: 'expects-hold',
+              relation: 'for-any',
+              scope: `Every rejected_evidence entry in the summary written for ${label}, searched for one naming ${entry.requirementId} in ${basename} within the recorded span at the corpus's line tolerance of ${tolerance}.`,
+              negativeDomain: `A run that never names the ${entry.requirementId} test as rejected, which is what a run that matched on its title does.`,
+              evidenceTargets: [at('/rejected_evidence')],
+            },
+            check: {
+              op: 'for-any',
+              collection: { pointer: at('/rejected_evidence') },
+              predicate: {
+                op: 'all',
+                operands: [
+                  { op: 'equality', operands: [{ pointer: '@/requirement_id' }, { literal: entry.requirementId }] },
+                  { op: 'regex', operands: [{ pointer: '@/file' }], pattern: basenamePattern(basename) },
+                  { op: 'set-membership', operands: [{ pointer: '@/line' }, { literal: admittedLines(entry, tolerance) }] },
+                ],
+              },
+            },
+          },
+          (scored) =>
+            okOf(scored.rejectedEvidence, [`rejected_evidence names ${entry.requirementId} at ${basename}:${entry.line}-${entry.lineEnd}`]),
+        );
+      }
+    } else {
+      push(
+        set.id,
+        'rejected-evidence-none',
+        {
+          polarity: 'expects-hold',
+          commentary: `${label}: every criterion has evidence that establishes it, so there is no test to turn down and rejected_evidence is empty.`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: 'deep-equality',
+            scope: `The rejected_evidence array in the summary written for ${label}.`,
+            negativeDomain: 'A run rejecting a test that does establish its criterion.',
+            evidenceTargets: [at('/rejected_evidence')],
+          },
+          check: { op: 'deep-equality', operands: [{ pointer: at('/rejected_evidence') }, { literal: [] }] },
+        },
+        (scored) => okOf(scored.rejectedEvidence, ['rejected_evidence is an array', 'rejected_evidence.length']),
+      );
+    }
+
+    // Waivers. Scored by the harness only where the gate matched, and the scorer
+    // half of each spec says so with undefined; see the function comment.
+    const waiversScored = (scored) => (scored.waivers.scored ? scored.waivers.checks : undefined);
+    if (set.waiverRegister) {
+      const valid = set.expectedWaiverHandling?.valid ?? [];
+      const invalid = set.expectedWaiverHandling?.invalid ?? [];
+      assert(valid.length + invalid.length > 0, `${label}: declares a waiver register and no expected waiver handling`);
+      push(
+        set.id,
+        'waiver-register',
+        {
+          polarity: 'expects-hold',
+          commentary: `${label}: ${set.expectedWaiverHandling.note} ${numberWord(valid.length + invalid.length)} filed, ${numberWord(valid.length)} valid, ${numberWord(invalid.length)} invalid.`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: 'all',
+            scope: `waivers.filed, waivers.valid, and waivers.invalid in the summary written for ${label}.`,
+            negativeDomain: 'A run that missed a filed waiver, or accepted one the register does not support.',
+            evidenceTargets: ['filed', 'valid', 'invalid'].map((field) => at(`/waivers/${field}`)),
+          },
+          check: allOf([
+            equalsPointer(at('/waivers/filed'), valid.length + invalid.length),
+            equalsPointer(at('/waivers/valid'), valid.length),
+            equalsPointer(at('/waivers/invalid'), invalid.length),
+          ]),
+        },
+        (scored) => {
+          const checks = waiversScored(scored);
+          return checks === undefined ? undefined : okOf(checks, ['waivers.filed', 'waivers.valid', 'waivers.invalid']);
+        },
+      );
+      for (const [waiver, verdict] of [...valid.map((entry) => [entry, true]), ...invalid.map((entry) => [entry, false])]) {
+        push(
+          set.id,
+          `waiver-${waiver.id}`,
+          {
+            polarity: 'expects-hold',
+            commentary: `${label}: ${waiver.id} waives ${waiver.waives} and is ${verdict ? 'well formed' : 'invalid'}. ${waiver.expectedTreatment}`,
+            direction: {
+              polarity: 'expects-hold',
+              relation: 'for-any',
+              scope: `Every waiver entry in the summary written for ${label}, searched for ${waiver.id}.`,
+              negativeDomain: `A run reporting ${waiver.id} as ${verdict ? 'invalid' : 'valid'}, or not reporting it at all.`,
+              evidenceTargets: [at('/waivers/entries')],
+            },
+            check: {
+              op: 'for-any',
+              collection: { pointer: at('/waivers/entries') },
+              predicate: {
+                op: 'all',
+                operands: [
+                  { op: 'equality', operands: [{ pointer: '@/id' }, { literal: waiver.id }] },
+                  { op: 'equality', operands: [{ pointer: '@/valid' }, { literal: verdict }] },
+                ],
+              },
+            },
+          },
+          (scored) => {
+            const checks = waiversScored(scored);
+            return checks === undefined ? undefined : okOf(checks, [`waiver ${waiver.id} reported ${verdict ? 'valid' : 'invalid'}`]);
+          },
+        );
+      }
+    } else {
+      push(
+        set.id,
+        'no-waiver-register',
+        {
+          polarity: 'expects-hold',
+          commentary: `${label}: the set has no waiver register, and step-05 emits the waivers block only when a register was found, so the key is absent.`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: 'not',
+            scope: `The waivers key in the summary written for ${label}.`,
+            negativeDomain: 'A run inventing a waiver register the workspace does not carry.',
+            evidenceTargets: [at('/waivers')],
+          },
+          check: { op: 'not', operands: [{ op: 'existence', operands: [{ pointer: at('/waivers') }] }] },
+        },
+        (scored) => {
+          const checks = waiversScored(scored);
+          return checks === undefined ? undefined : okOf(checks, ['waivers block absent when no register exists']);
+        },
+      );
+    }
+
+    // The run measured something: both deliverables exist, the summary declares
+    // the schema version the harness scores, and the runner exited clean. Any
+    // other exit is one of the runner's failure classes, an absent artifact is a
+    // missing-artifact failure, and another schema version is a changed contract
+    // the harness refuses to score as a regression; none is a low score.
+    const schemaPattern = `^${escapeRegex(TRACE_SUMMARY_SCHEMA)}\\.\\d+$`;
+    push(
+      set.id,
+      'run-measured',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: the summary and the matrix were both written, the summary declares schema_version ${TRACE_SUMMARY_SCHEMA}.x, which is the version step-05 emits and test/eval-trace.js scores, and tea-trace-runner exited ${TRACE_EXIT_CODES.none}. Every other exit code the runner produces is a TEA failure class, an absent artifact is a missing-artifact failure, and another schema version is a changed contract; none is a measured result.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `The two artifacts, the summary's schema_version, and the exit code of the ${traceStepId(set)} invocation.`,
+          negativeDomain:
+            'A run that wrote one deliverable and not the other, declared another schema version, or exited with an environment class.',
+          evidenceTargets: [
+            `/interactions/${traceStepId(set)}/artifact/summary`,
+            `/interactions/${traceStepId(set)}/artifact/matrix`,
+            at('/schema_version'),
+            `/interactions/${traceStepId(set)}/exit-code`,
+          ],
+        },
+        check: allOf([
+          { op: 'existence', operands: [{ pointer: `/interactions/${traceStepId(set)}/artifact/summary` }] },
+          { op: 'existence', operands: [{ pointer: `/interactions/${traceStepId(set)}/artifact/matrix` }] },
+          { op: 'regex', operands: [{ pointer: at('/schema_version') }], pattern: schemaPattern },
+          equalsPointer(`/interactions/${traceStepId(set)}/exit-code`, TRACE_EXIT_CODES.none),
+        ]),
+      },
+      () => true,
+    );
+  }
+  return specs;
+}
+
+/**
+ * The authored half of the trace behaviors: which oracle kinds each one groups,
+ * on which set, how hard a miss grades, and which risk it names. The sets are
+ * addressed by role rather than by id, so a renamed fixture set does not orphan
+ * a behavior: the seeded set is the one with a NONE criterion, the clean set the
+ * one with none.
+ */
+const TRACE_BEHAVIORS = [
+  {
+    id: 'B-001',
+    role: 'seeded',
+    kinds: ['gate-decision', 'gate-criteria'],
+    severity: 'critical',
+    risk: 'gate-flipped-by-one-misread-criterion',
+    description: 'The seeded set derives its gate from the rules and reports the criteria that produced it.',
+    success: 'The summary for the seeded set carries the expected gate decision and every gate_criteria field the ground truth records.',
+    requirement: 'expectedGate',
+  },
+  {
+    id: 'B-002',
+    role: 'seeded',
+    kinds: ['coverage-inventory', 'priority-breakdown', 'risk-summary', 'criteria-covered-by-level'],
+    severity: 'critical',
+    risk: 'arithmetic-drift-hidden-behind-a-correct-gate',
+    description: 'The seeded set reports coverage arithmetic that recomputes from the true statuses.',
+    success:
+      'The inventory, all four priority rows, the four risk counts, and the six per-level criteria counts in the seeded summary equal the values recomputed from trueCoverage.',
+    requirement: 'coverageArithmetic',
+  },
+  {
+    id: 'B-003',
+    role: 'seeded',
+    kinds: ['rejected-evidence-', 'live-dispositions', 'live-blocker-'],
+    severity: 'critical',
+    risk: 'title-match-scored-as-coverage',
+    description:
+      'The discriminating criterion is read rather than matched: its misnamed test is turned down and its recorded live pass counts as nothing.',
+    success:
+      'The seeded summary names the misnamed test under rejected_evidence at its recorded span, counts no live record as coverage, and raises both live records as blockers at their declared severities.',
+    requirement: 'criteria[isDiscriminatingCase]',
+  },
+  {
+    id: 'B-004',
+    role: 'seeded',
+    kinds: ['waiver-'],
+    severity: 'material',
+    risk: 'waiver-applied-to-the-gate',
+    description:
+      'The waiver register is reported, the well formed request as valid and the defective one as invalid, and neither moves the gate.',
+    success:
+      'The seeded summary reports two filed waivers, one valid and one invalid, names each with its verdict, and still derives the FAIL that B-001 asserts.',
+    requirement: 'expectedWaiverHandling',
+  },
+  {
+    id: 'B-005',
+    role: 'clean',
+    kinds: [
+      'gate-decision',
+      'gate-criteria',
+      'coverage-inventory',
+      'priority-breakdown',
+      'risk-summary',
+      'criteria-covered-by-level',
+      'live-absent',
+      'rejected-evidence-none',
+      'no-waiver-register',
+    ],
+    severity: 'critical',
+    risk: 'reports-gaps-everywhere',
+    description: 'The clean set draws no finding: full coverage, a PASS gate, no blocker, no rejection, and no waiver.',
+    success:
+      'The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.',
+    requirement: 'mustNotReport',
+  },
+  {
+    id: 'B-006',
+    role: 'both',
+    kinds: ['collection-and-oracle', 'run-measured'],
+    severity: 'critical',
+    risk: 'unmeasurable-run-scored-as-a-miss',
+    description:
+      'Each run collected statically, resolved the epic as a formal-requirements oracle, wrote both deliverables, and exited clean.',
+    success:
+      'Both summaries report contract_static collection, a COLLECTED status, a priority_thresholds gate basis, a formal_requirements oracle at high confidence naming the epic, and both runs left a summary and a matrix behind with exit 0.',
+    requirement: 'collection',
+  },
+];
+
+function buildTraceContract() {
+  const groundTruth = JSON.parse(fs.readFileSync(TRACE_GROUND_TRUTH_PATH, 'utf8'));
+  const sets = groundTruth.fixtureSets ?? [];
+  assert(
+    sets.length >= 2,
+    'ground-truth.json declares fewer than two fixture sets, so there is no clean control to hold the seeded set against',
+  );
+  const seeded = sets.filter((set) => (set.criteria ?? []).some((item) => item.trueCoverage !== 'FULL'));
+  const clean = sets.filter((set) => (set.criteria ?? []).every((item) => item.trueCoverage === 'FULL'));
+  assert(
+    seeded.length === 1 && clean.length === 1,
+    `expected one seeded and one clean fixture set; found ${seeded.length} and ${clean.length}`,
+  );
+
+  const specs = traceOracleSpecs(groundTruth);
+  const oracles = specs.map((spec) => ({ id: spec.id, ...spec.oracle }));
+  const summaryKeys = summaryKeysFromStep05();
+  for (const key of ['gate_status', 'gate_criteria', 'waivers']) {
+    assert(summaryKeys.conditional.includes(key), `step-05 no longer assigns "${key}" conditionally, and the oracles here address it`);
+  }
+  for (const key of [
+    'collection_mode',
+    'collection_status',
+    'gate_basis',
+    'inventory_basis',
+    'oracle',
+    'coverage',
+    'risk_summary',
+    'live_evidence',
+    'blockers',
+    'rejected_evidence',
+  ]) {
+    assert(summaryKeys.always.includes(key), `step-05's summary literal no longer carries "${key}", and the oracles here address it`);
+  }
+
+  const roleOf = (set) => (seeded.includes(set) ? 'seeded' : 'clean');
+  const behaviors = TRACE_BEHAVIORS.map((authored) => {
+    const targetSets = authored.role === 'both' ? sets : sets.filter((set) => roleOf(set) === authored.role);
+    const oracleIds = specs
+      .filter((spec) => targetSets.some((set) => set.id === spec.setId))
+      .filter((spec) => authored.kinds.some((kind) => (kind.endsWith('-') ? spec.kind.startsWith(kind) : spec.kind === kind)))
+      .map((spec) => spec.id);
+    assert(oracleIds.length > 0, `${authored.id}: no oracle matches kinds [${authored.kinds.join(', ')}] on the ${authored.role} set(s)`);
+    return {
+      id: authored.id,
+      description: authored.description,
+      severity: authored.severity,
+      observableSuccessCriterion: authored.success,
+      requirementLinks: targetSets.map((set) => ({ scheme: 'tea-eval-ground-truth', id: `${set.id}/${authored.requirement}` })),
+      riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
+      oracles: oracleIds.sort(),
+    };
+  });
+  const claimed = new Set(behaviors.flatMap((behavior) => behavior.oracles));
+  for (const spec of specs) {
+    assert(claimed.has(spec.id), `${spec.id} (${spec.kind} on ${spec.setId}) is stated by no behavior, so nothing would demand it`);
+  }
+
+  // The specification the run is scored against is the set of skill files the
+  // corpus cites for its rules, so an edit to any of them changes what this
+  // contract demands.
+  const citedFiles = [...new Set(Object.values(groundTruth.skillRuleCitations ?? {}).map((citation) => citation.file))].sort();
+  assert(citedFiles.length > 0, 'ground-truth.json cites no skill file, so there is no specification to digest');
+  for (const file of citedFiles) {
+    assert(fs.existsSync(path.join(PROJECT_ROOT, file)), `ground-truth.json cites ${file}, which does not exist`);
+  }
+
+  const maxCriteria = Math.max(...sets.map((set) => (set.criteria ?? []).length));
+  const witnessSet = seeded[0];
+
+  return {
+    schemaVersion: 4,
+    parentDigest: null,
+    revisionCount: 0,
+    contractId: 'tea-trace-behavioral',
+    sourceSpecDigest: digestOf(citedFiles.map((file) => path.join(PROJECT_ROOT, file))),
+    behaviors,
+    oracles,
+    rubrics: [],
+    waivers: [],
+    permittedInterfaces: [
+      {
+        logicalId: TRACE_INTERFACE,
+        kind: 'cli',
+        operations: [
+          {
+            operationId: TRACE_OPERATION,
+            invocation: { executable: TRACE_INTERFACE, subcommandPath: [] },
+            stateChangeMarker: true,
+            requestShape: TRACE_REQUEST_SHAPE,
+            artifacts: ['summary', 'matrix'],
+            // The summary is the machine-readable contract and carries every
+            // deterministic oracle. The matrix is the deliverable the summary
+            // links, and the per-criterion statuses the harness reads out of it
+            // are markdown, which the operator vocabulary addresses only as a
+            // whole document; they are scored by the harness and stated here
+            // through their arithmetic consequences.
+            descriptorChannel: { kind: 'artifact', artifactId: 'summary' },
+            responseDescriptor: traceSummaryDescriptor(summaryKeys, maxCriteria),
+            volatilePointers: ['/matrix'],
+            sensitivityWitness: {
+              // The two fixture sets are traced from one prompt, because
+              // test/eval-trace.js deliberately names no set-specific fact in it,
+              // so a differential between the two plan steps over stdin would
+              // attribute to the prompt a difference the staged workspace
+              // produced, and an invariance claim would be false because the two
+              // summaries differ. The one prompt value the corpus does establish
+              // an effect for is allow_gate: skillRuleCitations.gateEligibility
+              // says a gate is evaluated only when it is true, and step-05 sets
+              // gate_basis to `none` otherwise. Two prompts differing in that
+              // value, in one staged workspace, must therefore produce two
+              // gate_basis values, which is a true and checkable claim that the
+              // command reads its standard input. The legs are runnable only
+              // against a staged workspace of the seeded set, which is the
+              // coupling docs/explanation/eval-quality-command-adapter.md records
+              // for artifact-writing commands.
+              witnessId: 'gate-follows-allow-gate',
+              channel: 'stdin',
+              legs: [
+                {
+                  legId: 'witness-gate-evaluated',
+                  inputs: witnessInputs(
+                    TRACE_REQUEST_SHAPE,
+                    { option: { agent: TRACE_DEFAULT_AGENT } },
+                    { kind: 'text', value: buildTracePrompt(witnessSet) },
+                  ),
+                },
+                {
+                  legId: 'witness-gate-withheld',
+                  inputs: witnessInputs(
+                    TRACE_REQUEST_SHAPE,
+                    { option: { agent: TRACE_DEFAULT_AGENT } },
+                    { kind: 'text', value: buildTracePrompt(witnessSet, { allowGate: false }) },
+                  ),
+                },
+              ],
+              relation: {
+                op: 'not',
+                operands: [
+                  {
+                    op: 'deep-equality',
+                    operands: [
+                      { pointer: '/interactions/witness-gate-evaluated/artifact/summary/gate_basis' },
+                      { pointer: '/interactions/witness-gate-withheld/artifact/summary/gate_basis' },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ],
+    referenceSets: {},
+    siblingGroups: { operations: [], parameters: [] },
+    interactionPlan: sets.map((set) => ({
+      stepId: traceStepId(set),
+      operationId: TRACE_OPERATION,
+      after: null,
+      cardinality: 'exactly-one',
+      // The agent is bound as `any` rather than pinned: which vendor answered is
+      // the runner record's to state. The prompt is bound as `any` for the reason
+      // the fragment-selection contracts give: its bytes are evidence, and the
+      // sealed record carries their digest.
+      inputBinding: { argument: null, option: { agent: { matcher: 'any' } }, environment: null, stdin: { prompt: { matcher: 'any' } } },
+    })),
+    scopedResources: null,
+    forbiddenInputs: FORBIDDEN_INPUTS,
+    testData: {
+      setup:
+        `Each plan step stages one fixture set from test/fixtures/trace-eval/ into a disposable workspace: the set's files under project/, ` +
+        `a resolved _bmad/tea/config.yaml whose test_artifacts points inside that workspace, and the bmad-testarch-trace workflow under skill/. ` +
+        `ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. ` +
+        `The workspace is the authorization's working directory, and the prompt on standard input names project/ and skill/ and resolves every placeholder; ` +
+        `it is the same text for both steps, because it names no fact about either set. That shared prompt is why the sensitivity witness differs its two legs ` +
+        `on allow_gate rather than between the two steps: the seeded and clean summaries differ because of the staged workspace, so a differential between the ` +
+        `steps would attribute to the prompt a difference the prompt did not cause, and an invariance claim would be false. allow_gate is the one prompt value ` +
+        `the ground truth establishes an effect for, through skillRuleCitations.gateEligibility: step-05 evaluates a gate only when it is true and writes ` +
+        `gate_basis as none otherwise, so two prompts differing in that value, in one staged workspace, produce two gate_basis values. That is the same ` +
+        `reasoning that gives the fragment-selection contract for this workflow an invariance witness: the claim is moved onto an input the run demonstrably ` +
+        `reads, and stated as what it is.`,
+      cleanup:
+        'Delete the workspace. The corpus under test/fixtures/trace-eval/ is read-only and the harness digests it before and after every run.',
+      principals: null,
+      resources: null,
+    },
+    // A full trace is a five-step run over a whole project tree, so the bounds
+    // are the harness's own twenty-minute clock per set and a generous tool and
+    // cost allowance beside it, scaled with the set count.
+    budgets: {
+      maxToolCalls: 300 * sets.length,
+      maxWallClockMinutes: 20 * sets.length,
+      maxCostUsd: (4 * sets.length).toFixed(2),
+    },
+    safetyLimits: [
+      'The runner writes only inside the staged workspace, and only its two deliverables under project/test-artifacts/; the harness fails a run that changed the repository or the staged corpus.',
+      'The run adds, edits, and deletes nothing under project/docs/, project/src/, or project/tests/. The workflow does not generate tests, and a run that did has moved the benchmark.',
+      'No credential value appears in a prompt, an artifact, a log, or a result file.',
+    ],
+    requiredEvidence: [
+      'The e2e-trace-summary.json each run wrote, in full.',
+      'The traceability-matrix.md each run wrote, in full.',
+      'The exit code of each invocation.',
+      'The digest of the prompt each run was given, so an edit that changed the question is visible in the record.',
+    ],
+    // One step per fixture set, plus room for the two probe steps the compiler may add.
+    probeStepBound: sets.length + 2,
+    fixtureReset: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Rendering and the two modes
 // ---------------------------------------------------------------------------
 
@@ -1324,6 +2277,7 @@ function firstDifference(expected, actual) {
 function targets() {
   return [
     { relativePath: 'test-review.contract.json', build: buildTestReviewContract },
+    { relativePath: 'trace.contract.json', build: buildTraceContract },
     ...FRAGMENT_SELECTION.map((spec) => ({
       relativePath: path.join('fragment-selection', `${spec.workflow}.contract.json`),
       build: () => buildFragmentSelectionContract(spec),
@@ -1384,4 +2338,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { buildTestReviewContract, buildFragmentSelectionContract, render, FRAGMENT_SELECTION };
+module.exports = {
+  buildTestReviewContract,
+  buildFragmentSelectionContract,
+  buildTraceContract,
+  traceOracleSpecs,
+  traceStepId,
+  render,
+  FRAGMENT_SELECTION,
+};

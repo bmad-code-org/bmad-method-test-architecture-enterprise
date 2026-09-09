@@ -163,7 +163,7 @@ jobs:
       - name: Evaluate every contract oracle against the stored outputs and the harness scorers
         run: npm run test:contract-oracles
 
-      - name: Probe both TEA command targets through the eval-quality adapter
+      - name: Probe every TEA command target through the eval-quality adapter
         run: npm run test:probe-targets
 
       - name: Test changelog stamping

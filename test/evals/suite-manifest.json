@@ -164,7 +164,7 @@
         "test/fixtures/trace-eval/clean/tests/e2e/token-management.spec.ts"
       ],
       "groundTruth": ["test/fixtures/trace-eval/ground-truth.json"],
-      "contracts": [],
+      "contracts": ["test/contracts/trace.contract.json"],
       "thresholds": {
         "criterionStatusAccuracy": 0.9,
         "discriminatingCriterionAccuracy": 1,

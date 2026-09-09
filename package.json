@@ -32,7 +32,8 @@
   "main": "",
   "bin": {
     "tea-fragment-selection-runner": "cli/fragment-selection-runner.js",
-    "tea-test-review": "cli/test-review.js"
+    "tea-test-review": "cli/test-review.js",
+    "tea-trace-runner": "cli/trace-runner.js"
   },
   "scripts": {
     "docs:build": "node tools/build-docs.js",

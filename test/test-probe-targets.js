@@ -4,11 +4,11 @@
  * TEA measures its skills by running a command and reading what it wrote. That
  * mechanism is now eval-quality's `createCommandLineAdapter` rather than three
  * hand-rolled `spawnSync` blocks, and this file is what says so is true: it
- * drives both of TEA's real command targets through the real adapter and the
- * real policy, with a stub agent standing in for the vendor, and asserts the
- * observation that comes back.
+ * drives every one of TEA's three real command targets through the real adapter
+ * and the real policy, with a stub agent standing in for the vendor, and asserts
+ * the observation that comes back.
  *
- * Four things are checked here and nowhere else.
+ * Five things are checked here and nowhere else.
  *
  * 1. **Every contract names a command TEA ships.** Eight contracts declared
  *    `tea-fragment-selection-runner` for months and nothing by that name
@@ -23,13 +23,23 @@
  *
  * 3. **The adapter really drives a TEA command.** A real `tea-test-review` run
  *    against the checked-in fixture project, through the port, producing a
- *    verdict artifact the adapter reads back as JSON; and a real
- *    `tea-fragment-selection-runner` run producing a selection on stdout. Both
- *    are free: the vendor is a stub, and the only assertions are about the
- *    plumbing.
+ *    verdict artifact the adapter reads back as JSON; a real
+ *    `tea-fragment-selection-runner` run producing a selection on stdout; and a
+ *    real `tea-trace-runner` run leaving a summary and a matrix the adapter reads
+ *    back as JSON and as text, at the registry's default paths and at the
+ *    per-run paths a staged workspace supplies. All are free: the vendor is a
+ *    stub, and the only assertions are about the plumbing.
  *
  * 4. **A killed run is classified, not scored.** A budget exhaustion comes back
  *    as an environment failure with a class, never as a measurement.
+ *
+ * 5. **The trace harness runs end to end against the stub.** `test/eval-trace.js`
+ *    is spawned the way an operator spawns it, with the stub as a custom runner,
+ *    and its result record is read back: every declared repetition completed
+ *    and every threshold met on the correct run, a quality failure naming
+ *    fixture mutations when the stub writes a test, and a missing-artifact
+ *    failure when it writes nothing. That is the whole chain, from argv to the
+ *    record, with no credential.
  *
  * Usage: node test/test-probe-targets.js
  * Exit codes: 0 every check passed, 1 a check failed
@@ -40,6 +50,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const {
   EXECUTION_TARGETS,
@@ -61,6 +72,14 @@ const {
 } = require('../cli/fragment-selection-runner');
 const { RUNNER_CAPABILITIES: HARNESS_DECLARED_CAPABILITIES } = require('./eval-fragment-selection');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
+const {
+  EXIT_CODES: TRACE_EXIT_CODES,
+  RUNNER_CAPABILITIES: TRACE_RUNNER_DECLARED_CAPABILITIES,
+  TRACE_REQUEST_KEYS,
+  classOfAgentError: traceClassOfAgentError,
+  failureClassForExit: traceFailureClassForExit,
+} = require('../cli/trace-runner');
+const { RUNNER_CAPABILITIES: TRACE_HARNESS_DECLARED_CAPABILITIES } = require('./eval-trace');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -69,6 +88,8 @@ const CONTRACT_ROOT = path.join(__dirname, 'contracts');
 const REVIEW_FIXTURE_PROJECT = path.join(__dirname, 'fixtures', 'test-review-cli', 'project');
 const REVIEW_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-review-cli', 'stub-agent.js');
 const SELECTION_STUB_AGENT = path.join(__dirname, 'fixtures', 'fragment-selection-runner', 'stub-agent.js');
+const TRACE_STUB_AGENT = path.join(__dirname, 'fixtures', 'trace-runner', 'stub-agent.js');
+const TRACE_HARNESS = path.join(__dirname, 'eval-trace.js');
 
 const colors = {
   reset: '[0m',
@@ -388,6 +409,192 @@ async function checkFragmentSelectionProbe(runDir) {
   );
 }
 
+/**
+ * One tea-trace-runner probe against the stub, in a fresh working directory
+ * under `runDir`, because the stub writes where the previous probe wrote and a
+ * second probe expecting `absent` would otherwise read the first probe's files.
+ */
+async function traceProbe(runDir, probeId, stubMode, { artifacts, budgets, stage } = {}) {
+  const cwd = fs.mkdtempSync(path.join(runDir, 'trace-'));
+  if (stage) stage(cwd);
+  const { port } = await createProbePort({
+    cwd,
+    interfaceIds: ['tea-trace-runner'],
+    ...(artifacts ? { artifacts: { 'tea-trace-runner': artifacts } } : {}),
+    ...(budgets ? { budgets: { 'tea-trace-runner': budgets } } : {}),
+  });
+  return probeCommand(
+    port,
+    probeRequest({
+      probeId,
+      interfaceId: 'tea-trace-runner',
+      operationId: 'trace-fixture-set',
+      option: { agent: 'custom', 'agent-cmd': TRACE_STUB_AGENT, 'env-pass': 'STUB_MODE', 'timeout-ms': '60000' },
+      environment: { STUB_MODE: stubMode },
+      stdin: { kind: 'text', value: 'Run the trace workflow against project/ and write both deliverables.' },
+    }),
+    new AbortController().signal,
+  );
+}
+
+async function checkTraceProbe(runDir) {
+  console.log('\ntea-trace-runner through the adapter');
+
+  // The registry's default artifact map: the workflow's own paths under a project
+  // root that is the working directory. The stub, given no project/, writes there.
+  const complete = await traceProbe(runDir, 'trace-complete', 'complete');
+  assert(complete.ok, 'the probe returned an observation', complete.ok ? '' : complete.reason);
+  if (complete.ok) {
+    const { observation } = complete;
+    assert(observation.exitCode === TRACE_EXIT_CODES.none, 'a completed trace run exits 0', `exitCode ${observation.exitCode}`);
+    assert(
+      observation.artifacts.summary.kind === 'json' && observation.artifacts.summary.value?.gate_status === 'FAIL',
+      'the summary artifact is read back as JSON at the registry default path',
+      JSON.stringify(observation.artifacts.summary).slice(0, 200),
+    );
+    assert(
+      observation.artifacts.matrix.kind === 'text' && /^#{2,6}\s+AC-1\b/m.test(observation.artifacts.matrix.value),
+      'the matrix artifact is read back as text at the registry default path',
+      JSON.stringify(observation.artifacts.matrix).slice(0, 200),
+    );
+    assert(
+      observation.stdout.kind === 'text' && /Wrote .*traceability-matrix\.md/.test(observation.stdout.value),
+      'the runner forwards what the agent printed',
+      JSON.stringify(observation.stdout).slice(0, 200),
+    );
+  }
+
+  // The per-run override the harness supplies: the workspace holds project/, so
+  // the artifacts sit one directory down from the authorization cwd. The staged
+  // epic is the clean set's, and the stub picks its pair by that, so the gate
+  // read back says which artifact map won.
+  const staged = await traceProbe(runDir, 'trace-staged', 'complete', {
+    artifacts: {
+      summary: path.join('project', 'test-artifacts', 'e2e-trace-summary.json'),
+      matrix: path.join('project', 'test-artifacts', 'traceability-matrix.md'),
+    },
+    stage: (cwd) => {
+      fs.mkdirSync(path.join(cwd, 'project', 'docs', 'epics'), { recursive: true });
+      fs.writeFileSync(path.join(cwd, 'project', 'docs', 'epics', 'epic-5-api-token-lifecycle.md'), '# Epic 5\n', 'utf8');
+    },
+  });
+  assert(
+    staged.ok && staged.observation.artifacts.summary.kind === 'json' && staged.observation.artifacts.summary.value?.gate_status === 'PASS',
+    'a per-run artifact override reads the pair the stub wrote under project/',
+    JSON.stringify(staged.ok ? staged.observation.artifacts.summary : staged).slice(0, 200),
+  );
+
+  // An artifact the run never wrote is `absent`, not a throw and not an empty
+  // string, which is what lets the harness classify it as a missing artifact.
+  const nothing = await traceProbe(runDir, 'trace-nothing', 'nothing');
+  assert(
+    nothing.ok &&
+      nothing.observation.exitCode === TRACE_EXIT_CODES.none &&
+      nothing.observation.artifacts.summary.kind === 'absent' &&
+      nothing.observation.artifacts.matrix.kind === 'absent',
+    'a run that wrote neither deliverable exits 0 with both artifacts absent',
+    JSON.stringify(nothing.ok ? nothing.observation.artifacts : nothing),
+  );
+
+  // A summary that is not JSON comes back as `text`, so the harness reads a parser
+  // failure off the tag rather than off a JSON.parse in a try.
+  const invalid = await traceProbe(runDir, 'trace-invalid-json', 'invalid-json');
+  assert(
+    invalid.ok && invalid.observation.artifacts.summary.kind === 'text' && invalid.observation.artifacts.matrix.kind === 'text',
+    'a summary that is not JSON is read back as text beside a text matrix',
+    JSON.stringify(invalid.ok ? Object.fromEntries(Object.entries(invalid.observation.artifacts).map(([id, a]) => [id, a.kind])) : invalid),
+  );
+
+  // A vendor that exits nonzero is the runner's transport class, on the exit code.
+  const failed = await traceProbe(runDir, 'trace-fail', 'fail');
+  assert(
+    failed.ok && traceFailureClassForExit(failed.observation.exitCode) === 'environment-transport',
+    'a vendor that exits nonzero is reported as a transport failure on the exit code',
+    JSON.stringify(failed.ok ? failed.observation.exitCode : failed),
+  );
+
+  // The outer clock, lowered from the registry's 21-minute backstop, kills a run
+  // that hangs, and the kill is a timeout.
+  const started = Date.now();
+  const killed = await traceProbe(runDir, 'trace-slow', 'slow', { budgets: { maxElapsedMs: 1500 } });
+  assert(
+    !killed.ok && killed.failureClass === 'environment-timeout',
+    'exceeding the trace authorization wall clock is an environment timeout',
+    JSON.stringify(killed),
+  );
+  assert(Date.now() - started < 30_000, 'the hung trace run is actually killed rather than waited out');
+}
+
+// ---------------------------------------------------------------------------
+// 5. the trace harness runs end to end against the stub
+// ---------------------------------------------------------------------------
+
+/**
+ * `test/eval-trace.js` spawned the way an operator spawns it: the stub as a
+ * custom runner, STUB_MODE passed through, a result record requested.
+ */
+function runTraceHarness(runDir, stubMode, extraArgs) {
+  const jsonPath = path.join(runDir, `trace-harness-${stubMode}.json`);
+  const result = spawnSync(
+    process.execPath,
+    [TRACE_HARNESS, '--agent', 'custom', '--agent-cmd', TRACE_STUB_AGENT, '--env-pass', 'STUB_MODE', '--json', jsonPath, ...extraArgs],
+    { cwd: PROJECT_ROOT, encoding: 'utf8', env: { ...process.env, STUB_MODE: stubMode }, timeout: 300_000 },
+  );
+  let record = null;
+  if (fs.existsSync(jsonPath)) {
+    try {
+      record = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+    } catch {
+      record = null;
+    }
+  }
+  return { status: result.status, stderr: String(result.stderr ?? ''), stdout: String(result.stdout ?? ''), record };
+}
+
+function checkTraceHarnessSmoke(runDir) {
+  console.log('\nthe trace harness end to end against the stub');
+
+  const complete = runTraceHarness(runDir, 'complete', ['--runs', '2']);
+  assert(complete.status === 0, 'a correct run of both sets, twice, exits 0', complete.stderr.trim().split('\n').slice(-3).join(' | '));
+  assert(
+    complete.record?.mode === 'live' && complete.record?.failureClass === 'none',
+    'the record is a live run with no failure class',
+    JSON.stringify(complete.record && { mode: complete.record.mode, failureClass: complete.record.failureClass }),
+  );
+  const runner = complete.record?.runners?.[0];
+  assert(
+    runner?.repetitions?.expected === 4 && runner?.repetitions?.completed === 4,
+    'every declared repetition completed: two sets, two runs each',
+    JSON.stringify(runner?.repetitions),
+  );
+  assert(runner?.failures?.length === 0, 'every threshold is met on the correct run', JSON.stringify(runner?.failures));
+  assert(
+    runner?.version === 'stub-agent 1.0.0',
+    'the pre-flight recorded the version the stub answered --version with',
+    JSON.stringify(runner?.version),
+  );
+  assert(runner?.parameters?.envPassNames?.includes('STUB_MODE'), 'the record names the environment variable the operator passed through');
+
+  // The one thing the workflow says it never does, counted. A run that wrote a
+  // test into the corpus is a measured quality failure, and the record says which.
+  const mutate = runTraceHarness(runDir, 'mutate', ['--runs', '1', '--set', 'seeded-tenant-data-export']);
+  assert(mutate.status === 1, 'a run that writes a test into the corpus exits 1', `exit ${mutate.status}`);
+  assert(
+    mutate.record?.failureClass === 'quality' && mutate.record?.runners?.[0]?.failures?.includes('fixture mutations'),
+    'the record carries a quality failure naming fixture mutations',
+    JSON.stringify(mutate.record?.runners?.[0]?.failures),
+  );
+
+  // Nothing written is an environment failure with a class, never a low score.
+  const nothing = runTraceHarness(runDir, 'nothing', ['--runs', '1', '--set', 'seeded-tenant-data-export']);
+  assert(nothing.status === 2, 'a run that wrote no artifact exits 2', `exit ${nothing.status}`);
+  assert(
+    nothing.record?.failureClass === 'environment-missing-artifact' && nothing.record?.runners?.[0]?.repetitions?.completed === 0,
+    'the record classifies the lost run as a missing artifact and counts no completed repetition',
+    JSON.stringify(nothing.record && { failureClass: nothing.record.failureClass, repetitions: nothing.record.runners?.[0]?.repetitions }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // 4. a killed run is classified, not scored
 // ---------------------------------------------------------------------------
@@ -464,6 +671,41 @@ function checkRunnerDeclarations() {
     'the harness and the command declare the same runner capabilities',
     `harness ${JSON.stringify(HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(RUNNER_DECLARED_CAPABILITIES)}`,
   );
+  assert(
+    JSON.stringify([...TRACE_HARNESS_DECLARED_CAPABILITIES].sort()) === JSON.stringify([...TRACE_RUNNER_DECLARED_CAPABILITIES].sort()),
+    'the trace harness and tea-trace-runner declare the same runner capabilities',
+    `harness ${JSON.stringify(TRACE_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(TRACE_RUNNER_DECLARED_CAPABILITIES)}`,
+  );
+  assert(
+    TRACE_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
+      !RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes'),
+    'a trace run may write its deliverables and a selection may not; that is the one capability the two commands differ in',
+  );
+
+  // The two runner commands share one exit-code table, because a caller holding
+  // an observation cannot tell which command produced it. The table lives in
+  // cli/lib/runner-exit-codes.js and both re-export it; this is the check that
+  // neither has grown a spelling of its own.
+  assert(
+    JSON.stringify(TRACE_EXIT_CODES) === JSON.stringify(EXIT_CODES),
+    'tea-trace-runner and tea-fragment-selection-runner spell every failure class with the same exit code',
+    `${JSON.stringify(TRACE_EXIT_CODES)} vs ${JSON.stringify(EXIT_CODES)}`,
+  );
+  for (const [failureClass, code] of Object.entries(EXIT_CODES)) {
+    assert(
+      failureClassForExit(code) === failureClass && traceFailureClassForExit(code) === failureClass,
+      `exit ${code} maps back to ${failureClass} in both runners`,
+    );
+  }
+  assert(
+    TRACE_REQUEST_KEYS.option.required.every((key) => TRACE_REQUEST_KEYS.option.permitted.includes(key)),
+    'every required trace option key is also permitted',
+  );
+  assert(TRACE_REQUEST_KEYS.stdin.required.includes('prompt'), 'the trace prompt is required on standard input');
+  assert(
+    JSON.stringify(TRACE_REQUEST_KEYS.environment) === JSON.stringify(SELECTION_REQUEST_KEYS.environment),
+    'both runners permit the same environment names, because both wrap the same vendor call',
+  );
 
   // cli/fragment-selection-runner.js restates test/lib/eval-record.js's error
   // classification rather than importing it, so a shipped file does not depend
@@ -485,6 +727,11 @@ function checkRunnerDeclarations() {
     const shared = classifyAgentError(error);
     const runner = classOfAgentError(error);
     assert(shared === runner, `${probe.code} classifies the same in the runner and in eval-record`, `${runner} vs ${shared}`);
+    assert(
+      traceClassOfAgentError(error) === shared,
+      `${probe.code} classifies the same in tea-trace-runner`,
+      traceClassOfAgentError(error),
+    );
     assert(FAILURE_CLASSES.includes(runner), `${probe.code} classifies to a declared TEA failure class`, runner);
     assert(Object.hasOwn(EXIT_CODES, runner), `${probe.code} classifies to a class this command can exit with`, runner);
   }
@@ -565,7 +812,9 @@ async function main() {
     await checkDefaultDeny(runDir);
     await checkTestReviewProbe(runDir);
     await checkFragmentSelectionProbe(runDir);
+    await checkTraceProbe(runDir);
     await checkBudgets(runDir);
+    checkTraceHarnessSmoke(runDir);
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });
   }

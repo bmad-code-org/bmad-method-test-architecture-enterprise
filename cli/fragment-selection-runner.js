@@ -39,10 +39,12 @@
  *   tea-fragment-selection-runner --agent codex < prompt.txt
  *   tea-fragment-selection-runner --agent custom --agent-cmd ./my-runner < prompt.txt
  *
- * Exit codes: 0 a selection was produced, and the classes below otherwise. They
- * are the exit codes because the caller is a probe: the adapter records an exit
- * code as an observation and never as a fault, so the code is the only channel
- * that survives the boundary intact.
+ * Exit codes: 0 a selection was produced, and the classes in
+ * cli/lib/runner-exit-codes.js otherwise. They are the exit codes because the
+ * caller is a probe: the adapter records an exit code as an observation and never
+ * as a fault, so the code is the only channel that survives the boundary intact.
+ * The table is shared with tea-trace-runner so both commands spell one class with
+ * one number.
  */
 
 'use strict';
@@ -53,6 +55,7 @@ const { Command } = require('commander');
 const { AGENT_ADAPTERS } = require('./lib/agent-adapters');
 const { parseSelection } = require('./lib/parse-selection');
 const { runAgent } = require('./lib/run-agent');
+const { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNames } = require('./lib/runner-exit-codes');
 
 /** The same default `test/eval-fragment-selection.js` applies and `cli/test-review.js` declares, so this command changes no run that omits `--agent`. */
 const DEFAULT_AGENT = 'claude';
@@ -64,31 +67,6 @@ const DEFAULT_TIMEOUT_MS = 5 * 60_000;
 const RUNNER_CAPABILITIES = ['read-only'];
 
 /**
- * Exit code per outcome, and the single source of truth for it.
- *
- * The names are TEA's own failure classes (test/schema/eval-result.js), so a
- * caller reading an exit code back off a probe observation lands on the class it
- * would have derived from a thrown error, with no second table to keep in step.
- * `usage` has no failure class: a malformed invocation is the caller's defect,
- * not the environment's, and it is spelled 2 because every TEA harness already
- * spells a usage error 2.
- */
-const EXIT_CODES = {
-  none: 0,
-  usage: 2,
-  'environment-configuration': 3,
-  'environment-transport': 4,
-  'environment-timeout': 5,
-  'environment-parser': 6,
-};
-
-/** The reverse of EXIT_CODES, for a caller holding an observation's exitCode. */
-function failureClassForExit(code) {
-  const entry = Object.entries(EXIT_CODES).find(([, value]) => value === code);
-  return entry === undefined ? 'environment-transport' : entry[0];
-}
-
-/**
  * The request shape this command accepts, as the contract generator needs to
  * declare it.
  *
@@ -97,12 +75,8 @@ function failureClassForExit(code) {
  * verdict descriptor: the transcribed version had drifted by seven keys before
  * anybody measured it.
  *
- * The permitted environment names are the union of every adapter's own
- * `envNames`, because those are the variables a vendor call can actually
- * consume, plus HOME and USER. Those two are not decoration: eval-quality's
- * command-line adapter passes the child nothing but PATH and the names the
- * request declares, and both shipped vendors resolve a stored login through
- * HOME. A leg that declares neither can only authenticate from an API key.
+ * The permitted environment names are the vendor variables plus HOME and USER;
+ * cli/lib/runner-exit-codes.js states why those two are load-bearing.
  */
 const SELECTION_REQUEST_KEYS = {
   argument: { required: [], permitted: [] },
@@ -110,10 +84,7 @@ const SELECTION_REQUEST_KEYS = {
     required: ['agent'],
     permitted: ['agent', 'agent-cmd', 'agent-arg', 'env-pass', 'model', 'timeout-ms'],
   },
-  environment: {
-    required: [],
-    permitted: [...new Set([...Object.values(AGENT_ADAPTERS).flatMap((adapter) => adapter.envNames), 'HOME', 'USER'])].sort(),
-  },
+  environment: { required: [], permitted: vendorEnvironmentNames() },
   stdin: { required: ['prompt'], permitted: ['prompt'] },
 };
 
@@ -134,25 +105,6 @@ function readPrompt() {
     fail('usage', `could not read the prompt from standard input: ${error.message}`);
     return '';
   }
-}
-
-/**
- * A thrown runAgent error, as one of this command's classes.
- *
- * The mapping is test/lib/eval-record.js's `classifyAgentError`, restated here
- * rather than imported: this file ships in the package and that one lives under
- * test/, so importing it would put the eval harness on the published dependency
- * path. Restating it is only safe while the two agree, so it is exported and
- * test/test-probe-targets.js runs both over the same nine error shapes and
- * compares the answers.
- */
-function classOfAgentError(error) {
-  if (error.code === 'AGENT_UNKNOWN' || error.code === 'AGENT_COMMAND_REQUIRED' || String(error.code).startsWith('MODEL_')) {
-    return 'environment-configuration';
-  }
-  if (error.code === 'AGENT_NOT_FOUND') return 'environment-transport';
-  if (/timed out/i.test(error.message)) return 'environment-timeout';
-  return 'environment-transport';
 }
 
 function main(argv) {
