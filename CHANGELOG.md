@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.25.1] - 2026-09-09
+
 ### Changed
 
 - `eval-quality` moves from 1.3.0 to 1.4.0, which closes three findings this repository raised against it, and the probe corpora record what changed. Measured on the stored replay across the two versions: `test-review`'s five plants that had failed pre-flight on `seeded-faults-scoped` with a null verdict and exit 3 now pass pre-flight and score, taking the suite's defect class from four exercised and four caught to nine and nine at a rate of 1; `trace`'s O-023 and O-024 move from `abstained` to `passed-clean-control`, because a bare `count-tolerance` with `expected: 0` now counts a collection observed to be present and empty; and `trace`'s three defect probes report `condition-artifact-channel-contract-local`, the reason AD-9's gate refused them, where before a rejected probe surfaced only as `infrastructure-error` and exit 3. `expected-strength.json` records a `qualification` field per probe, so a rejection that changes its reason shows up as a diff.
