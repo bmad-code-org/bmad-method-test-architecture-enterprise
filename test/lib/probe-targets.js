@@ -125,6 +125,22 @@ const EXECUTION_TARGETS = [
     artifacts: {},
     maxElapsedMs: 6 * 60_000,
   },
+  {
+    interfaceId: 'tea-trace-runner',
+    executable: 'tea-trace-runner',
+    script: path.join('cli', 'trace-runner.js'),
+    subcommandPaths: [[]],
+    // The two deliverables the trace workflow writes, at the workflow's own
+    // default location relative to the project root. A caller whose project
+    // root is not the run directory, which is every staged eval workspace,
+    // supplies its own paths through `commandTargetPolicy`'s artifact override;
+    // these are what a run gets when it supplies none.
+    artifacts: { summary: 'test-artifacts/e2e-trace-summary.json', matrix: 'test-artifacts/traceability-matrix.md' },
+    // One minute above RUN_TIMEOUT_MS in test/eval-trace.js, for the reason the
+    // comment above EXECUTION_TARGETS gives: the inner clock classifies, and this
+    // one only backstops.
+    maxElapsedMs: 21 * 60_000,
+  },
 ];
 
 /** @returns {object|undefined} */

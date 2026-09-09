@@ -38,6 +38,9 @@
     },
     "test-review.contract.json": {
       "status": "compiles"
+    },
+    "trace.contract.json": {
+      "status": "compiles"
     }
   }
 }

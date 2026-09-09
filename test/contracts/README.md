@@ -10,12 +10,15 @@ against it.
 | Contract                                      | Suite                                                    | Cases                                               |
 | --------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
 | `test-review.contract.json`                   | The full behavioral eval for `bmad-testarch-test-review` | 9 planted defects, 1 clean control, 1 scope control |
+| `trace.contract.json`                         | The full behavioral eval for `bmad-testarch-trace`       | 1 seeded set of 10 criteria, 1 clean set of 5       |
 | `fragment-selection/<workflow>.contract.json` | Fragment routing for eight workflows                     | 24 cases                                            |
 
 **Every contract here is generated. Do not hand-edit one.** `tools/generate-contracts.js` writes all
-nine from their sources: `test-review.contract.json` from
-`test/fixtures/test-review-eval/ground-truth.json` and `criteria-registry.md`, and each
-fragment-selection contract from that workflow's `test/evals/<workflow>/evals.json`, its deciding
+ten from their sources: `test-review.contract.json` from
+`test/fixtures/test-review-eval/ground-truth.json` and `criteria-registry.md`; `trace.contract.json`
+from `test/fixtures/trace-eval/ground-truth.json`, the request shape `cli/trace-runner.js` declares,
+the prompt `test/eval-trace.js` assembles, and the summary literal in the trace workflow's step-05; and
+each fragment-selection contract from that workflow's `test/evals/<workflow>/evals.json`, its deciding
 step file, and its `resources/tea-index.csv`. Regenerate with `node tools/generate-contracts.js`; an
 edit made here by hand is overwritten by the next run and fails the gate in the meantime.
 
@@ -88,7 +91,7 @@ without the located issue list the table below breaks down. The list comes from 
 the renderer. The issues themselves are the same either way; only whether the tool prints them
 differs.
 
-## Nine of nine compile
+## Ten of ten compile
 
 `package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08. All 58
 parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
@@ -112,6 +115,18 @@ un-negated. It is a decision recorded here rather than a defect fixed: trace's s
 input-insensitive by design, and the contract now states that as its own claim instead of stating
 nothing.
 
+`trace.contract.json`, the tenth, states its witness over standard input on one prompt value,
+`allow_gate`. Its two plan steps share one prompt on purpose: `test/eval-trace.js` names no fact about
+either fixture set in it, so the seeded and clean summaries differ because of the staged workspace and
+never because of the prompt. A differential between the two steps would attribute the difference to
+the wrong input, and an invariance claim would be false. `allow_gate` is the one prompt value the
+ground truth establishes an effect for, through `skillRuleCitations.gateEligibility`: step-05
+evaluates a gate only when it is true and writes `gate_basis` as `none` otherwise, so two prompts
+differing in that value, in one staged workspace, produce two `gate_basis` values. That is a true and
+checkable claim that the command reads its standard input, and it is the claim the witness makes. The
+legs are runnable only against a staged workspace of the seeded set, which is the coupling
+`docs/explanation/eval-quality-command-adapter.md` records for every artifact-writing command.
+
 ## What the operator vocabulary cannot say
 
 Two limits surfaced while writing the oracles, and neither is about transport.
@@ -133,6 +148,15 @@ empty collection to `insufficient-evidence` with an `empty-collection` introduct
 which is a measured miss of every plant; the contract abstains on the same verdict. Both readings
 are stated, and `test/test-contract-oracles.js` accepts the abstention exactly when the resolution
 tree records that condition, and nowhere else.
+
+**A markdown deliverable is one string.** The trace matrix carries the per-criterion coverage
+statuses, the judgment the corpus exists to measure, and the vocabulary addresses a text artifact only
+as a whole document, through `regex`. A pattern that finds one section and reads its status inside a
+multi-kilobyte document runs against the evaluator's step budget, so `trace.contract.json` states the
+statuses through their deterministic consequences in the summary: the counts, the percentages, the
+gate, the gap buckets. The harness reads the matrix and the contract does not, and a stored run whose
+matrix declares no criterion section is refused by the harness and unseen by the contract, which
+`test/test-contract-oracles.js` prints as a skip rather than counting as agreement.
 
 **A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator
 refuses a quantifier nested inside a quantified group before matching anything, as a
@@ -166,19 +190,27 @@ one that runs unconditionally; the compile check and the oracle check need `eval
 The oracle check is the one that reads the oracles. It evaluates every oracle in every contract with
 `eval-quality`'s own evaluator, loaded from the installed package, over evidence this repository
 already holds: each stored verdict under `test/replay/test-review/` as one observation of the
-`review-corpus` step, and each fragment-selection case over three constructed selections and the
-stored captures. Each answer is compared with the harness scorer's on the same evidence: a plant
-oracle holds exactly when `scoreVerdict` counts the plant as a hit, the scope oracle exactly when it
-counts no finding as out of scope, a containment oracle exactly when `scoreCase` misses nothing. An
-oracle that faults, or that contradicts the scorer, fails `npm test`. Nothing read an oracle before
-it, and the section above records what its first run found.
+`review-corpus` step, each fragment-selection case over three constructed selections and the stored
+captures, and each stored trace run under `test/replay/trace/` as one observation of its fixture set's
+plan step, evaluated under both sets' oracles so that every trace oracle is also seen failing. Each
+answer is compared with the harness scorer's on the same evidence: a plant oracle holds exactly when
+`scoreVerdict` counts the plant as a hit, the scope oracle exactly when it counts no finding as out of
+scope, a containment oracle exactly when `scoreCase` misses nothing, and each trace oracle exactly
+when the `scoreRun` checks it restates all pass, through a correspondence `tools/generate-contracts.js`
+writes beside the oracle. Two trace exceptions are stated in that check's header: the waiver oracles
+are compared only where the harness scored them, because it skips the waiver block when the gate did
+not match so that one wrong gate is not scored three times, and a summary the harness refuses for its
+schema version is one the contract's run-shape oracle has to refuse too, with its other oracles left
+uncompared because there is no measurement to compare with. An oracle that faults, or that
+contradicts the scorer, fails `npm test`. Nothing read an oracle before it, and the section above
+records what its first run found.
 
 The compile check resolves `eval-quality` from `node_modules` and skips with an explicit message when it is
 absent, so the deterministic gate stays credential-free and runs with no network. It never passes
 silently: a skip says it skipped.
 
 When the compiler is available, the check compares each contract against the status
-`expected-status.json` records for it. All nine contracts `compile` today. A baseline is what keeps a
+`expected-status.json` records for it. All ten contracts `compile` today. A baseline is what keeps a
 known failure from reading as a passing check, and what makes the day a contract's status moves
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.
@@ -189,7 +221,7 @@ status changing.
 
 ## What the generator enforces
 
-`node tools/generate-contracts.js --check` regenerates all nine in memory and fails when the bytes on
+`node tools/generate-contracts.js --check` regenerates all ten in memory and fails when the bytes on
 disk differ, naming the contract and the first line that moved. It runs in `npm test`, so a fixture
 edit that leaves a contract stale fails the deterministic gate.
 
@@ -211,6 +243,12 @@ What that covers:
   only `files` against a shape requiring `files`, `json` and `agent`, which parses and then fails
   compilation under `undeclared-mandatory-input`;
 - the selection cardinality bound, counted from each workflow's `tea-index.csv`;
+- every value a trace oracle asserts, read from `test/fixtures/trace-eval/ground-truth.json`: the gate
+  and its ten criteria fields, the inventory, the priority rows, the risk counts, the per-level
+  criteria counts, the live dispositions and each blocker's severity, the rejected span at the
+  corpus's own line tolerance, and each waiver's verdict; the trace summary's key set, read from the
+  object literal in step-05 rather than transcribed; and the two witness prompts, built by the harness
+  function that builds the live one;
 - the budgets and the probe-step bound, scaled from the case count; and
 - the verdict response descriptor's `requiredKeys`, `permittedKeys` and `types`, read from
   `VERDICT_KEYS` in `cli/test-review.js`, which composes `PARSED_VERDICT_KEYS` from

@@ -1,0 +1,2388 @@
+{
+  "schemaVersion": 4,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-trace-behavioral",
+  "sourceSpecDigest": "sha256:4445608279be6776e0d59e239b27e1a6a6c67b79ed68030ea36e766a19fbd726",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "The seeded set derives its gate from the rules and reports the criteria that produced it.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The summary for the seeded set carries the expected gate decision and every gate_criteria field the ground truth records.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/expectedGate"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "gate-flipped-by-one-misread-criterion"
+        }
+      ],
+      "oracles": ["O-001", "O-002"]
+    },
+    {
+      "id": "B-002",
+      "description": "The seeded set reports coverage arithmetic that recomputes from the true statuses.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The inventory, all four priority rows, the four risk counts, and the six per-level criteria counts in the seeded summary equal the values recomputed from trueCoverage.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/coverageArithmetic"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "arithmetic-drift-hidden-behind-a-correct-gate"
+        }
+      ],
+      "oracles": ["O-003", "O-004", "O-005", "O-006"]
+    },
+    {
+      "id": "B-003",
+      "description": "The discriminating criterion is read rather than matched: its misnamed test is turned down and its recorded live pass counts as nothing.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The seeded summary names the misnamed test under rejected_evidence at its recorded span, counts no live record as coverage, and raises both live records as blockers at their declared severities.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/criteria[isDiscriminatingCase]"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "title-match-scored-as-coverage"
+        }
+      ],
+      "oracles": ["O-008", "O-009", "O-010", "O-011"]
+    },
+    {
+      "id": "B-004",
+      "description": "The waiver register is reported, the well formed request as valid and the defective one as invalid, and neither moves the gate.",
+      "severity": "material",
+      "observableSuccessCriterion": "The seeded summary reports two filed waivers, one valid and one invalid, names each with its verdict, and still derives the FAIL that B-001 asserts.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/expectedWaiverHandling"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "waiver-applied-to-the-gate"
+        }
+      ],
+      "oracles": ["O-012", "O-013", "O-014"]
+    },
+    {
+      "id": "B-005",
+      "description": "The clean set draws no finding: full coverage, a PASS gate, no blocker, no rejection, and no waiver.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-016", "O-017", "O-018", "O-019", "O-020", "O-021", "O-023", "O-024", "O-025"]
+    },
+    {
+      "id": "B-006",
+      "description": "Each run collected statically, resolved the epic as a formal-requirements oracle, wrote both deliverables, and exited clean.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Both summaries report contract_static collection, a COLLECTED status, a priority_thresholds gate basis, a formal_requirements oracle at high confidence naming the epic, and both runs left a summary and a matrix behind with exit 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/collection"
+        },
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/collection"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-007", "O-015", "O-022", "O-026"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: the gate is FAIL, produced by gateRule1P0. P0 coverage is 1 of 2, which is 50%. Rule 1 requires 100% and fires first, so the decision is FAIL and no later rule is reached. Rule 2 would also fire on its own, since overall coverage is 70% against a minimum of 80%.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "gate_status in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run deriving any decision other than FAIL for seeded-tenant-data-export.",
+        "evidenceTargets": ["/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_status"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_status"
+          },
+          {
+            "literal": "FAIL"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: the ten gate_criteria fields, as expectedGate.gateCriteria records them. Each is a threshold the skill states or a percentage recomputed from trueCoverage, so a run reporting a different required minimum has changed the gate it claims to be.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Every gate_criteria field in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run reporting a different threshold, a different actual percentage, or a different MET/NOT_MET status on any field.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p0_coverage_required",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p0_coverage_actual",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p0_status",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p1_coverage_target",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p1_coverage_minimum",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p1_coverage_actual",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p1_status",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/overall_coverage_minimum",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/overall_coverage_actual",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/overall_status"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p0_coverage_required"
+              },
+              {
+                "literal": "100%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p0_coverage_actual"
+              },
+              {
+                "literal": "50%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p0_status"
+              },
+              {
+                "literal": "NOT_MET"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p1_coverage_target"
+              },
+              {
+                "literal": "90%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p1_coverage_minimum"
+              },
+              {
+                "literal": "80%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p1_coverage_actual"
+              },
+              {
+                "literal": "100%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/p1_status"
+              },
+              {
+                "literal": "MET"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/overall_coverage_minimum"
+              },
+              {
+                "literal": "80%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/overall_coverage_actual"
+              },
+              {
+                "literal": "70%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_criteria/overall_status"
+              },
+              {
+                "literal": "NOT_MET"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: 7 of 10 criteria are FULL, which is round(7 / 10 * 100) = 70. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "coverage.inventory in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run whose covered count, total, or percentage disagrees with the recomputed values.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/inventory/covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/inventory/total",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/inventory/pct"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/inventory/covered"
+              },
+              {
+                "literal": 7
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/inventory/total"
+              },
+              {
+                "literal": 10
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/inventory/pct"
+              },
+              {
+                "literal": 70
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: P0 1/2 = 50%, P1 5/5 = 100%, P2 1/2 = 50%, P3 0/1 = 0%. An empty priority resolves to 100, per step-04's safePct.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "coverage.priority_breakdown, all four priorities, in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run whose total, covered count, or percentage for any priority disagrees with the recomputed values.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P0/total",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P0/covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P0/pct",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P1/total",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P1/covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P1/pct",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P2/total",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P2/covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P2/pct",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P3/total",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P3/covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P3/pct"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P0/total"
+              },
+              {
+                "literal": 2
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P0/covered"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P0/pct"
+              },
+              {
+                "literal": 50
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P1/total"
+              },
+              {
+                "literal": 5
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P1/covered"
+              },
+              {
+                "literal": 5
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P1/pct"
+              },
+              {
+                "literal": 100
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P2/total"
+              },
+              {
+                "literal": 2
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P2/covered"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P2/pct"
+              },
+              {
+                "literal": 50
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P3/total"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P3/covered"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/priority_breakdown/P3/pct"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: critical_open 1, high_open 0, medium_open 0, low_open 1, from the gap buckets step-04 builds out of criteria whose coverage is exactly NONE.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "risk_summary in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run counting a gap the corpus does not declare, or missing one it does.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary/critical_open",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary/high_open",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary/medium_open",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary/low_open"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary/critical_open"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary/high_open"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary/medium_open"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/risk_summary/low_open"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: criteria with a mapped test per level, e2e 3, api 6, component 0, unit 1, live 0, other 0. Invariant across the test-count ambiguity the corpus describes, because a NONE criterion has no level.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "coverage.by_level.*.criteria_covered for all six levels in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run attributing a criterion to a level its evidence does not carry.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/e2e/criteria_covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/api/criteria_covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/component/criteria_covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/unit/criteria_covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/live/criteria_covered",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/other/criteria_covered"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/e2e/criteria_covered"
+              },
+              {
+                "literal": 3
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/api/criteria_covered"
+              },
+              {
+                "literal": 6
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/component/criteria_covered"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/unit/criteria_covered"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/live/criteria_covered"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/coverage/by_level/other/criteria_covered"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-007",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: collection contract_static/COLLECTED, gate_basis priority_thresholds because the corpus records the set gate-eligible and step-05 sets the basis from eligibility (skillRuleCitations.gateEligibility), and an oracle resolved as formal_requirements at high confidence from epic-4-tenant-data-export-and-erasure.md with external pointers not_used. oracle.synthetic is false because step-01 marks an oracle synthetic only when it was inferred, and this one was read off numbered criteria.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "collection_mode, collection_status, gate_basis, inventory_basis, and the oracle block in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run reporting a non-collecting mode, a skipped gate, a synthetic or heuristic oracle, or an oracle document other than the epic.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/collection_mode",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/collection_status",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_basis",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/inventory_basis",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/resolution_mode",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/confidence",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/external_pointer_status",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/synthetic",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/sources"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/collection_mode"
+              },
+              {
+                "literal": "contract_static"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/collection_status"
+              },
+              {
+                "literal": "COLLECTED"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/gate_basis"
+              },
+              {
+                "literal": "priority_thresholds"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/inventory_basis"
+              },
+              {
+                "literal": "acceptance_criteria"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/resolution_mode"
+              },
+              {
+                "literal": "formal_requirements"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/confidence"
+              },
+              {
+                "literal": "high"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/external_pointer_status"
+              },
+              {
+                "literal": "not_used"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/synthetic"
+              },
+              {
+                "literal": false
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/oracle/sources"
+            },
+            "predicate": {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/"
+                }
+              ],
+              "pattern": "^(?:.*/|)epic-4-tenant-data-export-and-erasure\\.md$"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-008",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: Neither live record contributes coverage. AC-2 and AC-10 stay uncovered, and requirements_live_only stays 0 because no criterion in this set is covered by a live record. Dispositions: counted 0, requirements_live_only 0, failed 0, contradicted 0, blocked 0, skipped 0, unmatched 0, invalid 1. stale and unverifiable are left to the harness, which scores their sum, because which one a record lands on depends on whether the workspace resolves a commit sha.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "live_evidence.present and the eight environment-independent disposition counts in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run counting a recorded live pass as coverage, or classifying the unrecognised status as anything but invalid.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/present",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/counted",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/requirements_live_only",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/failed",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/contradicted",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/blocked",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/skipped",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/unmatched",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/invalid"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/present"
+              },
+              {
+                "literal": true
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/counted"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/requirements_live_only"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/failed"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/contradicted"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/blocked"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/skipped"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/unmatched"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/live_evidence/invalid"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-009",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: record 4-LIVE-001 is raised as a high severity blocker. stale and unverifiable are both in the high severity list in step-04 section 2b.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every blocker in the summary written for seeded-tenant-data-export, searched for one naming 4-LIVE-001.",
+        "negativeDomain": "A run raising no blocker for 4-LIVE-001, or raising it at another severity.",
+        "evidenceTargets": ["/interactions/trace-seeded-tenant-data-export/artifact/summary/blockers"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/blockers"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/id"
+                },
+                {
+                  "literal": "4-LIVE-001"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/severity"
+                },
+                {
+                  "literal": "high"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-010",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: record 4-LIVE-002 is raised as a medium severity blocker. invalid is not in the high severity list, so it falls through to medium.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every blocker in the summary written for seeded-tenant-data-export, searched for one naming 4-LIVE-002.",
+        "negativeDomain": "A run raising no blocker for 4-LIVE-002, or raising it at another severity.",
+        "evidenceTargets": ["/interactions/trace-seeded-tenant-data-export/artifact/summary/blockers"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/blockers"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/id"
+                },
+                {
+                  "literal": "4-LIVE-002"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/severity"
+                },
+                {
+                  "literal": "medium"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-011",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: tenant-export.api.spec.ts:30-38 is named as considered for AC-2 and turned down. The title names AC-2 and the body does not test it. It builds a context from ADMIN_TOKEN, posts the same export request AC-1 already covers, and asserts a 202. Nothing observes a member actor, a 403, or the job queue. MEMBER_TOKEN is declared at the top of the file and never used, which is the whole gap made visible.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every rejected_evidence entry in the summary written for seeded-tenant-data-export, searched for one naming AC-2 in tenant-export.api.spec.ts within the recorded span at the corpus's line tolerance of 1.",
+        "negativeDomain": "A run that never names the AC-2 test as rejected, which is what a run that matched on its title does.",
+        "evidenceTargets": ["/interactions/trace-seeded-tenant-data-export/artifact/summary/rejected_evidence"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/rejected_evidence"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/requirement_id"
+                },
+                {
+                  "literal": "AC-2"
+                }
+              ]
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/file"
+                }
+              ],
+              "pattern": "^(?:.*/|)tenant-export\\.api\\.spec\\.ts$"
+            },
+            {
+              "op": "set-membership",
+              "operands": [
+                {
+                  "pointer": "@/line"
+                },
+                {
+                  "literal": [29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-012",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: Both waivers are filed and unapplied. Neither changes the derived gate decision, because the workflow never derives WAIVED. two filed, one valid, one invalid.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "waivers.filed, waivers.valid, and waivers.invalid in the summary written for seeded-tenant-data-export.",
+        "negativeDomain": "A run that missed a filed waiver, or accepted one the register does not support.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/filed",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/valid",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/invalid"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/filed"
+              },
+              {
+                "literal": 2
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/valid"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/invalid"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-013",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: W-1 waives AC-8 and is well formed. Recorded as a well formed waiver request against the AC-8 gap. It does not clear the gate, because the FAIL is produced by AC-2, which W-1 does not address.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every waiver entry in the summary written for seeded-tenant-data-export, searched for W-1.",
+        "negativeDomain": "A run reporting W-1 as invalid, or not reporting it at all.",
+        "evidenceTargets": ["/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/entries"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/entries"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/id"
+                },
+                {
+                  "literal": "W-1"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/valid"
+                },
+                {
+                  "literal": true
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-014",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: W-2 waives AC-2 and is invalid. Reported as an invalid waiver request that cannot be applied, with at least the missing expiry, the approver's lack of authority, and the security nature of the waived criterion named. It must not appear as an accepted waiver and must not remove AC-2 from the gap analysis.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "for-any",
+        "scope": "Every waiver entry in the summary written for seeded-tenant-data-export, searched for W-2.",
+        "negativeDomain": "A run reporting W-2 as valid, or not reporting it at all.",
+        "evidenceTargets": ["/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/entries"]
+      },
+      "check": {
+        "op": "for-any",
+        "collection": {
+          "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/waivers/entries"
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/id"
+                },
+                {
+                  "literal": "W-2"
+                }
+              ]
+            },
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "@/valid"
+                },
+                {
+                  "literal": false
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "O-015",
+      "polarity": "expects-hold",
+      "commentary": "seeded-tenant-data-export: the summary and the matrix were both written, the summary declares schema_version 0.3.x, which is the version step-05 emits and test/eval-trace.js scores, and tea-trace-runner exited 0. Every other exit code the runner produces is a TEA failure class, an absent artifact is a missing-artifact failure, and another schema version is a changed contract; none is a measured result.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The two artifacts, the summary's schema_version, and the exit code of the trace-seeded-tenant-data-export invocation.",
+        "negativeDomain": "A run that wrote one deliverable and not the other, declared another schema version, or exited with an environment class.",
+        "evidenceTargets": [
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary",
+          "/interactions/trace-seeded-tenant-data-export/artifact/matrix",
+          "/interactions/trace-seeded-tenant-data-export/artifact/summary/schema_version",
+          "/interactions/trace-seeded-tenant-data-export/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/matrix"
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/artifact/summary/schema_version"
+              }
+            ],
+            "pattern": "^0\\.3\\.\\d+$"
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-seeded-tenant-data-export/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-016",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: the gate is PASS, produced by gateRule4Pass. P0 coverage is 100%, so Rule 1 does not fire. Overall coverage is 100%, so Rule 2 does not fire. P1 coverage is 100%, so Rule 3 does not fire and Rule 4 applies. No synthetic oracle and no live-only requirement exists, so neither overlay lowers the result.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "gate_status in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run deriving any decision other than PASS for clean-api-token-lifecycle.",
+        "evidenceTargets": ["/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_status"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_status"
+          },
+          {
+            "literal": "PASS"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-017",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: the ten gate_criteria fields, as expectedGate.gateCriteria records them. Each is a threshold the skill states or a percentage recomputed from trueCoverage, so a run reporting a different required minimum has changed the gate it claims to be.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "Every gate_criteria field in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run reporting a different threshold, a different actual percentage, or a different MET/NOT_MET status on any field.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p0_coverage_required",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p0_coverage_actual",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p0_status",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p1_coverage_target",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p1_coverage_minimum",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p1_coverage_actual",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p1_status",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/overall_coverage_minimum",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/overall_coverage_actual",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/overall_status"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p0_coverage_required"
+              },
+              {
+                "literal": "100%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p0_coverage_actual"
+              },
+              {
+                "literal": "100%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p0_status"
+              },
+              {
+                "literal": "MET"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p1_coverage_target"
+              },
+              {
+                "literal": "90%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p1_coverage_minimum"
+              },
+              {
+                "literal": "80%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p1_coverage_actual"
+              },
+              {
+                "literal": "100%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/p1_status"
+              },
+              {
+                "literal": "MET"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/overall_coverage_minimum"
+              },
+              {
+                "literal": "80%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/overall_coverage_actual"
+              },
+              {
+                "literal": "100%"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_criteria/overall_status"
+              },
+              {
+                "literal": "MET"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-018",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: 5 of 5 criteria are FULL, which is round(5 / 5 * 100) = 100. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "coverage.inventory in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run whose covered count, total, or percentage disagrees with the recomputed values.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/inventory/covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/inventory/total",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/inventory/pct"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/inventory/covered"
+              },
+              {
+                "literal": 5
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/inventory/total"
+              },
+              {
+                "literal": 5
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/inventory/pct"
+              },
+              {
+                "literal": 100
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-019",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: P0 2/2 = 100%, P1 2/2 = 100%, P2 1/1 = 100%, P3 0/0 = 100%. An empty priority resolves to 100, per step-04's safePct.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "coverage.priority_breakdown, all four priorities, in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run whose total, covered count, or percentage for any priority disagrees with the recomputed values.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P0/total",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P0/covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P0/pct",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P1/total",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P1/covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P1/pct",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P2/total",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P2/covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P2/pct",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P3/total",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P3/covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P3/pct"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P0/total"
+              },
+              {
+                "literal": 2
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P0/covered"
+              },
+              {
+                "literal": 2
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P0/pct"
+              },
+              {
+                "literal": 100
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P1/total"
+              },
+              {
+                "literal": 2
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P1/covered"
+              },
+              {
+                "literal": 2
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P1/pct"
+              },
+              {
+                "literal": 100
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P2/total"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P2/covered"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P2/pct"
+              },
+              {
+                "literal": 100
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P3/total"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P3/covered"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/priority_breakdown/P3/pct"
+              },
+              {
+                "literal": 100
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-020",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: critical_open 0, high_open 0, medium_open 0, low_open 0, from the gap buckets step-04 builds out of criteria whose coverage is exactly NONE.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "risk_summary in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run counting a gap the corpus does not declare, or missing one it does.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary/critical_open",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary/high_open",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary/medium_open",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary/low_open"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary/critical_open"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary/high_open"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary/medium_open"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/risk_summary/low_open"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-021",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: criteria with a mapped test per level, e2e 1, api 3, component 1, unit 0, live 0, other 0. Invariant across the test-count ambiguity the corpus describes, because a NONE criterion has no level.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "coverage.by_level.*.criteria_covered for all six levels in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run attributing a criterion to a level its evidence does not carry.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/e2e/criteria_covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/api/criteria_covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/component/criteria_covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/unit/criteria_covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/live/criteria_covered",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/other/criteria_covered"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/e2e/criteria_covered"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/api/criteria_covered"
+              },
+              {
+                "literal": 3
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/component/criteria_covered"
+              },
+              {
+                "literal": 1
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/unit/criteria_covered"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/live/criteria_covered"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/coverage/by_level/other/criteria_covered"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-022",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: collection contract_static/COLLECTED, gate_basis priority_thresholds because the corpus records the set gate-eligible and step-05 sets the basis from eligibility (skillRuleCitations.gateEligibility), and an oracle resolved as formal_requirements at high confidence from epic-5-api-token-lifecycle.md with external pointers not_used. oracle.synthetic is false because step-01 marks an oracle synthetic only when it was inferred, and this one was read off numbered criteria.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "collection_mode, collection_status, gate_basis, inventory_basis, and the oracle block in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run reporting a non-collecting mode, a skipped gate, a synthetic or heuristic oracle, or an oracle document other than the epic.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/collection_mode",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/collection_status",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_basis",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/inventory_basis",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/resolution_mode",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/confidence",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/external_pointer_status",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/synthetic",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/sources"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/collection_mode"
+              },
+              {
+                "literal": "contract_static"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/collection_status"
+              },
+              {
+                "literal": "COLLECTED"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/gate_basis"
+              },
+              {
+                "literal": "priority_thresholds"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/inventory_basis"
+              },
+              {
+                "literal": "acceptance_criteria"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/resolution_mode"
+              },
+              {
+                "literal": "formal_requirements"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/confidence"
+              },
+              {
+                "literal": "high"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/external_pointer_status"
+              },
+              {
+                "literal": "not_used"
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/synthetic"
+              },
+              {
+                "literal": false
+              }
+            ]
+          },
+          {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/oracle/sources"
+            },
+            "predicate": {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "@/"
+                }
+              ],
+              "pattern": "^(?:.*/|)epic-5-api-token-lifecycle\\.md$"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-023",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: This set has no live results file. Every disposition count is 0 and the blockers array is empty.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "live_evidence.present, live_evidence.freshness, and the blockers array in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run reporting live evidence where the set has no live file, or raising any blocker against a set with no skipped test.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/live_evidence/present",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/live_evidence/freshness",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/blockers"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/live_evidence/present"
+              },
+              {
+                "literal": false
+              }
+            ]
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/live_evidence/freshness"
+              },
+              {
+                "literal": "not_present"
+              }
+            ]
+          },
+          {
+            "op": "deep-equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/blockers"
+              },
+              {
+                "literal": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-024",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: every criterion has evidence that establishes it, so there is no test to turn down and rejected_evidence is empty.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "deep-equality",
+        "scope": "The rejected_evidence array in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run rejecting a test that does establish its criterion.",
+        "evidenceTargets": ["/interactions/trace-clean-api-token-lifecycle/artifact/summary/rejected_evidence"]
+      },
+      "check": {
+        "op": "deep-equality",
+        "operands": [
+          {
+            "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/rejected_evidence"
+          },
+          {
+            "literal": []
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-025",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: the set has no waiver register, and step-05 emits the waivers block only when a register was found, so the key is absent.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The waivers key in the summary written for clean-api-token-lifecycle.",
+        "negativeDomain": "A run inventing a waiver register the workspace does not carry.",
+        "evidenceTargets": ["/interactions/trace-clean-api-token-lifecycle/artifact/summary/waivers"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/waivers"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-026",
+      "polarity": "expects-hold",
+      "commentary": "clean-api-token-lifecycle: the summary and the matrix were both written, the summary declares schema_version 0.3.x, which is the version step-05 emits and test/eval-trace.js scores, and tea-trace-runner exited 0. Every other exit code the runner produces is a TEA failure class, an absent artifact is a missing-artifact failure, and another schema version is a changed contract; none is a measured result.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The two artifacts, the summary's schema_version, and the exit code of the trace-clean-api-token-lifecycle invocation.",
+        "negativeDomain": "A run that wrote one deliverable and not the other, declared another schema version, or exited with an environment class.",
+        "evidenceTargets": [
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/matrix",
+          "/interactions/trace-clean-api-token-lifecycle/artifact/summary/schema_version",
+          "/interactions/trace-clean-api-token-lifecycle/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary"
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/matrix"
+              }
+            ]
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/schema_version"
+              }
+            ],
+            "pattern": "^0\\.3\\.\\d+$"
+          },
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-clean-api-token-lifecycle/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-trace-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "trace-fixture-set",
+          "invocation": {
+            "executable": "tea-trace-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": true,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": ["agent"],
+              "permittedKeys": ["agent", "agent-cmd", "agent-arg", "env-pass", "model", "timeout-ms"],
+              "types": {
+                "agent": "string",
+                "agent-cmd": "string",
+                "agent-arg": "string",
+                "env-pass": "string",
+                "model": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "HOME", "OPENAI_API_KEY", "USER"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "HOME": "string",
+                "OPENAI_API_KEY": "string",
+                "USER": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": ["summary", "matrix"],
+          "descriptorChannel": {
+            "kind": "artifact",
+            "artifactId": "summary"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [
+              "schema_version",
+              "snapshot_at",
+              "repo",
+              "collection_mode",
+              "collection_status",
+              "inventory_basis",
+              "gate_basis",
+              "source_sha",
+              "target",
+              "decision_mode",
+              "evaluator",
+              "confidence",
+              "oracle",
+              "coverage",
+              "tests",
+              "risk_summary",
+              "heuristics",
+              "live_evidence",
+              "blockers",
+              "rejected_evidence",
+              "recommendations",
+              "links"
+            ],
+            "permittedKeys": [
+              "schema_version",
+              "snapshot_at",
+              "repo",
+              "collection_mode",
+              "collection_status",
+              "inventory_basis",
+              "gate_basis",
+              "source_sha",
+              "target",
+              "decision_mode",
+              "evaluator",
+              "confidence",
+              "oracle",
+              "coverage",
+              "tests",
+              "risk_summary",
+              "heuristics",
+              "live_evidence",
+              "blockers",
+              "rejected_evidence",
+              "recommendations",
+              "links",
+              "waivers",
+              "gate_status",
+              "gate_criteria"
+            ],
+            "types": {
+              "schema_version": "string",
+              "snapshot_at": null,
+              "repo": null,
+              "collection_mode": "string",
+              "collection_status": "string",
+              "inventory_basis": "string",
+              "gate_basis": "string",
+              "source_sha": null,
+              "target": null,
+              "decision_mode": null,
+              "evaluator": null,
+              "confidence": null,
+              "oracle": "object",
+              "coverage": "object",
+              "tests": null,
+              "risk_summary": "object",
+              "heuristics": null,
+              "live_evidence": "object",
+              "blockers": "array",
+              "rejected_evidence": "array",
+              "recommendations": null,
+              "links": null,
+              "waivers": "object",
+              "gate_status": "string",
+              "gate_criteria": "object"
+            },
+            "successIndicator": "/gate_status",
+            "channelRoles": {
+              "/gate_status": "success-indicator",
+              "/blockers": "collection",
+              "/rejected_evidence": "collection",
+              "/coverage": "payload",
+              "/gate_criteria": "payload",
+              "/live_evidence": "payload",
+              "/waivers": "payload"
+            },
+            "collectionLocations": [
+              {
+                "pointer": "/blockers",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 10
+                }
+              },
+              {
+                "pointer": "/rejected_evidence",
+                "referenceSet": null,
+                "expectedCardinality": {
+                  "mode": "at-most",
+                  "max": 10
+                }
+              }
+            ]
+          },
+          "volatilePointers": ["/matrix"],
+          "sensitivityWitness": {
+            "witnessId": "gate-follows-allow-gate",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-gate-evaluated",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `project`\n- `{config_source}`: `project/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `project/test-artifacts`\n- `{test_dir}`: `project/tests`\n- `{source_dir}`: `project/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
+                  }
+                }
+              },
+              {
+                "legId": "witness-gate-withheld",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `project`\n- `{config_source}`: `project/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `project/test-artifacts`\n- `{test_dir}`: `project/tests`\n- `{source_dir}`: `project/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `false`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-gate-evaluated/artifact/summary/gate_basis"
+                    },
+                    {
+                      "pointer": "/interactions/witness-gate-withheld/artifact/summary/gate_basis"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "trace-seeded-tenant-data-export",
+      "operationId": "trace-fixture-set",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    },
+    {
+      "stepId": "trace-clean-api-token-lifecycle",
+      "operationId": "trace-fixture-set",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "matcher": "any"
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Each plan step stages one fixture set from test/fixtures/trace-eval/ into a disposable workspace: the set's files under project/, a resolved _bmad/tea/config.yaml whose test_artifacts points inside that workspace, and the bmad-testarch-trace workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names project/ and skill/ and resolves every placeholder; it is the same text for both steps, because it names no fact about either set. That shared prompt is why the sensitivity witness differs its two legs on allow_gate rather than between the two steps: the seeded and clean summaries differ because of the staged workspace, so a differential between the steps would attribute to the prompt a difference the prompt did not cause, and an invariance claim would be false. allow_gate is the one prompt value the ground truth establishes an effect for, through skillRuleCitations.gateEligibility: step-05 evaluates a gate only when it is true and writes gate_basis as none otherwise, so two prompts differing in that value, in one staged workspace, produce two gate_basis values. That is the same reasoning that gives the fragment-selection contract for this workflow an invariance witness: the claim is moved onto an input the run demonstrably reads, and stated as what it is.",
+    "cleanup": "Delete the workspace. The corpus under test/fixtures/trace-eval/ is read-only and the harness digests it before and after every run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 600,
+    "maxWallClockMinutes": 40,
+    "maxCostUsd": "8.00"
+  },
+  "safetyLimits": [
+    "The runner writes only inside the staged workspace, and only its two deliverables under project/test-artifacts/; the harness fails a run that changed the repository or the staged corpus.",
+    "The run adds, edits, and deletes nothing under project/docs/, project/src/, or project/tests/. The workflow does not generate tests, and a run that did has moved the benchmark.",
+    "No credential value appears in a prompt, an artifact, a log, or a result file."
+  ],
+  "requiredEvidence": [
+    "The e2e-trace-summary.json each run wrote, in full.",
+    "The traceability-matrix.md each run wrote, in full.",
+    "The exit code of each invocation.",
+    "The digest of the prompt each run was given, so an edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 4,
+  "fixtureReset": null
+}

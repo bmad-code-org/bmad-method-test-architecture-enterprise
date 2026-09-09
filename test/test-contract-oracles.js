@@ -40,6 +40,17 @@
  *                        evaluated as well, through the same parser the runner
  *                        applies to a live reply.
  *
+ *   trace                Every stored trace run under test/replay/trace is one
+ *                        observation of the plan step for the fixture set it was
+ *                        frozen from: the summary as the `summary` artifact, the
+ *                        matrix as the `matrix` artifact, exit code 0. Every
+ *                        oracle the contract states for that set resolves over it
+ *                        and is compared with the check it restates in scoreRun,
+ *                        through the correspondence tools/generate-contracts.js
+ *                        writes beside each oracle. The other set's oracles are
+ *                        evaluated over the same run too, so every oracle is seen
+ *                        resolving false on evidence that fails it.
+ *
  * AGREEMENT
  *
  * An oracle may never contradict the scorer. Where the scorer passes, the oracle
@@ -57,6 +68,18 @@
  * an oracle that abstained for any other reason on failing evidence is still a
  * disagreement. test/contracts/README.md records the divergence beside the
  * fractional-recall one.
+ *
+ * Trace adds two stated exceptions of its own. The waiver oracles are compared
+ * only where scoreWaivers scored them, because the harness skips the waiver
+ * block when the gate did not match so that one wrong gate is not scored three
+ * times, and the spec's scorer half says so with undefined. And a run the
+ * harness refuses before scoring splits on why: a summary it refuses, for its
+ * schema version or its shape, is a run the contract's run-measured oracle must
+ * also refuse, and its other oracles are not compared because there is no
+ * measurement to compare with; a matrix it refuses, one with no criterion
+ * section, is outside the operator vocabulary altogether, since the matrix is
+ * markdown and every oracle reads the summary, so nothing is compared and the
+ * skip is printed.
  *
  * The evaluator is eval-quality's, loaded from the installed package's `dist/`
  * by file path. `test/test-contracts.js` already reaches `dist/cli/main.js` the
@@ -78,7 +101,17 @@ const { parseSelection } = require('../cli/lib/parse-selection');
 const { verdictFor } = require('../cli/lib/parse-report');
 const { scoreVerdict } = require('./eval-test-review');
 const { loadSuites, scoreCase } = require('./eval-fragment-selection');
+const {
+  loadGroundTruth: loadTraceGroundTruth,
+  parseMatrix,
+  scoreRun: scoreTraceRun,
+  summaryFromArtifact,
+  TRACE_OPERATION,
+} = require('./eval-trace');
 const { findCases } = require('./test-eval-replay');
+// The correspondence between each trace oracle and the scoreRun check it
+// restates is written once, in the generator beside the oracle itself.
+const { traceOracleSpecs, traceStepId } = require('../tools/generate-contracts');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(__dirname, 'contracts');
@@ -416,6 +449,121 @@ function checkFragmentSelectionOracles(evaluator) {
   console.log(`  ${colors.dim}${evaluated} oracle evaluation(s) across ${suites.length} contract(s)${colors.reset}`);
 }
 
+// ---------------------------------------------------------------------------
+// trace
+// ---------------------------------------------------------------------------
+
+/**
+ * One stored trace run as the artifacts a probe observation would carry: the
+ * summary tagged the way the adapter tags a file, the matrix as text.
+ */
+function traceArtifactsOf(directory, expected) {
+  const summaryPath = path.join(directory, expected.storedOutput?.summary ?? path.join('test-artifacts', 'e2e-trace-summary.json'));
+  const matrixPath = path.join(directory, expected.storedOutput?.matrix ?? path.join('test-artifacts', 'traceability-matrix.md'));
+  let summary = { kind: 'absent' };
+  if (fs.existsSync(summaryPath)) {
+    const text = fs.readFileSync(summaryPath, 'utf8');
+    try {
+      summary = { kind: 'json', value: JSON.parse(text) };
+    } catch {
+      summary = { kind: 'text', value: text };
+    }
+  }
+  const matrix = fs.existsSync(matrixPath) ? { kind: 'text', value: fs.readFileSync(matrixPath, 'utf8') } : { kind: 'absent' };
+  return { summary, matrix };
+}
+
+/**
+ * The harness's answer for one stored run: the scored object, or the reason it
+ * refused to score at all, split on which artifact it refused.
+ */
+function scoreTraceArtifacts(set, artifacts, groundTruth) {
+  const summary = summaryFromArtifact(artifacts.summary);
+  if (!summary.ok) return { refused: 'summary', reason: summary.reason };
+  const matrix = artifacts.matrix.kind === 'text' ? parseMatrix(artifacts.matrix.value, set) : null;
+  if (matrix === null) return { refused: 'matrix', reason: 'the matrix declares no section for any criterion the oracle names' };
+  return { scored: scoreTraceRun(set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance) };
+}
+
+function checkTraceOracles(evaluator) {
+  console.log('\ntrace.contract.json over every stored trace run');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'trace.contract.json'), 'the trace contract');
+  const groundTruth = loadTraceGroundTruth();
+  if (!groundTruth) unreadable('the trace ground truth is missing or not valid JSON');
+  const specs = traceOracleSpecs(groundTruth);
+  assert(
+    contract.oracles.length === specs.length && contract.oracles.every((oracle, index) => oracle.id === specs[index].id),
+    'the contract declares exactly the oracles the generator specifies, in order',
+    `${contract.oracles.length} on disk, ${specs.length} specified`,
+  );
+
+  let evaluated = 0;
+  let skippedUnscored = 0;
+  let skippedMatrix = 0;
+  const seenFalse = new Set();
+  const cases = findCases().filter((item) => item.suite === 'trace');
+  assert(cases.length > 0, 'test/replay/trace holds at least one stored trace run');
+  for (const item of cases) {
+    const expected = readJson(path.join(item.directory, 'expected.json'), `${item.id} expected result`);
+    const artifacts = traceArtifactsOf(item.directory, expected);
+    // Every set's oracles over this run. The set the run was frozen from is the
+    // agreement check proper; the other set is the run seen as a wrong answer to
+    // a different question, which is what makes an oracle resolve false.
+    for (const set of groundTruth.fixtureSets) {
+      const results = evaluateOracles(evaluator, contract, {
+        [traceStepId(set)]: observation({ operationId: TRACE_OPERATION, exitCode: 0, artifacts }),
+      });
+      const answer = scoreTraceArtifacts(set, artifacts, groundTruth);
+      const label = `${item.id} as ${set.id === expected.inputs?.fixtureSet ? 'its own set' : set.id}`;
+      const own = specs.filter((spec) => spec.setId === set.id);
+      if (answer.refused === 'matrix') {
+        skippedMatrix += own.length;
+        continue;
+      }
+      for (const spec of own) {
+        const result = results.get(spec.id);
+        if (answer.refused === 'summary') {
+          // A run the harness will not score. The contract has to refuse it too,
+          // through the one oracle that reads the run's shape; the rest have no
+          // measurement to agree or disagree with.
+          if (spec.kind !== 'run-measured') {
+            skippedUnscored += 1;
+            continue;
+          }
+          assert(
+            agrees(result, null),
+            `${label}: ${spec.id} (${spec.kind}) refuses the run the harness refuses (${answer.reason})`,
+            `oracle ${describe(result)}`,
+          );
+          evaluated += 1;
+          continue;
+        }
+        const scorer = spec.scorer(answer.scored);
+        if (scorer === undefined) {
+          skippedUnscored += 1;
+          continue;
+        }
+        if (scorer === false) seenFalse.add(spec.id);
+        assert(
+          agrees(result, scorer),
+          `${label}: ${spec.id} (${spec.kind}) agrees with scoreRun`,
+          `scoreRun says ${scorer ? 'pass' : 'fail'}, oracle ${describe(result)}`,
+        );
+        evaluated += 1;
+      }
+    }
+  }
+  // Every oracle but the shape one has to have been seen failing somewhere, or
+  // this check has only ever confirmed that a correct run passes.
+  for (const spec of specs) {
+    if (spec.kind === 'run-measured') continue;
+    assert(seenFalse.has(spec.id), `${spec.id} (${spec.kind} on ${spec.setId}) was seen resolving false on some stored run`);
+  }
+  console.log(
+    `  ${colors.dim}${evaluated} oracle evaluation(s) across ${cases.length} stored run(s) and ${groundTruth.fixtureSets.length} set(s); ${skippedUnscored} not scored by the harness, ${skippedMatrix} on a matrix it refused${colors.reset}`,
+  );
+}
+
 async function main() {
   console.log('contract oracles, evaluated with eval-quality and compared with the harness scorers');
   const evaluator = await loadEvaluator();
@@ -423,6 +571,7 @@ async function main() {
 
   checkTestReviewOracles(evaluator, groundTruth);
   checkFragmentSelectionOracles(evaluator);
+  checkTraceOracles(evaluator);
 
   console.log('');
   if (failed > 0) {

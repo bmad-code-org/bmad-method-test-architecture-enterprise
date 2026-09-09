@@ -6,13 +6,20 @@
  * that against a corpus whose true answers were written from the fixture design,
  * never from a run.
  *
- * WHY THIS ONE LOOKS LIKE eval-fragment-selection.js AND NOT LIKE eval-test-review.js
+ * HOW A RUN IS DRIVEN
  *
- * `test-review` has a CLI. It assembles the prompt, parses a strict-schema report,
- * and writes a verdict, so its harness spawns the CLI and reads the verdict. `trace`
- * has no CLI. So this harness does what the fragment-selection one does: it stages
- * the input, assembles the prompt itself, spawns the runner through
- * `cli/lib/run-agent.js`, and parses the artifacts the workflow leaves behind.
+ * `test-review` has a CLI that assembles its own prompt and writes a verdict.
+ * `trace` has `tea-trace-runner` (cli/trace-runner.js), whose whole surface is a
+ * prompt on standard input and an agent run in the working directory, so this
+ * harness stages the input, assembles the prompt itself, and probes that command
+ * through eval-quality's command-line adapter with the staged workspace as the
+ * authorization's working directory. The two artifacts the workflow leaves behind
+ * come back on the observation as tagged `json`, `text`, or `absent`, which is
+ * what lets a file the run never wrote be classified as a missing artifact rather
+ * than read through an `existsSync` race. The registry in test/lib/probe-targets.js
+ * authorizes the run before a process starts, caps its output, and SIGKILLs it a
+ * minute after RUN_TIMEOUT_MS as a backstop; the runner's own --timeout-ms is the
+ * clock that classifies.
  *
  * WHAT IS MEASURED
  *
@@ -78,8 +85,9 @@
  * `test-artifacts/e2e-trace-summary.json` at schema_version 0.3.x is the contract and
  * carries every deterministic oracle. It carries no per-criterion matrix, so the
  * per-criterion statuses are read from `test-artifacts/traceability-matrix.md`, the
- * deliverable the summary itself links. An absent or unparseable artifact is an
- * environment failure and exits 2, never a low score.
+ * deliverable the summary itself links. Both are read off the probe observation's
+ * artifact map. An absent or unparseable artifact is an environment failure and
+ * exits 2, never a low score.
  *
  * THREE MODES
  *
@@ -134,8 +142,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { runAgent } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
+const { failureClassForExit } = require('../cli/trace-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const {
@@ -146,13 +154,13 @@ const {
   probeVersion,
   redactArgs,
   measured,
-  classifyAgentError,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
+const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'trace-eval');
@@ -172,6 +180,20 @@ const RUN_TIMEOUT_MS = RUN_TIMEOUT_MINUTES * 60_000;
  * ONLY INTO ITS WORKSPACE in the header.
  */
 const RUNNER_CAPABILITIES = ['scoped-artifact-writes'];
+
+/**
+ * The command this harness probes, by the names test/lib/probe-targets.js and the
+ * trace contract share, and the two artifacts it reads off each observation. The
+ * paths are relative to the authorization's working directory, which is the staged
+ * workspace, so they name `project/test-artifacts/` rather than the workflow's own
+ * default of `test-artifacts/` under a project root that is the working directory.
+ */
+const TRACE_INTERFACE = 'tea-trace-runner';
+const TRACE_OPERATION = 'trace-fixture-set';
+const TRACE_ARTIFACTS = {
+  summary: path.join('project', 'test-artifacts', 'e2e-trace-summary.json'),
+  matrix: path.join('project', 'test-artifacts', 'traceability-matrix.md'),
+};
 
 // The summary contract this harness scores. The waivers block arrived in 0.3.0, so a
 // 0.2.x file would be missing an oracle rather than merely older.
@@ -369,8 +391,14 @@ function parseArgs(argv) {
         break;
       }
       case '--agent-cmd': {
-        agentCmd = argv[index + 1];
-        if (!agentCmd) fatal(2, '--agent-cmd requires an executable path or name');
+        const value = argv[index + 1];
+        if (!value) fatal(2, '--agent-cmd requires an executable path or name');
+        // A path is resolved here, against the operator's working directory. The
+        // runner executes in a staged workspace, so a relative path handed through
+        // unchanged would resolve against that workspace and fail every run after
+        // passing the pre-flight, which probes it from here. A bare name stays a
+        // PATH lookup, which is the same everywhere.
+        agentCmd = value.includes('/') || value.includes(path.sep) ? path.resolve(value) : value;
         index += 1;
         break;
       }
@@ -1098,10 +1126,16 @@ function assertGroundTruthAbsent(dir) {
  * named, no coverage status is suggested, and the oracle document is left to be
  * discovered the way step-01 discovers one.
  *
+ * `allowGate` is the one configuration value a caller may flip. The harness never
+ * does; the trace contract's sensitivity witness does, because step-05 evaluates a
+ * gate only when `allow_gate` is true, so two prompts differing in that one value
+ * are the differential that proves the command reads its standard input at all.
+ *
  * @param {object} set
+ * @param {{allowGate?: boolean}} [options]
  * @returns {string}
  */
-function buildPrompt(set) {
+function buildPrompt(set, { allowGate = true } = {}) {
   return [
     'You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.',
     '',
@@ -1120,7 +1154,7 @@ function buildPrompt(set) {
     '- `gate_type`: `epic`',
     '- `decision_mode`: `deterministic`',
     '- `collection_mode`: `contract_static`',
-    '- `allow_gate`: `true`',
+    `- \`allow_gate\`: \`${allowGate ? 'true' : 'false'}\``,
     '- `coverage_basis`: `auto`',
     '- `summary_confidence`: `auto`',
     '- `coverage_levels`: `e2e,api,component,unit,live`',
@@ -1170,22 +1204,24 @@ function caseIds() {
 /* -------------------------------------------------------------------------- */
 
 /**
- * The machine-readable summary the run wrote.
+ * The machine-readable summary the run wrote, off the tagged artifact the probe
+ * observation carries.
  *
- * @param {string} projectDir
+ * The adapter has already decided what the file is: `absent` when the run never
+ * wrote it, `text` when it wrote something JSON.parse refuses, `json` otherwise.
+ * Each is its own failure class here, and none is a low score.
+ *
+ * @param {{kind: string, value?: unknown}} artifact
  * @returns {{ok: true, summary: object}|{ok: false, failureClass: string, reason: string}}
  */
-function readSummary(projectDir) {
-  const summaryPath = path.join(projectDir, 'test-artifacts', 'e2e-trace-summary.json');
-  if (!fs.existsSync(summaryPath)) {
+function summaryFromArtifact(artifact) {
+  if (!artifact || artifact.kind === 'absent') {
     return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no e2e-trace-summary.json was written' };
   }
-  let summary;
-  try {
-    summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
-  } catch (error) {
-    return { ok: false, failureClass: 'environment-parser', reason: `e2e-trace-summary.json is not valid JSON: ${error.message}` };
+  if (artifact.kind !== 'json' || artifact.value === null || typeof artifact.value !== 'object' || Array.isArray(artifact.value)) {
+    return { ok: false, failureClass: 'environment-parser', reason: 'e2e-trace-summary.json is not a JSON object' };
   }
+  const summary = artifact.value;
   const version = String(summary.schema_version ?? '');
   if (version.split('.').slice(0, 2).join('.') !== SUMMARY_SCHEMA_MAJOR_MINOR) {
     // A different version is a changed contract, not a bad answer. Scoring it would
@@ -1197,6 +1233,25 @@ function readSummary(projectDir) {
     };
   }
   return { ok: true, summary };
+}
+
+/**
+ * The summary as a file on disk, tagged the way the adapter would tag it and then
+ * read through summaryFromArtifact, so a stored replay case and a live observation
+ * go through one reader.
+ *
+ * @param {string} projectDir
+ * @returns {{ok: true, summary: object}|{ok: false, failureClass: string, reason: string}}
+ */
+function readSummary(projectDir) {
+  const summaryPath = path.join(projectDir, 'test-artifacts', 'e2e-trace-summary.json');
+  if (!fs.existsSync(summaryPath)) return summaryFromArtifact({ kind: 'absent' });
+  const text = fs.readFileSync(summaryPath, 'utf8');
+  try {
+    return summaryFromArtifact({ kind: 'json', value: JSON.parse(text) });
+  } catch {
+    return summaryFromArtifact({ kind: 'text', value: text });
+  }
 }
 
 /**
@@ -1216,16 +1271,14 @@ function readSummary(projectDir) {
  * oracle states. That is what separates a made-up `AC-99` from the sections a run may
  * legitimately give the waiver requests, whose ids `W-1` and `W-2` are the same shape.
  *
- * @param {string} projectDir
+ * @param {string} text The matrix document, as the probe observation's `matrix` artifact carries it.
  * @param {object} set
  * @returns {{byCriterion: Map<string, {status: string|null, citations: Array<{file: string, line: number}>}>, invented: string[], duplicates: string[]}|null}
  */
-function readMatrix(projectDir, set) {
-  const matrixPath = path.join(projectDir, 'test-artifacts', 'traceability-matrix.md');
-  if (!fs.existsSync(matrixPath)) return null;
+function parseMatrix(text, set) {
   const ids = new Set((set.criteria ?? []).map((item) => item.id));
   const prefixes = new Set([...ids].map((id) => id.split('-')[0]));
-  const lines = fs.readFileSync(matrixPath, 'utf8').split('\n');
+  const lines = String(text).split('\n');
 
   const byCriterion = new Map();
   const invented = [];
@@ -1315,6 +1368,13 @@ function readMatrix(projectDir, set) {
 
   if (byCriterion.size === 0) return null;
   return { byCriterion, invented, duplicates };
+}
+
+/** The matrix as a file on disk, for a stored replay case; a live run reads it off the observation. */
+function readMatrix(projectDir, set) {
+  const matrixPath = path.join(projectDir, 'test-artifacts', 'traceability-matrix.md');
+  if (!fs.existsSync(matrixPath)) return null;
+  return parseMatrix(fs.readFileSync(matrixPath, 'utf8'), set);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1738,11 +1798,39 @@ function signatureOf(scored, mutations) {
 /* -------------------------------------------------------------------------- */
 
 /**
- * One complete trace run of one fixture set in a fresh workspace.
+ * Everything about the runner request that does not change between runs: the
+ * operator's overrides and the runner's own wall clock. The vendor name is applied
+ * per run, because one invocation may measure several.
  *
- * @returns {{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}}
+ * `--timeout-ms` is the inner clock. It bounds the vendor call inside the runner
+ * and reports a timeout as an exit code the caller classifies; the authorization's
+ * `maxElapsedMs` is a minute longer and SIGKILLs, so the inner bound fires first
+ * and the classification survives.
  */
-function runCase(set, options, agent, tolerance, pctTolerance) {
+function runnerOptions(options) {
+  const option = { 'timeout-ms': String(RUN_TIMEOUT_MS) };
+  if (options.agentCmd) option['agent-cmd'] = options.agentCmd;
+  if (options.model) option.model = options.model;
+  if (options.agentArgs.length > 0) option['agent-arg'] = [...options.agentArgs];
+  if (options.envPass.length > 0) option['env-pass'] = [...options.envPass];
+  return option;
+}
+
+/**
+ * One complete trace run of one fixture set in a fresh workspace, through
+ * eval-quality's command-line adapter.
+ *
+ * The staged workspace is the authorization's working directory, so the policy is
+ * what confines the run rather than a convention, and the two artifacts are read
+ * off the observation rather than by path. Three outcomes are told apart on the
+ * way back, and none of them is a score: a thrown fault carries the class
+ * `failureClassForFault` derives from the port's own code, a non-zero exit carries
+ * the class the runner spelled it as, and an artifact the run never wrote is
+ * `absent` and a missing artifact.
+ *
+ * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
+ */
+async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
   const workspace = stageWorkspace(set);
   try {
     const leaked = assertGroundTruthAbsent(workspace.dir);
@@ -1751,22 +1839,26 @@ function runCase(set, options, agent, tolerance, pctTolerance) {
     }
 
     const treeBefore = workingTreeState(PROJECT_ROOT);
-    try {
-      runAgent(buildPrompt(set), {
-        agent,
-        agentCommand: options.agentCmd,
-        agentArgs: options.agentArgs,
-        envPass: options.envPass,
-        model: options.model,
-        timeout: RUN_TIMEOUT_MS,
-        cwd: workspace.dir,
-        capabilities: RUNNER_CAPABILITIES,
-      });
-    } catch (error) {
-      return { ok: false, failureClass: classifyAgentError(error), reason: error.message };
-    }
+    const { port } = await createProbePort({
+      cwd: workspace.dir,
+      interfaceIds: [TRACE_INTERFACE],
+      artifacts: { [TRACE_INTERFACE]: TRACE_ARTIFACTS },
+    });
+    const result = await probeCommand(
+      port,
+      probeRequest({
+        probeId: `${set.id}-run-${runIndex + 1}`,
+        interfaceId: TRACE_INTERFACE,
+        operationId: TRACE_OPERATION,
+        option: { ...runnerOptions(options), agent },
+        environment: hostEnvironment(options.envPass),
+        stdin: { kind: 'text', value: buildPrompt(set) },
+      }),
+      new AbortController().signal,
+    );
     // The declared scope is the workspace. A run that reached the repository
-    // instead is outside it, and its artifacts are not read.
+    // instead is outside it, and its artifacts are not read. Checked before the
+    // result is, because a killed run may have written before it was killed.
     const treeChanges = workingTreeChanges(treeBefore, workingTreeState(PROJECT_ROOT));
     if (treeChanges.length > 0) {
       return {
@@ -1775,11 +1867,34 @@ function runCase(set, options, agent, tolerance, pctTolerance) {
         reason: `the runner changed the repository under a scoped-artifact-writes declaration: ${treeChanges.join(', ')}`,
       };
     }
+    // A thrown fault means the probe itself lost the run: a denial, a cap, an
+    // abort, or a process that never started.
+    if (!result.ok) return { ok: false, failureClass: result.failureClass, reason: result.reason };
 
-    const summary = readSummary(workspace.projectDir);
+    // A non-zero exit is an observation. The runner spells its failure classes as
+    // exit codes for exactly this reason, so the class here is the one it derived
+    // from the thrown error, with no second table.
+    const { observation } = result;
+    if (observation.exitCode !== 0) {
+      const stderr = observation.stderr.kind === 'text' ? observation.stderr.value : JSON.stringify(observation.stderr.value ?? '');
+      const tail = stderr.trim().split('\n').slice(-3).join(' | ');
+      return {
+        ok: false,
+        failureClass: failureClassForExit(observation.exitCode),
+        reason: tail || `tea-trace-runner exited ${observation.exitCode}`,
+      };
+    }
+
+    const summary = summaryFromArtifact(observation.artifacts.summary);
     if (!summary.ok) return summary;
 
-    const matrix = readMatrix(workspace.projectDir, set);
+    const matrixArtifact = observation.artifacts.matrix;
+    if (!matrixArtifact || matrixArtifact.kind === 'absent') {
+      return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no traceability-matrix.md was written' };
+    }
+    // The adapter tags a stream or file that JSON.parse accepts as `json`. A
+    // matrix is markdown, so a `json` tag here is a file that is not a matrix.
+    const matrix = matrixArtifact.kind === 'text' ? parseMatrix(matrixArtifact.value, set) : null;
     if (matrix === null) {
       return {
         ok: false,
@@ -1814,6 +1929,10 @@ function preflight({ agents, agentCmd }) {
 
   if (!fs.existsSync(GROUND_TRUTH)) report('environment-missing-artifact', `ground truth not found at ${GROUND_TRUTH}`);
   if (!fs.existsSync(SKILL_ROOT)) report('environment-missing-artifact', `trace workflow not found at ${SKILL_ROOT}`);
+  // The command every run goes through. The adapter spawns the file itself, so a
+  // missing executable bit fails the spawn before argv matters, and that is a
+  // configuration problem to name here rather than a lost run to classify later.
+  for (const problem of targetProblems(PROJECT_ROOT, [TRACE_INTERFACE])) report('environment-configuration', problem);
 
   for (const agent of agents) {
     // The name is checked against the adapter registry before anything is spawned.
@@ -1911,7 +2030,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
   };
 }
 
-function main() {
+async function main() {
   const startedAt = Date.now();
   const options = parseArgs(process.argv.slice(2));
   const { agents, runs, validateOnly, preflightOnly } = options;
@@ -2065,7 +2184,7 @@ function main() {
       const signatures = new Set();
       const caseScores = [];
       for (let runIndex = 0; runIndex < runs; runIndex += 1) {
-        const outcome = runCase(set, options, agent, tolerance, pctTolerance);
+        const outcome = await runCase(set, options, agent, runIndex, tolerance, pctTolerance);
         if (!outcome.ok) {
           console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
           lostRunClasses.push(outcome.failureClass);
@@ -2271,8 +2390,15 @@ function main() {
 
 // Only when invoked directly, so the scoring internals can be exercised and the
 // manifest can read THRESHOLDS without spending a vendor run.
+//
+// A rejected promise is exit 2 with the reason printed. `main` is asynchronous
+// because every entry point through eval-quality is, and an unhandled rejection
+// would otherwise end the process with no failure class and no record.
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    console.error(`${colors.red}eval: ${error?.stack ?? error}${colors.reset}`);
+    process.exit(2);
+  });
 }
 
 module.exports = {
@@ -2288,10 +2414,15 @@ module.exports = {
   caseIndex,
   caseIds,
   readSummary,
+  summaryFromArtifact,
   readMatrix,
+  parseMatrix,
   scoreRun,
   signatureOf,
   RUNNER_CAPABILITIES,
+  SUMMARY_SCHEMA_MAJOR_MINOR,
   THRESHOLDS,
   SUITE_ID,
+  TRACE_INTERFACE,
+  TRACE_OPERATION,
 };
