@@ -116,19 +116,21 @@ input-insensitive by design, and the contract now states that as its own claim i
 nothing.
 
 `trace.contract.json`, the tenth, states its witness over standard input on one prompt value,
-`allow_gate`. Its two plan steps share one prompt on purpose: `test/eval-trace.js` names no fact about
-either fixture set in it, so the seeded and clean summaries differ because of the staged workspace and
-never because of the prompt. A differential between the two steps would attribute the difference to
-the wrong input, and an invariance claim would be false. `allow_gate` is the one prompt value the
-ground truth establishes an effect for, through `skillRuleCitations.gateEligibility`: step-05
-evaluates a gate only when it is true and writes `gate_basis` as `none` otherwise, so two prompts
-differing in that value, in one staged workspace, produce two `gate_basis` values. That is a true and
-checkable claim that the command reads its standard input, and it is the claim the witness makes. The
-legs are runnable only against a staged workspace of the seeded set, which is the coupling
-`docs/explanation/eval-quality-command-adapter.md` records for every artifact-writing command. The
-contract itself states this reasoning in `testData.setup`, beside the sentence about the shared
-prompt, because `SensitivityWitness` is a strict object with no prose field of its own; do not look for
-it on the witness.
+`allow_gate`. Its two plan steps send two prompts, each written against its own fixture set's project
+root, and each step binds that prompt as its `stdin.prompt` literal. The summaries the two sets
+produce differ because of the files staged under those roots, so a differential across the two sets
+would attribute to the prompt a difference the staged workspace produced, and an invariance claim over
+them would be false. `allow_gate` is the one prompt value the ground truth establishes an effect for,
+through `skillRuleCitations.gateEligibility`: step-05 evaluates a gate only when it is true and writes
+`gate_basis` as `none` otherwise, so two prompts differing in that value, over one staged fixture set,
+produce two `gate_basis` values. That is a true and checkable claim that the command reads its
+standard input, and it is the claim the witness makes. Both its legs stage the clean set, because AD-10
+reads every other leg of an operation as a clean leg, and they are runnable only against that staged
+workspace, which is the coupling `docs/explanation/eval-quality-command-adapter.md` records for every
+artifact-writing command. The contract itself states this reasoning in `testData.setup`, because
+`SensitivityWitness` is a strict object with no prose field of its own; do not look for it on the
+witness. The section "A plan cannot declare that two steps must receive different inputs" below
+records what those literals cost and what they bought.
 
 ## What the operator vocabulary cannot say
 
