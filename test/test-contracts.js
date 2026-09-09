@@ -7,7 +7,7 @@
  * because the format belongs to eval-quality and its compiler is the only
  * authority on it.
  *
- * All nine contracts compile today. They did not when they were written: against
+ * All ten contracts compile today. They did not when they were written: against
  * eval-quality 0.2.0 the contract language could only describe a system under
  * test that speaks HTTP, and a TEA skill runs behind a command, so every one of
  * them failed to parse in the same handful of places. test/contracts/README.md

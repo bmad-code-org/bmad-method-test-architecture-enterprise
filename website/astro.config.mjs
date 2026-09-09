@@ -136,6 +136,8 @@ export default defineConfig({
             { label: 'Step Files & Orchestration', slug: 'explanation/step-file-architecture' },
             { label: 'Test Review CLI Architecture', slug: 'explanation/test-review-cli-architecture' },
             { label: 'Eval Quality Roadmap', slug: 'explanation/eval-quality-roadmap' },
+            { label: 'Eval Quality Command Adapter', slug: 'explanation/eval-quality-command-adapter' },
+            { label: 'Adopting eval-quality', slug: 'explanation/eval-quality-adoption-guide' },
           ],
         },
         {
