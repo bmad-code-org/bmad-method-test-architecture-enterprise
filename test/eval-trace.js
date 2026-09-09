@@ -22,7 +22,9 @@
  *                          scored on their own because a pooled accuracy hides them
  *   gate                   one bit per fixture set, carrying the same weight in the
  *                          summary as one per-criterion status
- *   coverage arithmetic    every count and percentage, recomputed from trueCoverage
+ *   coverage arithmetic    every count and percentage, recomputed from trueCoverage,
+ *                          the test inventory the accepted evidence adds up to, and the
+ *                          requirement ids the gap recommendations name
  *   evidence citations     each cited file and line resolving to a recorded span
  *   oracle resolution      collection mode, inventory basis, and the oracle block:
  *                          resolution mode, confidence, sources, external pointer
@@ -204,6 +206,49 @@ const EXPECTED_FAILED_WAIVER_CHECKS = {
 };
 
 /**
+ * The threshold each negative control in the corpus reaches a verdict through, keyed
+ * by the control's id.
+ *
+ * ground-truth.json declares three things a trace run must not do and, for each, how
+ * a harness would catch it. Nothing read that list, so a control added there was a
+ * sentence and nothing more. validateCorpus now fails when a control has no row here,
+ * when a row names a control the corpus no longer declares, and when a row names a
+ * threshold THRESHOLDS does not carry. Declaring a control therefore costs an
+ * enforcement, the same way EXPECTED_FAILED_WAIVER_CHECKS makes a recorded violation
+ * cost a check id.
+ */
+const NEGATIVE_CONTROL_ENFORCEMENT = {
+  // scoreLiveEvidence admits exactly the live records the set declares in blockers, so
+  // a quality blocker is one blocker too many, and on the clean set every blocker also
+  // counts under maxCleanFalsePositives. A quality warning confined to the matrix prose
+  // is not read, and the corpus's own howToExercise says so.
+  'test-quality-out-of-scope': 'liveEvidenceAccuracy',
+  // runCase digests the corpus files before and after the run. A changed or added file
+  // is a mutation.
+  'no-test-generation': 'maxFixtureMutations',
+  // scoreRun compares gate_status with the decision deriveGate produces from
+  // trueCoverage, which is FAIL for the seeded set whatever the register holds.
+  'waiver-does-not-set-the-gate': 'gateAccuracy',
+};
+
+/**
+ * The exclusion each rejected case in the corpus states, as a predicate every fixture
+ * set has to satisfy, keyed by the case's id.
+ *
+ * ground-truth.json lists the cases the corpus deliberately does not contain and why
+ * each would put an unscoreable value into it. A later edit that adds one contradicts
+ * a recorded decision, and nothing checked for that. validateCorpus holds every set to
+ * every predicate here and fails when a rejected case has no predicate or a predicate
+ * names no rejected case.
+ */
+const REJECTED_CASE_EXCLUSIONS = {
+  'counted-live-record': (set) => (set.expectedLiveEvidence?.counted ?? 0) === 0,
+  'unmatched-live-record': (set) => (set.expectedLiveEvidence?.unmatched ?? 0) === 0,
+  'unit-only-criterion': (set) => (set.criteria ?? []).every((item) => item.trueCoverage !== 'UNIT-ONLY'),
+  'non-static-collection-mode': (set) => set.collection?.collectionMode === 'contract_static',
+};
+
+/**
  * Thresholds. Same reasoning the two sibling harnesses state: a bar nobody clears
  * teaches nothing and a bar everyone clears teaches nothing. The difference here is
  * that most of these oracles are deterministic functions of the per-criterion
@@ -226,7 +271,9 @@ const THRESHOLDS = {
   // A run reporting a different required minimum has changed the gate it claims to be.
   gateCriteriaAccuracy: 1,
   // Integer arithmetic over statuses the run itself reported, at the corpus's declared
-  // tolerance of 0. A mismatch is a calculation defect with no defensible reading.
+  // tolerance of 0, plus the test inventory the accepted evidence adds up to and the
+  // requirement ids the gap recommendations have to name. A mismatch is a calculation
+  // defect with no defensible reading.
   coverageArithmeticAccuracy: 1,
   // collection_mode, collection_status, inventory_basis, and the oracle block
   // (resolution_mode, confidence, sources, external_pointer_status, synthetic). Both
@@ -482,12 +529,43 @@ function recomputeExpectations(set) {
     for (const level of levels) byLevel[level] += 1;
   }
 
+  // The tests the trace accepts as evidence, one per span, which is what step-04
+  // section 4b counts into tests.cases, tests.files, and by_level.*.tests: every test
+  // in a requirement's tests array, deduplicated. A test recorded in rejected_evidence
+  // is in no such array and so in no total, which is what makes these counts
+  // derivable.
+  const accepted = new Map();
+  for (const item of criteria) {
+    for (const entry of item.evidence ?? []) {
+      const key = entry.level === 'live' ? `live:${entry.recordId}` : `${entry.file}:${entry.line}`;
+      accepted.set(key, LEVELS.includes(entry.level) ? entry.level : 'other');
+    }
+  }
+  const byLevelTests = Object.fromEntries(LEVELS.map((level) => [level, 0]));
+  for (const level of accepted.values()) byLevelTests[level] += 1;
+  const files = new Set(
+    criteria
+      .flatMap((item) => item.evidence ?? [])
+      .filter((entry) => entry.level !== 'live')
+      .map((entry) => entry.file),
+  );
+  const testInventory = { files: files.size, cases: accepted.size, byLevelTests };
+
+  // Step-04 section 3 pushes one recommendation for the critical gaps, one for the high
+  // gaps, and one for the partially covered criteria, each naming its requirement ids.
+  // Those are the ids a run's recommendations have to name; the heuristic and live
+  // recommendations may add more, so the check is containment: every bucket member
+  // must be named, and more may be.
+  const recommendedIds = [...new Set([...gapBuckets.criticalGaps, ...gapBuckets.highGaps, ...gapBuckets.partialCoverageItems])];
+
   return {
     overall,
     priority,
     gapBuckets,
     riskSummary,
     byLevel,
+    testInventory,
+    recommendedIds,
     gate: deriveGate(priority.P0.pct, overall.pct, priority.P1.pct),
   };
 }
@@ -761,6 +839,24 @@ function validateCorpus(groundTruth) {
       compare(`byLevelCriteriaCovered.${level}`, expected.byLevel[level], typed.byLevelCriteriaCovered?.[level]);
     }
 
+    // The typed test inventory is held to the same rule: it exists to be compared with
+    // what the evidence entries add up to, and the harness scores the recomputed value.
+    const inventory = set.expectedTestInventory ?? {};
+    const compareInventory = (field, actual, declared) => {
+      if (declared === undefined) {
+        problems.push(`${label}: expectedTestInventory.${field} is not declared`);
+        return;
+      }
+      if (actual !== declared) {
+        problems.push(`${label}: expectedTestInventory.${field} says ${JSON.stringify(declared)}, the evidence entries give ${actual}`);
+      }
+    };
+    compareInventory('files', expected.testInventory.files, inventory.files);
+    compareInventory('cases', expected.testInventory.cases, inventory.cases);
+    for (const level of LEVELS) {
+      compareInventory(`byLevelTests.${level}`, expected.testInventory.byLevelTests[level], inventory.byLevelTests?.[level]);
+    }
+
     // The gate is the rules applied to the recomputed percentages, so a declared
     // decision that disagrees with them means one of the two was written by hand.
     if (set.expectedGate?.decision !== expected.gate.decision) {
@@ -821,6 +917,49 @@ function validateCorpus(groundTruth) {
       }
     } else if (set.expectedLiveEvidence?.present !== false) {
       problems.push(`${label}: declares no live results file while expectedLiveEvidence.present is not false`);
+    }
+  }
+
+  // Every negative control the corpus declares is enforced by a threshold this harness
+  // applies, and every enforcement row names a control the corpus still declares. A
+  // control with no row is a sentence nothing acts on, which is the drift this check
+  // exists to refuse.
+  const controls = groundTruth.negativeControls ?? [];
+  for (const control of controls) {
+    const key = NEGATIVE_CONTROL_ENFORCEMENT[control.id];
+    if (!key) {
+      problems.push(
+        `negativeControls[${control.id ?? '(no id)'}]: no row in NEGATIVE_CONTROL_ENFORCEMENT names the threshold that enforces it`,
+      );
+    } else if (!Object.prototype.hasOwnProperty.call(THRESHOLDS, key)) {
+      problems.push(
+        `negativeControls[${control.id}]: NEGATIVE_CONTROL_ENFORCEMENT names threshold "${key}", which THRESHOLDS does not declare`,
+      );
+    }
+  }
+  for (const id of Object.keys(NEGATIVE_CONTROL_ENFORCEMENT)) {
+    if (!controls.some((control) => control.id === id)) {
+      problems.push(`NEGATIVE_CONTROL_ENFORCEMENT names "${id}", which negativeControls does not declare`);
+    }
+  }
+
+  // Every rejected case is an exclusion every fixture set has to satisfy. A set that
+  // carries one has reopened a decision the corpus recorded, and either the set or the
+  // rejection has to go.
+  const rejected = groundTruth.rejectedCases ?? [];
+  for (const entry of rejected) {
+    const holds = REJECTED_CASE_EXCLUSIONS[entry.id];
+    if (!holds) {
+      problems.push(`rejectedCases[${entry.id ?? '(no id)'}]: no predicate in REJECTED_CASE_EXCLUSIONS checks the exclusion`);
+      continue;
+    }
+    for (const set of groundTruth.fixtureSets) {
+      if (!holds(set)) problems.push(`rejectedCases[${entry.id}]: fixtureSets[${set.id}] carries the case the corpus says it rejects`);
+    }
+  }
+  for (const id of Object.keys(REJECTED_CASE_EXCLUSIONS)) {
+    if (!rejected.some((entry) => entry.id === id)) {
+      problems.push(`REJECTED_CASE_EXCLUSIONS names "${id}", which rejectedCases does not declare`);
     }
   }
 
@@ -1093,12 +1232,28 @@ function readMatrix(projectDir, set) {
   const duplicates = [];
   const seen = new Set();
   let current = null;
+  let currentDepth = 0;
   // A criterion section lists the tests that establish it and, under its own label,
   // the tests it considered and turned down. Citations under the second label are the
   // run doing the right thing, so they are not read as evidence it offered.
   let inRejectedBlock = false;
   for (const line of lines) {
-    const heading = /^#{2,6}\s+\**([A-Za-z]+-\d+)\**\s*[:.)-]/.exec(line.trim());
+    const trimmed = line.trim();
+    const anyHeading = /^(#{1,6})\s/.exec(trimmed);
+    const heading = anyHeading ? /^#{2,6}\s+\**([A-Za-z]+-\d+)\**\s*[:.)-]/.exec(trimmed) : null;
+    if (anyHeading && !heading) {
+      // A heading that names no criterion still ends the open section when it sits at
+      // that section's depth or above it. The template's own `### Gap Analysis` and
+      // `#### Critical Gaps` follow the last criterion, and a test cited under them
+      // belongs to no criterion's evidence; before this, it was read as the last
+      // criterion's and counted unresolved. A deeper heading inside the section is
+      // part of it and changes nothing.
+      if (current !== null && anyHeading[1].length <= currentDepth) {
+        current = null;
+        inRejectedBlock = false;
+      }
+      continue;
+    }
     if (heading) {
       const id = heading[1].toUpperCase();
       inRejectedBlock = false;
@@ -1122,6 +1277,7 @@ function readMatrix(projectDir, set) {
         continue;
       }
       current = id;
+      currentDepth = anyHeading[1].length;
       byCriterion.set(id, { status: null, citations: [] });
       continue;
     }
@@ -1180,8 +1336,14 @@ function pctCheck(field, expected, actual, tolerance) {
  * Coverage counts and percentages, recomputed from trueCoverage and compared with the
  * numbers the run reported.
  *
- * The last group checks the report against itself: every percentage it prints must be
- * the rounding of the counts it prints beside them. A run whose counts are right and
+ * The test inventory is in here too: tests.files, tests.cases, and by_level.*.tests
+ * are the accepted evidence added up, and step-04 section 4b keeps a rejected test out
+ * of every one of them, so each has one value the corpus derives. So are the
+ * requirement ids the gap recommendations name, because step-04 section 3 builds
+ * those recommendations from the same buckets risk_summary counts.
+ *
+ * The internal group checks the report against itself: every percentage it prints must
+ * be the rounding of the counts it prints beside them. A run whose counts are right and
  * whose percentage is not has a calculation defect the ground truth cannot see.
  */
 function scoreArithmetic(summary, expected, tolerance) {
@@ -1204,16 +1366,34 @@ function scoreArithmetic(summary, expected, tolerance) {
     checks.push(check(`risk_summary.${key}`, expected.riskSummary[key], summary.risk_summary?.[key]));
   }
   for (const level of LEVELS) {
+    const reported = summary.coverage?.by_level?.[level] ?? {};
     checks.push(
-      check(`by_level.${level}.criteria_covered`, expected.byLevel[level], summary.coverage?.by_level?.[level]?.criteria_covered),
+      check(`by_level.${level}.criteria_covered`, expected.byLevel[level], reported.criteria_covered),
+      check(`by_level.${level}.tests`, expected.testInventory.byLevelTests[level], reported.tests),
     );
   }
+  checks.push(
+    check('tests.files', expected.testInventory.files, summary.tests?.files),
+    check('tests.cases', expected.testInventory.cases, summary.tests?.cases),
+  );
   const internal = [
     ['coverage.inventory', inventory],
     ...PRIORITIES.map((name) => [`priority_breakdown.${name}`, summary.coverage?.priority_breakdown?.[name] ?? {}]),
   ];
   for (const [label, block] of internal) {
     checks.push(check(`${label}.pct is round(covered/total*100)`, safePct(block.covered ?? 0, block.total ?? 0), block.pct));
+  }
+  // The ids named across every recommendation, compared by containment: the critical,
+  // high, and partial buckets each owe one recommendation naming their members, and
+  // the heuristic and live recommendations are free to name more.
+  const recommendations = Array.isArray(summary.recommendations) ? summary.recommendations : [];
+  const named = new Set(
+    recommendations.flatMap((entry) =>
+      (Array.isArray(entry?.requirements) ? entry.requirements : []).map((id) => String(id).toUpperCase()),
+    ),
+  );
+  for (const id of expected.recommendedIds) {
+    checks.push(check(`recommendations name ${id}`, true, named.has(id)));
   }
   return checks;
 }
@@ -1280,11 +1460,11 @@ function scoreOracleResolution(summary, set) {
  * only in prose ("story_id / epic_num / release_version / hotfix identifier from Step
  * 1"), with no fixed algorithm this harness can reproduce and check against; evaluator
  * is the operator's own identity; source_sha is the workspace's git commit, which
- * changes on every run; and recommendations is free text, which
- * nonDeterministicReportedValues already excludes by name, scoring only the requirement
- * ids a recommendation names. Each would need either a semantic grader or a
- * fixture-carried fact that does not exist, and a wrong guess would fail a correct run,
- * which this corpus treats as the one unaffordable mistake.
+ * changes on every run; and a recommendation's `action` is free text, so only the
+ * requirement ids it names are scored, in scoreArithmetic beside the gap buckets they
+ * come from. Each of the rest would need either a semantic grader or a fixture-carried
+ * fact that does not exist, and a wrong guess would fail a correct run, which this
+ * corpus treats as the one unaffordable mistake.
  */
 function scoreRunMetadata(summary) {
   const links = summary.links ?? {};

@@ -1,0 +1,146 @@
+{
+  "schema_version": "0.3.0",
+  "snapshot_at": "2026-09-08T10:30:00.000Z",
+  "repo": "tidewater-support-desk",
+  "collection_mode": "contract_static",
+  "collection_status": "COLLECTED",
+  "inventory_basis": "acceptance_criteria",
+  "gate_basis": "priority_thresholds",
+  "source_sha": "8f0c2a1d9e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a",
+  "target": {
+    "type": "epic",
+    "id": "5",
+    "label": "Epic 5: API Token Lifecycle"
+  },
+  "decision_mode": "deterministic",
+  "evaluator": "tea-eval-harness",
+  "confidence": "high",
+  "oracle": {
+    "resolution_mode": "formal_requirements",
+    "confidence": "high",
+    "sources": ["project/docs/epics/epic-5-api-token-lifecycle.md"],
+    "external_pointer_status": "not_used",
+    "synthetic": false
+  },
+  "coverage": {
+    "inventory": {
+      "covered": 5,
+      "total": 5,
+      "pct": 100
+    },
+    "priority_breakdown": {
+      "P0": {
+        "total": 2,
+        "covered": 2,
+        "pct": 100
+      },
+      "P1": {
+        "total": 2,
+        "covered": 2,
+        "pct": 100
+      },
+      "P2": {
+        "total": 1,
+        "covered": 1,
+        "pct": 100
+      },
+      "P3": {
+        "total": 0,
+        "covered": 0,
+        "pct": 100
+      }
+    },
+    "by_level": {
+      "e2e": {
+        "tests": 1,
+        "criteria_covered": 1
+      },
+      "api": {
+        "tests": 4,
+        "criteria_covered": 3
+      },
+      "component": {
+        "tests": 1,
+        "criteria_covered": 1
+      },
+      "unit": {
+        "tests": 0,
+        "criteria_covered": 0
+      },
+      "live": {
+        "tests": 0,
+        "criteria_covered": 0
+      },
+      "other": {
+        "tests": 0,
+        "criteria_covered": 0
+      }
+    }
+  },
+  "tests": {
+    "files": 4,
+    "cases": 6,
+    "skipped_cases": 0,
+    "fixme_cases": 0,
+    "pending_cases": 0
+  },
+  "risk_summary": {
+    "critical_open": 0,
+    "high_open": 0,
+    "medium_open": 0,
+    "low_open": 0
+  },
+  "heuristics": {
+    "endpoint_gaps": 0,
+    "auth_negative_path_status": "present",
+    "error_path_status": "present",
+    "ui_journey_status": "not_applicable",
+    "ui_state_status": "not_applicable"
+  },
+  "live_evidence": {
+    "present": false,
+    "results_file": "",
+    "freshness": "not_present",
+    "recorded_source_sha": "",
+    "current_source_sha": "8f0c2a1d9e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a",
+    "producer": "",
+    "counted": 0,
+    "stale": 0,
+    "unverifiable": 0,
+    "failed": 0,
+    "contradicted": 0,
+    "blocked": 0,
+    "skipped": 0,
+    "unmatched": 0,
+    "invalid": 0,
+    "requirements_live_only": 0
+  },
+  "blockers": [],
+  "rejected_evidence": [],
+  "recommendations": [
+    {
+      "priority": "LOW",
+      "action": "Run /bmad-testarch-test-review to assess test quality",
+      "requirements": []
+    }
+  ],
+  "links": {
+    "trace_report_path": "project/test-artifacts/traceability-matrix.md",
+    "trace_report_url": "",
+    "artifact_url": "",
+    "journey_evidence_url": ""
+  },
+  "gate_status": "PASS",
+  "gate_criteria": {
+    "p0_coverage_required": "100%",
+    "p0_coverage_actual": "100%",
+    "p0_status": "MET",
+    "p1_coverage_target": "90%",
+    "p1_coverage_minimum": "80%",
+    "p1_coverage_actual": "100%",
+    "p1_status": "MET",
+    "overall_coverage_minimum": "80%",
+    "overall_coverage_actual": "100%",
+    "overall_status": "MET"
+  }
+}

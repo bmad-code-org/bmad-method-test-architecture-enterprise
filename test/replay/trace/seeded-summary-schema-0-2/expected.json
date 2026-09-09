@@ -1,0 +1,32 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the summary declares schema_version 0.2.0 and carries no waivers",
+    "block, which is what a 0.2.x file looks like. readSummary refuses anything outside 0.3.x, because a",
+    "different version is a changed contract and scoring it would report a contract migration as a",
+    "quality regression. This case pins that refusal as an environment-parser failure with nothing",
+    "scored. The matrix beside it is seeded-correct-run's and is never",
+    "read, because runCase stops at the summary.",
+    "",
+    "The artifacts are CONSTRUCTED."
+  ],
+  "id": "seeded-summary-schema-0-2",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "readSummary takes the first two dotted parts of schema_version, 0.2, and compares them with the 0.3",
+    "this harness scores. They differ, so it returns not ok with failureClass environment-parser, the class",
+    "runCase reports for an artifact it cannot read. Nothing is scored and no signature exists for this",
+    "case, so it takes no part in checkTraceSignatures."
+  ],
+  "result": { "unmeasurable": "environment-parser" }
+}

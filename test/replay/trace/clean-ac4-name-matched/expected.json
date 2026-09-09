@@ -1,0 +1,91 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the clean set's discriminating false positive, the mirror image",
+    "of seeded-ac2-title-matched. AC-4's two tests never name it, the run matched on names, reported AC-4",
+    "as NONE, and the gate fell to FAIL by Rule 3 on a P1 coverage of 50%. The ground truth calls this the",
+    "single most likely false positive in the corpus. It is the case that pins cleanFalsePositives above",
+    "zero, and pins that the waiver oracle is skipped on a clean-set gate mismatch as well as a seeded one.",
+    "",
+    "The artifacts are CONSTRUCTED, internally consistent with the run's own wrong judgment: the two",
+    "credential-lifetime tests are mapped to nothing, so the run counts 4 cases in 3 files and 2 api tests",
+    "over 2 api criteria."
+  ],
+  "id": "clean-ac4-name-matched",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "clean-api-token-lifecycle",
+    "scoringInputsDigest": "sha256:3255d58babf67a05a33fc38a61c658518dd2c9742e42d3a67a1fa4c3c5d699ac"
+  },
+  "derivation": [
+    "Statuses: AC-4 reported NONE against FULL, and it is the discriminating criterion. The other four match.",
+    "isCleanSet is a property of the set, so it stays true.",
+    "",
+    "Gate: expected PASS, reported FAIL. Not ok, so waivers are not scored: scored false, 0 checks.",
+    "",
+    "Citations: the AC-4 section cites nothing, so the other four sections' 4 citations are the total and",
+    "all 4 resolve.",
+    "",
+    "Arithmetic, 38 checks, in scorer order. 4 of 5 at 80% against 5 of 5 at 100%: inventory.covered and",
+    "inventory.pct fail (2). P1 1 of 2 at 50% against 2 of 2 at 100%: P1.covered and P1.pct fail (2). AC-4",
+    "is a P1 with no coverage, so high_open reads 1 against 0 (1). Dropping its two api tests takes api",
+    "criteria_covered to 2 against 3 and api tests to 2 against 4 (2), and the file they share leaves the",
+    "count: tests.files 3 against 4 and tests.cases 4 against 6 (2). The internal checks pass because 4/5",
+    "and 1/2 round to what is printed. 9 failed, 29 passed.",
+    "",
+    "gate_criteria: p1_coverage_actual 50% against 100%, p1_status NOT_MET against MET, and",
+    "overall_coverage_actual 80% against 100%. overall_status stays MET because 80 meets the 80% minimum,",
+    "so it passes. 3 failed, 9 passed.",
+    "",
+    "Oracle resolution 7 of 7, run metadata 10 of 10, rejected evidence 2 of 2 over an empty array, live",
+    "3 of 3 with present false and no blocker.",
+    "",
+    "cleanFalsePositives: one status below FULL (1), no blocker, no rejected evidence, no waivers block, no",
+    "live presence, one risk_summary count above zero, high_open (1), no invented id. 2."
+  ],
+  "result": {
+    "isCleanSet": true,
+    "statuses": { "AC-1": "FULL", "AC-2": "FULL", "AC-3": "FULL", "AC-4": "NONE", "AC-5": "FULL" },
+    "statusMisses": ["AC-4 reported NONE, expected FULL (discriminating)"],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "PASS", "reported": "FAIL", "ok": false },
+    "citations": { "total": 4, "resolved": 4, "misattributed": [], "unresolved": [] },
+    "arithmetic": {
+      "checks": 38,
+      "passed": 29,
+      "failed": [
+        { "field": "coverage.inventory.covered", "expected": 5, "actual": 4 },
+        { "field": "coverage.inventory.pct", "expected": 100, "actual": 80 },
+        { "field": "priority_breakdown.P1.covered", "expected": 2, "actual": 1 },
+        { "field": "priority_breakdown.P1.pct", "expected": 100, "actual": 50 },
+        { "field": "risk_summary.high_open", "expected": 0, "actual": 1 },
+        { "field": "by_level.api.criteria_covered", "expected": 3, "actual": 2 },
+        { "field": "by_level.api.tests", "expected": 4, "actual": 2 },
+        { "field": "tests.files", "expected": 4, "actual": 3 },
+        { "field": "tests.cases", "expected": 6, "actual": 4 }
+      ]
+    },
+    "gateCriteria": {
+      "checks": 12,
+      "passed": 9,
+      "failed": [
+        { "field": "gate_criteria.p1_coverage_actual", "expected": "100%", "actual": "50%" },
+        { "field": "gate_criteria.p1_status", "expected": "MET", "actual": "NOT_MET" },
+        { "field": "gate_criteria.overall_coverage_actual", "expected": "100%", "actual": "80%" }
+      ]
+    },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 2, "passed": 2, "failed": [] },
+    "waivers": { "scored": false, "checks": 0, "passed": 0, "failed": [] },
+    "live": { "checks": 3, "passed": 3, "failed": [] },
+    "cleanFalsePositives": 2
+  }
+}

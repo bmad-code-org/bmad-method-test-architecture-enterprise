@@ -473,7 +473,20 @@
           "low_open": 1
         },
         "byLevelCriteriaCovered": {
-          "note": "Counts criteria whose status is FULL, PARTIAL, UNIT-ONLY, or INTEGRATION-ONLY, once per level that has a mapped test. Invariant across the test-count ambiguity described in nonDeterministicReportedValues.",
+          "note": "Counts criteria whose status is FULL, PARTIAL, UNIT-ONLY, or INTEGRATION-ONLY, once per level that has a mapped test. The test counts per level are in expectedTestInventory.",
+          "e2e": 3,
+          "api": 6,
+          "component": 0,
+          "unit": 1,
+          "live": 0,
+          "other": 0
+        }
+      },
+      "expectedTestInventory": {
+        "note": "Counts over criteria[].evidence, which are the tests the trace accepts. Step-04 section 4b builds tests.cases, tests.files, and by_level.*.tests from each requirement's tests array, deduplicated, and a test recorded in rejected_evidence is in no such array, so the misnamed AC-2 test is in none of these totals. Recompute from the evidence entries and compare; the harness scores the recomputed values.",
+        "files": 4,
+        "cases": 10,
+        "byLevelTests": {
           "e2e": 3,
           "api": 6,
           "component": 0,
@@ -833,6 +846,18 @@
           "other": 0
         }
       },
+      "expectedTestInventory": {
+        "files": 4,
+        "cases": 6,
+        "byLevelTests": {
+          "e2e": 1,
+          "api": 4,
+          "component": 1,
+          "unit": 0,
+          "live": 0,
+          "other": 0
+        }
+      },
       "expectedGate": {
         "decision": "PASS",
         "producedBy": "gateRule4Pass",
@@ -891,59 +916,12 @@
       ]
     }
   ],
-  "nonDeterministicReportedValues": [
-    {
-      "field": "tests.cases and coverage.by_level.*.tests for the seeded set",
-      "expected": "10 or 11",
-      "why": "Step-04 section 4b counts only tests that appear in a requirement's tests array. A run that leaves the misnamed AC-2 test unmapped counts 10 cases and 5 api tests. A run that maps it to AC-2 while classifying that criterion NONE counts 11 cases and 6 api tests. Both are defensible readings of the same evidence, so neither count is scored. coverage.by_level.*.criteria_covered is unaffected, because AC-2 is NONE under both readings and NONE is not coverage-eligible."
-    },
-    {
-      "field": "tests.files for the seeded set",
-      "expected": "4",
-      "why": "Both readings map tests from the same four files."
-    },
-    {
-      "field": "live_evidence.stale versus live_evidence.unverifiable for the seeded set",
-      "expected": "one of the two is 1 and the other is 0",
-      "why": "See expectedLiveEvidence.environmentDependentPair. The disposition depends on whether the workspace resolves a current commit sha, which is not a fact the fixture carries."
-    },
-    {
-      "field": "recommendations text",
-      "expected": "free text",
-      "why": "The recommendation strings are assembled from counts in step-04 section 3. Score the requirement ids each recommendation names, not its wording."
-    }
-  ],
-  "oracles": {
-    "deterministic": [
-      "Every criterion id in the oracle document appears in the reported matrix exactly once, and no id outside it appears.",
-      "Every reported coverage status is inside the five-value enum.",
-      "coverage.inventory.covered, .total, and .pct match the values recomputed from criteria[].trueCoverage.",
-      "coverage.priority_breakdown P0 through P3 totals, covered counts, and percentages match the recomputed values.",
-      "Each reported percentage equals round(covered / total * 100), with an empty priority resolving to 100.",
-      "gate_status equals expectedGate.decision, given the per-criterion statuses. The rule that produces it is a pure function of three numbers.",
-      "gate_criteria statuses match the thresholds, and gate_basis is priority_thresholds for both sets.",
-      "risk_summary counts match the gap buckets recomputed from the per-criterion statuses.",
-      "collection_status is COLLECTED and the gate is evaluated rather than skipped.",
-      "coverage.by_level.*.criteria_covered matches byLevelCriteriaCovered.",
-      "For the seeded set, live_evidence.counted is 0, invalid is 1, requirements_live_only is 0, and both live record ids appear in blockers at the declared severities.",
-      "For the clean set, blockers is empty and live_evidence.present is false.",
-      "Every evidence citation the report gives for a criterion resolves to a file and line span this file records for that criterion, within evidenceLineTolerance.",
-      "The waiver register's declared fields are present or absent as recorded: W-2 has no expiry date and no remediation due date, which is a field check and needs no judgment."
-    ],
-    "semantic": [
-      "The per-criterion coverage status. Deciding that the test titled for AC-2 does not establish AC-2, and that the AC-8 test establishes only half of AC-8, requires reading assertions against a sentence. This is the judgment the whole corpus exists to measure, and everything in the deterministic list above is a function of its output.",
-      "Mapping AC-4 in the clean set to two tests that never name it. The facts are in the fixture; recognizing them as the criterion's evidence is a semantic step.",
-      "Whether W-2's stated reason is a business justification or technical convenience, and whether its approver holds authority. The absence of an expiry date is deterministic; these two are not.",
-      "Whether a P0 authorization criterion counts as security for the purpose of the no-security-waiver rule.",
-      "Whether a gap recommendation is specific enough to act on."
-    ]
-  },
   "negativeControls": [
     {
       "id": "test-quality-out-of-scope",
       "expectation": "A trace run must not report test-quality defects as coverage gaps.",
       "why": "The fixtures are deliberately clean on test quality so that the only signal in the corpus is coverage. A finding such as a hard wait or a hidden assertion belongs to test-review, and here there is nothing of the kind to find. Any such finding is unattributed and should be adjudicated as a false positive rather than counted as recall.",
-      "howToExercise": "Assert the report raises no BLOCKER or WARNING quality issue against either set."
+      "howToExercise": "Assert the blockers array holds exactly the live records the set declares, so a quality blocker is one too many; on the clean set every blocker also counts as a false positive. A quality warning confined to the matrix prose is not read, so the control holds at the blocker level only."
     },
     {
       "id": "no-test-generation",
@@ -960,24 +938,24 @@
   ],
   "rejectedCases": [
     {
+      "id": "counted-live-record",
       "case": "A live verification record that must be classified as counted.",
       "why": "counted requires the recorded source_sha to match the commit under trace, which is git rev-parse HEAD of the host repository. That value is not a fact the fixture carries and it changes on every commit, so the expected disposition would not be derivable from the evidence given to the agent."
     },
     {
+      "id": "unmatched-live-record",
       "case": "A live record with disposition unmatched.",
       "why": "unmatched is only reachable from a record that first qualifies as counted, which needs a matching current sha. Same reason as above."
     },
     {
+      "id": "unit-only-criterion",
       "case": "A criterion whose expected status is UNIT-ONLY.",
       "why": "The status is defensible only when a reviewer agrees the unit level is insufficient, and PARTIAL is an equally defensible reading of the same evidence. The two statuses split the gap buckets differently while leaving every percentage identical, which would put an unscoreable value into the middle of the corpus. The distinction is worth adding later with a criterion whose text names a level explicitly."
     },
     {
+      "id": "non-static-collection-mode",
       "case": "A collection_mode other than contract_static, such as restricted or inaccessible.",
       "why": "Those modes are configuration rather than evidence. The expected answer would depend on how the harness invokes the workflow, not on anything the agent can read in the fixture."
-    },
-    {
-      "case": "A test-quality defect planted inside a covering test, such as a hard wait.",
-      "why": "It would make the expected coverage status depend on how strictly a run applies the checklist's quality section, which is a different contract. Coverage and quality would become entangled and neither number would mean anything on its own."
     }
   ]
 }

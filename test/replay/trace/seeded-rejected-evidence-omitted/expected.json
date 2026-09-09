@@ -1,0 +1,67 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the summary has no rejected_evidence key at all. schema_version 0.3.0",
+    "promises the array is always present and may be empty, so a summary without it is a contract miss",
+    "distinct from a run that considered nothing. scoreRejectedEvidence has a check for exactly that,",
+    "and this case is what keeps the three checks apart: the array's presence, its length, and the entry",
+    "naming the AC-2 test.",
+    "",
+    "The artifacts are CONSTRUCTED, as seeded-correct-run's with one key deleted."
+  ],
+  "id": "seeded-rejected-evidence-omitted",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "Everything but rejected_evidence is seeded-correct-run's and derives the same way.",
+    "",
+    "Rejected evidence: the key is absent, so it is not an array and the first check fails. The length check",
+    "compares the expected 1 with the length of nothing, which is undefined, so it fails and is stored with",
+    "no actual key. The entry check searches an empty list for AC-2 at line 30 to 38 and finds nothing. 0 of 3."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "NONE",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "FAIL", "reported": "FAIL", "ok": true },
+    "citations": { "total": 10, "resolved": 10, "misattributed": [], "unresolved": [] },
+    "arithmetic": { "checks": 40, "passed": 40, "failed": [] },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": {
+      "checks": 3,
+      "passed": 0,
+      "failed": [
+        { "field": "rejected_evidence is an array", "expected": true, "actual": false },
+        { "field": "rejected_evidence.length", "expected": 1 },
+        { "field": "rejected_evidence names AC-2 at tenant-export.api.spec.ts:30-38", "expected": true, "actual": false }
+      ]
+    },
+    "waivers": { "scored": true, "checks": 12, "passed": 12, "failed": [] },
+    "live": { "checks": 13, "passed": 13, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}

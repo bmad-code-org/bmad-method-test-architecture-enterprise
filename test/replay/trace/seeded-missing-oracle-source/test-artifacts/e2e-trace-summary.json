@@ -1,0 +1,217 @@
+{
+  "schema_version": "0.3.0",
+  "snapshot_at": "2026-09-08T10:00:00.000Z",
+  "repo": "tidewater-support-desk",
+  "collection_mode": "contract_static",
+  "collection_status": "COLLECTED",
+  "inventory_basis": "acceptance_criteria",
+  "gate_basis": "priority_thresholds",
+  "source_sha": "8f0c2a1d9e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a",
+  "target": {
+    "type": "epic",
+    "id": "4",
+    "label": "Epic 4: Tenant Data Export and Erasure"
+  },
+  "decision_mode": "deterministic",
+  "evaluator": "tea-eval-harness",
+  "confidence": "high",
+  "oracle": {
+    "resolution_mode": "formal_requirements",
+    "confidence": "high",
+    "sources": [],
+    "external_pointer_status": "not_used",
+    "synthetic": false
+  },
+  "coverage": {
+    "inventory": {
+      "covered": 7,
+      "total": 10,
+      "pct": 70
+    },
+    "priority_breakdown": {
+      "P0": {
+        "total": 2,
+        "covered": 1,
+        "pct": 50
+      },
+      "P1": {
+        "total": 5,
+        "covered": 5,
+        "pct": 100
+      },
+      "P2": {
+        "total": 2,
+        "covered": 1,
+        "pct": 50
+      },
+      "P3": {
+        "total": 1,
+        "covered": 0,
+        "pct": 0
+      }
+    },
+    "by_level": {
+      "e2e": {
+        "tests": 3,
+        "criteria_covered": 3
+      },
+      "api": {
+        "tests": 6,
+        "criteria_covered": 6
+      },
+      "component": {
+        "tests": 0,
+        "criteria_covered": 0
+      },
+      "unit": {
+        "tests": 1,
+        "criteria_covered": 1
+      },
+      "live": {
+        "tests": 0,
+        "criteria_covered": 0
+      },
+      "other": {
+        "tests": 0,
+        "criteria_covered": 0
+      }
+    }
+  },
+  "tests": {
+    "files": 4,
+    "cases": 10,
+    "skipped_cases": 0,
+    "fixme_cases": 0,
+    "pending_cases": 0
+  },
+  "risk_summary": {
+    "critical_open": 1,
+    "high_open": 0,
+    "medium_open": 0,
+    "low_open": 1
+  },
+  "heuristics": {
+    "endpoint_gaps": 0,
+    "auth_negative_path_status": "partial",
+    "error_path_status": "present",
+    "ui_journey_status": "not_applicable",
+    "ui_state_status": "not_applicable"
+  },
+  "live_evidence": {
+    "present": true,
+    "results_file": "project/test-artifacts/live-verification-results.json",
+    "freshness": "stale",
+    "recorded_source_sha": "0123456789abcdef0123456789abcdef01234567",
+    "current_source_sha": "8f0c2a1d9e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a",
+    "producer": "manual verification by release engineer",
+    "counted": 0,
+    "stale": 1,
+    "unverifiable": 0,
+    "failed": 0,
+    "contradicted": 0,
+    "blocked": 0,
+    "skipped": 0,
+    "unmatched": 0,
+    "invalid": 1,
+    "requirements_live_only": 0
+  },
+  "blockers": [
+    {
+      "id": "4-LIVE-001",
+      "severity": "high",
+      "reason": "Live result recorded against 0123456789abcdef0123456789abcdef01234567, which is not the commit under trace (8f0c2a1d9e7b6c5a4f3e2d1c0b9a8f7e6d5c4b3a). Re-verify and re-record.",
+      "test_file": "",
+      "test_title": "A member without the admin role cannot start an export"
+    },
+    {
+      "id": "4-LIVE-002",
+      "severity": "medium",
+      "reason": "Live result is not usable: status \"verified\" is not one of pass, fail, blocked, or skipped.",
+      "test_file": "",
+      "test_title": "The archive filename carries the tenant slug and the request date"
+    }
+  ],
+  "rejected_evidence": [
+    {
+      "requirement_id": "AC-2",
+      "test_id": "4-API-002",
+      "file": "project/tests/api/tenant-export.api.spec.ts",
+      "line": 30,
+      "level": "api",
+      "title": "AC-2 rejects export requests from members without the admin role",
+      "reason": "Builds its context from ADMIN_TOKEN, posts the same export request AC-1 already covers, and asserts a 202. Nothing observes a member actor, a 403, or the job queue."
+    }
+  ],
+  "recommendations": [
+    {
+      "priority": "URGENT",
+      "action": "Run /bmad-testarch-atdd for 1 P0 requirements",
+      "requirements": ["AC-2"]
+    },
+    {
+      "priority": "MEDIUM",
+      "action": "Complete coverage for 1 partially covered requirements",
+      "requirements": ["AC-8"]
+    },
+    {
+      "priority": "HIGH",
+      "action": "Re-record 1 live verification result(s) against the commit under trace; they no longer count as coverage",
+      "requirements": ["AC-2"]
+    },
+    {
+      "priority": "LOW",
+      "action": "Run /bmad-testarch-test-review to assess test quality",
+      "requirements": []
+    }
+  ],
+  "links": {
+    "trace_report_path": "project/test-artifacts/traceability-matrix.md",
+    "trace_report_url": "",
+    "artifact_url": "",
+    "journey_evidence_url": ""
+  },
+  "waivers": {
+    "register": "project/test-artifacts/gate-waivers.md",
+    "filed": 2,
+    "valid": 1,
+    "invalid": 1,
+    "entries": [
+      {
+        "id": "W-1",
+        "title": "Audit log timestamp assertion",
+        "covers": "AC-8",
+        "priority": "P2",
+        "valid": true,
+        "failed_checks": []
+      },
+      {
+        "id": "W-2",
+        "title": "Non-admin export rejection",
+        "covers": "AC-2",
+        "priority": "P0",
+        "valid": false,
+        "failed_checks": [
+          "business_justification",
+          "approver_authority",
+          "expiry_present",
+          "remediation_due_date",
+          "not_security",
+          "contract_complete"
+        ]
+      }
+    ]
+  },
+  "gate_status": "FAIL",
+  "gate_criteria": {
+    "p0_coverage_required": "100%",
+    "p0_coverage_actual": "50%",
+    "p0_status": "NOT_MET",
+    "p1_coverage_target": "90%",
+    "p1_coverage_minimum": "80%",
+    "p1_coverage_actual": "100%",
+    "p1_status": "MET",
+    "overall_coverage_minimum": "80%",
+    "overall_coverage_actual": "70%",
+    "overall_status": "NOT_MET"
+  }
+}

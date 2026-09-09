@@ -2,7 +2,7 @@
  * Replay the stored eval outputs through the live parsers and scorers, with no
  * model call and no network.
  *
- * The two eval harnesses can only produce a number by spending a vendor run, so
+ * The three eval harnesses can only produce a number by spending a vendor run, so
  * every change to how they parse a reply or score it has shipped unverified. A
  * scorer is ordinary code and it can be regression-tested like ordinary code:
  * keep the outputs a run produced, keep the result scoring them produced, and
@@ -16,12 +16,37 @@
  *                       scoreVerdict against the eval's real ground truth
  *   fragment-selection  stdout.txt, parsed by parseSelection and scored by
  *                       scoreCase against a frozen copy of one eval case
+ *   trace               test-artifacts/e2e-trace-summary.json and
+ *                       test-artifacts/traceability-matrix.md, the two files a
+ *                       trace run leaves in a staged workspace, read by
+ *                       readSummary and readMatrix and scored by scoreRun against
+ *                       one fixture set of the eval's real ground truth
  *
  * Each expected.json carries the result, the arithmetic that produced it, and
  * whether the stored output is a real capture or was constructed. The numbers
  * were derived by hand from the ground truth before this harness existed. A
  * golden file generated from the code under test would prove only that the code
  * is deterministic, which nobody doubts.
+ *
+ * A trace case is one fixture set's artifacts, so its expected.json names the set
+ * and digests that set's scoring inputs. An edit to the clean set fails no seeded
+ * case. Its result is the scored object reduced to
+ * what a reader can check by hand: the reported status per criterion, the gate,
+ * the citation tally, and for each check group the count, the count that passed,
+ * and the field, expected value, and actual value of every check that did not. A
+ * field the summary lacked appears with no `actual` key at all. A summary
+ * readSummary refuses, or a matrix readMatrix reads no criterion section out of,
+ * records `{ "unmeasurable": <failure class> }`, the class runCase reports for that
+ * environment failure.
+ *
+ * The trace cases also pin signatureOf, the string main() compares across
+ * repetitions to call a case stable. Its contract is that nothing scored is left
+ * out and nothing environmental is let in, and the corpus is what makes that
+ * checkable: two cases scored against the same set must sign identically exactly
+ * when their results are identical, and every case must sign differently once a
+ * fixture mutation is counted against it. A run whose live records land as
+ * unverifiable sits in the corpus beside its stale twin for this reason, and so
+ * does a run whose matrix carries lines the parser must ignore.
  *
  * Each stored verdict is also re-derived from its own report through
  * cli/lib/parse-report.js and has to reproduce. Without that, a stored verdict
@@ -39,27 +64,29 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Eleven of the thirteen cases
- * produce a number and nine of those eleven are constructed. Two carry real
- * captured bytes borrowed from the CLI parser fixtures, and both now score as a
- * measured miss rather than as unmeasurable: their reports document no finding
- * at all, and a verdict whose findings array is empty is a reviewer that named
- * nothing. The live runs of 2026-09-08 measured all three suites and none of
- * their output was committed, so this repository still holds no captured output
- * that this suite can turn into a number a vendor actually earned.
+ * produces a number was written by hand to be parsed. Twenty-three of the
+ * twenty-seven cases produce a number and twenty-one of those are constructed. Two
+ * carry real captured bytes borrowed from the CLI parser fixtures, and both now
+ * score as a measured miss rather than as unmeasurable: their reports document
+ * no finding at all, and a verdict whose findings array is empty is a reviewer
+ * that named nothing. The live runs of 2026-09-08 measured all three suites and
+ * none of their output was committed, so this repository still holds no captured
+ * output that this suite can turn into a number a vendor actually earned, and
+ * the trace suite in particular has no real capture at all.
  *
  * Two more things sit outside what a green run covers:
  *
  *   Aggregation and thresholds. recall, criticalRecall, nonFalsePositiveRate,
- *   scoreStdev, requiredRecall and forbiddenRate are all computed inside main()
- *   in the two harnesses and none of them is exported. Pinning them here would
- *   pin this file's reimplementation of the formula rather than theirs, which is
- *   worse than not pinning them, so the per-case counts are versioned and the
- *   aggregation over them is not. Change the nonFalsePositiveRate formula to fold
- *   unattributed findings in and every case here stays green. THRESHOLDS is a
- *   smaller gap than it looks: tools/validate-eval-schemas.js already fails when
- *   a harness constant and test/evals/suite-manifest.json disagree, so a lowered
- *   threshold is caught by npm run test:eval-schemas rather than here.
+ *   scoreStdev, requiredRecall, forbiddenRate and the trace ratios are all
+ *   computed inside main() in the three harnesses and none of them is exported.
+ *   Pinning them here would pin this file's reimplementation of the formula
+ *   rather than theirs, which is worse than not pinning them, so the per-case
+ *   counts are versioned and the aggregation over them is not. Change the
+ *   nonFalsePositiveRate formula to fold unattributed findings in and every case
+ *   here stays green. THRESHOLDS is a smaller gap than it looks:
+ *   tools/validate-eval-schemas.js already fails when a harness constant and
+ *   test/evals/suite-manifest.json disagree, so a lowered threshold is caught by
+ *   npm run test:eval-schemas rather than here.
  *
  *   admittedLinesFor's lineTolerance fallback. Every plant in ground-truth.json
  *   declares an admittedLines set, so the radius branch is unreachable from real
@@ -88,8 +115,9 @@
  * A case also records a digest of the scoring-relevant half of the ground truth.
  * A change there is a change to the input rather than to the scorer, and it fails
  * with its own message so the two are never confused. --accept refuses that one
- * outright: a moved plant needs its expected result re-derived by hand, which is
- * the same work that produced the corpus in the first place.
+ * outright: a moved plant or a moved evidence span needs its expected result
+ * re-derived by hand, which is the same work that produced the corpus in the
+ * first place.
  *
  * It also carries the checks on test/lib/eval-record.js that need no corpus. That
  * module writes the result file the harnesses upload, and this is the only entry
@@ -102,7 +130,8 @@
  *
  * Exit codes:
  *   0  every case reproduced its stored result
- *   1  a case moved, its ground truth moved, or its verdict and report disagree
+ *   1  a case moved, its ground truth moved, its verdict and report disagree, or
+ *      a trace signature disagrees with the results it is supposed to summarize
  *   2  the corpus could not be read, or --accept named a case that does not exist
  */
 
@@ -114,20 +143,23 @@ const path = require('node:path');
 const { parseReport } = require('../cli/lib/parse-report');
 const { scoreVerdict } = require('./eval-test-review');
 const { parseSelection, scoreCase } = require('./eval-fragment-selection');
+const { readSummary, readMatrix, scoreRun, signatureOf } = require('./eval-trace');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REPLAY_ROOT = path.join(__dirname, 'replay');
 const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'ground-truth.json');
+const TRACE_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'trace-eval', 'ground-truth.json');
 
 /**
  * The version of the parsing and scoring behaviour this corpus was recorded
  * against. It covers admittedLinesFor and scoreVerdict in eval-test-review.js,
- * and parseSelection and scoreCase in eval-fragment-selection.js. It does not
- * cover the aggregation those feed or the thresholds it is compared against; see
- * the header for why.
+ * parseSelection and scoreCase in eval-fragment-selection.js, and readSummary,
+ * readMatrix, scoreRun with the eight scorers it calls, and signatureOf in
+ * eval-trace.js. It does not cover the aggregation those feed or the thresholds
+ * it is compared against; see the header for why.
  *
- * Bump it in the same commit as a deliberate change to any of those four, then
+ * Bump it in the same commit as a deliberate change to any of those, then
  * re-record with --accept. Leaving it alone is what makes an accidental change
  * fail.
  *
@@ -150,8 +182,17 @@ const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'groun
  * also became boundary-aware at the same version: a path ends in `/name` or is
  * `name`, where a bare suffix match had admitted `notcheckout.spec.ts`. No stored
  * case carries such a path, so no other number moved.
+ *
+ * 4 is the trace scorers entering the corpus, with two changes made while the
+ * first cases were being derived by hand. readMatrix closes a criterion section
+ * at any heading of the same depth or shallower, where it had kept the last
+ * section open through `### Gap Analysis` and attributed every test cited there
+ * to the last criterion as an unresolved citation. scoreArithmetic scores
+ * tests.files, tests.cases, by_level.*.tests and the requirement ids the gap
+ * recommendations name, all recomputed from the accepted evidence. No
+ * test-review or fragment-selection case moved.
  */
-const SCORER_VERSION = 3;
+const SCORER_VERSION = 4;
 
 const colors = {
   reset: '[0m',
@@ -208,6 +249,74 @@ function scoringInputs(groundTruth) {
     ...(groundTruth.files ?? []).map((file) =>
       [file.path, ...(file.planted ?? []).map((plant) => `${plant.row}@${plant.line}[${(plant.admittedLines ?? []).join(' ')}]`)].join('|'),
     ),
+  ];
+}
+
+/**
+ * The scoring-relevant half of one trace fixture set, as canonical strings.
+ *
+ * Only what scoreRun and the scorers it calls read: the two tolerances, the
+ * oracle and collection fields, whether the set declares a live file and a
+ * register, each criterion's priority, true coverage, discriminating flag and the
+ * spans of its evidence and false evidence, the declared gate criteria, the ids
+ * of the expected valid and invalid waivers, and the live expectations down to
+ * the blocker severities. The typed coverageArithmetic and expectedTestInventory
+ * blocks stay out because validateCorpus already holds them equal to what the
+ * criteria recompute to, and every `why`, `text`, `title` and `establishes`
+ * string stays out so an editorial pass moves no digest.
+ *
+ * @param {object} groundTruth
+ * @param {object} set One entry of groundTruth.fixtureSets.
+ * @returns {string[]}
+ */
+function traceScoringInputs(groundTruth, set) {
+  const span = (entry) =>
+    entry.level === 'live' ? `live:${entry.recordId}` : `${entry.file}:${entry.line}-${entry.lineEnd}@${entry.level}`;
+  const live = set.expectedLiveEvidence ?? {};
+  const pair = live.environmentDependentPair?.whenCurrentShaResolves ?? {};
+  const ids = (waivers) => (waivers ?? []).map((waiver) => waiver.id).join(' ');
+  return [
+    `evidenceLineTolerance=${groundTruth.evidenceLineTolerance ?? 0}`,
+    `coveragePercentTolerance=${groundTruth.coveragePercentTolerance ?? 0}`,
+    `set=${set.id}`,
+    `oracle=${[
+      set.oracle?.document,
+      set.oracle?.coverageBasis,
+      set.oracle?.oracleResolutionMode,
+      set.oracle?.oracleConfidence,
+      set.oracle?.externalPointerStatus,
+    ].join('|')}`,
+    `collection=${set.collection?.collectionMode}|${set.collection?.collectionStatus}`,
+    `declares=live:${Boolean(set.liveResultsFile)}|register:${Boolean(set.waiverRegister)}`,
+    ...(set.criteria ?? []).map((item) =>
+      [
+        item.id,
+        item.priority,
+        item.trueCoverage,
+        item.isDiscriminatingCase === true,
+        (item.evidence ?? []).map(span).join(' '),
+        (item.falseEvidence ?? []).map(span).join(' '),
+      ].join('|'),
+    ),
+    `gateCriteria=${JSON.stringify(canonical(set.expectedGate?.gateCriteria ?? {}))}`,
+    `waivers=valid:${ids(set.expectedWaiverHandling?.valid)}|invalid:${ids(set.expectedWaiverHandling?.invalid)}`,
+    `live=${JSON.stringify(
+      canonical({
+        present: live.present,
+        freshness: live.freshness,
+        counted: live.counted,
+        requirements_live_only: live.requirements_live_only,
+        failed: live.failed,
+        contradicted: live.contradicted,
+        blocked: live.blocked,
+        skipped: live.skipped,
+        unmatched: live.unmatched,
+        invalid: live.invalid,
+        stale: pair.stale,
+        unverifiable: pair.unverifiable,
+        blockers: (live.expectedBlockers ?? []).map((blocker) => `${blocker.id}@${blocker.severity}`),
+      }),
+    )}`,
   ];
 }
 
@@ -268,6 +377,52 @@ function projectReviewResult(scored) {
 function projectSelectionResult(selection, item) {
   if (selection === null) return { selection: null, score: null };
   return { selection, score: scoreCase(item, selection) };
+}
+
+/**
+ * scoreRun's return value reduced to what a stored result can hold and a reader
+ * can derive by hand.
+ *
+ * Each check group becomes its size, the number that passed, and the field,
+ * expected value and actual value of each check that did not. Passing checks
+ * carry no information a reader could not reconstruct, because a passing check's
+ * actual value is its expected value and the expected values are fixed by the
+ * fixture set. `failed` keeps the scorer's own order, since two results are
+ * compared as JSON and that order is part of the answer. A check whose actual
+ * value was undefined, because the summary lacked the field, is stored with no
+ * `actual` key, which is how JSON spells undefined.
+ *
+ * @param {object} scored One return value of scoreRun.
+ * @returns {object}
+ */
+function projectTraceResult(scored) {
+  const group = (checks) => ({
+    checks: checks.length,
+    passed: checks.filter((item) => item.ok).length,
+    failed: checks.filter((item) => !item.ok).map(({ field, expected, actual }) => ({ field, expected, actual })),
+  });
+  return {
+    isCleanSet: scored.isCleanSet,
+    statuses: Object.fromEntries(scored.statusResults.map((item) => [item.id, item.reported])),
+    statusMisses: scored.statusResults
+      .filter((item) => !item.ok)
+      .map(
+        (item) =>
+          `${item.id} reported ${item.reported ?? 'nothing'}, expected ${item.expected}${item.discriminating ? ' (discriminating)' : ''}`,
+      ),
+    invented: scored.invented,
+    duplicates: scored.duplicates,
+    gate: scored.gate,
+    citations: scored.citations,
+    arithmetic: group(scored.arithmetic),
+    gateCriteria: group(scored.gateCriteria),
+    oracleResolution: group(scored.oracleResolution),
+    runMetadata: group(scored.runMetadata),
+    rejectedEvidence: group(scored.rejectedEvidence),
+    waivers: { scored: scored.waivers.scored, ...group(scored.waivers.checks) },
+    live: group(scored.live),
+    cleanFalsePositives: scored.cleanFalsePositives,
+  };
 }
 
 /** Object keys sorted at every depth, so a comparison does not depend on key order. */
@@ -380,6 +535,31 @@ function verdictDriftFromReport(verdict, reportPath) {
   return differences(stored, fresh, ['the verdict says', 'the report derives']);
 }
 
+/**
+ * Read and score one stored trace case, the way runCase does after the agent
+ * returns.
+ *
+ * Both artifacts have to be on disk, because a case missing one would record an
+ * environment failure that says nothing about the scorers. A summary that is
+ * there and that readSummary refuses, or a matrix that readMatrix reads no
+ * criterion section out of, is a real result: runCase reports each as an
+ * environment failure with a class, and the stored result names that class.
+ *
+ * @returns {{result: object, scored?: object}}
+ */
+function replayTraceCase(item, set, groundTruth) {
+  for (const name of ['e2e-trace-summary.json', 'traceability-matrix.md']) {
+    if (!fs.existsSync(path.join(item.directory, 'test-artifacts', name)))
+      unreadable(`${item.id}: no test-artifacts/${name} beside expected.json`);
+  }
+  const summary = readSummary(item.directory);
+  if (!summary.ok) return { result: { unmeasurable: summary.failureClass } };
+  const matrix = readMatrix(item.directory, set);
+  if (matrix === null) return { result: { unmeasurable: 'environment-missing-artifact' } };
+  const scored = scoreRun(set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance);
+  return { result: projectTraceResult(scored), scored };
+}
+
 /** Parse and score one stored fragment-selection case. */
 function replaySelectionCase(item, expected) {
   const stdoutPath = path.join(item.directory, 'stdout.txt');
@@ -453,6 +633,122 @@ function checkRecordHygiene() {
   assert(same(kept, innocuous), 'redactArgs keeps a value that merely contains a token prefix inside a word', JSON.stringify(kept));
 }
 
+/**
+ * signatureOf held to its own contract over every scored trace case.
+ *
+ * main() in eval-trace.js calls a case stable when every repetition signs the
+ * same, so the signature has to cover everything scored and nothing
+ * environmental. Both halves are checkable here without a model. Two cases scored
+ * against the same fixture set have identical stored results exactly when they
+ * sign identically: a pair that differs in a scored field and still signs the
+ * same is a field the signature dropped, which is the defect that let citation
+ * resolution flip between repetitions while the run reported itself stable, and a
+ * pair with identical results that signs differently is the signature reading
+ * something the scorer does not, which is the stale-versus-unverifiable pair
+ * scoreLiveEvidence collapses on purpose. The mutation count is the one input the
+ * signature takes from outside the scored object, and it has to move it.
+ *
+ * @param {Array<{id: string, set: string, result: object, scored: object}>} replayed
+ */
+function checkTraceSignatures(replayed) {
+  if (replayed.length === 0) return;
+  const mutationBlind = replayed.filter((item) => signatureOf(item.scored, 0) === signatureOf(item.scored, 1)).map((item) => item.id);
+  assert(
+    mutationBlind.length === 0,
+    'trace signatures move when a fixture mutation is counted',
+    `unchanged for ${mutationBlind.join(', ')}`,
+  );
+
+  const disagreements = [];
+  for (const [index, left] of replayed.entries()) {
+    for (const right of replayed.slice(index + 1)) {
+      if (left.set !== right.set) continue;
+      const sameResult = same(left.result, right.result);
+      const sameSignature = signatureOf(left.scored, 0) === signatureOf(right.scored, 0);
+      if (sameResult === sameSignature) continue;
+      disagreements.push(
+        sameResult
+          ? `${left.id} and ${right.id} score identically and sign differently, so the signature reads something the scorer does not`
+          : `${left.id} and ${right.id} score differently and sign identically, so a scored field is outside the signature`,
+      );
+    }
+  }
+  assert(disagreements.length === 0, 'trace signatures agree exactly when the scored results agree', disagreements.join('\n  '));
+}
+
+/**
+ * Score one stored case the way its suite scores it.
+ *
+ * A failure here is a reason the case cannot be compared at all, as opposed to a
+ * result that moved: its ground truth digests differently from when it was
+ * derived, or its stored verdict is not what its own report produces. Both are
+ * reported against the case and neither is something --accept may rewrite.
+ *
+ * @param {{id: string, suite: string, directory: string}} item
+ * @param {object} expected The case's expected.json.
+ * @param {object} context The loaded ground truths, their digests, and the list a
+ *   scored trace case is appended to for checkTraceSignatures.
+ * @returns {{observed: object|null}|{failure: string}}
+ */
+function replayCase(item, expected, context) {
+  switch (item.suite) {
+    case 'test-review': {
+      const recordedDigest = expected.inputs?.scoringInputsDigest;
+      if (recordedDigest !== context.groundTruthDigest) {
+        return {
+          failure:
+            `the ground truth moved. This result was derived against ${recordedDigest ?? '(nothing recorded)'} and ` +
+            `${path.relative(PROJECT_ROOT, GROUND_TRUTH)} now digests to ${context.groundTruthDigest}. A plant, a line, an admitted set ` +
+            'or the file list changed, so the expected numbers have to be re-derived by hand and the digest updated with them. ' +
+            '--accept will not do this one.',
+        };
+      }
+      const { verdict, reportPath } = loadReviewVerdict(item);
+      const drift = verdictDriftFromReport(verdict, reportPath);
+      if (drift.length > 0) {
+        return {
+          failure: [
+            `the stored verdict is not what its report produces (${path.relative(PROJECT_ROOT, reportPath)}):`,
+            ...drift.map((line) => `  ${line}`),
+            'A verdict no run could have produced makes every number scored from it meaningless, so fix the pair before',
+            'touching the expected result. --accept will not do this one either.',
+          ].join('\n  '),
+        };
+      }
+      return { observed: projectReviewResult(scoreVerdict(verdict, context.groundTruth)) };
+    }
+    case 'fragment-selection': {
+      return { observed: replaySelectionCase(item, expected) };
+    }
+    case 'trace': {
+      const setId = expected.inputs?.fixtureSet;
+      const set = context.traceSets.get(setId);
+      if (!set) {
+        unreadable(
+          `${item.id}: inputs.fixtureSet names "${setId ?? '(nothing)'}", which is not a set in ${path.relative(PROJECT_ROOT, TRACE_GROUND_TRUTH)}`,
+        );
+      }
+      const recordedDigest = expected.inputs?.scoringInputsDigest;
+      const setDigest = digest(traceScoringInputs(context.traceGroundTruth, set));
+      if (recordedDigest !== setDigest) {
+        return {
+          failure:
+            `the ground truth moved. This result was derived against ${recordedDigest ?? '(nothing recorded)'} and fixture set ${setId} in ` +
+            `${path.relative(PROJECT_ROOT, TRACE_GROUND_TRUTH)} now digests to ${setDigest}. A criterion, an evidence span, a gate criterion, ` +
+            'a waiver or live expectation, or a tolerance changed, so the expected result has to be re-derived by hand and the digest ' +
+            'updated with it. --accept will not do this one.',
+        };
+      }
+      const replayed = replayTraceCase(item, set, context.traceGroundTruth);
+      if (replayed.scored) context.traceReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
+      return { observed: replayed.result };
+    }
+    default: {
+      return { failure: `unknown suite directory "${item.suite}"; expected test-review, fragment-selection or trace` };
+    }
+  }
+}
+
 function main(argv) {
   const acceptIndex = argv.indexOf('--accept');
   const accepting = acceptIndex !== -1;
@@ -464,6 +760,9 @@ function main(argv) {
 
   const groundTruth = readJson(GROUND_TRUTH, 'ground truth');
   const groundTruthDigest = digest(scoringInputs(groundTruth));
+  const traceGroundTruth = readJson(TRACE_GROUND_TRUTH, 'trace ground truth');
+  const traceSets = new Map((traceGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
+  const traceReplayed = [];
   const cases = findCases();
 
   // A mistyped case id used to be a silent no-op that exited 0, which reads as
@@ -495,42 +794,12 @@ function main(argv) {
       continue;
     }
 
-    let observed;
-    if (item.suite === 'test-review') {
-      const recordedDigest = expected.inputs?.scoringInputsDigest;
-      if (recordedDigest !== groundTruthDigest) {
-        assert(
-          false,
-          item.id,
-          `the ground truth moved. This result was derived against ${recordedDigest ?? '(nothing recorded)'} and ` +
-            `${path.relative(PROJECT_ROOT, GROUND_TRUTH)} now digests to ${groundTruthDigest}. A plant, a line, an admitted set ` +
-            'or the file list changed, so the expected numbers have to be re-derived by hand and the digest updated with them. ' +
-            '--accept will not do this one.',
-        );
-        continue;
-      }
-      const { verdict, reportPath } = loadReviewVerdict(item);
-      const drift = verdictDriftFromReport(verdict, reportPath);
-      if (drift.length > 0) {
-        assert(
-          false,
-          item.id,
-          [
-            `the stored verdict is not what its report produces (${path.relative(PROJECT_ROOT, reportPath)}):`,
-            ...drift.map((line) => `  ${line}`),
-            'A verdict no run could have produced makes every number scored from it meaningless, so fix the pair before',
-            'touching the expected result. --accept will not do this one either.',
-          ].join('\n  '),
-        );
-        continue;
-      }
-      observed = projectReviewResult(scoreVerdict(verdict, groundTruth));
-    } else if (item.suite === 'fragment-selection') {
-      observed = replaySelectionCase(item, expected);
-    } else {
-      assert(false, item.id, `unknown suite directory "${item.suite}"; expected test-review or fragment-selection`);
+    const replayed = replayCase(item, expected, { groundTruth, groundTruthDigest, traceGroundTruth, traceSets, traceReplayed });
+    if ('failure' in replayed) {
+      assert(false, item.id, replayed.failure);
       continue;
     }
+    const { observed } = replayed;
 
     const reproduced = same(expected.result, observed);
     const current = expected.scorerVersion === SCORER_VERSION;
@@ -578,6 +847,7 @@ function main(argv) {
     assert(false, item.id, detail);
   }
 
+  checkTraceSignatures(traceReplayed);
   checkRecordHygiene();
 
   console.log(`\n${colors.cyan}========================================${colors.reset}`);
@@ -596,8 +866,10 @@ if (require.main === module) process.exit(main(process.argv.slice(2)));
 module.exports = {
   SCORER_VERSION,
   scoringInputs,
+  traceScoringInputs,
   projectReviewResult,
   projectSelectionResult,
+  projectTraceResult,
   differences,
   verdictDriftFromReport,
   findCases,

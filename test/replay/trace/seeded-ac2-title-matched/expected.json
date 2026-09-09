@@ -1,0 +1,124 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the false positive the seeded set exists to catch, scored end to",
+    "end. The run matched the AC-2 test on its title, called AC-2 FULL, and everything downstream followed:",
+    "P0 went to 100%, overall to 80%, Rule 4 returned PASS, the rejected_evidence array emptied, and the",
+    "waiver block turned both requests down for fail_only because the run no longer derived a FAIL. The",
+    "harness header calls the gate one bit and not the headline; this case shows the bit flipping and names",
+    "every other number that moves with it.",
+    "",
+    "It is also the case that pins the waiver oracle being skipped. scoreWaivers is only meaningful against",
+    "the decision the run derived, so a run whose gate is wrong contributes no waiver checks at all;",
+    "scoring them would add three more failures for the same misjudgment.",
+    "",
+    "The artifacts are CONSTRUCTED. The summary is internally consistent with the run's own wrong judgment:",
+    "every percentage is the rounding of the counts beside it, so the internal pct checks pass and only the",
+    "comparisons against the ground truth fail."
+  ],
+  "id": "seeded-ac2-title-matched",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "Statuses: AC-2 is reported FULL against a truth of NONE, and it is the discriminating criterion. The",
+    "other nine match.",
+    "",
+    "Gate: expected FAIL by Rule 1, reported PASS. Not ok, so waivers are not scored: scored false, 0 checks.",
+    "",
+    "Citations: the ten from seeded-correct-run plus AC-2 citing line 30 of tenant-export.api.spec.ts. Line 30",
+    "is inside the falseEvidence span 30 to 38 the ground truth records for AC-2, so it is counted as",
+    "misattributed: total 11, resolved 10, one misattributed entry.",
+    "",
+    "Arithmetic, 40 checks, in scorer order. The summary says 8 of 10 covered at 80% where the truth is 7 at",
+    "70%: inventory.covered and inventory.pct fail (2). P0 says 2 of 2 at 100% where the truth is 1 of 2 at",
+    "50%: P0.covered and P0.pct fail (2); P0.total, all of P1, P2 and P3 pass. critical_open says 0 where the",
+    "truth is 1 (1). Treating the AC-2 test as evidence adds one api test and one api criterion:",
+    "by_level.api.criteria_covered 7 against 6 and by_level.api.tests 7 against 6 fail (2), and tests.cases",
+    "11 against 10 fails (1); tests.files stays 4 because the test is in a file already counted. The five",
+    "internal pct checks pass because 8/10 and 2/2 round to what the summary prints. recommendations name",
+    "AC-8 through the partial-coverage entry and AC-2 through the live re-record entry, which still names",
+    "AC-2 as its requirement, so both pass. 8 failed, 32 passed.",
+    "",
+    "gate_criteria: p0_coverage_actual 100% against 50%, p0_status MET against NOT_MET,",
+    "overall_coverage_actual 80% against 70%, overall_status MET against NOT_MET, in declared order. The P1",
+    "fields, the three thresholds, collection_status and gate_basis pass. 4 failed, 8 passed.",
+    "",
+    "Rejected evidence: the array is present, so the first check passes; its length is 0 against 1, and it",
+    "names nothing at line 30 to 38. 1 of 3.",
+    "",
+    "Oracle resolution 7 of 7, run metadata 10 of 10 and live 13 of 13 are untouched by the misjudgment:",
+    "the live records still land as one stale and one invalid, and requirements_live_only stays 0 because",
+    "AC-2 now has a static test in the run's own view."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "FULL",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": ["AC-2 reported FULL, expected NONE (discriminating)"],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "FAIL", "reported": "PASS", "ok": false },
+    "citations": {
+      "total": 11,
+      "resolved": 10,
+      "misattributed": ["AC-2 -> tests/api/tenant-export.api.spec.ts:30"],
+      "unresolved": []
+    },
+    "arithmetic": {
+      "checks": 40,
+      "passed": 32,
+      "failed": [
+        { "field": "coverage.inventory.covered", "expected": 7, "actual": 8 },
+        { "field": "coverage.inventory.pct", "expected": 70, "actual": 80 },
+        { "field": "priority_breakdown.P0.covered", "expected": 1, "actual": 2 },
+        { "field": "priority_breakdown.P0.pct", "expected": 50, "actual": 100 },
+        { "field": "risk_summary.critical_open", "expected": 1, "actual": 0 },
+        { "field": "by_level.api.criteria_covered", "expected": 6, "actual": 7 },
+        { "field": "by_level.api.tests", "expected": 6, "actual": 7 },
+        { "field": "tests.cases", "expected": 10, "actual": 11 }
+      ]
+    },
+    "gateCriteria": {
+      "checks": 12,
+      "passed": 8,
+      "failed": [
+        { "field": "gate_criteria.p0_coverage_actual", "expected": "50%", "actual": "100%" },
+        { "field": "gate_criteria.p0_status", "expected": "NOT_MET", "actual": "MET" },
+        { "field": "gate_criteria.overall_coverage_actual", "expected": "70%", "actual": "80%" },
+        { "field": "gate_criteria.overall_status", "expected": "NOT_MET", "actual": "MET" }
+      ]
+    },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": {
+      "checks": 3,
+      "passed": 1,
+      "failed": [
+        { "field": "rejected_evidence.length", "expected": 1, "actual": 0 },
+        { "field": "rejected_evidence names AC-2 at tenant-export.api.spec.ts:30-38", "expected": true, "actual": false }
+      ]
+    },
+    "waivers": { "scored": false, "checks": 0, "passed": 0, "failed": [] },
+    "live": { "checks": 13, "passed": 13, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}

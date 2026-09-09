@@ -1,0 +1,71 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the clean set traced correctly, and it is the negative control",
+    "the ground truth says is not optional. Every criterion is FULL, the gate is PASS by Rule 4, there is no",
+    "live file, no register, no blocker and no rejected evidence, so the run has to say nothing about any of",
+    "them. It is the case that pins the waiver check for a set with no register: scoreWaivers expects the",
+    "waivers block to be absent, and here it is.",
+    "",
+    "It also pins the two clean-set judgments a name-matching run gets wrong: AC-4's two tests never name",
+    "it and are mapped anyway, and the API-only P0 criteria and the component-only AC-5 are FULL because a",
+    "single appropriate level establishes each.",
+    "",
+    "The artifacts are CONSTRUCTED, following step-05 section 3b at 0.3.0 with no waivers key."
+  ],
+  "id": "clean-correct-run",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "clean-api-token-lifecycle",
+    "scoringInputsDigest": "sha256:3255d58babf67a05a33fc38a61c658518dd2c9742e42d3a67a1fa4c3c5d699ac"
+  },
+  "derivation": [
+    "Statuses: five FULL against five FULL. isCleanSet is true because every criterion is FULL and the set",
+    "declares no live file and no register.",
+    "",
+    "Gate: P0 100%, overall 100%, P1 100%, so Rule 4 gives PASS and the summary says PASS.",
+    "",
+    "Citations: AC-1 line 14, AC-2 line 32, AC-3 line 10, AC-4 lines 15 and 29, AC-5 line 10, each the first",
+    "line of its recorded span. 6 of 6 resolve.",
+    "",
+    "Arithmetic is 38 checks, the seeded 40 without the two recommendation checks, because the clean set has",
+    "no critical, high or partial bucket member to name. 5 of 5 at 100%, P0 2 of 2, P1 2 of 2, P2 1 of 1,",
+    "P3 0 of 0 at 100% because safePct resolves an empty priority to 100, four zero risk counts, e2e 1 test",
+    "over 1 criterion, api 4 tests over 3 criteria, component 1 over 1, 4 files and 6 cases. All 38 pass.",
+    "",
+    "gate_criteria 12 of 12, oracle resolution 7 of 7 with epic-5-api-token-lifecycle.md as the source, run",
+    "metadata 10 of 10. Rejected evidence: an array of length 0 against an expected 0, and no entry to look",
+    "for, so 2 of 2.",
+    "",
+    "Waivers: the gate matched, so they are scored; the set has no register, so the single check is that",
+    "summary.waivers is undefined, and it is. 1 of 1.",
+    "",
+    "Live: present false, freshness not_present, and an empty blockers array. 3 of 3.",
+    "",
+    "cleanFalsePositives: no status below FULL, no blocker, no rejected evidence, no waivers block, no live",
+    "presence, no risk count above zero, no invented id. 0."
+  ],
+  "result": {
+    "isCleanSet": true,
+    "statuses": { "AC-1": "FULL", "AC-2": "FULL", "AC-3": "FULL", "AC-4": "FULL", "AC-5": "FULL" },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": { "expected": "PASS", "reported": "PASS", "ok": true },
+    "citations": { "total": 6, "resolved": 6, "misattributed": [], "unresolved": [] },
+    "arithmetic": { "checks": 38, "passed": 38, "failed": [] },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 2, "passed": 2, "failed": [] },
+    "waivers": { "scored": true, "checks": 1, "passed": 1, "failed": [] },
+    "live": { "checks": 3, "passed": 3, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}

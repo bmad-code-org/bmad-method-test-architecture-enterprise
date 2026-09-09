@@ -1,0 +1,67 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the matrix carries two sections the summary never counted. AC-11 is",
+    "a criterion the epic does not state, and a second AC-3 section contradicts the first with PARTIAL. Both",
+    "are named under mustNotReport, both have a threshold of 0, and readMatrix once discarded the first",
+    "before it could be counted, which is the defect the CHANGELOG records under maxInventedCriteria. This",
+    "case pins that both reach scoreRun, that the first AC-3 section keeps the floor, and that a citation",
+    "under either extra section is attributed to nobody.",
+    "",
+    "The summary is seeded-correct-run's on purpose. A run that had counted AC-11 into its inventory would",
+    "also fail arithmetic, and that would blur what this case is about, which is the matrix alone.",
+    "",
+    "The artifacts are CONSTRUCTED."
+  ],
+  "id": "seeded-invented-and-duplicate-sections",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "The AC-11 heading shares the AC prefix with the oracle's ids and names no criterion in it, so readMatrix",
+    "records it as invented and opens no section for it; the export-manifest.spec.ts:20 line beneath it is",
+    "attributed to nothing. The second AC-3 heading names an id already seen, so it is recorded as a",
+    "duplicate and its PARTIAL and its citation are ignored; AC-3 stays FULL from the first section.",
+    "",
+    "Statuses, gate, citations and every summary check are therefore seeded-correct-run's: 10 citations",
+    "resolve, and invented is [\"AC-11\"] and duplicates is [\"AC-3\"]. The set is not the clean one, so",
+    "neither list adds to cleanFalsePositives; in main() they reach maxInventedCriteria and",
+    "maxDuplicateCriteria directly."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "NONE",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": [],
+    "invented": ["AC-11"],
+    "duplicates": ["AC-3"],
+    "gate": { "expected": "FAIL", "reported": "FAIL", "ok": true },
+    "citations": { "total": 10, "resolved": 10, "misattributed": [], "unresolved": [] },
+    "arithmetic": { "checks": 40, "passed": 40, "failed": [] },
+    "gateCriteria": { "checks": 12, "passed": 12, "failed": [] },
+    "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
+    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "rejectedEvidence": { "checks": 3, "passed": 3, "failed": [] },
+    "waivers": { "scored": true, "checks": 12, "passed": 12, "failed": [] },
+    "live": { "checks": 13, "passed": 13, "failed": [] },
+    "cleanFalsePositives": 0
+  }
+}

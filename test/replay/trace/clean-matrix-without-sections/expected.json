@@ -1,0 +1,35 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the matrix renders its Detailed Mapping as a table with no section",
+    "per criterion, so no heading names a criterion and readMatrix reads no section at all. Every",
+    "status in the table is right, and none of it is scoreable, because the per-criterion statuses are the",
+    "one measurement the summary does not carry and the section shape is the contract for reading them.",
+    "This case pins that outcome as an environment failure, the class runCase reports when the matrix is",
+    "missing or declares no section, with nothing scored. The",
+    "summary beside it is clean-correct-run's and passes readSummary, so it is the matrix alone that stops",
+    "the scoring.",
+    "",
+    "The artifacts are CONSTRUCTED."
+  ],
+  "id": "clean-matrix-without-sections",
+  "suite": "trace",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/e2e-trace-summary.json",
+    "matrix": "test-artifacts/traceability-matrix.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "clean-api-token-lifecycle",
+    "scoringInputsDigest": "sha256:3255d58babf67a05a33fc38a61c658518dd2c9742e42d3a67a1fa4c3c5d699ac"
+  },
+  "derivation": [
+    "readSummary accepts the summary at 0.3.0. readMatrix then scans the matrix for headings of the shape",
+    "`#### AC-n:` and finds none, because the mapping is a table whose rows are not headings, so byCriterion",
+    "stays empty and it returns null. runCase reports a null matrix as environment-missing-artifact, and",
+    "that is the class recorded here. Nothing is scored and no signature exists for this case, so it takes",
+    "no part in checkTraceSignatures."
+  ],
+  "result": { "unmeasurable": "environment-missing-artifact" }
+}
