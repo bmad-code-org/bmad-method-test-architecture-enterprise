@@ -46,8 +46,12 @@
  *   node test/eval-contract-strength.js --suite trace --agent codex
  *   node test/eval-contract-strength.js --from-cache      # score with no new model call
  *
- * Exit codes: 0 every suite scored, 1 a suite scored a measured failure, 2 the
- * environment could not measure.
+ * Exit codes are read against `test/probes/expected-strength.json`, the same
+ * baseline the deterministic gate compares to: 0 when every probe reached the
+ * outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome
+ * moved. Eight of the thirty-one probes cannot be pre-flighted today and the
+ * baseline says so, so their failure is not news and does not colour the run;
+ * one of them starting to pass is news, and so is one that stops.
  */
 
 'use strict';
@@ -67,6 +71,7 @@ const REVIEW_FIXTURE_DIR = path.join('test', 'fixtures', 'test-review-eval');
 const REVIEW_SKILL_DIR = path.join('src', 'workflows', 'testarch', 'bmad-testarch-test-review');
 const DEFAULT_OUT = path.join(PROJECT_ROOT, 'test', 'eval-artifacts', 'contract-strength');
 const DEFAULT_CACHE = path.join(PROJECT_ROOT, 'test', 'eval-artifacts', 'preflight-cache');
+const BASELINE_PATH = path.join(PROJECT_ROOT, 'test', 'probes', 'expected-strength.json');
 const TRACE_GROUND_TRUTH = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json');
 
 const colors = {
@@ -358,7 +363,7 @@ async function runOneSuite(suite, options, stats) {
           signal: AbortSignal.timeout(60 * 60_000),
         },
       );
-      verdicts.push({ probeId: probe.probeId, passed: verdict.passed, checks: verdict.checks });
+      verdicts.push({ probeId: probe.probeId, passed: verdict.passed, preflight: preflightOutcome(verdict) });
       writeArtifact(outDir, `preflight-${probe.probeId}.json`, verdict);
       console.log(
         `  ${probe.probeId} ${probe.probeClass.padEnd(11)} pre-flight ${verdict.passed ? colors.green + 'passed' : colors.red + 'failed'}${colors.reset}`,
@@ -416,10 +421,66 @@ async function runOneSuite(suite, options, stats) {
     verdicts: outcome.scored.map((entry) => ({
       probeId: entry.probe.probeId,
       passed: entry.preflight.passed,
+      preflight: preflightOutcome(entry.preflight),
       verdict: entry.result.ladder.verdict,
       exitCode: entry.result.ladder.exitCode,
     })),
   };
+}
+
+/**
+ * One pre-flight verdict in the spelling `test/probes/expected-strength.json`
+ * records, so a live outcome and a recorded one compare as strings.
+ */
+function preflightOutcome(verdict) {
+  if (verdict.passed) return 'passed';
+  const failed = verdict.checks.filter((check) => check.outcome === 'failed').map((check) => check.kind);
+  return `failed: ${[...new Set(failed)].sort().join(', ')}`;
+}
+
+/**
+ * What this run measured, against what the corpus records it measures.
+ *
+ * The alternative was to exit 2 whenever any probe's pre-flight failed, which is
+ * true of this corpus every time it runs: eight of its thirty-one probes cannot
+ * be pre-flighted, for reasons `docs/explanation/eval-quality-command-adapter.md`
+ * records and no leg TEA can author repairs. A script that is red on every run
+ * stops being read within a week, and then the day it means something is the day
+ * nobody looks. That is the same defect as a declaration nothing enforces,
+ * arriving from the other direction.
+ *
+ * So the comparison is against the baseline, which is the idiom
+ * `test/contracts/expected-status.json` and `test/probes/expected-strength.json`
+ * already use everywhere else here: a recorded outcome, and movement in either
+ * direction is the finding. A probe recorded as unable to pre-flight and unable
+ * to pre-flight is not news. One that starts passing is, and so is one that
+ * stops.
+ */
+function baselineDifferences(results, baseline) {
+  const environment = [];
+  const measured = [];
+  for (const result of results) {
+    const recorded = baseline[result.suiteId]?.probes;
+    if (recorded === undefined) {
+      environment.push(`${result.suiteId}: the baseline records no such suite`);
+      continue;
+    }
+    for (const entry of result.verdicts ?? []) {
+      const expected = recorded[entry.probeId];
+      if (expected === undefined) {
+        environment.push(`${result.suiteId} ${entry.probeId}: the baseline records no such probe`);
+        continue;
+      }
+      if (entry.preflight !== expected.preflight) {
+        environment.push(`${result.suiteId} ${entry.probeId}: pre-flight ${entry.preflight}, recorded ${expected.preflight}`);
+      }
+      // `--preflight-only` scores nothing, so there is no verdict to compare.
+      if (entry.verdict !== undefined && entry.verdict !== expected.verdict) {
+        measured.push(`${result.suiteId} ${entry.probeId}: verdict ${String(entry.verdict)}, recorded ${String(expected.verdict)}`);
+      }
+    }
+  }
+  return { environment, measured };
 }
 
 async function main(argv) {
@@ -455,16 +516,20 @@ async function main(argv) {
     for (const problem of schemaProblems) console.error(`   ${problem}`);
     return 2;
   }
-  // A probe whose pre-flight failed measured nothing, and an environment failure
-  // outranks a measured one. Read before the verdict, because in `--preflight-only`
-  // there is no verdict to read at all and the run would otherwise report success
-  // on a pre-flight where every leg failed, which is the one thing that flag exists
-  // to catch. Today's corpus reaches this: eight of its thirty-one probes cannot be
-  // pre-flighted, for the reasons `test/probes/expected-strength.json` records.
-  const unmeasured = results.some((result) => (result.verdicts ?? []).some((entry) => entry.passed === false));
-  if (unmeasured) return 2;
-  const measuredFailure = results.some((result) => (result.verdicts ?? []).some((entry) => entry.verdict === 'FAIL'));
-  return measuredFailure ? 1 : 0;
+  const { environment, measured } = baselineDifferences(results, JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8')));
+  if (environment.length > 0) {
+    console.error(`\n${colors.red}${environment.length} pre-flight outcome(s) moved:${colors.reset}`);
+    for (const line of environment) console.error(`   ${line}`);
+    console.error(`\n${colors.dim}Read why before regenerating with: node test/test-probe-corpus.js --write${colors.reset}`);
+    return 2;
+  }
+  if (measured.length > 0) {
+    console.error(`\n${colors.red}${measured.length} verdict(s) moved:${colors.reset}`);
+    for (const line of measured) console.error(`   ${line}`);
+    return 1;
+  }
+  console.log(`${colors.green}every probe matched the outcome test/probes/expected-strength.json records${colors.reset}`);
+  return 0;
 }
 
 if (require.main === module) {

@@ -101,6 +101,13 @@ What the corpus scores, at `eval-quality` 1.3.0:
 A clean control never enters the vector, which is AD-7's rule rather than a gap: what it establishes
 is that the contract does not fire where there is nothing to find.
 
+`npm run eval:preflight` and `npm run eval:contract-strength` read their exit code against
+`test/probes/expected-strength.json` rather than against pass and fail directly: 0 when every probe
+reached the outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome moved.
+Eight probes that cannot be pre-flighted would otherwise make both scripts red on every run, and a
+script that is always red stops being read before the day it means something, which is a declaration
+nothing enforces arriving from the other direction.
+
 ### The behavior grouping was a defect, and it is fixed
 
 `eval-quality`'s `designatedOracleIdOf` resolves AD-40's designated oracle only for a behavior
@@ -146,7 +153,7 @@ since every completed trace run exits 0 whatever it wrote, so its three probes k
 that states the truth about the plant and are refused rather than given one that would qualify and
 mean nothing.
 
-**`seeded-faults-scoped` has no clean leg to use.** AD-10 asks whether a seeded fault fires anywhere
+**`seeded-faults-scoped` compares a run against itself.** AD-10 asks whether a seeded fault fires anywhere
 it should not, and `planPreflight` answers it against every leg already registered for the operation,
 which for a TEA contract is its sensitivity witness legs. `test-review`'s differential drives one leg
 at a seeded fixture and `trace`'s drives both at the seeded set, so a plant in a file a witness leg
@@ -154,6 +161,20 @@ reads fires on a leg the plan calls clean. Five of the nine review plants land t
 trace plants: the live pre-flight reports `D-001: the manifestation witness fires on clean leg
 "witness-gate-evaluated"`. The four review plants in the file no witness leg reads pre-flight cleanly
 and score, and the defect class catches all four.
+
+No leg TEA can add repairs it, and the reason is sharper than "a plant sits in a file a witness
+reads". For those five plants the fault leg's request is byte for byte the sensitivity leg's request:
+the same executable, the same `--files`, the same `--json`, the same `--agent`. The observation cache
+collapses them into one spawn for exactly that reason. So the check resolves the manifestation
+relation against a run identical to the fault run, and no relation true on the one can be false on
+the other. Adding a leg that reads an unplanted fixture changes nothing, because the check fails on a
+leg that fires rather than on the absence of a leg that does not, and adding legs can only add ways
+to fire. Making the seeded witness leg read an unplanted fixture is not available either: the
+differential it asserts is that two file lists produce different severity counts, and two unplanted
+lists produce the same counts, so the witness would fail instead. The one remaining shape, a witness
+whose relation compares the `reviewedFiles` the verdict echoes back, is the "the evidence contains
+the string I sent" condition the probe-side qualification gate exists to reject, and authoring it
+contract-side to get a green pre-flight would be gaming the witness.
 
 **"This collection is empty" has no spelling.** The evaluator intercepts an empty array on every
 quantifier and on every single-operand leaf and returns `insufficient-evidence` with an
