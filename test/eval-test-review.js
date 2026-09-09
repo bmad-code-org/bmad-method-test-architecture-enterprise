@@ -93,7 +93,7 @@ const {
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { createProbePort, hostEnvironment, probeCommand, probeRequest } = require('./lib/probe-targets');
-const { boundedProbe } = require('./lib/bounded-probe');
+const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
@@ -346,8 +346,12 @@ function preflight({ agents, agentCmd }) {
         String(probe.stdout || '')
           .trim()
           .split('\n')[0] || null;
+    } else if (probe.reason === 'failed') {
+      report('environment-transport', `agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
+    } else if (probe.reason === 'timeout') {
+      report('environment-transport', `agent CLI "${executable}" did not answer --version within ${PROBE_TIMEOUT_MS}ms and was killed`);
     } else {
-      report('environment-transport', `agent CLI "${executable}": ${probe.detail}`);
+      report('environment-transport', `agent CLI "${executable}" is not on PATH (${probe.detail})`);
     }
     const credential = agent === 'custom' ? null : missingCredential(agent);
     if (credential) report('environment-authentication', credential);
