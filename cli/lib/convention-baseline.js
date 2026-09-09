@@ -19,7 +19,7 @@
  *
  * Two tiers of grounding:
  * - corpusSize / sampled / sampledFiles: 100% mechanical (git ls-files, isTestFile,
- *   directory-distance ranking, a 40-file cap) — this is exactly step-02 §2b's
+ *   directory-distance ranking, an 8-file cap) — this is exactly step-02 §2b's
  *   sampling rules, just executed by code instead of described in prose. A report
  *   that cites a different sampled count, or a different corpus, is provably wrong
  *   and rejected outright.
@@ -59,7 +59,20 @@ const CONVENTION_KEYS = [
   'playwrightUtils',
 ];
 
-const MAX_SAMPLED_FILES = 40;
+// The sample is the review's single largest input, and it is paid on every run
+// regardless of how small the pull request is. The agent has no shell (see
+// agent-adapters.js's claude tool list), so a sampled file can only be opened one
+// Read at a time: the cap is a turn budget as much as a byte budget. At 40, and
+// measured on this repository against a one-file review set, the sample was
+// ~609 KB of files that were not in the diff; at 8 it is ~289 KB, over five times
+// fewer reads.
+//
+// Eight keeps the two properties the cap has to keep. It stays above
+// step-02-discover-tests.md §2b's `sampled < 4` "corpus too small to infer a
+// house rule" floor with margin, and it leaves enough files for §2b's 0.5
+// established/emerging ratio to mean something. Changing this changes the number
+// every report cites, so step-02 §2b's "Sampling rules" states the same figure.
+const MAX_SAMPLED_FILES = 8;
 const MIN_CORPUS_TO_ATTEMPT = 1; // 0 eligible files outside the review set: nothing to sample at all.
 
 // One regex per mechanically-recognizable key, matched against a sampled file's raw
@@ -180,7 +193,7 @@ function unavailable(reason) {
 
 /**
  * Compute the convention baseline for a review run: the real corpus outside the
- * review set, ranked closest-first by directory distance and capped at 40 (per
+ * review set, ranked closest-first by directory distance and capped at 8 (per
  * step-02-discover-tests.md §2b's sampling rules), plus a mechanical adoption scan
  * over the sampled files' real content.
  *
@@ -188,7 +201,7 @@ function unavailable(reason) {
  * @param {string} options.projectRoot - Repo root (git ls-files runs here).
  * @param {string[]} options.reviewFiles - The review set; excluded from sampling and
  *   used as the distance anchor.
- * @param {number} [options.cap] - Sample size cap (default 40, matching step-02).
+ * @param {number} [options.cap] - Sample size cap (default 8, matching step-02).
  * @returns {object} `{ baselineUnavailable: true, reason, ... }` when no corpus
  *   exists outside the review set (or git ls-files failed), otherwise
  *   `{ baselineUnavailable: false, corpusSize, sampled, sampledFiles, conventions }`.

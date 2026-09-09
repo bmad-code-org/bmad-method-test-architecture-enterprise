@@ -72,6 +72,19 @@ const DEFAULT_CAPABILITIES = ['scoped-artifact-writes'];
 
 const WRITE_TOOLS = ['Write', 'Edit'];
 const COMMAND_TOOLS = ['Bash'];
+// Delegation, which claude spells `Task` on the command line and exposes to the
+// model as `Agent`. step-03-quality-evaluation.md dispatches four quality workers
+// and resolves its execution mode from a runtime capability probe, so without this
+// the probe finds no launcher and every headless run collapses to `sequential` no
+// matter what tea_execution_mode says.
+//
+// It is granted from `scoped-artifact-writes` upward, that being the first tier
+// at which the workers' declared outputs can exist: each writes
+// /tmp/tea-test-review-<dimension>-<timestamp>.json, and step-03 section 5 aborts
+// the workflow when one of them is missing. A `read-only` runner cannot finish
+// that step in any mode, so handing it a launcher would widen the tool surface
+// while enabling nothing.
+const DELEGATE_TOOLS = ['Task'];
 
 /** The tier a capability list resolves to: the strongest one named. */
 function strongestCapability(capabilities = DEFAULT_CAPABILITIES) {
@@ -90,6 +103,7 @@ function claudeTools(capabilities) {
     ...(tier === 'read-only' ? [] : WRITE_TOOLS),
     'Glob',
     'Grep',
+    ...(tier === 'read-only' ? [] : DELEGATE_TOOLS),
     ...(tier === 'command-execution' ? COMMAND_TOOLS : []),
   ].join(',');
 }
@@ -196,8 +210,19 @@ const AGENT_ADAPTERS = {
     modelFlags: ['--model'],
     // --safe-mode strips repo customizations for the review run; --tools/
     // --allowedTools scope the run to the tool surface the caller's declared
-    // capabilities allow: search and read always, write only above read-only,
-    // the shell only under command-execution.
+    // capabilities allow: search and read always, write and delegation only
+    // above read-only, the shell only under command-execution. Both flags carry
+    // the same list because --tools decides what exists and --allowedTools
+    // decides what runs without a prompt; naming a tool in one and not the other
+    // either hides it or stops the headless run to ask about it.
+    //
+    // claude 2.1.266 has no turn cap to pair with these. `--max-budget-usd`
+    // is the nearest vendor bound and is reachable through the passthrough
+    // (--agent-arg --max-budget-usd --agent-arg 2.00); it stays out of this
+    // table for the same reason codex's reasoning effort does, since it is one
+    // vendor's flag and the other adapters cannot honor it. The vendor-agnostic
+    // bound is the wall-clock timeout in run-agent.js, which the CLI scales to
+    // the size of the review set.
     buildArgv: (extra = [], model, capabilities = DEFAULT_CAPABILITIES) => [
       '-p',
       '--output-format',
@@ -225,6 +250,14 @@ const AGENT_ADAPTERS = {
     // vendor's own enforcement of that tier.
     // --skip-git-repo-check matters under --isolate, where the agent's cwd
     // is a fresh tmpdir with no .git.
+    //
+    // No parallel-worker argv here, deliberately. `codex exec` exposes no
+    // subagent launcher for step-03's four quality workers to run on, so the
+    // prompt's tea_execution_mode=auto resolves through the capability probe to
+    // sequential on this adapter, which is the same run codex did before. The
+    // output contract, the aggregation, and the score are identical in either
+    // mode (step-03: "Mode changes orchestration only"), so codex loses the
+    // wall-clock gain and nothing else.
     //
     // Reasoning effort is deliberately not pinned here. It is a second
     // unstated input (a local model_reasoning_effort = "max" costs ~10s even

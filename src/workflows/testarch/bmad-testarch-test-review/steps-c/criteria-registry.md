@@ -99,7 +99,7 @@ For `priorityMarkers`, `testIds`, `bddNaming`, and the rest, repo habit is the o
 authority: nothing outside the corpus says whether the repo means to use test ids.
 `playwrightUtils` is different. A run-level precondition already resolved a
 deterministic external fact — the package is in the manifest, and the flag is on.
-An install is stronger evidence of intent than a ratio over at most 40 sampled
+An install is stronger evidence of intent than a ratio over at most 8 sampled
 files, and it is most decisive exactly where the ratio is least informative.
 
 So when `playwrightUtilsActive` is true and the baseline comes back `absent`,

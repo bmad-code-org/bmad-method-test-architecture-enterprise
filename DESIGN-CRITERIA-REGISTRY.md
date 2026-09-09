@@ -63,7 +63,7 @@ or label-based locator now satisfies L1 outright.**
 ### The baseline is measured before it is judged against
 
 `step-02-discover-tests` §2b samples the corpus **outside the review set** (a PR must
-not establish or dilute the convention it is judged against), capped at 40 files
+not establish or dilute the convention it is judged against), capped at 8 files
 closest-first, and classifies each convention on a pinned threshold: `< 4` files is
 `unknown`, `0` adopted is `absent`, `>= 50%` is `established`, otherwise `emerging`.
 Unmeasurable means every Convention row passes as `n/a` and the report says so.

@@ -61,7 +61,7 @@ const {
   extractFindings,
   FINDING_KEYS,
 } = require('../cli/lib/parse-report');
-const { VERDICT_KEYS, SKIP_KEYS } = require('../cli/test-review');
+const { VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs } = require('../cli/test-review');
 const {
   computeConventionBaseline,
   directoryDistance,
@@ -1841,7 +1841,22 @@ async function runTests() {
       assert(!prompt.includes('What would you like to do?'), 'prompt renders no interactive menu');
       assert(prompt.includes('review_scope=directory'), 'prompt derives review_scope=directory for a multi-file review set');
       assert(prompt.includes('tea_browser_automation=none'), 'prompt disables browser automation evidence');
-      assert(prompt.includes('tea_execution_mode=sequential'), 'prompt forces sequential execution');
+      // Both orchestration keys have to be stated. step-03-quality-evaluation.md
+      // resolves "auto" through a capability probe, and "auto" with the probe off
+      // collapses to sequential on every run, so stating one without the other
+      // would leave the parallel path unreachable and unstated.
+      assert(
+        prompt.includes('tea_execution_mode=auto') && prompt.includes('tea_capability_probe=true'),
+        'prompt states both orchestration keys so step-03 can probe for parallel workers',
+      );
+      assert(
+        !prompt.includes('tea_execution_mode=sequential'),
+        'prompt no longer pins the execution mode to sequential regardless of runtime capability',
+      );
+      assert(
+        prompt.includes('each worker receives the convention baseline stated above verbatim'),
+        'prompt carries the convention baseline into the workers, so a parallel run cannot score against a baseline it never saw',
+      );
 
       // Anchor on the standalone delimiter lines: the review_files contract line
       // mentions both markers inline, so a bare indexOf would find that first.
@@ -2088,10 +2103,14 @@ async function runTests() {
         'the zero-signal floor instruction applies uniformly to every mechanically-scanned key, not just priorityMarkers',
       );
       assert(
-        /testIds: mechanically scanned; at least one sampled file contains a recognized form\. Read the sampled files\s+yourself to judge the true adopted count \(0-40\)/.test(
+        /testIds: mechanically scanned; a recognized form appeared in 6 of the 40 sampled files\.[\s\S]*?high-recall and over-matches[\s\S]*?treat the count as a\s+starting point\.[\s\S]*?true adopted count \(0-40\)/.test(
           measuredConventionPrompt,
         ),
-        "a key with a nonzero mechanical signal is left to the agent's judgment for the true count, never forced to a specific number",
+        'a key with a nonzero mechanical signal states the scan count with its real confidence, and still leaves the true count to the reader',
+      );
+      assert(
+        /dataFactories: mechanically scanned; a recognized form appeared in 3 of the 40 sampled files/.test(measuredConventionPrompt),
+        'every mechanically-scanned key with a signal carries the count measured for that key alone',
       );
       assert(
         /bddNaming: not mechanically pre-scanned; read the sampled files yourself/.test(measuredConventionPrompt),
@@ -2329,23 +2348,45 @@ async function runTests() {
       const claudeDefault = AGENT_ADAPTERS.claude.buildArgv([], 'sonnet');
       assert(
         JSON.stringify(claudeDefault) === JSON.stringify(AGENT_ADAPTERS.claude.buildArgv([], 'sonnet', ['scoped-artifact-writes'])) &&
-          claudeDefault[claudeDefault.indexOf('--tools') + 1] === 'Read,Write,Edit,Glob,Grep',
-        'claude adapter defaults to the scoped-artifact-writes tool list the CLI has always passed',
+          claudeDefault[claudeDefault.indexOf('--tools') + 1] === 'Read,Write,Edit,Glob,Grep,Task',
+        'claude adapter defaults to the scoped-artifact-writes tool list',
+        JSON.stringify(claudeDefault),
+      );
+      // Both flags carry the same list. --tools decides what exists and
+      // --allowedTools decides what runs without a prompt, so a tool named in one
+      // and not the other is either invisible or a halt in a headless run.
+      assert(
+        claudeDefault[claudeDefault.indexOf('--allowedTools') + 1] === 'Read,Write,Edit,Glob,Grep,Task',
+        'claude adapter passes the delegation tool to --allowedTools as well as --tools, so step-03 can actually launch its workers',
         JSON.stringify(claudeDefault),
       );
       const claudeReadOnly = AGENT_ADAPTERS.claude.buildArgv([], 'sonnet', ['read-only']);
       assert(
         claudeReadOnly[claudeReadOnly.indexOf('--tools') + 1] === 'Read,Glob,Grep' &&
           claudeReadOnly[claudeReadOnly.indexOf('--allowedTools') + 1] === 'Read,Glob,Grep',
-        'claude adapter grants no write tool under a read-only declaration',
+        'claude adapter grants no write tool, and no delegation, under a read-only declaration',
         JSON.stringify(claudeReadOnly),
       );
       const claudeCommands = AGENT_ADAPTERS.claude.buildArgv([], 'sonnet', ['command-execution']);
       assert(
-        claudeCommands[claudeCommands.indexOf('--tools') + 1] === 'Read,Write,Edit,Glob,Grep,Bash' &&
+        claudeCommands[claudeCommands.indexOf('--tools') + 1] === 'Read,Write,Edit,Glob,Grep,Task,Bash' &&
           !claudeDefault.join(' ').includes('Bash'),
         'claude adapter grants the shell only under command-execution',
         JSON.stringify(claudeCommands),
+      );
+
+      // No supported vendor CLI caps turns, so the wall clock is the only bound on
+      // a run that stops making progress, and a flat 30 minutes made a one-file
+      // review indistinguishable from a stuck one for half an hour.
+      assert(
+        defaultTimeoutMs(1) === 1_020_000 && defaultTimeoutMs(3) === 1_260_000,
+        'the default agent timeout scales with the review set: 15 minutes plus 2 minutes per reviewed file',
+        `${defaultTimeoutMs(1)} / ${defaultTimeoutMs(3)}`,
+      );
+      assert(
+        defaultTimeoutMs(50) === DEFAULT_TIMEOUT_MS && defaultTimeoutMs(0) === 900_000,
+        'the scaled timeout is clamped to the 30-minute ceiling and never derives a nonpositive value from an empty review set',
+        `${defaultTimeoutMs(50)} / ${defaultTimeoutMs(0)}`,
       );
       const codexReadOnly = AGENT_ADAPTERS.codex.buildArgv([], 'gpt-5.6-sol', ['read-only']);
       const codexDefault = AGENT_ADAPTERS.codex.buildArgv([], 'gpt-5.6-sol');
@@ -5291,7 +5332,7 @@ async function runTests() {
 
       // A close neighbor (same directory as the reviewed file) and a distant one
       // (nested three levels under an unrelated directory), plus enough filler to
-      // exceed the 40-file cap and prove ranking, not just membership.
+      // exceed the sample cap and prove ranking, not just membership.
       fs.writeFileSync(path.join(cbRoot, 'tests', 'login.spec.ts'), "test('[P1] logs in', () => { expect(true).toBe(true); });\n");
       fs.mkdirSync(path.join(cbRoot, 'legacy', 'archive', 'old-suite'), { recursive: true });
       fs.writeFileSync(
@@ -5300,7 +5341,7 @@ async function runTests() {
       );
       // Named to sort AFTER "login.spec.ts" alphabetically (tie-break order at equal
       // distance), so the cap test below proves ranking by distance, not an artifact
-      // of alphabetical luck: login.spec.ts must survive the 40-file cap on its
+      // of alphabetical luck: login.spec.ts must survive the 8-file cap on its
       // distance alone, with 45 same-distance rivals crowding in behind it.
       for (let index = 0; index < 45; index++) {
         fs.writeFileSync(path.join(cbRoot, 'tests', `zzz-filler-${String(index).padStart(2, '0')}.spec.ts`), "test('filler', () => {});\n");
@@ -5314,7 +5355,15 @@ async function runTests() {
         'corpusSize counts every eligible file outside the review set, uncapped (1 login + 1 ancient + 45 filler)',
         JSON.stringify({ corpusSize: rankedBaseline.corpusSize, baselineUnavailable: rankedBaseline.baselineUnavailable }),
       );
-      assert(rankedBaseline.sampled === 40, 'sampled is capped at 40 even though 47 files are eligible', String(rankedBaseline.sampled));
+      // The cap is the review's largest recurring input and it is paid on every
+      // run, so it is pinned here: the number the CLI samples is the number every
+      // report cites, and the number step-02 §2b's sampling rules state in prose.
+      assert(rankedBaseline.sampled === 8, 'sampled is capped at 8 even though 47 files are eligible', String(rankedBaseline.sampled));
+      assert(
+        rankedBaseline.sampled >= 4,
+        "the cap stays above step-02 §2b's `sampled < 4` floor, below which every convention is 'unknown' and the whole baseline is wasted work",
+        String(rankedBaseline.sampled),
+      );
       assert(
         !rankedBaseline.sampledFiles.includes('legacy/archive/old-suite/ancient.spec.ts'),
         'closest-first ranking drops the distant file before the cap is reached (same-directory neighbors rank first)',

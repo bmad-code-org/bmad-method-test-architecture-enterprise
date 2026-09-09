@@ -80,7 +80,27 @@ const AGENTS = new Set([...Object.keys(AGENT_ADAPTERS), 'none']);
 const SCOPES = new Set(['single', 'directory', 'suite']);
 const FAIL_ON_LEVELS = new Set(['request-changes', 'block']);
 const GATE_ON_MODES = new Set(['introduced', 'all']);
-const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes
+const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes: the ceiling, and the value for a large review set
+// Nothing bounds how many turns the agent takes, and no supported vendor CLI
+// offers a turn cap (claude 2.1.266 has --max-budget-usd and no --max-turns;
+// codex exec has neither). The wall clock is the only vendor-agnostic bound, so
+// it scales with the one thing that legitimately makes a review longer: how many
+// files are in it. A flat 30 minutes let a one-file review spin for half an hour
+// before anyone found out. The allowances below are deliberately generous, since
+// the job of this clock is to end a stuck run on a CI runner of unknown speed,
+// and --timeout-ms still overrides it.
+const TIMEOUT_BASE_MS = 900_000; // 15 minutes before the per-file allowance
+const TIMEOUT_PER_FILE_MS = 120_000; // 2 minutes per reviewed file
+
+/**
+ * Default agent wall-clock timeout for a review set of this size.
+ *
+ * @param {number} reviewFileCount - Files in the authoritative review set.
+ * @returns {number} Timeout in ms, never above DEFAULT_TIMEOUT_MS.
+ */
+function defaultTimeoutMs(reviewFileCount) {
+  return Math.min(DEFAULT_TIMEOUT_MS, TIMEOUT_BASE_MS + TIMEOUT_PER_FILE_MS * Math.max(0, reviewFileCount));
+}
 const ENV_PASS_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const AGENT_OUTPUT_TAIL_LINES = 20;
 const AGENT_OUTPUT_TAIL_CHARS = 8000;
@@ -399,7 +419,10 @@ function main() {
       collect,
       [],
     )
-    .option('--timeout-ms <n>', 'agent wall-clock timeout in milliseconds (SIGTERM on expiry)', String(DEFAULT_TIMEOUT_MS))
+    .option(
+      '--timeout-ms <n>',
+      'agent wall-clock timeout in milliseconds (SIGTERM on expiry); default scales with the review set, 15 min plus 2 min per file, capped at 30 min',
+    )
     .option('--min-score <n>', 'verdict fails when the report quality score is below n (integer 0-100)')
     .option('--max-critical <n>', 'verdict fails when the report declares more than n Critical violations (integer; default: no cap)')
     .option('--min-files <n>', 'verdict fails when the report reviews fewer than n files (integer)', '1')
@@ -424,9 +447,9 @@ function main() {
       'force tea_use_playwright_utils on, overriding _bmad/tea/config.yaml (default when nothing states it: true)',
     )
     .option('--no-use-playwright-utils', 'force tea_use_playwright_utils off, overriding _bmad/tea/config.yaml')
-    .option('--use-pactjs-utils', 'force tea_use_pactjs_utils on, overriding _bmad/tea/config.yaml (default when nothing states it: false)')
+    .option('--use-pactjs-utils', 'force tea_use_pactjs_utils on, overriding _bmad/tea/config.yaml (default when nothing states it: true)')
     .option('--no-use-pactjs-utils', 'force tea_use_pactjs_utils off, overriding _bmad/tea/config.yaml')
-    .option('--pact-mcp <mode>', `force tea_pact_mcp, overriding _bmad/tea/config.yaml (${PACT_MCP_VALUES.join('|')}; default: none)`);
+    .option('--pact-mcp <mode>', `force tea_pact_mcp, overriding _bmad/tea/config.yaml (${PACT_MCP_VALUES.join('|')}; default: mcp)`);
 
   program.exitOverride();
   const normalizedArgv = normalizeAgentArgAliases(process.argv);
@@ -479,9 +502,14 @@ function main() {
       throw error;
     }
   }
-  const timeoutMs = Number.parseInt(options.timeoutMs, 10);
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
-    fail(EXIT.ENV_ERROR, `--timeout-ms must be a positive integer; got "${options.timeoutMs}".`);
+  // null means "not stated": the effective timeout is then derived from the size
+  // of the review set, which is not known until the review set is resolved below.
+  let explicitTimeoutMs = null;
+  if (options.timeoutMs !== undefined) {
+    explicitTimeoutMs = Number.parseInt(options.timeoutMs, 10);
+    if (!Number.isFinite(explicitTimeoutMs) || explicitTimeoutMs <= 0) {
+      fail(EXIT.ENV_ERROR, `--timeout-ms must be a positive integer; got "${options.timeoutMs}".`);
+    }
   }
   let minScore;
   if (options.minScore !== undefined) {
@@ -743,6 +771,8 @@ function main() {
   // once and reused for both the printed prompt and (below) the parsed-report
   // cross-check, so the two can never see a different corpus.
   const conventionBaseline = computeConventionBaseline({ projectRoot, reviewFiles: changedTestFiles });
+
+  const timeoutMs = explicitTimeoutMs ?? defaultTimeoutMs(changedTestFiles.length);
 
   // criteria-registry.md's row -> severity map, read from the skill itself so a
   // report's "**Row**: <id>" citations can be checked against real rows instead of
@@ -1091,4 +1121,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT };
+module.exports = { VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, defaultTimeoutMs };

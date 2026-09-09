@@ -10,9 +10,11 @@
  * context_files stays an invocation-only wire so PR evidence can never become
  * a persistent user preference.
  *
- * It also states every TEA config key that step-01 branches on, resolved by
- * resolve-tea-config. An unstated key is one the agent decides for itself, which
- * makes knowledge loading differ between runs over identical files.
+ * It also states every TEA config key the workflow branches on: the fragment-loading
+ * keys step-01 reads, resolved by resolve-tea-config, and the orchestration pair
+ * step-03 reads (tea_execution_mode, tea_capability_probe). An unstated key is one
+ * the agent decides for itself. Two runs over identical files would then load
+ * different knowledge, or dispatch a different number of workers.
  *
  * Two file lists travel in the prompt, each as a JSON array inside its own
  * delimiters so paths are unambiguously data: the review set, which is scored,
@@ -67,8 +69,9 @@ function conventionBaselinePromptLines(conventionBaseline) {
     }
     return measured.mechanicalSignal
       ? [
-          `- ${key}: mechanically scanned; at least one sampled file contains a recognized form. Read the sampled files`,
-          `  yourself to judge the true adopted count (0-${conventionBaseline.sampled}) and record the observed form.`,
+          `- ${key}: mechanically scanned; a recognized form appeared in ${measured.adopted} of the ${conventionBaseline.sampled} sampled files.`,
+          '  That scan is deliberately high-recall and over-matches (a regex cannot read intent), so treat the count as a',
+          `  starting point. Judge the true adopted count (0-${conventionBaseline.sampled}) from the sampled files and record the observed form.`,
         ]
       : [
           `- ${key}: mechanically scanned across all ${conventionBaseline.sampled} sampled files; zero occurrences of any`,
@@ -186,7 +189,8 @@ function buildPrompt({
     `review_scope=${reviewScope}`,
     `test_dir=${testDir}`,
     'tea_browser_automation=none',
-    'tea_execution_mode=sequential',
+    'tea_execution_mode=auto',
+    'tea_capability_probe=true',
     `tea_use_playwright_utils=${teaConfig.tea_use_playwright_utils}`,
     `tea_use_pactjs_utils=${teaConfig.tea_use_pactjs_utils}`,
     `tea_pact_mcp=${teaConfig.tea_pact_mcp}`,
@@ -197,6 +201,13 @@ function buildPrompt({
     'fragment set, Pact MCP) instead of inferring the flags.',
     'The two *_installed values above were read from the project manifest by the CLI. Do not re-derive them, and do',
     'not open package.json: they are the second half of each mandate gate, stated here for the same reason the flags are.',
+    "tea_execution_mode is auto and tea_capability_probe is true, which is src/module.yaml's own default pair.",
+    'step-03-quality-evaluation.md probes the runtime and dispatches the four quality workers in parallel when it can',
+    'launch them, and resolves to sequential when it cannot. Both keys are stated because step-03 branches on both:',
+    '"auto" with probing off resolves to sequential on every run, which would make the probe unreachable.',
+    'Whichever mode resolves, each worker receives the convention baseline stated above verbatim, exactly as step-03',
+    'section 1 requires. A worker handed no baseline reports "unknown" and passes its Convention rows as n/a, and the',
+    'CLI rejects a report whose Convention citations disagree with what it measured.',
     'playwrightUtilsActive = tea_use_playwright_utils AND playwright_utils_installed; when true, load',
     'playwright-utils-mandate.md and score registry rows M9 and L9. pactjsUtilsActive = tea_use_pactjs_utils AND',
     'pactjs_utils_installed; when true, load pactjs-utils-mandate.md and score registry row M10.',

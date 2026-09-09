@@ -115,10 +115,14 @@ number.
 - Sample test files that are **not in the review set**. A pull request adding four
   files must not be allowed to establish, or dilute, the convention it is judged
   against.
-- Discover them the way `review_scope: suite` would, then cap the sample at **40
+- Discover them the way `review_scope: suite` would, then cap the sample at **8
   files**, chosen closest-first by directory distance from the reviewed files, so
   the baseline describes the neighborhood the new tests live in rather than a
-  distant corner of a monorepo.
+  distant corner of a monorepo. Eight is deliberately small: the sample is read on
+  every run whatever the size of the change, so the cap is set at the smallest
+  number that still clears the `sampled < 4` floor below with margin and still
+  gives the 0.5 ratio a meaningful denominator. `cli/lib/convention-baseline.js`
+  applies the same figure, and the two are kept in sync by hand.
 - Record `corpusSize` (how many exist) and `sampled` (how many were read). When
   they differ, say so wherever the baseline is cited.
 - Read only what the measurement needs: test names, locator calls, imports, and
