@@ -26,15 +26,22 @@ const MODULE_DEFAULTS = {
   tea_use_playwright_utils: true,
   tea_use_pactjs_utils: true,
   tea_pact_mcp: 'mcp',
+  tea_execution_mode: 'auto',
+  tea_capability_probe: true,
 };
 
 const PACT_MCP_VALUES = ['mcp', 'none'];
+// step-03-quality-evaluation.md's requestable modes. `auto` asks the capability
+// probe to pick; the other three are honoured as stated.
+const EXECUTION_MODE_VALUES = ['auto', 'agent-team', 'subagent', 'sequential'];
 
 /** Maps a CLI option name to the config key it overrides. */
 const FLAG_TO_KEY = {
   usePlaywrightUtils: 'tea_use_playwright_utils',
   usePactjsUtils: 'tea_use_pactjs_utils',
   pactMcp: 'tea_pact_mcp',
+  executionMode: 'tea_execution_mode',
+  capabilityProbe: 'tea_capability_probe',
 };
 
 function configError(message) {
@@ -74,14 +81,30 @@ function coerceBoolean(value, key) {
  * @param {unknown} value - Raw value from config.yaml.
  * @returns {string}
  */
-function coercePactMcp(value) {
+function coerceExecutionMode(value, source = CONFIG_RELATIVE_PATH) {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (EXECUTION_MODE_VALUES.includes(normalized)) {
+      return normalized;
+    }
+  }
+  throw configError(`tea_execution_mode from ${source} must be one of ${EXECUTION_MODE_VALUES.join(' | ')}, got ${JSON.stringify(value)}`);
+}
+
+/**
+ * Coerce the tea_pact_mcp string enum.
+ *
+ * @param {unknown} value - Raw value from config.yaml.
+ * @returns {string}
+ */
+function coercePactMcp(value, source = CONFIG_RELATIVE_PATH) {
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
     if (PACT_MCP_VALUES.includes(normalized)) {
       return normalized;
     }
   }
-  throw configError(`tea_pact_mcp in ${CONFIG_RELATIVE_PATH} must be one of ${PACT_MCP_VALUES.join(' | ')}, got ${JSON.stringify(value)}`);
+  throw configError(`tea_pact_mcp from ${source} must be one of ${PACT_MCP_VALUES.join(' | ')}, got ${JSON.stringify(value)}`);
 }
 
 /**
@@ -121,6 +144,12 @@ function readTeaConfigFile(projectRoot) {
   }
   if ('tea_pact_mcp' in parsed) {
     values.tea_pact_mcp = coercePactMcp(parsed.tea_pact_mcp);
+  }
+  if ('tea_execution_mode' in parsed) {
+    values.tea_execution_mode = coerceExecutionMode(parsed.tea_execution_mode);
+  }
+  if ('tea_capability_probe' in parsed) {
+    values.tea_capability_probe = coerceBoolean(parsed.tea_capability_probe, 'tea_capability_probe');
   }
 
   return { present: true, path: configPath, values };
@@ -195,7 +224,13 @@ function resolveTeaConfig({ projectRoot, flags = {} }) {
   for (const [flagName, key] of Object.entries(FLAG_TO_KEY)) {
     const flagValue = flags[flagName];
     if (flagValue !== undefined) {
-      values[key] = key === 'tea_pact_mcp' ? coercePactMcp(flagValue) : flagValue;
+      if (key === 'tea_pact_mcp') {
+        values[key] = coercePactMcp(flagValue, '--pact-mcp');
+      } else if (key === 'tea_execution_mode') {
+        values[key] = coerceExecutionMode(flagValue, '--execution-mode');
+      } else {
+        values[key] = flagValue;
+      }
       sources[key] = 'flag';
       continue;
     }
@@ -223,6 +258,7 @@ module.exports = {
   KEY_TO_PACKAGE,
   KEY_TO_INSTALLED_FIELD,
   MODULE_DEFAULTS,
+  EXECUTION_MODE_VALUES,
   PACT_MCP_VALUES,
   CONFIG_RELATIVE_PATH,
   FLAG_TO_KEY,

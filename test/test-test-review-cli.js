@@ -64,6 +64,7 @@ const {
 const { VERDICT_KEYS, SKIP_KEYS, DEFAULT_TIMEOUT_MS, defaultTimeoutMs } = require('../cli/test-review');
 const {
   computeConventionBaseline,
+  strideSelect,
   directoryDistance,
   directoryOf,
   measureConventions,
@@ -1065,6 +1066,7 @@ async function runTests() {
           '$1No additional recommendations. Test quality is excellent. ✅$2',
         )
         .replaceAll('**Context Basis**: {none | pr_diff | pr_diff_truncated}', '**Context Basis**: pr_diff')
+        .replaceAll('**Execution Mode**: {agent-team | subagent | sequential}', '**Execution Mode**: subagent')
         .replaceAll('{relative_path_1}', 'tests/checkout.spec.ts')
         .replaceAll('{relative_path_2}', 'tests/cart.spec.ts')
         .replaceAll('{context_path_1}', 'docs/stories/checkout-decline.md')
@@ -1083,6 +1085,36 @@ async function runTests() {
           JSON.stringify(templateShaped.reviewedFiles) === JSON.stringify(['tests/checkout.spec.ts', 'tests/cart.spec.ts']),
           "template's Reviewed Files section yields the manifest verbatim (no prose lines counted as files)",
           JSON.stringify(templateShaped.reviewedFiles),
+        );
+        // The line exists to make a silent fallback to sequential visible afterwards,
+        // so it is required whenever the run measured a baseline: an omission would be
+        // exactly as silent as no line at all, and `auto` is the request rather than a
+        // result the probe ever returns.
+        const modeContract = { conventionBaseline: { baselineUnavailable: false, corpusSize: 4, sampled: 4, scanned: 4, conventions: {} } };
+        for (const [mutation, label] of [
+          [(t) => t.replace('**Execution Mode**: subagent\n\n', ''), 'a report that states no mode at all'],
+          [
+            (t) => t.replace('**Execution Mode**: subagent', '**Execution Mode**: auto'),
+            '"auto", which is the request and never a resolved mode',
+          ],
+          [(t) => t.replace('**Execution Mode**: subagent', '**Execution Mode**: parallel'), 'a mode outside the enum'],
+          [
+            (t) => t.replace('**Execution Mode**: subagent', '**Execution Mode**: subagent\n\n**Execution Mode**: sequential'),
+            'two Execution Mode lines disagreeing with each other',
+          ],
+        ]) {
+          let rejected = false;
+          try {
+            parseReport(mutation(templateShapedReport), modeContract);
+          } catch (error) {
+            rejected = error.code === 'REPORT_UNPARSEABLE';
+          }
+          assert(rejected, `a run that measured a baseline rejects ${label}`);
+        }
+        assert(
+          templateShaped.executionMode === 'subagent',
+          "template's Execution Mode line reaches the verdict, so a run that fell back to sequential says so in its own artifact",
+          String(templateShaped.executionMode),
         );
         assert(
           templateShaped.contextBasis === 'pr_diff' &&
@@ -1854,7 +1886,8 @@ async function runTests() {
         'prompt no longer pins the execution mode to sequential regardless of runtime capability',
       );
       assert(
-        prompt.includes('each worker receives the convention baseline stated above verbatim'),
+        prompt.includes('the convention baseline block stated above verbatim') &&
+          prompt.includes('written out in the launch prompt itself'),
         'prompt carries the convention baseline into the workers, so a parallel run cannot score against a baseline it never saw',
       );
 
@@ -2064,6 +2097,7 @@ async function runTests() {
           reason: null,
           corpusSize: 40,
           sampled: 40,
+          scanned: 40,
           sampledFiles: ['tests/login.spec.ts', 'tests/profile.spec.ts'],
           conventions: {
             priorityMarkers: { mechanical: true, adopted: 0, mechanicalSignal: false },
@@ -2077,8 +2111,8 @@ async function runTests() {
         },
       });
       assert(
-        measuredConventionPrompt.includes('- corpusSize: 40, sampled: 40'),
-        'prompt states the CLI-measured corpusSize/sampled as a fixed fact',
+        measuredConventionPrompt.includes('- corpusSize: 40, sampled: 40, scanned: 40'),
+        'prompt states the CLI-measured corpusSize/sampled/scanned as fixed facts',
       );
       assert(
         measuredConventionPrompt.includes(
@@ -2093,24 +2127,31 @@ async function runTests() {
         'prompt names the exact sampled files as a delimited, do-not-substitute block',
       );
       assert(
-        /priorityMarkers: mechanically scanned across all 40 sampled files; zero occurrences[\s\S]*?MUST be reported as absent: adopted = 0/.test(
+        /priorityMarkers: mechanically scanned across all 40 scanned files; zero occurrences[\s\S]*?MUST be reported as absent: adopted = 0/.test(
           measuredConventionPrompt,
         ),
         'prompt forbids a nonzero priorityMarkers claim when the CLI already found zero occurrences in every sampled file',
       );
       assert(
-        /networkFirst: mechanically scanned across all 40 sampled files; zero occurrences/.test(measuredConventionPrompt),
+        /networkFirst: mechanically scanned across all 40 scanned files; zero occurrences/.test(measuredConventionPrompt),
         'the zero-signal floor instruction applies uniformly to every mechanically-scanned key, not just priorityMarkers',
       );
       assert(
-        /testIds: mechanically scanned; a recognized form appeared in 6 of the 40 sampled files\.[\s\S]*?high-recall and over-matches[\s\S]*?treat the count as a\s+starting point\.[\s\S]*?true adopted count \(0-40\)/.test(
+        /testIds: mechanically scanned; at least one file in the wider scanned corpus contains a recognized form[\s\S]{0,320}?Judge the adopted count \(0-40\) from the sampled files alone/.test(
           measuredConventionPrompt,
         ),
-        'a key with a nonzero mechanical signal states the scan count with its real confidence, and still leaves the true count to the reader',
+        "a key with a nonzero mechanical signal is left to the agent's judgment for the true count, never forced to a specific number",
+      );
+      // The wider scan can find a form in a file the agent was never asked to read, so
+      // 0 among the sampled files is honest. Without this the prompt asserts a form
+      // exists and then rejects the only count the agent could truthfully give.
+      assert(
+        /0 is a legitimate answer here and does not contradict the scan/.test(measuredConventionPrompt),
+        'the prompt says a sampled count of zero is compatible with a nonzero scan over the wider corpus',
       );
       assert(
-        /dataFactories: mechanically scanned; a recognized form appeared in 3 of the 40 sampled files/.test(measuredConventionPrompt),
-        'every mechanically-scanned key with a signal carries the count measured for that key alone',
+        !/appeared in \d+ of the \d+ sampled files/.test(measuredConventionPrompt),
+        'the prompt never states a mechanical adoption count: the detectors over-match by design, and a stated number is one the parser cannot check in the direction it would move',
       );
       assert(
         /bddNaming: not mechanically pre-scanned; read the sampled files yourself/.test(measuredConventionPrompt),
@@ -2379,12 +2420,12 @@ async function runTests() {
       // a run that stops making progress, and a flat 30 minutes made a one-file
       // review indistinguishable from a stuck one for half an hour.
       assert(
-        defaultTimeoutMs(1) === 1_020_000 && defaultTimeoutMs(3) === 1_260_000,
-        'the default agent timeout scales with the review set: 15 minutes plus 2 minutes per reviewed file',
+        defaultTimeoutMs(1) === 1_320_000 && defaultTimeoutMs(3) === 1_560_000,
+        'the default agent timeout scales with the review set: 20 minutes plus 2 minutes per reviewed file',
         `${defaultTimeoutMs(1)} / ${defaultTimeoutMs(3)}`,
       );
       assert(
-        defaultTimeoutMs(50) === DEFAULT_TIMEOUT_MS && defaultTimeoutMs(0) === 900_000,
+        defaultTimeoutMs(50) === DEFAULT_TIMEOUT_MS && defaultTimeoutMs(0) === 1_200_000,
         'the scaled timeout is clamped to the 30-minute ceiling and never derives a nonpositive value from an empty review set',
         `${defaultTimeoutMs(50)} / ${defaultTimeoutMs(0)}`,
       );
@@ -5118,7 +5159,8 @@ async function runTests() {
       const fromFile = resolveTeaConfig({
         projectRoot: configRoot(
           'file',
-          'user_name: Murat\ntea_use_playwright_utils: false\ntea_use_pactjs_utils: true\ntea_pact_mcp: mcp\n',
+          'user_name: Murat\ntea_use_playwright_utils: false\ntea_use_pactjs_utils: true\ntea_pact_mcp: mcp\n' +
+            'tea_execution_mode: sequential\ntea_capability_probe: false\n',
         ),
       });
       assert(
@@ -5126,6 +5168,15 @@ async function runTests() {
           fromFile.values.tea_use_pactjs_utils === true &&
           fromFile.values.tea_pact_mcp === 'mcp',
         'config.yaml beats the module defaults',
+        JSON.stringify(fromFile.values),
+      );
+      // The orchestration pair is the documented way to force a review back to
+      // sequential (docs/reference/troubleshooting.md says to set it here), so it
+      // has to resolve through the same chain the fragment keys do. Stating it in
+      // the prompt without reading it here would have silently ignored the file.
+      assert(
+        fromFile.values.tea_execution_mode === 'sequential' && fromFile.values.tea_capability_probe === false,
+        'config.yaml can force the execution mode and turn the capability probe off',
         JSON.stringify(fromFile.values),
       );
       assert(
@@ -5359,10 +5410,38 @@ async function runTests() {
       // run, so it is pinned here: the number the CLI samples is the number every
       // report cites, and the number step-02 §2b's sampling rules state in prose.
       assert(rankedBaseline.sampled === 8, 'sampled is capped at 8 even though 47 files are eligible', String(rankedBaseline.sampled));
+      // Not redundant against the line above, and it stopped being redundant the day
+      // the cap moved from 40 to 8. This is the only place in the suite that encodes
+      // why the cap has a lower bound at all, and it is what fails when somebody cuts
+      // 8 to 3 and updates the assertion above to match.
       assert(
         rankedBaseline.sampled >= 4,
-        "the cap stays above step-02 §2b's `sampled < 4` floor, below which every convention is 'unknown' and the whole baseline is wasted work",
+        "the cap stays above step-02 §2b's `sampled < 4` floor, below which every convention reports 'unknown' and the whole baseline is wasted work",
         String(rankedBaseline.sampled),
+      );
+      // The scan is a separate budget from the read set: the CLI opens these itself,
+      // so the zero-signal floor keeps the corpus it always had while the agent's
+      // reading got five times cheaper. Collapsing the two back together restores the
+      // 8-file floor that convention-baseline.js's own comment says must never happen.
+      assert(
+        rankedBaseline.scanned === 40 && rankedBaseline.scanned > rankedBaseline.sampled,
+        'the mechanical scan covers a wider corpus than the agent is asked to read',
+        JSON.stringify({ sampled: rankedBaseline.sampled, scanned: rankedBaseline.scanned }),
+      );
+      // Every file in the reviewed file's own directory ranks at distance 0, so among
+      // them the ranking is the alphabetical tie-break alone. Taking the head made
+      // everything later in the alphabet unreachable by any review anchored there, on
+      // every run: a systematic wrong draw, which has no error bars to argue about.
+      assert(
+        rankedBaseline.sampledFiles.some((file) => /zzz-filler-(1\d|2\d|3\d|4\d)/.test(file)),
+        'the sample strides the ranked corpus, so files late in the tie-break order are reachable',
+        JSON.stringify(rankedBaseline.sampledFiles),
+      );
+      assert(
+        JSON.stringify(strideSelect(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], 4)) === JSON.stringify(['a', 'c', 'e', 'g']) &&
+          JSON.stringify(strideSelect(['a', 'b'], 5)) === JSON.stringify(['a', 'b']),
+        'strideSelect spreads its picks evenly, always takes the closest file, and returns everything when asked for more than it has',
+        JSON.stringify(strideSelect(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], 4)),
       );
       assert(
         !rankedBaseline.sampledFiles.includes('legacy/archive/old-suite/ancient.spec.ts'),

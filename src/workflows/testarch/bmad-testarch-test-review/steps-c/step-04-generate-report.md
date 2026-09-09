@@ -43,6 +43,10 @@ Use `test-review-template.md` to produce `{outputFile}` including:
 - Warnings and recommendations
 - Context references (story/test-design if available)
 - Coverage boundary note: `test-review` does not score coverage. Direct coverage findings to `trace`.
+- `**Execution Mode**:` in the Executive Summary, set to step 3F's `execution_mode`, which is the mode
+  step-03's capability probe actually resolved. Write `agent-team`, `subagent`, or `sequential`; never
+  `auto`, which is the request rather than the result. `cli/lib/parse-report.js` reads this line into
+  the verdict, so a headless run that silently fell back to `sequential` says so in its own artifact.
 
 Build `### Key Weaknesses` only from `reviewSummary.key_weaknesses`. Each
 rendered bullet must keep its `[row]` prefix and must have a matching scored

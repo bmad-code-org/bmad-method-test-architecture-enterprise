@@ -269,9 +269,13 @@ code path that looked for one.
 Same fix as the score and the recommendation before it: stop trusting the agent to
 compute a number the CLI can compute itself. `cli/lib/convention-baseline.js` now
 performs §2b's sampling deterministically — `git ls-files`, the review set excluded,
-ranked closest-first by directory distance, capped at 40 — and, for the five keys
+ranked closest-first by directory distance, capped at 8 — and, for the six keys
 with a literal recognized form (`priorityMarkers`, `testIds`, `networkFirst`,
-`dataFactories`, `fixtures`), scans the real sampled files for it. `bddNaming` and
+`dataFactories`, `fixtures`, `playwrightUtils`), scans the real file content for it.
+The scan reads a wider slice of the same ranking than the agent does, 40 files
+against 8, because the CLI opens them itself and the agent pays a turn per file.
+The zero-signal floor below is only as strong as the corpus it observed nothing in,
+so the read set got cheaper and the scanned corpus stayed where it was. `bddNaming` and
 `assertionStyle` get no mechanical signal (no single token separates "adopted" from
 "not" for a naming style or a dialect choice) and stay agent-judged; the
 sampled/corpusSize grounding still applies to them.
@@ -282,7 +286,7 @@ already does, and `parse-report.js`'s `verifyConventionBaseline` binds every
 `**Convention Baseline**:` line to it, one direction strictly (the sampled/corpusSize
 counts must match exactly — they're 100% mechanical) and one direction only
 downward (a citation claiming nonzero adoption for a key the CLI's own scan found
-zero real occurrences of anywhere in the sampled corpus is rejected outright; a lower
+zero real occurrences of anywhere in the scanned corpus is rejected outright; a lower
 or judgment-based count is left alone, because a regex cannot know intent and was
 never used to force a number up). Applied to #106's actual corpus, this scan finds
 zero `priorityMarkers` signal too — the same zero grep found — so the fabricated
@@ -292,8 +296,10 @@ Suite 8 reproduce this end-to-end against a real temp git repo built to the same
 shape (real neighbor test files, zero real priority markers anywhere).
 
 Not fixed here, and worth naming: the "seven keys" §2b measures don't map onto the
-registry's Convention gate class evenly. Only three published criteria are actually
-Convention-gated (`priorityMarkers` → L2, `testIds` → L3, `bddNaming` → L5);
+registry's Convention gate class evenly. Four published criteria are
+Convention-gated (`priorityMarkers` → L2, `testIds` → L3, `bddNaming` → L5, and
+`playwrightUtils` → M9 and L9, added later and the only one whose classification
+moves the score: M9 is MEDIUM at `established` and LOW at `emerging`);
 `networkFirst`/`dataFactories`/`fixtures` deliberately became Applicability-gated
 instead (see "The baseline is measured before it is judged against" above —
 popularity shouldn't demote a navigation race), and `assertionStyle` → L7 has no

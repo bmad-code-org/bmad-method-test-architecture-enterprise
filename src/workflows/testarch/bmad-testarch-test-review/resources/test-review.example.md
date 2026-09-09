@@ -36,6 +36,8 @@ Note: This review audits existing tests. It does not generate tests or score req
 
 **Context Waivers Applied**: 0
 
+**Execution Mode**: subagent
+
 The raw deduction score is 97: the file is small, readable, and mostly deterministic. The one HIGH finding caps the effective score at 79 and, on its own, still forces `Request Changes`: a fixed timer can pass or fail according to runner speed. The recommendation is computed from the deduplicated registry findings and is unchanged by how high the raw score is.
 
 ### Key Strengths
@@ -54,9 +56,9 @@ The raw deduction score is 97: the file is small, readable, and mostly determini
 
 | Criterion                            | Status        | Violations | Basis                                                                   | Notes                                                    |
 | ------------------------------------ | ------------- | ---------: | ----------------------------------------------------------------------- | -------------------------------------------------------- |
-| BDD Format (Given-When-Then)         | ✅ PASS       |          0 | Convention: bddNaming (18 of 24 sampled)                                | All names state user-visible behavior                    |
-| Test IDs                             | ✅ PASS       |          0 | Convention: testIds (20 of 24 sampled)                                  | All DOM lookups use stable test IDs                      |
-| Priority Markers (P0/P1/P2/P3)       | ⚠️ WARN       |          1 | Convention: priorityMarkers (22 of 24 sampled)                          | Test at line 81 has no marker                            |
+| BDD Format (Given-When-Then)         | ✅ PASS       |          0 | Convention: bddNaming (6 of 8 sampled)                                  | All names state user-visible behavior                    |
+| Test IDs                             | ✅ PASS       |          0 | Convention: testIds (7 of 8 sampled)                                    | All DOM lookups use stable test IDs                      |
+| Priority Markers (P0/P1/P2/P3)       | ⚠️ WARN       |          1 | Convention: priorityMarkers (7 of 8 sampled)                            | Test at line 81 has no marker                            |
 | Disabled or Focused Tests            | ✅ PASS       |          0 | Absolute                                                                | No skip, fixme, only, or focus marker                    |
 | Hard Waits (sleep, waitForTimeout)   | ❌ FAIL       |          1 | Absolute                                                                | Fixed 2-second timer at line 37                          |
 | Determinism (no conditionals)        | ✅ PASS       |          0 | Absolute                                                                | No branching, catches, or wall-clock fixtures            |
@@ -64,7 +66,7 @@ The raw deduction score is 97: the file is small, readable, and mostly determini
 | Fixture Patterns                     | ✅ PASS       |          0 | Applicability: the file needs authenticated setup                       | Existing merged fixtures are reused                      |
 | Data Factories                       | ✅ PASS (n/a) |          0 | Applicability: the file does not construct domain payloads              | No payload shape to extract                              |
 | Network-First Pattern                | ❌ FAIL       |          1 | Applicability: the file navigates and then reads data-dependent content | Observer at line 58 is declared after navigation         |
-| Playwright Utils Adoption            | ✅ PASS       |          0 | Convention: playwrightUtils (16 of 24 sampled)                          | Imports merged fixtures and uses utility interception    |
+| Playwright Utils Adoption            | ✅ PASS       |          0 | Convention: playwrightUtils (5 of 8 sampled)                            | Imports merged fixtures and uses utility interception    |
 | Pact.js Utils Adoption               | ✅ PASS (n/a) |          0 | Applicability: the reviewed file is not a Pact artifact                 | Gate closed                                              |
 | Explicit Assertions                  | ✅ PASS       |          0 | Absolute                                                                | Every test has a falsifiable assertion                   |
 | Test Length (≤1000 lines)            | ✅ PASS       |          0 | Absolute                                                                | File is 146 lines                                        |
@@ -73,7 +75,7 @@ The raw deduction score is 97: the file is small, readable, and mostly determini
 
 **Total Violations**: 0 Critical, 1 High, 1 Medium, 1 Low
 
-**Convention Baseline**: 24 test files sampled outside the review set
+**Convention Baseline**: 8 test files sampled outside the review set
 
 ## Quality Score Breakdown
 
@@ -177,7 +179,7 @@ await preferencesLoaded;
 **Criterion**: Priority Markers
 **Knowledge Base**: [test-priorities-matrix.md](./knowledge/test-priorities-matrix.md)
 
-**Issue Description:** The repository uses priority markers in 22 of 24 sampled files. This test has none, so selective execution cannot classify it.
+**Issue Description:** The repository uses priority markers in 7 of 8 sampled files. This test has none, so selective execution cannot classify it.
 
 **Recommended Improvement:** Prefix the behavioral name with `[P2]` after confirming the priority through the decision tree. Do not infer the marker from a risk score.
 

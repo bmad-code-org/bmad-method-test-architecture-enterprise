@@ -40,6 +40,8 @@ Coverage mapping and coverage gates are out of scope here. Use `trace` for cover
 
 **Context Waivers Applied**: 0
 
+**Execution Mode**: {agent-team | subagent | sequential}
+
 <!-- What this review was judged against, resolved in step 1. `none` means no story, test design, or source accompanied the tests: the verdict speaks to how the tests are built, not to whether they match a requirement. -->
 
 <!-- Context can add findings and clarify impact. It cannot waive a rubric violation, change severity, or alter the score. This machine-readable value must remain 0. -->

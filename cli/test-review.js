@@ -66,7 +66,7 @@ const { loadRegistryRowSeverities } = require('./lib/registry-rows');
 const { runAgent } = require('./lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('./lib/agent-adapters');
 const { withIsolation, selectBackend } = require('./lib/isolate');
-const { resolveTeaConfig, PACT_MCP_VALUES } = require('./lib/resolve-tea-config');
+const { resolveTeaConfig, PACT_MCP_VALUES, EXECUTION_MODE_VALUES } = require('./lib/resolve-tea-config');
 const { TEA_CLI_VERSION, buildReviewProvenance } = require('./lib/review-provenance');
 
 const EXIT = {
@@ -86,10 +86,17 @@ const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes: the ceiling, and the value 
 // codex exec has neither). The wall clock is the only vendor-agnostic bound, so
 // it scales with the one thing that legitimately makes a review longer: how many
 // files are in it. A flat 30 minutes let a one-file review spin for half an hour
-// before anyone found out. The allowances below are deliberately generous, since
-// the job of this clock is to end a stuck run on a CI runner of unknown speed,
-// and --timeout-ms still overrides it.
-const TIMEOUT_BASE_MS = 900_000; // 15 minutes before the per-file allowance
+// before anyone found out.
+//
+// The allowances below are deliberately generous. This clock has to end a stuck
+// run on a CI runner of unknown speed, and the file count is a coarse proxy: it
+// says nothing about how large those files are, how much context travelled with
+// them, or that four parallel workers each open the review set independently
+// where one sequential parent opened it once. The base is set well above the
+// slowest one-file review measured here (711s on main, 489s with these changes),
+// so the proxy being coarse costs margin instead of a false timeout, and
+// --timeout-ms still overrides all of it.
+const TIMEOUT_BASE_MS = 1_200_000; // 20 minutes before the per-file allowance
 const TIMEOUT_PER_FILE_MS = 120_000; // 2 minutes per reviewed file
 
 /**
@@ -421,7 +428,7 @@ function main() {
     )
     .option(
       '--timeout-ms <n>',
-      'agent wall-clock timeout in milliseconds (SIGTERM on expiry); default scales with the review set, 15 min plus 2 min per file, capped at 30 min',
+      'agent wall-clock timeout in milliseconds (SIGTERM on expiry); default scales with the review set, 20 min plus 2 min per file, capped at 30 min',
     )
     .option('--min-score <n>', 'verdict fails when the report quality score is below n (integer 0-100)')
     .option('--max-critical <n>', 'verdict fails when the report declares more than n Critical violations (integer; default: no cap)')
@@ -449,7 +456,13 @@ function main() {
     .option('--no-use-playwright-utils', 'force tea_use_playwright_utils off, overriding _bmad/tea/config.yaml')
     .option('--use-pactjs-utils', 'force tea_use_pactjs_utils on, overriding _bmad/tea/config.yaml (default when nothing states it: true)')
     .option('--no-use-pactjs-utils', 'force tea_use_pactjs_utils off, overriding _bmad/tea/config.yaml')
-    .option('--pact-mcp <mode>', `force tea_pact_mcp, overriding _bmad/tea/config.yaml (${PACT_MCP_VALUES.join('|')}; default: mcp)`);
+    .option('--pact-mcp <mode>', `force tea_pact_mcp, overriding _bmad/tea/config.yaml (${PACT_MCP_VALUES.join('|')}; default: mcp)`)
+    .option(
+      '--execution-mode <mode>',
+      `force tea_execution_mode, overriding _bmad/tea/config.yaml (${EXECUTION_MODE_VALUES.join('|')}; default: auto)`,
+    )
+    .option('--capability-probe', 'force tea_capability_probe on, overriding _bmad/tea/config.yaml (default: true)')
+    .option('--no-capability-probe', 'force tea_capability_probe off, so the requested execution mode is honored strictly');
 
   program.exitOverride();
   const normalizedArgv = normalizeAgentArgAliases(process.argv);
@@ -774,6 +787,13 @@ function main() {
 
   const timeoutMs = explicitTimeoutMs ?? defaultTimeoutMs(changedTestFiles.length);
 
+  // The workflow's step-03 tells the agent to mint a timestamp for its four worker
+  // output paths. A headless agent has no clock and no shell, so it writes a
+  // plausible string; nothing cleans /tmp/tea-test-review-*, and step-03 checks only
+  // that the four files exist. Two runs that invent the same value aggregate each
+  // other's scores. Minting it here costs nothing and removes the class.
+  const runId = randomUUID();
+
   // criteria-registry.md's row -> severity map, read from the skill itself so a
   // report's "**Row**: <id>" citations can be checked against real rows instead of
   // trusted. null on a skill root with no registry file (e.g. a bare test fixture);
@@ -795,6 +815,7 @@ function main() {
       unscorableTestArtifacts,
       forcedUnscorableCandidates,
       conventionBaseline,
+      runId,
     });
     console.log(prompt);
     if (jsonPath) {
@@ -919,6 +940,7 @@ function main() {
     unscorableTestArtifacts,
     forcedUnscorableCandidates,
     conventionBaseline,
+    runId,
   });
 
   const executeAgent = ({ agentCwd, spawnPrefix }) => {

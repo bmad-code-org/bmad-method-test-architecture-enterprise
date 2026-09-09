@@ -220,6 +220,13 @@ function bindReportToPrompt(report) {
   if (conventionBaselineLine && !/^\*\*Convention Baseline\*\*:/m.test(bound)) {
     bound = insertLineBeforeHeading(bound, 'Quality Score Breakdown', conventionBaselineLine);
   }
+  // Every real run resolves an execution mode and the parser requires the report to
+  // state it. Injected here rather than pasted into forty fixtures, each of which
+  // exists to exercise one unrelated schema rule; a fixture that states its own mode
+  // keeps it.
+  if (!/^\*\*Execution Mode\*\*:/m.test(bound)) {
+    bound = bound.replace(/^(\*\*Context Waivers Applied\*\*:[ \t]*[^\n]+)$/m, '$1\n\n**Execution Mode**: sequential');
+  }
   return bound;
 }
 
@@ -274,6 +281,7 @@ if (mode === 'fabricated-convention' || mode === 'honest-absent-convention') {
     `**Recommendation**: ${fabricating ? 'Approve with Comments' : 'Approve'}`,
     '**Context Basis**: none',
     '**Context Waivers Applied**: 0',
+    '**Execution Mode**: sequential',
     '',
     '### Summary',
     fabricating
@@ -343,6 +351,7 @@ if (mode === 'fabricated-critical-count' || mode === 'honest-critical-count') {
     `**Recommendation**: ${fabricating ? 'Approve' : 'Block'}`,
     '**Context Basis**: none',
     '**Context Waivers Applied**: 0',
+    '**Execution Mode**: sequential',
     '',
     '### Summary',
     fabricating

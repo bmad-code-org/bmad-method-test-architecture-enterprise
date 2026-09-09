@@ -78,6 +78,12 @@ const COMMAND_TOOLS = ['Bash'];
 // the probe finds no launcher and every headless run collapses to `sequential` no
 // matter what tea_execution_mode says.
 //
+// A launched subagent inherits this exact list, verified live against claude
+// 2.1.266 under the argv below: the child reported `Agent, Edit, Glob, Grep, Read,
+// Write` and no shell. So "the shell only under command-execution" holds at the four
+// workers as well as at the parent, and granting delegation does not widen the tool
+// surface by the back door.
+//
 // It is granted from `scoped-artifact-writes` upward, that being the first tier
 // at which the workers' declared outputs can exist: each writes
 // /tmp/tea-test-review-<dimension>-<timestamp>.json, and step-03 section 5 aborts
