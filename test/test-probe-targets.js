@@ -46,6 +46,7 @@ const {
   commandTargetPolicy,
   createProbePort,
   failureClassForFault,
+  observedText,
   probeCommand,
   probeRequest,
   targetFor,
@@ -540,6 +541,18 @@ function checkBoundedProbes(runDir) {
     'the default deadline is a bound a person would wait out',
     `${PROBE_TIMEOUT_MS}ms`,
   );
+
+  // An observation channel is tagged, and the tag is total. Reading `.value`
+  // without checking it gives `undefined` on an absent channel, and the
+  // diagnostic built from it then either throws or silently loses the exit
+  // code's only explanation. Both happen in the error path, where a crash is
+  // worst, so every kind is covered here rather than the two this adapter
+  // happens to produce.
+  assert(observedText({ kind: 'text', value: 'boom' }) === 'boom', 'a text channel reads as its own text');
+  assert(observedText({ kind: 'json', value: { a: 1 } }) === '{"a":1}', 'a json channel reads as its serialization');
+  assert(observedText({ kind: 'absent' }) === '', 'an absent channel reads as empty, never as the string "undefined"');
+  assert(observedText({}) === '', 'a channel carrying no tag at all reads as empty');
+  assert(typeof observedText({ kind: 'absent' }).trim === 'function', 'every reading is a string a diagnostic can trim');
 }
 
 async function main() {

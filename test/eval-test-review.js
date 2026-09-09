@@ -92,7 +92,7 @@ const {
   writeSuiteResult,
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
-const { createProbePort, hostEnvironment, probeCommand, probeRequest } = require('./lib/probe-targets');
+const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -472,7 +472,7 @@ async function runReview(agent, runIndex, runner = {}) {
     const verdict = observation.artifacts.verdict;
     if (verdict.kind === 'absent') {
       console.error(`  ${colors.red}run ${runIndex + 1}: no verdict written${colors.reset} (exit ${observation.exitCode})`);
-      const stderr = observation.stderr.kind === 'text' ? observation.stderr.value : JSON.stringify(observation.stderr.value);
+      const stderr = observedText(observation.stderr);
       if (stderr) console.error(`  ${colors.dim}${stderr.trim().split('\n').slice(-3).join('\n  ')}${colors.reset}`);
       // Exit 2 is the CLI's own environment class: a missing skill, an unusable
       // option, or no isolation backend. It never started the agent, so no

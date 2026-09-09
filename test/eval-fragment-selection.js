@@ -102,7 +102,7 @@ const {
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
-const { createProbePort, hostEnvironment, probeCommand, probeRequest } = require('./lib/probe-targets');
+const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -672,7 +672,7 @@ async function main() {
           // the one it derived from the thrown error, with no second table.
           const { observation } = result;
           if (observation.exitCode !== 0) {
-            const stderr = observation.stderr.kind === 'text' ? observation.stderr.value : JSON.stringify(observation.stderr.value);
+            const stderr = observedText(observation.stderr);
             console.error(
               `    ${colors.red}${item.id} run ${runIndex + 1}: ${stderr.trim() || `exit ${observation.exitCode}`}${colors.reset}`,
             );
