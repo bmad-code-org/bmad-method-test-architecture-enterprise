@@ -74,7 +74,7 @@ Two more couplings, both found by running it. A relative `--agent-cmd` passed th
 
 ## How much of `eval-quality` TEA actually uses
 
-The package is three halves of a pipeline: compile a contract, probe an environment, then score what came back. TEA uses the first two completely and none of the third, and the reason is a chain rather than a choice.
+The package has three stages: compile a contract, probe an environment, then score what came back. TEA uses the first two completely and none of the third, and the reason is a chain rather than a choice.
 
 Used:
 
@@ -84,13 +84,13 @@ Used:
 
 Not used, with the reason:
 
-- **`runPreflight` and `preflightFromObservations`.** These drive a contract's sensitivity witness through the probe port at two live model calls per contract, ten contracts deep. Nothing here has spent one.
-- **`runScore` and `seal`.** These are downstream of the pre-flight rather than independent of it: `runScore` takes a `PreflightVerdict` and a `Probe` among its inputs, so it cannot run until the pre-flight above has, and the `Probe` it wants is a corpus of seeded defects carrying qualification records, which is `eval-quality`'s own outstanding held-out-probe-corpus item. Contract-strength scoring is the package's headline claim and TEA cannot make it yet; saying so is more useful than a partial number.
+- **`runPreflight` and `preflightFromObservations`.** `runPreflight` plans a contract's sensitivity witness legs and sends each one through the probe port, at two live model calls per contract, ten contracts deep. `preflightFromObservations` reduces observations the caller already holds and sends nothing itself. Nothing here has spent a call through either.
+- **`runScore` and `seal`.** `runScore` takes a `PreflightVerdict` and a `Probe` among its inputs. The verdict is an artifact the caller supplies, from either pre-flight entry point, so what gates this here is that TEA has produced no verdict at all. The `Probe` is a corpus of seeded defects carrying qualification records, which is `eval-quality`'s own outstanding held-out-probe-corpus item. Contract-strength scoring is the package's headline claim and TEA cannot make it yet; saying so is more useful than a partial number.
 - **`digestArtifact`, `digestComposite`, `serializeArtifact`.** TEA digests through `test/lib/eval-record.js`, which has its own length-prefixed composition and its own callers. Two digest schemes over the same repository would be worse than one that is not the package's.
 - **`validateLineageChain`** has no artifact here to validate a chain over.
 - **`eval-quality/conformance`** defines the port an adapter author implements. TEA consumes a shipped adapter rather than writing one, so the conformance suite is not TEA's to run.
 
-One coupling worth naming: two of the three used entry points are reached by file path into `dist/`, because neither the compiler CLI nor the evaluator is on the package's `exports` map. That works and is pinned by an exact devDependency, and it is the kind of reach that a minor release can break without warning.
+One coupling worth naming: two of the three used entry points are reached by file path into `dist/`, because neither the compiler CLI nor the evaluator is on the package's `exports` map. The devDependency is pinned exactly, so an upgrade is a deliberate edit here rather than something that arrives on its own. The reach still breaks on the upgrade that moves those files, and nothing declares it.
 
 Owed:
 
