@@ -178,6 +178,7 @@ function stagedWorkspaceFor(suiteId) {
     const seeded = groundTruth.fixtureSets.find((set) => set.id.startsWith('seeded'));
     const staged = stageWorkspace(seeded);
     return {
+      root: staged.dir,
       cwd: staged.dir,
       artifacts: {
         'tea-trace-runner': {
@@ -192,7 +193,7 @@ function stagedWorkspaceFor(suiteId) {
     copyTree(path.join(PROJECT_ROOT, REVIEW_FIXTURE_DIR), path.join(dir, REVIEW_FIXTURE_DIR));
     copyTree(path.join(PROJECT_ROOT, REVIEW_SKILL_DIR), path.join(dir, REVIEW_SKILL_DIR));
   }
-  return { cwd: dir, artifacts: {} };
+  return { root: dir, cwd: dir, artifacts: {} };
 }
 
 /** The environment names this operation declares it accepts, intersected with what this machine has. */
@@ -217,8 +218,17 @@ function requestKey(request) {
  * returned from disk with this leg's own correlation identifiers written back
  * on, because the reducer indexes observations by `probeId` and the cached one
  * carries whichever leg happened to run first.
+ *
+ * A fresh workspace per spawned leg, and that is not tidiness. The first live
+ * trace pre-flight ran both witness legs in one staged directory and the second
+ * leg's artifact map read back a summary the first leg had written: the two
+ * summaries were byte-identical while the two matrices differed, so the
+ * differential the witness asserts was measured against a file the second run
+ * never produced. `fixtureReset` is `null` on every TEA contract, so AD-10 plans
+ * nothing to reset one, and a directory each is the only thing that makes a leg's
+ * evidence its own.
  */
-function cachingPort({ realPort, contract, cacheDir, agent, force, counters, log }) {
+function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log }) {
   fs.mkdirSync(cacheDir, { recursive: true });
   return {
     async probe(request, signal) {
@@ -239,8 +249,14 @@ function cachingPort({ realPort, contract, cacheDir, agent, force, counters, log
         },
       };
       log(`  ${colors.yellow}running${colors.reset} leg ${request.probeId} (${key})`);
+      const { port: realPort, workspace } = await makePort();
       const startedAt = Date.now();
-      const observation = await realPort.probe(augmented, signal);
+      let observation;
+      try {
+        observation = await realPort.probe(augmented, signal);
+      } finally {
+        fs.rmSync(workspace.root, { recursive: true, force: true });
+      }
       const elapsedMs = Date.now() - startedAt;
       const leg = { key, legId: request.probeId, operationId: request.operationId, elapsedMs, exitCode: observation.exitCode };
       for (const counter of counters) {
@@ -299,7 +315,6 @@ async function runOneSuite(suite, options, stats) {
   const suiteStats = { spawns: 0, hits: 0, elapsedMs: 0, legs: [] };
   const outDir = path.join(options.out, slug(suite.id));
   const cacheDir = path.join(options.cache, slug(suite.id));
-  const workspace = stagedWorkspaceFor(suite.id);
   const interfaceIds = suite.contract.permittedInterfaces.map((iface) => iface.logicalId);
   const log = (line) => console.log(line);
 
@@ -307,9 +322,12 @@ async function runOneSuite(suite, options, stats) {
   if (options.fromCache) {
     port = cacheOnlyPort(cacheDir, [stats, suiteStats]);
   } else {
-    const { port: realPort } = await createProbePort({ cwd: workspace.cwd, interfaceIds, artifacts: workspace.artifacts });
     port = cachingPort({
-      realPort,
+      makePort: async () => {
+        const staged = stagedWorkspaceFor(suite.id);
+        const { port: realPort } = await createProbePort({ cwd: staged.cwd, interfaceIds, artifacts: staged.artifacts });
+        return { port: realPort, workspace: staged };
+      },
       contract: suite.contract,
       cacheDir,
       agent: options.agent,
@@ -319,7 +337,7 @@ async function runOneSuite(suite, options, stats) {
     });
   }
 
-  console.log(`\n${suite.id} ${colors.dim}(${suite.probes.length} probe(s), workspace ${workspace.cwd})${colors.reset}`);
+  console.log(`\n${suite.id} ${colors.dim}(${suite.probes.length} probe(s), a staged workspace per spawned leg)${colors.reset}`);
   const suiteStartedAt = Date.now();
 
   if (options.preflightOnly) {

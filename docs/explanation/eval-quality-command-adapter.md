@@ -156,6 +156,43 @@ Three findings, all measured, none of them tuned away.
   `test/contracts/README.md` records as "a plan cannot declare that two steps must receive different
   inputs", with its consequence now measured.
 
+### What the live pre-flight measured
+
+The first pre-flight this repository has ever run, on 2026-09-09 against `claude`. Twenty legs
+spawned, 46 minutes of model time, and every leg cached under a digest of its request so a second
+invocation pays for nothing it has already answered.
+
+| Suite                                  | Legs spawned | Model time | Pre-flight                                                                                           |
+| -------------------------------------- | -----------: | ---------: | ---------------------------------------------------------------------------------------------------- |
+| the eight fragment-selection contracts |           16 |       919s | both probes passed on all eight                                                                      |
+| `trace`                                |            2 |       872s | the clean control passed; the three defect probes fail `seeded-fault-fired`                          |
+| `test-review`                          |            2 |      1006s | the clean control and the gameability probe passed; the nine defect probes fail `seeded-fault-fired` |
+
+Every witness held for a reason the corpus establishes rather than by accident. The
+fragment-selection differential is two prompts producing two different fragment lists, and the nfr
+pair differ by exactly the one fragment its config-gated case turns on. The `trace` differential is
+`allow_gate`: the `true` leg wrote `gate_basis: "priority_thresholds"` with `gate_status: "FAIL"` and
+the `false` leg wrote `gate_basis: "none"` and no gate at all, which is what step-05 declares.
+`test-review`'s differential is the file list: the seeded fixture drew five findings and exit 1, the
+clean control drew none and exit 0.
+
+Two things the live run found that no deterministic check could.
+
+**The two witness legs shared a staged workspace, and the second read the first's file.** The first
+live `trace` pre-flight failed its own witness. Both legs ran in one staged directory, and their two
+summaries came back byte-identical while their two matrices differed, which is a run that rewrote one
+artifact and left the other. The second leg's artifact map was reading a summary the first leg wrote.
+Every TEA contract declares `fixtureReset: null`, so AD-10 plans nothing to reset a workspace between
+legs, and a directory per spawned leg is the only thing that makes a leg's evidence its own. With
+that fixed the witness passes, and the fix cost the twelve minutes of the first pair.
+
+**`test-review`'s witness legs need the skill on disk.** They name their fixtures by
+repository-relative path, name no project root, and write a bare `verdict.json`, so all three resolve
+against the policy's `cwd`. A run directory holding only the fixtures fails before the agent starts,
+because `cli/lib/resolve-skill.js` probes four candidates under the project root and finds none. The
+run directory is given the skill at `src/workflows/testarch/bmad-testarch-test-review`, which is the
+fourth candidate and the one a checkout of this repository satisfies.
+
 ### The witness legs were not runnable, and now they are
 
 Eight fragment-selection contracts declared a witness leg whose standard input was the sentence "The
