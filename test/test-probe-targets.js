@@ -51,7 +51,14 @@ const {
   targetFor,
   targetProblems,
 } = require('./lib/probe-targets');
-const { EXIT_CODES, SELECTION_REQUEST_KEYS, classOfAgentError, failureClassForExit } = require('../cli/fragment-selection-runner');
+const {
+  EXIT_CODES,
+  RUNNER_CAPABILITIES: RUNNER_DECLARED_CAPABILITIES,
+  SELECTION_REQUEST_KEYS,
+  classOfAgentError,
+  failureClassForExit,
+} = require('../cli/fragment-selection-runner');
+const { RUNNER_CAPABILITIES: HARNESS_DECLARED_CAPABILITIES } = require('./eval-fragment-selection');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -318,20 +325,23 @@ async function checkFragmentSelectionProbe(runDir) {
   const { port } = await createProbePort({ cwd: runDir, interfaceIds: ['tea-fragment-selection-runner'] });
   const signal = new AbortController().signal;
 
-  // One environment name, carrying both the mode and the fragment list. The
-  // adapter builds argv from a key map, so `--env-pass` cannot be repeated
-  // through it and a probe forwards exactly one variable.
-  const selectionRequest = (probeId, stubMode) =>
+  // Two environment names through one `--env-pass`, which is the repeatable
+  // spelling under test as much as the modes are. An array option value reaches
+  // the child as the flag repeated once per element, so the stub answering with
+  // the list from STUB_FRAGMENTS proves the second occurrence arrived. Before
+  // eval-quality 1.2.0 an array was one JSON token and the fixture had to pack
+  // both values into one variable.
+  const selectionRequest = (probeId, stubMode, stubFragments = 'test-quality.md,data-factories.md') =>
     probeRequest({
       probeId,
       interfaceId: 'tea-fragment-selection-runner',
       operationId: 'select-fragments',
-      option: { agent: 'custom', 'agent-cmd': SELECTION_STUB_AGENT, 'env-pass': 'STUB_MODE' },
-      environment: { STUB_MODE: stubMode },
+      option: { agent: 'custom', 'agent-cmd': SELECTION_STUB_AGENT, 'env-pass': ['STUB_MODE', 'STUB_FRAGMENTS'] },
+      environment: { STUB_MODE: stubMode, STUB_FRAGMENTS: stubFragments },
       stdin: { kind: 'text', value: 'Decide which knowledge fragments this run must load.' },
     });
 
-  const bare = await probeCommand(port, selectionRequest('select-bare', 'fragments:test-quality.md,data-factories.md'), signal);
+  const bare = await probeCommand(port, selectionRequest('select-bare', 'fragments'), signal);
   assert(bare.ok, 'the probe returned an observation', bare.ok ? '' : bare.reason);
   if (bare.ok) {
     assert(bare.observation.exitCode === EXIT_CODES.none, 'a produced selection exits 0', `exitCode ${bare.observation.exitCode}`);
@@ -346,7 +356,7 @@ async function checkFragmentSelectionProbe(runDir) {
   // The witness every fragment-selection contract declares is a differential
   // over stdin. Two prompts through one authorization must be able to produce
   // two selections, and the stub is the only part of that a model would own.
-  const fenced = await probeCommand(port, selectionRequest('select-fenced', 'fenced:selector-resilience.md'), signal);
+  const fenced = await probeCommand(port, selectionRequest('select-fenced', 'fenced', 'selector-resilience.md'), signal);
   assert(
     fenced.ok && JSON.stringify(fenced.observation.stdout.value) === JSON.stringify({ fragments: ['selector-resilience.md'] }),
     'a fenced reply is normalized to the same payload shape',
@@ -440,6 +450,17 @@ function checkRunnerDeclarations() {
   assert(
     SELECTION_REQUEST_KEYS.environment.permitted.includes('HOME'),
     'HOME is a permitted environment key, because the adapter passes the child nothing else that could reach a stored login',
+  );
+
+  // The suite's capability declaration is checked against the harness constant by
+  // tools/validate-eval-schemas.js, and the command is what actually hands the
+  // capability to the vendor now that the harness probes rather than spawns. So
+  // the two constants have to agree, or the manifest describes a confinement the
+  // run does not get.
+  assert(
+    JSON.stringify([...HARNESS_DECLARED_CAPABILITIES].sort()) === JSON.stringify([...RUNNER_DECLARED_CAPABILITIES].sort()),
+    'the harness and the command declare the same runner capabilities',
+    `harness ${JSON.stringify(HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(RUNNER_DECLARED_CAPABILITIES)}`,
   );
 
   // cli/fragment-selection-runner.js restates test/lib/eval-record.js's error

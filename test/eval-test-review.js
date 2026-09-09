@@ -93,6 +93,7 @@ const {
   writeSuiteResult,
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
+const { createProbePort, hostEnvironment, probeCommand, probeRequest } = require('./lib/probe-targets');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
@@ -384,66 +385,101 @@ function caseIds() {
 }
 
 /**
- * One review of the whole fixture corpus.
+ * One review of the whole fixture corpus, through `eval-quality`'s command-line
+ * adapter.
  *
  * Returns `{ ok: true, verdict }`, or `{ ok: false, failureClass }` naming why
  * nothing came back. The distinction is the whole point: a timeout and a missing
  * verdict used to return null, and the caller then scored the runs that survived,
  * which converted a failed model call into a lower measured score.
  *
- * @returns {{ok: true, verdict: object}|{ok: false, failureClass: string}}
+ * Three things move with the adapter. The run is authorized before it starts, by
+ * the registry in `test/lib/probe-targets.js` rather than by whatever string this
+ * function assembles. Its output is capped, where the `spawnSync` it replaces
+ * bounded a runaway child by this process's own memory. And the verdict comes
+ * back as a tagged artifact, so a file the run never wrote is `absent` instead of
+ * an `existsSync` race followed by a `JSON.parse` in a `try`.
+ *
+ * Two wall clocks are in play and the inner one has to be the shorter.
+ * `--timeout-ms` bounds the CLI's own vendor call and reports a timeout through
+ * an exit code; the authorization's `maxElapsedMs` SIGKILLs the process and
+ * reports `budget-exhausted` with no exit code at all. The registry sets the
+ * outer bound one minute above `RUN_TIMEOUT_MS` for exactly this reason.
+ *
+ * @returns {Promise<{ok: true, verdict: object}|{ok: false, failureClass: string}>}
  */
-function runReview(agent, runIndex, runner = {}) {
+async function runReview(agent, runIndex, runner = {}) {
   const runDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-'));
+  // `--json` and `--output` resolve against `--project-root`, while the artifact
+  // map resolves against the authorization's `cwd`. Absolute paths are how the
+  // caller makes the two agree without depending on which one won.
   const jsonPath = path.join(runDir, 'verdict.json');
-  // `--output` defaults to `test-review.md` resolved against cwd, which this call sets to
-  // PROJECT_ROOT, so an unredirected run writes its report into the real repo tree. Only
-  // the JSON verdict is ever scored; the markdown report is redirected into the same
-  // disposable runDir the JSON already uses, purely so nothing lands outside it.
   const reportPath = path.join(runDir, 'test-review.md');
-  const reviewFiles = reviewFilePaths();
 
   try {
-    // No --fail-on override: the enum is request-changes|block, so there is no "never".
-    // A verdict failure exits 1 and still writes the verdict, which is all this needs;
-    // the harness reads the JSON regardless of exit code and only treats a MISSING
-    // verdict as a failed run.
-    //
-    // Every run is bounded. An agent that hangs would otherwise stall the whole
-    // matrix with no output and no way to tell a hang from a slow model.
-    // --isolate is how RUNNER_CAPABILITIES reaches the agent: the CLI wraps the
-    // run so nothing outside the two artifacts and the workflow's own temp files
-    // can be written, whichever vendor is running. Without the flag isolation is
-    // on only under CI, so a laptop run handed the agent a writable checkout.
-    const cliArgs = [CLI, '--agent', agent, '--files', reviewFiles.join(','), '--json', jsonPath, '--output', reportPath, '--isolate'];
-    if (runner.agentCmd) cliArgs.push('--agent-cmd', runner.agentCmd);
-    if (runner.model) cliArgs.push('--model', runner.model);
-    for (const value of runner.agentArgs ?? []) cliArgs.push(`--agent-arg=${value}`);
-    for (const name of runner.envPass ?? []) cliArgs.push('--env-pass', name);
-    const result = spawnSync(process.execPath, cliArgs, {
-      encoding: 'utf8',
-      cwd: PROJECT_ROOT,
-      timeout: RUN_TIMEOUT_MS,
+    const { port } = await createProbePort({
+      cwd: runDir,
+      interfaceIds: ['tea-test-review'],
+      artifacts: { 'tea-test-review': { verdict: jsonPath, report: reportPath } },
     });
 
-    if (result.error?.code === 'ETIMEDOUT' || result.signal === 'SIGTERM') {
-      console.error(`  ${colors.red}run ${runIndex + 1}: timed out after ${RUN_TIMEOUT_MINUTES} minutes${colors.reset}`);
-      return { ok: false, failureClass: 'environment-timeout' };
+    // No --fail-on override: the enum is request-changes|block, so there is no "never".
+    // A verdict failure exits 1 and still writes the verdict, which is all this needs;
+    // the harness reads the artifact regardless of exit code and only treats a MISSING
+    // verdict as a failed run.
+    const option = {
+      agent,
+      files: reviewFilePaths().join(','),
+      // The fixtures are repository-relative and the process now runs in a
+      // temporary directory, so the root they resolve against has to be stated.
+      'project-root': PROJECT_ROOT,
+      json: jsonPath,
+      output: reportPath,
+      'timeout-ms': String(RUN_TIMEOUT_MS),
+      // How RUNNER_CAPABILITIES reaches the agent: the CLI wraps the run so
+      // nothing outside the two artifacts and the workflow's own temp files can
+      // be written, whichever vendor is running. Without the flag isolation is
+      // on only under CI, so a laptop run handed the agent a writable checkout.
+      isolate: true,
+    };
+    if (runner.agentCmd) option['agent-cmd'] = runner.agentCmd;
+    if (runner.model) option.model = runner.model;
+    if ((runner.agentArgs ?? []).length > 0) option['agent-arg'] = [...runner.agentArgs];
+    if ((runner.envPass ?? []).length > 0) option['env-pass'] = [...runner.envPass];
+
+    const result = await probeCommand(
+      port,
+      probeRequest({
+        probeId: `review-run-${runIndex + 1}`,
+        interfaceId: 'tea-test-review',
+        operationId: 'review-test-files',
+        option,
+        environment: hostEnvironment(runner.envPass ?? []),
+      }),
+      new AbortController().signal,
+    );
+
+    if (!result.ok) {
+      console.error(`  ${colors.red}run ${runIndex + 1}: ${result.reason}${colors.reset}`);
+      return { ok: false, failureClass: result.failureClass };
     }
-    if (!fs.existsSync(jsonPath)) {
-      console.error(`  ${colors.red}run ${runIndex + 1}: no verdict written${colors.reset} (exit ${result.status})`);
-      if (result.stderr) console.error(`  ${colors.dim}${result.stderr.trim().split('\n').slice(-3).join('\n  ')}${colors.reset}`);
+
+    const { observation } = result;
+    const verdict = observation.artifacts.verdict;
+    if (verdict.kind === 'absent') {
+      console.error(`  ${colors.red}run ${runIndex + 1}: no verdict written${colors.reset} (exit ${observation.exitCode})`);
+      const stderr = observation.stderr.kind === 'text' ? observation.stderr.value : JSON.stringify(observation.stderr.value);
+      if (stderr) console.error(`  ${colors.dim}${stderr.trim().split('\n').slice(-3).join('\n  ')}${colors.reset}`);
       // Exit 2 is the CLI's own environment class: a missing skill, an unusable
       // option, or no isolation backend. It never started the agent, so no
       // verdict was ever going to exist.
-      return { ok: false, failureClass: result.status === 2 ? 'environment-configuration' : 'environment-missing-artifact' };
+      return { ok: false, failureClass: observation.exitCode === 2 ? 'environment-configuration' : 'environment-missing-artifact' };
     }
-    try {
-      return { ok: true, verdict: JSON.parse(fs.readFileSync(jsonPath, 'utf8')) };
-    } catch (error) {
-      console.error(`  ${colors.red}run ${runIndex + 1}: verdict is not valid JSON: ${error.message}${colors.reset}`);
+    if (verdict.kind !== 'json') {
+      console.error(`  ${colors.red}run ${runIndex + 1}: the verdict artifact is not valid JSON${colors.reset}`);
       return { ok: false, failureClass: 'environment-parser' };
     }
+    return { ok: true, verdict: verdict.value };
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });
   }
@@ -623,15 +659,42 @@ const pct = (value) => (Number.isNaN(value) ? '  n/a' : `${(value * 100).toFixed
  * Absolute paths that change every run are normalized out first. Without that the
  * digest is a fresh number each time and compares with nothing.
  *
- * @returns {string|null} Null when the CLI could not produce a prompt.
+ * The two-minute bound is the authorization's, lowered from the registry's live
+ * backstop: `--agent none` runs no model, so a prompt build that takes longer
+ * than that is hung rather than slow.
+ *
+ * @returns {Promise<string|null>} Null when the CLI could not produce a prompt.
  */
-function promptDigestFromCli() {
+async function promptDigestFromCli() {
   const probeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-eval-prompt-'));
   try {
-    const args = [CLI, '--agent', 'none', '--files', reviewFilePaths().join(','), '--output', path.join(probeDir, 'test-review.md')];
-    const probe = spawnSync(process.execPath, args, { encoding: 'utf8', cwd: PROJECT_ROOT, timeout: 120_000 });
-    if (probe.error || probe.status !== 0 || !probe.stdout) return null;
-    const normalized = probe.stdout.split(PROJECT_ROOT).join('<project-root>').split(probeDir).join('<run-dir>');
+    const { port } = await createProbePort({
+      cwd: probeDir,
+      interfaceIds: ['tea-test-review'],
+      artifacts: { 'tea-test-review': { report: path.join(probeDir, 'test-review.md') } },
+      budgets: { 'tea-test-review': { maxElapsedMs: 120_000 } },
+    });
+    const result = await probeCommand(
+      port,
+      probeRequest({
+        probeId: 'prompt-digest',
+        interfaceId: 'tea-test-review',
+        operationId: 'review-test-files',
+        option: {
+          agent: 'none',
+          files: reviewFilePaths().join(','),
+          'project-root': PROJECT_ROOT,
+          output: path.join(probeDir, 'test-review.md'),
+        },
+        environment: hostEnvironment(),
+      }),
+      new AbortController().signal,
+    );
+    if (!result.ok || result.observation.exitCode !== 0) return null;
+    const stdout = result.observation.stdout;
+    const text = stdout.kind === 'text' ? stdout.value : JSON.stringify(stdout.value);
+    if (!text) return null;
+    const normalized = text.split(PROJECT_ROOT).join('<project-root>').split(probeDir).join('<run-dir>');
     return digest(normalized);
   } catch {
     return null;
@@ -646,7 +709,7 @@ function promptDigestFromCli() {
  * the suite-level problems, and the exit code from the class, so the printed
  * outcome and the recorded outcome cannot disagree.
  */
-function finish({ options, startedAt, mode, runners, suiteFailureClasses = [] }) {
+async function finish({ options, startedAt, mode, runners, suiteFailureClasses = [] }) {
   const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
   const exitCode = exitCodeForFailureClass(failureClass);
 
@@ -663,7 +726,7 @@ function finish({ options, startedAt, mode, runners, suiteFailureClasses = [] })
     }
     // One review call covers the whole corpus, so every case shares the bundle's
     // prompt digest.
-    const promptDigest = mode === 'live' ? promptDigestFromCli() : null;
+    const promptDigest = mode === 'live' ? await promptDigestFromCli() : null;
     writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
@@ -707,7 +770,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
   };
 }
 
-function main() {
+async function main() {
   const startedAt = Date.now();
   const options = parseArgs(process.argv.slice(2));
   const { agents, runs, preflightOnly } = options;
@@ -721,7 +784,7 @@ function main() {
     console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
     for (const problem of problems) console.error(`  - ${problem.message}`);
     console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
-    finish({
+    await finish({
       options,
       startedAt,
       mode: preflightOnly ? 'preflight-only' : 'live',
@@ -731,7 +794,7 @@ function main() {
   }
   if (preflightOnly) {
     console.log(`\n${colors.green}pre-flight only; nothing measured.${colors.reset}`);
-    finish({ options, startedAt, mode: 'preflight-only', runners: [] });
+    await finish({ options, startedAt, mode: 'preflight-only', runners: [] });
   }
 
   const plantedTotal = (groundTruth.files ?? []).reduce((sum, file) => sum + (file.planted ?? []).length, 0);
@@ -748,7 +811,7 @@ function main() {
     const lostRunClasses = [];
 
     for (let runIndex = 0; runIndex < runs; runIndex += 1) {
-      const outcome = runReview(agent, runIndex, options);
+      const outcome = await runReview(agent, runIndex, options);
       if (!outcome.ok) {
         lostRunClasses.push(outcome.failureClass);
         continue;
@@ -900,13 +963,20 @@ function main() {
     );
   }
 
-  finish({ options, startedAt, mode: 'live', runners });
+  await finish({ options, startedAt, mode: 'live', runners });
 }
 
 // Only when invoked directly, so the scoring internals can be exercised without
 // spending a vendor run: the harness that measures the reviewer needs measuring too.
+//
+// A rejected promise is exit 2 with the reason printed. `main` is asynchronous
+// because every entry point through eval-quality is, and an unhandled rejection
+// would otherwise end the process with no failure class and no record.
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    console.error(`${colors.red}eval: ${error?.stack ?? error}${colors.reset}`);
+    process.exit(2);
+  });
 }
 
 module.exports = {

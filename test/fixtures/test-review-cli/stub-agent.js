@@ -48,6 +48,15 @@ const REPORTS = {
   findings: 'findings-multi-severity.md',
 };
 
+// A real vendor CLI answers --version, and every eval harness pre-flight probes
+// for it before it will run anything. Answering it is what lets the whole
+// test-review harness be driven end to end against this stub with no credential:
+// without it the probe reads the empty stdin below and reports a broken vendor.
+if (process.argv.includes('--version')) {
+  process.stdout.write('stub-agent 1.0.0\n');
+  process.exit(0);
+}
+
 function readStdin() {
   try {
     return fs.readFileSync(0, 'utf8');

@@ -36,7 +36,47 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { AGENT_ADAPTERS } = require('../../cli/lib/agent-adapters');
+
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
+
+/**
+ * The host environment variables a measured run is allowed to see.
+ *
+ * The adapter closes the child environment to `PATH` plus what the request
+ * declares, which is the guarantee that makes one probe reproducible. A TEA
+ * command still has to authenticate and still has to behave the way an operator
+ * running it by hand would, so three groups of names are declared:
+ *
+ * - Every vendor variable the shipped adapters read, taken from `AGENT_ADAPTERS`
+ *   rather than transcribed, so a new vendor's variable arrives here with it.
+ * - `HOME` and `USER`, because both shipped vendors resolve a stored login
+ *   through `HOME`, and `cli/test-review.js` reads `~/.claude/.credentials.json`
+ *   and the macOS keychain through the same variable.
+ * - `CI`, because `cli/test-review.js` turns filesystem isolation on when it is
+ *   set. Dropping it would quietly change how a measured run executes rather
+ *   than failing.
+ *
+ * A name absent from `process.env` is absent from the request. An empty string
+ * is a declared value and passes through, since some variables are meaningful
+ * when set to nothing.
+ */
+const HOST_ENVIRONMENT_NAMES = [
+  ...new Set([...Object.values(AGENT_ADAPTERS).flatMap((adapter) => adapter.envNames), 'HOME', 'USER', 'CI']),
+].sort();
+
+/**
+ * @param {string[]} [extraNames] Names the caller also passes through, typically an operator's own `--env-pass`.
+ * @returns {Record<string, string>}
+ */
+function hostEnvironment(extraNames = []) {
+  const environment = {};
+  for (const name of [...HOST_ENVIRONMENT_NAMES, ...extraNames]) {
+    const value = process.env[name];
+    if (typeof value === 'string') environment[name] = value;
+  }
+  return environment;
+}
 
 /**
  * Eight megabytes of captured output per stream and per artifact.
@@ -268,10 +308,12 @@ function targetProblems(projectRoot = PROJECT_ROOT, interfaceIds) {
 
 module.exports = {
   EXECUTION_TARGETS,
+  HOST_ENVIRONMENT_NAMES,
   MAX_OUTPUT_BYTES,
   commandTargetPolicy,
   createProbePort,
   failureClassForFault,
+  hostEnvironment,
   probeCommand,
   probeRequest,
   targetFor,

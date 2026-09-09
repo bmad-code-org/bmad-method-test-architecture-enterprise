@@ -54,15 +54,19 @@ One runner covers eight skills because the eight contracts declare one interface
 
 ## What it cannot express
 
-- **A repeatable option has no spelling.** `option` is a key map, so one `--env-pass` per probe is the ceiling. The selection stub packs its mode and fragment list into one variable for this reason.
+- **A repeatable option is an array value, from `eval-quality` 1.2.0.** `option` is a key map, so one `--env-pass` per probe was the ceiling and the selection stub packed its mode and its fragment list into one variable. An array now emits the flag once per element, and the stub reads `STUB_MODE` and `STUB_FRAGMENTS` separately because reaching both proves the second occurrence arrived.
 - **A negated flag is its own key.** A `false` value is omitted entirely, so commander's `--no-isolate` must be spelled `{'no-isolate': true}`.
-- **Every entry point is asynchronous.** `eval-quality` is ESM and this repository is CommonJS. The harnesses are synchronous from `main()` down, so converting one touches every scoring loop in it. That is the real cost of the rewiring below.
+- **Every entry point is asynchronous.** `eval-quality` is ESM and this repository is CommonJS. The harnesses were synchronous from `main()` down, so converting one touched every scoring loop in it. That was the real cost of the rewiring, and it is paid for two of the three: `main` is `async`, each run is awaited, and a rejected promise exits 2 with the reason printed rather than ending the process with no failure class and no record.
 
 ## Done, and owed
 
 Done, and covered by `npm test`: the registry, policy, port, and fault-to-failure-class mapping in `test/lib/probe-targets.js`; the runner, whose request shape and default agent `tools/generate-contracts.js` reads rather than transcribes; and `npm run test:probe-targets`, which drives both real commands through the real adapter against checked-in fixtures with a stub vendor. It asserts default-deny, the observation shape, artifact read-back, an absent artifact, a real budget kill classified as a timeout, and contract-to-registry agreement both ways, with no model call and no credential.
 
+Also done: `eval-test-review.js`'s `runReview` and `promptDigestFromCli` drive `tea-test-review` through the port, and `eval-fragment-selection.js` runs `cli/fragment-selection-runner.js` rather than calling `runAgent` in process, so its live path and its contract describe one thing. Both were verified end to end against their stub agents, with no model call: the review harness reads a real verdict artifact back as JSON and scores it, and the selection harness scores a real reply off stdout.
+
+Two path couplings closed with them. `runReview` states `--project-root` because the process no longer runs in the repository, and it passes absolute artifact paths so the CLI's `--project-root` resolution and the policy's `cwd` resolution cannot disagree. Each fragment-selection run's scratch directory is the authorization's `cwd`, so the `read-only` declaration is enforced by the policy rather than by the caller remembering to pass one.
+
 Owed:
 
-- **The three harnesses still spawn their own commands.** `eval-test-review.js`'s `runReview` and `promptDigestFromCli`, and `eval-trace.js`'s `runCase`, are what `probeCommand` replaces. `eval-fragment-selection.js` calls `runAgent` in process and should route through the runner in the same change, so its live path and its contract describe one thing.
+- **`eval-trace.js`'s `runCase` still calls `runAgent` in process.** It is the one harness with no command to point at: `tea-test-review` and `tea-fragment-selection-runner` both exist, and a trace runner does not. That is one registry entry, one command, and one contract, and the trace suite declares no contract today, so the contract is the work.
 - **No pre-flight has run.** `runPreflight` drives each contract's sensitivity witness through this port at two live model calls per contract. Nothing here has spent one.
