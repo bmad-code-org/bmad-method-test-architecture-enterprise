@@ -71,9 +71,13 @@ signature that says something true about their plants is refused, and the refusa
 `expected-strength.json` rather than replaced by an `exit-code` signature that would qualify and
 discriminate nothing.
 
-**A rejected probe carries no reason across the boundary.** The qualification gate computes a closed
-list of reason codes, and none of them reaches the evidence artifact or any published export. A
-probe the gate rejects surfaces only as `infrastructure-error` on every oracle and an exit code of 3.
+**A rejected probe now names its reason.** The qualification gate computes a closed list of twenty
+reason codes. Through eval-quality 1.3.0 none of them reached the evidence artifact or any published
+export, so a rejected probe surfaced only as `infrastructure-error` and an exit code of 3, and a
+corpus author had nothing to act on. From 1.4.0 `runScore` returns `qualification` beside the
+artifact and the ladder, and `expected-strength.json` records the codes per probe. The reason still
+stays off the evidence artifact, which is deliberate: it is a fact about the probe rather than about
+the run.
 
 ## What the scoring half reports about the contracts
 

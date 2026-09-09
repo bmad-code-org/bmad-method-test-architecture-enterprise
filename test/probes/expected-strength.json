@@ -4,8 +4,8 @@
     "probeCount": 11,
     "strength": {
       "defect": {
-        "exercised": 4,
-        "caught": 4,
+        "exercised": 9,
+        "caught": 9,
         "rate": 1
       },
       "gameability": {
@@ -21,51 +21,116 @@
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-001",
-        "preflight": "failed: seeded-faults-scoped",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-002": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-002",
-        "preflight": "failed: seeded-faults-scoped",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-003": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-003",
-        "preflight": "failed: seeded-faults-scoped",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-004": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-004",
-        "preflight": "failed: seeded-faults-scoped",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-005": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-005",
-        "preflight": "failed: seeded-faults-scoped",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-006": {
         "probeClass": "defect",
@@ -79,6 +144,7 @@
           "coverage gap state-change-read-back unsatisfied at or above the severity floor",
           "coverage gap whole-body unsatisfied at or above the severity floor"
         ],
+        "qualification": null,
         "strength": {
           "defect": {
             "caught": 1,
@@ -101,6 +167,7 @@
           "coverage gap state-change-read-back unsatisfied at or above the severity floor",
           "coverage gap whole-body unsatisfied at or above the severity floor"
         ],
+        "qualification": null,
         "strength": {
           "defect": {
             "caught": 1,
@@ -123,6 +190,7 @@
           "coverage gap state-change-read-back unsatisfied at or above the severity floor",
           "coverage gap whole-body unsatisfied at or above the severity floor"
         ],
+        "qualification": null,
         "strength": {
           "defect": {
             "caught": 1,
@@ -145,6 +213,7 @@
           "coverage gap state-change-read-back unsatisfied at or above the severity floor",
           "coverage gap whole-body unsatisfied at or above the severity floor"
         ],
+        "qualification": null,
         "strength": {
           "defect": {
             "caught": 1,
@@ -167,6 +236,7 @@
           "coverage gap state-change-read-back unsatisfied at or above the severity floor",
           "coverage gap whole-body unsatisfied at or above the severity floor"
         ],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -181,6 +251,7 @@
         "verdict": null,
         "exitCode": 3,
         "basis": ["oracle resolved infrastructure-error"],
+        "qualification": ["condition-artifact-channel-contract-local"],
         "strength": null
       }
     }
@@ -207,6 +278,7 @@
         "verdict": null,
         "exitCode": 3,
         "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "qualification": ["condition-artifact-channel-contract-local"],
         "strength": null
       },
       "P-002": {
@@ -217,6 +289,7 @@
         "verdict": null,
         "exitCode": 3,
         "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "qualification": ["condition-artifact-channel-contract-local"],
         "strength": null
       },
       "P-003": {
@@ -227,6 +300,7 @@
         "verdict": null,
         "exitCode": 3,
         "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "qualification": ["condition-artifact-channel-contract-local"],
         "strength": null
       },
       "P-004": {
@@ -237,6 +311,7 @@
         "verdict": "FAIL",
         "exitCode": 2,
         "basis": ["oracle resolved abstained at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -267,6 +342,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": {
@@ -285,6 +361,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -315,6 +392,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": {
@@ -333,6 +411,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -363,6 +442,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": {
@@ -381,6 +461,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -411,6 +492,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": {
@@ -429,6 +511,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -459,6 +542,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": {
@@ -477,6 +561,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -507,6 +592,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": {
@@ -525,6 +611,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -555,6 +642,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": {
@@ -573,6 +661,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
@@ -603,6 +692,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": {
@@ -621,6 +711,7 @@
         "verdict": "CONCERNS",
         "exitCode": 0,
         "basis": ["coverage gap malformed-input unsatisfied at or above the severity floor"],
+        "qualification": null,
         "strength": {
           "defect": null,
           "gameability": null,
