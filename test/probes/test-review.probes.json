@@ -1,0 +1,1561 @@
+[
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-001",
+    "probeClass": "defect",
+    "behaviorId": "B-001",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row H4 was planted in checkout.spec.ts at line 22: module-level mutable state mutated in a test with no reset. O-001 is the oracle that catches it, and B-001 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-h4",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+      },
+      "expectedObservableFailure": "The review reports registry row H4 against checkout.spec.ts at one of lines 7, 8, 9, 12, 22.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-001",
+        "behaviorId": "B-001",
+        "summary": "module-level mutable state mutated in a test with no reset",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-h4",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-h4/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H4"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [7, 8, 9, 12, 22]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-002",
+    "probeClass": "defect",
+    "behaviorId": "B-002",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row H1 was planted in checkout.spec.ts at line 16: waitForTimeout used to order steps. O-002 is the oracle that catches it, and B-002 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-h1",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+      },
+      "expectedObservableFailure": "The review reports registry row H1 against checkout.spec.ts at one of lines 12, 15, 16.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-002",
+        "behaviorId": "B-002",
+        "summary": "waitForTimeout used to order steps",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-h1",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-h1/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H1"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [12, 15, 16]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-003",
+    "probeClass": "defect",
+    "behaviorId": "B-003",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row L1 was planted in checkout.spec.ts at line 19: CSS id locator where a role locator is available. O-003 is the oracle that catches it, and B-003 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-l1",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+      },
+      "expectedObservableFailure": "The review reports registry row L1 against checkout.spec.ts at one of lines 12, 18, 19.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-003",
+        "behaviorId": "B-003",
+        "summary": "CSS id locator where a role locator is available",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-l1",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-l1/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "L1"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [12, 18, 19]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-004",
+    "probeClass": "defect",
+    "behaviorId": "B-004",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row H3 was planted in checkout.spec.ts at line 31: conditional decides whether anything is asserted. O-004 is the oracle that catches it, and B-004 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-h3",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+      },
+      "expectedObservableFailure": "The review reports registry row H3 against checkout.spec.ts at one of lines 26, 29, 30, 31.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-004",
+        "behaviorId": "B-004",
+        "summary": "conditional decides whether anything is asserted",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-h3",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-h3/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H3"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [26, 29, 30, 31]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-005",
+    "probeClass": "defect",
+    "behaviorId": "B-005",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row C1 was planted in checkout.spec.ts at line 38: the tenant-boundary test is skipped with no reason. O-005 is the oracle that catches it, and B-005 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-c1",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+      },
+      "expectedObservableFailure": "The review reports registry row C1 against checkout.spec.ts at one of lines 36, 37, 38.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-005",
+        "behaviorId": "B-005",
+        "summary": "the tenant-boundary test is skipped with no reason",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:e724bf06f0b4390767a76230365ebe0f08f3a2a96c2b376f8e81ded81add9648"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-c1",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-c1/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "C1"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [36, 37, 38]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-006",
+    "probeClass": "defect",
+    "behaviorId": "B-006",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row C3 was planted in orders.service.spec.ts at line 17: expect(true).toBe(true) can never fail. O-006 is the oracle that catches it, and B-006 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-c3",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
+      },
+      "expectedObservableFailure": "The review reports registry row C3 against orders.service.spec.ts at one of lines 15, 16, 17.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-006",
+        "behaviorId": "B-006",
+        "summary": "expect(true).toBe(true) can never fail",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-c3",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-c3/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "C3"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [15, 16, 17]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-007",
+    "probeClass": "defect",
+    "behaviorId": "B-007",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row C4 was planted in orders.service.spec.ts at line 23: test body has no assertion. O-007 is the oracle that catches it, and B-007 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-c4",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
+      },
+      "expectedObservableFailure": "The review reports registry row C4 against orders.service.spec.ts at one of lines 20, 21, 22, 23.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-007",
+        "behaviorId": "B-007",
+        "summary": "test body has no assertion",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-c4",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-c4/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "C4"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [20, 21, 22, 23]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-008",
+    "probeClass": "defect",
+    "behaviorId": "B-008",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row C5 was planted in orders.service.spec.ts at line 31: asserts a mock it configured; the service is never called. O-008 is the oracle that catches it, and B-008 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-c5",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
+      },
+      "expectedObservableFailure": "The review reports registry row C5 against orders.service.spec.ts at one of lines 26, 27, 28, 30, 31.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-008",
+        "behaviorId": "B-008",
+        "summary": "asserts a mock it configured; the service is never called",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-c5",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-c5/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "C5"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [26, 27, 28, 30, 31]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-009",
+    "probeClass": "defect",
+    "behaviorId": "B-009",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Registry row H10 was planted in orders.service.spec.ts at line 39: shape-only assertion: the type of the returned id is constrained and its value is not. O-009 is the oracle that catches it, and B-009 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/test-review-eval/ground-truth.json",
+      "mutationOperator": "plant-registry-row-h10",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
+      },
+      "expectedObservableFailure": "The review reports registry row H10 against orders.service.spec.ts at one of lines 34, 35, 36, 39.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+        "privateRef": null,
+        "digest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-009",
+        "behaviorId": "B-009",
+        "summary": "shape-only assertion: the type of the returned id is constrained and its value is not",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+            "privateRef": null,
+            "digest": "sha256:3e21dcac828649f5444949094051ded1388c1dd73d141fbf6e473fc322aff221"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-review-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-h10",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-h10/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H10"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [34, 35, 36, 39]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "exit-code",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-010",
+    "probeClass": "zero-action",
+    "behaviorId": "B-010",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:49fa36aae157d20f524dd62c971d91a8b3380230edeec6ef4e403f0cf7203351",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "profile.spec.ts carries no planted defect, so a review that reports anything against it has reported something that is not there. AD-7 keeps a clean control out of the strength vector; what it establishes is that the contract does not fire on a file with nothing in it.",
+    "qualification": {
+      "route": "clean-control",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "revisionCommitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+      "noKnownDefectStatement": "clean/profile.spec.ts is deliberately clean. ground-truth.json plants nothing in it and records the five findings a reviewer is most likely to invent there, each with the reason it is wrong."
+    },
+    "expectedClean": true,
+    "defects": []
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-011",
+    "probeClass": "gameability",
+    "behaviorId": "B-011",
+    "systemId": "tea-test-review-corpus",
+    "implementationDigest": "sha256:e3674f661b98d0567f6e81030d465960dca8fcc492557b948ad4605245cdd59a",
+    "artifactDigest": "sha256:9a9cc313c66e558cac8c1f82e5eeece36221407f49f2977e090785c8365d6697",
+    "commitDigest": "sha256:c20aea767ddc09b6429dec42605760386e0f35ead787196386e2bc0f2058bd04",
+    "rationale": "Recall alone rewards a reviewer that reports everything. A review that files a finding against every file it can reach clears all 9 plant oracles and violates O-011, which is the oracle that has to notice. ground-truth.json records the same rule under negativeControls.",
+    "qualification": {
+      "route": "gameability",
+      "degenerateResponse": "A verdict that files a finding against every file the reviewer opened, including the implementation files the fixtures import and nobody asked it to review.",
+      "naiveOracleSatisfiedEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/full-recall/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:c50934546e4f4efaa0732f95e0cb17144745a57710643b674bd71281f26f543e"
+      },
+      "disciplinedOracleRejectedEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-review/out-of-scope-finding/verdict.json",
+        "privateRef": null,
+        "digest": "sha256:3093fdba0097c2edb93020a75ac76c323563fa3afa49ea80dbb7c6d501ed6897"
+      }
+    },
+    "expectedClean": false,
+    "defects": [],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-review",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "files": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "for-any",
+          "collection": {
+            "pointer": "/interactions/observed/artifact/verdict/findings"
+          },
+          "predicate": {
+            "op": "not",
+            "operands": [
+              {
+                "op": "any",
+                "operands": [
+                  {
+                    "op": "equality",
+                    "operands": [
+                      {
+                        "pointer": "@/file"
+                      },
+                      {
+                        "literal": null
+                      }
+                    ]
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "@/file"
+                      }
+                    ],
+                    "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "@/file"
+                      }
+                    ],
+                    "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "@/file"
+                      }
+                    ],
+                    "pattern": "^(?:.*/|)profile\\.spec\\.ts$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+]

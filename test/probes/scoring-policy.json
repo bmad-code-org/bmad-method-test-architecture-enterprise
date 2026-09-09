@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 2,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "policyId": "tea-behavioral-eval",
+  "severityFloor": "material",
+  "confidenceThreshold": 0.7,
+  "catchThreshold": 0.5,
+  "minimumTrialCount": 1,
+  "reExecutionCap": 2,
+  "remediationCap": 3,
+  "regexMatchStepBudget": 1000000
+}

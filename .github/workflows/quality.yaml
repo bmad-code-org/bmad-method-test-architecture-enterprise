@@ -163,6 +163,15 @@ jobs:
       - name: Evaluate every contract oracle against the stored outputs and the harness scorers
         run: npm run test:contract-oracles
 
+      - name: Check the probe corpora against the sources they are generated from
+        run: npm run test:probe-sources
+
+      - name: Score every probe corpus through eval-quality against stored evidence
+        run: npm run test:probe-corpus
+
+      - name: Run the published port conformance suite against the command-line adapter
+        run: npm run test:probe-conformance
+
       - name: Probe every TEA command target through the eval-quality adapter
         run: npm run test:probe-targets
 

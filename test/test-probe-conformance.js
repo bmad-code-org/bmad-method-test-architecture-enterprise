@@ -1,0 +1,209 @@
+/**
+ * `eval-quality`'s own port conformance suite, run against the adapter TEA
+ * probes its commands through.
+ *
+ * `test/test-probe-targets.js` asserts what TEA's registry and policy decide:
+ * which logical name maps to which file, which budgets apply, and how a thrown
+ * fault becomes a TEA failure class. This asserts the other half, and it is the
+ * package's assertion rather than TEA's: `eval-quality/conformance` publishes
+ * the port boundary as an executable suite, fifteen outcomes for the command-line
+ * arm, and running it is how an adapter user learns that the adapter behaves the
+ * way the boundary says it does rather than the way this repository assumed.
+ *
+ * The mechanism is scripted per scenario because the shared six assertions need
+ * a port that fails, one that hangs, and one that returns an in-band error, and
+ * a real process does none of those on demand. The nine command-specific
+ * assertions run against the real mechanism and a real fixture executable, which
+ * is the point: a synthetic process would prove nothing about argv construction,
+ * a wall clock, or an output cap.
+ *
+ * No model call, no credential, no network.
+ *
+ * Usage: node test/test-probe-conformance.js
+ */
+
+'use strict';
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const PROJECT_ROOT = path.join(__dirname, '..');
+const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'probe-conformance', 'fixture-command.js');
+
+const colors = {
+  reset: '[0m',
+  red: '[31m',
+  green: '[32m',
+  dim: '[2m',
+};
+
+/** The caps the policy declares. Small enough that the fixture can be told to overrun each one, large enough that nothing else does. */
+const MAX_ELAPSED_MS = 4000;
+const MAX_OUTPUT_BYTES = 8 * 1024;
+
+const INTERFACE_ID = 'conformance-fixture';
+const ARTIFACT_ID = 'report';
+const ARTIFACT_TEXT = 'the fixture wrote this';
+
+/** A shell metacharacter payload. It has to reach the process as one literal token; a shell would split or expand it. */
+const INJECTION_VALUE = '; echo pwned > /tmp/tea-conformance-should-not-exist; $(whoami) `id` && rm -rf .';
+
+const request = (overrides) => ({
+  probeId: 'conformance',
+  interfaceId: INTERFACE_ID,
+  operationId: 'run-fixture',
+  kind: 'cli',
+  executable: INTERFACE_ID,
+  subcommandPath: [],
+  channels: { argument: {}, option: {}, environment: {}, stdin: { kind: 'absent' } },
+  ...overrides,
+});
+
+const channels = (overrides) => ({ argument: {}, option: {}, environment: {}, stdin: { kind: 'absent' }, ...overrides });
+
+/** A mechanism that counts what it was asked to do, so the suite's single-call assertions measure the process and not the port. */
+function countingMechanism(real) {
+  let calls = 0;
+  return {
+    mechanism: {
+      run: (runRequest, signal) => {
+        calls += 1;
+        return real.run(runRequest, signal);
+      },
+      readArtifact: (artifactPath, maxBytes) => real.readArtifact(artifactPath, maxBytes),
+    },
+    calls: () => calls,
+  };
+}
+
+/** A mechanism whose run always rejects, for the `fails` scenario. One call, one rejection, no retry. */
+function failingMechanism() {
+  let calls = 0;
+  return {
+    mechanism: {
+      run: async () => {
+        calls += 1;
+        throw new Error('the fixture mechanism was told to fail');
+      },
+      readArtifact: async () => ({ present: false, text: '', truncated: false }),
+    },
+    calls: () => calls,
+  };
+}
+
+/** A mechanism that never settles on its own, for the `hangs` scenario: the adapter's own abort handling is what has to answer. */
+function hangingMechanism() {
+  let calls = 0;
+  return {
+    mechanism: {
+      run: (runRequest, signal) =>
+        new Promise((resolve, reject) => {
+          calls += 1;
+          if (signal.aborted) reject(signal.reason);
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }),
+      readArtifact: async () => ({ present: false, text: '', truncated: false }),
+    },
+    calls: () => calls,
+  };
+}
+
+/** A mechanism that resolves with a shape the port contract does not admit, for the `in-band-error` scenario. */
+function inBandErrorMechanism() {
+  let calls = 0;
+  return {
+    mechanism: {
+      run: async () => {
+        calls += 1;
+        return { exitCode: 'not-a-number', stdout: '', stderr: '' };
+      },
+      readArtifact: async () => ({ present: false, text: '', truncated: false }),
+    },
+    calls: () => calls,
+  };
+}
+
+const MECHANISMS = {
+  resolves: countingMechanism,
+  fails: () => failingMechanism(),
+  hangs: () => hangingMechanism(),
+  'in-band-error': () => inBandErrorMechanism(),
+};
+
+async function main() {
+  const { createCommandLineAdapter, nodeCommandMechanism } = await import('eval-quality/adapters');
+  const { runCommandLineProbeConformance, formatConformanceReport, CONFORMANCE_OUTCOME_COUNTS } = await import('eval-quality/conformance');
+
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-probe-conformance-'));
+  const policy = {
+    authorizations: [
+      {
+        interfaceId: INTERFACE_ID,
+        executable: INTERFACE_ID,
+        target: FIXTURE,
+        permittedSubcommandPaths: [[]],
+        cwd: workspace,
+        artifacts: { [ARTIFACT_ID]: 'artifact.txt' },
+        maxElapsedMs: MAX_ELAPSED_MS,
+        maxOutputBytes: MAX_OUTPUT_BYTES,
+      },
+    ],
+  };
+
+  const subject = {
+    name: 'tea command-line probe adapter',
+    policy,
+    sampleRequest: request({ channels: channels({ option: { 'exit-code': '0' } }) }),
+    authorizedRequest: request({ channels: channels({ option: { 'exit-code': '0' } }) }),
+    unmappedInterfaceRequest: request({ interfaceId: 'no-such-interface', executable: 'no-such-interface' }),
+    unmappedExecutableRequest: request({ executable: 'no-such-executable' }),
+    unauthorizedSubcommandRequest: request({ subcommandPath: ['forbidden'] }),
+    nonZeroExitRequest: request({ channels: channels({ option: { 'exit-code': '3' } }) }),
+    injectionRequest: request({ channels: channels({ argument: { payload: INJECTION_VALUE } }) }),
+    injectionArgumentValue: INJECTION_VALUE,
+    artifactRequest: request({ channels: channels({ option: { write: ARTIFACT_TEXT } }) }),
+    artifactId: ARTIFACT_ID,
+    artifactExpectedText: ARTIFACT_TEXT,
+    overElapsedRequest: request({ channels: channels({ option: { 'sleep-ms': String(MAX_ELAPSED_MS * 3) } }) }),
+    overOutputRequest: request({ channels: channels({ option: { bytes: String(MAX_OUTPUT_BYTES * 4) } }) }),
+    async build(scenario) {
+      const scripted = MECHANISMS[scenario](nodeCommandMechanism);
+      const port = createCommandLineAdapter(policy, scripted.mechanism);
+      return { port: (probeRequest, signal) => port.probe(probeRequest, signal), underlyingCalls: scripted.calls };
+    },
+  };
+
+  const expected = CONFORMANCE_OUTCOME_COUNTS['command-probe'];
+  const problems = [];
+  // In a `finally`, because a throw out of the suite or the renderer would
+  // otherwise leave one temporary directory behind per failed invocation.
+  try {
+    const report = await runCommandLineProbeConformance(subject);
+    console.log(formatConformanceReport(report));
+    if (report.outcomes.length !== expected) {
+      problems.push(`the suite produced ${report.outcomes.length} outcome(s) and a complete command-probe run is ${expected}`);
+    }
+    for (const outcome of report.outcomes) {
+      if (!outcome.passed) problems.push(`${outcome.id}: ${outcome.detail}`);
+    }
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+
+  if (problems.length > 0) {
+    console.error(`\n${colors.red}${problems.length} conformance problem(s):${colors.reset}`);
+    for (const problem of problems) console.error(`   ${problem}`);
+    return 1;
+  }
+
+  console.log(`\n${colors.green}all ${expected} published command-probe conformance assertions passed${colors.reset}\n`);
+  return 0;
+}
+
+main()
+  .then((code) => process.exit(code))
+  .catch((error) => {
+    console.error(`${colors.red}probe conformance could not run:${colors.reset} ${error.stack ?? error}`);
+    process.exit(2);
+  });
