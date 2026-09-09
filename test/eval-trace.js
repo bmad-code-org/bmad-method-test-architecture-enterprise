@@ -1876,8 +1876,9 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
     // from the thrown error, with no second table.
     const { observation } = result;
     if (observation.exitCode !== 0) {
-      const stderr = observation.stderr.kind === 'text' ? observation.stderr.value : JSON.stringify(observation.stderr.value ?? '');
-      const tail = stderr.trim().split('\n').slice(-3).join(' | ');
+      // observedText reads the channel by its tag, so a JSON-shaped stderr is kept
+      // whole and an empty tail lets the exit code be the reason.
+      const tail = observedText(observation.stderr).trim().split('\n').filter(Boolean).slice(-3).join(' | ');
       return {
         ok: false,
         failureClass: failureClassForExit(observation.exitCode),
