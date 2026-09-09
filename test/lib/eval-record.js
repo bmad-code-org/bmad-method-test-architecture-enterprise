@@ -13,7 +13,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const { spawnSync } = require('node:child_process');
+
+const { boundedProbe } = require('./bounded-probe');
 
 const {
   validateEvalResult,
@@ -116,12 +117,12 @@ function digestPrompts(cases) {
  * @returns {{commit: string|null, dirty: boolean}}
  */
 function repositoryState(projectRoot) {
-  const rev = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: projectRoot, encoding: 'utf8' });
-  if (rev.error || rev.status !== 0) return { commit: null, dirty: false };
-  const status = spawnSync('git', ['status', '--porcelain'], { cwd: projectRoot, encoding: 'utf8' });
+  const rev = boundedProbe('git', ['rev-parse', 'HEAD'], { cwd: projectRoot });
+  if (!rev.ok) return { commit: null, dirty: false };
+  const status = boundedProbe('git', ['status', '--porcelain'], { cwd: projectRoot });
   return {
     commit: rev.stdout.trim(),
-    dirty: !status.error && status.status === 0 && status.stdout.trim().length > 0,
+    dirty: status.ok && status.stdout.trim().length > 0,
   };
 }
 
@@ -133,8 +134,8 @@ function repositoryState(projectRoot) {
  */
 function probeVersion(executable) {
   if (!executable) return null;
-  const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
-  if (probe.error || probe.status !== 0) return null;
+  const probe = boundedProbe(executable, ['--version']);
+  if (!probe.ok) return null;
   const line = String(probe.stdout || probe.stderr || '')
     .trim()
     .split('\n')[0];

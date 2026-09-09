@@ -23,7 +23,8 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+
+const { boundedProbe } = require('./bounded-probe');
 
 /** A fresh empty directory under the system temp root, for one agent run. */
 function scratchDirectory(prefix) {
@@ -53,8 +54,8 @@ function filesWritten(root) {
  * @returns {string[]|null}
  */
 function workingTreeState(projectRoot) {
-  const result = spawnSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: projectRoot, encoding: 'utf8' });
-  if (result.error || result.status !== 0) return null;
+  const result = boundedProbe('git', ['status', '--porcelain', '--untracked-files=all'], { cwd: projectRoot });
+  if (!result.ok) return null;
   return String(result.stdout ?? '')
     .split('\n')
     .filter((line) => line.length > 0)

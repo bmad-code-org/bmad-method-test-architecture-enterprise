@@ -250,6 +250,31 @@ function probeRequest({
 }
 
 /**
+ * One tagged observation channel as text a diagnostic can print.
+ *
+ * `stdout` and `stderr` come back as `{kind}`-tagged bodies, and the tag is
+ * total: `text`, `json`, or `absent`. Reading `.value` without checking the tag
+ * gives `undefined` on an absent channel, and the two things a caller then does
+ * with it both fail. `JSON.stringify(undefined)` is the value `undefined` rather
+ * than a string, so `.trim()` on it throws, in the error path, which is the
+ * worst place to put a crash because it fires only when something else has
+ * already gone wrong. Falling back to an empty string instead loses the exit
+ * code's only diagnostic.
+ *
+ * `createCommandLineAdapter` never produces an absent stream today, because it
+ * tags an empty capture as empty text. The port's own contract permits one, so
+ * a caller that reads the tag keeps working when a different mechanism does.
+ *
+ * @param {{kind: string, value?: unknown}} channel
+ * @returns {string} Empty when the channel carries nothing printable.
+ */
+function observedText(channel) {
+  if (channel?.kind === 'text') return String(channel.value ?? '');
+  if (channel?.kind === 'json') return JSON.stringify(channel.value);
+  return '';
+}
+
+/**
  * Run one command through the port and return the observation, or the failure
  * class that says why nothing was observed.
  *
@@ -314,6 +339,7 @@ module.exports = {
   createProbePort,
   failureClassForFault,
   hostEnvironment,
+  observedText,
   probeCommand,
   probeRequest,
   targetFor,

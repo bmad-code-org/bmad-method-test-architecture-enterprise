@@ -27,7 +27,7 @@ That last one had no TEA equivalent at all. A harness could spawn anything.
 
 **`eval-all.js`'s child spawn stays.** It uses `stdio: 'inherit'` so a forty-minute matrix prints as it goes. A probe captures and returns at the end, which is wrong for an operator watching one.
 
-**The `--version`, `git`, and keychain probes stay, and remain owed.** They interrogate the environment rather than probe a system under test, so the adapter does not cover them. None passes a timeout, so any one can hang CI. They need a bounded helper.
+**The `--version`, `git`, and keychain probes stay.** They interrogate the environment rather than probe a system under test, so the adapter does not cover them. None passed a timeout, so any one could hang CI rather than fail it; all seven now go through `test/lib/bounded-probe.js`, which is a ten-second deadline, a SIGKILL, and a reason the caller can act on.
 
 ## The policy is the seam
 

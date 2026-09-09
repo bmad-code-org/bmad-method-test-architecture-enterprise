@@ -133,7 +133,6 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 
 const { runAgent } = require('../cli/lib/run-agent');
 const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
@@ -153,6 +152,7 @@ const {
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
+const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'trace-eval');
@@ -1818,20 +1818,25 @@ function preflight({ agents, agentCmd }) {
   for (const agent of agents) {
     // The name is checked against the adapter registry before anything is spawned.
     // runAgent would reject an unknown vendor too, but only after the string had
-    // already been handed to spawnSync as a command.
+    // already been handed to a child process as a command.
     if (!Object.prototype.hasOwnProperty.call(AGENT_ADAPTERS, agent)) {
       report('environment-configuration', `unknown agent "${agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
       continue;
     }
     const executable = agent === 'custom' ? agentCmd : agent;
-    const probe = spawnSync(executable, ['--version'], { encoding: 'utf8' });
-    if (probe.error) report('environment-transport', `agent CLI "${executable}" is not on PATH (${probe.error.code})`);
-    else if (probe.status === 0)
+    const probe = boundedProbe(executable, ['--version']);
+    if (probe.ok) {
       versions[agent] =
         String(probe.stdout || '')
           .trim()
           .split('\n')[0] || null;
-    else report('environment-transport', `agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
+    } else if (probe.reason === 'failed') {
+      report('environment-transport', `agent CLI "${executable}" failed its --version probe (exit ${probe.status})`);
+    } else if (probe.reason === 'timeout') {
+      report('environment-transport', `agent CLI "${executable}" did not answer --version within ${PROBE_TIMEOUT_MS}ms and was killed`);
+    } else {
+      report('environment-transport', `agent CLI "${executable}" is not on PATH (${probe.detail})`);
+    }
     const credential = agent === 'custom' ? null : missingCredential(agent);
     if (credential) report('environment-authentication', credential);
   }
