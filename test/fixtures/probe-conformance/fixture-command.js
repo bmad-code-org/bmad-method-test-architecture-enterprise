@@ -42,13 +42,15 @@ function main() {
   const text = valueOf('write');
   if (text !== undefined) fs.writeFileSync(path.join(process.cwd(), 'artifact.txt'), text, 'utf8');
 
+  // `process.exitCode` and a natural exit, never `process.exit`. The adapter
+  // captures this process through a pipe, so a write is asynchronous, and
+  // exiting immediately abandons whatever has not drained. The `--bytes` case
+  // writes past the authorization's output cap on purpose, which is exactly the
+  // case a truncated stream would turn into a passing assertion.
   const exitCode = Number.parseInt(valueOf('exit-code') ?? '0', 10);
   const sleepMs = Number.parseInt(valueOf('sleep-ms') ?? '0', 10);
-  if (Number.isInteger(sleepMs) && sleepMs > 0) {
-    setTimeout(() => process.exit(exitCode), sleepMs);
-    return;
-  }
-  process.exit(exitCode);
+  process.exitCode = exitCode;
+  if (Number.isInteger(sleepMs) && sleepMs > 0) setTimeout(() => {}, sleepMs);
 }
 
 main();

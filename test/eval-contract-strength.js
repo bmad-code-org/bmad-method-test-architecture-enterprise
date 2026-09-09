@@ -314,7 +314,13 @@ function writeArtifact(dir, name, value) {
 async function runOneSuite(suite, options, stats) {
   const suiteStats = { spawns: 0, hits: 0, elapsedMs: 0, legs: [] };
   const outDir = path.join(options.out, slug(suite.id));
-  const cacheDir = path.join(options.cache, slug(suite.id));
+  // Keyed by agent as well as by suite. `requestKey` runs on the request before
+  // the agent is merged into its option channel, so two vendors would otherwise
+  // share one entry and a run against the second would be answered by the first
+  // while reporting itself cached. The agent is what changes the answer, and the
+  // environment values that also reach the child are credentials that must not
+  // be hashed into a path.
+  const cacheDir = path.join(options.cache, slug(options.agent), slug(suite.id));
   const interfaceIds = suite.contract.permittedInterfaces.map((iface) => iface.logicalId);
   const log = (line) => console.log(line);
 
@@ -449,6 +455,14 @@ async function main(argv) {
     for (const problem of schemaProblems) console.error(`   ${problem}`);
     return 2;
   }
+  // A probe whose pre-flight failed measured nothing, and an environment failure
+  // outranks a measured one. Read before the verdict, because in `--preflight-only`
+  // there is no verdict to read at all and the run would otherwise report success
+  // on a pre-flight where every leg failed, which is the one thing that flag exists
+  // to catch. Today's corpus reaches this: eight of its thirty-one probes cannot be
+  // pre-flighted, for the reasons `test/probes/expected-strength.json` records.
+  const unmeasured = results.some((result) => (result.verdicts ?? []).some((entry) => entry.passed === false));
+  if (unmeasured) return 2;
   const measuredFailure = results.some((result) => (result.verdicts ?? []).some((entry) => entry.verdict === 'FAIL'));
   return measuredFailure ? 1 : 0;
 }

@@ -174,19 +174,22 @@ async function main() {
     },
   };
 
-  const report = await runCommandLineProbeConformance(subject);
-  console.log(formatConformanceReport(report));
-
   const expected = CONFORMANCE_OUTCOME_COUNTS['command-probe'];
   const problems = [];
-  if (report.outcomes.length !== expected) {
-    problems.push(`the suite produced ${report.outcomes.length} outcome(s) and a complete command-probe run is ${expected}`);
+  // In a `finally`, because a throw out of the suite or the renderer would
+  // otherwise leave one temporary directory behind per failed invocation.
+  try {
+    const report = await runCommandLineProbeConformance(subject);
+    console.log(formatConformanceReport(report));
+    if (report.outcomes.length !== expected) {
+      problems.push(`the suite produced ${report.outcomes.length} outcome(s) and a complete command-probe run is ${expected}`);
+    }
+    for (const outcome of report.outcomes) {
+      if (!outcome.passed) problems.push(`${outcome.id}: ${outcome.detail}`);
+    }
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
   }
-  for (const outcome of report.outcomes) {
-    if (!outcome.passed) problems.push(`${outcome.id}: ${outcome.detail}`);
-  }
-
-  fs.rmSync(workspace, { recursive: true, force: true });
 
   if (problems.length > 0) {
     console.error(`\n${colors.red}${problems.length} conformance problem(s):${colors.reset}`);

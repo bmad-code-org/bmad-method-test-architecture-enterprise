@@ -97,6 +97,22 @@ function assert(condition, message) {
 
 const pad = (n) => String(n).padStart(3, '0');
 
+/**
+ * One repository-relative path in the spelling the generated corpus carries.
+ *
+ * POSIX separators always, because this string is hashed beside the file's bytes
+ * and stored in the probe. A Windows checkout would otherwise regenerate every
+ * digest and every stored path, and `npm run test:probe-sources` would report a
+ * stale corpus on a tree nobody had touched. On POSIX it is the identity, so no
+ * committed byte moves.
+ */
+function repositoryPath(...segments) {
+  return path
+    .join(...segments)
+    .split(path.sep)
+    .join('/');
+}
+
 /** `sha256:<hex>` over the named repository files, in the order given. */
 function digestOf(relativePaths) {
   const parts = [];
@@ -525,12 +541,12 @@ function buildTraceProbes() {
 
 function buildFragmentSelectionProbes(workflow) {
   const contract = loadContract(path.join('fragment-selection', `${workflow}.contract.json`));
-  const evalsPath = path.join('test', 'evals', workflow, 'evals.json');
+  const evalsPath = repositoryPath('test', 'evals', workflow, 'evals.json');
   const evals = JSON.parse(fs.readFileSync(path.join(EVAL_ROOT, workflow, 'evals.json'), 'utf8'));
   const first = evals.cases[0];
   assert(first, `${workflow}: evals.json carries no case`);
 
-  const contextFiles = evals.contextFiles.map((file) => path.join('src', 'workflows', 'testarch', workflow, file));
+  const contextFiles = evals.contextFiles.map((file) => repositoryPath('src', 'workflows', 'testarch', workflow, file));
   const corpusDigest = digestOf([evalsPath, ...contextFiles]);
   const containmentOracleId = 'O-001';
   const exclusionOracleId = 'O-002';
