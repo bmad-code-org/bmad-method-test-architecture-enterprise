@@ -92,10 +92,9 @@ const DEFAULT_TIMEOUT_MS = 1_800_000; // 30 minutes: the ceiling, and the value 
 // run on a CI runner of unknown speed, and the file count is a coarse proxy: it
 // says nothing about how large those files are, how much context travelled with
 // them, or that four parallel workers each open the review set independently
-// where one sequential parent opened it once. The base is set well above the
-// slowest one-file review measured here (711s on main, 489s with these changes),
-// so the proxy being coarse costs margin instead of a false timeout, and
-// --timeout-ms still overrides all of it.
+// where one sequential parent opened it once. The base sits well above the
+// longest one-file review observed locally, which ran about 12 minutes, so a
+// coarse proxy spends margin, and --timeout-ms still overrides all of it.
 const TIMEOUT_BASE_MS = 1_200_000; // 20 minutes before the per-file allowance
 const TIMEOUT_PER_FILE_MS = 120_000; // 2 minutes per reviewed file
 
