@@ -90,6 +90,17 @@ Every probe names the oracle that catches it, and that is enforced rather than i
 generator reads a probe's `behaviorId` out of the contract and refuses one whose behavior discharges
 more than a single oracle.
 
+What the corpus scores, at `eval-quality` 1.3.0:
+
+| Contract                               | defect        | gameability           | Not scored, and why                                                                                     |
+| -------------------------------------- | ------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
+| `test-review`                          | 4 of 4 caught | refused               | five plants fire on a witness leg the plan calls clean; the gameability signature reads a written file  |
+| the eight fragment-selection contracts | none authored | 1 of 1 caught on each | fragment selection seeds no defect; it is a routing measurement with a required set and a forbidden set |
+| `trace`                                | refused       | none authored         | all three plants fire on a witness leg the plan calls clean, and the signature reads a written file     |
+
+A clean control never enters the vector, which is AD-7's rule rather than a gap: what it establishes
+is that the contract does not fire where there is nothing to find.
+
 ### The behavior grouping was a defect, and it is fixed
 
 `eval-quality`'s `designatedOracleIdOf` resolves AD-40's designated oracle only for a behavior
@@ -104,15 +115,17 @@ per oracle now. The demand is unchanged: the same oracles, all required, at the 
 all ten contracts still compiling and all 611 oracle checks still agreeing with their scorers. Only
 the grouping moved.
 
-`trace.contract.json` still groups, up to nine oracles under one behavior, and its probes are a clean
-control and three defect probes whose signature the vocabulary refuses for the reason below. Nothing
-there votes through a designated oracle yet, and the day a trace probe needs to, the same split is
-what it needs.
+`trace.contract.json` is split the same way, twenty-six behaviors for twenty-six oracles, minted from
+the oracle identifiers so `B-00n` and `O-00n` are one thing. Its authored groups still carry the
+severity, the risk, the requirement link and the success sentence; what they no longer do is put nine
+oracles behind one behavior. Its two probes passed before the split only because a clean control
+resolves `passed-clean-control` on every oracle, so the fallthrough happened to be right; a defect
+probe there would have been voted by `O-001` whatever criterion it withheld.
 
 ### What the probe vocabulary cannot say about a command
 
-Two limits, both measured against the installed package rather than inferred, and both recorded in
-`test/probes/expected-strength.json` so the day either closes is visible.
+Four limits, all measured against the installed package rather than inferred, and all recorded in
+`test/probes/expected-strength.json` so the day one closes is visible.
 
 **A defect signature cannot address a file a command wrote.** `qualifyProbe` refuses an `artifact`
 pointer outright as `condition-artifact-channel-contract-local`: an artifact identifier is minted per
@@ -121,10 +134,34 @@ contract, so a signature carrying one resolves only against the contract it was 
 output as its descriptor channel. Measured across TEA's three commands: a structured stdout signature
 against `tea-fragment-selection-runner` qualifies, the same shape against `tea-test-review` does not,
 an artifact signature against either is refused, and an `exit-code` signature qualifies against all
-three. So the eight fragment-selection contracts carry a signature that discriminates a real
-degenerate reply, and the two contracts whose deliverable is a file carry one that says what is true
-about the plant and is refused. Writing an `exit-code` signature for those instead would qualify and
-discriminate nothing, which is the catch rate of 1.00 by construction that AD-40 exists to prevent.
+three.
+
+What is left is the exit code, and whether that is honest depends on the command. For
+`tea-test-review` it discriminates: a review that finds a gating defect exits 1 and one that finds
+none exits 0, so the condition is false on the clean control, and the nine plant probes carry it. It
+does not discriminate which row, so per-row attribution is the designated oracle's and the finding's
+rather than the signature's, which is a weaker guarantee than AD-40 intends and is stated here
+because it is what the vocabulary allows. For `tea-trace-runner` the exit code discriminates nothing,
+since every completed trace run exits 0 whatever it wrote, so its three probes keep the signature
+that states the truth about the plant and are refused rather than given one that would qualify and
+mean nothing.
+
+**`seeded-faults-scoped` has no clean leg to use.** AD-10 asks whether a seeded fault fires anywhere
+it should not, and `planPreflight` answers it against every leg already registered for the operation,
+which for a TEA contract is its sensitivity witness legs. `test-review`'s differential drives one leg
+at a seeded fixture and `trace`'s drives both at the seeded set, so a plant in a file a witness leg
+reads fires on a leg the plan calls clean. Five of the nine review plants land there, and all three
+trace plants: the live pre-flight reports `D-001: the manifestation witness fires on clean leg
+"witness-gate-evaluated"`. The four review plants in the file no witness leg reads pre-flight cleanly
+and score, and the defect class catches all four.
+
+**"This collection is empty" has no spelling.** The evaluator intercepts an empty array on every
+quantifier and on every single-operand leaf and returns `insufficient-evidence` with an
+`empty-collection` condition before the operator runs, so `count-tolerance` with `expected: 0` never
+counts and `deep-equality` against a literal `[]` never compares. Two of `trace`'s oracles make
+exactly that claim about its clean set, and both abstain on the run they were written to confirm.
+`count-tolerance` is the spelling this repository now uses, because it is the claim the oracle is
+making and it starts working the day an empty collection counts as evidence for a cardinality check.
 
 **A rejected probe carries no reason across the boundary.** The qualification gate computes a closed
 list of twenty reason codes and none of them reaches the evidence artifact or any published export.
@@ -142,11 +179,16 @@ Three findings, all measured, none of them tuned away.
   before. `test-review` leaves `whole-body`, `malformed-input` and `state-change-read-back`
   unsatisfied; every fragment-selection contract leaves `malformed-input` unsatisfied. Each scores the
   run down to CONCERNS without blocking it, which is exactly the weight AD-20 gives a coverage gap.
-- **`trace`'s clean control scores FAIL.** Seven of its twenty-six oracles quantify over collections
-  the clean set leaves empty, so each resolves `insufficient-evidence` with an `empty-collection`
-  introduction condition and lands on `abstained`, which is a behavioural failure at or above the
-  policy's severity floor. `test/contracts/README.md` already recorded that the contract abstains
-  where the harness reads a measured miss; this is the first time the consequence has been scored.
+- **`trace`'s clean control scores FAIL, and it is two different things.** Seven of its twenty-six
+  oracles abstain. Five belong to the seeded set and resolve against a record carrying only the clean
+  set's observation, and TEA cannot repair that: both plan steps declare one operation and send the
+  same prompt, because what makes a trace run the seeded set or the clean set is the staged workspace
+  and no request shape names one, so a record carrying both runs is ambiguous under `exactly-one` and
+  a record carrying one leaves the other set's oracles reading nothing. Binding the prompt literally
+  was tried and the generator's comment records why it does not work. The other two assert that a
+  collection is empty, which the vocabulary cannot say at all. Neither half is a case for giving the
+  clean set a member so an oracle has something to read: that would mutate a control to make the
+  instrument work.
 - **A plan cannot tell two steps apart when both bind their inputs by matcher.** Each
   fragment-selection contract declares one plan step per case, distinguished only by the prompt, and
   the prompt is bound `{matcher: 'any'}` because the alternative is a 28-kilobyte literal per step. A
@@ -158,15 +200,17 @@ Three findings, all measured, none of them tuned away.
 
 ### What the live pre-flight measured
 
-The first pre-flight this repository has ever run, on 2026-09-09 against `claude`. Twenty legs
-spawned, 46 minutes of model time, and every leg cached under a digest of its request so a second
-invocation pays for nothing it has already answered.
+The first pre-flight this repository has ever run, on 2026-09-09 against `claude`. Twenty-one legs
+spawned, 55 minutes of model time, and every leg cached under a digest of its request so a second
+invocation pays for nothing it has already answered. The three manifestation witnesses `trace` gained
+at `eval-quality` 1.3.0 cost nothing: their request is the one its `allow_gate: true` witness leg
+already sends, and the cache is keyed on the request.
 
-| Suite                                  | Legs spawned | Model time | Pre-flight                                                                                           |
-| -------------------------------------- | -----------: | ---------: | ---------------------------------------------------------------------------------------------------- |
-| the eight fragment-selection contracts |           16 |       919s | both probes passed on all eight                                                                      |
-| `trace`                                |            2 |       872s | the clean control passed; the three defect probes fail `seeded-fault-fired`                          |
-| `test-review`                          |            2 |      1006s | the clean control and the gameability probe passed; the nine defect probes fail `seeded-fault-fired` |
+| Suite                                  | Legs spawned | Model time | Pre-flight                                                                           |
+| -------------------------------------- | -----------: | ---------: | ------------------------------------------------------------------------------------ |
+| the eight fragment-selection contracts |           16 |       919s | both probes passed on all eight                                                      |
+| `trace`                                |            2 |       872s | the clean control passed; the three defect probes fire on a leg the plan calls clean |
+| `test-review`                          |            3 |      1485s | the clean control, the gameability probe and four of the nine defect probes passed   |
 
 Every witness held for a reason the corpus establishes rather than by accident. The
 fragment-selection differential is two prompts producing two different fragment lists, and the nfr

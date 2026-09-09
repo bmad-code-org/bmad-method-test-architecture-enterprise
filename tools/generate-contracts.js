@@ -1805,7 +1805,7 @@ function traceOracleSpecs(groundTruth) {
           check: allOf([
             equalsPointer(at('/live_evidence/present'), false),
             equalsPointer(at('/live_evidence/freshness'), live.freshness),
-            { op: 'deep-equality', operands: [{ pointer: at('/blockers') }, { literal: [] }] },
+            emptyCollection(at('/blockers')),
           ]),
         },
         (scored) => okOf(scored.live, ['live_evidence.present', 'live_evidence.freshness', 'blockers is empty']),
@@ -1860,12 +1860,12 @@ function traceOracleSpecs(groundTruth) {
           commentary: `${label}: every criterion has evidence that establishes it, so there is no test to turn down and rejected_evidence is empty.`,
           direction: {
             polarity: 'expects-hold',
-            relation: 'deep-equality',
+            relation: 'count-tolerance',
             scope: `The rejected_evidence array in the summary written for ${label}.`,
             negativeDomain: 'A run rejecting a test that does establish its criterion.',
             evidenceTargets: [at('/rejected_evidence')],
           },
-          check: { op: 'deep-equality', operands: [{ pointer: at('/rejected_evidence') }, { literal: [] }] },
+          check: emptyCollection(at('/rejected_evidence')),
         },
         (scored) => okOf(scored.rejectedEvidence, ['rejected_evidence is an array', 'rejected_evidence.length']),
       );
@@ -2045,7 +2045,7 @@ const TRACE_BEHAVIORS = [
     description:
       'The waiver register is reported, the well formed request as valid and the defective one as invalid, and neither moves the gate.',
     success:
-      'The seeded summary reports two filed waivers, one valid and one invalid, names each with its verdict, and still derives the FAIL that B-001 asserts.',
+      'The seeded summary reports two filed waivers, one valid and one invalid, names each with its verdict, and still derives the FAIL the gate behavior asserts.',
     requirement: 'expectedWaiverHandling',
   },
   {
@@ -2083,6 +2083,20 @@ const TRACE_BEHAVIORS = [
   },
 ];
 
+/**
+ * "This collection is empty", as a count rather than as a comparison.
+ *
+ * `deep-equality` against a literal `[]` was the first spelling and it cannot
+ * work: AD-4 resolves any addressing of an empty collection to
+ * `insufficient-evidence` before the comparison runs, so the oracle abstained on
+ * exactly the run it was written to confirm and scored the clean control a
+ * behavioural failure. `count-tolerance` counts the elements instead, and zero
+ * elements with zero tolerance is the claim.
+ */
+function emptyCollection(pointer) {
+  return { op: 'count-tolerance', operands: [{ pointer }], expected: 0, tolerance: 0, relative: false };
+}
+
 function buildTraceContract() {
   const groundTruth = JSON.parse(fs.readFileSync(TRACE_GROUND_TRUTH_PATH, 'utf8'));
   const sets = groundTruth.fixtureSets ?? [];
@@ -2119,23 +2133,38 @@ function buildTraceContract() {
   }
 
   const roleOf = (set) => (seeded.includes(set) ? 'seeded' : 'clean');
-  const behaviors = TRACE_BEHAVIORS.map((authored) => {
+  // One behavior per oracle, in oracle order, rather than one per authored group.
+  // The groups are still what carries the severity, the risk, the requirement
+  // link and the success sentence; what they no longer do is put several oracles
+  // behind one behavior, which is what left AD-40's designated oracle unresolved
+  // and made `score` vote a probe's trial with the first oracle in the contract
+  // whatever the probe seeded. Each split behavior keeps its group's success
+  // sentence, because that sentence is the group's observable criterion and each
+  // behavior is one oracle's share of it; the description is the oracle's own,
+  // which is already a sentence about that one check.
+  const oracleById = new Map(oracles.map((oracle) => [oracle.id, oracle]));
+  const behaviors = [];
+  for (const authored of TRACE_BEHAVIORS) {
     const targetSets = authored.role === 'both' ? sets : sets.filter((set) => roleOf(set) === authored.role);
-    const oracleIds = specs
+    const matched = specs
       .filter((spec) => targetSets.some((set) => set.id === spec.setId))
-      .filter((spec) => authored.kinds.some((kind) => (kind.endsWith('-') ? spec.kind.startsWith(kind) : spec.kind === kind)))
-      .map((spec) => spec.id);
-    assert(oracleIds.length > 0, `${authored.id}: no oracle matches kinds [${authored.kinds.join(', ')}] on the ${authored.role} set(s)`);
-    return {
-      id: authored.id,
-      description: authored.description,
-      severity: authored.severity,
-      observableSuccessCriterion: authored.success,
-      requirementLinks: targetSets.map((set) => ({ scheme: 'tea-eval-ground-truth', id: `${set.id}/${authored.requirement}` })),
-      riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
-      oracles: oracleIds.sort(),
-    };
-  });
+      .filter((spec) => authored.kinds.some((kind) => (kind.endsWith('-') ? spec.kind.startsWith(kind) : spec.kind === kind)));
+    assert(matched.length > 0, `${authored.id}: no oracle matches kinds [${authored.kinds.join(', ')}] on the ${authored.role} set(s)`);
+    for (const spec of matched) {
+      behaviors.push({
+        id: spec.id,
+        description: oracleById.get(spec.id).commentary,
+        severity: authored.severity,
+        observableSuccessCriterion: authored.success,
+        requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${spec.setId}/${authored.requirement}` }],
+        riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
+        oracles: [spec.id],
+      });
+    }
+  }
+  behaviors.sort((left, right) => (left.id < right.id ? -1 : 1));
+  // The identifier is minted from the oracle's, so B-00n and O-00n are one thing.
+  for (const behavior of behaviors) behavior.id = behavior.id.replace('O-', 'B-');
   const claimed = new Set(behaviors.flatMap((behavior) => behavior.oracles));
   for (const spec of specs) {
     assert(claimed.has(spec.id), `${spec.id} (${spec.kind} on ${spec.setId}) is stated by no behavior, so nothing would demand it`);
@@ -2247,6 +2276,14 @@ function buildTraceContract() {
       // the runner record's to state. The prompt is bound as `any` for the reason
       // the fragment-selection contracts give: its bytes are evidence, and the
       // sealed record carries their digest.
+      //
+      // Binding it to its literal bytes was tried, to let one record carry both
+      // steps' observations and stop each step selecting every observation of the
+      // operation. It cannot work here: the two steps send the same prompt on
+      // purpose, because what makes a trace run the seeded set or the clean set is
+      // the staged workspace and no request shape names one. So nothing in the
+      // plan tells these two steps apart, and a record scoring one set leaves the
+      // other set's oracles quantifying over evidence that is not theirs.
       inputBinding: { argument: null, option: { agent: { matcher: 'any' } }, environment: null, stdin: { prompt: { matcher: 'any' } } },
     })),
     scopedResources: null,

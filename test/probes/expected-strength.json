@@ -4,9 +4,9 @@
     "probeCount": 11,
     "strength": {
       "defect": {
-        "exercised": 0,
-        "caught": 0,
-        "rate": null
+        "exercised": 4,
+        "caught": 4,
+        "rate": 1
       },
       "gameability": {
         "exercised": 0,
@@ -21,91 +21,139 @@
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-001",
-        "preflight": "failed: seeded-fault-fired",
+        "preflight": "failed: seeded-faults-scoped",
         "verdict": null,
         "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "basis": ["pre-flight verdict did not pass"],
         "strength": null
       },
       "P-002": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-002",
-        "preflight": "failed: seeded-fault-fired",
+        "preflight": "failed: seeded-faults-scoped",
         "verdict": null,
         "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "basis": ["pre-flight verdict did not pass"],
         "strength": null
       },
       "P-003": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-003",
-        "preflight": "failed: seeded-fault-fired",
+        "preflight": "failed: seeded-faults-scoped",
         "verdict": null,
         "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "basis": ["pre-flight verdict did not pass"],
         "strength": null
       },
       "P-004": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-004",
-        "preflight": "failed: seeded-fault-fired",
+        "preflight": "failed: seeded-faults-scoped",
         "verdict": null,
         "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "basis": ["pre-flight verdict did not pass"],
         "strength": null
       },
       "P-005": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-005",
-        "preflight": "failed: seeded-fault-fired",
+        "preflight": "failed: seeded-faults-scoped",
         "verdict": null,
         "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "basis": ["pre-flight verdict did not pass"],
         "strength": null
       },
       "P-006": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-006",
-        "preflight": "failed: seeded-fault-fired",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-007": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-007",
-        "preflight": "failed: seeded-fault-fired",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-008": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-008",
-        "preflight": "failed: seeded-fault-fired",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-009": {
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-009",
-        "preflight": "failed: seeded-fault-fired",
-        "verdict": null,
-        "exitCode": 3,
-        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
-        "strength": null
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "strength": {
+          "defect": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "gameability": null,
+          "zero-action": null
+        }
       },
       "P-010": {
         "probeClass": "zero-action",
@@ -155,7 +203,7 @@
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-001",
-        "preflight": "failed: seeded-fault-fired",
+        "preflight": "failed: seeded-faults-scoped",
         "verdict": null,
         "exitCode": 3,
         "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
@@ -165,7 +213,7 @@
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-001",
-        "preflight": "failed: seeded-fault-fired",
+        "preflight": "failed: seeded-faults-scoped",
         "verdict": null,
         "exitCode": 3,
         "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
@@ -175,7 +223,7 @@
         "probeClass": "defect",
         "expectedClean": false,
         "behaviorId": "B-001",
-        "preflight": "failed: seeded-fault-fired",
+        "preflight": "failed: seeded-faults-scoped",
         "verdict": null,
         "exitCode": 3,
         "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
@@ -184,7 +232,7 @@
       "P-004": {
         "probeClass": "zero-action",
         "expectedClean": true,
-        "behaviorId": "B-005",
+        "behaviorId": "B-016",
         "preflight": "passed",
         "verdict": "FAIL",
         "exitCode": 2,

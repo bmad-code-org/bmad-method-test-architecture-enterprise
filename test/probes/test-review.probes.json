@@ -58,7 +58,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-h4",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-h4/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H4"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [7, 8, 9, 12, 22]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -67,7 +125,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -86,46 +144,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "H4"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [7, 8, 9, 12, 22]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }
@@ -189,7 +216,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-h1",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-h1/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H1"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [12, 15, 16]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -198,7 +283,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -217,46 +302,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "H1"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [12, 15, 16]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }
@@ -320,7 +374,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-l1",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-l1/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "L1"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [12, 18, 19]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -329,7 +441,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -348,46 +460,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "L1"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [12, 18, 19]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }
@@ -451,7 +532,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-h3",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-h3/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H3"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [26, 29, 30, 31]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -460,7 +599,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -479,46 +618,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "H3"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [26, 29, 30, 31]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }
@@ -582,7 +690,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-c1",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-c1/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "C1"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [36, 37, 38]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -591,7 +757,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -610,46 +776,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "C1"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)checkout\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [36, 37, 38]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }
@@ -713,7 +848,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-c3",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-c3/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "C3"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [15, 16, 17]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -722,7 +915,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -741,46 +934,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "C3"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [15, 16, 17]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }
@@ -844,7 +1006,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-c4",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-c4/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "C4"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [20, 21, 22, 23]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -853,7 +1073,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -872,46 +1092,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "C4"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [20, 21, 22, 23]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }
@@ -975,7 +1164,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-c5",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-c5/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "C5"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [26, 27, 28, 30, 31]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -984,7 +1231,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -1003,46 +1250,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "C5"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [26, 27, 28, 30, 31]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }
@@ -1106,7 +1322,65 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-h10",
+          "interfaceId": "tea-test-review",
+          "operationId": "review-test-files",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "files": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+              "json": "verdict.json",
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "absent"
+            }
+          },
+          "relation": {
+            "op": "for-any",
+            "collection": {
+              "pointer": "/interactions/manifest-h10/artifact/verdict/findings"
+            },
+            "predicate": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "equality",
+                  "operands": [
+                    {
+                      "pointer": "@/row"
+                    },
+                    {
+                      "literal": "H10"
+                    }
+                  ]
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "@/file"
+                    }
+                  ],
+                  "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
+                },
+                {
+                  "op": "set-membership",
+                  "operands": [
+                    {
+                      "pointer": "@/line"
+                    },
+                    {
+                      "literal": [34, 35, 36, 39]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -1115,7 +1389,7 @@
         "executable": "tea-test-review",
         "subcommandPath": []
       },
-      "observableChannel": "artifact",
+      "observableChannel": "exit-code",
       "condition": {
         "selector": {
           "inputBinding": {
@@ -1134,46 +1408,15 @@
           }
         },
         "predicate": {
-          "op": "for-any",
-          "collection": {
-            "pointer": "/interactions/observed/artifact/verdict/findings"
-          },
-          "predicate": {
-            "op": "all",
-            "operands": [
-              {
-                "op": "equality",
-                "operands": [
-                  {
-                    "pointer": "@/row"
-                  },
-                  {
-                    "literal": "H10"
-                  }
-                ]
-              },
-              {
-                "op": "regex",
-                "operands": [
-                  {
-                    "pointer": "@/file"
-                  }
-                ],
-                "pattern": "^(?:.*/|)orders\\.service\\.spec\\.ts$"
-              },
-              {
-                "op": "set-membership",
-                "operands": [
-                  {
-                    "pointer": "@/line"
-                  },
-                  {
-                    "literal": [34, 35, 36, 39]
-                  }
-                ]
-              }
-            ]
-          }
+          "op": "equality",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/exit-code"
+            },
+            {
+              "literal": 1
+            }
+          ]
         }
       }
     }

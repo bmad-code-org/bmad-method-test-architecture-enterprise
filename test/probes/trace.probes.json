@@ -52,7 +52,33 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-ac-2",
+          "interfaceId": "tea-trace-runner",
+          "operationId": "trace-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `project`\n- `{config_source}`: `project/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `project/test-artifacts`\n- `{test_dir}`: `project/tests`\n- `{source_dir}`: `project/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-ac-2/artifact/summary/coverage/priority_breakdown/P0/pct"
+              },
+              {
+                "literal": 50
+              }
+            ]
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -146,7 +172,33 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-ac-8",
+          "interfaceId": "tea-trace-runner",
+          "operationId": "trace-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `project`\n- `{config_source}`: `project/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `project/test-artifacts`\n- `{test_dir}`: `project/tests`\n- `{source_dir}`: `project/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-ac-8/artifact/summary/coverage/priority_breakdown/P2/pct"
+              },
+              {
+                "literal": 50
+              }
+            ]
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -240,7 +292,33 @@
           }
         ],
         "source": "controlled-mutation",
-        "manifestationWitness": null
+        "manifestationWitness": {
+          "legId": "manifest-ac-10",
+          "interfaceId": "tea-trace-runner",
+          "operationId": "trace-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `project`\n- `{config_source}`: `project/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `project/test-artifacts`\n- `{test_dir}`: `project/tests`\n- `{source_dir}`: `project/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-ac-10/artifact/summary/coverage/priority_breakdown/P3/pct"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          }
+        }
       }
     ],
     "defectSignature": {
@@ -287,7 +365,7 @@
     "revisionCount": 0,
     "probeId": "P-004",
     "probeClass": "zero-action",
-    "behaviorId": "B-005",
+    "behaviorId": "B-016",
     "systemId": "tea-trace-clean-api-token-lifecycle",
     "implementationDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
     "artifactDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",

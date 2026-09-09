@@ -83,6 +83,22 @@ function reviewExpectation(caseId) {
   return readJson(path.join(REPLAY_ROOT, 'test-review', caseId, 'expected.json')).result;
 }
 
+/**
+ * One stored verdict narrowed to the files a leg actually reviewed.
+ *
+ * The severity counts and the recommendation are recomputed from what survives,
+ * so a review of a file with no CRITICAL plant approves and exits 0. Both are
+ * read from the findings rather than carried over, because carrying them over
+ * would make a leg that found nothing still report a blocking verdict.
+ */
+function narrowVerdict(verdict, files) {
+  const findings = verdict.findings.filter((finding) => files.some((file) => finding.file.endsWith(file)));
+  const violations = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const finding of findings) violations[finding.severity.toLowerCase()] += 1;
+  const recommendation = violations.critical > 0 || violations.high > 0 ? 'Block' : 'Approve';
+  return { ...verdict, findings, violations, reviewedFiles: files, recommendation };
+}
+
 /** `Block` is the only recommendation that exits 1; every other measured verdict exits 0. */
 const reviewExitCode = (verdict) => (verdict.recommendation === 'Block' ? 1 : 0);
 
@@ -126,6 +142,9 @@ function testReviewEvidence(contract) {
       .flatMap((entry) => entry.planted ?? [])
       .map((plant) => [byRequirement.get(`tea-criteria-registry/${plant.row}`), plant.row]),
   );
+  const oracleOfBehavior = new Map(
+    contract.behaviors.filter((behavior) => behavior.oracles.length === 1).map((behavior) => [behavior.id, behavior.oracles[0]]),
+  );
 
   return {
     /**
@@ -135,8 +154,15 @@ function testReviewEvidence(contract) {
      * review that reports nothing gating.
      */
     answer(request) {
-      const files = String(request.channels.option.files ?? '');
-      return reviewBody(reviewVerdict(files.includes('/seeded/') ? 'full-recall' : 'approved-with-no-findings'));
+      // A review reports what it read. The stored full-recall verdict covers the
+      // whole corpus, so a leg naming one file gets that verdict narrowed to the
+      // findings in it, which is what the live leg returned: the seeded checkout
+      // fixture drew its own five and nothing else.
+      const files = String(request.channels.option.files ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      return reviewBody(narrowVerdict(reviewVerdict('full-recall'), files));
     },
     recordInputs(probe) {
       // The gameability probe is scored against the run that games the suite:
@@ -160,36 +186,55 @@ function testReviewEvidence(contract) {
         }),
       ];
 
-      // The scope oracle is the last but two, by the order
-      // tools/generate-contracts.js writes them: one oracle per plant, then the
-      // clean control, the scope control, the verdict shape, and the exit code.
       const oracleIds = contract.oracles.map((oracle) => oracle.id);
       const missedRows = new Set(measured.misses);
 
-      const findings =
-        probe.probeClass === 'gameability'
-          ? [
-              {
-                findingType: 'defect',
-                findingId: 'F-001',
-                oracleId: scopeOracleId,
-                probeId: probe.probeId,
-                behaviorId: probe.behaviorId,
-                severity: 'material',
-                summary: `The review reported ${measured.outOfScope} finding(s) against a file outside the review set.`,
-                confidence: 1,
-                observationIds: [observationId],
-                evidenceArtifacts: [],
-                quotedEvidence: [
-                  {
-                    quote: verdict.findings.find((finding) => !reviewedFiles.includes(finding.file)).file,
-                    channel: 'artifact',
-                    artifactId: 'verdict',
-                  },
-                ],
-              },
-            ]
-          : [];
+      // What the evaluator claims about this probe's own seeded defect. A
+      // gameability probe claims the degenerate reply the scope oracle rejects; a
+      // defect probe claims the planted row its designated oracle discharges.
+      // AD-40 decides the catch from the signature and this citation together, so
+      // a probe with no finding of its own can only resolve `manifested-unclaimed`.
+      const findings = [];
+      if (probe.probeClass === 'gameability') {
+        findings.push({
+          findingType: 'defect',
+          findingId: 'F-001',
+          oracleId: scopeOracleId,
+          probeId: probe.probeId,
+          behaviorId: probe.behaviorId,
+          severity: 'material',
+          summary: `The review reported ${measured.outOfScope} finding(s) against a file outside the review set.`,
+          confidence: 1,
+          observationIds: [observationId],
+          evidenceArtifacts: [],
+          quotedEvidence: [
+            {
+              quote: verdict.findings.find((finding) => !reviewedFiles.includes(finding.file)).file,
+              channel: 'artifact',
+              artifactId: 'verdict',
+            },
+          ],
+        });
+      } else if (probe.probeClass === 'defect') {
+        const oracleId = probe.defects[0].behaviorId === probe.behaviorId ? oracleOfBehavior.get(probe.behaviorId) : null;
+        const row = rowOfOracle.get(oracleId);
+        const reported = verdict.findings.find((finding) => finding.row === row);
+        if (reported !== undefined) {
+          findings.push({
+            findingType: 'defect',
+            findingId: 'F-001',
+            oracleId,
+            probeId: probe.probeId,
+            behaviorId: probe.behaviorId,
+            severity: reported.severity === 'Critical' ? 'critical' : 'material',
+            summary: `The review reported registry row ${row} at ${reported.file}:${reported.line}.`,
+            confidence: 1,
+            observationIds: [observationId],
+            evidenceArtifacts: [],
+            quotedEvidence: [{ quote: row, channel: 'artifact', artifactId: 'verdict' }],
+          });
+        }
+      }
 
       const violated = new Set(findings.map((finding) => finding.oracleId));
       const held = (oracleId) => {
@@ -255,22 +300,29 @@ function traceEvidence(contract) {
     recordInputs(probe) {
       const clean = probe.expectedClean;
       const caseId = clean ? 'clean-correct-run' : 'seeded-correct-run';
+      // One observation, and the other step's oracles then have nothing of their
+      // own to read. Both steps declare the same operation and send the same
+      // prompt, because what makes a trace run the seeded set or the clean set is
+      // the staged workspace and no request shape names one, so a record carrying
+      // both runs is ambiguous under `exactly-one` and a record carrying one
+      // leaves five seeded-set oracles quantifying over an absent collection. The
+      // clean control's FAIL is that, plus two oracles asserting an empty array.
       const step = clean ? cleanStep : seededStep;
       const observationId = clean ? 'trace-clean-run' : 'trace-seeded-run';
-      const artifacts = traceArtifacts(caseId);
+      const observations = [
+        recordObservation({
+          observationId,
+          sequence: 1,
+          operationId: step.operationId,
+          callInputs: { option: { agent: 'claude' }, stdin: { prompt: `The prompt the trace harness assembles for ${caseId}.` } },
+          stdout: { kind: 'text', value: '' },
+          stderr: { kind: 'text', value: '' },
+          exitCode: 0,
+          artifacts: traceArtifacts(caseId),
+        }),
+      ];
       return {
-        observations: [
-          recordObservation({
-            observationId,
-            sequence: 1,
-            operationId: step.operationId,
-            callInputs: { option: { agent: 'claude' }, stdin: { prompt: `The prompt the trace harness assembles for ${caseId}.` } },
-            stdout: { kind: 'text', value: '' },
-            stderr: { kind: 'text', value: '' },
-            exitCode: 0,
-            artifacts,
-          }),
-        ],
+        observations,
         findings: [],
         // Both stored runs are recorded as scoring every check they were given,
         // so every oracle held on the evidence the harness read.

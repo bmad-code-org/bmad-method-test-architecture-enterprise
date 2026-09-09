@@ -31,26 +31,26 @@
  * `test/probes/expected-strength.json` rather than avoided by writing a weaker
  * probe:
  *
- * - A defect probe's `manifestationWitness` cannot describe a command. Its
- *   `inputs` field is the HTTP-only `WitnessInputs` (`path`, `query`, `header`,
- *   `body`), while the contract side's sensitivity-witness leg takes a union
- *   admitting `argument`, `option`, `environment` and `stdin`. A witness carrying
- *   command channels fails the Probe parse, one carrying transport channels
- *   throws `undeclared-mandatory-input` at plan time, and `null` fails the
- *   `seeded-fault-fired` check, which fails pre-flight and invalidates the run.
- *   So every `defect` and `zero-action` probe here declares `null` and is
- *   recorded as blocked.
  * - A defect signature cannot address a file the command wrote. An `artifact`
- *   pointer is refused as `condition-artifact-channel-contract-local`, and a
- *   `stdout` pointer resolves only where the operation declares standard output
- *   as its descriptor channel. `tea-fragment-selection-runner` does, so its
- *   signatures qualify; `tea-test-review` and `tea-trace-runner` both write their
- *   deliverable to a file, so theirs do not.
- *
- * The signatures below say what is true about the plant rather than what would
- * pass. An `exit-code` signature qualifies against all three commands and
- * discriminates nothing, which is the catch rate of 1.00 by construction that
- * AD-40 exists to prevent, so none is written.
+ *   pointer is refused as `condition-artifact-channel-contract-local`, because an
+ *   artifact identifier is minted per contract and a signature carrying one
+ *   resolves only against the contract it was authored on. A `stdout` pointer
+ *   resolves only where the operation declares standard output as its descriptor
+ *   channel. `tea-fragment-selection-runner` does, so its signatures address the
+ *   selection itself. `tea-test-review` and `tea-trace-runner` both write their
+ *   deliverable to a file, so a signature that reads it is refused, and what is
+ *   left is the exit code. For `tea-test-review` that discriminates: the seeded
+ *   fixture exits 1 and the clean control exits 0, so the condition is false on a
+ *   review that found nothing gating. For `tea-trace-runner` it does not: every
+ *   completed trace run exits 0 whatever it wrote, so its probes keep the
+ *   signature that states the truth about the plant and are recorded as refused
+ *   rather than given one that would qualify and discriminate nothing.
+ * - `seeded-faults-scoped` treats every leg already registered for an operation
+ *   as a clean leg, and the only legs a TEA contract registers are its sensitivity
+ *   witness legs. `test-review`'s differential drives one leg at a seeded fixture
+ *   and `trace`'s drives both at the seeded set, so a plant in a file a witness leg
+ *   reviews fires on a leg AD-10 calls clean. Five of the nine review plants and
+ *   all three trace plants land there.
  *
  * Usage: node tools/generate-probes.js [--check]
  * Exit codes: 0 = written or up to date, 1 = a corpus is stale, 2 = the generator could not run
@@ -64,6 +64,12 @@ const prettier = require('prettier');
 
 const { digest } = require('../test/lib/eval-record');
 const { parseRegistryRows } = require('./validate-criteria-fragments');
+// The prompt a trace manifestation witness sends is the prompt the harness
+// assembles, for the reason tools/generate-contracts.js reads the same function
+// for the contract's own witness legs: a leg carrying a description of a prompt
+// is scheduled by pre-flight and then measures nothing.
+const { buildPrompt: buildTracePrompt } = require('../test/eval-trace');
+const { DEFAULT_AGENT: TRACE_DEFAULT_AGENT } = require('../cli/trace-runner');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -76,6 +82,12 @@ const TRACE_FIXTURE_PREFIX = 'test/fixtures/trace-eval/';
 
 /** The Probe schema version this generator writes. A bump arrives as a parse failure on the first run after an upgrade. */
 const PROBE_SCHEMA_VERSION = 3;
+
+/** The agent a witness leg names. The same value the contract's own witness legs carry, so a leg differs from them only in what it reviews. */
+const DEFAULT_REVIEW_AGENT = 'claude';
+
+/** `tea-test-review` exits 1 on a blocking verdict and 0 on an approving one. Both are measured verdicts; only the first says a gating defect was found. */
+const GATING_EXIT_CODE = 1;
 
 class GeneratorError extends Error {}
 
@@ -122,13 +134,6 @@ function soleBehaviorFor(contract, oracleId) {
     found.length === 1,
     `${contract.contractId}: ${found.length} behavior(s) declare ${oracleId} alone, and a probe needs exactly one so AD-40's designated oracle resolves`,
   );
-  return found[0].id;
-}
-
-/** The behavior a probe may name when no single-oracle behavior exists, with the grouping recorded rather than hidden. */
-function groupedBehaviorFor(contract, oracleId) {
-  const found = contract.behaviors.filter((behavior) => behavior.oracles.includes(oracleId));
-  assert(found.length === 1, `${contract.contractId}: ${found.length} behavior(s) name ${oracleId}`);
   return found[0].id;
 }
 
@@ -244,29 +249,49 @@ function buildTestReviewProbes() {
           severity: registrySeverity === 'CRITICAL' ? 'critical' : 'material',
           oracleEvidence: [fileReference(plant.relativePath), fileReference(groundTruthPath)],
           source: 'controlled-mutation',
-          // Blocked: `WitnessInputs` names the four transport channels and this
-          // defect fires behind a command. See this file's header.
-          manifestationWitness: null,
+          // What pre-flight probes to see this plant fire: one review of the file
+          // it was planted in, and the verdict naming its row at a line the ground
+          // truth admits. The relation reads the artifact the review wrote, which
+          // the witness may do and a defect signature may not.
+          manifestationWitness: {
+            legId: `manifest-${plant.row.toLowerCase()}`,
+            interfaceId: 'tea-test-review',
+            operationId: 'review-test-files',
+            inputs: {
+              argument: {},
+              option: { files: plant.relativePath, json: 'verdict.json', agent: DEFAULT_REVIEW_AGENT },
+              environment: {},
+              stdin: { kind: 'absent' },
+            },
+            relation: {
+              op: 'for-any',
+              collection: { pointer: `/interactions/manifest-${plant.row.toLowerCase()}/artifact/verdict/findings` },
+              predicate: {
+                op: 'all',
+                operands: [
+                  { op: 'equality', operands: [{ pointer: '@/row' }, { literal: plant.row }] },
+                  { op: 'regex', operands: [{ pointer: '@/file' }], pattern: basenamePattern(plant.basename) },
+                  { op: 'set-membership', operands: [{ pointer: '@/line' }, { literal: plant.admittedLines }] },
+                ],
+              },
+            },
+          },
         },
       ],
+      // The exit code, because the vocabulary refuses everything else this
+      // command produces; see the header. It discriminates: a review that finds a
+      // gating defect exits 1 and one that finds none exits 0, so the condition is
+      // false on the clean control. It does not discriminate WHICH row, so the
+      // per-row attribution is the designated oracle's and the finding's rather
+      // than the signature's, and that is the weaker guarantee this contract gets
+      // until a signature can address a written artifact.
       defectSignature: {
         interfaceKind: 'cli',
         invocation: { executable: 'tea-test-review', subcommandPath: [] },
-        observableChannel: 'artifact',
+        observableChannel: 'exit-code',
         condition: {
           selector: selector({ option: { files: { matcher: 'any' } } }),
-          predicate: {
-            op: 'for-any',
-            collection: { pointer: '/interactions/observed/artifact/verdict/findings' },
-            predicate: {
-              op: 'all',
-              operands: [
-                { op: 'equality', operands: [{ pointer: '@/row' }, { literal: plant.row }] },
-                { op: 'regex', operands: [{ pointer: '@/file' }], pattern: basenamePattern(plant.basename) },
-                { op: 'set-membership', operands: [{ pointer: '@/line' }, { literal: plant.admittedLines }] },
-              ],
-            },
-          },
+          predicate: { op: 'equality', operands: [{ pointer: '/interactions/observed/exit-code' }, { literal: GATING_EXIT_CODE }] },
         },
       },
     };
@@ -387,7 +412,7 @@ function buildTraceProbes() {
   // The gate oracle is the one every seeded gap is ultimately answerable to: the
   // gate is derived from the coverage the gaps produce.
   const gateOracleId = contract.oracles[0].id;
-  const gateBehaviorId = groupedBehaviorFor(contract, gateOracleId);
+  const gateBehaviorId = soleBehaviorFor(contract, gateOracleId);
 
   const probes = gaps.map((criterion, index) => ({
     schemaVersion: PROBE_SCHEMA_VERSION,
@@ -424,8 +449,30 @@ function buildTraceProbes() {
         severity: criterion.priority === 'P0' ? 'critical' : 'material',
         oracleEvidence: [fileReference(groundTruthPath)],
         source: 'controlled-mutation',
-        // Blocked for the same reason every defect probe here is; see the header.
-        manifestationWitness: null,
+        // One run of the seeded set, and the summary's own priority arithmetic
+        // showing the gap. The percentage is the criterion's priority band read
+        // off the ground truth rather than transcribed, so a criterion that
+        // changes band moves this relation with it.
+        manifestationWitness: {
+          legId: `manifest-${criterion.id.toLowerCase()}`,
+          interfaceId: 'tea-trace-runner',
+          operationId: 'trace-fixture-set',
+          inputs: {
+            argument: {},
+            option: { agent: TRACE_DEFAULT_AGENT },
+            environment: {},
+            stdin: { kind: 'text', value: buildTracePrompt(seeded) },
+          },
+          relation: {
+            op: 'equality',
+            operands: [
+              {
+                pointer: `/interactions/manifest-${criterion.id.toLowerCase()}/artifact/summary/coverage/priority_breakdown/${criterion.priority}/pct`,
+              },
+              { literal: seeded.coverageArithmetic.priority[criterion.priority].expectedPct },
+            ],
+          },
+        },
       },
     ],
     defectSignature: {
@@ -442,14 +489,16 @@ function buildTraceProbes() {
     },
   }));
 
-  const cleanOracleId = contract.behaviors.find((behavior) => behavior.description.startsWith('The clean set')).oracles[0];
+  // The clean set's own behaviors are the ones whose requirement link names it.
+  const cleanBehavior = contract.behaviors.find((behavior) => behavior.requirementLinks.some((link) => link.id.startsWith(`${clean.id}/`)));
+  assert(cleanBehavior, `trace.contract.json declares no behavior linked to ${clean.id}`);
   probes.push({
     schemaVersion: PROBE_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
     probeId: `P-${pad(gaps.length + 1)}`,
     probeClass: 'zero-action',
-    behaviorId: groupedBehaviorFor(contract, cleanOracleId),
+    behaviorId: cleanBehavior.id,
     systemId: `tea-trace-${clean.id}`,
     implementationDigest: corpusDigest,
     artifactDigest: corpusDigest,

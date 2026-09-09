@@ -7,7 +7,7 @@
   "behaviors": [
     {
       "id": "B-001",
-      "description": "The seeded set derives its gate from the rules and reports the criteria that produced it.",
+      "description": "seeded-tenant-data-export: the gate is FAIL, produced by gateRule1P0. P0 coverage is 1 of 2, which is 50%. Rule 1 requires 100% and fires first, so the decision is FAIL and no later rule is reached. Rule 2 would also fire on its own, since overall coverage is 70% against a minimum of 80%.",
       "severity": "critical",
       "observableSuccessCriterion": "The summary for the seeded set carries the expected gate decision and every gate_criteria field the ground truth records.",
       "requirementLinks": [
@@ -22,11 +22,30 @@
           "id": "gate-flipped-by-one-misread-criterion"
         }
       ],
-      "oracles": ["O-001", "O-002"]
+      "oracles": ["O-001"]
     },
     {
       "id": "B-002",
-      "description": "The seeded set reports coverage arithmetic that recomputes from the true statuses.",
+      "description": "seeded-tenant-data-export: the ten gate_criteria fields, as expectedGate.gateCriteria records them. Each is a threshold the skill states or a percentage recomputed from trueCoverage, so a run reporting a different required minimum has changed the gate it claims to be.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The summary for the seeded set carries the expected gate decision and every gate_criteria field the ground truth records.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/expectedGate"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "gate-flipped-by-one-misread-criterion"
+        }
+      ],
+      "oracles": ["O-002"]
+    },
+    {
+      "id": "B-003",
+      "description": "seeded-tenant-data-export: 7 of 10 criteria are FULL, which is round(7 / 10 * 100) = 70. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
       "severity": "critical",
       "observableSuccessCriterion": "The inventory, all four priority rows, the four risk counts, and the six per-level criteria counts in the seeded summary equal the values recomputed from trueCoverage.",
       "requirementLinks": [
@@ -41,11 +60,87 @@
           "id": "arithmetic-drift-hidden-behind-a-correct-gate"
         }
       ],
-      "oracles": ["O-003", "O-004", "O-005", "O-006"]
+      "oracles": ["O-003"]
     },
     {
-      "id": "B-003",
-      "description": "The discriminating criterion is read rather than matched: its misnamed test is turned down and its recorded live pass counts as nothing.",
+      "id": "B-004",
+      "description": "seeded-tenant-data-export: P0 1/2 = 50%, P1 5/5 = 100%, P2 1/2 = 50%, P3 0/1 = 0%. An empty priority resolves to 100, per step-04's safePct.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The inventory, all four priority rows, the four risk counts, and the six per-level criteria counts in the seeded summary equal the values recomputed from trueCoverage.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/coverageArithmetic"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "arithmetic-drift-hidden-behind-a-correct-gate"
+        }
+      ],
+      "oracles": ["O-004"]
+    },
+    {
+      "id": "B-005",
+      "description": "seeded-tenant-data-export: critical_open 1, high_open 0, medium_open 0, low_open 1, from the gap buckets step-04 builds out of criteria whose coverage is exactly NONE.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The inventory, all four priority rows, the four risk counts, and the six per-level criteria counts in the seeded summary equal the values recomputed from trueCoverage.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/coverageArithmetic"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "arithmetic-drift-hidden-behind-a-correct-gate"
+        }
+      ],
+      "oracles": ["O-005"]
+    },
+    {
+      "id": "B-006",
+      "description": "seeded-tenant-data-export: criteria with a mapped test per level, e2e 3, api 6, component 0, unit 1, live 0, other 0. Invariant across the test-count ambiguity the corpus describes, because a NONE criterion has no level.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The inventory, all four priority rows, the four risk counts, and the six per-level criteria counts in the seeded summary equal the values recomputed from trueCoverage.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/coverageArithmetic"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "arithmetic-drift-hidden-behind-a-correct-gate"
+        }
+      ],
+      "oracles": ["O-006"]
+    },
+    {
+      "id": "B-007",
+      "description": "seeded-tenant-data-export: collection contract_static/COLLECTED, gate_basis priority_thresholds because the corpus records the set gate-eligible and step-05 sets the basis from eligibility (skillRuleCitations.gateEligibility), and an oracle resolved as formal_requirements at high confidence from epic-4-tenant-data-export-and-erasure.md with external pointers not_used. oracle.synthetic is false because step-01 marks an oracle synthetic only when it was inferred, and this one was read off numbered criteria.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Both summaries report contract_static collection, a COLLECTED status, a priority_thresholds gate basis, a formal_requirements oracle at high confidence naming the epic, and both runs left a summary and a matrix behind with exit 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/collection"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-007"]
+    },
+    {
+      "id": "B-008",
+      "description": "seeded-tenant-data-export: Neither live record contributes coverage. AC-2 and AC-10 stay uncovered, and requirements_live_only stays 0 because no criterion in this set is covered by a live record. Dispositions: counted 0, requirements_live_only 0, failed 0, contradicted 0, blocked 0, skipped 0, unmatched 0, invalid 1. stale and unverifiable are left to the harness, which scores their sum, because which one a record lands on depends on whether the workspace resolves a commit sha.",
       "severity": "critical",
       "observableSuccessCriterion": "The seeded summary names the misnamed test under rejected_evidence at its recorded span, counts no live record as coverage, and raises both live records as blockers at their declared severities.",
       "requirementLinks": [
@@ -60,13 +155,70 @@
           "id": "title-match-scored-as-coverage"
         }
       ],
-      "oracles": ["O-008", "O-009", "O-010", "O-011"]
+      "oracles": ["O-008"]
     },
     {
-      "id": "B-004",
-      "description": "The waiver register is reported, the well formed request as valid and the defective one as invalid, and neither moves the gate.",
+      "id": "B-009",
+      "description": "seeded-tenant-data-export: record 4-LIVE-001 is raised as a high severity blocker. stale and unverifiable are both in the high severity list in step-04 section 2b.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The seeded summary names the misnamed test under rejected_evidence at its recorded span, counts no live record as coverage, and raises both live records as blockers at their declared severities.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/criteria[isDiscriminatingCase]"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "title-match-scored-as-coverage"
+        }
+      ],
+      "oracles": ["O-009"]
+    },
+    {
+      "id": "B-010",
+      "description": "seeded-tenant-data-export: record 4-LIVE-002 is raised as a medium severity blocker. invalid is not in the high severity list, so it falls through to medium.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The seeded summary names the misnamed test under rejected_evidence at its recorded span, counts no live record as coverage, and raises both live records as blockers at their declared severities.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/criteria[isDiscriminatingCase]"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "title-match-scored-as-coverage"
+        }
+      ],
+      "oracles": ["O-010"]
+    },
+    {
+      "id": "B-011",
+      "description": "seeded-tenant-data-export: tenant-export.api.spec.ts:30-38 is named as considered for AC-2 and turned down. The title names AC-2 and the body does not test it. It builds a context from ADMIN_TOKEN, posts the same export request AC-1 already covers, and asserts a 202. Nothing observes a member actor, a 403, or the job queue. MEMBER_TOKEN is declared at the top of the file and never used, which is the whole gap made visible.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The seeded summary names the misnamed test under rejected_evidence at its recorded span, counts no live record as coverage, and raises both live records as blockers at their declared severities.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/criteria[isDiscriminatingCase]"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "title-match-scored-as-coverage"
+        }
+      ],
+      "oracles": ["O-011"]
+    },
+    {
+      "id": "B-012",
+      "description": "seeded-tenant-data-export: Both waivers are filed and unapplied. Neither changes the derived gate decision, because the workflow never derives WAIVED. two filed, one valid, one invalid.",
       "severity": "material",
-      "observableSuccessCriterion": "The seeded summary reports two filed waivers, one valid and one invalid, names each with its verdict, and still derives the FAIL that B-001 asserts.",
+      "observableSuccessCriterion": "The seeded summary reports two filed waivers, one valid and one invalid, names each with its verdict, and still derives the FAIL the gate behavior asserts.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -79,11 +231,68 @@
           "id": "waiver-applied-to-the-gate"
         }
       ],
-      "oracles": ["O-012", "O-013", "O-014"]
+      "oracles": ["O-012"]
     },
     {
-      "id": "B-005",
-      "description": "The clean set draws no finding: full coverage, a PASS gate, no blocker, no rejection, and no waiver.",
+      "id": "B-013",
+      "description": "seeded-tenant-data-export: W-1 waives AC-8 and is well formed. Recorded as a well formed waiver request against the AC-8 gap. It does not clear the gate, because the FAIL is produced by AC-2, which W-1 does not address.",
+      "severity": "material",
+      "observableSuccessCriterion": "The seeded summary reports two filed waivers, one valid and one invalid, names each with its verdict, and still derives the FAIL the gate behavior asserts.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/expectedWaiverHandling"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "waiver-applied-to-the-gate"
+        }
+      ],
+      "oracles": ["O-013"]
+    },
+    {
+      "id": "B-014",
+      "description": "seeded-tenant-data-export: W-2 waives AC-2 and is invalid. Reported as an invalid waiver request that cannot be applied, with at least the missing expiry, the approver's lack of authority, and the security nature of the waived criterion named. It must not appear as an accepted waiver and must not remove AC-2 from the gap analysis.",
+      "severity": "material",
+      "observableSuccessCriterion": "The seeded summary reports two filed waivers, one valid and one invalid, names each with its verdict, and still derives the FAIL the gate behavior asserts.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/expectedWaiverHandling"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "waiver-applied-to-the-gate"
+        }
+      ],
+      "oracles": ["O-014"]
+    },
+    {
+      "id": "B-015",
+      "description": "seeded-tenant-data-export: the summary and the matrix were both written, the summary declares schema_version 0.3.x, which is the version step-05 emits and test/eval-trace.js scores, and tea-trace-runner exited 0. Every other exit code the runner produces is a TEA failure class, an absent artifact is a missing-artifact failure, and another schema version is a changed contract; none is a measured result.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Both summaries report contract_static collection, a COLLECTED status, a priority_thresholds gate basis, a formal_requirements oracle at high confidence naming the epic, and both runs left a summary and a matrix behind with exit 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-tenant-data-export/collection"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-015"]
+    },
+    {
+      "id": "B-016",
+      "description": "clean-api-token-lifecycle: the gate is PASS, produced by gateRule4Pass. P0 coverage is 100%, so Rule 1 does not fire. Overall coverage is 100%, so Rule 2 does not fire. P1 coverage is 100%, so Rule 3 does not fire and Rule 4 applies. No synthetic oracle and no live-only requirement exists, so neither overlay lowers the result.",
       "severity": "critical",
       "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
       "requirementLinks": [
@@ -98,18 +307,109 @@
           "id": "reports-gaps-everywhere"
         }
       ],
-      "oracles": ["O-016", "O-017", "O-018", "O-019", "O-020", "O-021", "O-023", "O-024", "O-025"]
+      "oracles": ["O-016"]
     },
     {
-      "id": "B-006",
-      "description": "Each run collected statically, resolved the epic as a formal-requirements oracle, wrote both deliverables, and exited clean.",
+      "id": "B-017",
+      "description": "clean-api-token-lifecycle: the ten gate_criteria fields, as expectedGate.gateCriteria records them. Each is a threshold the skill states or a percentage recomputed from trueCoverage, so a run reporting a different required minimum has changed the gate it claims to be.",
       "severity": "critical",
-      "observableSuccessCriterion": "Both summaries report contract_static collection, a COLLECTED status, a priority_thresholds gate basis, a formal_requirements oracle at high confidence naming the epic, and both runs left a summary and a matrix behind with exit 0.",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
-          "id": "seeded-tenant-data-export/collection"
-        },
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-017"]
+    },
+    {
+      "id": "B-018",
+      "description": "clean-api-token-lifecycle: 5 of 5 criteria are FULL, which is round(5 / 5 * 100) = 100. Only FULL counts toward a percentage, per skillRuleCitations.coverageArithmetic.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-018"]
+    },
+    {
+      "id": "B-019",
+      "description": "clean-api-token-lifecycle: P0 2/2 = 100%, P1 2/2 = 100%, P2 1/1 = 100%, P3 0/0 = 100%. An empty priority resolves to 100, per step-04's safePct.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-019"]
+    },
+    {
+      "id": "B-020",
+      "description": "clean-api-token-lifecycle: critical_open 0, high_open 0, medium_open 0, low_open 0, from the gap buckets step-04 builds out of criteria whose coverage is exactly NONE.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-020"]
+    },
+    {
+      "id": "B-021",
+      "description": "clean-api-token-lifecycle: criteria with a mapped test per level, e2e 1, api 3, component 1, unit 0, live 0, other 0. Invariant across the test-count ambiguity the corpus describes, because a NONE criterion has no level.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-021"]
+    },
+    {
+      "id": "B-022",
+      "description": "clean-api-token-lifecycle: collection contract_static/COLLECTED, gate_basis priority_thresholds because the corpus records the set gate-eligible and step-05 sets the basis from eligibility (skillRuleCitations.gateEligibility), and an oracle resolved as formal_requirements at high confidence from epic-5-api-token-lifecycle.md with external pointers not_used. oracle.synthetic is false because step-01 marks an oracle synthetic only when it was inferred, and this one was read off numbered criteria.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Both summaries report contract_static collection, a COLLECTED status, a priority_thresholds gate basis, a formal_requirements oracle at high confidence naming the epic, and both runs left a summary and a matrix behind with exit 0.",
+      "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
           "id": "clean-api-token-lifecycle/collection"
@@ -121,7 +421,83 @@
           "id": "unmeasurable-run-scored-as-a-miss"
         }
       ],
-      "oracles": ["O-007", "O-015", "O-022", "O-026"]
+      "oracles": ["O-022"]
+    },
+    {
+      "id": "B-023",
+      "description": "clean-api-token-lifecycle: This set has no live results file. Every disposition count is 0 and the blockers array is empty.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-023"]
+    },
+    {
+      "id": "B-024",
+      "description": "clean-api-token-lifecycle: every criterion has evidence that establishes it, so there is no test to turn down and rejected_evidence is empty.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-024"]
+    },
+    {
+      "id": "B-025",
+      "description": "clean-api-token-lifecycle: the set has no waiver register, and step-05 emits the waivers block only when a register was found, so the key is absent.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The clean summary reports every criterion covered, every percentage at 100, a PASS gate with every criterion MET, zero open risks, an empty blockers array, an empty rejected_evidence array, live evidence absent, and no waivers block.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-025"]
+    },
+    {
+      "id": "B-026",
+      "description": "clean-api-token-lifecycle: the summary and the matrix were both written, the summary declares schema_version 0.3.x, which is the version step-05 emits and test/eval-trace.js scores, and tea-trace-runner exited 0. Every other exit code the runner produces is a TEA failure class, an absent artifact is a missing-artifact failure, and another schema version is a changed contract; none is a measured result.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Both summaries report contract_static collection, a COLLECTED status, a priority_thresholds gate basis, a formal_requirements oracle at high confidence naming the epic, and both runs left a summary and a matrix behind with exit 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-api-token-lifecycle/collection"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-026"]
     }
   ],
   "oracles": [
@@ -1964,15 +2340,15 @@
             ]
           },
           {
-            "op": "deep-equality",
+            "op": "count-tolerance",
             "operands": [
               {
                 "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/blockers"
-              },
-              {
-                "literal": []
               }
-            ]
+            ],
+            "expected": 0,
+            "tolerance": 0,
+            "relative": false
           }
         ]
       }
@@ -1983,21 +2359,21 @@
       "commentary": "clean-api-token-lifecycle: every criterion has evidence that establishes it, so there is no test to turn down and rejected_evidence is empty.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "deep-equality",
+        "relation": "count-tolerance",
         "scope": "The rejected_evidence array in the summary written for clean-api-token-lifecycle.",
         "negativeDomain": "A run rejecting a test that does establish its criterion.",
         "evidenceTargets": ["/interactions/trace-clean-api-token-lifecycle/artifact/summary/rejected_evidence"]
       },
       "check": {
-        "op": "deep-equality",
+        "op": "count-tolerance",
         "operands": [
           {
             "pointer": "/interactions/trace-clean-api-token-lifecycle/artifact/summary/rejected_evidence"
-          },
-          {
-            "literal": []
           }
-        ]
+        ],
+        "expected": 0,
+        "tolerance": 0,
+        "relative": false
       }
     },
     {
