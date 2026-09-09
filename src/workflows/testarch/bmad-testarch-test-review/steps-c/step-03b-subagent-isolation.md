@@ -80,6 +80,11 @@ const score = Math.max(0, 100 - totalPenalty);
 
 ## OUTPUT FORMAT
 
+Write this JSON to `/tmp/tea-test-review-isolation-<timestamp>.json`, using the
+`timestamp` the dispatching step handed you. Do not generate one: step-03
+section 5 aborts the workflow when the path it expects does not exist, and a
+worker that invented its own timestamp writes a file nobody looks for.
+
 ```json
 {
   "dimension": "isolation",

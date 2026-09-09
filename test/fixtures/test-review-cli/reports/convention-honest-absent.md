@@ -22,6 +22,8 @@ stepsCompleted:
 
 **Context Waivers Applied**: 0
 
+**Execution Mode**: sequential
+
 ### Key Weaknesses
 
 ❌ n/a

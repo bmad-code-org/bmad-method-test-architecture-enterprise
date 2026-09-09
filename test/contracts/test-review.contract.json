@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-test-review-behavioral",
-  "sourceSpecDigest": "sha256:cfb461959e36b43afd077be4d60fecd4ed82d7438c080c28c1f6268412432c3d",
+  "sourceSpecDigest": "sha256:b11cb38432335aceb5cddf280a552e5aa6c77bda01de983b5086934b629b43a4",
   "behaviors": [
     {
       "id": "B-001",
@@ -1061,6 +1061,7 @@
               "keyWeaknesses",
               "advisoryObservations",
               "conventionBaseline",
+              "executionMode",
               "reportedQualityScore",
               "reportedRecommendation",
               "unscorableTestArtifacts",
@@ -1095,6 +1096,7 @@
               "keyWeaknesses": "array",
               "advisoryObservations": "array",
               "conventionBaseline": "object",
+              "executionMode": "string",
               "reportedQualityScore": "number",
               "reportedRecommendation": "string",
               "unscorableTestArtifacts": "array",

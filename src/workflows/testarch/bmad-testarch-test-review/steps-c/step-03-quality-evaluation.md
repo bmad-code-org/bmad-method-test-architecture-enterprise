@@ -47,11 +47,19 @@ Coverage is intentionally excluded from this workflow and handled by `trace`.
 
 ### 1. Prepare Execution Context
 
-**Generate unique timestamp:**
+**Resolve the run's unique timestamp:**
 
 ```javascript
+// Headless: the orchestrating CLI states `tea_run_id` in the prompt. Use it verbatim.
+// Interactive, with no tea_run_id supplied:
 const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 ```
+
+When `tea_run_id` is stated, that value IS the timestamp. Do not generate one beside
+it. An agent with no shell cannot run the line above and will emit a plausible-looking
+string instead; nothing cleans `/tmp/tea-test-review-*`, and section 5 below checks
+only that the four files exist, so two runs that landed on the same invented value
+would aggregate each other's scores into one report.
 
 **Prepare context for all subagents:**
 
@@ -176,6 +184,29 @@ If probing is disabled, honor the requested mode strictly. If that mode cannot b
 
 ### 3. Dispatch 4 Quality Workers
 
+**Every launch prompt carries the whole payload, written out in full.** A worker
+launched as a subagent starts with an empty context: it sees the text of the launch
+prompt and nothing else. Naming a step file is not enough, because that file
+references its own inputs through `{skill-root}` templates that only this step can
+resolve. Write all of the following into each worker's launch prompt literally:
+
+1. The absolute path of the worker's step file, and the absolute path of
+   `criteria-registry.md`. Never the `{skill-root}` placeholder.
+2. The review set, as the same JSON array this run received.
+3. `convention_baseline` verbatim, including `sampled`, the sampled file list, and
+   the per-key measurement. A worker handed no baseline reports `unknown` and passes
+   every Convention row as `n/a`, which removes those deductions from the score with
+   nothing in the report saying a measurement was lost.
+4. `playwright_utils_installed` and `pactjs_utils_installed`. A worker that cannot
+   see them cannot resolve M9, M10 or L9's run-level precondition, and those rows
+   vanish from the run the same silent way.
+5. The `timestamp` from section 1, already substituted into the worker's output
+   path. Do not ask a worker to generate one: four workers writing four different
+   timestamps produce four paths section 5 will not find, and the workflow aborts.
+
+Every one of these failures is a quieter score rather than a louder error, so state
+the payload rather than assuming the worker can reach it.
+
 **Subagent A: Determinism**
 
 - File: `./step-03a-subagent-determinism.md`
@@ -204,6 +235,11 @@ If probing is disabled, honor the requested mode strictly. If that mode cannot b
 - Status: Running... ⟳
 
 In `agent-team` and `subagent` modes, runtime decides worker scheduling and concurrency.
+
+The four output paths differ by dimension, so four workers sharing one `timestamp`
+cannot collide with each other. Two runs on the same machine could, which is what
+`tea_run_id` exists to prevent: a value the caller minted is unique by construction,
+where one the agent invented is only as unique as the string it happened to pick.
 
 ---
 
@@ -246,8 +282,14 @@ outputs.forEach((output) => {
 🚀 Performance Report:
 - Execution Mode: {resolvedMode}
 - Total Elapsed: ~mode-dependent
-- Parallel Gain: ~60-70% faster when mode is subagent/agent-team
 ```
+
+`resolvedMode` is a run input, the same as the model and the convention baseline,
+so it has to survive into the artifact. Carry it to step 3F as
+`execution_mode`, which step 4 prints as the report's `**Execution Mode**:` line
+and `cli/lib/parse-report.js` reads into the verdict JSON. A console line alone is
+discarded on a successful run, which is what made a silent fallback to `sequential`
+indistinguishable afterwards from the parallel run that was asked for.
 
 ---
 

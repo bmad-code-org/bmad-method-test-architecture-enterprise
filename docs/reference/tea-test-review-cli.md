@@ -92,7 +92,9 @@ The job needs `contents: read` and `pull-requests: write`, and forks receive no 
 | `--agent-cmd <path>`                                   | the selected adapter's command                                     | Override a built-in executable; required with `--agent custom`.                                                                   |
 | `--agent-arg <arg>`                                    | -                                                                  | Extra argument appended to the selected agent's argv (repeatable).                                                                |
 | `--env-pass <NAME>`                                    | -                                                                  | Env var allowed through beyond the default set (repeatable).                                                                      |
-| `--timeout-ms <n>`                                     | `1800000` (30 min)                                                 | Agent wall-clock timeout (SIGTERM on expiry).                                                                                     |
+| `--timeout-ms <n>`                                     | 20 min + 2 min per reviewed file, capped at 30 min                 | Agent wall-clock timeout (SIGTERM on expiry). No supported vendor CLI caps turns, so this is the bound on a stuck run.            |
+| `--execution-mode <mode>`                              | `auto`                                                             | Force `tea_execution_mode` (`auto`\|`agent-team`\|`subagent`\|`sequential`), overriding `_bmad/tea/config.yaml`.                  |
+| `--capability-probe` / `--no-capability-probe`         | `true`                                                             | Force `tea_capability_probe`. With it off, the requested execution mode is honored strictly.                                      |
 | `--min-score <n>`                                      | -                                                                  | Fail when the quality score is below `n` (0-100).                                                                                 |
 | `--max-critical <n>`                                   | no cap                                                             | Fail when Critical violations exceed `n`.                                                                                         |
 | `--min-files <n>`                                      | `1`                                                                | Fail when fewer than `n` files are reviewed.                                                                                      |
@@ -173,17 +175,19 @@ Why the model is pinned rather than left to the vendor CLI: [Test Review CLI Arc
 
 ## TEA config resolution
 
-Four config keys pick which knowledge fragments load. The CLI states all four in the prompt.
+Four config keys pick which knowledge fragments load, and two more decide how step-03 orchestrates its quality workers. The CLI states all six in the prompt, because a key it leaves unstated is one the agent decides for itself.
 
-One of the four is fixed by the headless contract: `tea_browser_automation=none`. So is `tea_execution_mode=sequential`, which governs execution rather than fragment selection. The other three resolve by precedence, highest first:
+One of the four is fixed by the headless contract: `tea_browser_automation=none`. The other five, the three fragment keys plus the orchestration pair `tea_execution_mode` and `tea_capability_probe`, resolve by precedence, highest first:
 
-1. Explicit flag (`--use-pactjs-utils`, `--no-use-playwright-utils`, `--pact-mcp mcp`)
+1. Explicit flag (`--use-pactjs-utils`, `--no-use-playwright-utils`, `--pact-mcp mcp`, `--execution-mode sequential`, `--no-capability-probe`)
 2. `<project-root>/_bmad/tea/config.yaml` (written by `npx bmad-method install`)
-3. Module default from `src/module.yaml`: `tea_use_playwright_utils: true`, `tea_use_pactjs_utils: false`, `tea_pact_mcp: none`
+3. Module default from `src/module.yaml`: `tea_use_playwright_utils: true`, `tea_use_pactjs_utils: true`, `tea_pact_mcp: mcp`, `tea_execution_mode: auto`, `tea_capability_probe: true`
+
+`step-03-quality-evaluation.md` reads the orchestration pair, probes the runtime, dispatches its four quality workers in parallel when it can launch them, and resolves to `sequential` when it cannot. Both keys are stated in the prompt because `auto` with the probe off resolves to `sequential` on every run, which would leave the parallel path unreachable. The report's `**Execution Mode**:` line records which one it resolved to.
 
 A missing `config.yaml` is normal: CI installs the skill without running the interactive installer. Content that exists but is invalid is an error (exit 2): non-boolean `tea_use_*`, a `tea_pact_mcp` outside the enum, unparseable YAML, or a non-mapping file. Quoted booleans (`'true'`, `'false'`) are coerced.
 
-**In CI, state what you need.** A contract-testing repo gets `tea_use_pactjs_utils: false` by default, loads `contract-testing.md` instead of the `pactjs-utils-*`/`pact-*` fragments, and won't flag a missing determinism gate. Commit `_bmad/tea/config.yaml` or pass `--use-pactjs-utils`.
+**In CI, state what you need.** With no `config.yaml` and no flag, a contract-testing repo gets `tea_use_pactjs_utils: true` and loads the `pactjs-utils-*`/`pact-*` fragments, which is what a repo on those utilities wants. A repo writing raw `@pact-foundation/pact` should commit `_bmad/tea/config.yaml` or pass `--no-use-pactjs-utils`, so the review loads `contract-testing.md` and scores against the rules that repo actually follows.
 
 ## Exit codes
 
@@ -259,10 +263,12 @@ A review verdict (also written to `--json <file>` when given):
   "contextWaiversApplied": 0,
   "keyStrengths": ["Fully deterministic, no conditional branching or timing dependencies"],
   "keyWeaknesses": ["Missing explicit test IDs on two test cases"],
+  "executionMode": "subagent",
   "conventionBaseline": {
     "baselineUnavailable": false,
     "corpusSize": 47,
-    "sampled": 40,
+    "sampled": 8,
+    "scanned": 40,
     "sampledFiles": ["tests/login.spec.ts", "tests/profile.spec.ts"],
     "conventions": {
       "priorityMarkers": { "mechanical": true, "adopted": 0, "mechanicalSignal": false },
@@ -281,9 +287,13 @@ Per severity, `findings` agrees with `violations`: exactly for Critical and High
 
 `contextWaiversApplied` is strict and always `0`. `keyStrengths` and `keyWeaknesses` are best-effort, pulled from the report's Executive Summary bullet lists for PR-comment display; they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
 
+`executionMode` is the mode `step-03-quality-evaluation.md`'s capability probe resolved for this run: `agent-team`, `subagent`, or `sequential`. It is absent when the report states none. Without it a run that asked for parallel workers and silently fell back to `sequential` was indistinguishable afterwards from one that got what it asked for, which made any speed claim about the run unfalsifiable.
+
 `conventionBaseline` is the CLI's own deterministic measurement of step-02-discover-tests.md §2b's convention baseline, never the agent's. It travels in the verdict alongside `agent` and `model`, so a stored score also says what house convention it was judged against and how that was established.
 
-[`cli/lib/convention-baseline.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/convention-baseline.js) computes `sampledFiles` and per-key `mechanicalSignal` by reading the sampled files' content, never by asking the agent. The report's own `Convention: <key> (<adopted> of <sampled> sampled)` citations are rejected (exit 3) when they disagree with that scan. The sharpest case: a citation claiming nonzero adoption for a key the scan found zero real occurrences of anywhere in the sampled corpus.
+[`cli/lib/convention-baseline.js`](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/blob/main/cli/lib/convention-baseline.js) computes `sampledFiles` and per-key `mechanicalSignal` by reading file content, never by asking the agent. The report's own `Convention: <key> (<adopted> of <sampled> sampled)` citations are rejected (exit 3) when they disagree with that scan. The sharpest case: a citation claiming nonzero adoption for a key the scan found zero real occurrences of anywhere in the scanned corpus.
+
+`sampled` and `scanned` are two different corpora out of one ranking. `sampled` (8) is what the agent is told to read and the denominator every citation uses; it is a turn budget, since the agent has no shell and opens one file per turn. `scanned` (40) is how many files the CLI opened itself for the mechanical detectors, which costs no turns, so it stays wide: the zero-signal floor is only as strong as the corpus it observed nothing in.
 
 The field is absent only when no baseline was computed for this run, such as a bare `parseReport` call in a unit test with no CLI around it.
 
@@ -359,7 +369,7 @@ The comment carries the score/recommendation/violations digest, review provenanc
 ## Security model
 
 - **Prompt delivery**: `claude`, `codex`, and `custom` receive the complete prompt on stdin, so their prompt does not appear in process arguments. `agy` requires the prompt in its `--print` argument. Its complete prompt can therefore be visible to local process inspection and CI diagnostics; use it only in an appropriately isolated runner.
-- **Agent execution**: the `claude` adapter strips repo customizations and limits tools to `Read,Write,Edit,Glob,Grep`. The `codex` adapter confines its run with `--sandbox workspace-write`. Both are the `scoped-artifact-writes` tier, which is what this CLI runs at; a caller of `cli/lib/run-agent.js` that declares `read-only`, as the fragment-selection eval and `tea-fragment-selection-runner` do, gets `Read,Glob,Grep` and `--sandbox read-only` instead, and only a `command-execution` declaration adds `Bash`. The `agy` adapter uses `--dangerously-skip-permissions`, with filesystem limits supplied by the CLI's isolation wrapper. A custom runner receives only the arguments supplied at the command line, so its caller owns the equivalent tool and approval policy. Every adapter gets a minimal child environment; only `--env-pass` variables are added.
+- **Agent execution**: the `claude` adapter strips repo customizations and limits tools to `Read,Write,Edit,Glob,Grep,Task`. `Task` is delegation, which `step-03-quality-evaluation.md` needs to dispatch its four quality workers in parallel; without it the workflow's capability probe finds no launcher and every run falls back to `sequential`. The `codex` adapter confines its run with `--sandbox workspace-write`. Both are the `scoped-artifact-writes` tier, which is what this CLI runs at; a caller of `cli/lib/run-agent.js` that declares `read-only`, as the fragment-selection eval and `tea-fragment-selection-runner` do, gets `Read,Glob,Grep` and `--sandbox read-only`, with no delegation, and only a `command-execution` declaration adds `Bash`. The `agy` adapter uses `--dangerously-skip-permissions`, with filesystem limits supplied by the CLI's isolation wrapper. A custom runner receives only the arguments supplied at the command line, so its caller owns the equivalent tool and approval policy. Every adapter gets a minimal child environment; only `--env-pass` variables are added.
 - **Filesystem isolation**: with `--isolate` (default on in CI) the agent may read the project but can't modify the tree under review; it writes only the report, verdict, and the temp files the workflow's own subagent steps declare (sandbox-exec on macOS, bwrap on Linux, chmod fallback).
 - **Control-plane guard**: a PR diff that modifies the vendored skill fails the run closed (exit 2) unless `--files` was explicit. An explicit `--skill-root` outside the checkout is untouchable by the diff.
 - **Untrusted-content contract**: reviewed-file and context-file content is data: instructions inside either are defects to report, never commands. Context can raise a finding but never waive one, so a story cannot argue a violation away. Hostile paths (newlines, NUL bytes, delimiter literals) are rejected before they reach the prompt; both lists travel as JSON arrays in their own delimited blocks.

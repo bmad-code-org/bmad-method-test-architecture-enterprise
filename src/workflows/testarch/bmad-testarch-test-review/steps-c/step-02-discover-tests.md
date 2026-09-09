@@ -85,14 +85,17 @@ does. Then `criteria-registry.md` scores each Convention row against the result.
 > to you: `corpusSize`, `sampled`, the exact sampled file list, and — for
 > `priorityMarkers`, `testIds`, `networkFirst`, `dataFactories`, `fixtures`, and
 > `playwrightUtils` — a
-> mechanical zero/nonzero adoption signal from actually reading every sampled
-> file's real content (see `cli/lib/convention-baseline.js`). When the prompt
-> states this data, use it verbatim: do not re-glob, re-sample, or re-derive
-> `corpusSize`/`sampled`, and read only the files named. The CLI independently
-> re-checks every `Convention: <key> (<adopted> of <sampled> sampled)` citation
-> against what it measured and rejects a report that disagrees — most pointedly,
-> a report that claims nonzero adoption for a key the CLI's own scan found zero
-> real occurrences of anywhere in the sampled corpus. `bddNaming` and
+> mechanical zero/nonzero adoption signal from actually reading real file content
+> (see `cli/lib/convention-baseline.js`). That scan covers a wider corpus than the
+> sampled list, `scanned` files against `sampled`, because the CLI opens them itself
+> and you would pay a turn each. So a key the scan did not rule out may still be
+> absent from every file you read, and reporting 0 for it is correct. When the
+> prompt states this data, use it verbatim: do not re-glob, re-sample, or re-derive
+> `corpusSize`/`sampled`/`scanned`, and read only the files named. The CLI
+> independently re-checks every `Convention: <key> (<adopted> of <sampled> sampled)`
+> citation against what it measured and rejects a report that disagrees — most
+> pointedly, a report that claims nonzero adoption for a key the CLI's own scan
+> found zero real occurrences of anywhere in the scanned corpus. `bddNaming` and
 > `assertionStyle` carry no mechanical signal (no single token distinguishes
 > "adopted" from "not" for a naming style or a dialect choice), so read the named
 > files yourself and judge those two; the sampled/corpusSize grounding still
@@ -115,10 +118,26 @@ number.
 - Sample test files that are **not in the review set**. A pull request adding four
   files must not be allowed to establish, or dilute, the convention it is judged
   against.
-- Discover them the way `review_scope: suite` would, then cap the sample at **40
-  files**, chosen closest-first by directory distance from the reviewed files, so
-  the baseline describes the neighborhood the new tests live in rather than a
-  distant corner of a monorepo.
+- Count a file as eligible only when its **name** says it is a test (`*.spec.*`,
+  `*.test.*`, `*.cy.*`, `*_test.go`, `test_*.py`, and the rest of the table the
+  runners define), and drop anything under a `fixtures`, `__fixtures__`, `__mocks__`
+  or `testdata` directory. A helper or a component that merely sits inside a test
+  folder is not a test, and a spec under a fixtures directory is some other test's
+  input. The sharpest case is a seeded-defect corpus: sampling one to learn "what
+  this repo does" learns the anti-patterns.
+- Rank the eligible files closest-first by directory distance from the reviewed
+  files and keep the closest **40**, so the baseline describes the neighborhood the
+  new tests live in rather than a distant corner of a monorepo.
+- Read **8** of those 40, spread evenly: every `floor(i × scanned / sampled)`-th
+  file, for `i` from 0. Eight is deliberately small, because these are read on every
+  run whatever the size of the change, and it is the smallest count that still clears
+  the `sampled < 4` floor below with margin and gives the 0.5 ratio a meaningful
+  denominator. Spread them out, because every file in the reviewed
+  file's own directory sits at distance 0, so among them the ranking is the
+  alphabetical tie-break and nothing else; taking the head makes everything later in
+  the alphabet unreachable by any review anchored there, on every run.
+- `cli/lib/convention-baseline.js` applies these same figures, and the two are kept
+  in sync by hand.
 - Record `corpusSize` (how many exist) and `sampled` (how many were read). When
   they differ, say so wherever the baseline is cited.
 - Read only what the measurement needs: test names, locator calls, imports, and
@@ -162,12 +181,12 @@ Carry this object forward to `step-03` as `convention_baseline`. It travels in
 ```javascript
 const conventionBaseline = {
   corpusSize: 19,
-  sampled: 19,
+  sampled: 8,
   conventions: {
-    priorityMarkers: { adopted: 11, sampled: 19, status: 'established', form: '[P#] in the test name' },
-    testIds: { adopted: 8, sampled: 19, status: 'emerging', form: 'data-testid' },
-    networkFirst: { adopted: 5, sampled: 19, status: 'emerging', form: 'interceptNetworkCall' },
-    playwrightUtils: { adopted: 5, sampled: 19, status: 'emerging', form: 'apiRequest fixture' },
+    priorityMarkers: { adopted: 6, sampled: 8, status: 'established', form: '[P#] in the test name' },
+    testIds: { adopted: 3, sampled: 8, status: 'emerging', form: 'data-testid' },
+    networkFirst: { adopted: 2, sampled: 8, status: 'emerging', form: 'interceptNetworkCall' },
+    playwrightUtils: { adopted: 2, sampled: 8, status: 'emerging', form: 'apiRequest fixture' },
     // ...one entry per key in the table above, every key present
   },
 };

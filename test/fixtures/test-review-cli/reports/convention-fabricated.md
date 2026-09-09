@@ -22,6 +22,8 @@ stepsCompleted:
 
 **Context Waivers Applied**: 0
 
+**Execution Mode**: sequential
+
 ### Summary
 
 Reproduces couture-cast PR #106's actual defect: a plausible-sounding, specific

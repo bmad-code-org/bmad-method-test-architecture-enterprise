@@ -71,6 +71,11 @@ const { SEVERITY_ENUM } = require('./registry-rows');
 const RECOMMENDATION_ENUM = ['Approve', 'Approve with Comments', 'Request Changes', 'Block'];
 const RECOMMENDATION_LINE = /^[ \t]*(?:\*\*Recommendation\*\*:|\*\*Recommendation:\*\*|Recommendation:)[ \t]*([^\r\n]+?)[ \t]*$/m;
 const CONTEXT_BASIS_ENUM = ['none', 'pr_diff', 'pr_diff_truncated'];
+// step-03-quality-evaluation.md's own three resolved modes. `auto` is a request,
+// never a resolution, so it is deliberately absent: a report that says `auto` never
+// ran the probe.
+const EXECUTION_MODE_ENUM = ['agent-team', 'subagent', 'sequential'];
+const EXECUTION_MODE_LINE_SOURCE = String.raw`^[ \t]*\*\*Execution Mode:?\*\*:?[ \t]*([^\r\n]+?)[ \t]*$`;
 const CONTEXT_BASIS_LINE_SOURCE = String.raw`^[ \t]*\*\*Context Basis:?\*\*:?[ \t]*([^\r\n]+)[ \t]*$`;
 const CONTEXT_WAIVERS_LINE_SOURCE = String.raw`^[ \t]*\*\*Context Waivers Applied:?\*\*:?[ \t]*([^\r\n]+)[ \t]*$`;
 const SCORE_PATTERN = /\*\*Quality Score\*\*:\s*(\d+)\s*\/\s*100(?:[ \t]*\([ \t]*([A-F])(?=[ \t)-]))?/;
@@ -155,6 +160,7 @@ const PARSED_VERDICT_KEYS = {
   },
   conditional: {
     conventionBaseline: 'object',
+    executionMode: 'string',
     reportedQualityScore: 'number',
     reportedRecommendation: 'string',
   },
@@ -696,6 +702,51 @@ function parseConventionCitations(text) {
   }));
 }
 
+/**
+ * Parse the at-most-one "**Execution Mode**:" line, required on any run that
+ * measured a convention baseline.
+ *
+ * `step-03-quality-evaluation.md` resolves its own execution mode from a runtime
+ * capability probe and prints the result to the agent's stdout, which
+ * `cli/lib/run-agent.js` captures and `cli/test-review.js` reads only when the
+ * report is missing. So a run that asked for parallel workers and silently got
+ * `sequential` was indistinguishable, after the fact, from one that got what it
+ * asked for. That made "this change made the review faster" unfalsifiable: the
+ * gain could have come from anywhere. The mode is a run input the same way the
+ * model and the convention baseline are, so it travels in the verdict with them.
+ *
+ * Required exactly when the run supplied a convention baseline, which every real
+ * CLI run does. Making it unconditionally optional would have left the hole it
+ * exists to close: a report that omits the line is as silent about its mode as one
+ * written before the line existed, and the failure gradient would run the wrong way,
+ * with an omission passing and a malformed value exiting 3. A bare `parseReport`
+ * call in a unit test supplies no baseline and needs no mode.
+ *
+ * @param {string} text - Full report.
+ * @param {boolean} required - Whether this run has to state a mode.
+ * @returns {string|null} The resolved mode, or null when none is stated and none is required.
+ */
+function parseExecutionMode(text, required) {
+  const matches = [...text.matchAll(new RegExp(EXECUTION_MODE_LINE_SOURCE, 'gm'))];
+  if (matches.length === 0) {
+    if (required) {
+      unparseable(
+        'Report is missing the "**Execution Mode**:" line; state the mode step-03 actually resolved ' +
+          `(${EXECUTION_MODE_ENUM.join(' | ')}), so a run that fell back to sequential says so in its own artifact`,
+      );
+    }
+    return null;
+  }
+  if (matches.length > 1) {
+    unparseable(`Report must contain at most one "**Execution Mode**:" line; found ${matches.length}`);
+  }
+  const cleaned = stripWrappers(matches[0][1].replaceAll(/\s+/g, ' ')).toLowerCase();
+  if (!EXECUTION_MODE_ENUM.includes(cleaned)) {
+    unparseable(`Report Execution Mode "${cleaned}" is not one of: ${EXECUTION_MODE_ENUM.join(' | ')}`);
+  }
+  return cleaned;
+}
+
 /** Extract the optional, at-most-one "**Convention Baseline**:" line's raw value. */
 function parseConventionBaselineLine(text) {
   const matches = [...text.matchAll(new RegExp(CONVENTION_BASELINE_LINE_SOURCE, 'gm'))];
@@ -795,8 +846,9 @@ function verifyConventionBaseline(text, conventionBaselineContract) {
     if (measured && measured.mechanical && measured.mechanicalSignal === false && citation.adopted > 0) {
       unparseable(
         `Report Convention citation "${citation.key} (${citation.adopted} of ${citation.sampled} sampled)" claims adoption, but this run ` +
-          `scanned every one of the ${conventionBaselineContract.sampled} sampled files for the recognized forms and found zero occurrences; ` +
-          'a convention with no real evidence in the sampled corpus must be reported as absent (0 adopted), never a fabricated nonzero count',
+          `scanned every one of the ${conventionBaselineContract.scanned ?? conventionBaselineContract.sampled} files in its scanned corpus ` +
+          'for the recognized forms and found zero occurrences; a convention with no real evidence anywhere in that corpus must be ' +
+          'reported as absent (0 adopted), never a fabricated nonzero count',
       );
     }
   }
@@ -1465,6 +1517,7 @@ function parseReport(reportText, runContract = {}) {
 
   verifyRunContract({ reviewedFiles, contextBasis, contextFiles, excludedFiles }, runContract);
   verifyConventionBaseline(text, runContract.conventionBaseline);
+  const executionMode = parseExecutionMode(text, Boolean(runContract.conventionBaseline));
 
   const executiveSection = extractSection(text, 'Executive Summary');
   const keyStrengths = extractBullets(extractSubsection(executiveSection, 'Key Strengths'), '✅');
@@ -1499,6 +1552,9 @@ function parseReport(reportText, runContract = {}) {
   // the verdict, not just the pass/fail outcome of checking against it.
   if (runContract.conventionBaseline) {
     setConditionalKey(parsed, 'conventionBaseline', runContract.conventionBaseline);
+  }
+  if (executionMode !== null) {
+    setConditionalKey(parsed, 'executionMode', executionMode);
   }
   if (
     reportedQualityScore !== qualityScore ||
@@ -1575,6 +1631,8 @@ module.exports = {
   CONTEXT_BASIS_ENUM,
   verifyConventionBaseline,
   parseConventionCitations,
+  parseExecutionMode,
+  EXECUTION_MODE_ENUM,
   verifyFindingSeverityCounts,
   extractFindings,
   FINDING_KEYS,

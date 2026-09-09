@@ -364,8 +364,12 @@ const reviewSummary = {
   key_weaknesses: keyWeaknesses,
   advisory_observations: advisoryObservations,
 
-  subagent_execution: 'PARALLEL (4 quality dimensions)',
-  performance_gain: '~60% faster than sequential',
+  // The mode step-03 actually resolved, carried through verbatim. It used to read
+  // 'PARALLEL (4 quality dimensions)' and '~60% faster than sequential' whatever ran,
+  // which described a sequential run as a parallel one and published a speed figure
+  // nobody had measured. Step 4 prints this as the report's "**Execution Mode**:"
+  // line, and cli/lib/parse-report.js reads it into the verdict.
+  execution_mode: subagentContext.execution.resolvedMode,
 };
 
 // Save for Step 4 (report generation)

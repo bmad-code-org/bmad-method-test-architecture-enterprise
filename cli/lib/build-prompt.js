@@ -10,9 +10,11 @@
  * context_files stays an invocation-only wire so PR evidence can never become
  * a persistent user preference.
  *
- * It also states every TEA config key that step-01 branches on, resolved by
- * resolve-tea-config. An unstated key is one the agent decides for itself, which
- * makes knowledge loading differ between runs over identical files.
+ * It also states every TEA config key the workflow branches on: the fragment-loading
+ * keys step-01 reads, resolved by resolve-tea-config, and the orchestration pair
+ * step-03 reads (tea_execution_mode, tea_capability_probe). An unstated key is one
+ * the agent decides for itself. Two runs over identical files would then load
+ * different knowledge, or dispatch a different number of workers.
  *
  * Two file lists travel in the prompt, each as a JSON array inside its own
  * delimiters so paths are unambiguously data: the review set, which is scored,
@@ -67,20 +69,25 @@ function conventionBaselinePromptLines(conventionBaseline) {
     }
     return measured.mechanicalSignal
       ? [
-          `- ${key}: mechanically scanned; at least one sampled file contains a recognized form. Read the sampled files`,
-          `  yourself to judge the true adopted count (0-${conventionBaseline.sampled}) and record the observed form.`,
+          `- ${key}: mechanically scanned; at least one file in the wider scanned corpus contains a recognized form, so`,
+          '  this key is NOT ruled out. That corpus is larger than the sampled files below, so the form may well live in a',
+          `  file you were not asked to read. Judge the adopted count (0-${conventionBaseline.sampled}) from the sampled files alone and`,
+          '  record the observed form; 0 is a legitimate answer here and does not contradict the scan.',
         ]
       : [
-          `- ${key}: mechanically scanned across all ${conventionBaseline.sampled} sampled files; zero occurrences of any`,
+          `- ${key}: mechanically scanned across all ${conventionBaseline.scanned} scanned files; zero occurrences of any`,
           '  recognized form were found. This convention MUST be reported as absent: adopted = 0. A report claiming ANY',
-          `  nonzero adoption for ${key} will be rejected — the CLI already read every sampled file and found nothing.`,
+          `  nonzero adoption for ${key} will be rejected — the CLI already read every scanned file and found nothing.`,
         ];
   });
   return [
     "step-02-discover-tests.md §2b's convention baseline has already been computed for this run. Do not sample, glob,",
     'or guess this yourself — the corpus and the counts below came from actually reading the files named, not the',
     'reviewed files themselves (sampling the review set to judge the review set would be circular).',
-    `- corpusSize: ${conventionBaseline.corpusSize}, sampled: ${conventionBaseline.sampled}`,
+    `- corpusSize: ${conventionBaseline.corpusSize}, sampled: ${conventionBaseline.sampled}, scanned: ${conventionBaseline.scanned}`,
+    'sampled is the list below, the files you read. scanned is how many files the CLI ran its own mechanical detectors',
+    'over, which is wider because it costs the CLI a file read and costs you nothing. Cite sampled, never scanned:',
+    'the scanned corpus only decides which conventions the CLI has already ruled out for you.',
     `The "**Convention Baseline**:" line must read exactly: ${conventionBaseline.sampled} test files sampled outside the review set`,
     'Sampled files (read exactly these; do not substitute, add, or drop any):',
     '---BEGIN CONVENTION CORPUS---',
@@ -126,6 +133,14 @@ function conventionBaselinePromptLines(conventionBaseline) {
  *   only --test-glob put there and that no built-in rule recognizes. The CLI
  *   cannot know whether a registry row attached, so it names them and the agent
  *   applies criteria-registry rule 4 rather than publishing 100 - 0 = 100.
+ * @param {string} [options.runId] - Unique id for this run, minted by the CLI. The
+ *   workflow's step-03 uses it verbatim as the `timestamp` in its worker output
+ *   paths. step-03 asks the agent to generate one with `new Date().toISOString()`,
+ *   which a headless agent with no shell cannot execute: it emits a plausible
+ *   string instead, and two runs on one machine can land on the same one. Nothing
+ *   cleans /tmp/tea-test-review-*, and step-03 section 5 checks existence only, so
+ *   a repeat would aggregate a previous run's scores. A real unique value from the
+ *   caller removes the class.
  * @param {object} [options.conventionBaseline] - step-02-discover-tests.md §2b's
  *   "convention baseline", pre-computed by cli/lib/convention-baseline.js instead of
  *   left to the agent to sample. `{ baselineUnavailable: true, reason }` or
@@ -149,6 +164,7 @@ function buildPrompt({
   unscorableTestArtifacts = [],
   forcedUnscorableCandidates = [],
   conventionBaseline,
+  runId = '',
 }) {
   const absoluteSkillRoot = path.resolve(skillRoot);
   const absoluteOutputPath = path.resolve(outputPath);
@@ -186,7 +202,9 @@ function buildPrompt({
     `review_scope=${reviewScope}`,
     `test_dir=${testDir}`,
     'tea_browser_automation=none',
-    'tea_execution_mode=sequential',
+    `tea_execution_mode=${teaConfig.tea_execution_mode}`,
+    `tea_capability_probe=${teaConfig.tea_capability_probe}`,
+    ...(runId ? [`tea_run_id=${runId}`] : []),
     `tea_use_playwright_utils=${teaConfig.tea_use_playwright_utils}`,
     `tea_use_pactjs_utils=${teaConfig.tea_use_pactjs_utils}`,
     `tea_pact_mcp=${teaConfig.tea_pact_mcp}`,
@@ -197,6 +215,25 @@ function buildPrompt({
     'fragment set, Pact MCP) instead of inferring the flags.',
     'The two *_installed values above were read from the project manifest by the CLI. Do not re-derive them, and do',
     'not open package.json: they are the second half of each mandate gate, stated here for the same reason the flags are.',
+    'tea_execution_mode and tea_capability_probe are the orchestration pair step-03-quality-evaluation.md branches on,',
+    'resolved the same way the fragment keys above are: an explicit CLI flag, then _bmad/tea/config.yaml, then',
+    'src/module.yaml\'s default. Both are stated because step-03 reads both, and "auto" with probing off resolves to',
+    'sequential on every run.',
+    'Whichever mode resolves, dispatch every quality worker with the full subagentContext step-03 section 1 assembles,',
+    'written out in the launch prompt itself: the review set, the criteria-registry path resolved to an absolute path,',
+    'the convention baseline block stated above verbatim, and the playwright_utils_installed / pactjs_utils_installed',
+    'values. A worker that has to guess any of those scores rows it cannot see, which silently removes deductions.',
+    ...(runId
+      ? [
+          `Use tea_run_id (${runId}) verbatim wherever step-03-quality-evaluation.md section 1 says to generate a`,
+          '`timestamp`, and pass that same value to every worker and to step 3F. Do not generate one: you have no clock,',
+          'nothing cleans /tmp/tea-test-review-*, and step-03 section 5 checks only that the files exist, so an invented',
+          "value that collided with an earlier run's would aggregate that run's scores into this report.",
+        ]
+      : []),
+    'Report the mode you actually ran in as exactly one "**Execution Mode**: <mode>" line in the Executive Summary,',
+    'where <mode> is agent-team, subagent, or sequential. Never write "auto" there: auto is the request, and this line',
+    'records what the capability probe resolved it to.',
     'playwrightUtilsActive = tea_use_playwright_utils AND playwright_utils_installed; when true, load',
     'playwright-utils-mandate.md and score registry rows M9 and L9. pactjsUtilsActive = tea_use_pactjs_utils AND',
     'pactjs_utils_installed; when true, load pactjs-utils-mandate.md and score registry row M10.',

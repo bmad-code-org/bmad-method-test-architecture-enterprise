@@ -22,6 +22,8 @@ stepsCompleted:
 
 **Context Waivers Applied**: 0
 
+**Execution Mode**: sequential
+
 ### Summary
 
 No corpus exists outside the review set, so every Convention row passes as n/a
