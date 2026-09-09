@@ -17,7 +17,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 
 | Layer                           | What it covers                                                                                                    | Where                             |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Deterministic repository checks | 21 checks in the `npm test` chain, credential-free, no network, no model call                                     | `package.json`                    |
+| Deterministic repository checks | The `npm test` chain, credential-free, no network, no model call                                                  | `package.json`                    |
 | Fragment-selection eval         | 24 cases across the eight workflow skills that ship a knowledge index, measuring which knowledge a run loads      | `test/eval-fragment-selection.js` |
 | Behavioral eval, `test-review`  | 9 planted defects across two seeded files, one clean control, one scope control, repeated three times             | `test/eval-test-review.js`        |
 | Behavioral eval, `trace`        | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice | `test/eval-trace.js`              |
@@ -267,7 +267,7 @@ Witness legs for an artifact-writing command carry a coupling worth planning for
 
 ### The deterministic gate
 
-`npm test` is 21 checks, credential-free, no network, no model call. The eval-relevant ones:
+The `npm test` chain is credential-free, makes no network call and no model call, and grows a step whenever a new check lands. The eval-relevant ones:
 
 ```bash
 npm run test:eval-data          # fragment-selection corpus, static
@@ -311,7 +311,7 @@ One `npm run eval:all` for one runner spends 55 calls: 48 fragment selections (2
 
 Repetition counts are a real cost multiplier and are declared per suite. Two is the smallest number that can say whether an answer is reproducible. `test-review` uses three because it also measures score variance.
 
-`eval-quality`'s own pre-flight spends two live model calls per contract to drive each contract's sensitivity witness. At ten contracts that is twenty calls, and TEA has spent none of them. That work is owed and named as owed.
+`eval-quality`'s own pre-flight is a separate spend. It drives each contract's witness legs through the same port for real, and TEA ran its first one on 2026-09-09 against `claude`: twenty-one legs spawned and 55 minutes of model time, with every leg cached under a digest of its request so a second invocation pays for nothing it has already answered. The eight fragment-selection contracts took sixteen legs and 919 seconds between them, `trace` two legs and 872 seconds, and `test-review` three legs and 1,485 seconds. `docs/explanation/eval-quality-command-adapter.md` records what each one returned. Budget a pre-flight as its own line, and expect the first one to find something.
 
 ### Wall clock
 
@@ -343,6 +343,8 @@ Every one of these was found by running something the repository had believed wi
 
 **Three declarations nothing enforced.** In one pass: the manifest declared runner capabilities no harness applied, the pre-flight argv skipped the runner for two of three suites, and the contracts held oracles nothing in the repository read. A declaration that nothing enforces is worse than a gap, because it reads as a guarantee.
 
+**Two witness legs sharing one staged workspace.** The first live `trace` pre-flight failed its own witness. Both legs ran in one staged directory and their two summaries came back byte-identical beside two matrices that differed, which is a run that rewrote one artifact and left the other, so the second leg's artifact map was reading a file the first leg wrote. Every TEA contract declares `fixtureReset: null`, so nothing in the plan resets a workspace between legs, and a directory per spawned leg is the only thing that makes a leg's evidence its own. No deterministic check could have found it.
+
 **Eleven oracles nothing could evaluate.** Covered above. Compilation is not evaluation.
 
 **A contract naming a command nobody ships.** Covered above. The check that prevents its return runs in both directions.
@@ -351,7 +353,7 @@ Every one of these was found by running something the repository had believed wi
 
 **A test file that could not be reviewed.** 22 KB of new test code carried three raw NUL bytes used as a string separator, so git read the file as binary and showed a size instead of a diff. The escape is the same byte at runtime.
 
-**Four characters of headroom.** `llms-full.txt` sat at 599,996 characters of a 600,000 cap marked DO NOT CHANGE, so the next documentation change of any size would have failed the build. Measure the bundle when you add a document. This one is 43,202 characters: with it in, the bundle measures 614,833 and `npm run docs:build` exits 1 on the cap, so `tools/build-docs.js` excludes it alongside the roadmap and the command-adapter document, on the same reasoning. The bundle is 571,631 characters without it.
+**Four characters of headroom.** `llms-full.txt` sat at 599,996 characters of a 600,000 cap marked DO NOT CHANGE, so the next documentation change of any size would have failed the build. Measure the bundle when you add a document. This one is 44,322 characters: with it in, the bundle measures 615,953 and `npm run docs:build` exits 1 on the cap, so `tools/build-docs.js` excludes it alongside the roadmap and the command-adapter document, on the same reasoning. The bundle is 571,631 characters without it.
 
 ## What does not transfer
 

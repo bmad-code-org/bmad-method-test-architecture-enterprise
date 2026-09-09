@@ -37,9 +37,9 @@ const LLM_EXCLUDE_PATTERNS = [
   // Maintainer handoff documents. They record what this repository still owes
   // itself, how its own evaluation surface is built, and how another BMAD module
   // would build one, which is of no use to an agent consuming TEA to do testing
-  // work, and together they cost roughly 68k of a 600k budget that had four
-  // characters left. The adoption guide alone is 43k: with it in, the bundle
-  // measures 614,833 characters and the build fails on the cap.
+  // work, and together they cost roughly 69k of a 600k budget that had four
+  // characters left. The adoption guide alone is 44k: with it in, the bundle
+  // measures 615,953 characters and the build fails on the cap.
   'explanation/eval-quality-roadmap',
   'explanation/eval-quality-command-adapter',
   'explanation/eval-quality-adoption-guide',
