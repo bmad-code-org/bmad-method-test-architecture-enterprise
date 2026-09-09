@@ -22,7 +22,8 @@
  *     name for that contract's sourceSpecDigest,
  *   - cli/trace-runner.js's TRACE_REQUEST_KEYS and DEFAULT_AGENT for that
  *     contract's request shape and witness legs, and test/eval-trace.js's
- *     buildPrompt for the two prompts the witness legs send, and
+ *     buildPrompt for the two prompts the witness legs send and for the literal
+ *     each of its two plan steps binds on standard input, and
  *   - the trace workflow's step-05 for the key set of the summary the run writes.
  *
  * The prose that is genuinely authored (an oracle's commentary, a behavior's lead
@@ -69,8 +70,8 @@ const { VERDICT_KEYS, DEFAULT_AGENT } = require('../cli/test-review');
 // owns its own request shape and its own default agent, so both are read from it.
 const { SELECTION_REQUEST_KEYS, DEFAULT_AGENT: SELECTION_DEFAULT_AGENT } = require('../cli/fragment-selection-runner');
 // And for the trace command: its request shape and default agent are its own, and
-// the prompt its witness legs send is the harness's, because the harness is the
-// only thing that assembles one.
+// the prompt its witness legs send and the literal each of its plan steps binds
+// are the harness's, because the harness is the only thing that assembles one.
 const { TRACE_REQUEST_KEYS, DEFAULT_AGENT: TRACE_DEFAULT_AGENT, EXIT_CODES: TRACE_EXIT_CODES } = require('../cli/trace-runner');
 const { vendorEnvironmentNames } = require('../cli/lib/runner-exit-codes');
 const {
@@ -2278,20 +2279,31 @@ function buildTraceContract() {
       operationId: TRACE_OPERATION,
       after: null,
       cardinality: 'exactly-one',
-      // The agent is bound as `any` rather than pinned: which vendor answered is
-      // the runner record's to state. The prompt is bound as `any` for the reason
-      // the fragment-selection contracts give: its bytes are evidence, and the
-      // sealed record carries their digest.
+      // The agent is bound as `any`: which vendor answered is the runner record's
+      // to state.
       //
-      // The two steps no longer send the same prompt. Each fixture set is staged
-      // under its own project root and the prompt is written against it, so the
-      // request now says which set a run traces. What the matcher leaves open is
-      // which observation a step selects: a record carrying one observation is
-      // selected by both steps, so the other set's oracles quantify over evidence
-      // that is not theirs. That is the limit test/contracts/README.md records as
-      // "a plan cannot declare that two steps must receive different inputs", and
-      // it is a property of the matcher rather than of the prompts.
-      inputBinding: { argument: null, option: { agent: { matcher: 'any' } }, environment: null, stdin: { prompt: { matcher: 'any' } } },
+      // Standard input is bound as a literal, and the literal is the prompt the
+      // harness assembles for this fixture set. Both steps declare the same
+      // operation, so under a matcher binding every observation satisfies both
+      // steps: one observation is selected twice and the other set's oracles
+      // quantify over evidence that is not theirs, which is what held the clean
+      // control at FAIL with five abstentions. The prompt is the only part of the
+      // request that tells the two steps apart, because the project root it is
+      // written against is the one fact about the set the request carries.
+      //
+      // buildTracePrompt is test/eval-trace.js's own buildPrompt, the function
+      // that assembles the prompt the live run sends and the prompt
+      // test/lib/probe-scoring.js puts on a trace observation. A literal is
+      // compared with deepEquals, so a prompt restated here in any other form
+      // would select nothing, every oracle would resolve `unreached`, and a run
+      // that examined no evidence at all would report clean at exit 0. One
+      // function on both sides is what makes that unrepresentable.
+      inputBinding: {
+        argument: null,
+        option: { agent: { matcher: 'any' } },
+        environment: null,
+        stdin: { prompt: { literal: buildTracePrompt(set) } },
+      },
     })),
     scopedResources: null,
     forbiddenInputs: FORBIDDEN_INPUTS,

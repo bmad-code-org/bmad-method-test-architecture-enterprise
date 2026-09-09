@@ -145,6 +145,18 @@ cases differ only in the prompt sent to the runner, and that is the property tha
 mean anything. `sensitivityWitness` expresses a two-leg version of this inside one operation and
 nothing expresses it across plan steps.
 
+Answered for `trace`, at a price the eight fragment-selection contracts cannot pay. Binding each
+step's `stdin.prompt` as a literal of that step's own prompt is what tells the two steps apart: the
+seeded step selects the seeded run, the clean step selects the clean one, and `trace`'s clean control
+moved from FAIL at exit 2 with five oracles abstaining to CONCERNS at exit 0 with all twenty-six
+resolving `passed-clean-control`. It costs 3.6 kilobytes on `trace.contract.json` and 42 to 143
+kilobytes on a fragment-selection contract, which roughly doubles each of those eight files, so they
+keep the matcher. A literal is compared with `deepEquals`, so both sides of one have to come from a
+single function: `tools/generate-contracts.js` and `test/lib/probe-scoring.js` both call `buildPrompt`
+from `test/eval-trace.js`, and the record builder throws when the contract on disk carries any other
+bytes. A prompt restated in either place would select nothing and every oracle would resolve
+`unreached`, which reads as a clean run at exit 0.
+
 **An empty collection is no evidence.** AD-4 resolves a quantifier over an
 empty collection to `insufficient-evidence` with an `empty-collection` introduction condition. The
 `test-review` harness reads a verdict whose findings array is empty as a reviewer that named nothing,

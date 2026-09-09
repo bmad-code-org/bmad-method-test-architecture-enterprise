@@ -308,9 +308,14 @@
         "expectedClean": true,
         "behaviorId": "B-016",
         "preflight": "passed",
-        "verdict": "FAIL",
-        "exitCode": 2,
-        "basis": ["oracle resolved abstained at or above the severity floor"],
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
         "qualification": null,
         "strength": {
           "defect": null,
