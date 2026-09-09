@@ -125,7 +125,10 @@ evaluates a gate only when it is true and writes `gate_basis` as `none` otherwis
 differing in that value, in one staged workspace, produce two `gate_basis` values. That is a true and
 checkable claim that the command reads its standard input, and it is the claim the witness makes. The
 legs are runnable only against a staged workspace of the seeded set, which is the coupling
-`docs/explanation/eval-quality-command-adapter.md` records for every artifact-writing command.
+`docs/explanation/eval-quality-command-adapter.md` records for every artifact-writing command. The
+contract itself states this reasoning in `testData.setup`, beside the sentence about the shared
+prompt, because `SensitivityWitness` is a strict object with no prose field of its own; do not look for
+it on the witness.
 
 ## What the operator vocabulary cannot say
 
