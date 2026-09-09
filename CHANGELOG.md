@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.26.0] - 2026-09-09
+
 ### Changed
 
 - `tea-test-review` spent most of a small review reading files that were not in the pull request. `step-02-discover-tests.md` §2b's convention sample was capped at 40 files, and the agent runs with no shell, so each sampled file cost its own `Read` turn on every run whatever the size of the diff. The agent now reads 8. Measured on a 50-file corpus with a one-file review set: 40 files and ~233 KB before, 8 files and ~47 KB after, five times fewer reads and a fifth of the bytes. Eight clears §2b's `sampled < 4` "corpus too small to infer a house rule" floor with margin and leaves the 0.5 established/emerging ratio a denominator that means something. The sampled count is published in the report and cross-checked by `parse-report.js`, so every report states the corpus it was judged against.
