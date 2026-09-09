@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.25.0] - 2026-09-09
+
 ### Added
 
 - `npm run test:contract-oracles`, which evaluates every oracle in every Behavioral Evaluation Contract with `eval-quality`'s own evaluator and fails when an oracle faults or disagrees with the harness scorer on the same evidence. Every stored `test-review` verdict under `test/replay/` is one observation of the contract's `review-corpus` step, and every fragment-selection case is evaluated over three constructed selections plus the stored captures, 289 checks in all. Nothing had read an oracle before: `test:contracts` compiles a contract and never runs an operator, and `test:contract-sources` checks the JSON matches its generator. Its first run found that eleven of the thirteen oracles in `test-review.contract.json` could not be evaluated at all; see Fixed.
