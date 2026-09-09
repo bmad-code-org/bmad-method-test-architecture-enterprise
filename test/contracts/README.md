@@ -132,7 +132,7 @@ it on the witness.
 
 ## What the operator vocabulary cannot say
 
-Two limits surfaced while writing the oracles, and neither is about transport.
+Five limits surfaced while writing the oracles, and none of them is about transport.
 
 **A fractional pass over a set of oracles has no spelling.** `all` and `for-all` are total, `any` and
 `for-any` are existential, and nothing sits between. The `test-review` eval's own recall threshold is

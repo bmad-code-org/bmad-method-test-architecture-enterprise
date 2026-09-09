@@ -5,7 +5,7 @@ description: 'Current TEA eval coverage, the remaining per-skill work, the plann
 
 # Eval Quality and Behavioral Coverage Roadmap
 
-This is the source-controlled handoff for TEA's remaining eval work. It records what exists, what still needs evidence, and the order in which to build it.
+This is the source-controlled handoff for TEA's remaining eval work. It records what exists, what still needs evidence, and the order in which to build it. [Adopting eval-quality, One Skill at a Time](./eval-quality-adoption-guide.md) turns the same material into a procedure for a module that has none of it yet.
 
 The central constraint is simple: `npm run eval:all` runs every live eval that exists today. It does not yet prove the complete behavior of every TEA skill.
 
