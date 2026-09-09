@@ -162,34 +162,65 @@ trace plants: the live pre-flight reports `D-001: the manifestation witness fire
 "witness-gate-evaluated"`. The four review plants in the file no witness leg reads pre-flight cleanly
 and score, and the defect class catches all four.
 
-No leg TEA can add repairs it, and the reason is sharper than "a plant sits in a file a witness
+No leg TEA could add repaired it, and the reason was sharper than "a plant sits in a file a witness
 reads". For those five plants the fault leg's request is byte for byte the sensitivity leg's request:
 the same executable, the same `--files`, the same `--json`, the same `--agent`. The observation cache
-collapses them into one spawn for exactly that reason. So the check resolves the manifestation
+collapses them into one spawn for exactly that reason. So the check resolved the manifestation
 relation against a run identical to the fault run, and no relation true on the one can be false on
-the other. Adding a leg that reads an unplanted fixture changes nothing, because the check fails on a
-leg that fires rather than on the absence of a leg that does not, and adding legs can only add ways
-to fire. Making the seeded witness leg read an unplanted fixture is not available either: the
+the other. Adding a leg that reads an unplanted fixture changed nothing, because the check fails on a
+leg that fires rather than on the absence of a leg that does not, and adding legs could only add ways
+to fire. Making the seeded witness leg read an unplanted fixture was not available either: the
 differential it asserts is that two file lists produce different severity counts, and two unplanted
 lists produce the same counts, so the witness would fail instead. The one remaining shape, a witness
 whose relation compares the `reviewedFiles` the verdict echoes back, is the "the evidence contains
 the string I sent" condition the probe-side qualification gate exists to reject, and authoring it
 contract-side to get a green pre-flight would be gaming the witness.
 
-**"This collection is empty" has no spelling.** The evaluator intercepts an empty array on every
-quantifier and on every single-operand leaf and returns `insufficient-evidence` with an
-`empty-collection` condition before the operator runs, so `count-tolerance` with `expected: 0` never
-counts and `deep-equality` against a literal `[]` never compares. Two of `trace`'s oracles make
-exactly that claim about its clean set, and both abstain on the run they were written to confirm.
-`count-tolerance` is the spelling this repository now uses, because it is the claim the oracle is
-making and it starts working the day an empty collection counts as evidence for a cardinality check.
+TEA raised it upstream, and 1.4.0 fixes it in the reducer. A clean leg is dropped when it issued the
+fault leg's request and received the fault leg's answer, compared over the request with the
+correlation identifier neutralised and over the projected evidence with the observation identifier
+neutralised. Both halves are required: dropping on the answer alone would discard AD-10's own worked
+example of two distinct nonexistent identifiers both returning 404, which are the legs the check
+exists to read. A check left with no clean leg to examine now fails and names why, where it reported
+satisfied before.
 
-**A rejected probe carries no reason across the boundary.** The qualification gate computes a closed
-list of twenty reason codes and none of them reaches the evidence artifact or any published export.
-A probe the gate rejects surfaces as `infrastructure-error` on every oracle and exit 3, and a corpus
-author reading that has nothing to act on. Reading the reasons needs `qualifyProbe`, which is not on
-the exports map, and that would be the third reach into `dist/` this document already records two of.
-TEA does not take it.
+Measured on the stored replay across the two versions, `test-review`'s five plants move from
+`preflight: failed: seeded-faults-scoped` with a null verdict and exit 3 to `preflight: passed`,
+`CONCERNS`, exit 0, each carrying its own strength vector. The suite's defect class goes from four
+exercised and four caught to nine and nine, still at a rate of 1. `expected-strength.json` records
+the move.
+
+`trace`'s three plants still fail, and that is the fix working rather than failing. Their witness
+fires on `witness-gate-withheld`, a leg that issues a different request and receives a different
+answer, so the reducer keeps it in the examined set and the check reports a real scoping problem in
+the trace contract. It is a finding about the contract and it is still open.
+
+**"This collection is empty" has a spelling, as of 1.4.0.** Through 1.3.0 the evaluator intercepted
+an empty array on every quantifier and every single-operand leaf and returned `insufficient-evidence`
+with an `empty-collection` condition before the operator ran, so `count-tolerance` with `expected: 0`
+never counted. `trace`'s O-023 and O-024 make exactly that claim about its clean set, and both
+abstained on the run they were written to confirm. TEA raised it upstream and 1.4.0 exempts the three
+operators that read a property of the collection itself: `count-tolerance` reads its cardinality,
+`existence` and `absence` read its presence. Measured on the stored replay across the two versions,
+O-023 and O-024 move from `abstained` to `passed-clean-control`, so `count-tolerance` was the right
+spelling to have committed to.
+
+One limit is worth knowing before writing a new oracle. Every quantifier still abstains over an empty
+collection, which is AD-4's whole purpose and is why `trace`'s five `for-any` oracles over the seeded
+export still abstain on a clean run: they ask whether some element exists, and an empty collection is
+an honest "nothing was checked". `deep-equality` against a literal `[]` also still abstains, so the
+two spellings of "this collection is empty" disagree. eval-quality records that disagreement in AD-4
+rather than hiding it. The bare `count-tolerance` assertion is the one to write.
+
+**A rejected probe names its reason, as of 1.4.0.** The qualification gate computes a closed list of
+twenty reason codes. Through 1.3.0 none of them reached the evidence artifact or any published
+export, so a probe the gate rejected surfaced as `infrastructure-error` and exit 3 and a corpus
+author reading that had nothing to act on. Reading the reasons meant calling `qualifyProbe`, which
+was off the exports map, and taking it would have been the third reach into `dist/` this document
+already records two of. TEA raised that upstream instead. `runScore` now returns `qualification`
+beside the artifact and the ladder, `QUALIFICATION_FAILURES` publishes the closed set, and
+`test-probe-corpus` records the codes per probe in `expected-strength.json`. No reach into `dist/`
+was needed and the count stays at two.
 
 ### What the scoring half says about TEA's contracts
 

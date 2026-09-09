@@ -51,6 +51,20 @@ function basisShapes(basis) {
   return [...new Set(basis.map((line) => line.replaceAll(/oracle O-\d+/g, 'oracle'))).values()].sort();
 }
 
+/**
+ * The reason codes AD-9's gate gave, or null when it admitted the probe.
+ *
+ * A rejected probe resolves an oracle to `infrastructure-error` wherever no
+ * higher-precedence condition already resolved it, which reads the same
+ * whichever of the twenty reasons fired. `runScore` carries the closed set out
+ * on `qualification`, so the baseline records which one it was and a rejection
+ * that changes its reason shows up as a diff.
+ */
+function qualificationCodes(qualification) {
+  const codes = qualification.failures.map((failure) => failure.code).sort();
+  return codes.length === 0 ? null : codes;
+}
+
 /** One probe's result, small enough to read in a diff and complete enough to notice a change. */
 function probeSummary(entry) {
   const failedChecks = entry.preflight.checks.filter((check) => check.outcome === 'failed').map((check) => check.kind);
@@ -62,6 +76,7 @@ function probeSummary(entry) {
     verdict: entry.result.ladder.verdict,
     exitCode: entry.result.ladder.exitCode,
     basis: basisShapes(entry.result.ladder.basis),
+    qualification: qualificationCodes(entry.result.qualification),
     strength: entry.result.artifact?.strength?.vector ?? null,
   };
 }

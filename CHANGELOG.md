@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `eval-quality` moves from 1.3.0 to 1.4.0, which closes three findings this repository raised against it, and the probe corpora record what changed. Measured on the stored replay across the two versions: `test-review`'s five plants that had failed pre-flight on `seeded-faults-scoped` with a null verdict and exit 3 now pass pre-flight and score, taking the suite's defect class from four exercised and four caught to nine and nine at a rate of 1; `trace`'s O-023 and O-024 move from `abstained` to `passed-clean-control`, because a bare `count-tolerance` with `expected: 0` now counts a collection observed to be present and empty; and `trace`'s three defect probes report `condition-artifact-channel-contract-local`, the reason AD-9's gate refused them, where before a rejected probe surfaced only as `infrastructure-error` and exit 3. `expected-strength.json` records a `qualification` field per probe, so a rejection that changes its reason shows up as a diff.
+
+### Fixed
+
+- Four passages describing limitations that no longer exist. `test/probes/README.md` and `docs/explanation/eval-quality-command-adapter.md` each said a rejected probe carries no reason across the boundary; the adapter document also said "this collection is empty" has no spelling, and argued that no leg TEA could add repairs `seeded-faults-scoped` firing on a leg carrying the fault leg's own request. All four are rewritten against what 1.4.0 does, with the measured before and after. Two findings stay open and belong to TEA rather than to `eval-quality`: `trace`'s witness fires on `witness-gate-withheld`, a leg that issues a different request and receives a different answer, which is a real scoping problem in the trace contract; and its three defect probes address a file the command wrote, which the qualification gate refuses by design.
+
 ## [1.25.0] - 2026-09-09
 
 ### Added
