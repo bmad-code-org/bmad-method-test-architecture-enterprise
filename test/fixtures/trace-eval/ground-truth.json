@@ -161,6 +161,7 @@
     {
       "id": "seeded-tenant-data-export",
       "root": "seeded",
+      "projectRoot": "tenant-data-export",
       "purpose": "Positive case. Coverage looks nearly complete and is not, and the difference turns on reading the evidence instead of matching names.",
       "oracle": {
         "document": "seeded/docs/epics/epic-4-tenant-data-export-and-erasure.md",
@@ -650,6 +651,7 @@
     {
       "id": "clean-api-token-lifecycle",
       "root": "clean",
+      "projectRoot": "api-token-lifecycle",
       "purpose": "Negative control. Every criterion has adequate evidence, so any reported gap is a false positive and the harness counts it as one.",
       "oracle": {
         "document": "clean/docs/epics/epic-5-api-token-lifecycle.md",

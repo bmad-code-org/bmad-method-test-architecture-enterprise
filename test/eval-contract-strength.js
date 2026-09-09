@@ -36,9 +36,9 @@
  * test-review leg names its fixtures by repository-relative path and writes
  * `verdict.json` beside them, and the policy's `cwd` is what both resolve
  * against, so the fixtures are copied into the run directory and the artifact
- * lands there. A trace leg needs the seeded set staged, which is what
- * test/eval-trace.js already does for its own runs. A selection needs nothing on
- * disk at all.
+ * lands there. A trace leg needs its own fixture set staged, which is what
+ * test/eval-trace.js already does for its own runs, and the leg's prompt says which
+ * set that is. A selection needs nothing on disk at all.
  *
  * Usage:
  *   npm run eval:preflight                     # the live pre-flight, cached, nothing scored
@@ -49,9 +49,9 @@
  * Exit codes are read against `test/probes/expected-strength.json`, the same
  * baseline the deterministic gate compares to: 0 when every probe reached the
  * outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome
- * moved. Eight of the thirty-one probes cannot be pre-flighted today and the
- * baseline says so, so their failure is not news and does not colour the run;
- * one of them starting to pass is news, and so is one that stops.
+ * moved. Eight of the thirty-one probes could not be pre-flighted when that rule
+ * was written, and the baseline said so; all thirty-one pre-flight now, so a
+ * failure here is news and the baseline is what says so.
  */
 
 'use strict';
@@ -64,7 +64,7 @@ const { digest } = require('./lib/eval-record');
 const { validateArtifact } = require('./lib/eval-quality-inputs');
 const { createProbePort, hostEnvironment } = require('./lib/probe-targets');
 const { runSuite, sealContract, suites } = require('./lib/probe-scoring');
-const { stageWorkspace } = require('./eval-trace');
+const { stageWorkspace, traceArtifactPaths } = require('./eval-trace');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REVIEW_FIXTURE_DIR = path.join('test', 'fixtures', 'test-review-eval');
@@ -160,9 +160,13 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * The run directory one suite's legs execute in, and the artifact paths that
  * directory makes true.
  *
- * A trace leg is staged by the trace harness itself, so the seeded set arrives
- * exactly as `npm run eval:trace` stages it, under the same `project/` prefix its
- * artifact override names.
+ * A trace leg is staged by the trace harness itself, so the set arrives exactly as
+ * `npm run eval:trace` stages it, under the same project root its artifact override
+ * names. Which set that is comes out of the leg's own prompt: each fixture set has
+ * its own project root and the prompt is written against it, so a leg that traces
+ * the clean set asks for the clean set. Staging one set for every leg is what made
+ * the contract's two witness legs seeded runs, which is the scoping failure
+ * `seeded-faults-scoped` reported against all three defect probes.
  *
  * A test-review leg is the coupling `docs/explanation/eval-quality-command-adapter.md`
  * records: its `--files` are repository-relative, its `--json` is a bare
@@ -177,20 +181,19 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * A selection leg gets an empty directory, which is what its `read-only`
  * declaration is for.
  */
-function stagedWorkspaceFor(suiteId) {
+function stagedWorkspaceFor(suiteId, request) {
   if (suiteId === 'trace') {
     const groundTruth = JSON.parse(fs.readFileSync(TRACE_GROUND_TRUTH, 'utf8'));
-    const seeded = groundTruth.fixtureSets.find((set) => set.id.startsWith('seeded'));
-    const staged = stageWorkspace(seeded);
+    const prompt = String(request?.channels?.stdin?.value ?? '');
+    const set = groundTruth.fixtureSets.find((entry) => prompt.includes(`\`{project-root}\`: \`${entry.projectRoot}\``));
+    if (set === undefined) {
+      throw new Error('a trace leg sent a prompt naming no fixture set project root, so there is no set to stage for it');
+    }
+    const staged = stageWorkspace(set);
     return {
       root: staged.dir,
       cwd: staged.dir,
-      artifacts: {
-        'tea-trace-runner': {
-          summary: path.join('project', 'test-artifacts', 'e2e-trace-summary.json'),
-          matrix: path.join('project', 'test-artifacts', 'traceability-matrix.md'),
-        },
-      },
+      artifacts: { 'tea-trace-runner': traceArtifactPaths(set) },
     };
   }
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), `tea-${slug(suiteId)}-preflight-`));
@@ -254,7 +257,7 @@ function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log
         },
       };
       log(`  ${colors.yellow}running${colors.reset} leg ${request.probeId} (${key})`);
-      const { port: realPort, workspace } = await makePort();
+      const { port: realPort, workspace } = await makePort(augmented);
       const startedAt = Date.now();
       let observation;
       try {
@@ -334,8 +337,8 @@ async function runOneSuite(suite, options, stats) {
     port = cacheOnlyPort(cacheDir, [stats, suiteStats]);
   } else {
     port = cachingPort({
-      makePort: async () => {
-        const staged = stagedWorkspaceFor(suite.id);
+      makePort: async (request) => {
+        const staged = stagedWorkspaceFor(suite.id, request);
         const { port: realPort } = await createProbePort({ cwd: staged.cwd, interfaceIds, artifacts: staged.artifacts });
         return { port: realPort, workspace: staged };
       },

@@ -27,7 +27,7 @@ That last one had no TEA equivalent at all. A harness could spawn anything.
 
 **`eval-all.js`'s child spawn stays.** It uses `stdio: 'inherit'` so a forty-minute matrix prints as it goes. A probe captures and returns at the end, which is wrong for an operator watching one.
 
-**The `--version`, `git`, and keychain probes stay.** They interrogate the environment rather than probe a system under test, so the adapter does not cover them. None passed a timeout, so any one could hang CI rather than fail it; all seven now go through `test/lib/bounded-probe.js`, which is a ten-second deadline, a SIGKILL, and a reason the caller can act on.
+**The `--version`, `git`, and keychain probes stay.** They interrogate the environment rather than probe a system under test, so the adapter does not cover them. None passed a timeout, so any one could hang CI rather than fail it; all eight now go through `test/lib/bounded-probe.js`, which is a ten-second deadline, a SIGKILL, and a reason the caller can act on. Eight is four `--version` probes, three `git` reads, and the keychain lookup.
 
 ## The policy is the seam
 
@@ -90,13 +90,19 @@ Every probe names the oracle that catches it, and that is enforced rather than i
 generator reads a probe's `behaviorId` out of the contract and refuses one whose behavior discharges
 more than a single oracle.
 
-What the corpus scores, at `eval-quality` 1.3.0:
+What the corpus scores, read off `test/probes/expected-strength.json` as it stands:
 
 | Contract                               | defect        | gameability           | Not scored, and why                                                                                     |
 | -------------------------------------- | ------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
-| `test-review`                          | 4 of 4 caught | refused               | five plants fire on a witness leg the plan calls clean; the gameability signature reads a written file  |
+| `test-review`                          | 9 of 9 caught | refused               | the gameability signature reads a written file, so AD-9's gate refuses it                               |
 | the eight fragment-selection contracts | none authored | 1 of 1 caught on each | fragment selection seeds no defect; it is a routing measurement with a required set and a forbidden set |
-| `trace`                                | refused       | none authored         | all three plants fire on a witness leg the plan calls clean, and the signature reads a written file     |
+| `trace`                                | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
+
+The two numbers that moved and what moved them: `test-review`'s defect class went from four exercised
+and four caught to nine and nine when `eval-quality` 1.4.0 dropped a clean leg that had issued the
+fault leg's own request, and `trace`'s three plants stopped failing pre-flight when its witness legs
+moved off the seeded set. Both are `seeded-faults-scoped`, and both are below. Every probe in the
+corpus now pre-flights, so what is left unscored is the qualification gate alone.
 
 A clean control never enters the vector, which is AD-7's rule rather than a gap: what it establishes
 is that the contract does not fire where there is nothing to find.
@@ -104,9 +110,10 @@ is that the contract does not fire where there is nothing to find.
 `npm run eval:preflight` and `npm run eval:contract-strength` read their exit code against
 `test/probes/expected-strength.json` rather than against pass and fail directly: 0 when every probe
 reached the outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome moved.
-Eight probes that cannot be pre-flighted would otherwise make both scripts red on every run, and a
-script that is always red stops being read before the day it means something, which is a declaration
-nothing enforces arriving from the other direction.
+Eight probes could not be pre-flighted when that rule was written, and both scripts would have been
+red on every run, which is how a script stops being read before the day it means something. All
+thirty-one pre-flight now, so the baseline is what says a green run is green rather than what excuses
+a red one, and the rule is what catches the first probe to stop.
 
 ### The behavior grouping was a defect, and it is fixed
 
@@ -132,7 +139,9 @@ probe there would have been voted by `O-001` whatever criterion it withheld.
 ### What the probe vocabulary cannot say about a command
 
 Four limits, all measured against the installed package rather than inferred, and all recorded in
-`test/probes/expected-strength.json` so the day one closes is visible.
+`test/probes/expected-strength.json` so the day one closes is visible. Three have closed since they
+were written: two upstream in `eval-quality` 1.4.0 and one here, in the trace contract. Each is kept
+with what closed it, because a limit that vanishes silently teaches nobody why it was there.
 
 **A defect signature cannot address a file a command wrote.** `qualifyProbe` refuses an `artifact`
 pointer outright as `condition-artifact-channel-contract-local`: an artifact identifier is minted per
@@ -141,7 +150,9 @@ contract, so a signature carrying one resolves only against the contract it was 
 output as its descriptor channel. Measured across TEA's three commands: a structured stdout signature
 against `tea-fragment-selection-runner` qualifies, the same shape against `tea-test-review` does not,
 an artifact signature against either is refused, and an `exit-code` signature qualifies against all
-three.
+three. Measured again on `tea-trace-runner` through `runScore`, one channel at a time over the same
+stored evidence: `artifact` is refused as `condition-artifact-channel-contract-local`, `stdout` as
+`condition-pointer-unwritable`, and `exit-code` is admitted.
 
 What is left is the exit code, and whether that is honest depends on the command. For
 `tea-test-review` it discriminates: a review that finds a gating defect exits 1 and one that finds
@@ -153,14 +164,14 @@ since every completed trace run exits 0 whatever it wrote, so its three probes k
 that states the truth about the plant and are refused rather than given one that would qualify and
 mean nothing.
 
-**`seeded-faults-scoped` compares a run against itself.** AD-10 asks whether a seeded fault fires anywhere
-it should not, and `planPreflight` answers it against every leg already registered for the operation,
-which for a TEA contract is its sensitivity witness legs. `test-review`'s differential drives one leg
-at a seeded fixture and `trace`'s drives both at the seeded set, so a plant in a file a witness leg
-reads fires on a leg the plan calls clean. Five of the nine review plants land there, and all three
-trace plants: the live pre-flight reports `D-001: the manifestation witness fires on clean leg
-"witness-gate-evaluated"`. The four review plants in the file no witness leg reads pre-flight cleanly
-and score, and the defect class catches all four.
+**`seeded-faults-scoped` compares a run against itself.** AD-10 asks whether a seeded fault fires
+anywhere it should not, and `planPreflight` answers it against every leg already registered for the
+operation, which for a TEA contract is its sensitivity witness legs. `test-review`'s differential
+drove one leg at a seeded fixture and `trace`'s drove both at the seeded set, so at `eval-quality`
+1.3.0 a plant in a file a witness leg read fired on a leg the plan called clean. Five of the nine
+review plants landed there, and all three trace plants: the live pre-flight reported `D-001: the
+manifestation witness fires on clean leg "witness-gate-evaluated"`. The four review plants in the
+file no witness leg reads pre-flighted cleanly and scored, and the defect class caught all four.
 
 No leg TEA could add repaired it, and the reason was sharper than "a plant sits in a file a witness
 reads". For those five plants the fault leg's request is byte for byte the sensitivity leg's request:
@@ -190,10 +201,41 @@ Measured on the stored replay across the two versions, `test-review`'s five plan
 exercised and four caught to nine and nine, still at a rate of 1. `expected-strength.json` records
 the move.
 
-`trace`'s three plants still fail, and that is the fix working rather than failing. Their witness
-fires on `witness-gate-withheld`, a leg that issues a different request and receives a different
-answer, so the reducer keeps it in the examined set and the check reports a real scoping problem in
-the trace contract. It is a finding about the contract and it is still open.
+`trace`'s three plants failed on that same run, and that was the fix working: their witness fired on
+`witness-gate-withheld`, a leg that issues a different request and receives a different answer, so
+the reducer kept it in the examined set and the check reported a real scoping problem in the trace
+contract. That problem is now closed, and the shape of it is worth keeping.
+
+The witness was right and the leg was not clean. AD-10 reads every other leg of an operation as a
+clean leg. `trace-fixture-set` carries `stateChangeMarker: true`, so `selectControl` plans no control
+leg for it, and the only other legs it had were its two sensitivity witness legs, both staged against
+the seeded set. `D-001` asserts that P0 coverage is 50, which is what the seeded workspace produces
+and what `allow_gate` does not move, so the relation was true on a seeded run with the gate withheld.
+It fired there because the plant was there.
+
+Nothing in the request could say otherwise. The run's real input is the staged workspace, both sets
+were staged at one `project/` root, and `buildPrompt` took a fixture set and read nothing off it, so
+the two sets sent byte-identical prompts and no leg could ask for the set without the plant. Each set
+now declares a `projectRoot` in `test/fixtures/trace-eval/ground-truth.json`,
+`tenant-data-export` and `api-token-lifecycle`, and the whole prompt is written against it:
+`{project-root}`, `{config_source}`, `{test_artifacts}`, `{test_dir}`, `{source_dir}`, the epic
+directory, and both deliverable paths. `stagedWorkspaceFor` stages the set the leg's prompt names,
+the stored-evidence port answers with that set's stored run, and the stub agent resolves
+`{project-root}` off the prompt the way a real agent does.
+
+The contract's two witness legs now trace the clean set, which is the set that establishes what
+"clean leg" means for this operation. P0 coverage there is 100, so `D-001`'s relation resolves false
+on both legs and the check is satisfied on evidence. The `allow_gate` differential is untouched and
+holds on either set: the clean set writes `gate_basis: "priority_thresholds"` when the gate is
+allowed and `"none"` when it is withheld, the same pair the seeded set writes. Measured on the stored
+replay, the three probes move from `preflight: failed: seeded-faults-scoped` to `preflight: passed`,
+and their basis loses the `pre-flight verdict did not pass` line. They are still refused by the
+qualification gate, so their verdict, exit code and strength are unchanged.
+
+The project roots name the epic each set traces and not the set's role. A run that read `clean` in
+the directory it works in would have been handed the answer, which is the rule the corpus already
+follows when it keeps every inline label out of the fixture files, so `validateCorpus` fails a
+project root carrying `seeded`, `clean`, `control`, `planted` or `gap`.
 
 **"This collection is empty" has a spelling, as of 1.4.0.** Through 1.3.0 the evaluator intercepted
 an empty array on every quantifier and every single-operand leaf and returned `insufficient-evidence`
@@ -231,16 +273,25 @@ Three findings, all measured, none of them tuned away.
   before. `test-review` leaves `whole-body`, `malformed-input` and `state-change-read-back`
   unsatisfied; every fragment-selection contract leaves `malformed-input` unsatisfied. Each scores the
   run down to CONCERNS without blocking it, which is exactly the weight AD-20 gives a coverage gap.
-- **`trace`'s clean control scores FAIL, and it is two different things.** Seven of its twenty-six
-  oracles abstain. Five belong to the seeded set and resolve against a record carrying only the clean
-  set's observation, and TEA cannot repair that: both plan steps declare one operation and send the
-  same prompt, because what makes a trace run the seeded set or the clean set is the staged workspace
-  and no request shape names one, so a record carrying both runs is ambiguous under `exactly-one` and
-  a record carrying one leaves the other set's oracles reading nothing. Binding the prompt literally
-  was tried and the generator's comment records why it does not work. The other two assert that a
-  collection is empty, which the vocabulary cannot say at all. Neither half is a case for giving the
-  clean set a member so an oracle has something to read: that would mutate a control to make the
-  instrument work.
+- **`trace`'s clean control scores FAIL, and what remains of it is one thing.** Measured on the
+  stored replay, five of its twenty-six oracles abstain on `P-004`: `O-009`, `O-010`, `O-011`,
+  `O-013` and `O-014`, every one a `for-any` quantifier over the seeded export, and every one named
+  in the artifact's `verdictBasis`. It was seven. `O-023` and `O-024`, the two asserting that a
+  collection is empty, moved to `passed-clean-control` when `eval-quality` 1.4.0 gave that claim a
+  spelling.
+
+  The five abstain because the record carries only the clean set's observation and both plan steps
+  select it. The reason recorded here used to be that no request shape names a fixture set; that is
+  no longer true, since each set is staged under its own project root and the prompt is written
+  against it. What is left is the binding: `stdin.prompt` is bound `{matcher: 'any'}`, so one
+  observation is selected by both steps, which is the same limit as the bullet below. The trace
+  prompt is 1.8 kilobytes rather than fragment selection's 28, so the size argument against a literal
+  does not apply here either. What a literal binding needs beside it is a record carrying both sets'
+  observations, and whether one probe's record may carry the run of a set it did not seed is a
+  question about what a clean control means rather than a mechanical change, so it is not made here.
+  Neither half is a case for giving the clean set a member so an oracle has something to read: that
+  would mutate a control to make the instrument work.
+
 - **A plan cannot tell two steps apart when both bind their inputs by matcher.** Each
   fragment-selection contract declares one plan step per case, distinguished only by the prompt, and
   the prompt is bound `{matcher: 'any'}` because the alternative is a 28-kilobyte literal per step. A
@@ -252,11 +303,12 @@ Three findings, all measured, none of them tuned away.
 
 ### What the live pre-flight measured
 
-The first pre-flight this repository has ever run, on 2026-09-09 against `claude`. Twenty-one legs
-spawned, 55 minutes of model time, and every leg cached under a digest of its request so a second
-invocation pays for nothing it has already answered. The three manifestation witnesses `trace` gained
-at `eval-quality` 1.3.0 cost nothing: their request is the one its `allow_gate: true` witness leg
-already sends, and the cache is keyed on the request.
+The first pre-flight this repository has ever run, on 2026-09-09 against `claude`, at `eval-quality`
+1.3.0. Twenty-one legs spawned, 55 minutes of model time, and every leg cached under a digest of its
+request so a second invocation pays for nothing it has already answered. The three manifestation
+witnesses `trace` gained at 1.3.0 cost nothing on that run: their request was the one its
+`allow_gate: true` witness leg already sent, and the cache is keyed on the request. The table is that
+run and has not been re-measured; what has changed under it since is below.
 
 | Suite                                  | Legs spawned | Model time | Pre-flight                                                                           |
 | -------------------------------------- | -----------: | ---------: | ------------------------------------------------------------------------------------ |
@@ -271,6 +323,15 @@ pair differ by exactly the one fragment its config-gated case turns on. The `tra
 the `false` leg wrote `gate_basis: "none"` and no gate at all, which is what step-05 declares.
 `test-review`'s differential is the file list: the seeded fixture drew five findings and exit 1, the
 clean control drew none and exit 0.
+
+Two things about that table have moved since, both on the stored replay rather than on a repeat of
+the live run. `test-review`'s pre-flight outcome is now nine of nine defect probes rather than four,
+because `eval-quality` 1.4.0 drops a clean leg that issued the fault leg's own request. `trace`'s is
+now all four probes passing, because its witness legs moved to the clean set. That move also costs a
+leg: the three manifestation witnesses trace the seeded set while the two witness legs trace the
+clean set, so their request is no longer one the cache already holds and `trace` spawns three legs
+where it spawned two. The three still share one request between them, so it is one extra spawn and
+not three.
 
 Two things the live run found that no deterministic check could.
 
@@ -296,8 +357,8 @@ prompt the harness assembles for case X", which parses, compiles, and is schedul
 then measures nothing when a real agent is finally handed it. `tools/generate-contracts.js` reads
 `buildPrompt` out of `test/eval-fragment-selection.js` now, the same way the trace witness already
 read its two prompts from its own harness, so a leg sends the prompt the suite sends. The contracts
-grew from around 20 kilobytes to around 90, which is what the trace contract already paid for the
-same correctness.
+grew from around 20 kilobytes to between 59 and 109, which is what the trace contract already paid
+for the same correctness.
 
 `test-review`'s request shape declared an environment permitting three API keys and forbidding `HOME`.
 The adapter closes the child environment to `PATH` plus what the request declares, and
@@ -315,9 +376,9 @@ Two path couplings closed with them. `runReview` states `--project-root` because
 
 Also done: `eval-trace.js`'s `runCase` probes `tea-trace-runner` (`cli/trace-runner.js`), the command the trace suite had no equivalent of. The runner's whole surface is a prompt on standard input and an agent run in the working directory. It builds no prompt and knows no vendor, and it declares `scoped-artifact-writes`, the one capability a trace run needs and a selection does not. The two workflow artifacts are the authorization's artifact map, supplied per run because each case stages its own workspace, and they come back tagged, so a file the run never wrote is `absent` and a missing artifact rather than an `existsSync` race. Both runner commands share one exit-code table in `cli/lib/runner-exit-codes.js`, because a caller holding an observation cannot tell which command produced it. `trace.contract.json` is the tenth contract, generated from `test/fixtures/trace-eval/ground-truth.json` with 26 oracles over the summary artifact, and `npm run test:contract-oracles` evaluates every one of them over the fourteen stored trace runs, under both fixture sets' oracles, and compares each with the `scoreRun` check it restates. The whole chain was verified with a stub vendor: `npm run test:probe-targets` spawns the harness itself, reads its result record back, and sees every threshold met on a correct run, a quality failure on a run that wrote a test, and a missing-artifact failure on a run that wrote nothing.
 
-The trace witness is a differential over standard input on one prompt value, `allow_gate`. The two plan steps share one prompt on purpose, since the harness names no fact about either set in it, so a differential between the two steps would attribute to the prompt a difference the staged workspace produced, and an invariance claim would be false because the two summaries differ. `allow_gate` is the one prompt value the corpus establishes an effect for: step-05 evaluates a gate only when it is true and writes `gate_basis` as `none` otherwise, so two prompts differing in that value in one workspace produce two `gate_basis` values.
+The trace witness is a differential over standard input on one prompt value, `allow_gate`. The differential is on that value rather than between the two fixture sets, because the seeded and clean summaries differ from the staged files rather than from the prompt, so a differential between the sets would attribute to the prompt a difference the prompt did not cause, and an invariance claim would be false because the two summaries differ. `allow_gate` is the one prompt value the corpus establishes an effect for: step-05 evaluates a gate only when it is true and writes `gate_basis` as `none` otherwise, so two prompts differing in that value over one staged set produce two `gate_basis` values. Both witness legs stage the clean set, which is what makes them clean legs for `seeded-faults-scoped`.
 
-Two more couplings, both found by running it. A relative `--agent-cmd` passed the harness pre-flight, which probes it from the harness's own directory, and then failed every run, because the runner executes in the staged workspace and a relative path resolves there; `parseArgs` resolves a path against the operator's directory now. And the trace witness legs are runnable only against a staged workspace of the seeded set, because the run's real input is the working directory, which the request shape cannot name; that is the same coupling `test-review`'s legs have with `--project-root`.
+Two more couplings, both found by running it. A relative `--agent-cmd` passed the harness pre-flight, which probes it from the harness's own directory, and then failed every run, because the runner executes in the staged workspace and a relative path resolves there; `parseArgs` resolves a path against the operator's directory now. And the trace witness legs are runnable only against a staged workspace, because the run's real input is the working directory; that is the same coupling `test-review`'s legs have with `--project-root`. Which set that workspace holds is in the request now: each fixture set declares its own `projectRoot`, the prompt is written against it, and `stagedWorkspaceFor` stages the set the leg names. Staging one set for every leg is what made the two witness legs seeded runs, which is the scoping failure `seeded-faults-scoped` reported against all three defect probes.
 
 One coupling worth naming, and it did not change with the scoring half: two of the entry points TEA
 reaches are addressed by file path into `dist/`, because neither the compiler CLI nor the evaluator is

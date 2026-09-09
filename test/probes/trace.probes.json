@@ -7,9 +7,9 @@
     "probeClass": "defect",
     "behaviorId": "B-001",
     "systemId": "tea-trace-seeded-tenant-data-export",
-    "implementationDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
-    "artifactDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
-    "commitDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
+    "implementationDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
+    "artifactDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
+    "commitDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
     "rationale": "AC-2 is P0 and its true coverage is NONE: Export is denied to a member without the admin role. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
     "qualification": {
       "route": "controlled-mutation",
@@ -19,20 +19,20 @@
         "storage": "public",
         "path": "test/fixtures/trace-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366"
+        "digest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9"
       },
       "expectedObservableFailure": "The traceability matrix classifies AC-2 as NONE and the summary counts it in the gap buckets.",
       "baselinePassEvidence": {
         "storage": "public",
         "path": "test/replay/trace/clean-correct-run/test-artifacts/e2e-trace-summary.json",
         "privateRef": null,
-        "digest": "sha256:794c923eb3006bb8cd64a67f3436e824016afbe809fd3d74e409d983afd7adb6"
+        "digest": "sha256:66a11c3d4f9352d21045ee3f8b58eaf5415c3bbc17266a5d6cb248b986cd4943"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/trace/seeded-correct-run/test-artifacts/e2e-trace-summary.json",
         "privateRef": null,
-        "digest": "sha256:8d3c5d66952ece1356ade4e4f22ffe9c0bc179a3041bb73c39b56530c2577eba"
+        "digest": "sha256:d669327d25e22b64aab1c565561ae04bc1e7aff827b0ee8c63930ecc4056260d"
       },
       "rollbackVerified": true
     },
@@ -48,7 +48,7 @@
             "storage": "public",
             "path": "test/fixtures/trace-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366"
+            "digest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9"
           }
         ],
         "source": "controlled-mutation",
@@ -64,7 +64,7 @@
             "environment": {},
             "stdin": {
               "kind": "text",
-              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `project`\n- `{config_source}`: `project/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `project/test-artifacts`\n- `{test_dir}`: `project/tests`\n- `{source_dir}`: `project/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
+              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `tenant-data-export/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `tenant-data-export`\n- `{config_source}`: `tenant-data-export/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `tenant-data-export/test-artifacts`\n- `{test_dir}`: `tenant-data-export/tests`\n- `{source_dir}`: `tenant-data-export/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `tenant-data-export/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `tenant-data-export/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `tenant-data-export/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `tenant-data-export/docs/`, `tenant-data-export/src/`, or `tenant-data-export/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
             }
           },
           "relation": {
@@ -127,9 +127,9 @@
     "probeClass": "defect",
     "behaviorId": "B-001",
     "systemId": "tea-trace-seeded-tenant-data-export",
-    "implementationDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
-    "artifactDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
-    "commitDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
+    "implementationDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
+    "artifactDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
+    "commitDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
     "rationale": "AC-8 is P2 and its true coverage is PARTIAL: The audit log records the actor and the time of every export request. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
     "qualification": {
       "route": "controlled-mutation",
@@ -139,20 +139,20 @@
         "storage": "public",
         "path": "test/fixtures/trace-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366"
+        "digest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9"
       },
       "expectedObservableFailure": "The traceability matrix classifies AC-8 as PARTIAL and the summary counts it in the partial coverage items.",
       "baselinePassEvidence": {
         "storage": "public",
         "path": "test/replay/trace/clean-correct-run/test-artifacts/e2e-trace-summary.json",
         "privateRef": null,
-        "digest": "sha256:794c923eb3006bb8cd64a67f3436e824016afbe809fd3d74e409d983afd7adb6"
+        "digest": "sha256:66a11c3d4f9352d21045ee3f8b58eaf5415c3bbc17266a5d6cb248b986cd4943"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/trace/seeded-correct-run/test-artifacts/e2e-trace-summary.json",
         "privateRef": null,
-        "digest": "sha256:8d3c5d66952ece1356ade4e4f22ffe9c0bc179a3041bb73c39b56530c2577eba"
+        "digest": "sha256:d669327d25e22b64aab1c565561ae04bc1e7aff827b0ee8c63930ecc4056260d"
       },
       "rollbackVerified": true
     },
@@ -168,7 +168,7 @@
             "storage": "public",
             "path": "test/fixtures/trace-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366"
+            "digest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9"
           }
         ],
         "source": "controlled-mutation",
@@ -184,7 +184,7 @@
             "environment": {},
             "stdin": {
               "kind": "text",
-              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `project`\n- `{config_source}`: `project/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `project/test-artifacts`\n- `{test_dir}`: `project/tests`\n- `{source_dir}`: `project/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
+              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `tenant-data-export/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `tenant-data-export`\n- `{config_source}`: `tenant-data-export/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `tenant-data-export/test-artifacts`\n- `{test_dir}`: `tenant-data-export/tests`\n- `{source_dir}`: `tenant-data-export/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `tenant-data-export/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `tenant-data-export/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `tenant-data-export/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `tenant-data-export/docs/`, `tenant-data-export/src/`, or `tenant-data-export/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
             }
           },
           "relation": {
@@ -247,9 +247,9 @@
     "probeClass": "defect",
     "behaviorId": "B-001",
     "systemId": "tea-trace-seeded-tenant-data-export",
-    "implementationDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
-    "artifactDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
-    "commitDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
+    "implementationDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
+    "artifactDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
+    "commitDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
     "rationale": "AC-10 is P3 and its true coverage is NONE: The archive filename carries the tenant slug and the request date. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
     "qualification": {
       "route": "controlled-mutation",
@@ -259,20 +259,20 @@
         "storage": "public",
         "path": "test/fixtures/trace-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366"
+        "digest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9"
       },
       "expectedObservableFailure": "The traceability matrix classifies AC-10 as NONE and the summary counts it in the gap buckets.",
       "baselinePassEvidence": {
         "storage": "public",
         "path": "test/replay/trace/clean-correct-run/test-artifacts/e2e-trace-summary.json",
         "privateRef": null,
-        "digest": "sha256:794c923eb3006bb8cd64a67f3436e824016afbe809fd3d74e409d983afd7adb6"
+        "digest": "sha256:66a11c3d4f9352d21045ee3f8b58eaf5415c3bbc17266a5d6cb248b986cd4943"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/trace/seeded-correct-run/test-artifacts/e2e-trace-summary.json",
         "privateRef": null,
-        "digest": "sha256:8d3c5d66952ece1356ade4e4f22ffe9c0bc179a3041bb73c39b56530c2577eba"
+        "digest": "sha256:d669327d25e22b64aab1c565561ae04bc1e7aff827b0ee8c63930ecc4056260d"
       },
       "rollbackVerified": true
     },
@@ -288,7 +288,7 @@
             "storage": "public",
             "path": "test/fixtures/trace-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366"
+            "digest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9"
           }
         ],
         "source": "controlled-mutation",
@@ -304,7 +304,7 @@
             "environment": {},
             "stdin": {
               "kind": "text",
-              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `project/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `project`\n- `{config_source}`: `project/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `project/test-artifacts`\n- `{test_dir}`: `project/tests`\n- `{source_dir}`: `project/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `project/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `project/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `project/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `project/docs/`, `project/src/`, or `project/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
+              "value": "You are running the TEA workflow `bmad-testarch-trace` against the project in `tenant-data-export/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `tenant-data-export`\n- `{config_source}`: `tenant-data-export/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `tenant-data-export/test-artifacts`\n- `{test_dir}`: `tenant-data-export/tests`\n- `{source_dir}`: `tenant-data-export/src`\n- `{skill-root}`: `skill`\n- `gate_type`: `epic`\n- `decision_mode`: `deterministic`\n- `collection_mode`: `contract_static`\n- `allow_gate`: `true`\n- `coverage_basis`: `auto`\n- `summary_confidence`: `auto`\n- `coverage_levels`: `e2e,api,component,unit,live`\n\nThe trace target is the epic under `tenant-data-export/docs/epics/`. Resolve the coverage oracle from it the\nway step-01 says to.\n\n----- what to produce -----\nWrite both deliverables the workflow declares:\n\n- `tenant-data-export/test-artifacts/traceability-matrix.md`, from `skill/trace-template.md`, carrying the\n  detailed mapping with one section per criterion, each stating its coverage status and the tests\n  that establish it as `file:line`.\n- `tenant-data-export/test-artifacts/e2e-trace-summary.json` at schema_version 0.3.0, exactly as\n  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.\n\nDo not add, edit, or delete any file under `tenant-data-export/docs/`, `tenant-data-export/src/`, or `tenant-data-export/tests/`.\nThis workflow does not generate tests.\n\nWhen you are done, print one line naming the two files you wrote. Nothing else you print is read."
             }
           },
           "relation": {
@@ -367,9 +367,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-016",
     "systemId": "tea-trace-clean-api-token-lifecycle",
-    "implementationDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
-    "artifactDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
-    "commitDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
+    "implementationDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
+    "artifactDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
+    "commitDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
     "rationale": "clean-api-token-lifecycle has adequate evidence for all 5 of its criteria, so any gap the run reports is a false positive. It is the control that stops a trace suite scoring well by calling everything a gap.",
     "qualification": {
       "route": "clean-control",
@@ -377,9 +377,9 @@
         "storage": "public",
         "path": "test/replay/trace/clean-correct-run/test-artifacts/e2e-trace-summary.json",
         "privateRef": null,
-        "digest": "sha256:794c923eb3006bb8cd64a67f3436e824016afbe809fd3d74e409d983afd7adb6"
+        "digest": "sha256:66a11c3d4f9352d21045ee3f8b58eaf5415c3bbc17266a5d6cb248b986cd4943"
       },
-      "revisionCommitDigest": "sha256:54b75c1a59ab71def9408f0d2baf973dd85e37256f22008b6906f828b4938366",
+      "revisionCommitDigest": "sha256:b4c8e549d126083436d73f920ab166191883b4f7af37fba0f444a5abee8e09c9",
       "noKnownDefectStatement": "Negative control. Every criterion has adequate evidence, so any reported gap is a false positive and the harness counts it as one."
     },
     "expectedClean": true,

@@ -26,10 +26,10 @@
  *
  * WHAT DOES NOT SCORE, AND WHY IT IS STILL HERE
  *
- * Two of the nine kinds of probe TEA can honestly author are refused by
- * `eval-quality` 1.2.0, and both refusals are recorded in
- * `test/probes/expected-strength.json` rather than avoided by writing a weaker
- * probe:
+ * One kind of probe TEA can honestly author is refused by `eval-quality`, and the
+ * refusal is recorded in `test/probes/expected-strength.json` rather than avoided
+ * by writing a weaker probe. A second was, and is recorded here with what closed
+ * it:
  *
  * - A defect signature cannot address a file the command wrote. An `artifact`
  *   pointer is refused as `condition-artifact-channel-contract-local`, because an
@@ -48,9 +48,12 @@
  * - `seeded-faults-scoped` treats every leg already registered for an operation
  *   as a clean leg, and the only legs a TEA contract registers are its sensitivity
  *   witness legs. `test-review`'s differential drives one leg at a seeded fixture
- *   and `trace`'s drives both at the seeded set, so a plant in a file a witness leg
- *   reviews fires on a leg AD-10 calls clean. Five of the nine review plants and
- *   all three trace plants land there.
+ *   and `trace`'s drove both at the seeded set, so a plant in a file a witness leg
+ *   reviews fired on a leg AD-10 calls clean: five of the nine review plants and
+ *   all three trace plants. Both halves are closed. `eval-quality` 1.4.0 drops a
+ *   clean leg that issued the fault leg's own request and received its answer,
+ *   which cleared the five review plants, and `trace`'s witness legs now stage the
+ *   clean set, which cleared its three. Every probe in the corpus pre-flights.
  *
  * Usage: node tools/generate-probes.js [--check]
  * Exit codes: 0 = written or up to date, 1 = a corpus is stale, 2 = the generator could not run
