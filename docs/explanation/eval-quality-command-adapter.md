@@ -58,6 +58,120 @@ One runner covers eight skills because the eight contracts declare one interface
 - **A negated flag is its own key.** A `false` value is omitted entirely, so commander's `--no-isolate` must be spelled `{'no-isolate': true}`.
 - **Every entry point is asynchronous.** `eval-quality` is ESM and this repository is CommonJS. The harnesses were synchronous from `main()` down, so converting one touched every scoring loop in it. That was the real cost of the rewiring, and it is paid for all three: `main` is `async`, each run is awaited, and a rejected promise exits 2 with the reason printed rather than ending the process with no failure class and no record.
 
+## How much of eval-quality TEA actually uses
+
+The package has three stages: compile a contract, probe an environment, then score what came back.
+TEA used the first two and none of the third. It uses all three now, and this section is the
+inventory, kept honest by being a list of what is still unused rather than a list of what is.
+
+| Published surface                                                                                          | TEA's use                                                                                                                                                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `compile`, through the `eval-quality` binary                                                               | `npm run test:contracts` compiles all ten contracts against `test/contracts/expected-status.json`                                                                                                                                                                         |
+| `createCommandLineAdapter`, `nodeCommandMechanism`, `CommandTargetPolicy`                                  | `test/lib/probe-targets.js` maps three logical executables to three real commands                                                                                                                                                                                         |
+| `runPreflight`                                                                                             | `npm run eval:preflight` drives every contract's witness legs through the adapter for real                                                                                                                                                                                |
+| `runScore`                                                                                                 | `npm run test:probe-corpus` scores 31 probes across ten corpora; `npm run eval:contract-strength` scores them under a live pre-flight verdict                                                                                                                             |
+| `seal`                                                                                                     | one sealed evaluator brief per contract, written by the same script                                                                                                                                                                                                       |
+| `digestArtifact`                                                                                           | every artifact digest the run record and the isolation manifest declare                                                                                                                                                                                                   |
+| the published JSON Schemas                                                                                 | `test/lib/eval-quality-inputs.js` validates every artifact TEA builds or receives against `eval-quality/schemas/*`                                                                                                                                                        |
+| `preflightFromObservations`                                                                                | unused, and it cannot be used: a caller has to key its observations by leg identifier, and the leg identifiers are minted by the plan `runPreflight` builds. TEA holds a port for both halves, so the port entry point answers the same question with no ordering problem |
+| `validateLineageChain`, `INTERCHANGE_ARTIFACT_KEYS`, `serializeArtifact`, `digestBytes`, `digestComposite` | unused. Every TEA artifact is `revisionCount: 0` with a null parent, so there is no chain to validate, and the digest helpers TEA needs are the artifact one and its own file digest                                                                                      |
+| `eval-quality/conformance`                                                                                 | `npm run test:probe-conformance` runs the published command-line arm against a fixture command                                                                                                                                                                            |
+
+### What the corpus is
+
+`tools/generate-probes.js` writes 31 probes from the ground truth this repository already keeps.
+Nine defect probes for `test-review`, one per planted registry row, each a controlled mutation whose
+target artifact, baseline-pass evidence and mutated-fail evidence are files on disk. Three for
+`trace`, one per criterion the seeded set deliberately leaves short. A clean control for every
+contract, and a gameability probe for each of the eight fragment-selection contracts and for
+`test-review`. `test/probes/README.md` carries the whole record.
+
+Every probe names the oracle that catches it, and that is enforced rather than intended: the
+generator reads a probe's `behaviorId` out of the contract and refuses one whose behavior discharges
+more than a single oracle.
+
+### The behavior grouping was a defect, and it is fixed
+
+`eval-quality`'s `designatedOracleIdOf` resolves AD-40's designated oracle only for a behavior
+declaring exactly one oracle, and `score` votes a trial with `designatedState ?? firstInvalidatingState ?? firstState`.
+A behavior grouping four plant oracles resolves none, so every probe in the corpus would have voted
+whatever state the contract's first oracle happened to reach, and the defect catch rate would have
+been zero by construction whatever the reviewer did.
+
+`test-review.contract.json` grouped its nine plant oracles into three behaviors by severity, and each
+fragment-selection contract grouped its two oracles per case into one behavior. Both are one behavior
+per oracle now. The demand is unchanged: the same oracles, all required, at the same severities, with
+all ten contracts still compiling and all 611 oracle checks still agreeing with their scorers. Only
+the grouping moved.
+
+`trace.contract.json` still groups, up to nine oracles under one behavior, and its probes are a clean
+control and three defect probes whose signature the vocabulary refuses for the reason below. Nothing
+there votes through a designated oracle yet, and the day a trace probe needs to, the same split is
+what it needs.
+
+### What the probe vocabulary cannot say about a command
+
+Two limits, both measured against the installed package rather than inferred, and both recorded in
+`test/probes/expected-strength.json` so the day either closes is visible.
+
+**A defect signature cannot address a file a command wrote.** `qualifyProbe` refuses an `artifact`
+pointer outright as `condition-artifact-channel-contract-local`: an artifact identifier is minted per
+contract, so a signature carrying one resolves only against the contract it was authored on. A
+`stdout` pointer is refused as `condition-pointer-unwritable` unless the operation declares standard
+output as its descriptor channel. Measured across TEA's three commands: a structured stdout signature
+against `tea-fragment-selection-runner` qualifies, the same shape against `tea-test-review` does not,
+an artifact signature against either is refused, and an `exit-code` signature qualifies against all
+three. So the eight fragment-selection contracts carry a signature that discriminates a real
+degenerate reply, and the two contracts whose deliverable is a file carry one that says what is true
+about the plant and is refused. Writing an `exit-code` signature for those instead would qualify and
+discriminate nothing, which is the catch rate of 1.00 by construction that AD-40 exists to prevent.
+
+**A rejected probe carries no reason across the boundary.** The qualification gate computes a closed
+list of twenty reason codes and none of them reaches the evidence artifact or any published export.
+A probe the gate rejects surfaces as `infrastructure-error` on every oracle and exit 3, and a corpus
+author reading that has nothing to act on. Reading the reasons needs `qualifyProbe`, which is not on
+the exports map, and that would be the third reach into `dist/` this document already records two of.
+TEA does not take it.
+
+### What the scoring half says about TEA's contracts
+
+Three findings, all measured, none of them tuned away.
+
+- **`test-review` and every fragment-selection contract leave AD-20 coverage rules unsatisfied.**
+  `runScore` computes them from the contract itself and nothing in this repository had read them
+  before. `test-review` leaves `whole-body`, `malformed-input` and `state-change-read-back`
+  unsatisfied; every fragment-selection contract leaves `malformed-input` unsatisfied. Each scores the
+  run down to CONCERNS without blocking it, which is exactly the weight AD-20 gives a coverage gap.
+- **`trace`'s clean control scores FAIL.** Seven of its twenty-six oracles quantify over collections
+  the clean set leaves empty, so each resolves `insufficient-evidence` with an `empty-collection`
+  introduction condition and lands on `abstained`, which is a behavioural failure at or above the
+  policy's severity floor. `test/contracts/README.md` already recorded that the contract abstains
+  where the harness reads a measured miss; this is the first time the consequence has been scored.
+- **A plan cannot tell two steps apart when both bind their inputs by matcher.** Each
+  fragment-selection contract declares one plan step per case, distinguished only by the prompt, and
+  the prompt is bound `{matcher: 'any'}` because the alternative is a 28-kilobyte literal per step. A
+  record carrying one observation is therefore selected by every step, and the oracles of the other
+  cases resolve against evidence that is not theirs. The designated oracle still votes correctly, so
+  the strength vector is unaffected, and the surrounding outcome rows are noise. This is the limit
+  `test/contracts/README.md` records as "a plan cannot declare that two steps must receive different
+  inputs", with its consequence now measured.
+
+### The witness legs were not runnable, and now they are
+
+Eight fragment-selection contracts declared a witness leg whose standard input was the sentence "The
+prompt the harness assembles for case X", which parses, compiles, and is scheduled by pre-flight, and
+then measures nothing when a real agent is finally handed it. `tools/generate-contracts.js` reads
+`buildPrompt` out of `test/eval-fragment-selection.js` now, the same way the trace witness already
+read its two prompts from its own harness, so a leg sends the prompt the suite sends. The contracts
+grew from around 20 kilobytes to around 90, which is what the trace contract already paid for the
+same correctness.
+
+`test-review`'s request shape declared an environment permitting three API keys and forbidding `HOME`.
+The adapter closes the child environment to `PATH` plus what the request declares, and
+`cli/test-review.js` resolves a stored login through `HOME`, so a machine with a keychain login could
+not run that contract's own pre-flight. The shape is read from `vendorEnvironmentNames()` now, the
+same source the other two commands use.
+
 ## Done, and owed
 
 Done, and covered by `npm test`: the registry, policy, port, and fault-to-failure-class mapping in `test/lib/probe-targets.js`; the runner, whose request shape and default agent `tools/generate-contracts.js` reads rather than transcribes; and `npm run test:probe-targets`, which drives all three real commands through the real adapter against checked-in fixtures with a stub vendor. It asserts default-deny, the observation shape, artifact read-back, an absent artifact, a real budget kill classified as a timeout, and contract-to-registry agreement both ways, with no model call and no credential.
@@ -72,26 +186,13 @@ The trace witness is a differential over standard input on one prompt value, `al
 
 Two more couplings, both found by running it. A relative `--agent-cmd` passed the harness pre-flight, which probes it from the harness's own directory, and then failed every run, because the runner executes in the staged workspace and a relative path resolves there; `parseArgs` resolves a path against the operator's directory now. And the trace witness legs are runnable only against a staged workspace of the seeded set, because the run's real input is the working directory, which the request shape cannot name; that is the same coupling `test-review`'s legs have with `--project-root`.
 
-## How much of `eval-quality` TEA actually uses
-
-The package has three stages: compile a contract, probe an environment, then score what came back. TEA uses the first two completely and none of the third, and the reason is a chain rather than a choice.
-
-Used:
-
-- **`compile`**, through `dist/cli/main.js`, on all ten contracts every `npm test`. `test/contracts/expected-status.json` pins each one's status and a move in either direction fails.
-- **`createCommandLineAdapter`, `nodeCommandMechanism`, and `evaluateCommandTarget`** from `eval-quality/adapters`, behind `test/lib/probe-targets.js`. Every measured TEA command runs through them.
-- **The expression evaluator**, reached by file path under `dist/core/evaluate/`, in `npm run test:contract-oracles`. It resolves every oracle in every contract over stored outputs and compares each with the harness check it restates.
-
-Not used, with the reason:
-
-- **`runPreflight` and `preflightFromObservations`.** `runPreflight` plans a contract's sensitivity witness legs and sends each one through the probe port, at two live model calls per contract, ten contracts deep. `preflightFromObservations` reduces observations the caller already holds and sends nothing itself. Nothing here has spent a call through either.
-- **`runScore` and `seal`.** `runScore` takes a `PreflightVerdict` and a `Probe` among its inputs. The verdict is an artifact the caller supplies, from either pre-flight entry point, so what gates this here is that TEA has produced no verdict at all. The `Probe` is a corpus of seeded defects carrying qualification records, which is `eval-quality`'s own outstanding held-out-probe-corpus item. Contract-strength scoring is the package's headline claim and TEA cannot make it yet; saying so is more useful than a partial number.
-- **`digestArtifact`, `digestComposite`, `serializeArtifact`.** TEA digests through `test/lib/eval-record.js`, which has its own length-prefixed composition and its own callers. Two digest schemes over the same repository would be worse than one that is not the package's.
-- **`validateLineageChain`** has no artifact here to validate a chain over.
-- **`eval-quality/conformance`** defines the port an adapter author implements. TEA consumes a shipped adapter rather than writing one, so the conformance suite is not TEA's to run.
-
-One coupling worth naming: two of the three used entry points are reached by file path into `dist/`, because neither the compiler CLI nor the evaluator is on the package's `exports` map. The devDependency is pinned exactly, so an upgrade is a deliberate edit here rather than something that arrives on its own. The reach still breaks on the upgrade that moves those files, and nothing declares it.
+One coupling worth naming, and it did not change with the scoring half: two of the entry points TEA
+reaches are addressed by file path into `dist/`, because neither the compiler CLI nor the evaluator is
+on the package's `exports` map. The devDependency is pinned exactly, so an upgrade is a deliberate
+edit here rather than something that arrives on its own. The reach still breaks on the upgrade that
+moves those files, and nothing declares it. A third reach was needed to read a rejected probe's
+qualification reasons and was not taken; that is recorded above under what the vocabulary cannot say.
 
 Owed:
 
-- **No pre-flight has run.** `runPreflight` drives each contract's sensitivity witness through this port at two live model calls per contract. Nothing here has spent one, and it is the gate on everything in the scoring half above.
+- **A live sealed run record.** The scoring half is driven live for the pre-flight and replayed for the record, because a live record is a complete harness run per probe and that cost belongs to `npm run eval:all`. The evaluator configuration on every artifact says `stored-replay` so the two cannot be confused.

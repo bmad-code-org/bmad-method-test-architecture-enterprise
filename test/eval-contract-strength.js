@@ -1,0 +1,447 @@
+/**
+ * The live half of the scoring chain: a real pre-flight, then a real score and
+ * seal under it.
+ *
+ * `npm run test:probe-corpus` runs the same chain against stored evidence with no
+ * model call. This runs `runPreflight` through `eval-quality`'s command-line
+ * adapter against the commands TEA ships, so the pre-flight verdict is measured
+ * rather than constructed, and then scores every probe under that verdict and
+ * seals each contract.
+ *
+ * WHAT IS LIVE AND WHAT IS NOT
+ *
+ * The pre-flight is live: every leg is a real agent run through a real process.
+ * The sealed run record each probe is scored against is the stored output
+ * `test/replay/` keeps, because a live record needs a complete harness run per
+ * probe and `npm run eval:all` is where that cost belongs. So a verdict here is a
+ * real answer to "can this environment measure anything" composed with a replayed
+ * answer to "did the contract catch it". The evaluator configuration on every
+ * artifact says `stored-replay`, and the cost report says what the pre-flight
+ * actually spent.
+ *
+ * RESUMABLE, AND WHY IT HAS TO BE
+ *
+ * Twenty legs at up to fifteen minutes each is a long run against a quota that
+ * can end it at any point. Every observation is cached to disk under a digest of
+ * the request that produced it, so a rate limit costs one leg and not the set,
+ * and a second invocation pays only for what is missing. The cache is keyed on
+ * the request rather than on the leg, which also collapses the legs that are the
+ * same request: AD-10 mints two control-observe legs from the first witness leg's
+ * inputs, and a manifestation witness against the same file list as a witness leg
+ * is the same run again.
+ *
+ * THE WORKSPACE
+ *
+ * Each suite runs in its own staged directory, never in the repository. A
+ * test-review leg names its fixtures by repository-relative path and writes
+ * `verdict.json` beside them, and the policy's `cwd` is what both resolve
+ * against, so the fixtures are copied into the run directory and the artifact
+ * lands there. A trace leg needs the seeded set staged, which is what
+ * test/eval-trace.js already does for its own runs. A selection needs nothing on
+ * disk at all.
+ *
+ * Usage:
+ *   npm run eval:preflight                     # the live pre-flight, cached, nothing scored
+ *   npm run eval:contract-strength             # pre-flight, then score and seal
+ *   node test/eval-contract-strength.js --suite trace --agent codex
+ *   node test/eval-contract-strength.js --from-cache      # score with no new model call
+ *
+ * Exit codes: 0 every suite scored, 1 a suite scored a measured failure, 2 the
+ * environment could not measure.
+ */
+
+'use strict';
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+
+const { digest } = require('./lib/eval-record');
+const { validateArtifact } = require('./lib/eval-quality-inputs');
+const { createProbePort, hostEnvironment } = require('./lib/probe-targets');
+const { runSuite, sealContract, suites } = require('./lib/probe-scoring');
+const { stageWorkspace } = require('./eval-trace');
+
+const PROJECT_ROOT = path.join(__dirname, '..');
+const REVIEW_FIXTURE_DIR = path.join('test', 'fixtures', 'test-review-eval');
+const REVIEW_SKILL_DIR = path.join('src', 'workflows', 'testarch', 'bmad-testarch-test-review');
+const DEFAULT_OUT = path.join(PROJECT_ROOT, 'test', 'eval-artifacts', 'contract-strength');
+const DEFAULT_CACHE = path.join(PROJECT_ROOT, 'test', 'eval-artifacts', 'preflight-cache');
+const TRACE_GROUND_TRUTH = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json');
+
+const colors = {
+  reset: '[0m',
+  red: '[31m',
+  green: '[32m',
+  yellow: '[33m',
+  dim: '[2m',
+};
+
+function parseArgs(argv) {
+  const options = {
+    agent: 'claude',
+    suiteIds: [],
+    preflightOnly: false,
+    fromCache: false,
+    force: false,
+    out: DEFAULT_OUT,
+    cache: DEFAULT_CACHE,
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    const next = () => {
+      const value = argv[index + 1];
+      if (value === undefined) throw new Error(`${argument} needs a value`);
+      index += 1;
+      return value;
+    };
+    switch (argument) {
+      case '--agent': {
+        options.agent = next();
+        break;
+      }
+      case '--suite': {
+        options.suiteIds.push(next());
+        break;
+      }
+      case '--out': {
+        options.out = path.resolve(next());
+        break;
+      }
+      case '--cache': {
+        options.cache = path.resolve(next());
+        break;
+      }
+      case '--preflight-only': {
+        options.preflightOnly = true;
+        break;
+      }
+      case '--from-cache': {
+        options.fromCache = true;
+        break;
+      }
+      case '--force': {
+        options.force = true;
+        break;
+      }
+      default: {
+        throw new Error(`unknown option ${argument}`);
+      }
+    }
+  }
+  return options;
+}
+
+/**
+ * One directory copied into another.
+ *
+ * Hand-written rather than `fs.cpSync`, which is still experimental below Node
+ * 22.3.0 and this package declares `>=22.0.0`.
+ */
+function copyTree(from, to) {
+  fs.mkdirSync(to, { recursive: true });
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    const source = path.join(from, entry.name);
+    const target = path.join(to, entry.name);
+    if (entry.isDirectory()) copyTree(source, target);
+    else fs.copyFileSync(source, target);
+  }
+}
+
+/** A directory name a cache path can carry, from a suite identifier that may hold a slash. */
+const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
+
+/**
+ * The run directory one suite's legs execute in, and the artifact paths that
+ * directory makes true.
+ *
+ * A trace leg is staged by the trace harness itself, so the seeded set arrives
+ * exactly as `npm run eval:trace` stages it, under the same `project/` prefix its
+ * artifact override names.
+ *
+ * A test-review leg is the coupling `docs/explanation/eval-quality-command-adapter.md`
+ * records: its `--files` are repository-relative, its `--json` is a bare
+ * `verdict.json`, and both resolve against the policy's `cwd`, which is also
+ * where the artifact map reads the verdict back. So the run directory is given
+ * the fixture tree at the path `--files` names and the skill at a path
+ * `resolveSkill` probes, and everything the leg declares is then true of it. The
+ * skill is `src/workflows/testarch/...`, which is the fourth candidate
+ * `cli/lib/resolve-skill.js` looks in and the one a checkout of this repository
+ * satisfies.
+ *
+ * A selection leg gets an empty directory, which is what its `read-only`
+ * declaration is for.
+ */
+function stagedWorkspaceFor(suiteId) {
+  if (suiteId === 'trace') {
+    const groundTruth = JSON.parse(fs.readFileSync(TRACE_GROUND_TRUTH, 'utf8'));
+    const seeded = groundTruth.fixtureSets.find((set) => set.id.startsWith('seeded'));
+    const staged = stageWorkspace(seeded);
+    return {
+      cwd: staged.dir,
+      artifacts: {
+        'tea-trace-runner': {
+          summary: path.join('project', 'test-artifacts', 'e2e-trace-summary.json'),
+          matrix: path.join('project', 'test-artifacts', 'traceability-matrix.md'),
+        },
+      },
+    };
+  }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `tea-${slug(suiteId)}-preflight-`));
+  if (suiteId === 'test-review') {
+    copyTree(path.join(PROJECT_ROOT, REVIEW_FIXTURE_DIR), path.join(dir, REVIEW_FIXTURE_DIR));
+    copyTree(path.join(PROJECT_ROOT, REVIEW_SKILL_DIR), path.join(dir, REVIEW_SKILL_DIR));
+  }
+  return { cwd: dir, artifacts: {} };
+}
+
+/** The environment names this operation declares it accepts, intersected with what this machine has. */
+function permittedEnvironment(contract, operationId) {
+  const operation = contract.permittedInterfaces.flatMap((iface) => iface.operations).find((entry) => entry.operationId === operationId);
+  const permitted = new Set(operation?.requestShape?.environment?.permittedKeys ?? []);
+  return Object.fromEntries(Object.entries(hostEnvironment()).filter(([name]) => permitted.has(name)));
+}
+
+/** The cache key for one probe request: everything about it except which leg asked. */
+function requestKey(request) {
+  const { probeId, ...rest } = request;
+  return digest([JSON.stringify(rest)])
+    .replace('sha256:', '')
+    .slice(0, 32);
+}
+
+/**
+ * The live port, with every observation cached to disk under its request.
+ *
+ * The cache is the resumability. A leg whose request was answered before is
+ * returned from disk with this leg's own correlation identifiers written back
+ * on, because the reducer indexes observations by `probeId` and the cached one
+ * carries whichever leg happened to run first.
+ */
+function cachingPort({ realPort, contract, cacheDir, agent, force, counters, log }) {
+  fs.mkdirSync(cacheDir, { recursive: true });
+  return {
+    async probe(request, signal) {
+      const key = requestKey(request);
+      const file = path.join(cacheDir, `${key}.json`);
+      if (!force && fs.existsSync(file)) {
+        for (const counter of counters) counter.hits += 1;
+        log(`  ${colors.dim}cached${colors.reset} leg ${request.probeId} (${key})`);
+        const cached = JSON.parse(fs.readFileSync(file, 'utf8'));
+        return { ...cached.observation, probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
+      }
+      const augmented = {
+        ...request,
+        channels: {
+          ...request.channels,
+          option: { ...request.channels.option, agent },
+          environment: { ...permittedEnvironment(contract, request.operationId), ...request.channels.environment },
+        },
+      };
+      log(`  ${colors.yellow}running${colors.reset} leg ${request.probeId} (${key})`);
+      const startedAt = Date.now();
+      const observation = await realPort.probe(augmented, signal);
+      const elapsedMs = Date.now() - startedAt;
+      const leg = { key, legId: request.probeId, operationId: request.operationId, elapsedMs, exitCode: observation.exitCode };
+      for (const counter of counters) {
+        counter.spawns += 1;
+        counter.elapsedMs += elapsedMs;
+        counter.legs.push(leg);
+      }
+      fs.writeFileSync(
+        file,
+        `${JSON.stringify({ key, agent, at: new Date().toISOString(), elapsedMs, request: { ...augmented, channels: { ...augmented.channels, environment: Object.keys(augmented.channels.environment) } }, observation }, null, 2)}\n`,
+        'utf8',
+      );
+      log(
+        `  ${colors.dim}wrote${colors.reset} ${path.relative(PROJECT_ROOT, file)} in ${(elapsedMs / 1000).toFixed(1)}s, exit ${observation.exitCode}`,
+      );
+      return observation;
+    },
+  };
+}
+
+/** A port that answers only from the cache and refuses to spend a call. */
+function cacheOnlyPort(cacheDir, counters) {
+  return {
+    async probe(request) {
+      const key = requestKey(request);
+      const file = path.join(cacheDir, `${key}.json`);
+      if (!fs.existsSync(file)) {
+        throw new Error(`--from-cache is set and leg ${request.probeId} (${key}) has no cached observation; run without it first`);
+      }
+      const cached = JSON.parse(fs.readFileSync(file, 'utf8'));
+      for (const counter of counters) counter.hits += 1;
+      return { ...cached.observation, probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
+    },
+  };
+}
+
+/** What one run of the legs cost, in the terms an operator planning the next one needs. */
+function costReport(agent, stats, startedAt) {
+  return {
+    startedAt: new Date(startedAt).toISOString(),
+    agent,
+    spawnedLegs: stats.spawns,
+    cachedLegs: stats.hits,
+    spawnedWallClockSeconds: Math.round(stats.elapsedMs / 1000),
+    totalWallClockSeconds: Math.round((Date.now() - startedAt) / 1000),
+    legs: stats.legs,
+  };
+}
+
+function writeArtifact(dir, name, value) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, name), `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+async function runOneSuite(suite, options, stats) {
+  const suiteStats = { spawns: 0, hits: 0, elapsedMs: 0, legs: [] };
+  const outDir = path.join(options.out, slug(suite.id));
+  const cacheDir = path.join(options.cache, slug(suite.id));
+  const workspace = stagedWorkspaceFor(suite.id);
+  const interfaceIds = suite.contract.permittedInterfaces.map((iface) => iface.logicalId);
+  const log = (line) => console.log(line);
+
+  let port;
+  if (options.fromCache) {
+    port = cacheOnlyPort(cacheDir, [stats, suiteStats]);
+  } else {
+    const { port: realPort } = await createProbePort({ cwd: workspace.cwd, interfaceIds, artifacts: workspace.artifacts });
+    port = cachingPort({
+      realPort,
+      contract: suite.contract,
+      cacheDir,
+      agent: options.agent,
+      force: options.force,
+      counters: [stats, suiteStats],
+      log,
+    });
+  }
+
+  console.log(`\n${suite.id} ${colors.dim}(${suite.probes.length} probe(s), workspace ${workspace.cwd})${colors.reset}`);
+  const suiteStartedAt = Date.now();
+
+  if (options.preflightOnly) {
+    const { preflightSuite } = require('./lib/probe-scoring');
+    const verdicts = [];
+    for (const probe of suite.probes) {
+      const verdict = await preflightSuite(
+        { ...suite, probes: [probe] },
+        {
+          port,
+          runId: `live-${slug(suite.id)}-${probe.probeId}`,
+          signal: AbortSignal.timeout(60 * 60_000),
+        },
+      );
+      verdicts.push({ probeId: probe.probeId, passed: verdict.passed, checks: verdict.checks });
+      writeArtifact(outDir, `preflight-${probe.probeId}.json`, verdict);
+      console.log(
+        `  ${probe.probeId} ${probe.probeClass.padEnd(11)} pre-flight ${verdict.passed ? colors.green + 'passed' : colors.red + 'failed'}${colors.reset}`,
+      );
+    }
+    // Only when a leg was actually spawned. A cached or `--from-cache` run spent
+    // nothing, and overwriting the record of the run that did spend something
+    // with a row of zeros loses the only thing this file is for.
+    if (suiteStats.spawns > 0) writeArtifact(outDir, 'preflight-cost.json', costReport(options.agent, suiteStats, suiteStartedAt));
+    return { suiteId: suite.id, preflightOnly: true, verdicts };
+  }
+
+  const outcome = await runSuite(suite, {
+    port,
+    runId: `live-${slug(suite.id)}`,
+    modelSnapshot: 'stored-replay',
+    signal: AbortSignal.timeout(60 * 60_000),
+  });
+
+  const problems = [];
+  for (const entry of outcome.scored) {
+    problems.push(...entry.schemaProblems, ...entry.preflightProblems);
+    writeArtifact(outDir, `preflight-${entry.probe.probeId}.json`, entry.preflight);
+    if (entry.result.artifact !== null) writeArtifact(outDir, `evidence-${entry.probe.probeId}.json`, entry.result.artifact);
+    console.log(
+      `  ${entry.probe.probeId} ${entry.probe.probeClass.padEnd(11)} pre-flight ${entry.preflight.passed ? 'passed' : 'failed'}  verdict ${String(entry.result.ladder.verdict)} (exit ${entry.result.ladder.exitCode})`,
+    );
+  }
+  if (suiteStats.spawns > 0) writeArtifact(outDir, 'preflight-cost.json', costReport(options.agent, suiteStats, suiteStartedAt));
+  const sealed = await sealContract(suite.contract);
+  problems.push(...sealed.schemaProblems);
+  writeArtifact(outDir, 'sealed-evaluator-brief.json', sealed.brief);
+  writeArtifact(outDir, 'contract-strength.json', {
+    contractId: suite.contract.contractId,
+    vector: outcome.strength,
+    probes: outcome.scored.map((entry) => ({
+      probeId: entry.probe.probeId,
+      probeClass: entry.probe.probeClass,
+      preflightPassed: entry.preflight.passed,
+      verdict: entry.result.ladder.verdict,
+      exitCode: entry.result.ladder.exitCode,
+      basis: entry.result.ladder.basis,
+    })),
+  });
+
+  const rate = (entry) => (entry === null || entry.rate === null ? 'not measured' : `${(entry.rate * 100).toFixed(0)}%`);
+  console.log(
+    `  ${colors.dim}strength: defect ${rate(outcome.strength.defect)}, gameability ${rate(outcome.strength.gameability)}, zero-action ${rate(outcome.strength['zero-action'])}${colors.reset}`,
+  );
+
+  return {
+    suiteId: suite.id,
+    strength: outcome.strength,
+    problems,
+    verdicts: outcome.scored.map((entry) => ({
+      probeId: entry.probe.probeId,
+      passed: entry.preflight.passed,
+      verdict: entry.result.ladder.verdict,
+      exitCode: entry.result.ladder.exitCode,
+    })),
+  };
+}
+
+async function main(argv) {
+  const options = parseArgs(argv);
+  const selected = suites().filter((suite) => options.suiteIds.length === 0 || options.suiteIds.includes(suite.id));
+  if (selected.length === 0) throw new Error(`no suite matches ${options.suiteIds.join(', ')}`);
+
+  const stats = { spawns: 0, hits: 0, elapsedMs: 0, legs: [] };
+  const results = [];
+  const startedAt = Date.now();
+
+  for (const suite of selected) {
+    try {
+      results.push(await runOneSuite(suite, options, stats));
+    } catch (error) {
+      console.error(`  ${colors.red}${suite.id} could not run:${colors.reset} ${error.message}`);
+      results.push({ suiteId: suite.id, error: error.message });
+    }
+  }
+
+  const cost = costReport(options.agent, stats, startedAt);
+  if (cost.spawnedLegs > 0) writeArtifact(options.out, 'preflight-cost.json', cost);
+  console.log(
+    `\n${cost.spawnedLegs} leg(s) run and ${cost.cachedLegs} answered from cache, ${cost.spawnedWallClockSeconds}s spent in the model, ${cost.totalWallClockSeconds}s total.`,
+  );
+  console.log(`${colors.dim}artifacts under ${path.relative(PROJECT_ROOT, options.out)}${colors.reset}`);
+
+  const failedToRun = results.filter((result) => result.error !== undefined);
+  if (failedToRun.length > 0) return 2;
+  const schemaProblems = results.flatMap((result) => result.problems ?? []);
+  if (schemaProblems.length > 0) {
+    console.error(`${colors.red}${schemaProblems.length} artifact(s) did not match their published schema:${colors.reset}`);
+    for (const problem of schemaProblems) console.error(`   ${problem}`);
+    return 2;
+  }
+  const measuredFailure = results.some((result) => (result.verdicts ?? []).some((entry) => entry.verdict === 'FAIL'));
+  return measuredFailure ? 1 : 0;
+}
+
+if (require.main === module) {
+  main(process.argv.slice(2))
+    .then((code) => process.exit(code))
+    .catch((error) => {
+      console.error(`${colors.red}contract strength could not run:${colors.reset} ${error.stack ?? error}`);
+      process.exit(2);
+    });
+}
+
+module.exports = { parseArgs, requestKey, stagedWorkspaceFor, validateArtifact };

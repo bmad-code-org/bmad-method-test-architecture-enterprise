@@ -72,12 +72,18 @@ const { SELECTION_REQUEST_KEYS, DEFAULT_AGENT: SELECTION_DEFAULT_AGENT } = requi
 // the prompt its witness legs send is the harness's, because the harness is the
 // only thing that assembles one.
 const { TRACE_REQUEST_KEYS, DEFAULT_AGENT: TRACE_DEFAULT_AGENT, EXIT_CODES: TRACE_EXIT_CODES } = require('../cli/trace-runner');
+const { vendorEnvironmentNames } = require('../cli/lib/runner-exit-codes');
 const {
   buildPrompt: buildTracePrompt,
   SUMMARY_SCHEMA_MAJOR_MINOR: TRACE_SUMMARY_SCHEMA,
   TRACE_INTERFACE,
   TRACE_OPERATION,
 } = require('../test/eval-trace');
+// The prompt a selection witness leg sends is the prompt the harness assembles,
+// for the reason the trace witness reads its two prompts from the harness as
+// well: a leg carrying a description of a prompt parses, compiles, schedules,
+// and then measures nothing when it is finally run.
+const { buildPrompt: buildSelectionPrompt } = require('../test/eval-fragment-selection');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -175,39 +181,42 @@ const VERDICT_POINTERS = ['findings', 'violations', 'qualityScore', 'recommendat
 );
 
 /**
- * One behavior per severity class of planted row.
+ * The risk a missed plant of each registry severity names, and how hard it grades.
  *
- * The membership of each group is derived from the registry's severity for the
- * rows the corpus actually plants, so a plant that changes row cannot leave a
- * behavior pointing at a row nobody plants any more. Everything here is the prose
- * around that: which risk the group names.
+ * There is one behavior per planted row rather than one per severity class, and
+ * that is a requirement of the scoring half rather than a preference. AD-40 pairs
+ * a probe with the single oracle discharging the behavior its seeded defect
+ * breaks, and `eval-quality`'s `designatedOracleIdOf` resolves that oracle only
+ * when the behavior declares exactly one. A behavior grouping four plant oracles
+ * resolves none, and `score` then votes the trial with the first oracle's state
+ * instead, so every probe in the corpus would be measured against O-001 whatever
+ * row it seeded. The demand is unchanged either way: the same nine oracles, all
+ * required, at the same severities. Only the grouping moved.
+ *
+ * Nothing grades below material. HIGH and MEDIUM-or-LOW were both hand-assigned
+ * `low` once, which put missing a planted HIGH defect below one out-of-scope
+ * finding (the scope behavior, material). Missing a planted defect is the failure
+ * this suite exists to catch, so that ordering was inverted. `low` is unused
+ * here, which is the honest reading of a corpus with two tiers: a row carrying
+ * its own CRITICAL recall gate grades critical, and a row feeding the pooled
+ * recall gate grades material.
  */
-const PLANT_GROUPS = [
-  { id: 'B-001', severities: ['CRITICAL'], label: 'CRITICAL', risk: 'missed-critical-defect' },
-  { id: 'B-003', severities: ['HIGH'], label: 'HIGH', risk: 'missed-high-defect' },
-  { id: 'B-004', severities: ['MEDIUM', 'LOW'], label: 'MEDIUM or LOW', risk: 'missed-minor-defect' },
+const PLANT_SEVERITY_CLASSES = [
+  { severities: ['CRITICAL'], grade: 'critical', risk: 'missed-critical-defect' },
+  { severities: ['HIGH'], grade: 'material', risk: 'missed-high-defect' },
+  { severities: ['MEDIUM', 'LOW'], grade: 'material', risk: 'missed-minor-defect' },
 ];
 
 /**
- * How hard a missed plant grades, read off the registry severity of the rows in
- * the group.
+ * The severity class of one planted row, by its registry severity.
  *
- * The corpus supports two grades and no more, because the harness gates CRITICAL
- * recall on its own threshold of 1 and pools every other severity into a single
- * recall threshold of 0.7. A group whose rows carry their own gate grades
- * critical; a group that feeds the pooled gate grades material.
- *
- * Nothing grades below material. The HIGH group and the MEDIUM-or-LOW group were
- * both hand-assigned `low`, which put missing every planted HIGH defect below one
- * out-of-scope finding (B-005, material). Missing a planted defect is the failure
- * this suite exists to catch, so that ordering was inverted. `low` is now unused
- * here, which is the honest reading of a corpus with two tiers.
- *
- * @param {{severities: string[]}} group
- * @returns {string}
+ * @param {string} registrySeverity
+ * @returns {{severities: string[], grade: string, risk: string}}
  */
-function plantGroupSeverity(group) {
-  return group.severities.includes('CRITICAL') ? 'critical' : 'material';
+function plantSeverityClass(registrySeverity) {
+  const found = PLANT_SEVERITY_CLASSES.find((entry) => entry.severities.includes(registrySeverity));
+  assert(found, `criteria-registry.md grades a planted row ${registrySeverity}, which no severity class here covers`);
+  return found;
 }
 
 /** The JSON type names a response descriptor may declare; `null` means "declared, type not stated". */
@@ -432,39 +441,41 @@ function buildTestReviewContract() {
     },
   );
 
-  const behaviors = [];
-  for (const group of PLANT_GROUPS) {
-    const rows = sortRows([
-      ...new Set(plants.filter((plant) => group.severities.includes(severityOfRow.get(plant.row))).map((plant) => plant.row)),
-    ]);
-    // An empty severity class is dropped, because a behavior over no oracle demands
-    // nothing and no scorer could fail it.
-    if (rows.length === 0) continue;
-    behaviors.push({
-      id: group.id,
-      description: `Every planted ${group.label} defect is named at its registry row, in the right file, within the declared line window.`,
-      severity: plantGroupSeverity(group),
+  // One behavior per planted row, in corpus order, so B-00n, O-00n and the nth
+  // plant are one thing. See PLANT_SEVERITY_CLASSES for why the grouping is
+  // per row rather than per severity class.
+  const behaviorIdOfRow = new Map();
+  const behaviors = plants.map((plant, index) => {
+    const id = `B-${String(index + 1).padStart(3, '0')}`;
+    behaviorIdOfRow.set(plant.row, id);
+    const severityClass = plantSeverityClass(severityOfRow.get(plant.row));
+    return {
+      id,
+      description: `The planted ${plant.row} defect at ${plant.basename}:${plant.line} is named at its registry row, in the right file, within the declared line window.`,
+      severity: severityClass.grade,
       observableSuccessCriterion:
-        `The verdict artifact carries one finding per planted ${group.label} row, each citing the fixture the defect was ` +
-        `planted in and a line inside that row's declared window.`,
-      requirementLinks: rows.map((row) => ({ scheme: 'tea-criteria-registry', id: row })),
-      riskLinks: [{ scheme: 'tea-eval-risk', id: group.risk }],
-      oracles: rows.map((row) => oracleIdOfRow.get(row)).sort(),
-    });
-  }
-
-  behaviors.splice(1, 0, {
-    id: 'B-002',
-    description: 'The clean control draws no finding.',
-    severity: 'critical',
-    observableSuccessCriterion: `No finding in the verdict artifact names ${cleanBasename}.`,
-    requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: clean.path }],
-    riskLinks: [{ scheme: 'tea-eval-risk', id: 'reports-everything' }],
-    oracles: [cleanOracleId],
+        `The verdict artifact carries a finding whose row is ${plant.row}, whose file is ${plant.basename}, and whose line is one of ` +
+        `${plant.admittedLines.join(', ')}.`,
+      requirementLinks: [{ scheme: 'tea-criteria-registry', id: plant.row }],
+      riskLinks: [{ scheme: 'tea-eval-risk', id: severityClass.risk }],
+      oracles: [oracleIdOfRow.get(plant.row)],
+    };
   });
+
+  const nextBehaviorId = (offset) => `B-${String(plants.length + offset).padStart(3, '0')}`;
+  const [cleanBehaviorId, scopeBehaviorId, verdictBehaviorId] = [nextBehaviorId(1), nextBehaviorId(2), nextBehaviorId(3)];
   behaviors.push(
     {
-      id: 'B-005',
+      id: cleanBehaviorId,
+      description: 'The clean control draws no finding.',
+      severity: 'critical',
+      observableSuccessCriterion: `No finding in the verdict artifact names ${cleanBasename}.`,
+      requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: clean.path }],
+      riskLinks: [{ scheme: 'tea-eval-risk', id: 'reports-everything' }],
+      oracles: [cleanOracleId],
+    },
+    {
+      id: scopeBehaviorId,
       description: 'Findings stay inside the review set, because coverage belongs to the trace workflow.',
       severity: 'material',
       observableSuccessCriterion: 'Every located finding in the verdict artifact names one of the files under review.',
@@ -473,7 +484,7 @@ function buildTestReviewContract() {
       oracles: [scopeOracleId],
     },
     {
-      id: 'B-006',
+      id: verdictBehaviorId,
       description: 'The verdict artifact is internally consistent and the run measured something.',
       severity: 'critical',
       observableSuccessCriterion:
@@ -677,7 +688,14 @@ const WITNESS_VERDICT_FILE = 'verdict.json';
 const REVIEW_REQUEST_SHAPE = {
   argument: stringShape([], []),
   option: stringShape(['files', 'json', 'agent'], ['files', 'json', 'agent', 'model', 'output', 'project-root', 'skill-root', 'test-dir']),
-  environment: stringShape([], ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN']),
+  // Read from the runner exit-code module rather than authored, the same source
+  // the other two commands' shapes come from. The authored list named three API
+  // keys and forbade HOME, which is the variable cli/test-review.js resolves a
+  // stored login through: eval-quality's command-line adapter closes the child
+  // environment to PATH plus what the request declares, so a leg run against
+  // that shape could authenticate only from an API key and a machine with a
+  // keychain login could not run its own pre-flight at all.
+  environment: stringShape([], vendorEnvironmentNames()),
   stdin: stringShape([], []),
 };
 
@@ -1032,10 +1050,22 @@ const FRAGMENT_SELECTION = [
 ];
 
 /** "does not name a.md." for one, "neither a.md nor b.md." for two, "none of a.md, b.md, or c.md." past that. */
-function excludeClause(fragments) {
-  if (fragments.length === 1) return ` and does not name ${fragments[0]}.`;
-  if (fragments.length === 2) return ` and names neither ${fragments[0]} nor ${fragments[1]}.`;
-  return ` and names none of ${fragments.slice(0, -1).join(', ')}, or ${fragments.at(-1)}.`;
+function excludeSentence(caseId, fragments) {
+  const lead = `The selection returned for ${caseId}`;
+  if (fragments.length === 1) return `${lead} does not name ${fragments[0]}.`;
+  if (fragments.length === 2) return `${lead} names neither ${fragments[0]} nor ${fragments[1]}.`;
+  return `${lead} names none of ${fragments.slice(0, -1).join(', ')}, or ${fragments.at(-1)}.`;
+}
+
+/**
+ * One authored lead as a finished sentence.
+ *
+ * Several leads end on a trailing comma, because each used to be completed by
+ * the exclusion clause that followed it in one grouped success criterion. The
+ * two halves are two behaviors now, so the containment half closes itself.
+ */
+function successSentence(lead) {
+  return `${lead.replace(/,$/, '')}.`;
 }
 
 /**
@@ -1142,15 +1172,36 @@ function buildFragmentSelectionContract(spec) {
       containmentOracle(containmentId, entry.id, entry.expect, authored.includedCommentary),
       exclusionOracle(exclusionId, entry.id, entry.expect, authored.excludedCommentary),
     );
-    behaviors.push({
-      id: `B-${String(index + 1).padStart(3, '0')}`,
-      description: `${authored.lead} The case asserts: "${assertion.text}"`,
-      severity: authored.severity,
-      observableSuccessCriterion: authored.successLead + excludeClause(entry.expect.mustNotLoad),
-      requirementLinks: evals.contextFiles.map((file) => ({ scheme: 'tea-workflow-step', id: `${workflow}/${file}` })),
-      riskLinks: authored.risks.map((risk) => ({ scheme: 'tea-eval-risk', id: risk })),
-      oracles: [containmentId, exclusionId],
-    });
+    // Two behaviors per case, one per oracle, rather than one behavior over
+    // both. `eval-quality`'s `designatedOracleIdOf` resolves AD-40's designated
+    // oracle only for a behavior declaring exactly one, and with none resolved
+    // `score` votes a probe's trial with the first oracle's state instead of the
+    // one the probe's own behavior names. A gameability probe against the
+    // exclusion oracle would then be measured against the containment oracle of
+    // the first case in the file. Splitting demands nothing new: the same two
+    // oracles, both required, at the same severity.
+    const requirementLinks = evals.contextFiles.map((file) => ({ scheme: 'tea-workflow-step', id: `${workflow}/${file}` }));
+    const riskLinks = authored.risks.map((risk) => ({ scheme: 'tea-eval-risk', id: risk }));
+    behaviors.push(
+      {
+        id: `B-${String(2 * index + 1).padStart(3, '0')}`,
+        description: `${authored.lead} The case asserts: "${assertion.text}"`,
+        severity: authored.severity,
+        observableSuccessCriterion: successSentence(authored.successLead),
+        requirementLinks,
+        riskLinks,
+        oracles: [containmentId],
+      },
+      {
+        id: `B-${String(2 * index + 2).padStart(3, '0')}`,
+        description: `The same case, read for what it must leave out. ${authored.lead} The case asserts: "${assertion.text}"`,
+        severity: authored.severity,
+        observableSuccessCriterion: excludeSentence(entry.id, entry.expect.mustNotLoad),
+        requirementLinks,
+        riskLinks,
+        oracles: [exclusionId],
+      },
+    );
   }
 
   return {
@@ -1284,7 +1335,11 @@ function buildSelectionWitness(spec, evals) {
     );
     invariant = false;
   }
-  const legs = [first, second].map((caseId) => ({ caseId, legId: `witness-${caseId}` }));
+  const legs = [first, second].map((caseId) => {
+    const entry = evals.cases.find((candidate) => candidate.id === caseId);
+    assert(entry, `${spec.workflow}: the witness names case ${caseId}, which evals.json does not carry`);
+    return { caseId, legId: `witness-${caseId}`, prompt: buildSelectionPrompt({ dir: spec.workflow, data: evals }, entry) };
+  });
   const equality = {
     op: 'deep-equality',
     operands: legs.map(({ legId }) => ({ pointer: `/interactions/${legId}/stdout/fragments` })),
@@ -1297,18 +1352,9 @@ function buildSelectionWitness(spec, evals) {
     // one option and the two legs hold it fixed, because the differential this
     // witness asserts is over the prompt: a leg that also changed the agent
     // would let a difference in the two selections come from the vendor.
-    legs: legs.map(({ caseId, legId }) => ({
+    legs: legs.map(({ legId, prompt }) => ({
       legId,
-      inputs: witnessInputs(
-        SELECTION_REQUEST_SHAPE,
-        { option: { agent: SELECTION_DEFAULT_AGENT } },
-        {
-          kind: 'text',
-          value:
-            `The prompt the harness assembles for case ${caseId}: the workflow's own step file or files, its resources/tea-index.csv, ` +
-            `and that case's task, repository facts, and TEA config.`,
-        },
-      ),
+      inputs: witnessInputs(SELECTION_REQUEST_SHAPE, { option: { agent: SELECTION_DEFAULT_AGENT } }, { kind: 'text', value: prompt }),
     })),
     // A differential asserts the two legs disagree; an invariance claim asserts
     // they agree. Same equality expression, negated only in the first case.
