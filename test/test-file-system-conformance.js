@@ -39,9 +39,13 @@
  * a filesystem fail, hang and lie on demand.
  *
  * What that leaves uncertified is one line of the package: whether its default
- * mechanism is the pair of calls this file believes it is. That is the package's
- * to hold, and the alternative is worse, since a mechanism nobody can count
- * turns six of the twelve assertions into a claim nothing checks.
+ * mechanism is the pair of calls this file believes it is, and, with it, the
+ * zero-argument default binding, which nothing in this repository calls. That is
+ * the package's to hold, and the alternative is worse: the four
+ * `single-underlying-call-on-*` outcomes read `underlyingCalls()`, so a mechanism
+ * nobody can count turns those four into a claim nothing checks, and the two
+ * `typed-fault` and two `no-in-band-error` outcomes need a mechanism that can be
+ * told to fail and to lie, which a fixed default cannot be.
  *
  * Usage: node test/test-file-system-conformance.js
  * Exit codes: 0 = every published assertion passed, 1 = an assertion failed,
@@ -76,9 +80,17 @@ const FIXTURE_BYTES = new TextEncoder().encode(FIXTURE_TEXT);
  *
  * `writeFile` returns the byte count itself because `fs.writeFile` resolves to
  * `undefined`, and the adapter assembles `FileWriteResponse.byteLength` from
- * whatever the mechanism returned. Returning the length from the request instead
- * would make the parse unfalsifiable for that method, which is the package's own
- * note on the same line.
+ * whatever the mechanism returned.
+ *
+ * Worth being exact about what that leaves falsifiable, because the package's
+ * note on the same line is easy to over-read. The `bytes` this receives is the
+ * request's own, so `bytes.length` is derived from a value that already parsed
+ * and `writeFile/schema-valid-return` cannot reject: a mechanism that writes
+ * nothing at all and returns `bytes.length` still scores twelve of twelve. What
+ * makes the write path falsifiable is `in-band-error`, which returns a shape the
+ * response parser refuses, and the check after the run below, which reads the
+ * file back. Keeping this mechanism faithful to the package's default matters
+ * more than making one assertion falsifiable by deviating from it.
  */
 function realMechanism() {
   let calls = 0;
@@ -109,21 +121,30 @@ function failingMechanism() {
 }
 
 /**
- * A mechanism that never settles on its own, for the `hangs` scenario.
+ * A mechanism that never settles, for the `hangs` scenario.
  *
- * The adapter's own abort handling is what has to answer, so this rejects only
- * when the signal says to, and checks `aborted` first in case the signal was
- * already aborted before the listener was attached.
+ * It watches the signal for nothing, and that is the whole point. A mechanism
+ * that rejects on abort settles the call itself, and its listener is registered
+ * before the adapter's, because `runPortMethod` evaluates `mechanism(...)` as an
+ * argument and only then calls `raceAbort`. Listeners fire in registration
+ * order, so the mechanism wins the race and the fault the assertion inspects
+ * comes from `runPortMethod`'s `if (signal.aborted)` catch fallback rather than
+ * from the adapter's abort handling. The two paths are distinguishable by their
+ * message, `signal was aborted before the mechanism settled` against `the signal
+ * aborted while the mechanism was in flight`, and this scenario is here to
+ * exercise the second.
+ *
+ * Measured, because the difference is invisible in a passing report: against an
+ * adapter with the abort race deleted, a self-settling mechanism scores 12 of 12
+ * and this one scores 10 of 12, both `prompt-abort` outcomes failing with "the
+ * call had not settled 1000ms after the signal aborted". Two assertions that
+ * certified nothing now certify what they name.
  */
 function hangingMechanism() {
   let calls = 0;
-  const hang = (...args) => {
-    const signal = args.at(-1);
-    return new Promise((resolve, reject) => {
-      calls += 1;
-      if (signal.aborted) reject(signal.reason);
-      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-    });
+  const hang = () => {
+    calls += 1;
+    return new Promise(() => {});
   };
   return { mechanism: { readFile: hang, writeFile: hang }, calls: () => calls };
 }
@@ -169,7 +190,7 @@ async function main() {
   fs.writeFileSync(readPath, FIXTURE_TEXT);
 
   /** One subject per method, differing only in the request each sends. */
-  const subjectFor = (name, sampleRequest) => ({
+  const subjectFor = (name, method, sampleRequest) => ({
     name,
     sampleRequest,
     // A fresh mechanism per scenario, because `underlyingCalls()` is read as an
@@ -179,7 +200,10 @@ async function main() {
       const scripted = MECHANISMS[scenario]();
       const port = createNodeFileSystemAdapter(scripted.mechanism);
       return {
-        port: (request, signal) => (name.endsWith('write') ? port.writeFile(request, signal) : port.readFile(request, signal)),
+        // The method is passed in rather than read off `name`, which is the
+        // human-readable string the report header prints and has no business
+        // deciding which port method runs.
+        port: (request, signal) => port[method](request, signal),
         underlyingCalls: scripted.calls,
       };
     },
@@ -190,8 +214,8 @@ async function main() {
   // one temporary directory behind per failed invocation.
   try {
     const report = await runFileSystemPortConformance(
-      subjectFor('tea file-system adapter read', { path: readPath }),
-      subjectFor('tea file-system adapter write', { path: writePath, bytes: FIXTURE_BYTES }),
+      subjectFor('tea file-system adapter read', 'readFile', { path: readPath }),
+      subjectFor('tea file-system adapter write', 'writeFile', { path: writePath, bytes: FIXTURE_BYTES }),
     );
     console.log(formatConformanceReport(report));
 
@@ -204,6 +228,15 @@ async function main() {
     }
     for (const outcome of report.outcomes) {
       if (!outcome.passed) problems.push(`${outcome.id}: ${outcome.detail}`);
+    }
+    // Outside the arm, because the arm cannot ask it. `writeFile/schema-valid-return`
+    // is assembled from the request, so it holds for a mechanism that wrote
+    // nothing; this is what says the bytes reached the disk.
+    const written = fs.existsSync(writePath) ? fs.readFileSync(writePath, 'utf8') : null;
+    if (written !== FIXTURE_TEXT) {
+      problems.push(
+        `the write scenario left ${written === null ? 'no file' : JSON.stringify(written)} at the path it was given, expected the fixture bytes`,
+      );
     }
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });

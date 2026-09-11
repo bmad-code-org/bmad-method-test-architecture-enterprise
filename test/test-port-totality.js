@@ -76,13 +76,18 @@ const PROBE_KINDS = {
  * Which TEA check runs each published conformance arm.
  *
  * `file` is the check that runs it. `reason` is why no check does, and a reason
- * is one of two things. Three of them are adoption work TEA has planned: the
- * corpus, clock and file-system arms were already available on the release TEA
- * ran before this upgrade, so nothing about them waits on a package change. The
- * other two are declines. `environment-probe` and `mcp-probe` are the api and mcp
- * arms, TEA measures neither an HTTP service nor a tool server, and the package
- * ships no adapter for the first, so neither has a subject to run against. A
- * decline is not deferral and each one says which it is.
+ * is one of two things. Two of them are adoption work TEA has planned: the
+ * corpus and clock arms were already available on the release TEA ran before
+ * this upgrade, so nothing about them waits on a package change. The other two
+ * are declines. `environment-probe` and `mcp-probe` are the api and mcp arms,
+ * TEA measures neither an HTTP service nor a tool server, and the package ships
+ * no adapter for the first, so neither has a subject to run against. A decline
+ * is not deferral and each one says which it is.
+ *
+ * This paragraph enumerates the entries below and nothing holds it to them, so a
+ * reason moving to a file leaves it wrong: it said three adoption reasons for
+ * one release after `file-system` became a file. Read it against the map rather
+ * than instead of it.
  */
 const CONFORMANCE_ARMS = {
   'command-probe': { file: 'test/test-probe-conformance.js' },
@@ -263,9 +268,9 @@ async function main() {
     );
     if (entry === undefined) continue;
     assert(
-      typeof entry.file === 'string' || (typeof entry.reason === 'string' && entry.reason.length > 0),
+      (typeof entry.file === 'string' && entry.file.length > 0) || (typeof entry.reason === 'string' && entry.reason.length > 0),
       `the "${arm}" arm names the check that runs it or records why none does`,
-      'an entry that is neither is an arm nobody decided about',
+      'an entry that is neither is an arm nobody decided about, and an empty file path reads as a check that exists and then throws EISDIR on the repository root',
     );
     if (entry.file === undefined) continue;
     // The count for an arm this file says TEA runs, resolved here so a registry

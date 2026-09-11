@@ -112,17 +112,29 @@ function failingMechanism() {
   };
 }
 
-/** A mechanism that never settles on its own, for the `hangs` scenario: the adapter's own abort handling is what has to answer. */
+/**
+ * A mechanism that never settles, for the `hangs` scenario.
+ *
+ * It watches the signal for nothing, and that is the point. This used to reject
+ * on abort, which settled the call itself: the mechanism's listener is
+ * registered before the adapter's, because `runPortMethod` evaluates
+ * `mechanism(...)` as an argument and only then calls `raceAbort`, and listeners
+ * fire in registration order. So the mechanism won the race and `prompt-abort`
+ * inspected a fault minted by `runPortMethod`'s `if (signal.aborted)` catch
+ * fallback rather than by the adapter's abort handling, which is the thing the
+ * assertion exists to certify. Measured against an adapter with the race
+ * deleted: the old mechanism scored a full pass and this one fails both
+ * `prompt-abort` outcomes with "the call had not settled 1000ms after the signal
+ * aborted".
+ */
 function hangingMechanism() {
   let calls = 0;
   return {
     mechanism: {
-      run: (runRequest, signal) =>
-        new Promise((resolve, reject) => {
-          calls += 1;
-          if (signal.aborted) reject(signal.reason);
-          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-        }),
+      run: () => {
+        calls += 1;
+        return new Promise(() => {});
+      },
       readArtifact: async () => ({ present: false, text: '', truncated: false }),
     },
     calls: () => calls,
