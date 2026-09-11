@@ -181,6 +181,9 @@ jobs:
       - name: Score every probe corpus through eval-quality against stored evidence
         run: npm run test:probe-corpus
 
+      - name: Prove the clock port is in the path that produces a duration
+        run: npm run test:clock-port
+
       - name: Run the published port conformance suite against the command-line adapter
         run: npm run test:probe-conformance
 

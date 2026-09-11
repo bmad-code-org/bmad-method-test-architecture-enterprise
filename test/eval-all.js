@@ -27,6 +27,7 @@ const { spawnSync } = require('node:child_process');
 
 const { loadSuiteManifest, unaccountedSkills } = require('./lib/suite-manifest');
 const { teaSkills } = require('./lib/tea-skills');
+const { nowMs, elapsedMsSince } = require('./lib/clock');
 const { digestFiles, repositoryState, suiteResultRecord, runSummaryRecord, writeRunSummary } = require('./lib/eval-record');
 const { exitCodeForFailureClass, worstFailureClass } = require('./schema/eval-result');
 
@@ -283,8 +284,8 @@ function readChildRecord(invocation, options, exitStatus, durationMs) {
   return placeholderRecord(invocation.suite, options, exitStatus, durationMs);
 }
 
-function main() {
-  const startedAt = Date.now();
+async function main() {
+  const startedAt = await nowMs();
   let options;
   try {
     options = parseArgs(process.argv.slice(2));
@@ -323,7 +324,7 @@ function main() {
           repository: repositoryState(PROJECT_ROOT),
           suites: [],
           unaccountedSkills: unaccounted,
-          durationMs: Date.now() - startedAt,
+          durationMs: await elapsedMsSince(startedAt),
           runFailureClasses: ['environment-configuration'],
         }),
       );
@@ -347,13 +348,13 @@ function main() {
       console.log(`\n========================================`);
       console.log(invocation.label);
       console.log(`========================================\n`);
-      const invocationStartedAt = Date.now();
+      const invocationStartedAt = await nowMs();
       const result = spawnSync(process.execPath, [invocation.script, ...invocation.args], {
         cwd: PROJECT_ROOT,
         env: process.env,
         stdio: 'inherit',
       });
-      const durationMs = Date.now() - invocationStartedAt;
+      const durationMs = await elapsedMsSince(invocationStartedAt);
       let status = result.status;
       if (result.error) {
         console.error(`eval:all: ${invocation.label} could not start: ${result.error.message}`);
@@ -373,7 +374,7 @@ function main() {
       repository: repositoryState(PROJECT_ROOT),
       suites: children.map((child) => child.record).filter(Boolean),
       unaccountedSkills: [],
-      durationMs: Date.now() - startedAt,
+      durationMs: await elapsedMsSince(startedAt),
       runFailureClasses: children.map((child) => childFailureClass(child.record, child.exitCode)),
     });
     aggregate = summary.exitCode;

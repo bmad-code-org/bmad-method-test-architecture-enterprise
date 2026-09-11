@@ -20,6 +20,18 @@
  * is the point: a synthetic process would prove nothing about argv construction,
  * a wall clock, or an output cap.
  *
+ * The clock arm runs here too, against the adapter `test/lib/clock.js` reads
+ * through. Its six assertions are the shared six, so the subject is the scripted
+ * mechanism alone: a clock has no argv, no artifact and no output cap for a
+ * specialized assertion to address.
+ *
+ * A caution that cost real time here, and is worth carrying to the remaining
+ * arms. Handing the runner an adapter directly rather than a subject produces a
+ * full-length report in which every outcome fails on `subject.build is not a
+ * function`, so a check comparing only the count against
+ * `CONFORMANCE_OUTCOME_COUNTS` passes on a run where nothing worked. The count
+ * and the verdicts are both asserted below for that reason.
+ *
  * No model call, no credential, no network.
  *
  * Usage: node test/test-probe-conformance.js
@@ -139,9 +151,53 @@ const MECHANISMS = {
   'in-band-error': () => inBandErrorMechanism(),
 };
 
+/**
+ * The clock subject the shared six assertions need.
+ *
+ * `runClockPortConformance` drives four scenarios and the shape of each is what
+ * the assertions read. `resolves` returns an instant. `fails` throws, so the
+ * adapter has a mechanism failure to turn into a declared `RuntimeFault`.
+ * `hangs` must reject when the signal aborts rather than resolve, which is the
+ * whole of `read/prompt-abort`. `in-band-error` must throw rather than return an
+ * error value, which is the whole of `read/no-in-band-error`.
+ *
+ * `underlyingCalls` is a function rather than a counter object, because the two
+ * single-call assertions call it.
+ *
+ * The mechanism is scripted rather than real for the reason the command-line
+ * subject gives: a real clock does not fail or hang on demand, and the shared
+ * assertions need one that does.
+ */
+function clockSubject() {
+  return {
+    name: 'tea system clock adapter',
+    sampleRequest: {},
+    async build(scenario) {
+      let calls = 0;
+      const mechanism = async (signal) => {
+        calls += 1;
+        if (scenario === 'fails') throw new Error('the system clock could not be read');
+        if (scenario === 'in-band-error') throw new Error('an in-band error value is thrown rather than returned');
+        if (scenario === 'hangs') {
+          return new Promise((resolve, reject) => {
+            const abort = () => reject(Object.assign(new Error('the clock read was aborted'), { name: 'AbortError' }));
+            if (signal?.aborted) return abort();
+            signal?.addEventListener('abort', abort, { once: true });
+          });
+        }
+        return new Date().toISOString();
+      };
+      const { createSystemClockAdapter } = await import('eval-quality/adapters');
+      const port = createSystemClockAdapter(mechanism);
+      return { port: (request, signal) => port.read(request, signal), underlyingCalls: () => calls };
+    },
+  };
+}
+
 async function main() {
   const { createCommandLineAdapter, nodeCommandMechanism } = await import('eval-quality/adapters');
-  const { runCommandLineProbeConformance, formatConformanceReport, CONFORMANCE_OUTCOME_COUNTS } = await import('eval-quality/conformance');
+  const { runCommandLineProbeConformance, runClockPortConformance, formatConformanceReport, CONFORMANCE_OUTCOME_COUNTS } =
+    await import('eval-quality/conformance');
 
   // Resolved before anything is staged. It throws when the package's registry has
   // moved, and every throw above the `try` below is a temporary directory left
@@ -217,13 +273,25 @@ async function main() {
     fs.rmSync(workspace, { recursive: true, force: true });
   }
 
+  const clockExpected = CONFORMANCE_OUTCOME_COUNTS['clock'];
+  const clockReport = await runClockPortConformance(clockSubject());
+  console.log(formatConformanceReport(clockReport));
+  if (clockReport.outcomes.length !== clockExpected) {
+    problems.push(`the clock suite produced ${clockReport.outcomes.length} outcome(s) and a complete clock run is ${clockExpected}`);
+  }
+  for (const outcome of clockReport.outcomes) {
+    if (!outcome.passed) problems.push(`clock ${outcome.id}: ${outcome.detail}`);
+  }
+
   if (problems.length > 0) {
     console.error(`\n${colors.red}${problems.length} conformance problem(s):${colors.reset}`);
     for (const problem of problems) console.error(`   ${problem}`);
     return 1;
   }
 
-  console.log(`\n${colors.green}all ${expected} published command-probe conformance assertions passed${colors.reset}\n`);
+  console.log(
+    `\n${colors.green}all ${expected} published command-probe and ${clockExpected} clock conformance assertions passed${colors.reset}\n`,
+  );
   return 0;
 }
 
