@@ -45,6 +45,83 @@ inputDocuments:
 
 This document is the epic and story breakdown for upgrading TEA from `eval-quality` 1.4.0 to 3.0.0, adopting every capability of that package TEA can use, and closing the deferred work the repository already declares.
 
+## Delivery Progress
+
+Last reconciled with GitHub on 2026-09-11 across `bmad-method-test-architecture-enterprise` and `bmad-eval-quality`. A checked story has all of its work merged to the relevant repository's `main`. An unchecked story marked **Active** has work in merged or open pull requests and still has acceptance criteria left. Every other unchecked story has no pull request recorded here.
+
+| Epic | Merged | Active | Remaining | State |
+| --- | ---: | ---: | ---: | --- |
+| Epic 1 | 5 / 5 | 0 | 0 | Complete |
+| Epic 2 | 3 / 7 | 1 | 3 | In progress |
+| Epic 3 | 5 / 6 | 0 | 1 | In progress |
+| Epic 4 | 1 / 8 | 0 | 7 | In progress |
+| Epic 5 | 0 / 5 | 0 | 5 | Queued |
+| Epic 6 | 3 / 12 | 0 | 9 | In progress |
+| **Total** | **17 / 43** | **1** | **25** | **40% merged** |
+
+### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
+
+- [x] [Story 1.1: Prove the pin move against the package's own corpus](#story-11-prove-the-pin-move-against-the-packages-own-corpus) ([#165](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/165))
+- [x] [Story 1.2: Bound the environment channel on every command policy](#story-12-bound-the-environment-channel-on-every-command-policy) ([#165](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/165))
+- [x] [Story 1.3: Migrate all 31 probes and 10 contracts](#story-13-migrate-all-31-probes-and-10-contracts) ([#165](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/165))
+- [x] [Story 1.4: Complete the command-probe conformance arm](#story-14-complete-the-command-probe-conformance-arm) ([#165](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/165))
+- [x] [Story 1.5: Prove totality across the widened port unions](#story-15-prove-totality-across-the-widened-port-unions) ([#165](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/165))
+
+### Epic 2 progress: The package publishes what its consumers need
+
+- [x] [Story 2.1: Export the schema-version constants and the dominance comparison](#story-21-export-the-schema-version-constants-and-the-dominance-comparison) ([eval-quality #128](https://github.com/bmad-code-org/bmad-eval-quality/pull/128))
+- [x] [Story 2.2: Name the three versions the package stamps](#story-22-name-the-three-versions-the-package-stamps) ([eval-quality #129](https://github.com/bmad-code-org/bmad-eval-quality/pull/129))
+- [x] [Story 2.3: Make `VERSION` tell the truth](#story-23-make-version-tell-the-truth) ([eval-quality #128](https://github.com/bmad-code-org/bmad-eval-quality/pull/128))
+- [ ] [Story 2.4: Release the package and verify it on npm](#story-24-release-the-package-and-verify-it-on-npm)
+- [ ] [Story 2.5: Publish the eight repo-local gates as a consumable surface](#story-25-publish-the-eight-repo-local-gates-as-a-consumable-surface). **Active:** first two of three PRs merged in [eval-quality #130](https://github.com/bmad-code-org/bmad-eval-quality/pull/130) and [eval-quality #132](https://github.com/bmad-code-org/bmad-eval-quality/pull/132); third is pending
+- [ ] [Story 2.6: Derive TEA's artifact versions from the package](#story-26-derive-teas-artifact-versions-from-the-package)
+- [ ] [Story 2.7: Validate the stamp and the two unchecked artifact kinds](#story-27-validate-the-stamp-and-the-two-unchecked-artifact-kinds)
+
+### Epic 3 progress: Every port TEA hand-rolls runs on the shipped adapter
+
+- [x] [Story 3.1: Hold every conformance count to the package](#story-31-hold-every-conformance-count-to-the-package) ([#169](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/169))
+- [x] [Story 3.2: Resolve the corpus through the shipped adapter](#story-32-resolve-the-corpus-through-the-shipped-adapter) ([#168](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/168))
+- [x] [Story 3.3: Read the clock through the shipped adapter](#story-33-read-the-clock-through-the-shipped-adapter) ([#171](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/171))
+- [x] [Story 3.4: Certify the file-system adapter](#story-34-certify-the-file-system-adapter) ([#170](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/170))
+- [x] [Story 3.5: Cut the trace harness over to the file-system port](#story-35-cut-the-trace-harness-over-to-the-file-system-port) ([#173](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/173))
+- [ ] [Story 3.6: Cut the remaining harnesses over to the file-system port](#story-36-cut-the-remaining-harnesses-over-to-the-file-system-port)
+
+### Epic 4 progress: TEA's claims, codes and supply chain are machine-held
+
+- [ ] [Story 4.1: Hold every published count against its source](#story-41-hold-every-published-count-against-its-source)
+- [ ] [Story 4.2: Hold every published prose claim against its artifact](#story-42-hold-every-published-prose-claim-against-its-artifact)
+- [ ] [Story 4.3: Execute the fenced commands in the documentation](#story-43-execute-the-fenced-commands-in-the-documentation)
+- [ ] [Story 4.4: Narrow faults by type and assert every vocabulary](#story-44-narrow-faults-by-type-and-assert-every-vocabulary)
+- [x] [Story 4.5: Read diagnostics from the sink and decide the strict rung](#story-45-read-diagnostics-from-the-sink-and-decide-the-strict-rung) ([#175](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/175))
+- [ ] [Story 4.6: Hold the supply chain](#story-46-hold-the-supply-chain)
+- [ ] [Story 4.7: Hold layering, boundary and lineage](#story-47-hold-layering-boundary-and-lineage)
+- [ ] [Story 4.8: Gate the ungated trees, allowlists, coverage and CI](#story-48-gate-the-ungated-trees-allowlists-coverage-and-ci)
+
+### Epic 5 progress: Drift is measured and the upgrade is proven live
+
+- [ ] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance)
+- [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result)
+- [ ] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships)
+- [ ] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page)
+- [ ] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea)
+
+### Epic 6 progress: Every TEA skill is covered by a behavioral suite
+
+- [x] [Story 6.1: Prove `bmad-tea` routes an intent to the right workflow](#story-61-prove-bmad-tea-routes-an-intent-to-the-right-workflow) ([#167](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/167))
+- [x] [Story 6.2: Prove `bmad-testarch-test-design` grounds its risks](#story-62-prove-bmad-testarch-test-design-grounds-its-risks) ([#166](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/166))
+- [x] [Story 6.3: Prove `bmad-testarch-nfr` refuses an unsupported PASS](#story-63-prove-bmad-testarch-nfr-refuses-an-unsupported-pass) ([#174](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/174))
+- [ ] [Story 6.4: Prove `bmad-testarch-ci` emits configuration that parses](#story-64-prove-bmad-testarch-ci-emits-configuration-that-parses)
+- [ ] [Story 6.5: Prove `bmad-testarch-atdd` fails red for the intended reason](#story-65-prove-bmad-testarch-atdd-fails-red-for-the-intended-reason)
+- [ ] [Story 6.6: Build the fixed implementation and qualified regression fixture](#story-66-build-the-fixed-implementation-and-qualified-regression-fixture)
+- [ ] [Story 6.7: Prove `bmad-testarch-automate` catches the qualified regression](#story-67-prove-bmad-testarch-automate-catches-the-qualified-regression)
+- [ ] [Story 6.8: Score the `bmad-testarch-framework` scaffold's contents](#story-68-score-the-bmad-testarch-framework-scaffolds-contents)
+- [ ] [Story 6.9: Install and smoke-test the generated scaffold](#story-69-install-and-smoke-test-the-generated-scaffold)
+- [ ] [Story 6.10: Build the multi-turn transcript harness](#story-610-build-the-multi-turn-transcript-harness)
+- [ ] [Story 6.11: Prove `bmad-teach-me-testing` teaches rather than asserts](#story-611-prove-bmad-teach-me-testing-teaches-rather-than-asserts)
+- [ ] [Story 6.12: Empty the deferred array](#story-612-empty-the-deferred-array)
+
+Supporting work merged during this sequence: [TEA #172](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/172) holds the `npm test` chain against missing script definitions. [eval-quality #131](https://github.com/bmad-code-org/bmad-eval-quality/pull/131) keeps the pending-release note current while upstream work continues. These strengthen delivery and close no story by themselves.
+
 There is no PRD and no architecture document for this work, and none was written. It is a brownfield upgrade of an existing dependency, so the requirements source is the dependency's own released behavior read from its source, plus TEA's current state read from its own artifacts.
 
 Three facts frame everything below.

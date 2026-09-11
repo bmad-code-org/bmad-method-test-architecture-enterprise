@@ -23,7 +23,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 | Behavioral eval, `trace`        | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice  | `test/eval-trace.js`              |
 | Behavioral eval, `bmad-tea`     | 18 intents put to the agent, one call each, measuring which menu item a sentence routes to, repeated twice         | `test/eval-bmad-tea-routing.js`   |
 | Behavioral eval, `nfr`          | An evidence bundle with known gaps and a clean control, each audited in its own staged workspace, repeated twice   | `test/eval-nfr.js`                |
-| Behavioral Evaluation Contracts | Thirteen, all compiling, all generated, every oracle evaluated against stored evidence                             | `test/contracts/`                 |
+| Behavioral Evaluation Contracts | Fourteen, all compiling, all generated, every oracle evaluated against stored evidence                             | `test/contracts/`                 |
 | Replay corpus                   | 57 stored outputs scored with no model call: 3 selections, 10 verdicts, 14 trace pairs, 13 nfr reports, 17 replies | `test/replay/`                    |
 
 One of the ten skills, `bmad-teach-me-testing`, has no suite of any kind. It carries a deferred entry in the manifest naming its owner, its missing evidence, and the condition that retires the entry, because a suite list with a skill quietly missing from it reads as coverage.

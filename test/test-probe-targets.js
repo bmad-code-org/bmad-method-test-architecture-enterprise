@@ -673,7 +673,7 @@ async function checkTraceProbe(runDir) {
  * `runDir`, because the stub writes where the previous probe wrote and a second
  * probe expecting `absent` would otherwise read the first probe's file.
  */
-async function nfrProbe(runDir, probeId, stubMode, { artifacts, prompt } = {}) {
+async function nfrProbe(runDir, probeId, stubMode, { artifacts, prompt, timeoutMs = '60000' } = {}) {
   const cwd = fs.mkdtempSync(path.join(runDir, 'nfr-'));
   const { port } = await createProbePort({
     cwd,
@@ -687,7 +687,7 @@ async function nfrProbe(runDir, probeId, stubMode, { artifacts, prompt } = {}) {
       probeId,
       interfaceId: 'tea-nfr-runner',
       operationId: 'audit-evidence-bundle',
-      option: { agent: 'custom', 'agent-cmd': NFR_STUB_AGENT, 'env-pass': 'STUB_MODE', 'timeout-ms': '60000' },
+      option: { agent: 'custom', 'agent-cmd': NFR_STUB_AGENT, 'env-pass': 'STUB_MODE', 'timeout-ms': timeoutMs },
       environment: { STUB_MODE: stubMode },
       stdin: { kind: 'text', value: prompt ?? 'Audit the evidence bundle and write the report the workflow declares.' },
     }),
@@ -749,6 +749,15 @@ async function checkNfrProbe(runDir) {
     failed.ok && nfrFailureClassForExit(failed.observation.exitCode) === 'environment-transport',
     'a vendor that exits nonzero is reported as a transport failure on the exit code',
     JSON.stringify(failed.ok ? failed.observation.exitCode : failed),
+  );
+
+  const invalidTimeout = await nfrProbe(runDir, 'nfr-invalid-timeout', 'complete', { timeoutMs: '1.5' });
+  assert(
+    invalidTimeout.ok &&
+      invalidTimeout.observation.exitCode === NFR_EXIT_CODES.usage &&
+      /--timeout-ms must be a positive integer; got "1\.5"/.test(observedText(invalidTimeout.observation.stderr)),
+    'a decimal timeout is rejected as a usage error before the runner starts',
+    JSON.stringify(invalidTimeout.ok ? invalidTimeout.observation : invalidTimeout).slice(0, 300),
   );
 }
 
@@ -855,6 +864,14 @@ function checkNfrHarnessSmoke(runDir) {
     mutate.record?.failureClass === 'quality' && mutate.record?.runners?.[0]?.failures?.includes('fixture mutations'),
     'the record carries a quality failure naming fixture mutations',
     JSON.stringify(mutate.record?.runners?.[0]?.failures),
+  );
+
+  const deleted = runNfrHarness(runDir, 'delete', ['--runs', '1', '--set', 'gapped-harbor-billing-ledger']);
+  assert(deleted.status === 1, 'a run that deletes evidence from the bundle exits 1', `exit ${deleted.status}`);
+  assert(
+    deleted.record?.failureClass === 'quality' && deleted.record?.runners?.[0]?.failures?.includes('fixture mutations'),
+    'the record carries a quality failure when evidence disappears',
+    JSON.stringify(deleted.record?.runners?.[0]?.failures),
   );
 
   // Nothing written is an environment failure with a class, never a low score.

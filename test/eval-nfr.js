@@ -847,7 +847,12 @@ function validateCorpus(groundTruth) {
 function digestTree(root, relativePaths) {
   const parts = [];
   for (const relative of [...relativePaths].sort()) {
-    parts.push(relative, fs.readFileSync(path.join(root, relative)));
+    try {
+      parts.push(relative, fs.readFileSync(path.join(root, relative)));
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      parts.push(relative, '\0missing', relative);
+    }
   }
   return digest(parts);
 }

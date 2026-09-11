@@ -232,7 +232,7 @@ false positives with the gate flipping, a wrong percentage, a missing oracle
 source, an omitted `rejected_evidence` array, a waiver turned down for the wrong
 reasons, a matrix full of lines the parser must ignore, an invented and a
 duplicated criterion section, an empty `waivers` block on the set that has no
-register, and two artifacts the harness must refuse to score at all. Thirteen `nfr` cases
+register, and two artifacts the harness must refuse to score at all. Fifteen `nfr` cases
 cover both bundles: a correct audit of each, the two unsupported PASS results, an omitted
 domain section, a domain assessed twice, a domain section stating no status the four-value
 enum recognises, a fabricated evidence citation, the workflow's own worked example quoted

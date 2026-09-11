@@ -1294,7 +1294,13 @@ function buildNfrProbes() {
               environment: {},
               stdin: { kind: 'text', value: buildNfrPrompt(gapped) },
             },
-            relation: overallStatusAny(`/interactions/${legId}/artifact/report`, gapped.expectedOverallStatus),
+            relation:
+              oracleId === unknownOracleId
+                ? {
+                    op: 'containment',
+                    operands: [{ pointer: `/interactions/${legId}/artifact/report` }, { literal: NFR_UNKNOWN_TOKEN }],
+                  }
+                : overallStatusAny(`/interactions/${legId}/artifact/report`, gapped.expectedOverallStatus),
           },
         },
       ],
