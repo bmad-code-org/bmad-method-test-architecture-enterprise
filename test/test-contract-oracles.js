@@ -120,7 +120,6 @@ const { findCases } = require('./test-eval-replay');
 // The correspondence between each trace oracle and the scoreRun check it
 // restates is written once, in the generator beside the oracle itself.
 const { traceOracleSpecs, traceStepId, routingOracleSpecs, ROUTING_CONTRACTS } = require('../tools/generate-contracts');
-const { traceOracleSpecs, traceStepId } = require('../tools/generate-contracts');
 // Same rule for test-design: the generator owns the correspondence between each
 // oracle and the harness predicate it is paired with, so it is imported rather
 // than restated here.
@@ -785,6 +784,10 @@ function checkRoutingOracles(evaluator) {
 
   console.log(
     `  ${colors.dim}${evaluated} oracle evaluation(s) across ${ROUTING_CONTRACTS.length} contract(s) and ${stored.length} stored reply(ies)${colors.reset}`,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // test-design
 // ---------------------------------------------------------------------------
 

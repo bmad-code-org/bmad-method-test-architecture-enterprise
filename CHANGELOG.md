@@ -52,6 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `test/test-contract-oracles.js` reads its regex step budget from `test/probes/scoring-policy.json` rather than declaring a second one. The two had drifted: the test hardcoded 10,000 with a comment saying "the budget is never approached" while the shipped policy declares 1,000,000. The comment was true of the evidence the older contracts address, which is a JSON field holding a short string, and it stopped being true the moment a contract addressed a whole markdown document, because the estimated step count scales with the length of the value matched. The test-design oracles estimate up to 29,436 steps against a three-kilobyte document, so every one of them faulted at `budget-exhausted` in the test while scoring cleanly under the policy every real run uses.
 
 <<<<<<< HEAD
+
 ### Fixed
 
 - Two statements in `docs/explanation/eval-quality-roadmap.md` and `docs/explanation/eval-quality-command-adapter.md` that this upgrade falsified or that were already false.
@@ -64,7 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Seventeen stale counts and claims in prose, every one of which this change would have made staler. `npm test` chains twenty-five checks and the README said twenty-one; `test/contracts/` holds twelve contracts and three files said ten; `test/probes/` holds thirty-five probes across twelve corpora and two files said thirty-one across ten; the replay corpus holds forty-four cases and three files said twenty-seven; TEA ships four commands and four harnesses and five statements said three; and the README, the adoption guide and the roadmap each said that every suite had been measured live, which stops being true the moment a suite is added. These are hand-maintained counts and they will go stale again. FR23 and Story 4.1 are what end that; this is not it.
 
 =======
->>>>>>> a2aa8ba (fix(evals): close the review findings on the test-design suite)
+
+> > > > > > > a2aa8ba (fix(evals): close the review findings on the test-design suite)
+
 ## [1.26.0] - 2026-09-09
 
 ### Changed

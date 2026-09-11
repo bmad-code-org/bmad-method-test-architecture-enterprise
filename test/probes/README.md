@@ -4,14 +4,14 @@ A contract says what a TEA skill has to do. A probe says what was wrong with the
 contract was asked, and `eval-quality`'s `runScore` reads the two together to answer the question the
 package exists for: did this contract's oracles catch the defect that was actually there?
 
-| Corpus                                      | Probes | What they are                                                        |
-| ------------------------------------------- | -----: | -------------------------------------------------------------------- |
-| `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe |
+| Corpus                                      | Probes | What they are                                                          |
+| ------------------------------------------- | -----: | ---------------------------------------------------------------------- |
+| `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe   |
 | `test-design.probes.json`                   |     16 | Fourteen defective documents, one clean control, one gameability probe |
-| `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                        |
-| `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow             |
-| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                          |
-| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                          |
+| `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                          |
+| `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow               |
+| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                            |
+| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                            |
 
 **Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all twelve
 files from the sources this repository already keeps: `test/fixtures/test-review-eval/ground-truth.json`

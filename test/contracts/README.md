@@ -95,7 +95,7 @@ without the located issue list the table below breaks down. The list comes from 
 the renderer. The issues themselves are the same either way; only whether the tool prints them
 differs.
 
-## Twelve of twelve compile
+## Thirteen of thirteen compile
 
 `package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08. All 58
 parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
@@ -296,7 +296,7 @@ absent, so the deterministic gate stays credential-free and runs with no network
 silently: a skip says it skipped.
 
 When the compiler is available, the check compares each contract against the status
-`expected-status.json` records for it. All twelve contracts `compile` today. A baseline is what keeps a
+`expected-status.json` records for it. All thirteen contracts `compile` today. A baseline is what keeps a
 known failure from reading as a passing check, and what makes the day a contract's status moves
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.

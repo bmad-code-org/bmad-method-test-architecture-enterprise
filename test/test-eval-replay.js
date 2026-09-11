@@ -67,8 +67,8 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Twenty-three of the
- * forty-four cases produce a number and all but two of those are constructed. Two
+ * produces a number was written by hand to be parsed. Fifty-two of the
+ * fifty-five cases produce a number and all but two of those are constructed. Two
  * carry real captured bytes borrowed from the CLI parser fixtures, and both now
  * score as a measured miss rather than as unmeasurable: their reports document
  * no finding at all, and a verdict whose findings array is empty is a reviewer
@@ -813,6 +813,9 @@ function checkRoutingSignatures(replayed) {
     'routing signatures agree exactly when two replies to one intent decided the same thing',
     disagreements.join('\n  '),
   );
+}
+
+/**
  * The scoring inputs of one test-design fixture set, as a string a digest is taken
  * over.
  *
