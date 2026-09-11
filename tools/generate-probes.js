@@ -79,7 +79,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const prettier = require('prettier');
 
-const { digest } = require('../test/lib/eval-record');
+const { loadCorpus } = require('../test/lib/corpus-port');
 const { parseRegistryRows } = require('./validate-criteria-fragments');
 // The prompt a trace manifestation witness sends is the prompt the harness
 // assembles, for the reason tools/generate-contracts.js reads the same function
@@ -142,15 +142,63 @@ function repositoryPath(...segments) {
     .join('/');
 }
 
-/** `sha256:<hex>` over the named repository files, in the order given. */
+/**
+ * The corpus this generator digests from, resolved through `eval-quality`'s
+ * corpus port before any probe is built.
+ *
+ * `main` loads it and every `digestOf` below reads from it, which is what makes
+ * the bytes behind every attested digest come from the certified resolver rather
+ * than from this file's own `readFileSync`. The hash is unchanged, so no
+ * committed digest moves.
+ *
+ * Set rather than read lazily because the builders are synchronous and the port
+ * is not. A path outside the loaded set is a named error rather than a silent
+ * read, which is stricter than what it replaces: the old helper would digest any
+ * file in the repository.
+ */
+let corpus;
+
+/** Every file under one repository directory, as repository-relative references. */
+function filesUnder(...segments) {
+  const root = path.join(PROJECT_ROOT, ...segments);
+  if (!fs.existsSync(root)) return [];
+  const found = [];
+  const walk = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else found.push(repositoryPath(path.relative(PROJECT_ROOT, full)));
+    }
+  };
+  walk(root);
+  return found;
+}
+
+/**
+ * Every member this generator may digest, named up front.
+ *
+ * Four trees plus the workflow step files each fragment-selection case cites.
+ * The step files are named by `evals.json` rather than walked, because a
+ * workflow directory holds a great deal this corpus is not made of.
+ */
+function corpusMembers() {
+  const contextFiles = fragmentSelectionWorkflows().flatMap((workflow) => {
+    const evals = JSON.parse(fs.readFileSync(path.join(EVAL_ROOT, workflow, 'evals.json'), 'utf8'));
+    return (evals.contextFiles ?? []).map((file) => repositoryPath('src', 'workflows', 'testarch', workflow, file));
+  });
+  return [
+    ...filesUnder('test', 'fixtures', 'test-review-eval'),
+    ...filesUnder('test', 'fixtures', 'trace-eval'),
+    ...filesUnder('test', 'replay'),
+    ...filesUnder('test', 'evals'),
+    ...contextFiles,
+  ];
+}
+
+/** `sha256:<hex>` over the named corpus members, in the order given. */
 function digestOf(relativePaths) {
-  const parts = [];
-  for (const relative of relativePaths) {
-    const absolute = path.join(PROJECT_ROOT, relative);
-    assert(fs.existsSync(absolute), `${relative} does not exist, so nothing can be digested for it`);
-    parts.push(relative, fs.readFileSync(absolute));
-  }
-  return digest(parts);
+  assert(corpus !== undefined, 'the corpus has not been loaded, so nothing can be digested; main loads it before any probe is built');
+  return corpus.digest(relativePaths);
 }
 
 /** A public artifact reference to one repository file, digested from its bytes. */
@@ -1296,6 +1344,9 @@ function firstDifference(expected, actual) {
 async function main() {
   const check = process.argv.slice(2).includes('--check');
   const prettierConfig = await prettier.resolveConfig(path.join(PROBE_ROOT, 'test-review.probes.json'));
+  // Every byte this generator digests comes through the certified corpus port,
+  // resolved here because the builders below are synchronous and the port is not.
+  corpus = await loadCorpus(PROJECT_ROOT, corpusMembers());
 
   const stale = [];
   for (const target of targets()) {
@@ -1333,6 +1384,23 @@ async function main() {
       }
     }
     console.error('\nRegenerate with: node tools/generate-probes.js');
+    return 1;
+  }
+
+  // Every corpus on disk is one this generator writes. The check above holds
+  // the bytes of what it writes, and `test/lib/probe-scoring.js` scores each
+  // corpus against a digest over the corpus as parsed rather than its bytes, so
+  // this is what makes the two halves cover the same set: a corpus file nobody
+  // generates would be scored with its bytes held by nothing.
+  const generated = new Set(targets().map((target) => repositoryPath(target.relativePath)));
+  const unheld = filesUnder('test', 'probes')
+    .filter((reference) => reference.endsWith('.probes.json'))
+    .map((reference) => reference.replace('test/probes/', ''))
+    .filter((reference) => !generated.has(reference));
+  if (unheld.length > 0) {
+    console.error(`❌ ${unheld.length} probe corpus file(s) under test/probes are generated by nothing:\n`);
+    for (const reference of unheld) console.error(`   test/probes/${reference}`);
+    console.error('\nGenerate it here, or delete it: a corpus nothing writes is a corpus nothing holds.');
     return 1;
   }
 

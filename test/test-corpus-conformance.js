@@ -39,6 +39,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const { loadCorpus } = require('./lib/corpus-port');
+
 const colors = {
   reset: '[0m',
   red: '[31m',
@@ -167,7 +169,49 @@ async function main() {
     return 1;
   }
 
-  console.log(`\n${colors.green}all ${expected} published corpus-port conformance assertions passed${colors.reset}\n`);
+  // TEA's own wrapper, whose two properties are what keep the cutover an
+  // adoption rather than a re-attestation. The escape and fault behavior above
+  // is the adapter's and is certified by the arm; these two are this
+  // repository's and nothing else executes them.
+  const workspaceFor = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-corpus-wrapper-'));
+  const wrapperProblems = [];
+  try {
+    fs.writeFileSync(path.join(workspaceFor, 'a.txt'), 'a');
+    fs.writeFileSync(path.join(workspaceFor, 'b.txt'), 'b');
+    const corpus = await loadCorpus(workspaceFor, ['a.txt', 'b.txt']);
+
+    // The order is the caller's. Every digest recorded in a committed probe
+    // corpus was taken in the order its caller passed, so a corpus that sorted
+    // for itself would move all of them.
+    if (corpus.digest(['a.txt', 'b.txt']) === corpus.digest(['b.txt', 'a.txt'])) {
+      wrapperProblems.push(
+        'the corpus digests two orders of the same members to one value, so the caller order it promises is not honored',
+      );
+    }
+
+    // A member nobody named is a named error. The helper this replaces would
+    // read any file in the repository, so a corpus could not say what it was
+    // made of.
+    let refused = false;
+    try {
+      corpus.digest(['c.txt']);
+    } catch (error) {
+      refused = /not a member of the corpus/.test(error.message);
+    }
+    if (!refused) wrapperProblems.push('a reference outside the loaded corpus was digested instead of refused');
+  } finally {
+    fs.rmSync(workspaceFor, { recursive: true, force: true });
+  }
+
+  if (wrapperProblems.length > 0) {
+    console.error(`\n${colors.red}${wrapperProblems.length} problem(s) in TEA's corpus wrapper:${colors.reset}`);
+    for (const problem of wrapperProblems) console.error(`   ${problem}`);
+    return 1;
+  }
+
+  console.log(
+    `\n${colors.green}all ${expected} published corpus-port conformance assertions passed, and TEA's corpus keeps caller order and refuses an unloaded member${colors.reset}\n`,
+  );
   return 0;
 }
 

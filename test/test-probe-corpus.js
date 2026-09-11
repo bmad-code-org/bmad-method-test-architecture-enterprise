@@ -105,7 +105,7 @@ async function main() {
 
   console.log('\nprobe corpora scored through eval-quality, against stored evidence\n');
 
-  for (const suite of suites()) {
+  for (const suite of await suites()) {
     for (const probe of suite.probes) {
       for (const message of validateArtifact('probe', probe)) {
         problems.push(`${suite.id} ${probe.probeId}: Probe${message}`);

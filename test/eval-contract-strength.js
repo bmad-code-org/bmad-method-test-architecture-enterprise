@@ -507,7 +507,7 @@ function baselineDifferences(results, baseline) {
 
 async function main(argv) {
   const options = parseArgs(argv);
-  const selected = suites().filter((suite) => options.suiteIds.length === 0 || options.suiteIds.includes(suite.id));
+  const selected = (await suites()).filter((suite) => options.suiteIds.length === 0 || options.suiteIds.includes(suite.id));
   if (selected.length === 0) throw new Error(`no suite matches ${options.suiteIds.join(', ')}`);
 
   const stats = { spawns: 0, hits: 0, elapsedMs: 0, legs: [] };
