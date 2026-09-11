@@ -68,40 +68,13 @@
             }
           },
           "relation": {
-            "op": "any",
+            "op": "containment",
             "operands": [
               {
-                "op": "containment",
-                "operands": [
-                  {
-                    "pointer": "/interactions/manifest-performance/artifact/report"
-                  },
-                  {
-                    "literal": "overall_status: 'FAIL'"
-                  }
-                ]
+                "pointer": "/interactions/manifest-performance/artifact/report"
               },
               {
-                "op": "containment",
-                "operands": [
-                  {
-                    "pointer": "/interactions/manifest-performance/artifact/report"
-                  },
-                  {
-                    "literal": "overall_status: \"FAIL\""
-                  }
-                ]
-              },
-              {
-                "op": "containment",
-                "operands": [
-                  {
-                    "pointer": "/interactions/manifest-performance/artifact/report"
-                  },
-                  {
-                    "literal": "overall_status: FAIL"
-                  }
-                ]
+                "literal": "UNKNOWN"
               }
             ]
           }

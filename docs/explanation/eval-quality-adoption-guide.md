@@ -15,16 +15,16 @@ A skill is measured when a run of it produces evidence that a checked-in oracle 
 
 TEA's state today, as `test/evals/suite-manifest.json` registers it:
 
-| Layer                           | What it covers                                                                                                     | Where                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
-| Deterministic repository checks | The `npm test` chain, credential-free, no network, no model call                                                   | `package.json`                    |
-| Fragment-selection eval         | 24 cases across the eight workflow skills that ship a knowledge index, measuring which knowledge a run loads       | `test/eval-fragment-selection.js` |
-| Behavioral eval, `test-review`  | 9 planted defects across two seeded files, one clean control, one scope control, repeated three times              | `test/eval-test-review.js`        |
-| Behavioral eval, `trace`        | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice  | `test/eval-trace.js`              |
-| Behavioral eval, `bmad-tea`     | 18 intents put to the agent, one call each, measuring which menu item a sentence routes to, repeated twice         | `test/eval-bmad-tea-routing.js`   |
-| Behavioral eval, `nfr`          | An evidence bundle with known gaps and a clean control, each audited in its own staged workspace, repeated twice   | `test/eval-nfr.js`                |
-| Behavioral Evaluation Contracts | Thirteen, all compiling, all generated, every oracle evaluated against stored evidence                             | `test/contracts/`                 |
-| Replay corpus                   | 57 stored outputs scored with no model call: 3 selections, 10 verdicts, 14 trace pairs, 13 nfr reports, 17 replies | `test/replay/`                    |
+| Layer                           | What it covers                                                                                                                               | Where                             |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Deterministic repository checks | The `npm test` chain, credential-free, no network, no model call                                                                             | `package.json`                    |
+| Fragment-selection eval         | 24 cases across the eight workflow skills that ship a knowledge index, measuring which knowledge a run loads                                 | `test/eval-fragment-selection.js` |
+| Behavioral eval, `test-review`  | 9 planted defects across two seeded files, one clean control, one scope control, repeated three times                                        | `test/eval-test-review.js`        |
+| Behavioral eval, `trace`        | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice                            | `test/eval-trace.js`              |
+| Behavioral eval, `bmad-tea`     | 18 intents put to the agent, one call each, measuring which menu item a sentence routes to, repeated twice                                   | `test/eval-bmad-tea-routing.js`   |
+| Behavioral eval, `nfr`          | An evidence bundle with known gaps and a clean control, each audited in its own staged workspace, repeated twice                             | `test/eval-nfr.js`                |
+| Behavioral Evaluation Contracts | Fourteen, all compiling, all generated, every oracle evaluated against stored evidence                                                       | `test/contracts/`                 |
+| Replay corpus                   | 70 stored outputs scored with no model call: 3 selections, 10 verdicts, 14 trace pairs, 15 nfr reports, 11 test-design documents, 17 replies | `test/replay/`                    |
 
 One of the ten skills, `bmad-teach-me-testing`, has no suite of any kind. It carries a deferred entry in the manifest naming its owner, its missing evidence, and the condition that retires the entry, because a suite list with a skill quietly missing from it reads as coverage.
 

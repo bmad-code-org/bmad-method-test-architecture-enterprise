@@ -16,7 +16,7 @@ against it.
 | `fragment-selection/<workflow>.contract.json` | Fragment routing for eight workflows                     | 24 cases                                            |
 
 **Every contract here is generated. Do not hand-edit one.** `tools/generate-contracts.js` writes all
-twelve from their sources: `test-review.contract.json` from
+fourteen from their sources: `test-review.contract.json` from
 `test/fixtures/test-review-eval/ground-truth.json` and `criteria-registry.md`; `trace.contract.json`
 from `test/fixtures/trace-eval/ground-truth.json`, the request shape `cli/trace-runner.js` declares,
 the prompt `test/eval-trace.js` assembles, and the summary literal in the trace workflow's step-05;
@@ -341,7 +341,7 @@ status changing.
 
 ## What the generator enforces
 
-`node tools/generate-contracts.js --check` regenerates all twelve in memory and fails when the bytes on
+`node tools/generate-contracts.js --check` regenerates all fourteen in memory and fails when the bytes on
 disk differ, naming the contract and the first line that moved. It runs in `npm test`, so a fixture
 edit that leaves a contract stale fails the deterministic gate.
 

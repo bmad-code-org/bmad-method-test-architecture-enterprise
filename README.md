@@ -373,7 +373,7 @@ TEA has deterministic checks and live evals. These cover specific risks. They ar
 
 The eight suites under `test/evals/` measure one decision inside each knowledge-bearing workflow: whether the agent selects the required knowledge fragments and avoids fragments the workflow excludes. They do not execute the complete workflow or grade its final artifact.
 
-`test-review` and `trace` each have an additional behavioral eval. `test-review` runs the complete review against files containing nine planted defects plus one clean file, then scores recall, the non-false-positive rate, score variance, and verdict stability. `trace` runs the complete traceability workflow against a ten-criterion seeded set whose declared gate is FAIL and a five-criterion clean set whose declared gate is PASS, then scores criterion status, the gate decision and the criteria behind it, the coverage arithmetic, evidence citation, and case stability.
+The `nfr`, `test-design`, `test-review`, and `trace` suites add behavioral evals. `nfr` audits one evidence bundle with known gaps and one clean bundle. `test-design` analyzes one seeded epic and one clean control epic. `test-review` runs the complete review against files containing nine planted defects plus one clean file, then scores recall, the non-false-positive rate, score variance, and verdict stability. `trace` runs the complete traceability workflow against a ten-criterion seeded set whose declared gate is FAIL and a five-criterion clean set whose declared gate is PASS, then scores criterion status, the gate decision and the criteria behind it, the coverage arithmetic, evidence citation, and case stability.
 
 | Skill                       | Fragment-selection cases | Full behavioral eval                                           |
 | --------------------------- | ------------------------ | -------------------------------------------------------------- |
@@ -383,8 +383,8 @@ The eight suites under `test/evals/` measure one decision inside each knowledge-
 | `bmad-testarch-automate`    | 5                        | None                                                           |
 | `bmad-testarch-ci`          | 2                        | None                                                           |
 | `bmad-testarch-framework`   | 3                        | None                                                           |
-| `bmad-testarch-nfr`         | 2                        | None                                                           |
-| `bmad-testarch-test-design` | 5                        | None                                                           |
+| `bmad-testarch-nfr`         | 2                        | Yes; one evidence bundle with known gaps and one clean bundle  |
+| `bmad-testarch-test-design` | 5                        | Yes; one seeded epic and one clean control epic                |
 | `bmad-testarch-test-review` | 2                        | Yes; three files, nine planted defects, and one clean file     |
 | `bmad-testarch-trace`       | 2                        | Yes; a ten-criterion seeded set and a five-criterion clean set |
 

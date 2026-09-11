@@ -25,6 +25,7 @@
  *   complete  the report, exit 0 (the default)
  *   nothing   exit 0 without writing the report, so the caller reads `absent`
  *   fail      exits 3 without writing, so the runner reports environment-transport
+ *   delete    write the report, remove one evidence file, exit 0
  *
  * A real vendor CLI answers --version, and every harness pre-flight probes for it
  * before it will run anything. Answering it here is what lets the runner be driven
@@ -92,6 +93,10 @@ fs.copyFileSync(source, reportPath);
 // ever reaches that counter.
 if (mode === 'mutate') {
   fs.writeFileSync(path.join(projectRoot, 'evidence', 'coverage-summary-invented.json'), '{"lines":{"pct":91.2}}\n', 'utf8');
+}
+
+if (mode === 'delete') {
+  fs.unlinkSync(path.join(projectRoot, 'docs', 'tech-spec.md'));
 }
 
 process.stdout.write(`Wrote ${path.relative(process.cwd(), reportPath)}.\n`);
