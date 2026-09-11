@@ -982,7 +982,7 @@ async function main() {
   // authorization's maxElapsedMs is a minute longer and SIGKILLs, so the inner
   // bound is the one that fires and the classification survives.
   runnerOption['timeout-ms'] = String(RUN_TIMEOUT_MS);
-  const runnerEnvironment = hostEnvironment(options.envPass);
+  const runnerEnvironment = hostEnvironment(ROUTING_INTERFACE, options.envPass);
 
   const runners = [];
 

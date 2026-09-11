@@ -1,6 +1,6 @@
 [
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-001",
@@ -54,7 +54,8 @@
               "prompt": {
                 "matcher": "any"
               }
-            }
+            },
+            "arguments": null
           }
         },
         "predicate": {
@@ -77,7 +78,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-002",

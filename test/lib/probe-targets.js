@@ -199,6 +199,11 @@ const EXECUTION_TARGETS = [
     // operation declares no artifact, so authorizing one would let a run be
     // scored off a file the contract never said it would read.
     artifacts: {},
+    // The vendor variables and nothing else, which is the list
+    // cli/routing-runner.js declares through ROUTING_REQUEST_KEYS and the list
+    // the two routing contracts carry. A routing decision reads no file and
+    // needs no other key.
+    environmentKeys: vendorEnvironmentNames(),
     maxElapsedMs: 6 * 60_000,
   },
   {

@@ -2730,7 +2730,7 @@ function buildRoutingContract(spec) {
   }));
 
   return {
-    schemaVersion: 4,
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
     contractId: spec.contractId,
