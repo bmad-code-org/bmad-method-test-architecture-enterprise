@@ -148,9 +148,12 @@
  *
  * - Six existence checks that answer a question rather than guard a read: a
  *   declared fixture file, a declared artifact directory, the ground truth and
- *   the workflow directory. The port has no `exists`, and answering "is this
- *   there" by reading every byte of it is a different operation with a
- *   different cost.
+ *   the workflow directory. Two of the six are over directories, which the port
+ *   cannot read at all. The other four the port could answer, badly: asking "is
+ *   this there" through a byte read means loading every byte of a file to learn
+ *   a boolean, which is a different operation with a different cost, so these
+ *   stay by choice rather than by necessity and the distinction is worth the
+ *   sentence.
  * - One directory walk and its guard, which enumerate a staged tree.
  * - Ten lifecycle calls: one `mkdtemp`, four `mkdir`, two `copyFile` and three
  *   `rm` that create and remove the staged workspace.

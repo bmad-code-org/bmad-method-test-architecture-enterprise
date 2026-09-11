@@ -46,9 +46,63 @@
 
 'use strict';
 
+const fs = require('node:fs');
+
 /** `eval-quality` is ESM and this repository is CommonJS, so every entry point through it is asynchronous. */
 async function loadAdapters() {
   return import('eval-quality/adapters');
+}
+
+/**
+ * The scripted mechanism, when `TEA_FILE_SYSTEM_FIXTURE` names a readable file
+ * of one.
+ *
+ * A port adopted but never scripted is a port nobody can tell from the thing it
+ * replaced. `test/test-probe-conformance.js` and the file-system arm certify the
+ * adapter, and neither touches a TEA call site, so a story that adopted the port
+ * and left every harness on `fs.readFileSync` would pass both unchanged.
+ *
+ * So this is the seam `test/test-file-system-port.js` drives. The fixture
+ * declares `reads`, a map of path to the text the port must answer with, and
+ * `log`, a file every call appends to. A path outside `reads` falls through to
+ * the real filesystem, because a harness run reads a great deal this is not
+ * scripting and refusing all of it would prove nothing about the one path under
+ * assertion.
+ *
+ * Replace a port call with `fs.readFileSync` and the variable is ignored: the
+ * real bytes come back, the scripted ones do not, and the call is missing from
+ * the log.
+ *
+ * Read once at module load, so a run cannot be handed a different filesystem
+ * halfway through.
+ */
+function scriptedFixture() {
+  const declared = process.env.TEA_FILE_SYSTEM_FIXTURE;
+  if (!declared) return null;
+  const parsed = JSON.parse(fs.readFileSync(declared, 'utf8'));
+  return { reads: parsed.reads ?? {}, log: parsed.log ?? null };
+}
+
+const fixture = scriptedFixture();
+
+function record(line) {
+  if (fixture?.log) fs.appendFileSync(fixture.log, `${line}\n`);
+}
+
+/** The mechanism the adapter runs on: the real filesystem, or the scripted one over it. */
+function mechanism() {
+  return {
+    readFile: async (filePath) => {
+      record(`read ${filePath}`);
+      if (Object.hasOwn(fixture.reads, filePath)) return Buffer.from(fixture.reads[filePath], 'utf8');
+      return fs.promises.readFile(filePath);
+    },
+    writeFile: async (filePath, bytes) => {
+      record(`write ${filePath}`);
+      await fs.promises.writeFile(filePath, bytes);
+      return bytes.byteLength;
+    },
+  };
 }
 
 let port;
@@ -57,7 +111,7 @@ let port;
 async function filePort() {
   if (port === undefined) {
     const { createNodeFileSystemAdapter } = await loadAdapters();
-    port = createNodeFileSystemAdapter();
+    port = fixture === null ? createNodeFileSystemAdapter() : createNodeFileSystemAdapter(mechanism());
   }
   return port;
 }
