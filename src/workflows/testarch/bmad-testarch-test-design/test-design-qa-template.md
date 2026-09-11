@@ -181,7 +181,7 @@ test('example test @p0', async ({ apiRequest }) => {
 
 ### P0 (Critical)
 
-**Criteria:** Blocks core functionality + High risk (≥6) + No workaround + Affects majority of users
+**Criteria:** Critical business, security, data-integrity, or compliance impact with no safe workaround. Risk score is supporting evidence and is not a required condition.
 
 | Test ID    | Requirement   | Test Level | Risk Link | Notes   |
 | ---------- | ------------- | ---------- | --------- | ------- |
@@ -194,7 +194,7 @@ test('example test @p0', async ({ apiRequest }) => {
 
 ### P1 (High)
 
-**Criteria:** Important features + Medium risk (3-4) + Common workflows + Workaround exists but difficult
+**Criteria:** Core, frequent, or complex behavior with material user reach and a limited workaround. Risk score is supporting evidence and is not a required condition.
 
 | Test ID    | Requirement   | Test Level | Risk Link | Notes   |
 | ---------- | ------------- | ---------- | --------- | ------- |
@@ -207,7 +207,7 @@ test('example test @p0', async ({ apiRequest }) => {
 
 ### P2 (Medium)
 
-**Criteria:** Secondary features + Low risk (1-2) + Edge cases + Regression prevention
+**Criteria:** Secondary behavior with narrower user reach and an acceptable workaround. Risk score is supporting evidence and is not a required condition.
 
 | Test ID    | Requirement   | Test Level | Risk Link | Notes   |
 | ---------- | ------------- | ---------- | --------- | ------- |
@@ -219,7 +219,7 @@ test('example test @p0', async ({ apiRequest }) => {
 
 ### P3 (Low)
 
-**Criteria:** Nice-to-have + Exploratory + Performance benchmarks + Documentation validation
+**Criteria:** Rare, cosmetic, or experimental behavior with minimal impact and an easy workaround. Risk score is supporting evidence and is not a required condition.
 
 | Test ID    | Requirement   | Test Level | Notes   |
 | ---------- | ------------- | ---------- | ------- |

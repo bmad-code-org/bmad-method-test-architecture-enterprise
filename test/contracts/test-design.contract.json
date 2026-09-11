@@ -1,0 +1,1021 @@
+{
+  "schemaVersion": 4,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-test-design-behavioral",
+  "sourceSpecDigest": "sha256:7e7522e734bcfc54d5cee19d5610e7cee1060603d7e4f884a0717438aae57279",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "seeded-offline-order-capture: the document carries a risk register. A table cell holding an R-NNN identifier is the shape the harness reads rows out of, and a document with none is refused before it is scored rather than scored as an empty register.",
+      "severity": "material",
+      "observableSuccessCriterion": "The run writes a test design document whose risk register carries at least one identified risk.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/risk-register-present"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unscoreable-deliverable"
+        }
+      ],
+      "oracles": ["O-001"]
+    },
+    {
+      "id": "B-002",
+      "description": "seeded-offline-order-capture: the document carries the deciding vocabulary of sec-unencrypted-offline-queue, which the epic supports in as many words: \"It holds the full order payload, including the customer's stored card reference and billing address, and it is not encrypted at rest.\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Every risk the feature description supports is reached by the document that analyses it.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/grounded-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "generic-risk-list"
+        }
+      ],
+      "oracles": ["O-002"]
+    },
+    {
+      "id": "B-003",
+      "description": "seeded-offline-order-capture: the document carries the deciding vocabulary of data-sync-conflict-overwrite, which the epic supports in as many words: \"The server applies queued edits in the order they arrive and performs no version check and no timestamp check, so a later arrival overwrites an earlier one\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Every risk the feature description supports is reached by the document that analyses it.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/grounded-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "generic-risk-list"
+        }
+      ],
+      "oracles": ["O-003"]
+    },
+    {
+      "id": "B-004",
+      "description": "seeded-offline-order-capture: the document carries the deciding vocabulary of tech-uncapped-retry-loop, which the epic supports in as many words: \"There is no backoff, no attempt cap, and no dead-letter path\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Every risk the feature description supports is reached by the document that analyses it.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/grounded-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "generic-risk-list"
+        }
+      ],
+      "oracles": ["O-004"]
+    },
+    {
+      "id": "B-005",
+      "description": "seeded-offline-order-capture: the document carries the deciding vocabulary of perf-backlog-sync-budget, which the epic supports in as many words: \"requires a full backlog of that size to finish syncing within 30 seconds of regaining connectivity\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Every risk the feature description supports is reached by the document that analyses it.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/grounded-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "generic-risk-list"
+        }
+      ],
+      "oracles": ["O-005"]
+    },
+    {
+      "id": "B-006",
+      "description": "seeded-offline-order-capture: the document carries the deciding vocabulary of ops-no-release-kill-switch, which the epic supports in as many words: \"There is no feature flag, no staged rollout, and no way to disable it without shipping a new build\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Every risk the feature description supports is reached by the document that analyses it.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/grounded-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "generic-risk-list"
+        }
+      ],
+      "oracles": ["O-006"]
+    },
+    {
+      "id": "B-007",
+      "description": "seeded-offline-order-capture: the document does not carry payment-gateway-failure, which the epic rules out in as many words: \"the existing billing service charges the stored card reference on its own nightly schedule, and this epic does not touch it, call it, or change when it runs\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/no-invented-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "ungrounded-risk"
+        }
+      ],
+      "oracles": ["O-007"]
+    },
+    {
+      "id": "B-008",
+      "description": "seeded-offline-order-capture: the document does not carry cross-tenant-data-leak, which the epic rules out in as many words: \"one customer organization per installation, with its own database and its own application servers\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/no-invented-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "ungrounded-risk"
+        }
+      ],
+      "oracles": ["O-008"]
+    },
+    {
+      "id": "B-009",
+      "description": "seeded-offline-order-capture: the document does not carry browser-and-accessibility-regression, which the epic rules out in as many words: \"There is no browser surface and no web view in this epic\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/no-invented-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "ungrounded-risk"
+        }
+      ],
+      "oracles": ["O-009"]
+    },
+    {
+      "id": "B-010",
+      "description": "seeded-offline-order-capture: the document does not carry data-residency-compliance, which the epic rules out in as many words: \"Data residency is unchanged and is enforced by the platform's regional routing layer, which this epic does not modify.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "seeded-offline-order-capture/no-invented-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "ungrounded-risk"
+        }
+      ],
+      "oracles": ["O-010"]
+    },
+    {
+      "id": "B-011",
+      "description": "clean-last-sync-indicator: the document carries a risk register. A table cell holding an R-NNN identifier is the shape the harness reads rows out of, and a document with none is refused before it is scored rather than scored as an empty register.",
+      "severity": "material",
+      "observableSuccessCriterion": "The run writes a test design document whose risk register carries at least one identified risk.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-last-sync-indicator/risk-register-present"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unscoreable-deliverable"
+        }
+      ],
+      "oracles": ["O-011"]
+    },
+    {
+      "id": "B-012",
+      "description": "clean-last-sync-indicator: the document does not carry data-loss-or-corruption, which the epic rules out in as many words: \"The settings store is opened read-only for this field, so no order, queue entry or setting can be altered or lost by it.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-last-sync-indicator/no-invented-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "ungrounded-risk"
+        }
+      ],
+      "oracles": ["O-012"]
+    },
+    {
+      "id": "B-013",
+      "description": "clean-last-sync-indicator: the document does not carry unauthorized-exposure, which the epic rules out in as many words: \"it is shown to the person holding the device, so the change exposes nothing to anyone who could not already see it, and it adds no personal data to the screen\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-last-sync-indicator/no-invented-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "ungrounded-risk"
+        }
+      ],
+      "oracles": ["O-013"]
+    },
+    {
+      "id": "B-014",
+      "description": "clean-last-sync-indicator: the document does not carry render-performance-degradation, which the epic rules out in as many words: \"The single local key lookup runs on a screen that is already open, so the screen's existing render budget is unchanged.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-last-sync-indicator/no-invented-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "ungrounded-risk"
+        }
+      ],
+      "oracles": ["O-014"]
+    },
+    {
+      "id": "B-015",
+      "description": "clean-last-sync-indicator: the document does not carry rollout-without-kill-switch, which the epic rules out in as many words: \"an existing feature flag the release process already toggles per organization, so it can be turned off without a new build\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "No risk the feature description rules out appears in the document.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-last-sync-indicator/no-invented-risks"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "ungrounded-risk"
+        }
+      ],
+      "oracles": ["O-015"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document carries a risk register. A table cell holding an R-NNN identifier is the shape the harness reads rows out of, and a document with none is refused before it is scored rather than scored as an empty register.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "regex",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run that wrote a document carrying no risk identifier in any table.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "regex",
+        "operands": [
+          {
+            "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+          }
+        ],
+        "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document carries the deciding vocabulary of sec-unencrypted-offline-queue, which the epic supports in as many words: \"It holds the full order payload, including the customer's stored card reference and billing address, and it is not encrypted at rest.\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document never names sec-unencrypted-offline-queue in any of the terms the epic grounds it in.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Uu][Nn][Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Nn][Oo][Tt]\\s+[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt]|[Pp][Ll][Aa][Ii][Nn]\\s+[Tt][Ee][Xx][Tt]|[Cc][Ll][Ee][Aa][Rr][Tt][Ee][Xx][Tt]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ii][Oo][Nn]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt])[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Qq][Uu][Ee][Uu][Ee]|[Ll][Oo][Cc][Aa][Ll]|[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Qq][Ll][Ii][Tt][Ee]|[Oo][Nn]-[Dd][Ii][Ss][Kk]|[Aa][Tt]\\s+[Rr][Ee][Ss][Tt]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Ss][Tt][Oo][Rr][Ee][Dd])[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document carries the deciding vocabulary of data-sync-conflict-overwrite, which the epic supports in as many words: \"The server applies queued edits in the order they arrive and performs no version check and no timestamp check, so a later arrival overwrites an earlier one\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document never names data-sync-conflict-overwrite in any of the terms the epic grounds it in.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Ff][Ll][Ii][Cc][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt]|[Cc][Ll][Oo][Bb][Bb][Ee][Rr]|[Ll][Aa][Ss][Tt]\\s+[Ww][Rr][Ii][Tt][Ee]|[Ll][Aa][Ss][Tt]-[Ww][Rr][Ii][Tt][Ee]|[Ll][Oo][Ss][Tt]\\s+[Uu][Pp][Dd][Aa][Tt][Ee])[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Ss][Ii][Mm][Uu][Ll][Tt][Aa][Nn][Ee][Oo][Uu][Ss]|[Tt][Ww][Oo]\\s+[Tt][Ee][Cc][Hh][Nn][Ii][Cc][Ii][Aa][Nn][Ss]|[Ss][Ee][Cc][Oo][Nn][Dd]\\s+[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Aa][Mm][Ee]\\s+[Ww][Oo][Rr][Kk]\\s+[Oo][Rr][Dd][Ee][Rr]|[Vv][Ee][Rr][Ss][Ii][Oo][Nn]|[Tt][Ii][Mm][Ee][Ss][Tt][Aa][Mm][Pp])[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document carries the deciding vocabulary of tech-uncapped-retry-loop, which the epic supports in as many words: \"There is no backoff, no attempt cap, and no dead-letter path\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document never names tech-uncapped-retry-loop in any of the terms the epic grounds it in.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Rr][Ee][Tt][Rr][Yy]|[Rr][Ee][Tt][Rr][Ii][Ee][Ss]|[Rr][Ee][Tt][Rr][Ii][Ee][Dd]|[Bb][Aa][Cc][Kk][Oo][Ff][Ff]|[Bb][Aa][Cc][Kk]-[Oo][Ff][Ff]|[Dd][Ee][Aa][Dd]\\s+[Ll][Ee][Tt][Tt][Ee][Rr]|[Dd][Ee][Aa][Dd]-[Ll][Ee][Tt][Tt][Ee][Rr])[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Cc][Aa][Pp]|[Uu][Nn][Bb][Oo][Uu][Nn][Dd][Ee][Dd]|[Ii][Nn][Dd][Ee][Ff][Ii][Nn][Ii][Tt]|[Ii][Nn][Ff][Ii][Nn][Ii][Tt][Ee]|[Ll][Oo][Oo][Pp]|[Ss][Tt][Oo][Rr][Mm]|[Ee][Xx][Hh][Aa][Uu][Ss][Tt]|[Nn][Oo]\\s+[Ll][Ii][Mm][Ii][Tt]|[Ff][Oo][Rr][Ee][Vv][Ee][Rr])[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document carries the deciding vocabulary of perf-backlog-sync-budget, which the epic supports in as many words: \"requires a full backlog of that size to finish syncing within 30 seconds of regaining connectivity\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document never names perf-backlog-sync-budget in any of the terms the epic grounds it in.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Bb][Aa][Cc][Kk][Ll][Oo][Gg]|2,000|2000|[Bb][Uu][Ll][Kk]|[Vv][Oo][Ll][Uu][Mm][Ee]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Ll][Aa][Rr][Gg][Ee]\\s+[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:30\\s+[Ss][Ee][Cc][Oo][Nn][Dd]|30[Ss]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Ss][Ll][Oo][Ww]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Ww][Ii][Tt][Hh][Ii][Nn]\\s+30|[Ss][Yy][Nn][Cc]\\s+[Tt][Ii][Mm][Ee]|[Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document carries the deciding vocabulary of ops-no-release-kill-switch, which the epic supports in as many words: \"There is no feature flag, no staged rollout, and no way to disable it without shipping a new build\" A document that never reaches this vocabulary has not analysed the feature it was given. This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document never names ops-no-release-kill-switch in any of the terms the epic grounds it in.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Tt][Oo][Gg][Gg][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd])[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Ss][Tt][Aa][Gg][Ee][Dd]|[Ss][Tt][Oo][Rr][Ee]\\s+[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-007",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document does not carry payment-gateway-failure, which the epic rules out in as many words: \"the existing billing service charges the stored card reference on its own nightly schedule, and this epic does not touch it, call it, or change when it runs\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document reports payment-gateway-failure against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Cc][Hh][Aa][Rr][Gg][Ii][Nn][Gg]|[Cc][Hh][Aa][Rr][Gg][Ee]\\s+[Ff][Aa][Ii][Ll]|[Ss][Ee][Tt][Tt][Ll][Ee][Mm][Ee][Nn][Tt]|[Cc][Aa][Rr][Dd]\\s+[Pp][Rr][Oo][Cc][Ee][Ss][Ss][Oo][Rr]|[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr])[\\s\\S]*$"
+              },
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Oo][Uu][Tt][Aa][Gg][Ee]|[Uu][Nn][Aa][Vv][Aa][Ii][Ll][Aa][Bb][Ll][Ee]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee][Dd]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee]|[Tt][Hh][Ii][Rr][Dd]-[Pp][Aa][Rr][Tt][Yy]|[Tt][Hh][Ii][Rr][Dd]\\s+[Pp][Aa][Rr][Tt][Yy]|[Tt][Ii][Mm][Ee][Oo][Uu][Tt]|[Dd][Oo][Ww][Nn])[\\s\\S]*$"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-008",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document does not carry cross-tenant-data-leak, which the epic rules out in as many words: \"one customer organization per installation, with its own database and its own application servers\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document reports cross-tenant-data-leak against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Tt][Ee][Nn][Aa][Nn][Tt]|[Cc][Rr][Oo][Ss][Ss]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Mm][Uu][Ll][Tt][Ii]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn][Ss]|[Aa][Nn][Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Oo][Tt][Hh][Ee][Rr]\\s+[Cc][Uu][Ss][Tt][Oo][Mm][Ee][Rr][Ss])[\\s\\S]*$"
+              },
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Ll][Ee][Aa][Kk]|[Ll][Ee][Aa][Kk][Aa][Gg][Ee]|[Ii][Ss][Oo][Ll][Aa][Tt][Ii][Oo][Nn]|[Bb][Ll][Ee][Ee][Dd]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Bb][Oo][Uu][Nn][Dd][Aa][Rr][Yy]|[Ss][Ee][Gg][Rr][Ee][Gg][Aa][Tt])[\\s\\S]*$"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-009",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document does not carry browser-and-accessibility-regression, which the epic rules out in as many words: \"There is no browser surface and no web view in this epic\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document reports browser-and-accessibility-regression against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+              }
+            ],
+            "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss][Ii][Bb][Ii][Ll][Ii][Tt][Yy]|[Aa]11[Yy]|[Ss][Cc][Rr][Ee][Ee][Nn]\\s+[Rr][Ee][Aa][Dd][Ee][Rr]|[Ww][Cc][Aa][Gg]|[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Ss][Aa][Ff][Aa][Rr][Ii]|[Ff][Ii][Rr][Ee][Ff][Oo][Xx]|[Rr][Ee][Ss][Pp][Oo][Nn][Ss][Ii][Vv][Ee]\\s+[Ll][Aa][Yy][Oo][Uu][Tt])[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-010",
+      "polarity": "expects-hold",
+      "commentary": "seeded-offline-order-capture: the document does not carry data-residency-compliance, which the epic rules out in as many words: \"Data residency is unchanged and is enforced by the platform's regional routing layer, which this epic does not modify.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The test design document written for seeded-offline-order-capture, taken whole.",
+        "negativeDomain": "A run whose document reports data-residency-compliance against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-seeded-offline-order-capture/artifact/design"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Rr][Ee][Ss][Ii][Dd][Ee][Nn][Cc][Yy]|[Gg][Dd][Pp][Rr]|[Ss][Oo][Vv][Ee][Rr][Ee][Ii][Gg][Nn][Tt][Yy]|[Dd][Aa][Tt][Aa]\\s+[Pp][Rr][Oo][Tt][Ee][Cc][Tt][Ii][Oo][Nn]\\s+[Rr][Ee][Gg][Uu][Ll][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+              },
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-seeded-offline-order-capture/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Cc][Oo][Mm][Pp][Ll][Ii]|[Rr][Ee][Gg][Uu][Ll][Aa][Tt]|[Jj][Uu][Rr][Ii][Ss][Dd][Ii][Cc][Tt][Ii][Oo][Nn]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Oo][Rr][Dd][Ee][Rr]|[Ll][Aa][Ww][Ff][Uu][Ll]|[Ll][Ee][Gg][Aa][Ll])[\\s\\S]*$"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-011",
+      "polarity": "expects-hold",
+      "commentary": "clean-last-sync-indicator: the document carries a risk register. A table cell holding an R-NNN identifier is the shape the harness reads rows out of, and a document with none is refused before it is scored rather than scored as an empty register.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "regex",
+        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
+        "negativeDomain": "A run that wrote a document carrying no risk identifier in any table.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+      },
+      "check": {
+        "op": "regex",
+        "operands": [
+          {
+            "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+          }
+        ],
+        "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
+      }
+    },
+    {
+      "id": "O-012",
+      "polarity": "expects-hold",
+      "commentary": "clean-last-sync-indicator: the document does not carry data-loss-or-corruption, which the epic rules out in as many words: \"The settings store is opened read-only for this field, so no order, queue entry or setting can be altered or lost by it.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
+        "negativeDomain": "A run whose document reports data-loss-or-corruption against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Cc][Oo][Rr][Rr][Uu][Pp][Tt]|[Dd][Aa][Tt][Aa]\\s+[Ll][Oo][Ss][Ss]|[Ll][Oo][Ss][Ee]\\s+[Dd][Aa][Tt][Aa]|[Ll][Oo][Ss][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Dd][Ee][Ll][Ee][Tt][Ee]|[Tt][Rr][Uu][Nn][Cc][Aa][Tt])[\\s\\S]*$"
+              },
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Ss][Tt][Oo][Rr][Ee]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Rr][Ee][Cc][Oo][Rr][Dd]|[Ff][Ii][Ee][Ll][Dd]|[Dd][Aa][Tt][Aa][Bb][Aa][Ss][Ee]|[Ss][Ee][Tt][Tt][Ii][Nn][Gg]|[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-013",
+      "polarity": "expects-hold",
+      "commentary": "clean-last-sync-indicator: the document does not carry unauthorized-exposure, which the epic rules out in as many words: \"it is shown to the person holding the device, so the change exposes nothing to anyone who could not already see it, and it adds no personal data to the screen\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
+        "negativeDomain": "A run whose document reports unauthorized-exposure against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Uu][Nn][Aa][Uu][Tt][Hh][Oo][Rr][Ii]|[Ll][Ee][Aa][Kk]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Ee][Xx][Pp][Oo][Ss][Ee]|[Pp][Ii][Ii]|[Pp][Ee][Rr][Ss][Oo][Nn][Aa][Ll]\\s+[Dd][Aa][Tt][Aa]|[Ss][Ee][Nn][Ss][Ii][Tt][Ii][Vv][Ee]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll])[\\s\\S]*$"
+              },
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss]|[Pp][Ee][Rr][Mm][Ii][Ss][Ss][Ii][Oo][Nn]|[Aa][Uu][Tt][Hh]|[Vv][Ii][Ss][Ii][Bb][Ll][Ee]|[Dd][Ii][Ss][Cc][Ll][Oo][Ss]|[Pp][Rr][Ii][Vv][Aa][Cc][Yy])[\\s\\S]*$"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-014",
+      "polarity": "expects-hold",
+      "commentary": "clean-last-sync-indicator: the document does not carry render-performance-degradation, which the epic rules out in as many words: \"The single local key lookup runs on a screen that is already open, so the screen's existing render budget is unchanged.\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
+        "negativeDomain": "A run whose document reports render-performance-degradation against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Ss][Ll][Oo][Ww]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Jj][Aa][Nn][Kk]|[Ff][Rr][Aa][Mm][Ee]|[Dd][Ee][Gg][Rr][Aa][Dd]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Rr][Ee][Nn][Dd][Ee][Rr]\\s+[Bb][Uu][Dd][Gg][Ee][Tt])[\\s\\S]*$"
+              },
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Ll][Oo][Aa][Dd]|[Rr][Ee][Nn][Dd][Ee][Rr]|[Ss][Cc][Rr][Ee][Ee][Nn]|[Ss][Tt][Aa][Rr][Tt][Uu][Pp]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Nn][Ee][Tt][Ww][Oo][Rr][Kk]\\s+[Cc][Aa][Ll][Ll]|[Pp][Oo][Ll][Ll])[\\s\\S]*$"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-015",
+      "polarity": "expects-hold",
+      "commentary": "clean-last-sync-indicator: the document does not carry rollout-without-kill-switch, which the epic rules out in as many words: \"an existing feature flag the release process already toggles per organization, so it can be turned off without a new build\" A risk list that reaches it is a list that would fit any feature, which is the whole failure this suite exists to catch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The test design document written for clean-last-sync-indicator, taken whole.",
+        "negativeDomain": "A run whose document reports rollout-without-kill-switch against a feature description that excludes it.",
+        "evidenceTargets": ["/interactions/design-clean-last-sync-indicator/artifact/design"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Nn][Oo]\\s+[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Cc][Aa][Nn][Nn][Oo][Tt]\\s+[Bb][Ee]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd]|[Uu][Nn][Rr][Ee][Cc][Oo][Vv][Ee][Rr][Aa][Bb][Ll][Ee]|[Nn][Oo]\\s+[Ww][Aa][Yy]\\s+[Tt][Oo]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee])[\\s\\S]*$"
+              },
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/design-clean-last-sync-indicator/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-test-design-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "design-fixture-set",
+          "invocation": {
+            "executable": "tea-test-design-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": true,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": ["agent"],
+              "permittedKeys": ["agent", "agent-cmd", "agent-arg", "env-pass", "model", "timeout-ms"],
+              "types": {
+                "agent": "string",
+                "agent-cmd": "string",
+                "agent-arg": "string",
+                "env-pass": "string",
+                "model": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "HOME", "OPENAI_API_KEY", "USER"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "HOME": "string",
+                "OPENAI_API_KEY": "string",
+                "USER": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": ["design"],
+          "descriptorChannel": {
+            "kind": "artifact",
+            "artifactId": "design"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [],
+            "permittedKeys": [],
+            "types": {},
+            "successIndicator": "",
+            "channelRoles": {
+              "": "payload"
+            },
+            "collectionLocations": []
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "scope-follows-design-level",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-design-level-full",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-sync-indicator/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-sync-indicator`\n- `{config_source}`: `field-sync-indicator/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-sync-indicator/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `9`\n- `run_key`: `epic-9`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-sync-indicator/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-sync-indicator/test-artifacts/test-design-epic-9.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-sync-indicator/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+                  }
+                }
+              },
+              {
+                "legId": "witness-design-level-minimal",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-sync-indicator/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-sync-indicator`\n- `{config_source}`: `field-sync-indicator/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-sync-indicator/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `9`\n- `run_key`: `epic-9`\n- `design_level`: `minimal`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-sync-indicator/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-sync-indicator/test-artifacts/test-design-epic-9.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-sync-indicator/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "deep-equality",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-design-level-full/artifact/design"
+                    },
+                    {
+                      "pointer": "/interactions/witness-design-level-minimal/artifact/design"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "design-seeded-offline-order-capture",
+      "operationId": "design-fixture-set",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+          }
+        }
+      }
+    },
+    {
+      "stepId": "design-clean-last-sync-indicator",
+      "operationId": "design-fixture-set",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-sync-indicator/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-sync-indicator`\n- `{config_source}`: `field-sync-indicator/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-sync-indicator/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `9`\n- `run_key`: `epic-9`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-sync-indicator/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-sync-indicator/test-artifacts/test-design-epic-9.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-sync-indicator/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Each plan step stages one fixture set from test/fixtures/test-design-eval/ into a disposable workspace: the set's epic under its own project root (field-order-capture/ for seeded-offline-order-capture, field-sync-indicator/ for clean-last-sync-indicator), an empty test-artifacts/, a resolved _bmad/tea/config.yaml whose test_artifacts points inside that workspace, and the bmad-testarch-test-design workflow under skill/. The skill sits outside the project root because three of its files carry worked risk registers with their own R-001 rows and a fourth carries one numbered from R-002 (test-design-template.md, checklist.md, resources/test-design-epic-3.example.md and resources/knowledge/adr-quality-readiness-checklist.md), and a source tree containing them would let a run lift its register from the worked example and still read as an analysis of the epic. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run and again on --validate-only. The prompt on standard input names the project root and skill/ and pins the mode, the epic number and the run key, because step-01 halts to ask for each of them and a headless run that halts is an environment failure rather than a measurement. The witness differs its two legs on design_level over one staged set, the value test-design-template.md renders into the document's Scope line, rather than between the two sets, whose documents differ because their staged epics differ.",
+    "cleanup": "Delete the workspace. The corpus under test/fixtures/test-design-eval/ is read-only and the harness digests it before and after every run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 400,
+    "maxWallClockMinutes": 40,
+    "maxCostUsd": "6.00"
+  },
+  "safetyLimits": [
+    "The runner writes only inside the staged workspace, and only its deliverable under the fixture set's own test-artifacts/; the harness fails a run that changed the repository or the staged corpus.",
+    "The run adds, edits, and deletes nothing under the fixture set's docs/. The workflow does not change its inputs, and a run that did has moved the benchmark.",
+    "No credential value appears in a prompt, an artifact, a log, or a result file."
+  ],
+  "requiredEvidence": [
+    "The test design document each run wrote, in full.",
+    "The exit code of each invocation.",
+    "The digest of the prompt each run was given, so an edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 4,
+  "fixtureReset": null
+}

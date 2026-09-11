@@ -167,6 +167,23 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
  */
 const EXECUTION_TARGETS = [
   {
+    interfaceId: 'tea-test-design-runner',
+    executable: 'tea-test-design-runner',
+    script: path.join('cli', 'test-design-runner.js'),
+    subcommandPaths: [[]],
+    // The one deliverable the epic-level test-design workflow writes, at the
+    // workflow's own default location relative to the project root. A caller
+    // whose project root is not the run directory, which is every staged eval
+    // workspace, supplies its own path through `commandTargetPolicy`'s artifact
+    // override; this is what a run gets when it supplies none. The epic number
+    // is the workflow's own placeholder and a caller always overrides it.
+    artifacts: { design: 'test-artifacts/test-design-epic-1.md' },
+    // One minute above RUN_TIMEOUT_MS in test/eval-test-design.js, for the
+    // reason the comment above EXECUTION_TARGETS gives: the inner clock
+    // classifies, and this one only backstops.
+    maxElapsedMs: 21 * 60_000,
+  },
+  {
     interfaceId: 'tea-test-review',
     executable: 'tea-test-review',
     script: path.join('cli', 'test-review.js'),

@@ -1,0 +1,115 @@
+{
+  "$comment": [
+    "One edit to seeded-correct-run's coverage plan and nothing else: the unencrypted-queue risk drops from P0",
+    "to P2 and the backlog-budget risk rises from P2 to P0. No risk row moves and no cell changes.",
+    "",
+    "It is in the corpus because it is the only case that can fail the ordering constraint, and because it",
+    "shows what that constraint does and does not claim. The fixture never says the queue risk must be P0. It",
+    "says the queue risk is more severe than the backlog risk, so whatever priorities the run assigns, the",
+    "first must not come out weaker than the second. Asserting an absolute priority would measure the fixture's",
+    "opinion; the workflow's own knowledge fragments say priority is a separate judgment the score informs."
+  ],
+  "id": "seeded-priority-inverted",
+  "suite": "test-design",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:c9d52801aeb14e1aa7bcc9c69f737ea3e07007b3e0d98371c0d25a068ba74d4f"
+  },
+  "derivation": [
+    "Every shape, link, grounding and coverage number is seeded-correct-run's, because only the priority",
+    "sections the rows sit in changed. Coverage is still 5 of 5: each risk is still linked from a row whose",
+    "level the fixture admits, and the check reads the level and not the section.",
+    "",
+    "Priorities after the edit: data P0, perf P0, tech P1, sec P2, ops P2.",
+    "",
+    "Ranks are sec 1, data 2, tech 3, perf 4, ops 4, so the nine strictly ordered pairs and their verdicts are:",
+    "  sec over data:  P2 against P0, fails",
+    "  sec over tech:  P2 against P1, fails",
+    "  sec over perf:  P2 against P0, fails",
+    "  sec over ops:   P2 against P2, holds, because equal priorities satisfy the constraint",
+    "  data over tech: P0 against P1, holds",
+    "  data over perf: P0 against P0, holds",
+    "  data over ops:  P0 against P2, holds",
+    "  tech over perf: P1 against P0, fails",
+    "  tech over ops:  P1 against P2, holds",
+    "Nine resolvable, five satisfied, four failures."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": false,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 5,
+      "wellFormedIds": 5,
+      "validCategories": 5,
+      "inScale": 5,
+      "arithmeticOk": 5,
+      "banded": 5,
+      "bandOk": 5,
+      "arithmeticTotal": 5
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 5,
+      "resolved": 5,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 5,
+      "missed": []
+    },
+    "ungrounded": [],
+    "cleanControl": null,
+    "coverage": {
+      "evaluated": 5,
+      "satisfied": 5,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 9,
+      "satisfied": 5,
+      "failures": [
+        {
+          "higher": "sec-unencrypted-offline-queue",
+          "lower": "data-sync-conflict-overwrite",
+          "higherPriority": "P2",
+          "lowerPriority": "P0"
+        },
+        {
+          "higher": "sec-unencrypted-offline-queue",
+          "lower": "tech-uncapped-retry-loop",
+          "higherPriority": "P2",
+          "lowerPriority": "P1"
+        },
+        {
+          "higher": "sec-unencrypted-offline-queue",
+          "lower": "perf-backlog-sync-budget",
+          "higherPriority": "P2",
+          "lowerPriority": "P0"
+        },
+        {
+          "higher": "tech-uncapped-retry-loop",
+          "lower": "perf-backlog-sync-budget",
+          "higherPriority": "P1",
+          "lowerPriority": "P0"
+        }
+      ]
+    }
+  }
+}

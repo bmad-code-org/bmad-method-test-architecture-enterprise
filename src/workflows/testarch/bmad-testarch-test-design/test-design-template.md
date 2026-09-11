@@ -60,10 +60,10 @@ lastSaved: ''
 
 ### Low-Priority Risks (Score 1-2)
 
-| Risk ID | Category | Description   | Probability | Impact | Score | Action  |
-| ------- | -------- | ------------- | ----------- | ------ | ----- | ------- |
-| R-005   | OPS      | {description} | 1           | 2      | 2     | Monitor |
-| R-006   | BUS      | {description} | 1           | 1      | 1     | Monitor |
+| Risk ID | Category | Description   | Probability | Impact | Score | Action   |
+| ------- | -------- | ------------- | ----------- | ------ | ----- | -------- |
+| R-005   | OPS      | {description} | 1           | 2      | 2     | Document |
+| R-006   | BUS      | {description} | 1           | 1      | 1     | Document |
 
 ### Risk Category Legend
 
@@ -171,45 +171,18 @@ Risk score is supporting evidence and is not a required condition.
 
 ---
 
-## Execution Order
+## Execution Strategy
 
-### Smoke Tests (<5 min)
+**Philosophy:** Run every functional scenario in pull requests while the suite stays under 15 minutes.
+Defer only work with material infrastructure or duration cost. P0 through P3 are priority and are not
+execution timing; this section decides when tests run and the coverage plan above decides what they are.
 
-**Purpose**: Fast feedback, catch build-breaking issues
+- **Pull request:** {scenario classes that run on every pull request}. Playwright runs in parallel with
+  a target duration below 15 minutes.
+- **Nightly:** {long-running or expensive suites, for example burn-in and provider retry}.
+- **Weekly:** {the most expensive work, for example k6 baselines and exploratory sessions}.
 
-- [ ] {scenario} (30s)
-- [ ] {scenario} (45s)
-- [ ] {scenario} (1min)
-
-**Total**: {smoke_count} scenarios
-
-### P0 Tests (<10 min)
-
-**Purpose**: Critical path validation
-
-- [ ] {scenario} (E2E)
-- [ ] {scenario} (API)
-- [ ] {scenario} (API)
-
-**Total**: {p0_count} scenarios
-
-### P1 Tests (<30 min)
-
-**Purpose**: Important feature coverage
-
-- [ ] {scenario} (API)
-- [ ] {scenario} (Component)
-
-**Total**: {p1_count} scenarios
-
-### P2/P3 Tests (<60 min)
-
-**Purpose**: Full regression coverage
-
-- [ ] {scenario} (Unit)
-- [ ] {scenario} (API)
-
-**Total**: {p2p3_count} scenarios
+Do not re-list the individual tests here. They are already in the coverage plan.
 
 ---
 

@@ -1,0 +1,82 @@
+{
+  "$comment": [
+    "The reference run of the clean control. The epic's genuine risk set is small and this run reports two",
+    "risks, under the ceiling of three, and reaches none of the four risks the epic rules out.",
+    "",
+    "The document is CONSTRUCTED. Its two risks are the ones the epic actually leaves open: a drifted device",
+    "clock making a relative time read as recent, and the absent-value case having to hide the row."
+  ],
+  "id": "clean-correct-run",
+  "suite": "test-design",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "clean-last-sync-indicator",
+    "scoringInputsDigest": "sha256:49a920fea137ea9bc41a7e518fbed590865814abae0a86f4710828128a86a90b"
+  },
+  "derivation": [
+    "Two risk rows, R-001 and R-002, so wellFormedIds is 2 and validCategories is 2 over BUS and TECH.",
+    "",
+    "Scale and arithmetic: 2x2=4 and 2x1=2. Both factors in range on both rows, so inScale is 2, the",
+    "arithmetic denominator is 2 and arithmeticOk is 2.",
+    "",
+    "Bands: 4 under Score 3-4 and 2 under Score 1-2, so banded is 2 and bandOk is 2.",
+    "",
+    "Risk links: two coverage rows, each naming a declared id, so 2 of 2 resolve.",
+    "",
+    "The clean set declares no material risk, so grounding is 0 of 0, coverage evaluates nothing and no",
+    "ordering pair exists. None of the four ruled-out matchers fires on either description, so ungrounded",
+    "is empty.",
+    "",
+    "Clean control: two rows against a ceiling of three, so the excess is 0."
+  ],
+  "result": {
+    "mentions": {
+      "data-loss-or-corruption": false,
+      "unauthorized-exposure": false,
+      "render-performance-degradation": false,
+      "rollout-without-kill-switch": false
+    },
+    "shape": {
+      "rows": 2,
+      "wellFormedIds": 2,
+      "validCategories": 2,
+      "inScale": 2,
+      "arithmeticOk": 2,
+      "banded": 2,
+      "bandOk": 2,
+      "arithmeticTotal": 2
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 2,
+      "resolved": 2,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 0,
+      "matched": 0,
+      "missed": []
+    },
+    "ungrounded": [],
+    "cleanControl": {
+      "maxRisks": 3,
+      "excess": 0
+    },
+    "coverage": {
+      "evaluated": 0,
+      "satisfied": 0,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 0,
+      "resolvable": 0,
+      "satisfied": 0,
+      "failures": []
+    }
+  }
+}

@@ -80,6 +80,11 @@ const {
   TRACE_INTERFACE,
   TRACE_OPERATION,
 } = require('../test/eval-trace');
+// And for the test-design command, on the same rule: the command owns its request
+// shape and its default agent, and the harness owns the prompt, because the harness
+// is the only thing that assembles one.
+const { TEST_DESIGN_REQUEST_KEYS, DEFAULT_AGENT: TEST_DESIGN_DEFAULT_AGENT } = require('../cli/test-design-runner');
+const { buildPrompt: buildTestDesignPrompt, TEST_DESIGN_INTERFACE, TEST_DESIGN_OPERATION } = require('../test/eval-test-design');
 // The prompt a selection witness leg sends is the prompt the harness assembles,
 // for the reason the trace witness reads its two prompts from the harness as
 // well: a leg carrying a description of a prompt parses, compiles, schedules,
@@ -115,6 +120,15 @@ const FIXTURE_PREFIX = 'test/fixtures/test-review-eval/';
 const TRACE_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval');
 const TRACE_GROUND_TRUTH_PATH = path.join(TRACE_FIXTURE_ROOT, 'ground-truth.json');
 const TRACE_STEP_05 = path.join(WORKFLOW_ROOT, 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
+const TEST_DESIGN_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval');
+const TEST_DESIGN_GROUND_TRUTH_PATH = path.join(TEST_DESIGN_FIXTURE_ROOT, 'ground-truth.json');
+/** The step files whose rules this corpus is written against, digested as the specification. */
+const TEST_DESIGN_SPEC_FILES = [
+  path.join(WORKFLOW_ROOT, 'bmad-testarch-test-design', 'steps-c', 'step-03-risk-and-testability.md'),
+  path.join(WORKFLOW_ROOT, 'bmad-testarch-test-design', 'steps-c', 'step-04-coverage-plan.md'),
+  path.join(WORKFLOW_ROOT, 'bmad-testarch-test-design', 'steps-c', 'step-05-generate-output.md'),
+  path.join(WORKFLOW_ROOT, 'bmad-testarch-test-design', 'test-design-template.md'),
+];
 
 /**
  * The Eval Contract schema version this generator writes. A bump arrives as a
@@ -2827,6 +2841,394 @@ function buildRoutingContract(spec) {
 }
 
 // ---------------------------------------------------------------------------
+// test-design.contract.json
+// ---------------------------------------------------------------------------
+
+/**
+ * The request shape of the command this contract names, read from that command
+ * rather than transcribed here, the same rule the other three follow.
+ */
+const TEST_DESIGN_REQUEST_SHAPE = Object.fromEntries(
+  Object.entries(TEST_DESIGN_REQUEST_KEYS).map(([channel, keys]) => [channel, stringShape(keys.required, keys.permitted)]),
+);
+
+function testDesignStepId(set) {
+  return `design-${set.id}`;
+}
+
+/** The one artifact this operation declares, as an interaction-rooted pointer. */
+function testDesignArtifactPointer(stepId) {
+  return `/interactions/${stepId}/artifact/design`;
+}
+
+/**
+ * One fixture token as an anchored, case-insensitive ECMA-262 fragment.
+ *
+ * Three things have to line up with `matchesGroups` in test/eval-test-design.js,
+ * which is the predicate every oracle here is paired with. That predicate lowercases
+ * and collapses whitespace before it searches, so each letter becomes a two-member
+ * character class and each space becomes `\s+`; without the second, a token like
+ * "feature flag" would miss wherever the document wrapped the line between the two
+ * words and the oracle would disagree with its own scorer.
+ *
+ * No lookahead and no backreference anywhere in this file's patterns. The evaluator
+ * refuses a catastrophic-backtracking shape at compile time, which is how every
+ * regex oracle in test-review.contract.json was found to be unrunnable, and a
+ * conjunction is spelled with the `all` connective rather than with a lookahead
+ * chain for that reason.
+ */
+function caseInsensitiveToken(token) {
+  return [...token]
+    .map((character) => {
+      if (character === ' ') return String.raw`\s+`;
+      if (/[a-z]/i.test(character)) return `[${character.toUpperCase()}${character.toLowerCase()}]`;
+      return character.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+    })
+    .join('');
+}
+
+/** "the document contains at least one of these tokens", anchored over the whole body. */
+function tokenGroupExpression(pointer, group) {
+  return {
+    op: 'regex',
+    operands: [{ pointer }],
+    pattern: `^[\\s\\S]*(?:${group.map(caseInsensitiveToken).join('|')})[\\s\\S]*$`,
+  };
+}
+
+/** The conjunction of a declared matcher's groups, as `all` over one regex per group. */
+function matcherExpression(pointer, groups) {
+  const operands = groups.map((group) => tokenGroupExpression(pointer, group));
+  return operands.length === 1 ? operands[0] : { op: 'all', operands };
+}
+
+/**
+ * Every oracle this contract states, with the harness predicate each one is paired
+ * with, in a stable order.
+ *
+ * WHY THESE ORACLES ARE THE WEAK READING, AND WHY THAT IS STATED RATHER THAN HIDDEN
+ *
+ * `bmad-testarch-test-design` declares one output and it is prose:
+ * `{test_artifacts}/test-design-epic-{epic_num}.md` and nothing machine-readable
+ * beside it. `bmad-testarch-trace` is the contrast, and the comment in
+ * buildTraceContract says why it matters: its markdown matrix "is markdown, which
+ * the operator vocabulary addresses only as a whole document", so trace states the
+ * matrix's content through the arithmetic consequences its JSON summary carries and
+ * declares the matrix a volatile pointer. Test-design has no summary to point at.
+ *
+ * The consequence is concrete. test/eval-test-design.js scores each risk row's own
+ * category, probability, impact, score, band and description, and checks arithmetic,
+ * scale, band placement, grounding, coverage mapping and pairwise priority ordering.
+ * None of that is expressible here, because an oracle over a markdown body cannot
+ * tell which row a token sits in and cannot do arithmetic at all.
+ *
+ * So every oracle below is paired with `documentMentions`, the harness's own
+ * document-global predicate, rather than with the row-scoped result. That makes the
+ * agreement test/test-contract-oracles.js runs true by construction. Pairing an
+ * oracle against the row-scoped result instead would make the two agree by
+ * coincidence on whatever the replay corpus happens to hold, which reads as coverage
+ * and holds nothing.
+ *
+ * A green test-contract-oracles.js therefore says the contract and the harness agree
+ * about which vocabulary the document carries. It does not say the suite passed, and
+ * it says nothing at all about the arithmetic or the mapping.
+ *
+ * @param {object} groundTruth Parsed test/fixtures/test-design-eval/ground-truth.json.
+ * @returns {Array<object>}
+ */
+function testDesignOracleSpecs(groundTruth) {
+  const specs = [];
+  let counter = 0;
+  const nextId = () => {
+    counter += 1;
+    return `O-${String(counter).padStart(3, '0')}`;
+  };
+
+  for (const set of groundTruth.fixtureSets ?? []) {
+    const stepId = testDesignStepId(set);
+    const pointer = testDesignArtifactPointer(stepId);
+
+    specs.push({
+      id: nextId(),
+      setId: set.id,
+      kind: 'run-measured',
+      riskId: null,
+      oracle: {
+        polarity: 'expects-hold',
+        commentary:
+          `${set.id}: the document carries a risk register. A table cell holding an R-NNN identifier is the shape the harness ` +
+          `reads rows out of, and a document with none is refused before it is scored rather than scored as an empty register.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'regex',
+          scope: `The test design document written for ${set.id}, taken whole.`,
+          negativeDomain: 'A run that wrote a document carrying no risk identifier in any table.',
+          evidenceTargets: [pointer],
+        },
+        check: { op: 'regex', operands: [{ pointer }], pattern: String.raw`^[\s\S]*\|[^|\n]*R-[0-9]{3}[^|\n]*\|[\s\S]*$` },
+      },
+      scorer: (scored) => scored.shape.rows > 0,
+    });
+
+    for (const risk of set.materialRisks ?? []) {
+      specs.push({
+        id: nextId(),
+        setId: set.id,
+        kind: 'material-vocabulary',
+        riskId: risk.id,
+        oracle: {
+          polarity: 'expects-hold',
+          commentary:
+            `${set.id}: the document carries the deciding vocabulary of ${risk.id}, which the epic supports in as many words: ` +
+            `"${risk.groundingQuote}" A document that never reaches this vocabulary has not analysed the feature it was given. ` +
+            `This is the document-global reading; whether a risk row in an admitted category carries it is the harness's to say.`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: matcherExpression(pointer, risk.anyOf).op,
+            scope: `The test design document written for ${set.id}, taken whole.`,
+            negativeDomain: `A run whose document never names ${risk.id} in any of the terms the epic grounds it in.`,
+            evidenceTargets: [pointer],
+          },
+          check: matcherExpression(pointer, risk.anyOf),
+        },
+        scorer: (scored) => scored.mentions[risk.id] === true,
+      });
+    }
+
+    for (const risk of set.unsupportedRisks ?? []) {
+      specs.push({
+        id: nextId(),
+        setId: set.id,
+        kind: 'unsupported-vocabulary',
+        riskId: risk.id,
+        oracle: {
+          polarity: 'expects-hold',
+          commentary:
+            `${set.id}: the document does not carry ${risk.id}, which the epic rules out in as many words: ` +
+            `"${risk.exclusionQuote}" A risk list that reaches it is a list that would fit any feature, which is the whole ` +
+            `failure this suite exists to catch.`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: 'not',
+            scope: `The test design document written for ${set.id}, taken whole.`,
+            negativeDomain: `A run whose document reports ${risk.id} against a feature description that excludes it.`,
+            evidenceTargets: [pointer],
+          },
+          check: { op: 'not', operands: [matcherExpression(pointer, risk.anyOf)] },
+        },
+        scorer: (scored) => scored.mentions[risk.id] === false,
+      });
+    }
+  }
+  return specs;
+}
+
+/** The authored reading of each oracle kind: how hard a miss counts and which risk it names. */
+const TEST_DESIGN_BEHAVIORS = {
+  'run-measured': {
+    severity: 'material',
+    risk: 'unscoreable-deliverable',
+    requirement: 'risk-register-present',
+    success: 'The run writes a test design document whose risk register carries at least one identified risk.',
+  },
+  'material-vocabulary': {
+    severity: 'critical',
+    risk: 'generic-risk-list',
+    requirement: 'grounded-risks',
+    success: 'Every risk the feature description supports is reached by the document that analyses it.',
+  },
+  'unsupported-vocabulary': {
+    severity: 'critical',
+    risk: 'ungrounded-risk',
+    requirement: 'no-invented-risks',
+    success: 'No risk the feature description rules out appears in the document.',
+  },
+};
+
+function buildTestDesignContract() {
+  const groundTruth = JSON.parse(fs.readFileSync(TEST_DESIGN_GROUND_TRUTH_PATH, 'utf8'));
+  const sets = groundTruth.fixtureSets ?? [];
+  assert(
+    sets.length >= 2,
+    'ground-truth.json declares fewer than two fixture sets, so there is no clean control to hold the seeded set against',
+  );
+  const seeded = sets.filter((set) => (set.materialRisks ?? []).length > 0);
+  // The clean control is the set that declares no material risk. Both sets declare
+  // a `maxRisks` ceiling now, so the ceiling no longer tells them apart.
+  const clean = sets.filter((set) => (set.materialRisks ?? []).length === 0);
+  assert(
+    seeded.length === 1 && clean.length === 1,
+    `expected one seeded and one clean fixture set; found ${seeded.length} and ${clean.length}`,
+  );
+  for (const file of TEST_DESIGN_SPEC_FILES) {
+    assert(fs.existsSync(file), `the specification digest names ${file}, which does not exist`);
+  }
+
+  const specs = testDesignOracleSpecs(groundTruth);
+  const oracles = specs.map((spec) => ({ id: spec.id, ...spec.oracle }));
+  const behaviors = specs.map((spec) => {
+    const authored = TEST_DESIGN_BEHAVIORS[spec.kind];
+    assert(authored, `no authored behavior for oracle kind "${spec.kind}"`);
+    return {
+      id: spec.id.replace('O-', 'B-'),
+      description: spec.oracle.commentary,
+      severity: authored.severity,
+      observableSuccessCriterion: authored.success,
+      requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${spec.setId}/${authored.requirement}` }],
+      riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
+      oracles: [spec.id],
+    };
+  });
+
+  // The witness differs its two legs on design_level, the one prompt value the
+  // template renders straight into the document: test-design-template.md writes
+  // "**Scope:** {design_level} test design for Epic {epic_num}", so two prompts
+  // differing in that value, over one staged fixture set, produce two documents.
+  // A differential between the two sets would not do, for the reason the trace
+  // witness records: their documents differ because their staged epics differ,
+  // which attributes to the prompt an effect the workspace produced.
+  const witnessSet = clean[0];
+  const witnessPointer = (legId) => testDesignArtifactPointer(legId);
+
+  return {
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    contractId: 'tea-test-design-behavioral',
+    sourceSpecDigest: digestOf(TEST_DESIGN_SPEC_FILES),
+    behaviors,
+    oracles,
+    rubrics: [],
+    waivers: [],
+    permittedInterfaces: [
+      {
+        logicalId: TEST_DESIGN_INTERFACE,
+        kind: 'cli',
+        operations: [
+          {
+            operationId: TEST_DESIGN_OPERATION,
+            invocation: { executable: TEST_DESIGN_INTERFACE, subcommandPath: [] },
+            stateChangeMarker: true,
+            requestShape: TEST_DESIGN_REQUEST_SHAPE,
+            artifacts: ['design'],
+            // The deliverable is markdown and the workflow declares nothing
+            // machine-readable beside it, so the descriptor addresses the body as
+            // a whole. The empty pointer is RFC 6901's whole document, which is
+            // the only structure this artifact has.
+            descriptorChannel: { kind: 'artifact', artifactId: 'design' },
+            responseDescriptor: {
+              requiredKeys: [],
+              permittedKeys: [],
+              types: {},
+              successIndicator: '',
+              channelRoles: { '': 'payload' },
+              collectionLocations: [],
+            },
+            volatilePointers: [],
+            sensitivityWitness: {
+              witnessId: 'scope-follows-design-level',
+              channel: 'stdin',
+              legs: [
+                {
+                  legId: 'witness-design-level-full',
+                  inputs: witnessInputs(
+                    TEST_DESIGN_REQUEST_SHAPE,
+                    { option: { agent: TEST_DESIGN_DEFAULT_AGENT } },
+                    { kind: 'text', value: buildTestDesignPrompt(witnessSet, { designLevel: 'full' }) },
+                  ),
+                },
+                {
+                  legId: 'witness-design-level-minimal',
+                  inputs: witnessInputs(
+                    TEST_DESIGN_REQUEST_SHAPE,
+                    { option: { agent: TEST_DESIGN_DEFAULT_AGENT } },
+                    { kind: 'text', value: buildTestDesignPrompt(witnessSet, { designLevel: 'minimal' }) },
+                  ),
+                },
+              ],
+              relation: {
+                op: 'not',
+                operands: [
+                  {
+                    op: 'deep-equality',
+                    operands: [
+                      { pointer: witnessPointer('witness-design-level-full') },
+                      { pointer: witnessPointer('witness-design-level-minimal') },
+                    ],
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ],
+    referenceSets: {},
+    siblingGroups: { operations: [], parameters: [] },
+    interactionPlan: sets.map((set) => ({
+      stepId: testDesignStepId(set),
+      operationId: TEST_DESIGN_OPERATION,
+      after: null,
+      cardinality: 'exactly-one',
+      // The agent is bound as `any`: which vendor answered is the runner record's
+      // to state. Standard input is bound as the literal prompt the harness
+      // assembles for this set, for the reason the trace plan records: both steps
+      // declare one operation, so under a matcher binding every observation
+      // satisfies both steps and each set's oracles would quantify over evidence
+      // that is not theirs. buildTestDesignPrompt is test/eval-test-design.js's own
+      // buildPrompt, so the literal here and the bytes a run sends are one function.
+      inputBinding: {
+        argument: null,
+        option: { agent: { matcher: 'any' } },
+        environment: null,
+        stdin: { prompt: { literal: buildTestDesignPrompt(set) } },
+      },
+    })),
+    scopedResources: null,
+    forbiddenInputs: FORBIDDEN_INPUTS,
+    testData: {
+      setup:
+        `Each plan step stages one fixture set from test/fixtures/test-design-eval/ into a disposable workspace: the set's epic under its own project ` +
+        `root (${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), an empty test-artifacts/, a resolved _bmad/tea/config.yaml whose ` +
+        `test_artifacts points inside that workspace, and the bmad-testarch-test-design workflow under skill/. The skill sits outside the project root ` +
+        `because three of its files carry worked risk registers with their own R-001 rows and a fourth carries one numbered from R-002 ` +
+        `(test-design-template.md, checklist.md, resources/test-design-epic-3.example.md and ` +
+        `resources/knowledge/adr-quality-readiness-checklist.md), and a source tree containing them would let a run lift its register from ` +
+        `the worked example and still read as an analysis of the epic. ground-truth.json is never staged, and the harness asserts that no staged file carries its ` +
+        `bytes or its keys before the run and again on --validate-only. The prompt on standard input names the project root and skill/ and pins the mode, ` +
+        `the epic number and the run key, because step-01 halts to ask for each of them and a headless run that halts is an environment failure rather ` +
+        `than a measurement. The witness differs its two legs on design_level over one staged set, the value test-design-template.md renders into the ` +
+        `document's Scope line, rather than between the two sets, whose documents differ because their staged epics differ.`,
+      cleanup:
+        'Delete the workspace. The corpus under test/fixtures/test-design-eval/ is read-only and the harness digests it before and after every run.',
+      principals: null,
+      resources: null,
+    },
+    // An epic-level design reads five step files, the epic and several knowledge
+    // fragments and writes one document, so the bounds are the harness's own
+    // twenty-minute clock per set with a tool and cost allowance beside it.
+    budgets: {
+      maxToolCalls: 200 * sets.length,
+      maxWallClockMinutes: 20 * sets.length,
+      maxCostUsd: (3 * sets.length).toFixed(2),
+    },
+    safetyLimits: [
+      "The runner writes only inside the staged workspace, and only its deliverable under the fixture set's own test-artifacts/; the harness fails a run that changed the repository or the staged corpus.",
+      "The run adds, edits, and deletes nothing under the fixture set's docs/. The workflow does not change its inputs, and a run that did has moved the benchmark.",
+      'No credential value appears in a prompt, an artifact, a log, or a result file.',
+    ],
+    requiredEvidence: [
+      'The test design document each run wrote, in full.',
+      'The exit code of each invocation.',
+      'The digest of the prompt each run was given, so an edit that changed the question is visible in the record.',
+    ],
+    // One step per fixture set, plus room for the two probe steps the compiler may add.
+    probeStepBound: sets.length + 2,
+    fixtureReset: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Rendering and the two modes
 // ---------------------------------------------------------------------------
 
@@ -2856,6 +3258,7 @@ function targets() {
   return [
     ...ROUTING_CONTRACTS.map((spec) => ({ relativePath: spec.relativePath, build: () => buildRoutingContract(spec) })),
     { relativePath: 'test-review.contract.json', build: buildTestReviewContract },
+    { relativePath: 'test-design.contract.json', build: buildTestDesignContract },
     { relativePath: 'trace.contract.json', build: buildTraceContract },
     ...FRAGMENT_SELECTION.map((spec) => ({
       relativePath: path.join('fragment-selection', `${spec.workflow}.contract.json`),
@@ -2918,6 +3321,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  testDesignOracleSpecs,
+  testDesignStepId,
   buildTestReviewContract,
   buildFragmentSelectionContract,
   buildTraceContract,

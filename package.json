@@ -33,6 +33,7 @@
   "bin": {
     "tea-fragment-selection-runner": "cli/fragment-selection-runner.js",
     "tea-routing-runner": "cli/routing-runner.js",
+    "tea-test-design-runner": "cli/test-design-runner.js",
     "tea-test-review": "cli/test-review.js",
     "tea-trace-runner": "cli/trace-runner.js"
   },
@@ -47,6 +48,7 @@
     "eval:fragment-selection": "node test/eval-fragment-selection.js",
     "eval:preflight": "node test/eval-contract-strength.js --preflight-only",
     "eval:routing": "node test/eval-bmad-tea-routing.js",
+    "eval:test-design": "node test/eval-test-design.js",
     "eval:test-review": "node test/eval-test-review.js",
     "eval:trace": "node test/eval-trace.js",
     "format:check": "prettier --check .",
@@ -60,7 +62,7 @@
     "release:minor": "gh workflow run publish.yaml -f channel=latest -f bump=minor",
     "release:next": "gh workflow run publish.yaml -f channel=next",
     "release:patch": "gh workflow run publish.yaml -f channel=latest -f bump=patch",
-    "test": "npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:criteria-fragments && npm run test:enforce-hook && npm run test:eval-data && npm run test:eval-trace-data && npm run test:eval-routing-data && npm run test:eval-schemas && npm run test:eval-replay && npm run test:eval-quality-corpus && npm run test:contract-sources && npm run test:contracts && npm run test:contract-oracles && npm run test:probe-sources && npm run test:probe-corpus && npm run test:probe-conformance && npm run test:probe-targets && npm run test:port-totality && npm run test:ci-coverage && npm run test:release-metadata && npm run test:changelog && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
+    "test": "npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:criteria-fragments && npm run test:enforce-hook && npm run test:eval-data && npm run test:eval-test-design-data && npm run test:eval-trace-data && npm run test:eval-routing-data && npm run test:eval-schemas && npm run test:eval-replay && npm run test:eval-quality-corpus && npm run test:contract-sources && npm run test:contracts && npm run test:contract-oracles && npm run test:probe-sources && npm run test:probe-corpus && npm run test:probe-conformance && npm run test:probe-targets && npm run test:port-totality && npm run test:ci-coverage && npm run test:release-metadata && npm run test:changelog && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
     "test:changelog": "node test/test-stamp-changelog.js",
     "test:ci-coverage": "node tools/validate-ci-coverage.js",
     "test:cli": "node test/test-test-review-cli.js",
@@ -75,6 +77,7 @@
     "test:eval-replay": "node test/test-eval-replay.js",
     "test:eval-routing-data": "node test/eval-bmad-tea-routing.js --validate-only",
     "test:eval-schemas": "node tools/validate-eval-schemas.js",
+    "test:eval-test-design-data": "node test/eval-test-design.js --validate-only",
     "test:eval-trace-data": "node test/eval-trace.js --validate-only",
     "test:install": "node test/test-installation-components.js",
     "test:knowledge": "node test/test-knowledge-base.js",

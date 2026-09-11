@@ -10,14 +10,18 @@ against it.
 | Contract                                      | Suite                                                    | Cases                                               |
 | --------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
 | `test-review.contract.json`                   | The full behavioral eval for `bmad-testarch-test-review` | 9 planted defects, 1 clean control, 1 scope control |
+| `test-design.contract.json`                   | The full behavioral eval for `bmad-testarch-test-design` | 1 seeded set of 5 material risks, 1 clean control   |
 | `trace.contract.json`                         | The full behavioral eval for `bmad-testarch-trace`       | 1 seeded set of 10 criteria, 1 clean set of 5       |
 | `fragment-selection/<workflow>.contract.json` | Fragment routing for eight workflows                     | 24 cases                                            |
 
 **Every contract here is generated. Do not hand-edit one.** `tools/generate-contracts.js` writes all
-ten from their sources: `test-review.contract.json` from
+eleven from their sources: `test-review.contract.json` from
 `test/fixtures/test-review-eval/ground-truth.json` and `criteria-registry.md`; `trace.contract.json`
 from `test/fixtures/trace-eval/ground-truth.json`, the request shape `cli/trace-runner.js` declares,
-the prompt `test/eval-trace.js` assembles, and the summary literal in the trace workflow's step-05; and
+the prompt `test/eval-trace.js` assembles, and the summary literal in the trace workflow's step-05;
+`test-design.contract.json` from `test/fixtures/test-design-eval/ground-truth.json`, the request shape
+`cli/test-design-runner.js` declares, the prompt `test/eval-test-design.js` assembles, and a digest
+over the test-design workflow's step-03, step-04, step-05 and `test-design-template.md`; and
 each fragment-selection contract from that workflow's `test/evals/<workflow>/evals.json`, its deciding
 step file, and its `resources/tea-index.csv`. Regenerate with `node tools/generate-contracts.js`; an
 edit made here by hand is overwritten by the next run and fails the gate in the meantime.
@@ -116,7 +120,7 @@ un-negated. It is a decision recorded here rather than a defect fixed: trace's s
 input-insensitive by design, and the contract now states that as its own claim instead of stating
 nothing.
 
-`trace.contract.json`, the tenth, states its witness over standard input on one prompt value,
+`trace.contract.json` states its witness over standard input on one prompt value,
 `allow_gate`. Its two plan steps send two prompts, each written against its own fixture set's project
 root, and each step binds that prompt as its `stdin.prompt` literal. The summaries the two sets
 produce differ because of the files staged under those roots, so a differential across the two sets
@@ -159,6 +163,39 @@ quantify over evidence that is not theirs. The literal is what tells eighteen st
 also what the two contracts cost: each step carries the whole assembled prompt, which is the skill and
 its menu read off disk, so the pair is about 420 kilobytes of mostly repeated bytes. That is the price
 of the binding being correct, and it is paid by a generated file rather than by a reader.
+
+## `test-design.contract.json` states the weak reading, and says so
+
+One honest limitation shapes every oracle in this contract, so it is recorded first.
+
+`bmad-testarch-test-design` declares one deliverable in the epic-level mode this contract exercises, and it is prose: `{test_artifacts}/test-design-epic-{epic_num}.md`, with nothing machine-readable beside it.
+`bmad-testarch-trace` is the contrast that makes the gap legible.
+It writes `e2e-trace-summary.json` beside its markdown matrix, which is why `trace.contract.json` can state the matrix's content through the arithmetic consequences the summary carries and declare the matrix a volatile pointer.
+Test-design has no summary to point its oracles at.
+
+So every oracle in this contract addresses the document as a whole, and the generator pairs each one with `documentMentions`, `test/eval-test-design.js`'s own document-global predicate, rather than with the row-scoped scorer result.
+That makes the agreement `test/test-contract-oracles.js` checks true by construction.
+Pairing an oracle with the row-scoped result would make the two agree by coincidence on whatever the replay corpus happens to hold, which reads as coverage and holds nothing.
+
+What a green `test-contract-oracles.js` buys here is narrow, so it is worth stating plainly.
+It says the contract and the harness agree about which vocabulary the document carries.
+It does not say the suite passed, and it says nothing about the arithmetic or the mapping: the 1-3 scale, the arithmetic that makes a score the product of its own two factors, the band a row is filed under, the coverage level and the pairwise priority ordering are the harness's to check, because an oracle over a markdown body cannot tell which row a token sits in and cannot do arithmetic at all.
+
+Fifteen oracles, in three kinds.
+One `run-measured` per fixture set asserts the document carries a table cell holding an `R-NNN` identifier, which is the shape the harness reads rows out of, and a document with none is refused before it is scored at all.
+One `material-vocabulary` per material risk, five on the seeded set and none on the clean one, asserts the document reaches the deciding vocabulary of a risk the epic supports in as many words.
+One `unsupported-vocabulary` per ruled-out risk, four on each set, asserts the document does not reach a risk the epic rules out.
+The two `run-measured` behaviors grade `material` and the other thirteen grade `critical`.
+Each token group becomes one anchored, case-insensitive regex whose spaces are `\s+`, and a matcher's groups are conjoined with `all`: `matchesGroups` lowercases and collapses whitespace before it searches, and without the `\s+` a token like "feature flag" would miss wherever the document wrapped the line between the two words, and the oracle would disagree with its own scorer.
+No lookahead and no backreference anywhere, for the reason the regex limit below records.
+
+Each of the two plan steps binds its own prompt as a `stdin.prompt` literal, for the reason the trace plan records below: both steps declare one operation, so under a matcher binding every observation satisfies both steps and each set's oracles would quantify over evidence that is not theirs.
+`buildTestDesignPrompt` in the generator is `test/eval-test-design.js`'s own `buildPrompt`, so the literal on disk and the bytes a run sends are one function.
+
+The sensitivity witness differs its two legs on `design_level`, `full` against `minimal`, over one staged fixture set, and asserts the two documents are not deep-equal.
+`test-design-template.md` renders that value straight into the document's Scope line, `**Scope:** {design_level} test design for Epic {epic_num}`, so two prompts differing in it produce two documents, which is a true and checkable claim that the command reads its standard input.
+A differential between the two fixture sets would not do: their documents differ because their staged epics differ, which would attribute to the prompt an effect the workspace produced.
+Both legs stage the clean set, and the contract states the whole arrangement in `testData.setup`, because `SensitivityWitness` is a strict object with no prose field of its own.
 
 ## What the operator vocabulary cannot say
 
@@ -236,17 +273,21 @@ The oracle check is the one that reads the oracles. It evaluates every oracle in
 `eval-quality`'s own evaluator, loaded from the installed package, over evidence this repository
 already holds: each stored verdict under `test/replay/test-review/` as one observation of the
 `review-corpus` step, each fragment-selection case over three constructed selections and the stored
-captures, and each stored trace run under `test/replay/trace/` as one observation of its fixture set's
-plan step, evaluated under both sets' oracles so that every trace oracle is also seen failing. Each
-answer is compared with the harness scorer's on the same evidence: a plant oracle holds exactly when
-`scoreVerdict` counts the plant as a hit, the scope oracle exactly when it counts no finding as out of
-scope, a containment oracle exactly when `scoreCase` misses nothing, and each trace oracle exactly
+captures, each stored test design under `test/replay/test-design/` as the `design` artifact of its
+fixture set's plan step, and each stored trace run under `test/replay/trace/` as one observation of its
+fixture set's plan step, the last two evaluated under both sets' oracles so that every oracle is also
+seen failing. Each answer is compared with the harness scorer's on the same evidence: a plant oracle
+holds exactly when `scoreVerdict` counts the plant as a hit, the scope oracle exactly when it counts no finding as out of
+scope, a containment oracle exactly when `scoreCase` misses nothing, each test-design oracle exactly
+when `documentMentions` says the document carries that risk's vocabulary, and each trace oracle exactly
 when the `scoreRun` checks it restates all pass, through a correspondence `tools/generate-contracts.js`
 writes beside the oracle. Two trace exceptions are stated in that check's header: the waiver oracles
 are compared only where the harness scored them, because it skips the waiver block when the gate did
 not match so that one wrong gate is not scored three times, and a summary the harness refuses for its
 schema version is one the contract's run-shape oracle has to refuse too, with its other oracles left
-uncompared because there is no measurement to compare with. An oracle that faults, or that
+uncompared because there is no measurement to compare with. Test-design splits the same way on a
+document the harness refuses for carrying no risk table: the contract's `run-measured` oracle has to
+refuse it too, and its other oracles are left uncompared. An oracle that faults, or that
 contradicts the scorer, fails `npm test`. Nothing read an oracle before it, and the section above
 records what its first run found.
 
@@ -266,7 +307,7 @@ status changing.
 
 ## What the generator enforces
 
-`node tools/generate-contracts.js --check` regenerates all ten in memory and fails when the bytes on
+`node tools/generate-contracts.js --check` regenerates all eleven in memory and fails when the bytes on
 disk differ, naming the contract and the first line that moved. It runs in `npm test`, so a fixture
 edit that leaves a contract stale fails the deterministic gate.
 
@@ -294,6 +335,12 @@ What that covers:
   corpus's own line tolerance, and each waiver's verdict; the trace summary's key set, read from the
   object literal in step-05 rather than transcribed; and the two witness prompts, built by the harness
   function that builds the live one;
+- every value a test-design oracle asserts, read from `test/fixtures/test-design-eval/ground-truth.json`:
+  each declared risk's token groups, compiled into the anchored regexes the oracles carry, the grounding
+  sentence a material oracle quotes and the exclusion sentence an unsupported one quotes; and the two
+  witness prompts and both plan-step prompt literals, built by the harness function that builds the live
+  one. The generator also refuses a corpus that does not declare exactly one seeded set and one clean
+  control, and a specification digest naming a step file that does not exist;
 - the budgets and the probe-step bound, scaled from the case count; and
 - the verdict response descriptor's `requiredKeys`, `permittedKeys` and `types`, read from
   `VERDICT_KEYS` in `cli/test-review.js`, which composes `PARSED_VERDICT_KEYS` from

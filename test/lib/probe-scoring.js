@@ -51,6 +51,7 @@ const { buildPrompt: buildTracePrompt } = require('../eval-trace');
 // prompt selects nothing and the record is scored against no evidence at all.
 const { buildPrompt: buildRoutingPrompt, correctRoutingAnswer } = require('../eval-bmad-tea-routing');
 const { ROUTING_CONTRACTS } = require('../../tools/generate-contracts');
+const { buildPrompt: buildTestDesignPrompt } = require('../eval-test-design');
 const {
   evaluatorConfiguration,
   isolationManifest,
@@ -415,6 +416,121 @@ function traceEvidence(contract) {
 }
 
 // ---------------------------------------------------------------------------
+// evidence: test design
+// ---------------------------------------------------------------------------
+
+const TEST_DESIGN_REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design');
+
+/** One stored test design, as the single text artifact this operation declares. */
+function testDesignArtifacts(caseId, designLevel, epicNum) {
+  const text = fs.readFileSync(path.join(TEST_DESIGN_REPLAY_ROOT, caseId, 'design.md'), 'utf8');
+  // The template renders design_level into the document's Scope line, which is the
+  // one effect the prompt has on the bytes and the whole basis of this contract's
+  // sensitivity witness. The stored documents carry no Scope line, so it is applied
+  // here from the level the leg asked for. A leg asking for `full` and a leg asking
+  // for `minimal` then differ in exactly that line, which is what the witness claims.
+  const scoped = text.replace(/^(# .*\n)/, `$1\n**Scope:** ${designLevel} test design for Epic ${epicNum}\n`);
+  return { design: { kind: 'text', value: scoped } };
+}
+
+/**
+ * The evidence the test-design probes are scored against: the documents already
+ * stored under test/replay/test-design/, answered per leg from the prompt the leg
+ * sent.
+ *
+ * The prompt names the staged project root, and that root is the only thing in the
+ * request that says which fixture set a leg is asking for, so it is what the port
+ * answers from. This is the trace port's rule and it is here for the same reason:
+ * both plan steps declare one operation, so a leg that could not be told apart
+ * would let one set's oracles quantify over the other set's document.
+ */
+function testDesignEvidence(contract) {
+  const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval', 'ground-truth.json'));
+
+  const legs = groundTruth.fixtureSets.map((set, index) => {
+    const step = contract.interactionPlan[index];
+    const prompt = buildTestDesignPrompt(set);
+    // The tripwire the trace port records: a literal is compared with deepEquals,
+    // so a prompt restated here in any other form would select nothing, every
+    // oracle would resolve unreached, and the run would report clean at exit 0
+    // having examined no evidence.
+    if (step.inputBinding.stdin?.prompt?.literal !== prompt) {
+      throw new Error(
+        `${step.stepId} binds a stdin literal that is not the prompt the harness assembles for ${set.id}; run node tools/generate-contracts.js`,
+      );
+    }
+    return {
+      caseId: set.materialRisks?.length > 0 ? 'seeded-correct-run' : 'clean-correct-run',
+      observationId: `design-${set.id}-run`,
+      projectRoot: set.projectRoot,
+      epicNum: set.epicNum,
+      step,
+      prompt,
+    };
+  });
+
+  const legByProjectRoot = new Map(legs.map((leg) => [leg.projectRoot, leg]));
+  const designLevelOf = (prompt) => /`design_level`: `([a-z]+)`/.exec(prompt)?.[1] ?? 'full';
+
+  return {
+    answer(request) {
+      const prompt = String(request.channels.stdin?.value ?? '');
+      const matched = [...legByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
+      if (matched === undefined) {
+        throw new Error('a test-design leg sent a prompt naming no fixture set project root, so no staged run answers it');
+      }
+      const leg = matched[1];
+      return {
+        exitCode: 0,
+        stdout: { kind: 'text', value: '' },
+        stderr: { kind: 'text', value: '' },
+        artifacts: testDesignArtifacts(leg.caseId, designLevelOf(prompt), leg.epicNum),
+      };
+    },
+    recordInputs() {
+      // Both runs, always. Each step binds its own set's prompt as a literal, so the
+      // seeded step selects the seeded observation and the clean step selects the
+      // clean one, and neither set's oracles ever quantify over the other's document.
+      // Carrying one run would leave the other set's oracles with no evidence to
+      // reach, and an oracle disposition citing nothing is scored as an unsupported
+      // claim.
+      const observations = legs.map((leg, index) =>
+        recordObservation({
+          observationId: leg.observationId,
+          sequence: index + 1,
+          operationId: leg.step.operationId,
+          callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
+          stdout: { kind: 'text', value: '' },
+          stderr: { kind: 'text', value: '' },
+          exitCode: 0,
+          artifacts: testDesignArtifacts(leg.caseId, 'full', leg.epicNum),
+        }),
+      );
+      const observationIdByStep = new Map(legs.map((leg) => [leg.step.stepId, leg.observationId]));
+      const stepOf = (pointer) => String(pointer).split('/')[2];
+      const citedObservationId = (oracle) => {
+        const target = (oracle.direction?.evidenceTargets ?? []).find((pointer) => observationIdByStep.has(stepOf(pointer)));
+        return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
+      };
+      return {
+        observations,
+        findings: [],
+        // Both stored runs are the correct run of their set, so every oracle held on
+        // the evidence the harness read.
+        oracleDispositions: contract.oracles.map((oracle) => ({
+          oracleId: oracle.id,
+          disposition: 'held',
+          observationIds: [citedObservationId(oracle)],
+          note: null,
+        })),
+        evaluatorRecommendation: 'PASS',
+        conditionArm: 'correct-run',
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // evidence: fragment selection
 // ---------------------------------------------------------------------------
 
@@ -672,6 +788,12 @@ function suites() {
       contractPath: path.join(CONTRACT_ROOT, 'test-review.contract.json'),
       probesPath: path.join(PROBE_ROOT, 'test-review.probes.json'),
       evidenceFor: testReviewEvidence,
+    },
+    {
+      id: 'test-design',
+      contractPath: path.join(CONTRACT_ROOT, 'test-design.contract.json'),
+      probesPath: path.join(PROBE_ROOT, 'test-design.probes.json'),
+      evidenceFor: testDesignEvidence,
     },
     {
       id: 'trace',

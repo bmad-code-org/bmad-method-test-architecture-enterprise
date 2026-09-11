@@ -1,0 +1,94 @@
+{
+  "$comment": [
+    "The reference run of the seeded set. Every check this suite makes passes on it, which is what makes",
+    "it the case every other seeded case is a one-edit mutation of: the derivation of each of those says",
+    "what its edit changed and nothing else has to be re-derived.",
+    "",
+    "The document is CONSTRUCTED. It reports the five risks the epic supports, one per category the epic",
+    "grounds, scores each on the workflow's own scale, files each under the band its score falls in, and",
+    "links each from a coverage row at a level the fixture admits."
+  ],
+  "id": "seeded-correct-run",
+  "suite": "test-design",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:c9d52801aeb14e1aa7bcc9c69f737ea3e07007b3e0d98371c0d25a068ba74d4f"
+  },
+  "derivation": [
+    "Five risk rows, ids R-001 through R-005, so wellFormedIds is 5 and no id repeats.",
+    "Categories SEC, DATA, TECH, PERF and OPS are all among the six, so validCategories is 5.",
+    "",
+    "Scale and arithmetic: 2x3=6, 3x3=9, 3x2=6, 2x2=4, 1x2=2. Every factor is in 1..3, so inScale is 5 and",
+    "the arithmetic denominator is 5; every stated score is the product, so arithmeticOk is 5.",
+    "",
+    "Bands: 6, 9 and 6 sit under Score >=6; 4 sits under Score 3-4; 2 sits under Score 1-2. All five rows",
+    "sit under a heading that declares a range, so banded is 5 and bandOk is 5.",
+    "",
+    "Risk links: five coverage rows each name one declared id, so 5 of 5 resolve.",
+    "",
+    "Grounding: each of the five descriptions carries both token groups of the material risk it names, in a",
+    "category that risk admits, so matched is 5 of 5 and missed is empty. No unmatched row matches any",
+    "ruled-out entry, so ungrounded is empty.",
+    "",
+    "Coverage: R-001 at Integration (admitted Unit, Integration, E2E), R-002 at E2E (API, Integration, E2E),",
+    "R-003 at Unit (Unit, Integration, API), R-004 at API (API, Integration, E2E), R-005 at E2E (E2E,",
+    "Integration, Component). Five evaluated, five satisfied.",
+    "",
+    "Ordering: ranks are sec 1, data 2, tech 3, perf 4, ops 4, which gives nine strictly ordered pairs.",
+    "Priorities are sec P0, data P0, tech P1, perf P2, ops P2. Every pair has the more severe risk at a",
+    "priority at least as strong as the less severe one, so all nine resolve and all nine pass."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": false,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 5,
+      "wellFormedIds": 5,
+      "validCategories": 5,
+      "inScale": 5,
+      "arithmeticOk": 5,
+      "banded": 5,
+      "bandOk": 5,
+      "arithmeticTotal": 5
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 5,
+      "resolved": 5,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 5,
+      "missed": []
+    },
+    "ungrounded": [],
+    "cleanControl": null,
+    "coverage": {
+      "evaluated": 5,
+      "satisfied": 5,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 9,
+      "satisfied": 9,
+      "failures": []
+    }
+  }
+}

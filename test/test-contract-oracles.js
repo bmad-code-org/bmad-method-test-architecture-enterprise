@@ -120,17 +120,39 @@ const { findCases } = require('./test-eval-replay');
 // The correspondence between each trace oracle and the scoreRun check it
 // restates is written once, in the generator beside the oracle itself.
 const { traceOracleSpecs, traceStepId, routingOracleSpecs, ROUTING_CONTRACTS } = require('../tools/generate-contracts');
+const { traceOracleSpecs, traceStepId } = require('../tools/generate-contracts');
+// Same rule for test-design: the generator owns the correspondence between each
+// oracle and the harness predicate it is paired with, so it is imported rather
+// than restated here.
+const { testDesignOracleSpecs, testDesignStepId } = require('../tools/generate-contracts');
+const {
+  readDesign: readTestDesign,
+  scoreRun: scoreTestDesignRun,
+  loadGroundTruth: loadTestDesignGroundTruth,
+  TEST_DESIGN_OPERATION,
+} = require('../test/eval-test-design');
+
+const { scoringPolicy } = require('./lib/eval-quality-inputs');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(__dirname, 'contracts');
 const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'ground-truth.json');
 
 /**
- * The regex step budget a scoring policy would carry. Every pattern the
- * generator writes is an anchored literal with one alternation, so the budget
- * is never approached; it is here because the operator requires one.
+ * The regex step budget every oracle here is evaluated under.
+ *
+ * Read from test/probes/scoring-policy.json rather than restated, because that is
+ * the policy TEA actually scores with and two numbers for one budget is a drift
+ * nobody watches. It had already drifted: this constant was 10,000 with a comment
+ * saying "the budget is never approached", while the shipped policy declares
+ * 1,000,000. The comment was true of the evidence the two older contracts address,
+ * which is a JSON field holding a short string. It stopped being true the moment a
+ * contract addressed a whole markdown document, because the estimated step count
+ * scales with the length of the value matched: test-design's oracles estimate up to
+ * 29,436 steps against a three-kilobyte document and would have faulted here at
+ * budget-exhausted while scoring cleanly under the policy every real run uses.
  */
-const REGEX_STEP_BUDGET = 10_000;
+const REGEX_STEP_BUDGET = scoringPolicy().regexMatchStepBudget;
 
 const colors = {
   reset: '[0m',
@@ -763,6 +785,112 @@ function checkRoutingOracles(evaluator) {
 
   console.log(
     `  ${colors.dim}${evaluated} oracle evaluation(s) across ${ROUTING_CONTRACTS.length} contract(s) and ${stored.length} stored reply(ies)${colors.reset}`,
+// test-design
+// ---------------------------------------------------------------------------
+
+/**
+ * One stored test-design run as the artifact a probe observation would carry.
+ *
+ * The deliverable is markdown, so the adapter tags it `text` and there is nothing
+ * else on the observation to read. That is the whole reason this contract's oracles
+ * are what they are; see the comment above testDesignOracleSpecs in
+ * tools/generate-contracts.js.
+ */
+function testDesignArtifactOf(directory, expected) {
+  const designPath = path.join(directory, expected.storedOutput?.design ?? 'design.md');
+  return fs.existsSync(designPath) ? { kind: 'text', value: fs.readFileSync(designPath, 'utf8') } : { kind: 'absent' };
+}
+
+/**
+ * Evaluate every test-design oracle over every stored document and compare each
+ * answer with the harness predicate the generator paired it with.
+ *
+ * Each spec's `scorer` reads `documentMentions`, the harness's own document-global
+ * predicate, rather than the row-scoped scored result. That is deliberate and it is
+ * what makes this comparison meaningful: an oracle over a markdown body cannot tell
+ * which row a token sits in, so pairing it with the row-scoped answer would make the
+ * two agree by coincidence on whatever this corpus happens to hold.
+ *
+ * A green run here therefore says the contract and the harness agree about which
+ * vocabulary a document carries. It does not say the suite passed, and it says
+ * nothing about the arithmetic, the band placement, the coverage mapping or the
+ * priority ordering, all of which only the harness checks.
+ */
+function checkTestDesignOracles(evaluator) {
+  console.log('\ntest-design.contract.json over every stored test design');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'test-design.contract.json'), 'the test-design contract');
+  const groundTruth = loadTestDesignGroundTruth();
+  if (!groundTruth) unreadable('the test-design ground truth is missing or not valid JSON');
+  const specs = testDesignOracleSpecs(groundTruth);
+  assert(
+    contract.oracles.length === specs.length && contract.oracles.every((oracle, index) => oracle.id === specs[index].id),
+    'the contract declares exactly the oracles the generator specifies, in order',
+    `${contract.oracles.length} on disk, ${specs.length} specified`,
+  );
+
+  const categories = new Set(groundTruth.riskCategories ?? []);
+  const setsById = new Map((groundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
+  let evaluated = 0;
+  let skippedRefused = 0;
+  const seenFalse = new Set();
+  const cases = findCases().filter((item) => item.suite === 'test-design');
+  assert(cases.length > 0, 'test/replay/test-design holds at least one stored test design');
+
+  for (const item of cases) {
+    const expected = readJson(path.join(item.directory, 'expected.json'), `${item.id} expected result`);
+    const artifact = testDesignArtifactOf(item.directory, expected);
+    // Every set's oracles over this document. The set the document was frozen from
+    // is the agreement check proper; the other set is the document seen as a wrong
+    // answer to a different question, which is what makes an oracle resolve false.
+    for (const set of groundTruth.fixtureSets ?? []) {
+      const stepId = testDesignStepId(set);
+      const results = evaluateOracles(evaluator, contract, {
+        [stepId]: observation({ operationId: TEST_DESIGN_OPERATION, exitCode: 0, artifacts: { design: artifact } }),
+      });
+      const read = readTestDesign(artifact);
+      const own = specs.filter((spec) => spec.setId === set.id);
+      const label = `${item.id} as ${set.id === expected.inputs?.fixtureSet ? 'its own set' : set.id}`;
+
+      if (!read.ok) {
+        // A document the harness will not score. The contract has to refuse it too,
+        // through the one oracle that reads the run's shape; the rest have no
+        // measurement to agree or disagree with.
+        for (const spec of own) {
+          if (spec.kind !== 'run-measured') {
+            skippedRefused += 1;
+            continue;
+          }
+          assert(
+            agrees(results.get(spec.id), null),
+            `${label}: ${spec.id} (${spec.kind}) refuses the document the harness refuses (${read.reason})`,
+            `oracle ${describe(results.get(spec.id))}`,
+          );
+          evaluated += 1;
+        }
+        continue;
+      }
+
+      const scored = scoreTestDesignRun(setsById.get(set.id), read.design, categories);
+      for (const spec of own) {
+        const scorer = spec.scorer(scored);
+        if (scorer === false) seenFalse.add(spec.id);
+        assert(
+          agrees(results.get(spec.id), scorer),
+          `${label}: ${spec.id} (${spec.kind}) agrees with the harness predicate it is paired with`,
+          `harness says ${scorer ? 'pass' : 'fail'}, oracle ${describe(results.get(spec.id))}`,
+        );
+        evaluated += 1;
+      }
+    }
+  }
+  // Every oracle but the shape one has to have been seen failing somewhere, or this
+  // check has only ever confirmed that a correct run passes.
+  for (const spec of specs) {
+    if (spec.kind === 'run-measured') continue;
+    assert(seenFalse.has(spec.id), `${spec.id} (${spec.kind} on ${spec.setId}) was seen resolving false on some stored document`);
+  }
+  console.log(
+    `  ${colors.dim}${evaluated} oracle evaluation(s) across ${cases.length} stored document(s) and ${(groundTruth.fixtureSets ?? []).length} set(s); ${skippedRefused} on a document the harness refused${colors.reset}`,
   );
 }
 
@@ -774,6 +902,7 @@ async function main() {
   checkTestReviewOracles(evaluator, groundTruth);
   checkFragmentSelectionOracles(evaluator);
   checkRoutingOracles(evaluator);
+  checkTestDesignOracles(evaluator);
   checkTraceOracles(evaluator);
 
   console.log('');

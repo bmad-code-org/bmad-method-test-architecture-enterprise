@@ -9,7 +9,9 @@
  * TEA already plants defects and already records them. `test/fixtures/test-review-eval/ground-truth.json`
  * carries nine planted rows with their severities, files, lines and admitted
  * lines; `test/fixtures/trace-eval/ground-truth.json` carries a seeded set whose
- * coverage gaps are the plant and a clean set that is the control; each
+ * coverage gaps are the plant and a clean set that is the control;
+ * `test/fixtures/test-design-eval/ground-truth.json` carries the risks each epic
+ * supports and the risks each epic rules out in as many words; each
  * `test/evals/<workflow>/evals.json` carries a required set and a forbidden set
  * per case. Every probe below is derived from one of those, the way
  * `tools/generate-contracts.js` derives the contracts from the same sources.
@@ -37,14 +39,15 @@
  *   resolves only against the contract it was authored on. A `stdout` pointer
  *   resolves only where the operation declares standard output as its descriptor
  *   channel. `tea-fragment-selection-runner` does, so its signatures address the
- *   selection itself. `tea-test-review` and `tea-trace-runner` both write their
- *   deliverable to a file, so a signature that reads it is refused, and what is
- *   left is the exit code. For `tea-test-review` that discriminates: the seeded
- *   fixture exits 1 and the clean control exits 0, so the condition is false on a
- *   review that found nothing gating. For `tea-trace-runner` it does not: every
- *   completed trace run exits 0 whatever it wrote, so its probes keep the
- *   signature that states the truth about the plant and are recorded as refused
- *   rather than given one that would qualify and discriminate nothing.
+ *   selection itself. `tea-test-review`, `tea-trace-runner` and
+ *   `tea-test-design-runner` all write their deliverable to a file, so a
+ *   signature that reads it is refused, and what is left is the exit code. For
+ *   `tea-test-review` that discriminates: the seeded fixture exits 1 and the
+ *   clean control exits 0, so the condition is false on a review that found
+ *   nothing gating. For the other two it does not: every completed trace run and
+ *   every completed design run exits 0 whatever it wrote, so their probes keep
+ *   the signature that states the truth about the plant and are recorded as
+ *   refused rather than given one that would qualify and discriminate nothing.
  * - `seeded-faults-scoped` treats every leg already registered for an operation
  *   as a clean leg, and the only legs a TEA contract registers are its sensitivity
  *   witness legs. `test-review`'s differential drives one leg at a seeded fixture
@@ -53,7 +56,16 @@
  *   all three trace plants. Both halves are closed. `eval-quality` 1.4.0 drops a
  *   clean leg that issued the fault leg's own request and received its answer,
  *   which cleared the five review plants, and `trace`'s witness legs now stage the
- *   clean set, which cleared its three. Every probe in the corpus pre-flights.
+ *   clean set, which cleared its three. Every probe the deterministic gate scores
+ *   pre-flights.
+ * - `test-design` is the corpus the deterministic gate does not score yet.
+ *   `test/lib/probe-scoring.js` declares one evidence source per suite and has
+ *   none for it, so `npm run test:probe-corpus` never reaches these probes and
+ *   `expected-strength.json` carries no line for them. The evidence a source
+ *   would answer from is already on disk under `test/replay/test-design/`, and
+ *   every probe below cites it, so what is left is the wiring rather than the
+ *   corpus. Until it lands, `node tools/generate-probes.js --check` is the only
+ *   thing that reads these probes.
  *
  * Usage: node tools/generate-probes.js [--check]
  * Exit codes: 0 = written or up to date, 1 = a corpus is stale, 2 = the generator could not run
@@ -70,13 +82,16 @@ const { parseRegistryRows } = require('./validate-criteria-fragments');
 // The prompt a trace manifestation witness sends is the prompt the harness
 // assembles, for the reason tools/generate-contracts.js reads the same function
 // for the contract's own witness legs: a leg carrying a description of a prompt
-// is scheduled by pre-flight and then measures nothing.
+// is scheduled by pre-flight and then measures nothing. The test-design witness
+// legs below read their own harness's buildPrompt on the same rule.
 const { buildPrompt: buildTracePrompt } = require('../test/eval-trace');
 const { DEFAULT_AGENT: TRACE_DEFAULT_AGENT } = require('../cli/trace-runner');
 // The routing probes name the oracle they game by the pointer it reads, which is
 // how they stay attached to the right oracle when a case is added to the corpus
 // and every id after it shifts.
 const { ROUTING_CONTRACTS } = require('./generate-contracts');
+const { buildPrompt: buildTestDesignPrompt, TEST_DESIGN_INTERFACE, TEST_DESIGN_OPERATION } = require('../test/eval-test-design');
+const { DEFAULT_AGENT: TEST_DESIGN_DEFAULT_AGENT } = require('../cli/test-design-runner');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -85,8 +100,12 @@ const EVAL_ROOT = path.join(PROJECT_ROOT, 'test', 'evals');
 const REVIEW_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval');
 const TRACE_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval');
 const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
+const TEST_DESIGN_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval');
+const TEST_DESIGN_REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design');
 const REVIEW_FIXTURE_PREFIX = 'test/fixtures/test-review-eval/';
 const TRACE_FIXTURE_PREFIX = 'test/fixtures/trace-eval/';
+const TEST_DESIGN_FIXTURE_PREFIX = 'test/fixtures/test-design-eval/';
+const TEST_DESIGN_REPLAY_PREFIX = 'test/replay/test-design/';
 
 /** The Probe schema version this generator writes. A bump arrives as a parse failure on the first run after an upgrade. */
 const PROBE_SCHEMA_VERSION = 5;
@@ -554,6 +573,483 @@ function buildTraceProbes() {
 }
 
 // ---------------------------------------------------------------------------
+// test-design
+// ---------------------------------------------------------------------------
+
+/** The pointer a test-design oracle reads: one step's design document, whole. */
+function testDesignArtifactPointer(stepId) {
+  return `/interactions/${stepId}/artifact/design`;
+}
+
+/** The same document as the reserved observation a defect signature addresses. */
+const OBSERVED_DESIGN_POINTER = testDesignArtifactPointer('observed');
+
+/** One expression with every pointer equal to `from` rewritten to `to`, and nothing else touched. */
+function repointed(node, from, to) {
+  if (Array.isArray(node)) return node.map((entry) => repointed(entry, from, to));
+  if (node === null || typeof node !== 'object') return node;
+  return Object.fromEntries(
+    Object.entries(node).map(([key, value]) => [key, key === 'pointer' && value === from ? to : repointed(value, from, to)]),
+  );
+}
+
+/**
+ * The negation of one oracle check, with a double negative collapsed.
+ *
+ * An unsupported-vocabulary oracle is already spelled `not(matcher)`, so wrapping
+ * it again would state the defect as "it is not the case that the document does
+ * not carry this vocabulary". The collapsed form is the same predicate and it is
+ * the one a reader can check.
+ */
+function negated(expression) {
+  if (expression.op === 'not' && expression.operands.length === 1) return expression.operands[0];
+  return { op: 'not', operands: [expression] };
+}
+
+/**
+ * "This document is the one written for the epic that carries the risk."
+ *
+ * A manifestation witness is re-resolved against every other leg of its operation
+ * to establish that the fault is scoped to the leg carrying it, and the only thing
+ * in a test design document that says which fixture set produced it is the epic
+ * number: `test-design-template.md` renders it into the title and into the Scope
+ * line. Without this conjunct a witness asserting an absence would fire on any
+ * document about any other feature, which establishes nothing about scope. The
+ * number is read off the corpus rather than written here.
+ */
+function testDesignEpicMarker(pointer, epicNum) {
+  assert(/^\d+$/.test(String(epicNum)), `a fixture set declares epicNum ${JSON.stringify(epicNum)}, which is not a number`);
+  return { op: 'regex', operands: [{ pointer }], pattern: String.raw`^[\s\S]*Epic\s+${epicNum}[\s\S]*$` };
+}
+
+/**
+ * Every stored test-design run, with the fixture set it was scored against and
+ * the outcome `test/test-eval-replay.js` records for it.
+ *
+ * These are the same files that suite replays, read here for their recorded
+ * result rather than re-scored: `result.mentions` is `documentMentions`, which is
+ * the predicate every vocabulary oracle in this contract is paired with, so a
+ * stored run says directly whether an oracle holds on it. That is what lets each
+ * probe below name evidence instead of describing a run nobody kept.
+ */
+function testDesignReplayCases() {
+  assert(fs.existsSync(TEST_DESIGN_REPLAY_ROOT), 'test/replay/test-design does not exist, so no stored run evidences a test-design probe');
+  const cases = fs
+    .readdirSync(TEST_DESIGN_REPLAY_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()
+    .map((id) => {
+      const expectedPath = `${TEST_DESIGN_REPLAY_PREFIX}${id}/expected.json`;
+      const absolute = path.join(PROJECT_ROOT, expectedPath);
+      assert(fs.existsSync(absolute), `${expectedPath} does not exist, so ${id} records no scored outcome`);
+      const stored = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+      return {
+        id,
+        setId: stored.inputs.fixtureSet,
+        result: stored.result,
+        expectedPath,
+        designPath: `${TEST_DESIGN_REPLAY_PREFIX}${id}/${stored.storedOutput.design}`,
+      };
+    });
+  assert(cases.length > 0, 'test/replay/test-design stores no run, so there is nothing to evidence a probe with');
+  return cases;
+}
+
+/**
+ * Did every check the harness makes pass on this stored run?
+ *
+ * The reference run of each fixture set is read off its recorded outcome rather
+ * than recognised by its directory name. Every other seeded case is a one-edit
+ * mutation of it and four of them leave the document-global reading untouched, so
+ * "the run whose oracles all hold" does not identify it and "the run with nothing
+ * wrong anywhere" does.
+ */
+function testDesignRunPassed(result) {
+  if (result.unmeasurable !== undefined) return false;
+  return (
+    result.shapeFailures.length === 0 &&
+    result.links.dangling.length === 0 &&
+    result.grounding.missed.length === 0 &&
+    result.grounding.matched === result.grounding.declared &&
+    result.ungrounded.length === 0 &&
+    result.coverage.failures.length === 0 &&
+    result.ordering.failures.length === 0 &&
+    result.ordering.satisfied === result.ordering.resolvable &&
+    result.ordering.resolvable === result.ordering.pairs &&
+    (result.cleanControl === null || result.cleanControl.excess === 0)
+  );
+}
+
+/**
+ * Whether one oracle holds on one stored run, or null when the run records no
+ * answer for it.
+ *
+ * A run the harness refused as unparseable never reached `documentMentions`, so a
+ * vocabulary oracle has no recorded reading there and the run is left out of that
+ * oracle's evidence rather than counted as a violation it did not record.
+ */
+function testDesignOracleHolds(entry, result) {
+  if (entry.kind === 'run-measured') return result.unmeasurable === undefined && result.shape.rows > 0;
+  if (result.unmeasurable !== undefined) return null;
+  const mentioned = result.mentions[entry.risk.id];
+  assert(typeof mentioned === 'boolean', `a stored run records no mention of ${entry.risk.id}, which ${entry.oracleId} reads`);
+  return entry.kind === 'material-vocabulary' ? mentioned : !mentioned;
+}
+
+/**
+ * Every oracle `test-design.contract.json` states, paired with the corpus entry
+ * `tools/generate-contracts.js` generated it from.
+ *
+ * The pairing is recomputed from the same ground truth rather than parsed out of
+ * an oracle's commentary, and then checked against the contract on disk: an
+ * oracle whose evidence target names a different fixture set, or whose check has
+ * the wrong polarity for the entry it landed on, fails the generator instead of
+ * producing a probe about an oracle it has nothing to do with. The order is the
+ * contract's own, so P-NNN, B-NNN and O-NNN are one row of the same table for the
+ * first fifteen probes.
+ */
+function testDesignOracleIndex(contract, sets) {
+  const entries = [];
+  for (const set of sets) {
+    entries.push({ set, kind: 'run-measured', risk: null });
+    for (const risk of set.materialRisks ?? []) entries.push({ set, kind: 'material-vocabulary', risk });
+    for (const risk of set.unsupportedRisks ?? []) entries.push({ set, kind: 'unsupported-vocabulary', risk });
+  }
+  assert(
+    entries.length === contract.oracles.length,
+    `test-design.contract.json states ${contract.oracles.length} oracle(s) and the corpus accounts for ${entries.length}; run node tools/generate-contracts.js`,
+  );
+  return entries.map((entry, position) => {
+    const oracleId = `O-${pad(position + 1)}`;
+    const oracle = contract.oracles.find((candidate) => candidate.id === oracleId);
+    assert(oracle, `test-design.contract.json states no ${oracleId}`);
+    const pointer = testDesignArtifactPointer(`design-${entry.set.id}`);
+    assert(
+      oracle.direction.evidenceTargets.length === 1 && oracle.direction.evidenceTargets[0] === pointer,
+      `${oracleId} reads ${oracle.direction.evidenceTargets.join(', ')} and the corpus places ${entry.set.id}, which reads ${pointer}, there`,
+    );
+    assert(
+      (oracle.check.op === 'not') === (entry.kind === 'unsupported-vocabulary'),
+      `${oracleId} is a "${oracle.check.op}" check and the corpus places a ${entry.kind} oracle there`,
+    );
+    return { ...entry, oracleId, oracle, pointer, behaviorId: soleBehaviorFor(contract, oracleId) };
+  });
+}
+
+/**
+ * One probe per test-design oracle, in the contract's own order, and one
+ * gameability probe after them.
+ *
+ * WHAT A TEST-DESIGN PROBE CAN SAY, AND WHAT IT CANNOT
+ *
+ * `bmad-testarch-test-design` declares one output and it is prose, so every
+ * oracle in this contract reads the whole document and none can tell which risk
+ * row a token sits in. tools/generate-contracts.js states that in full and pairs
+ * each oracle with `documentMentions`, the harness's own document-global
+ * predicate. The probes below are held to the same reading, and each rationale
+ * says what its oracle establishes rather than what the suite measures: the
+ * row-scoped grounding, the arithmetic, the band placement, the coverage mapping
+ * and the priority ordering are all test/eval-test-design.js's, and no probe here
+ * claims an oracle reaches them.
+ *
+ * Every probe names a stored run under `test/replay/test-design/` for its
+ * evidence, and which run is read off the recorded outcome rather than chosen:
+ * `result.mentions` is the predicate the vocabulary oracles are paired with, so
+ * the run a probe's oracle resolves false on is the run that evidences its
+ * mutation. A corpus edit that moves that answer fails the generator rather than
+ * leaving a probe pointing at a run that no longer shows what it claims.
+ *
+ * The gameability probe is the one with no stored run of its own, and that is the
+ * finding it records. Its degenerate document has the mentions map of the
+ * reference run and the grounding block of the generic register, and no oracle in
+ * this contract can hold those two apart.
+ */
+function buildTestDesignProbes() {
+  const contract = loadContract('test-design.contract.json');
+  const groundTruth = JSON.parse(fs.readFileSync(path.join(TEST_DESIGN_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
+  const sets = groundTruth.fixtureSets ?? [];
+  assert(sets.length >= 2, 'the test-design ground truth declares fewer than two fixture sets, so it carries no clean control');
+
+  const groundTruthPath = `${TEST_DESIGN_FIXTURE_PREFIX}ground-truth.json`;
+  const epicPathOf = (set) => `${TEST_DESIGN_FIXTURE_PREFIX}${set.root}/${set.epicFile}`;
+  const cases = testDesignReplayCases();
+  // The corpus revision, pinned by what it is made of: the ground truth, the two
+  // epics a run is handed, and every stored run a probe cites. `commitDigest`
+  // wants an AD-27 digest and a git commit identifier is not one, so the corpus is
+  // pinned by its contents rather than by where it was committed.
+  const corpusDigest = digestOf([
+    groundTruthPath,
+    ...sets.map(epicPathOf),
+    ...cases.flatMap((stored) => [stored.designPath, stored.expectedPath]),
+  ]);
+  const severityOf = new Map(contract.behaviors.map((behavior) => [behavior.id, behavior.severity]));
+  const index = testDesignOracleIndex(contract, sets);
+
+  // The reference run of each set: the one stored run on which every check the
+  // harness makes passes. It is each probe's baseline-pass evidence, and the
+  // generator asserts below that the probe's own oracle actually holds on it.
+  const referenceOf = new Map();
+  for (const set of sets) {
+    const found = cases.filter((stored) => stored.setId === set.id && testDesignRunPassed(stored.result));
+    assert(
+      found.length === 1,
+      `test/replay/test-design stores ${found.length} run(s) of ${set.id} on which every check passes, and a baseline needs exactly one`,
+    );
+    referenceOf.set(set.id, found[0]);
+  }
+
+  const probes = index.map((entry, position) => {
+    const { set, kind, risk, oracleId, oracle, pointer, behaviorId } = entry;
+    const seeded = (set.materialRisks ?? []).length > 0;
+    const reference = referenceOf.get(set.id);
+    assert(
+      testDesignOracleHolds(entry, reference.result) === true,
+      `${oracleId} does not hold on ${reference.id}, which is ${set.id}'s reference run, so that run is not its baseline`,
+    );
+    const head = {
+      schemaVersion: PROBE_SCHEMA_VERSION,
+      parentDigest: null,
+      revisionCount: 0,
+      probeId: `P-${pad(position + 1)}`,
+      behaviorId,
+      systemId: `tea-test-design-${set.id}`,
+      implementationDigest: corpusDigest,
+      commitDigest: corpusDigest,
+    };
+
+    // The clean control. The seeded set's own run-measured oracle has a stored
+    // violation and is probed as a defect below; this set's has none, because a
+    // control whose document goes missing is a broken corpus rather than a
+    // measurement.
+    if (kind === 'run-measured' && !seeded) {
+      return {
+        ...head,
+        probeClass: 'zero-action',
+        artifactDigest: digestOf([reference.designPath]),
+        rationale:
+          `${set.id} is the corpus's control: its epic describes a feature whose genuine risk set is small, and ` +
+          `ground-truth.json caps a correct run at ${set.maxRisks} reported risks. ${reference.id} is that run, and all ` +
+          `${index.filter((other) => other.set.id === set.id).length} oracles this contract states for the set hold on it. ` +
+          'AD-7 keeps a clean control out of the strength vector; what it establishes is that the contract does not fire ' +
+          'where there is nothing to find.',
+        qualification: {
+          route: 'clean-control',
+          baselinePassEvidence: fileReference(reference.expectedPath),
+          revisionCommitDigest: corpusDigest,
+          noKnownDefectStatement:
+            `${set.id} declares no material risk. ground-truth.json gives it ${(set.unsupportedRisks ?? []).length} risks the ` +
+            `epic rules out in as many words and a ceiling of ${set.maxRisks} reported risks, and ` +
+            'npm run test:eval-test-design-data fails when a declared quote has left the epic it names.',
+        },
+        expectedClean: true,
+        defects: [],
+      };
+    }
+
+    const violating = cases.filter((stored) => stored.setId === set.id && testDesignOracleHolds(entry, stored.result) === false);
+    assert(
+      violating.length > 0,
+      `no stored run of ${set.id} resolves ${oracleId} false, so nothing evidences the mutation this probe describes`,
+    );
+    const mutated = violating[0];
+    const legId = kind === 'run-measured' ? `manifest-${set.id}-register` : `manifest-${risk.id}`;
+    const legPointer = testDesignArtifactPointer(legId);
+
+    const authored = {
+      'run-measured': {
+        operator: 'write-no-risk-register',
+        summary: `The document written for ${set.id} carries no table with a risk id and a score: ${mutated.result.unmeasurable}`,
+        failure: `The document carries no table cell holding an R-NNN identifier, so ${oracleId} resolves false and the harness refuses the run as ${mutated.result.unmeasurable} rather than scoring an empty register.`,
+        rationale:
+          `${mutated.id} is a stored run that wrote a document with no risk register at all, and a document the harness ` +
+          `cannot read is refused as ${mutated.result.unmeasurable} rather than scored as a register with nothing wrong in ` +
+          `it. ${oracleId} catches the same thing from the body alone, by finding no R-NNN in any table cell, and ` +
+          `${behaviorId} is the behavior it discharges.`,
+      },
+      'material-vocabulary': {
+        operator: `omit-material-risk-${risk?.id}`,
+        summary: `${risk?.id} is material to ${set.id} and the document omits it: ${risk?.summary}`,
+        failure: `The document never reaches ${risk?.id}'s deciding vocabulary, so ${oracleId} resolves false over the whole body.`,
+        rationale:
+          `${risk?.id} is material to ${set.id}: the epic supports it in as many words, and a document that never reaches its ` +
+          `deciding vocabulary has not analysed the feature it was given. ${mutated.id} is the stored run that does exactly ` +
+          `that, and ${oracleId} is the oracle that catches it through ${behaviorId}. The oracle reads the whole document, so ` +
+          'what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category ' +
+          'carries it is for test/eval-test-design.js to say.',
+      },
+      'unsupported-vocabulary': {
+        operator: `report-ruled-out-risk-${risk?.id}`,
+        summary: `${risk?.id} is ruled out by ${set.id} and the document reports it: ${risk?.summary}`,
+        failure: `The document carries ${risk?.id}'s vocabulary, which the epic rules out, so ${oracleId} resolves false over the whole body.`,
+        rationale:
+          `${risk?.id} is ruled out by ${set.id}'s epic in as many words, so a document that reports it has invented a risk ` +
+          `that would fit any feature. ${mutated.id} is the stored run that reports it, and ${oracleId} is the oracle that ` +
+          `catches it through ${behaviorId}. The oracle reads the whole document, so it also fires on a document that names ` +
+          'the vocabulary while explaining why the risk does not apply, which is the false positive a document-global ' +
+          'reading buys.',
+      },
+    }[kind];
+
+    return {
+      ...head,
+      probeClass: 'defect',
+      artifactDigest: digestOf([mutated.designPath]),
+      rationale: authored.rationale,
+      qualification: {
+        route: 'controlled-mutation',
+        // The mutation is to the document a run writes, and every stored seeded
+        // case is one edit to the reference document, so that document is what the
+        // operator is named against.
+        mutationSource: reference.designPath,
+        mutationOperator: authored.operator,
+        targetArtifact: fileReference(reference.designPath),
+        expectedObservableFailure: authored.failure,
+        baselinePassEvidence: fileReference(reference.expectedPath),
+        mutatedFailEvidence: fileReference(mutated.expectedPath),
+        // Both documents are stored side by side and neither is produced by
+        // editing the other in place, so there is nothing to roll back. The corpus
+        // the runs were staged from is digested before and after every live run.
+        rollbackVerified: true,
+      },
+      expectedClean: false,
+      defects: [
+        {
+          defectId: `D-${pad(position + 1)}`,
+          behaviorId,
+          summary: authored.summary,
+          // The contract's own reading of how hard this miss counts, rather than a
+          // second severity table that could disagree with it.
+          severity: severityOf.get(behaviorId),
+          oracleEvidence: [fileReference(mutated.designPath), fileReference(groundTruthPath)],
+          source: 'controlled-mutation',
+          // What pre-flight probes to see this defect fire: one design run of the
+          // set the risk belongs to, and the document it wrote read for the
+          // vocabulary. The relation is the oracle's own check negated, so a probe
+          // and an oracle read one document the same way, conjoined with the epic
+          // number so the witness says nothing about a document written for the
+          // other set.
+          manifestationWitness: {
+            legId,
+            interfaceId: TEST_DESIGN_INTERFACE,
+            operationId: TEST_DESIGN_OPERATION,
+            inputs: {
+              argument: {},
+              option: { agent: TEST_DESIGN_DEFAULT_AGENT },
+              environment: {},
+              stdin: { kind: 'text', value: buildTestDesignPrompt(set) },
+            },
+            relation: {
+              op: 'all',
+              operands: [testDesignEpicMarker(legPointer, set.epicNum), negated(repointed(oracle.check, pointer, legPointer))],
+            },
+          },
+        },
+      ],
+      // The artifact channel, because the deliverable is the only thing this
+      // command produces and the exit code says nothing: cli/lib/runner-exit-codes.js
+      // gives 0 to every run whose agent completed, so a run that wrote a document
+      // with no risk analysis in it and a correct run both exit 0. The signature
+      // therefore states the truth about the defect and is refused as
+      // `condition-artifact-channel-contract-local`, which is the same trade
+      // tea-trace-runner's probes record; see the header.
+      defectSignature: {
+        interfaceKind: 'cli',
+        invocation: { executable: TEST_DESIGN_INTERFACE, subcommandPath: [] },
+        observableChannel: 'artifact',
+        condition: {
+          selector: selector({ option: { agent: { matcher: 'any' } } }),
+          predicate: negated(repointed(oracle.check, pointer, OBSERVED_DESIGN_POINTER)),
+        },
+      },
+    };
+  });
+
+  // The gameability probe, against the seeded set, whose oracles are the ones a
+  // degenerate document has something to gain from.
+  const seededSet = sets.find((set) => (set.materialRisks ?? []).length > 0);
+  assert(seededSet, 'no test-design fixture set declares a material risk, so no document can be gamed against one');
+  const seededEntries = index.filter((entry) => entry.set.id === seededSet.id);
+  const gamed = seededEntries.find((entry) => entry.kind === 'material-vocabulary');
+  assert(gamed, `${seededSet.id} states no material-vocabulary oracle, so a prose mention gains a document nothing`);
+  const reference = referenceOf.get(seededSet.id);
+  // The stored run whose register is read and whose rows ground nothing. It is the
+  // register the degenerate document borrows, read off the recorded outcome rather
+  // than recognised by name.
+  const generic = cases.filter(
+    (stored) =>
+      stored.setId === seededSet.id &&
+      stored.result.unmeasurable === undefined &&
+      stored.result.shape.rows > 0 &&
+      stored.result.grounding.declared > 0 &&
+      stored.result.grounding.matched === 0,
+  );
+  assert(
+    generic.length === 1,
+    `test/replay/test-design stores ${generic.length} run(s) of ${seededSet.id} whose register grounds nothing, and this probe needs exactly one`,
+  );
+
+  probes.push({
+    schemaVersion: PROBE_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    probeId: `P-${pad(index.length + 1)}`,
+    probeClass: 'gameability',
+    behaviorId: gamed.behaviorId,
+    systemId: `tea-test-design-${seededSet.id}`,
+    implementationDigest: corpusDigest,
+    artifactDigest: digestOf([reference.designPath]),
+    commitDigest: corpusDigest,
+    rationale:
+      `A document with ${reference.id}'s mentions map and ${generic[0].id}'s grounding block satisfies every one of the ` +
+      `${seededEntries.length} oracles this contract states for ${seededSet.id} and reports nothing the epic supports. Its ` +
+      'register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material ' +
+      `risk's deciding vocabulary in prose, so ${seededEntries[0].oracleId} finds R-NNN identifiers in a table, the ` +
+      `${seededEntries.filter((entry) => entry.kind === 'material-vocabulary').length} material-vocabulary oracles find ` +
+      `their tokens somewhere in the body, and the ` +
+      `${seededEntries.filter((entry) => entry.kind === 'unsupported-vocabulary').length} unsupported-vocabulary oracles ` +
+      `find no ruled-out vocabulary. Nothing in this contract rejects that document. ${generic[0].id} records what the ` +
+      `row-scoped reading does with a register like it: ${generic[0].result.grounding.matched} of ` +
+      `${generic[0].result.grounding.declared} material risks matched a register row in an admitted category. This probe is ` +
+      'the record that the contract scores the gamed document clean.',
+    qualification: {
+      route: 'gameability',
+      degenerateResponse:
+        'A test design document whose register rows carry well-formed identifiers, correct arithmetic and a band for each ' +
+        'score, describing risks the epic neither supports nor rules out, beside a mitigation section that names every ' +
+        "material risk's deciding vocabulary in prose.",
+      naiveOracleSatisfiedEvidence: fileReference(reference.expectedPath),
+      disciplinedOracleRejectedEvidence: fileReference(generic[0].expectedPath),
+    },
+    expectedClean: false,
+    // AD-9's gameability route qualifies a degenerate response rather than a
+    // seeded defect, so there is no defect to declare and no manifestation witness
+    // to owe.
+    defects: [],
+    defectSignature: {
+      interfaceKind: 'cli',
+      invocation: { executable: TEST_DESIGN_INTERFACE, subcommandPath: [] },
+      observableChannel: 'artifact',
+      condition: {
+        selector: selector({ option: { agent: { matcher: 'any' } } }),
+        // Every oracle this contract states for the seeded set, read off the one
+        // document. The condition states what the degenerate reply satisfies
+        // rather than what separates it from a correct one, because nothing
+        // expressible over this artifact separates the two: the reference run
+        // satisfies the same conjunction. That is the measurement this probe
+        // exists to record.
+        predicate: {
+          op: 'all',
+          operands: seededEntries.map((entry) => repointed(entry.oracle.check, entry.pointer, OBSERVED_DESIGN_POINTER)),
+        },
+      },
+    },
+  });
+
+  return probes;
+}
+
+// ---------------------------------------------------------------------------
 // fragment selection
 // ---------------------------------------------------------------------------
 
@@ -769,6 +1265,7 @@ function targets() {
       build: () => buildRoutingProbes(spec),
     })),
     { relativePath: 'test-review.probes.json', build: buildTestReviewProbes },
+    { relativePath: 'test-design.probes.json', build: buildTestDesignProbes },
     { relativePath: 'trace.probes.json', build: buildTraceProbes },
     ...fragmentSelectionWorkflows().map((workflow) => ({
       relativePath: path.join('fragment-selection', `${workflow}.probes.json`),

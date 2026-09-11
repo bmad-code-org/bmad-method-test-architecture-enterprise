@@ -1,0 +1,119 @@
+{
+  "$comment": [
+    "The failure this whole suite exists to catch: a risk register that would fit any feature. Four risks, all",
+    "of them plausible, none of them supported by the epic, and every one of them ruled out by the epic in as",
+    "many words. Not one of the five risks the epic does support is reported.",
+    "",
+    "It is the only case that resolves every seeded oracle in the contract to false, in both directions at",
+    "once: the five material-vocabulary oracles because the document never reaches that vocabulary, and the",
+    "four unsupported-vocabulary oracles because it reaches theirs. Read on its own the document is competent.",
+    "It scores, bands and links every risk correctly. That is the point: shape is not grounding.",
+    "",
+    "The document is CONSTRUCTED. Each of its four descriptions is the exampleDescription of the ruled-out",
+    "entry it names, which is the sentence the fixture already holds that entry's matcher to."
+  ],
+  "id": "seeded-generic-register",
+  "suite": "test-design",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:c9d52801aeb14e1aa7bcc9c69f737ea3e07007b3e0d98371c0d25a068ba74d4f"
+  },
+  "derivation": [
+    "Four risk rows, R-001 through R-004, so wellFormedIds is 4 and validCategories is 4 over SEC, BUS, OPS",
+    "and TECH.",
+    "",
+    "Scale and arithmetic: 2x3=6, 2x3=6, 2x2=4, 1x2=2. All in range and all correct, so inScale is 4, the",
+    "arithmetic denominator is 4 and arithmeticOk is 4. Bands: the two sixes under Score >=6, the four under",
+    "Score 3-4, the two under Score 1-2, so banded is 4 and bandOk is 4.",
+    "",
+    "Risk links: four coverage rows each naming a declared id, so 4 of 4 resolve.",
+    "",
+    "Grounding: none of the five material matchers fires on any description, so matched is 0 of 5 and all five",
+    "ids are missed. Every one of the four rows is then tested against the ruled-out entries and every one",
+    "matches, so ungrounded holds four entries.",
+    "",
+    "Coverage: it is evaluated over the material risks that were reported, and none was, so the evaluated count",
+    "is 0. A risk the run never named is already a recall miss and failing its coverage as well would score one",
+    "omission twice.",
+    "",
+    "Ordering: the nine pairs still exist, because they come from the fixture's ranks. None resolves, because",
+    "neither risk in any pair reached a priority. Nine pairs, zero resolvable, zero satisfied. An unmeasurable",
+    "ratio fails the threshold rather than clearing it."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": false,
+      "data-sync-conflict-overwrite": false,
+      "tech-uncapped-retry-loop": false,
+      "perf-backlog-sync-budget": false,
+      "ops-no-release-kill-switch": false,
+      "payment-gateway-failure": true,
+      "cross-tenant-data-leak": true,
+      "browser-and-accessibility-regression": true,
+      "data-residency-compliance": true
+    },
+    "shape": {
+      "rows": 4,
+      "wellFormedIds": 4,
+      "validCategories": 4,
+      "inScale": 4,
+      "arithmeticOk": 4,
+      "banded": 4,
+      "bandOk": 4,
+      "arithmeticTotal": 4
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 4,
+      "resolved": 4,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 0,
+      "missed": [
+        "sec-unencrypted-offline-queue",
+        "data-sync-conflict-overwrite",
+        "tech-uncapped-retry-loop",
+        "perf-backlog-sync-budget",
+        "ops-no-release-kill-switch"
+      ]
+    },
+    "ungrounded": [
+      {
+        "unsupportedId": "cross-tenant-data-leak",
+        "rowId": "R-001"
+      },
+      {
+        "unsupportedId": "payment-gateway-failure",
+        "rowId": "R-002"
+      },
+      {
+        "unsupportedId": "data-residency-compliance",
+        "rowId": "R-003"
+      },
+      {
+        "unsupportedId": "browser-and-accessibility-regression",
+        "rowId": "R-004"
+      }
+    ],
+    "cleanControl": null,
+    "coverage": {
+      "evaluated": 0,
+      "satisfied": 0,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 0,
+      "satisfied": 0,
+      "failures": []
+    }
+  }
+}

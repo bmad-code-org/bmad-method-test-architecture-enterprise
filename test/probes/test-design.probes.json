@@ -1,0 +1,2612 @@
+[
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-001",
+    "behaviorId": "B-001",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:03e7ccbff9f7deaede352514e78819f9ab4285a0f272ca61fd34a022b251ac18",
+    "rationale": "seeded-register-absent is a stored run that wrote a document with no risk register at all, and a document the harness cannot read is refused as environment-parser rather than scored as a register with nothing wrong in it. O-001 catches the same thing from the body alone, by finding no R-NNN in any table cell, and B-001 is the behavior it discharges.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "write-no-risk-register",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document carries no table cell holding an R-NNN identifier, so O-001 resolves false and the harness refuses the run as environment-parser rather than scoring an empty register.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-register-absent/expected.json",
+        "privateRef": null,
+        "digest": "sha256:0fab0b39a9004a65d671e82dd77d9689602c41200833295138cb15b69af09b94"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-001",
+        "behaviorId": "B-001",
+        "summary": "The document written for seeded-offline-order-capture carries no table with a risk id and a score: environment-parser",
+        "severity": "material",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-register-absent/design.md",
+            "privateRef": null,
+            "digest": "sha256:03e7ccbff9f7deaede352514e78819f9ab4285a0f272ca61fd34a022b251ac18"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-seeded-offline-order-capture-register",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-seeded-offline-order-capture-register/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-seeded-offline-order-capture-register/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-002",
+    "behaviorId": "B-002",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "sec-unencrypted-offline-queue is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-002 is the oracle that catches it through B-002. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "omit-material-risk-sec-unencrypted-offline-queue",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document never reaches sec-unencrypted-offline-queue's deciding vocabulary, so O-002 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-002",
+        "behaviorId": "B-002",
+        "summary": "sec-unencrypted-offline-queue is material to seeded-offline-order-capture and the document omits it: The outbound queue holds a card reference and a billing address unencrypted on the device.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-sec-unencrypted-offline-queue",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "all",
+                    "operands": [
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Uu][Nn][Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Nn][Oo][Tt]\\s+[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt]|[Pp][Ll][Aa][Ii][Nn]\\s+[Tt][Ee][Xx][Tt]|[Cc][Ll][Ee][Aa][Rr][Tt][Ee][Xx][Tt]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ii][Oo][Nn]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt])[\\s\\S]*$"
+                      },
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-sec-unencrypted-offline-queue/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Qq][Uu][Ee][Uu][Ee]|[Ll][Oo][Cc][Aa][Ll]|[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Qq][Ll][Ii][Tt][Ee]|[Oo][Nn]-[Dd][Ii][Ss][Kk]|[Aa][Tt]\\s+[Rr][Ee][Ss][Tt]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Ss][Tt][Oo][Rr][Ee][Dd])[\\s\\S]*$"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Uu][Nn][Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Nn][Oo][Tt]\\s+[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt]|[Pp][Ll][Aa][Ii][Nn]\\s+[Tt][Ee][Xx][Tt]|[Cc][Ll][Ee][Aa][Rr][Tt][Ee][Xx][Tt]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ii][Oo][Nn]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Qq][Uu][Ee][Uu][Ee]|[Ll][Oo][Cc][Aa][Ll]|[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Qq][Ll][Ii][Tt][Ee]|[Oo][Nn]-[Dd][Ii][Ss][Kk]|[Aa][Tt]\\s+[Rr][Ee][Ss][Tt]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Ss][Tt][Oo][Rr][Ee][Dd])[\\s\\S]*$"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-003",
+    "behaviorId": "B-003",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "data-sync-conflict-overwrite is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-003 is the oracle that catches it through B-003. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "omit-material-risk-data-sync-conflict-overwrite",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document never reaches data-sync-conflict-overwrite's deciding vocabulary, so O-003 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-003",
+        "behaviorId": "B-003",
+        "summary": "data-sync-conflict-overwrite is material to seeded-offline-order-capture and the document omits it: Two offline edits to one work order silently overwrite each other, because the server orders by arrival and checks no version.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-data-sync-conflict-overwrite",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-data-sync-conflict-overwrite/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "all",
+                    "operands": [
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-data-sync-conflict-overwrite/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Ff][Ll][Ii][Cc][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt]|[Cc][Ll][Oo][Bb][Bb][Ee][Rr]|[Ll][Aa][Ss][Tt]\\s+[Ww][Rr][Ii][Tt][Ee]|[Ll][Aa][Ss][Tt]-[Ww][Rr][Ii][Tt][Ee]|[Ll][Oo][Ss][Tt]\\s+[Uu][Pp][Dd][Aa][Tt][Ee])[\\s\\S]*$"
+                      },
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-data-sync-conflict-overwrite/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Ss][Ii][Mm][Uu][Ll][Tt][Aa][Nn][Ee][Oo][Uu][Ss]|[Tt][Ww][Oo]\\s+[Tt][Ee][Cc][Hh][Nn][Ii][Cc][Ii][Aa][Nn][Ss]|[Ss][Ee][Cc][Oo][Nn][Dd]\\s+[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Aa][Mm][Ee]\\s+[Ww][Oo][Rr][Kk]\\s+[Oo][Rr][Dd][Ee][Rr]|[Vv][Ee][Rr][Ss][Ii][Oo][Nn]|[Tt][Ii][Mm][Ee][Ss][Tt][Aa][Mm][Pp])[\\s\\S]*$"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Ff][Ll][Ii][Cc][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt]|[Cc][Ll][Oo][Bb][Bb][Ee][Rr]|[Ll][Aa][Ss][Tt]\\s+[Ww][Rr][Ii][Tt][Ee]|[Ll][Aa][Ss][Tt]-[Ww][Rr][Ii][Tt][Ee]|[Ll][Oo][Ss][Tt]\\s+[Uu][Pp][Dd][Aa][Tt][Ee])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Ss][Ii][Mm][Uu][Ll][Tt][Aa][Nn][Ee][Oo][Uu][Ss]|[Tt][Ww][Oo]\\s+[Tt][Ee][Cc][Hh][Nn][Ii][Cc][Ii][Aa][Nn][Ss]|[Ss][Ee][Cc][Oo][Nn][Dd]\\s+[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Aa][Mm][Ee]\\s+[Ww][Oo][Rr][Kk]\\s+[Oo][Rr][Dd][Ee][Rr]|[Vv][Ee][Rr][Ss][Ii][Oo][Nn]|[Tt][Ii][Mm][Ee][Ss][Tt][Aa][Mm][Pp])[\\s\\S]*$"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-004",
+    "behaviorId": "B-004",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "tech-uncapped-retry-loop is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-004 is the oracle that catches it through B-004. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "omit-material-risk-tech-uncapped-retry-loop",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document never reaches tech-uncapped-retry-loop's deciding vocabulary, so O-004 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-004",
+        "behaviorId": "B-004",
+        "summary": "tech-uncapped-retry-loop is material to seeded-offline-order-capture and the document omits it: A payload the server will never accept is retried forever with no backoff, cap or dead-letter path.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-tech-uncapped-retry-loop",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-tech-uncapped-retry-loop/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "all",
+                    "operands": [
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-tech-uncapped-retry-loop/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Rr][Ee][Tt][Rr][Yy]|[Rr][Ee][Tt][Rr][Ii][Ee][Ss]|[Rr][Ee][Tt][Rr][Ii][Ee][Dd]|[Bb][Aa][Cc][Kk][Oo][Ff][Ff]|[Bb][Aa][Cc][Kk]-[Oo][Ff][Ff]|[Dd][Ee][Aa][Dd]\\s+[Ll][Ee][Tt][Tt][Ee][Rr]|[Dd][Ee][Aa][Dd]-[Ll][Ee][Tt][Tt][Ee][Rr])[\\s\\S]*$"
+                      },
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-tech-uncapped-retry-loop/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Cc][Aa][Pp]|[Uu][Nn][Bb][Oo][Uu][Nn][Dd][Ee][Dd]|[Ii][Nn][Dd][Ee][Ff][Ii][Nn][Ii][Tt]|[Ii][Nn][Ff][Ii][Nn][Ii][Tt][Ee]|[Ll][Oo][Oo][Pp]|[Ss][Tt][Oo][Rr][Mm]|[Ee][Xx][Hh][Aa][Uu][Ss][Tt]|[Nn][Oo]\\s+[Ll][Ii][Mm][Ii][Tt]|[Ff][Oo][Rr][Ee][Vv][Ee][Rr])[\\s\\S]*$"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Rr][Ee][Tt][Rr][Yy]|[Rr][Ee][Tt][Rr][Ii][Ee][Ss]|[Rr][Ee][Tt][Rr][Ii][Ee][Dd]|[Bb][Aa][Cc][Kk][Oo][Ff][Ff]|[Bb][Aa][Cc][Kk]-[Oo][Ff][Ff]|[Dd][Ee][Aa][Dd]\\s+[Ll][Ee][Tt][Tt][Ee][Rr]|[Dd][Ee][Aa][Dd]-[Ll][Ee][Tt][Tt][Ee][Rr])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Cc][Aa][Pp]|[Uu][Nn][Bb][Oo][Uu][Nn][Dd][Ee][Dd]|[Ii][Nn][Dd][Ee][Ff][Ii][Nn][Ii][Tt]|[Ii][Nn][Ff][Ii][Nn][Ii][Tt][Ee]|[Ll][Oo][Oo][Pp]|[Ss][Tt][Oo][Rr][Mm]|[Ee][Xx][Hh][Aa][Uu][Ss][Tt]|[Nn][Oo]\\s+[Ll][Ii][Mm][Ii][Tt]|[Ff][Oo][Rr][Ee][Vv][Ee][Rr])[\\s\\S]*$"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-005",
+    "behaviorId": "B-005",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "perf-backlog-sync-budget is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-005 is the oracle that catches it through B-005. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "omit-material-risk-perf-backlog-sync-budget",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document never reaches perf-backlog-sync-budget's deciding vocabulary, so O-005 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-005",
+        "behaviorId": "B-005",
+        "summary": "perf-backlog-sync-budget is material to seeded-offline-order-capture and the document omits it: A full day's backlog of 2,000 queued items has to finish syncing within 30 seconds on mid-range hardware.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-perf-backlog-sync-budget",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-perf-backlog-sync-budget/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "all",
+                    "operands": [
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-perf-backlog-sync-budget/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Bb][Aa][Cc][Kk][Ll][Oo][Gg]|2,000|2000|[Bb][Uu][Ll][Kk]|[Vv][Oo][Ll][Uu][Mm][Ee]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Ll][Aa][Rr][Gg][Ee]\\s+[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+                      },
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-perf-backlog-sync-budget/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:30\\s+[Ss][Ee][Cc][Oo][Nn][Dd]|30[Ss]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Ss][Ll][Oo][Ww]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Ww][Ii][Tt][Hh][Ii][Nn]\\s+30|[Ss][Yy][Nn][Cc]\\s+[Tt][Ii][Mm][Ee]|[Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Bb][Aa][Cc][Kk][Ll][Oo][Gg]|2,000|2000|[Bb][Uu][Ll][Kk]|[Vv][Oo][Ll][Uu][Mm][Ee]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Ll][Aa][Rr][Gg][Ee]\\s+[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:30\\s+[Ss][Ee][Cc][Oo][Nn][Dd]|30[Ss]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Ss][Ll][Oo][Ww]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Ww][Ii][Tt][Hh][Ii][Nn]\\s+30|[Ss][Yy][Nn][Cc]\\s+[Tt][Ii][Mm][Ee]|[Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-006",
+    "behaviorId": "B-006",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "ops-no-release-kill-switch is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-006 is the oracle that catches it through B-006. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "omit-material-risk-ops-no-release-kill-switch",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document never reaches ops-no-release-kill-switch's deciding vocabulary, so O-006 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-006",
+        "behaviorId": "B-006",
+        "summary": "ops-no-release-kill-switch is material to seeded-offline-order-capture and the document omits it: The feature ships on for everyone with no flag, so recovery costs a store review of one to three days.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-ops-no-release-kill-switch",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-ops-no-release-kill-switch/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "not",
+                "operands": [
+                  {
+                    "op": "all",
+                    "operands": [
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-ops-no-release-kill-switch/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Tt][Oo][Gg][Gg][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd])[\\s\\S]*$"
+                      },
+                      {
+                        "op": "regex",
+                        "operands": [
+                          {
+                            "pointer": "/interactions/manifest-ops-no-release-kill-switch/artifact/design"
+                          }
+                        ],
+                        "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Ss][Tt][Aa][Gg][Ee][Dd]|[Ss][Tt][Oo][Rr][Ee]\\s+[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Tt][Oo][Gg][Gg][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Ss][Tt][Aa][Gg][Ee][Dd]|[Ss][Tt][Oo][Rr][Ee]\\s+[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-007",
+    "behaviorId": "B-007",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "payment-gateway-failure is ruled out by seeded-offline-order-capture's epic in as many words, so a document that reports it has invented a risk that would fit any feature. seeded-generic-register is the stored run that reports it, and O-007 is the oracle that catches it through B-007. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "report-ruled-out-risk-payment-gateway-failure",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document carries payment-gateway-failure's vocabulary, which the epic rules out, so O-007 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-007",
+        "behaviorId": "B-007",
+        "summary": "payment-gateway-failure is ruled out by seeded-offline-order-capture and the document reports it: A card-processing failure. The epic does not call the billing service and does not change when it charges.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-payment-gateway-failure",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-payment-gateway-failure/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-payment-gateway-failure/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Cc][Hh][Aa][Rr][Gg][Ii][Nn][Gg]|[Cc][Hh][Aa][Rr][Gg][Ee]\\s+[Ff][Aa][Ii][Ll]|[Ss][Ee][Tt][Tt][Ll][Ee][Mm][Ee][Nn][Tt]|[Cc][Aa][Rr][Dd]\\s+[Pp][Rr][Oo][Cc][Ee][Ss][Ss][Oo][Rr]|[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr])[\\s\\S]*$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-payment-gateway-failure/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Oo][Uu][Tt][Aa][Gg][Ee]|[Uu][Nn][Aa][Vv][Aa][Ii][Ll][Aa][Bb][Ll][Ee]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee][Dd]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee]|[Tt][Hh][Ii][Rr][Dd]-[Pp][Aa][Rr][Tt][Yy]|[Tt][Hh][Ii][Rr][Dd]\\s+[Pp][Aa][Rr][Tt][Yy]|[Tt][Ii][Mm][Ee][Oo][Uu][Tt]|[Dd][Oo][Ww][Nn])[\\s\\S]*$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Cc][Hh][Aa][Rr][Gg][Ii][Nn][Gg]|[Cc][Hh][Aa][Rr][Gg][Ee]\\s+[Ff][Aa][Ii][Ll]|[Ss][Ee][Tt][Tt][Ll][Ee][Mm][Ee][Nn][Tt]|[Cc][Aa][Rr][Dd]\\s+[Pp][Rr][Oo][Cc][Ee][Ss][Ss][Oo][Rr]|[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr])[\\s\\S]*$"
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Oo][Uu][Tt][Aa][Gg][Ee]|[Uu][Nn][Aa][Vv][Aa][Ii][Ll][Aa][Bb][Ll][Ee]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee][Dd]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee]|[Tt][Hh][Ii][Rr][Dd]-[Pp][Aa][Rr][Tt][Yy]|[Tt][Hh][Ii][Rr][Dd]\\s+[Pp][Aa][Rr][Tt][Yy]|[Tt][Ii][Mm][Ee][Oo][Uu][Tt]|[Dd][Oo][Ww][Nn])[\\s\\S]*$"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-008",
+    "behaviorId": "B-008",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "cross-tenant-data-leak is ruled out by seeded-offline-order-capture's epic in as many words, so a document that reports it has invented a risk that would fit any feature. seeded-generic-register is the stored run that reports it, and O-008 is the oracle that catches it through B-008. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "report-ruled-out-risk-cross-tenant-data-leak",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document carries cross-tenant-data-leak's vocabulary, which the epic rules out, so O-008 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-008",
+        "behaviorId": "B-008",
+        "summary": "cross-tenant-data-leak is ruled out by seeded-offline-order-capture and the document reports it: One organization reading another's orders. Each installation has its own database and shares no storage.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-cross-tenant-data-leak",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-cross-tenant-data-leak/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-cross-tenant-data-leak/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Tt][Ee][Nn][Aa][Nn][Tt]|[Cc][Rr][Oo][Ss][Ss]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Mm][Uu][Ll][Tt][Ii]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn][Ss]|[Aa][Nn][Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Oo][Tt][Hh][Ee][Rr]\\s+[Cc][Uu][Ss][Tt][Oo][Mm][Ee][Rr][Ss])[\\s\\S]*$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-cross-tenant-data-leak/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Ll][Ee][Aa][Kk]|[Ll][Ee][Aa][Kk][Aa][Gg][Ee]|[Ii][Ss][Oo][Ll][Aa][Tt][Ii][Oo][Nn]|[Bb][Ll][Ee][Ee][Dd]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Bb][Oo][Uu][Nn][Dd][Aa][Rr][Yy]|[Ss][Ee][Gg][Rr][Ee][Gg][Aa][Tt])[\\s\\S]*$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Tt][Ee][Nn][Aa][Nn][Tt]|[Cc][Rr][Oo][Ss][Ss]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Mm][Uu][Ll][Tt][Ii]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn][Ss]|[Aa][Nn][Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Oo][Tt][Hh][Ee][Rr]\\s+[Cc][Uu][Ss][Tt][Oo][Mm][Ee][Rr][Ss])[\\s\\S]*$"
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Ll][Ee][Aa][Kk]|[Ll][Ee][Aa][Kk][Aa][Gg][Ee]|[Ii][Ss][Oo][Ll][Aa][Tt][Ii][Oo][Nn]|[Bb][Ll][Ee][Ee][Dd]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Bb][Oo][Uu][Nn][Dd][Aa][Rr][Yy]|[Ss][Ee][Gg][Rr][Ee][Gg][Aa][Tt])[\\s\\S]*$"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-009",
+    "behaviorId": "B-009",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "browser-and-accessibility-regression is ruled out by seeded-offline-order-capture's epic in as many words, so a document that reports it has invented a risk that would fit any feature. seeded-generic-register is the stored run that reports it, and O-009 is the oracle that catches it through B-009. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "report-ruled-out-risk-browser-and-accessibility-regression",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document carries browser-and-accessibility-regression's vocabulary, which the epic rules out, so O-009 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-009",
+        "behaviorId": "B-009",
+        "summary": "browser-and-accessibility-regression is ruled out by seeded-offline-order-capture and the document reports it: A browser or accessibility regression. The client is a native application with no browser surface.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-browser-and-accessibility-regression",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-browser-and-accessibility-regression/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-browser-and-accessibility-regression/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss][Ii][Bb][Ii][Ll][Ii][Tt][Yy]|[Aa]11[Yy]|[Ss][Cc][Rr][Ee][Ee][Nn]\\s+[Rr][Ee][Aa][Dd][Ee][Rr]|[Ww][Cc][Aa][Gg]|[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Ss][Aa][Ff][Aa][Rr][Ii]|[Ff][Ii][Rr][Ee][Ff][Oo][Xx]|[Rr][Ee][Ss][Pp][Oo][Nn][Ss][Ii][Vv][Ee]\\s+[Ll][Aa][Yy][Oo][Uu][Tt])[\\s\\S]*$"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "regex",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/artifact/design"
+            }
+          ],
+          "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss][Ii][Bb][Ii][Ll][Ii][Tt][Yy]|[Aa]11[Yy]|[Ss][Cc][Rr][Ee][Ee][Nn]\\s+[Rr][Ee][Aa][Dd][Ee][Rr]|[Ww][Cc][Aa][Gg]|[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Ss][Aa][Ff][Aa][Rr][Ii]|[Ff][Ii][Rr][Ee][Ff][Oo][Xx]|[Rr][Ee][Ss][Pp][Oo][Nn][Ss][Ii][Vv][Ee]\\s+[Ll][Aa][Yy][Oo][Uu][Tt])[\\s\\S]*$"
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-010",
+    "behaviorId": "B-010",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
+    "rationale": "data-residency-compliance is ruled out by seeded-offline-order-capture's epic in as many words, so a document that reports it has invented a risk that would fit any feature. seeded-generic-register is the stored run that reports it, and O-010 is the oracle that catches it through B-010. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/seeded-correct-run/design.md",
+      "mutationOperator": "report-ruled-out-risk-data-residency-compliance",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96"
+      },
+      "expectedObservableFailure": "The document carries data-residency-compliance's vocabulary, which the epic rules out, so O-010 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-010",
+        "behaviorId": "B-010",
+        "summary": "data-residency-compliance is ruled out by seeded-offline-order-capture and the document reports it: A residency or GDPR exposure. Residency is enforced by a routing layer this epic does not modify.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/seeded-generic-register/design.md",
+            "privateRef": null,
+            "digest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-data-residency-compliance",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-order-capture/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-order-capture`\n- `{config_source}`: `field-order-capture/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-order-capture/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `7`\n- `run_key`: `epic-7`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-order-capture/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-order-capture/test-artifacts/test-design-epic-7.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-order-capture/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-data-residency-compliance/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+7[\\s\\S]*$"
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-data-residency-compliance/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Rr][Ee][Ss][Ii][Dd][Ee][Nn][Cc][Yy]|[Gg][Dd][Pp][Rr]|[Ss][Oo][Vv][Ee][Rr][Ee][Ii][Gg][Nn][Tt][Yy]|[Dd][Aa][Tt][Aa]\\s+[Pp][Rr][Oo][Tt][Ee][Cc][Tt][Ii][Oo][Nn]\\s+[Rr][Ee][Gg][Uu][Ll][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-data-residency-compliance/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Cc][Oo][Mm][Pp][Ll][Ii]|[Rr][Ee][Gg][Uu][Ll][Aa][Tt]|[Jj][Uu][Rr][Ii][Ss][Dd][Ii][Cc][Tt][Ii][Oo][Nn]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Oo][Rr][Dd][Ee][Rr]|[Ll][Aa][Ww][Ff][Uu][Ll]|[Ll][Ee][Gg][Aa][Ll])[\\s\\S]*$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Rr][Ee][Ss][Ii][Dd][Ee][Nn][Cc][Yy]|[Gg][Dd][Pp][Rr]|[Ss][Oo][Vv][Ee][Rr][Ee][Ii][Gg][Nn][Tt][Yy]|[Dd][Aa][Tt][Aa]\\s+[Pp][Rr][Oo][Tt][Ee][Cc][Tt][Ii][Oo][Nn]\\s+[Rr][Ee][Gg][Uu][Ll][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Cc][Oo][Mm][Pp][Ll][Ii]|[Rr][Ee][Gg][Uu][Ll][Aa][Tt]|[Jj][Uu][Rr][Ii][Ss][Dd][Ii][Cc][Tt][Ii][Oo][Nn]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Oo][Rr][Dd][Ee][Rr]|[Ll][Aa][Ww][Ff][Uu][Ll]|[Ll][Ee][Gg][Aa][Ll])[\\s\\S]*$"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-011",
+    "behaviorId": "B-011",
+    "systemId": "tea-test-design-clean-last-sync-indicator",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "zero-action",
+    "artifactDigest": "sha256:72772123c507e0bb6334a29475086e4cccc5cf08b7af1030bb3bf6b76a69221a",
+    "rationale": "clean-last-sync-indicator is the corpus's control: its epic describes a feature whose genuine risk set is small, and ground-truth.json caps a correct run at 3 reported risks. clean-correct-run is that run, and all 5 oracles this contract states for the set hold on it. AD-7 keeps a clean control out of the strength vector; what it establishes is that the contract does not fire where there is nothing to find.",
+    "qualification": {
+      "route": "clean-control",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+      },
+      "revisionCommitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+      "noKnownDefectStatement": "clean-last-sync-indicator declares no material risk. ground-truth.json gives it 4 risks the epic rules out in as many words and a ceiling of 3 reported risks, and npm run test:eval-test-design-data fails when a declared quote has left the epic it names."
+    },
+    "expectedClean": true,
+    "defects": []
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-012",
+    "behaviorId": "B-012",
+    "systemId": "tea-test-design-clean-last-sync-indicator",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848",
+    "rationale": "data-loss-or-corruption is ruled out by clean-last-sync-indicator's epic in as many words, so a document that reports it has invented a risk that would fit any feature. clean-over-reported is the stored run that reports it, and O-012 is the oracle that catches it through B-012. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/clean-correct-run/design.md",
+      "mutationOperator": "report-ruled-out-risk-data-loss-or-corruption",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:72772123c507e0bb6334a29475086e4cccc5cf08b7af1030bb3bf6b76a69221a"
+      },
+      "expectedObservableFailure": "The document carries data-loss-or-corruption's vocabulary, which the epic rules out, so O-012 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-over-reported/expected.json",
+        "privateRef": null,
+        "digest": "sha256:9bcf16ea7a0edfc60d6fea51e0364cd9f9c46cabf822d3bafa1acb4caeb6d6f1"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-012",
+        "behaviorId": "B-012",
+        "summary": "data-loss-or-corruption is ruled out by clean-last-sync-indicator and the document reports it: Losing or corrupting stored data. The change opens the settings store read-only and writes nothing.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/clean-over-reported/design.md",
+            "privateRef": null,
+            "digest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-data-loss-or-corruption",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-sync-indicator/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-sync-indicator`\n- `{config_source}`: `field-sync-indicator/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-sync-indicator/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `9`\n- `run_key`: `epic-9`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-sync-indicator/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-sync-indicator/test-artifacts/test-design-epic-9.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-sync-indicator/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-data-loss-or-corruption/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+9[\\s\\S]*$"
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-data-loss-or-corruption/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Cc][Oo][Rr][Rr][Uu][Pp][Tt]|[Dd][Aa][Tt][Aa]\\s+[Ll][Oo][Ss][Ss]|[Ll][Oo][Ss][Ee]\\s+[Dd][Aa][Tt][Aa]|[Ll][Oo][Ss][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Dd][Ee][Ll][Ee][Tt][Ee]|[Tt][Rr][Uu][Nn][Cc][Aa][Tt])[\\s\\S]*$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-data-loss-or-corruption/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Ss][Tt][Oo][Rr][Ee]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Rr][Ee][Cc][Oo][Rr][Dd]|[Ff][Ii][Ee][Ll][Dd]|[Dd][Aa][Tt][Aa][Bb][Aa][Ss][Ee]|[Ss][Ee][Tt][Tt][Ii][Nn][Gg]|[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Cc][Oo][Rr][Rr][Uu][Pp][Tt]|[Dd][Aa][Tt][Aa]\\s+[Ll][Oo][Ss][Ss]|[Ll][Oo][Ss][Ee]\\s+[Dd][Aa][Tt][Aa]|[Ll][Oo][Ss][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Dd][Ee][Ll][Ee][Tt][Ee]|[Tt][Rr][Uu][Nn][Cc][Aa][Tt])[\\s\\S]*$"
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Ss][Tt][Oo][Rr][Ee]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Rr][Ee][Cc][Oo][Rr][Dd]|[Ff][Ii][Ee][Ll][Dd]|[Dd][Aa][Tt][Aa][Bb][Aa][Ss][Ee]|[Ss][Ee][Tt][Tt][Ii][Nn][Gg]|[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-013",
+    "behaviorId": "B-013",
+    "systemId": "tea-test-design-clean-last-sync-indicator",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848",
+    "rationale": "unauthorized-exposure is ruled out by clean-last-sync-indicator's epic in as many words, so a document that reports it has invented a risk that would fit any feature. clean-over-reported is the stored run that reports it, and O-013 is the oracle that catches it through B-013. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/clean-correct-run/design.md",
+      "mutationOperator": "report-ruled-out-risk-unauthorized-exposure",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:72772123c507e0bb6334a29475086e4cccc5cf08b7af1030bb3bf6b76a69221a"
+      },
+      "expectedObservableFailure": "The document carries unauthorized-exposure's vocabulary, which the epic rules out, so O-013 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-over-reported/expected.json",
+        "privateRef": null,
+        "digest": "sha256:9bcf16ea7a0edfc60d6fea51e0364cd9f9c46cabf822d3bafa1acb4caeb6d6f1"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-013",
+        "behaviorId": "B-013",
+        "summary": "unauthorized-exposure is ruled out by clean-last-sync-indicator and the document reports it: Exposing data to someone who should not see it. The value is the device's own timestamp shown to its holder.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/clean-over-reported/design.md",
+            "privateRef": null,
+            "digest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-unauthorized-exposure",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-sync-indicator/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-sync-indicator`\n- `{config_source}`: `field-sync-indicator/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-sync-indicator/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `9`\n- `run_key`: `epic-9`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-sync-indicator/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-sync-indicator/test-artifacts/test-design-epic-9.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-sync-indicator/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-unauthorized-exposure/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+9[\\s\\S]*$"
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-unauthorized-exposure/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Uu][Nn][Aa][Uu][Tt][Hh][Oo][Rr][Ii]|[Ll][Ee][Aa][Kk]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Ee][Xx][Pp][Oo][Ss][Ee]|[Pp][Ii][Ii]|[Pp][Ee][Rr][Ss][Oo][Nn][Aa][Ll]\\s+[Dd][Aa][Tt][Aa]|[Ss][Ee][Nn][Ss][Ii][Tt][Ii][Vv][Ee]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll])[\\s\\S]*$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-unauthorized-exposure/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss]|[Pp][Ee][Rr][Mm][Ii][Ss][Ss][Ii][Oo][Nn]|[Aa][Uu][Tt][Hh]|[Vv][Ii][Ss][Ii][Bb][Ll][Ee]|[Dd][Ii][Ss][Cc][Ll][Oo][Ss]|[Pp][Rr][Ii][Vv][Aa][Cc][Yy])[\\s\\S]*$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Uu][Nn][Aa][Uu][Tt][Hh][Oo][Rr][Ii]|[Ll][Ee][Aa][Kk]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Ee][Xx][Pp][Oo][Ss][Ee]|[Pp][Ii][Ii]|[Pp][Ee][Rr][Ss][Oo][Nn][Aa][Ll]\\s+[Dd][Aa][Tt][Aa]|[Ss][Ee][Nn][Ss][Ii][Tt][Ii][Vv][Ee]|[Cc][Rr][Ee][Dd][Ee][Nn][Tt][Ii][Aa][Ll])[\\s\\S]*$"
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss]|[Pp][Ee][Rr][Mm][Ii][Ss][Ss][Ii][Oo][Nn]|[Aa][Uu][Tt][Hh]|[Vv][Ii][Ss][Ii][Bb][Ll][Ee]|[Dd][Ii][Ss][Cc][Ll][Oo][Ss]|[Pp][Rr][Ii][Vv][Aa][Cc][Yy])[\\s\\S]*$"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-014",
+    "behaviorId": "B-014",
+    "systemId": "tea-test-design-clean-last-sync-indicator",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848",
+    "rationale": "render-performance-degradation is ruled out by clean-last-sync-indicator's epic in as many words, so a document that reports it has invented a risk that would fit any feature. clean-over-reported is the stored run that reports it, and O-014 is the oracle that catches it through B-014. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/clean-correct-run/design.md",
+      "mutationOperator": "report-ruled-out-risk-render-performance-degradation",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:72772123c507e0bb6334a29475086e4cccc5cf08b7af1030bb3bf6b76a69221a"
+      },
+      "expectedObservableFailure": "The document carries render-performance-degradation's vocabulary, which the epic rules out, so O-014 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-over-reported/expected.json",
+        "privateRef": null,
+        "digest": "sha256:9bcf16ea7a0edfc60d6fea51e0364cd9f9c46cabf822d3bafa1acb4caeb6d6f1"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-014",
+        "behaviorId": "B-014",
+        "summary": "render-performance-degradation is ruled out by clean-last-sync-indicator and the document reports it: A performance regression. One local key lookup on a screen that is already open, with no network call.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/clean-over-reported/design.md",
+            "privateRef": null,
+            "digest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-render-performance-degradation",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-sync-indicator/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-sync-indicator`\n- `{config_source}`: `field-sync-indicator/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-sync-indicator/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `9`\n- `run_key`: `epic-9`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-sync-indicator/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-sync-indicator/test-artifacts/test-design-epic-9.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-sync-indicator/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-render-performance-degradation/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+9[\\s\\S]*$"
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-render-performance-degradation/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Ss][Ll][Oo][Ww]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Jj][Aa][Nn][Kk]|[Ff][Rr][Aa][Mm][Ee]|[Dd][Ee][Gg][Rr][Aa][Dd]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Rr][Ee][Nn][Dd][Ee][Rr]\\s+[Bb][Uu][Dd][Gg][Ee][Tt])[\\s\\S]*$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-render-performance-degradation/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Ll][Oo][Aa][Dd]|[Rr][Ee][Nn][Dd][Ee][Rr]|[Ss][Cc][Rr][Ee][Ee][Nn]|[Ss][Tt][Aa][Rr][Tt][Uu][Pp]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Nn][Ee][Tt][Ww][Oo][Rr][Kk]\\s+[Cc][Aa][Ll][Ll]|[Pp][Oo][Ll][Ll])[\\s\\S]*$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Pp][Ee][Rr][Ff][Oo][Rr][Mm][Aa][Nn][Cc][Ee]|[Ss][Ll][Oo][Ww]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Jj][Aa][Nn][Kk]|[Ff][Rr][Aa][Mm][Ee]|[Dd][Ee][Gg][Rr][Aa][Dd]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Rr][Ee][Nn][Dd][Ee][Rr]\\s+[Bb][Uu][Dd][Gg][Ee][Tt])[\\s\\S]*$"
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Ll][Oo][Aa][Dd]|[Rr][Ee][Nn][Dd][Ee][Rr]|[Ss][Cc][Rr][Ee][Ee][Nn]|[Ss][Tt][Aa][Rr][Tt][Uu][Pp]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Nn][Ee][Tt][Ww][Oo][Rr][Kk]\\s+[Cc][Aa][Ll][Ll]|[Pp][Oo][Ll][Ll])[\\s\\S]*$"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-015",
+    "behaviorId": "B-015",
+    "systemId": "tea-test-design-clean-last-sync-indicator",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "probeClass": "defect",
+    "artifactDigest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848",
+    "rationale": "rollout-without-kill-switch is ruled out by clean-last-sync-indicator's epic in as many words, so a document that reports it has invented a risk that would fit any feature. clean-over-reported is the stored run that reports it, and O-015 is the oracle that catches it through B-015. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/replay/test-design/clean-correct-run/design.md",
+      "mutationOperator": "report-ruled-out-risk-rollout-without-kill-switch",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/design.md",
+        "privateRef": null,
+        "digest": "sha256:72772123c507e0bb6334a29475086e4cccc5cf08b7af1030bb3bf6b76a69221a"
+      },
+      "expectedObservableFailure": "The document carries rollout-without-kill-switch's vocabulary, which the epic rules out, so O-015 resolves false over the whole body.",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/clean-over-reported/expected.json",
+        "privateRef": null,
+        "digest": "sha256:9bcf16ea7a0edfc60d6fea51e0364cd9f9c46cabf822d3bafa1acb4caeb6d6f1"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-015",
+        "behaviorId": "B-015",
+        "summary": "rollout-without-kill-switch is ruled out by clean-last-sync-indicator and the document reports it: An unrecoverable rollout. The row ships behind an existing flag the release process already toggles.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/replay/test-design/clean-over-reported/design.md",
+            "privateRef": null,
+            "digest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848"
+          },
+          {
+            "storage": "public",
+            "path": "test/fixtures/test-design-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-rollout-without-kill-switch",
+          "interfaceId": "tea-test-design-runner",
+          "operationId": "design-fixture-set",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-test-design` against the project in `field-sync-indicator/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nTake mode C (Create). Resolve the workflow placeholders to these values:\n\n- `{project-root}`: `field-sync-indicator`\n- `{config_source}`: `field-sync-indicator/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `field-sync-indicator/test-artifacts`\n- `{skill-root}`: `skill`\n- `mode`: `epic-level`\n- `run_scope`: `epic-level`\n- `epic_num`: `9`\n- `run_key`: `epic-9`\n- `design_level`: `full`\n- `tea_execution_mode`: `sequential`\n- `tea_capability_probe`: `false`\n\nThe epic is the one document under `field-sync-indicator/docs/epics/`. It is the only requirements source for this\nrun; there is no PRD, no architecture document and no sprint status file, and none is missing.\n\n----- what to produce -----\nWrite the one deliverable epic-level mode declares:\n\n- `field-sync-indicator/test-artifacts/test-design-epic-9.md`, from `skill/test-design-template.md`, carrying\n  the risk assessment and the test coverage plan the template lays out, with each risk row stating its\n  category, probability, impact and score, and each coverage row naming its test level and the risk it\n  covers.\n\nDo not add, edit, or delete any file under `field-sync-indicator/docs/`. This workflow does not change its inputs,\nand it does not generate tests.\n\nDo not stop to ask a question. Every value the workflow would otherwise ask for is stated above.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "all",
+            "operands": [
+              {
+                "op": "regex",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-rollout-without-kill-switch/artifact/design"
+                  }
+                ],
+                "pattern": "^[\\s\\S]*Epic\\s+9[\\s\\S]*$"
+              },
+              {
+                "op": "all",
+                "operands": [
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-rollout-without-kill-switch/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Nn][Oo]\\s+[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Cc][Aa][Nn][Nn][Oo][Tt]\\s+[Bb][Ee]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd]|[Uu][Nn][Rr][Ee][Cc][Oo][Vv][Ee][Rr][Aa][Bb][Ll][Ee]|[Nn][Oo]\\s+[Ww][Aa][Yy]\\s+[Tt][Oo]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee])[\\s\\S]*$"
+                  },
+                  {
+                    "op": "regex",
+                    "operands": [
+                      {
+                        "pointer": "/interactions/manifest-rollout-without-kill-switch/artifact/design"
+                      }
+                    ],
+                    "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Nn][Oo]\\s+[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Cc][Aa][Nn][Nn][Oo][Tt]\\s+[Bb][Ee]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd]|[Uu][Nn][Rr][Ee][Cc][Oo][Vv][Ee][Rr][Aa][Bb][Ll][Ee]|[Nn][Oo]\\s+[Ww][Aa][Yy]\\s+[Tt][Oo]\\s+[Dd][Ii][Ss][Aa][Bb][Ll][Ee])[\\s\\S]*$"
+            },
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-016",
+    "probeClass": "gameability",
+    "behaviorId": "B-002",
+    "systemId": "tea-test-design-seeded-offline-order-capture",
+    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "artifactDigest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96",
+    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "rationale": "A document with seeded-correct-run's mentions map and seeded-generic-register's grounding block satisfies every one of the 10 oracles this contract states for seeded-offline-order-capture and reports nothing the epic supports. Its register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material risk's deciding vocabulary in prose, so O-001 finds R-NNN identifiers in a table, the 5 material-vocabulary oracles find their tokens somewhere in the body, and the 4 unsupported-vocabulary oracles find no ruled-out vocabulary. Nothing in this contract rejects that document. seeded-generic-register records what the row-scoped reading does with a register like it: 0 of 5 material risks matched a register row in an admitted category. This probe is the record that the contract scores the gamed document clean.",
+    "qualification": {
+      "route": "gameability",
+      "degenerateResponse": "A test design document whose register rows carry well-formed identifiers, correct arithmetic and a band for each score, describing risks the epic neither supports nor rules out, beside a mitigation section that names every material risk's deciding vocabulary in prose.",
+      "naiveOracleSatisfiedEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-correct-run/expected.json",
+        "privateRef": null,
+        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+      },
+      "disciplinedOracleRejectedEvidence": {
+        "storage": "public",
+        "path": "test/replay/test-design/seeded-generic-register/expected.json",
+        "privateRef": null,
+        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+      }
+    },
+    "expectedClean": false,
+    "defects": [],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-test-design-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null
+          }
+        },
+        "predicate": {
+          "op": "all",
+          "operands": [
+            {
+              "op": "regex",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/design"
+                }
+              ],
+              "pattern": "^[\\s\\S]*\\|[^|\\n]*R-[0-9]{3}[^|\\n]*\\|[\\s\\S]*$"
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Uu][Nn][Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Nn][Oo][Tt]\\s+[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ee][Dd]|[Pp][Ll][Aa][Ii][Nn][Tt][Ee][Xx][Tt]|[Pp][Ll][Aa][Ii][Nn]\\s+[Tt][Ee][Xx][Tt]|[Cc][Ll][Ee][Aa][Rr][Tt][Ee][Xx][Tt]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt][Ii][Oo][Nn]|[Ee][Nn][Cc][Rr][Yy][Pp][Tt])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Qq][Uu][Ee][Uu][Ee]|[Ll][Oo][Cc][Aa][Ll]|[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Qq][Ll][Ii][Tt][Ee]|[Oo][Nn]-[Dd][Ii][Ss][Kk]|[Aa][Tt]\\s+[Rr][Ee][Ss][Tt]|[Ss][Tt][Oo][Rr][Aa][Gg][Ee]|[Ss][Tt][Oo][Rr][Ee][Dd])[\\s\\S]*$"
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Ff][Ll][Ii][Cc][Tt]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt][Ee]|[Oo][Vv][Ee][Rr][Ww][Rr][Ii][Tt]|[Cc][Ll][Oo][Bb][Bb][Ee][Rr]|[Ll][Aa][Ss][Tt]\\s+[Ww][Rr][Ii][Tt][Ee]|[Ll][Aa][Ss][Tt]-[Ww][Rr][Ii][Tt][Ee]|[Ll][Oo][Ss][Tt]\\s+[Uu][Pp][Dd][Aa][Tt][Ee])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Cc][Oo][Nn][Cc][Uu][Rr][Rr][Ee][Nn][Tt]|[Ss][Ii][Mm][Uu][Ll][Tt][Aa][Nn][Ee][Oo][Uu][Ss]|[Tt][Ww][Oo]\\s+[Tt][Ee][Cc][Hh][Nn][Ii][Cc][Ii][Aa][Nn][Ss]|[Ss][Ee][Cc][Oo][Nn][Dd]\\s+[Dd][Ee][Vv][Ii][Cc][Ee]|[Ss][Aa][Mm][Ee]\\s+[Ww][Oo][Rr][Kk]\\s+[Oo][Rr][Dd][Ee][Rr]|[Vv][Ee][Rr][Ss][Ii][Oo][Nn]|[Tt][Ii][Mm][Ee][Ss][Tt][Aa][Mm][Pp])[\\s\\S]*$"
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Rr][Ee][Tt][Rr][Yy]|[Rr][Ee][Tt][Rr][Ii][Ee][Ss]|[Rr][Ee][Tt][Rr][Ii][Ee][Dd]|[Bb][Aa][Cc][Kk][Oo][Ff][Ff]|[Bb][Aa][Cc][Kk]-[Oo][Ff][Ff]|[Dd][Ee][Aa][Dd]\\s+[Ll][Ee][Tt][Tt][Ee][Rr]|[Dd][Ee][Aa][Dd]-[Ll][Ee][Tt][Tt][Ee][Rr])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Cc][Aa][Pp]|[Uu][Nn][Bb][Oo][Uu][Nn][Dd][Ee][Dd]|[Ii][Nn][Dd][Ee][Ff][Ii][Nn][Ii][Tt]|[Ii][Nn][Ff][Ii][Nn][Ii][Tt][Ee]|[Ll][Oo][Oo][Pp]|[Ss][Tt][Oo][Rr][Mm]|[Ee][Xx][Hh][Aa][Uu][Ss][Tt]|[Nn][Oo]\\s+[Ll][Ii][Mm][Ii][Tt]|[Ff][Oo][Rr][Ee][Vv][Ee][Rr])[\\s\\S]*$"
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Bb][Aa][Cc][Kk][Ll][Oo][Gg]|2,000|2000|[Bb][Uu][Ll][Kk]|[Vv][Oo][Ll][Uu][Mm][Ee]|[Tt][Hh][Rr][Oo][Uu][Gg][Hh][Pp][Uu][Tt]|[Ll][Aa][Rr][Gg][Ee]\\s+[Qq][Uu][Ee][Uu][Ee])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:30\\s+[Ss][Ee][Cc][Oo][Nn][Dd]|30[Ss]|[Ll][Aa][Tt][Ee][Nn][Cc][Yy]|[Ss][Ll][Oo][Ww]|[Bb][Uu][Dd][Gg][Ee][Tt]|[Ww][Ii][Tt][Hh][Ii][Nn]\\s+30|[Ss][Yy][Nn][Cc]\\s+[Tt][Ii][Mm][Ee]|[Dd][Uu][Rr][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+                }
+              ]
+            },
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Ff][Ee][Aa][Tt][Uu][Rr][Ee]\\s+[Ff][Ll][Aa][Gg]|[Kk][Ii][Ll][Ll]\\s+[Ss][Ww][Ii][Tt][Cc][Hh]|[Kk][Ii][Ll][Ll]-[Ss][Ww][Ii][Tt][Cc][Hh]|[Tt][Oo][Gg][Gg][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee]|[Dd][Ii][Ss][Aa][Bb][Ll][Ee][Dd])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Rr][Oo][Ll][Ll][Oo][Uu][Tt]|[Rr][Ee][Ll][Ee][Aa][Ss][Ee]|[Rr][Oo][Ll][Ll][Bb][Aa][Cc][Kk]|[Rr][Oo][Ll][Ll]\\s+[Bb][Aa][Cc][Kk]|[Dd][Ee][Pp][Ll][Oo][Yy]|[Ss][Tt][Aa][Gg][Ee][Dd]|[Ss][Tt][Oo][Rr][Ee]\\s+[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ee][Rr][Tt])[\\s\\S]*$"
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/observed/artifact/design"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Gg][Aa][Tt][Ee][Ww][Aa][Yy]|[Cc][Hh][Aa][Rr][Gg][Ii][Nn][Gg]|[Cc][Hh][Aa][Rr][Gg][Ee]\\s+[Ff][Aa][Ii][Ll]|[Ss][Ee][Tt][Tt][Ll][Ee][Mm][Ee][Nn][Tt]|[Cc][Aa][Rr][Dd]\\s+[Pp][Rr][Oo][Cc][Ee][Ss][Ss][Oo][Rr]|[Pp][Aa][Yy][Mm][Ee][Nn][Tt]\\s+[Pp][Rr][Oo][Vv][Ii][Dd][Ee][Rr])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/observed/artifact/design"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Oo][Uu][Tt][Aa][Gg][Ee]|[Uu][Nn][Aa][Vv][Aa][Ii][Ll][Aa][Bb][Ll][Ee]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee][Dd]|[Dd][Ee][Cc][Ll][Ii][Nn][Ee]|[Tt][Hh][Ii][Rr][Dd]-[Pp][Aa][Rr][Tt][Yy]|[Tt][Hh][Ii][Rr][Dd]\\s+[Pp][Aa][Rr][Tt][Yy]|[Tt][Ii][Mm][Ee][Oo][Uu][Tt]|[Dd][Oo][Ww][Nn])[\\s\\S]*$"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/observed/artifact/design"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Tt][Ee][Nn][Aa][Nn][Tt]|[Cc][Rr][Oo][Ss][Ss]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Mm][Uu][Ll][Tt][Ii]-[Tt][Ee][Nn][Aa][Nn][Tt]|[Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn][Ss]|[Aa][Nn][Oo][Tt][Hh][Ee][Rr]\\s+[Oo][Rr][Gg][Aa][Nn][Ii][Zz][Aa][Tt][Ii][Oo][Nn]|[Oo][Tt][Hh][Ee][Rr]\\s+[Cc][Uu][Ss][Tt][Oo][Mm][Ee][Rr][Ss])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/observed/artifact/design"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Ll][Ee][Aa][Kk]|[Ll][Ee][Aa][Kk][Aa][Gg][Ee]|[Ii][Ss][Oo][Ll][Aa][Tt][Ii][Oo][Nn]|[Bb][Ll][Ee][Ee][Dd]|[Ee][Xx][Pp][Oo][Ss][Uu][Rr][Ee]|[Bb][Oo][Uu][Nn][Dd][Aa][Rr][Yy]|[Ss][Ee][Gg][Rr][Ee][Gg][Aa][Tt])[\\s\\S]*$"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/artifact/design"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:[Aa][Cc][Cc][Ee][Ss][Ss][Ii][Bb][Ii][Ll][Ii][Tt][Yy]|[Aa]11[Yy]|[Ss][Cc][Rr][Ee][Ee][Nn]\\s+[Rr][Ee][Aa][Dd][Ee][Rr]|[Ww][Cc][Aa][Gg]|[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Rr][Oo][Ww][Ss][Ee][Rr]|[Ss][Aa][Ff][Aa][Rr][Ii]|[Ff][Ii][Rr][Ee][Ff][Oo][Xx]|[Rr][Ee][Ss][Pp][Oo][Nn][Ss][Ii][Vv][Ee]\\s+[Ll][Aa][Yy][Oo][Uu][Tt])[\\s\\S]*$"
+                }
+              ]
+            },
+            {
+              "op": "not",
+              "operands": [
+                {
+                  "op": "all",
+                  "operands": [
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/observed/artifact/design"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Rr][Ee][Ss][Ii][Dd][Ee][Nn][Cc][Yy]|[Gg][Dd][Pp][Rr]|[Ss][Oo][Vv][Ee][Rr][Ee][Ii][Gg][Nn][Tt][Yy]|[Dd][Aa][Tt][Aa]\\s+[Pp][Rr][Oo][Tt][Ee][Cc][Tt][Ii][Oo][Nn]\\s+[Rr][Ee][Gg][Uu][Ll][Aa][Tt][Ii][Oo][Nn])[\\s\\S]*$"
+                    },
+                    {
+                      "op": "regex",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/observed/artifact/design"
+                        }
+                      ],
+                      "pattern": "^[\\s\\S]*(?:[Cc][Oo][Mm][Pp][Ll][Ii]|[Rr][Ee][Gg][Uu][Ll][Aa][Tt]|[Jj][Uu][Rr][Ii][Ss][Dd][Ii][Cc][Tt][Ii][Oo][Nn]|[Cc][Rr][Oo][Ss][Ss]-[Bb][Oo][Rr][Dd][Ee][Rr]|[Ll][Aa][Ww][Ff][Uu][Ll]|[Ll][Ee][Gg][Aa][Ll])[\\s\\S]*$"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+]

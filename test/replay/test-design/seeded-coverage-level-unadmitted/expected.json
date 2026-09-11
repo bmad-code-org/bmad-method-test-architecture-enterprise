@@ -1,0 +1,89 @@
+{
+  "$comment": [
+    "One edit to seeded-correct-run: R-001, the unencrypted-queue risk, is covered at Component instead of",
+    "Integration.",
+    "",
+    "It is in the corpus because a risk that reaches the coverage plan at a level that cannot establish it is",
+    "the failure a plain count of linked risks would miss. The fixture admits Unit, Integration and E2E for",
+    "this risk, because what is on disk is settled by opening the file the queue writes; a component test of a",
+    "UI surface establishes nothing about it."
+  ],
+  "id": "seeded-coverage-level-unadmitted",
+  "suite": "test-design",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:c9d52801aeb14e1aa7bcc9c69f737ea3e07007b3e0d98371c0d25a068ba74d4f"
+  },
+  "derivation": [
+    "Everything seeded-correct-run derives holds except one coverage check.",
+    "",
+    "Coverage: R-001 is linked from exactly one row and that row's level is Component, which is not in the",
+    "admitted set Unit, Integration, E2E. The check fails with the levels it did find, so satisfied falls to 4",
+    "over an evaluated count of 5.",
+    "",
+    "The risk link still resolves, because Component is a level and R-001 is still a declared id, so links stay",
+    "5 of 5. Grounding stays 5 of 5 for the same reason as before.",
+    "",
+    "Ordering is unchanged at 9 of 9. R-001 is still linked from a P0 row, so its priority is still P0 and every",
+    "pair it takes part in still holds."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": false,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 5,
+      "wellFormedIds": 5,
+      "validCategories": 5,
+      "inScale": 5,
+      "arithmeticOk": 5,
+      "banded": 5,
+      "bandOk": 5,
+      "arithmeticTotal": 5
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 5,
+      "resolved": 5,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 5,
+      "missed": []
+    },
+    "ungrounded": [],
+    "cleanControl": null,
+    "coverage": {
+      "evaluated": 5,
+      "satisfied": 4,
+      "failures": [
+        {
+          "riskId": "sec-unencrypted-offline-queue",
+          "reason": "no linked row uses an admitted level",
+          "levels": ["Component"]
+        }
+      ]
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 9,
+      "satisfied": 9,
+      "failures": []
+    }
+  }
+}
