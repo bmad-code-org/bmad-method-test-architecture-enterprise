@@ -1,0 +1,145 @@
+{
+  "$comment": [
+    "The failure this whole suite exists to catch: a risk register that would fit any feature. Four risks, all",
+    "of them plausible, none of them supported by the epic, and every one of them ruled out by the epic in as",
+    "many words. Not one of the five risks the epic does support is reported.",
+    "",
+    "It is the only case that resolves every seeded oracle in the contract to false, in both directions at",
+    "once: the five material-vocabulary oracles because the document never reaches that vocabulary, and the",
+    "four unsupported-vocabulary oracles because it reaches theirs. Read on its own the document is competent.",
+    "It scores, bands and links every risk correctly. That is the point: shape is not grounding.",
+    "",
+    "The document is CONSTRUCTED. Each of its four descriptions is the exampleDescription of the ruled-out",
+    "entry it names, which is the sentence the fixture already holds that entry's matcher to."
+  ],
+  "id": "seeded-generic-register",
+  "suite": "test-design",
+  "scorerVersion": 7,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "Four risk rows, R-001 through R-004, so wellFormedIds is 4 and validCategories is 4 over SEC, BUS, OPS",
+    "and TECH.",
+    "",
+    "Scale and arithmetic: 2x3=6, 2x3=6, 2x2=4, 1x2=2. All in range and all correct, so inScale is 4, the",
+    "arithmetic denominator is 4 and arithmeticOk is 4. Bands: the two sixes under Score >=6, the four under",
+    "Score 3-4, the two under Score 1-2, so banded is 4 and bandOk is 4.",
+    "",
+    "Risk links: four coverage rows each naming a declared id, so 4 of 4 resolve.",
+    "",
+    "Grounding: none of the five material matchers fires on any description, so matched is 0 of 5 and all five",
+    "ids are missed. Every one of the four rows is then tested against the ruled-out entries and every one",
+    "matches, so ungrounded holds four entries.",
+    "",
+    "Coverage: it is evaluated over the material risks that were reported, and none was, so the evaluated count",
+    "is 0. A risk the run never named is already a recall miss and failing its coverage as well would score one",
+    "omission twice.",
+    "",
+    "Ordering: the nine pairs still exist, because they come from the fixture's ranks. None resolves, because",
+    "neither risk in any pair reached a priority. Nine pairs, zero resolvable, zero satisfied. An unmeasurable",
+    "ratio fails the threshold rather than clearing it.",
+    "",
+    "WHAT MOVED AT SCORER VERSION 5",
+    "",
+    "`banded` is now `rows` on every case, because a row under a heading that declares no score range is a",
+    "band failure rather than an exemption. `cleanControl` is `ceiling` and both sets declare one, so the",
+    "seeded corpus is bounded too. `grounding` carries `topSeverityMissed`, the count of the set's",
+    "lowest-ranked risks that went unreported. Material risks are assigned by maximum matching rather than",
+    "first-come, and every row is tested against the exclusions whether or not it matched a material risk.",
+    "",
+    "AT SCORER VERSION 6",
+    "",
+    "`ordering` carries `flattened`, which is true when every material risk that reached a priority reached",
+    "the same one. A plan like that satisfies every pairwise constraint without ordering anything, so the",
+    "metric reports unmeasurable rather than a perfect score.",
+    "",
+    "AT SCORER VERSION 7",
+    "",
+    "`unscoredRiskTables` records every table that names risks with an `R-NNN` id and states no score. Such a",
+    "table cannot be scored and used to be skipped without a word, so a register split across a scored table",
+    "and an unscored one lost its second half silently. The threshold on the count is zero."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": false,
+      "data-sync-conflict-overwrite": false,
+      "tech-uncapped-retry-loop": false,
+      "perf-backlog-sync-budget": false,
+      "ops-no-release-kill-switch": false,
+      "payment-gateway-failure": true,
+      "cross-tenant-data-leak": true,
+      "browser-and-accessibility-regression": true,
+      "data-residency-compliance": true
+    },
+    "shape": {
+      "rows": 4,
+      "wellFormedIds": 4,
+      "validCategories": 4,
+      "inScale": 4,
+      "arithmeticOk": 4,
+      "banded": 4,
+      "bandOk": 4,
+      "arithmeticTotal": 4
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 4,
+      "resolved": 4,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 0,
+      "missed": [
+        "sec-unencrypted-offline-queue",
+        "data-sync-conflict-overwrite",
+        "tech-uncapped-retry-loop",
+        "perf-backlog-sync-budget",
+        "ops-no-release-kill-switch"
+      ],
+      "topSeverityMissed": 1
+    },
+    "ungrounded": [
+      {
+        "unsupportedId": "cross-tenant-data-leak",
+        "rowId": "R-001"
+      },
+      {
+        "unsupportedId": "payment-gateway-failure",
+        "rowId": "R-002"
+      },
+      {
+        "unsupportedId": "data-residency-compliance",
+        "rowId": "R-003"
+      },
+      {
+        "unsupportedId": "browser-and-accessibility-regression",
+        "rowId": "R-004"
+      }
+    ],
+    "ceiling": {
+      "maxRisks": 8,
+      "excess": 0
+    },
+    "unscoredRiskTables": [],
+    "coverage": {
+      "evaluated": 0,
+      "satisfied": 0,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 0,
+      "satisfied": 0,
+      "flattened": false,
+      "failures": []
+    }
+  }
+}

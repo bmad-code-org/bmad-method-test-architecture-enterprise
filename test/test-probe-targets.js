@@ -4,11 +4,11 @@
  * TEA measures its skills by running a command and reading what it wrote. That
  * mechanism is now eval-quality's `createCommandLineAdapter` rather than three
  * hand-rolled `spawnSync` blocks, and this file is what says so is true: it
- * drives every one of TEA's three real command targets through the real adapter
+ * drives every one of TEA's four real command targets through the real adapter
  * and the real policy, with a stub agent standing in for the vendor, and asserts
  * the observation that comes back.
  *
- * Five things are checked here and nowhere else.
+ * Six things are checked here and nowhere else.
  *
  * 1. **Every contract names a command TEA ships.** Eight contracts declared
  *    `tea-fragment-selection-runner` for months and nothing by that name
@@ -33,13 +33,21 @@
  * 4. **A killed run is classified, not scored.** A budget exhaustion comes back
  *    as an environment failure with a class, never as a measurement.
  *
- * 5. **The trace harness runs end to end against the stub.** `test/eval-trace.js`
- *    is spawned the way an operator spawns it, with the stub as a custom runner,
- *    and its result record is read back: every declared repetition completed
- *    and every threshold met on the correct run, a quality failure naming
- *    fixture mutations when the stub writes a test, and a missing-artifact
- *    failure when it writes nothing. That is the whole chain, from argv to the
- *    record, with no credential.
+ * 5. **The behavioral harnesses run end to end against the stub.**
+ *    `test/eval-trace.js` and `test/eval-test-design.js` are spawned the way an
+ *    operator spawns them, each with its own stub as a custom runner, and their
+ *    result records are read back: every declared repetition completed and every
+ *    threshold met on a correct run, a quality failure naming fixture mutations
+ *    when the run writes into the corpus it was handed, and a missing-artifact
+ *    failure when it writes no deliverable. The test-design half also drives
+ *    three documents carrying one known defect each, so the metric the record
+ *    names can be compared with the defect that produced it. That is the whole
+ *    chain, from argv to the record, with no credential.
+ *
+ * 6. **The environment probes are bounded.** The `--version`, `git` and keychain
+ *    probes are nobody's system under test and stayed hand-rolled, so each one
+ *    is driven against a child that never returns. A pre-flight that blocks
+ *    forever leaves CI watching a job that will never end.
  *
  * Usage: node test/test-probe-targets.js
  * Exit codes: 0 every check passed, 1 a check failed
@@ -81,6 +89,11 @@ const {
   failureClassForExit: traceFailureClassForExit,
 } = require('../cli/trace-runner');
 const { RUNNER_CAPABILITIES: TRACE_HARNESS_DECLARED_CAPABILITIES } = require('./eval-trace');
+const { RUNNER_CAPABILITIES: TEST_DESIGN_RUNNER_DECLARED_CAPABILITIES } = require('../cli/test-design-runner');
+const {
+  RUNNER_CAPABILITIES: TEST_DESIGN_HARNESS_DECLARED_CAPABILITIES,
+  THRESHOLDS: TEST_DESIGN_THRESHOLDS,
+} = require('./eval-test-design');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -91,6 +104,8 @@ const REVIEW_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-review-cli', 's
 const SELECTION_STUB_AGENT = path.join(__dirname, 'fixtures', 'fragment-selection-runner', 'stub-agent.js');
 const TRACE_STUB_AGENT = path.join(__dirname, 'fixtures', 'trace-runner', 'stub-agent.js');
 const TRACE_HARNESS = path.join(__dirname, 'eval-trace.js');
+const TEST_DESIGN_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-design-runner', 'stub-agent.js');
+const TEST_DESIGN_HARNESS = path.join(__dirname, 'eval-test-design.js');
 
 /**
  * The environment names the three stub agents read, passed through `--env-pass`.
@@ -643,18 +658,22 @@ async function checkTraceProbe(runDir) {
 }
 
 // ---------------------------------------------------------------------------
-// 5. the trace harness runs end to end against the stub
+// 5. the behavioral harnesses run end to end against the stub
 // ---------------------------------------------------------------------------
 
 /**
- * `test/eval-trace.js` spawned the way an operator spawns it: the stub as a
- * custom runner, STUB_MODE passed through, a result record requested.
+ * One behavioral harness spawned the way an operator spawns it: that suite's stub
+ * as a custom runner, STUB_MODE passed through, a result record requested.
+ *
+ * The two harnesses share this because they share the operator's command line: one
+ * vendor selection, one environment passthrough, one `--json` path read back the
+ * same way. A second copy would let one suite's spawn drift, and then a green check
+ * here would say nothing about how the other suite behaves for an operator.
  */
-function runTraceHarness(runDir, stubMode, extraArgs) {
-  const jsonPath = path.join(runDir, `trace-harness-${stubMode}.json`);
+function runHarnessAgainstStub(harness, stubAgent, jsonPath, stubMode, extraArgs) {
   const result = spawnSync(
     process.execPath,
-    [TRACE_HARNESS, '--agent', 'custom', '--agent-cmd', TRACE_STUB_AGENT, '--env-pass', 'STUB_MODE', '--json', jsonPath, ...extraArgs],
+    [harness, '--agent', 'custom', '--agent-cmd', stubAgent, '--env-pass', 'STUB_MODE', '--json', jsonPath, ...extraArgs],
     { cwd: PROJECT_ROOT, encoding: 'utf8', env: { ...process.env, STUB_MODE: stubMode }, timeout: 300_000 },
   );
   let record = null;
@@ -666,6 +685,20 @@ function runTraceHarness(runDir, stubMode, extraArgs) {
     }
   }
   return { status: result.status, stderr: String(result.stderr ?? ''), stdout: String(result.stdout ?? ''), record };
+}
+
+function runTraceHarness(runDir, stubMode, extraArgs) {
+  return runHarnessAgainstStub(TRACE_HARNESS, TRACE_STUB_AGENT, path.join(runDir, `trace-harness-${stubMode}.json`), stubMode, extraArgs);
+}
+
+function runTestDesignHarness(runDir, stubMode, extraArgs) {
+  return runHarnessAgainstStub(
+    TEST_DESIGN_HARNESS,
+    TEST_DESIGN_STUB_AGENT,
+    path.join(runDir, `test-design-harness-${stubMode}.json`),
+    stubMode,
+    extraArgs,
+  );
 }
 
 function checkTraceHarnessSmoke(runDir) {
@@ -709,6 +742,137 @@ function checkTraceHarnessSmoke(runDir) {
     nothing.record?.failureClass === 'environment-missing-artifact' && nothing.record?.runners?.[0]?.repetitions?.completed === 0,
     'the record classifies the lost run as a missing artifact and counts no completed repetition',
     JSON.stringify(nothing.record && { failureClass: nothing.record.failureClass, repetitions: nothing.record.runners?.[0]?.repetitions }),
+  );
+}
+
+/**
+ * One seeded case, once. Every document below is written about the seeded epic, so
+ * the clean control has nothing to say about any of them, and a stub repeating
+ * itself byte for byte measures the same thing twice.
+ */
+const SEEDED_DESIGN_CASE = ['--runs', '1', '--set', 'seeded-offline-order-capture'];
+
+/** The failures a runner record names, as the array the harness wrote. */
+function recordedFailures(result) {
+  return result.record?.runners?.[0]?.failures;
+}
+
+function checkTestDesignHarnessSmoke(runDir) {
+  console.log('\nthe test-design harness end to end against the stub');
+
+  const complete = runTestDesignHarness(runDir, 'complete', ['--runs', '2']);
+  assert(complete.status === 0, 'a correct run of both sets, twice, exits 0', complete.stderr.trim().split('\n').slice(-3).join(' | '));
+  assert(
+    complete.record?.mode === 'live' && complete.record?.failureClass === 'none',
+    'the record is a live run with no failure class',
+    JSON.stringify(complete.record && { mode: complete.record.mode, failureClass: complete.record.failureClass }),
+  );
+  const runner = complete.record?.runners?.[0];
+  assert(
+    runner?.repetitions?.expected === 4 && runner?.repetitions?.completed === 4,
+    'every declared repetition completed: two sets, two runs each',
+    JSON.stringify(runner?.repetitions),
+  );
+  assert(runner?.failures?.length === 0, 'every threshold is met on the correct run', JSON.stringify(runner?.failures));
+
+  // The gate again, read off the record itself, because the record is what a later
+  // reader holds. A metric no run could answer is written as null there, and a reader
+  // comparing null with a threshold would call it met; this says every one of them is
+  // a number that clears its own bar.
+  const measurements = runner?.measurements ?? {};
+  const unmet = Object.entries(TEST_DESIGN_THRESHOLDS)
+    // The `max` keys are ceilings on counts and are read on the next assertion.
+    .filter(([key]) => !key.startsWith('max'))
+    .filter(([key, threshold]) => !(typeof measurements[key] === 'number' && measurements[key] >= threshold))
+    .map(([key]) => key);
+  assert(unmet.length === 0, 'every declared threshold is measured as a number and met in the record', unmet.join(', '));
+  assert(
+    measurements.riskCeilingExcess === 0 &&
+      measurements.ungroundedRisks === 0 &&
+      measurements.topSeverityMissed === 0 &&
+      measurements.fixtureMutations === 0,
+    'neither set exceeds its ceiling, no row reads as one the epic rules out, the most severe risks are reported, and the staged corpus is unchanged',
+    JSON.stringify({
+      riskCeilingExcess: measurements.riskCeilingExcess,
+      ungroundedRisks: measurements.ungroundedRisks,
+      fixtureMutations: measurements.fixtureMutations,
+    }),
+  );
+
+  // The one thing the prompt forbids in as many words. A run that edited the epic it
+  // was handed has moved the benchmark, and the next run would be measured against a
+  // corpus this one rewrote, so the record has to name it.
+  const mutate = runTestDesignHarness(runDir, 'mutate', SEEDED_DESIGN_CASE);
+  assert(mutate.status === 1, 'a run that edits a file under the staged docs/ exits 1', `exit ${mutate.status}`);
+  assert(
+    mutate.record?.failureClass === 'quality' && recordedFailures(mutate)?.includes('fixture mutations'),
+    'the record carries a quality failure naming fixture mutations',
+    JSON.stringify(recordedFailures(mutate)),
+  );
+
+  // A run that wrote no document has measured nothing, so what the record has to
+  // carry is the environment class that lost it.
+  const nothing = runTestDesignHarness(runDir, 'nothing', SEEDED_DESIGN_CASE);
+  assert(nothing.status === 2, 'a run that wrote no document exits 2', `exit ${nothing.status}`);
+  assert(
+    nothing.record?.failureClass === 'environment-missing-artifact' && nothing.record?.runners?.[0]?.repetitions?.completed === 0,
+    'the record classifies the lost run as a missing artifact and counts no completed repetition',
+    JSON.stringify(nothing.record && { failureClass: nothing.record.failureClass, repetitions: nothing.record.runners?.[0]?.repetitions }),
+  );
+
+  // Three documents with one known defect each, which is the half of this suite no
+  // other check covers: the trace harness scores a matrix and this one scores
+  // arithmetic, a heading and a claim about an epic.
+
+  // A score cell that disagrees with its own two factors. It fails twice on purpose:
+  // 3 x 2 written as 5 is wrong arithmetic, and it also drops the row out of the
+  // `Score >=6` heading it was filed under, which is the second statement the
+  // document makes about that row.
+  const arithmetic = runTestDesignHarness(runDir, 'arithmetic-off', SEEDED_DESIGN_CASE);
+  assert(arithmetic.status === 1, 'a score cell that is not the product of its factors exits 1', `exit ${arithmetic.status}`);
+  assert(
+    arithmetic.record?.failureClass === 'quality' &&
+      recordedFailures(arithmetic)?.includes('scoreArithmeticAccuracy') &&
+      recordedFailures(arithmetic)?.includes('bandPlacementAccuracy'),
+    'the record names the arithmetic and the band the wrong score fell out of',
+    JSON.stringify(recordedFailures(arithmetic)),
+  );
+
+  // A score-9 risk filed under `Low-Priority Risks (Score 1-2)`, with its own
+  // arithmetic correct. Band placement is the only threshold it misses, which is what
+  // proves the scorer reads the heading a row sits under as well as the cells.
+  const band = runTestDesignHarness(runDir, 'band-misfiled', SEEDED_DESIGN_CASE);
+  assert(band.status === 1, 'a score-9 risk filed under the Score 1-2 heading exits 1', `exit ${band.status}`);
+  assert(
+    band.record?.failureClass === 'quality' && JSON.stringify(recordedFailures(band)) === JSON.stringify(['bandPlacementAccuracy']),
+    'band placement is the only threshold the misfiled register misses',
+    JSON.stringify(recordedFailures(band)),
+  );
+
+  // The register this suite exists to catch: four plausible risks, every one of them
+  // ruled out by the epic in as many words. Precision and recall both have to report
+  // it, and the two metrics that need a matched risk go unmeasurable, because an
+  // empty denominator would otherwise clear the bar it never met.
+  const generic = runTestDesignHarness(runDir, 'generic-register', SEEDED_DESIGN_CASE);
+  assert(generic.status === 1, 'a register of risks the epic rules out exits 1', `exit ${generic.status}`);
+  assert(
+    generic.record?.failureClass === 'quality' &&
+      JSON.stringify(recordedFailures(generic)) ===
+        JSON.stringify([
+          'groundedRiskRecall',
+          'riskPrecision',
+          'priorityOrderingAccuracy (unmeasurable)',
+          'coverageMappingAccuracy (unmeasurable)',
+          '4 risk(s) the epic rules out in as many words',
+          '1 of the most severe risk(s) went unreported',
+        ]),
+    'the record names recall, precision, the two metrics a matched risk would have made measurable, the four invented risks, and the top-severity miss',
+    JSON.stringify(recordedFailures(generic)),
+  );
+  assert(
+    generic.record?.runners?.[0]?.measurements?.ungroundedRisks === 4,
+    'all four reported risks are counted as ones the epic rules out',
+    JSON.stringify(generic.record?.runners?.[0]?.measurements?.ungroundedRisks),
   );
 }
 
@@ -795,6 +959,12 @@ function checkRunnerDeclarations() {
     `harness ${JSON.stringify(TRACE_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(TRACE_RUNNER_DECLARED_CAPABILITIES)}`,
   );
   assert(
+    JSON.stringify([...TEST_DESIGN_HARNESS_DECLARED_CAPABILITIES].sort()) ===
+      JSON.stringify([...TEST_DESIGN_RUNNER_DECLARED_CAPABILITIES].sort()),
+    'the test-design harness and tea-test-design-runner declare the same runner capabilities',
+    `harness ${JSON.stringify(TEST_DESIGN_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(TEST_DESIGN_RUNNER_DECLARED_CAPABILITIES)}`,
+  );
+  assert(
     TRACE_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       !RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes'),
     'a trace run may write its deliverables and a selection may not; that is the one capability the two commands differ in',
@@ -856,7 +1026,7 @@ function checkRunnerDeclarations() {
 }
 
 // ---------------------------------------------------------------------------
-// 5. the environment probes are bounded
+// 6. the environment probes are bounded
 // ---------------------------------------------------------------------------
 
 /**
@@ -933,6 +1103,7 @@ async function main() {
     await checkTraceProbe(runDir);
     await checkBudgets(runDir);
     checkTraceHarnessSmoke(runDir);
+    checkTestDesignHarnessSmoke(runDir);
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });
   }

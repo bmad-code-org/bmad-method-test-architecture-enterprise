@@ -7,9 +7,9 @@
     "way is the most expensive possible mistake to make about your own quality gate.",
     "",
     "Only `evalType: behavioral` discharges a skill's coverage obligation. Fragment selection measures which",
-    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so six of the",
-    "eight skills it spans are still listed under `deferred`. The other two, `test-review` and `trace`, are",
-    "discharged by their own behavioral suites rather than by their fragment-selection cases.",
+    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so five of the",
+    "eight skills it spans are still listed under `deferred`. The other three, `test-design`, `test-review` and",
+    "`trace`, each carry a behavioral suite of their own, and that is what discharges them.",
     "",
     "`ciTier` is the tier at which a suite runs in full. `npm run eval:all -- --preflight-only` runs each suite's",
     "`harnessOptions.preflightArgs` instead, which validates the data and then probes the runner: the executable",
@@ -137,6 +137,79 @@
       "caseCount": 24,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["read-only"]
+    },
+    {
+      "$comment": [
+        "Two fixture sets, each one epic document and each its own case, so one staged workspace and one",
+        "agent call apiece. They are never designed in one run: combining them changes every ratio, and the",
+        "clean set exists so recall cannot be met by reporting everything.",
+        "",
+        "`fixtures` lists the two epics the agent is given and `groundTruth` names the file it must never",
+        "see. The harness asserts that separation on the staged workspace and on the prompt before it spends",
+        "a call, and --validate-only asserts it too, so the check does not only run when a model runs.",
+        "",
+        "The runner needs a scoped write because the workflow's deliverable is a document it must create.",
+        "",
+        "Two repetitions. A full epic-level design reads five step files, the epic and several knowledge",
+        "fragments, so it costs far more than a fragment selection, and two is the smallest number that can",
+        "say whether the answer is reproducible.",
+        "",
+        "READ THIS BEFORE TREATING THIS SUITE'S CONTRACT AS COVERAGE.",
+        "",
+        "The thresholds above are the harness's, and the harness is the only thing that checks them. The",
+        "contract this suite links is deliberately weaker than the harness, because the workflow declares",
+        "one output and it is prose: `{test_artifacts}/test-design-epic-{epic_num}.md`, with nothing",
+        "machine-readable beside it. bmad-testarch-trace writes e2e-trace-summary.json next to its markdown",
+        "matrix, which is how the trace contract states the matrix's content through arithmetic its oracles",
+        "can reach. Test-design has no summary to point at, so every oracle here addresses the document as a",
+        "whole and can only ask which vocabulary it carries. The arithmetic, the band placement, the",
+        "coverage mapping and the priority ordering are checked by the harness, and by the eleven stored",
+        "documents under test/replay/test-design/ that re-derive all four through test/test-eval-replay.js",
+        "in `npm test` with no model call. No oracle in this contract reaches any of the four.",
+        "",
+        "So a green test/test-contract-oracles.js says the contract and the harness agree about the",
+        "vocabulary. It is not this suite passing, and it is not a substitute for running it. Closing that",
+        "gap needs the workflow to emit a machine-readable summary of its register and coverage plan. That",
+        "gap is reported here and carries no story yet, and it is not work this suite can do from the",
+        "consumer side."
+      ],
+      "id": "test-design",
+      "skill": "bmad-testarch-test-design",
+      "evalType": "behavioral",
+      "harness": "test/eval-test-design.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": [
+        "test/fixtures/test-design-eval/seeded/docs/epics/epic-7-offline-order-capture.md",
+        "test/fixtures/test-design-eval/clean/docs/epics/epic-9-last-sync-indicator.md"
+      ],
+      "groundTruth": ["test/fixtures/test-design-eval/ground-truth.json"],
+      "contracts": ["test/contracts/test-design.contract.json"],
+      "thresholds": {
+        "groundedRiskRecall": 0.8,
+        "riskPrecision": 0.8,
+        "scaleComplianceAccuracy": 1,
+        "scoreArithmeticAccuracy": 1,
+        "categoryValidityAccuracy": 1,
+        "bandPlacementAccuracy": 1,
+        "riskIdWellFormedAccuracy": 1,
+        "riskLinkResolutionAccuracy": 1,
+        "priorityOrderingAccuracy": 1,
+        "coverageMappingAccuracy": 0.8,
+        "maxUnscoredRiskTables": 0,
+        "maxUngroundedRisks": 0,
+        "maxTopSeverityMissed": 0,
+        "maxRiskCeilingExcess": 0,
+        "maxUnstableCases": 0,
+        "maxFixtureMutations": 0
+      },
+      "repetitions": 2,
+      "caseCount": 2,
+      "ciTier": "full-matrix",
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -273,12 +346,6 @@
       "owner": "TEA maintainers",
       "missingEvidence": "Fragment selection only. No evidence fixture with known gaps exists, so an unsupported PASS cannot be distinguished from a grounded one.",
       "exitCondition": "A behavioral suite proves the workflow grounds every status in supplied evidence, covers all four NFR domains, returns CONCERNS for unknown thresholds, and avoids unsupported PASS results."
-    },
-    {
-      "skill": "bmad-testarch-test-design",
-      "owner": "TEA maintainers",
-      "missingEvidence": "Fragment selection only. No fixture carries a known risk set, so risk grounding and priority consistency are unmeasured.",
-      "exitCondition": "A behavioral suite proves the workflow identifies grounded risks, applies probability and impact consistently, assigns priorities through stated judgment, and maps each material risk to suitable coverage."
     }
   ]
 }

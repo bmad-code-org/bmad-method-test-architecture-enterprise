@@ -106,9 +106,9 @@ inputDocuments: []
 
 #### Low-Priority Risks (Score 1-2)
 
-| Risk ID | Category | Description   | Probability | Impact | Score   | Action  |
-| ------- | -------- | ------------- | ----------- | ------ | ------- | ------- |
-| {R-ID}  | {CAT}    | {Description} | {1-3}       | {1-3}  | {Score} | Monitor |
+| Risk ID | Category | Description   | Probability | Impact | Score   | Action   |
+| ------- | -------- | ------------- | ----------- | ------ | ------- | -------- |
+| {R-ID}  | {CAT}    | {Description} | {1-3}       | {1-3}  | {Score} | Document |
 
 #### Risk Category Legend
 

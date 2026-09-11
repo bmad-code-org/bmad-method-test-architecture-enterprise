@@ -1,0 +1,117 @@
+{
+  "$comment": [
+    "One edit to seeded-correct-run: R-002, the score-9 risk, is moved into the Low-Priority Risks (Score 1-2)",
+    "table without changing any of its cells.",
+    "",
+    "It is the case the band placement check exists for, and it is the pair of answers that check has to give:",
+    "a 9 filed under Score 1-2 fails, and the same 9 filed under Score >=6 in seeded-correct-run passes. Before",
+    "the check existed the scorer read the score cell and never looked at which heading the row sat under, so",
+    "the most severe risk the matrix can express could be filed with the cosmetic ones and score clean."
+  ],
+  "id": "seeded-band-misfiled",
+  "suite": "test-design",
+  "scorerVersion": 7,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "Everything seeded-correct-run derives holds except band placement.",
+    "",
+    "Band: R-002 states 9 and now sits under Score 1-2, which does not contain it, so bandOk falls to 4 over a",
+    "banded count of 5. The Low-Priority table carries an Action column and no Mitigation column, which changes",
+    "nothing the scorer reads.",
+    "",
+    "Arithmetic is untouched at 5 of 5: 3 x 3 is still 9 and the cell still says 9. That is the point of the",
+    "case. The two checks read different things and only one of them moves.",
+    "",
+    "Grounding, coverage and ordering are all unchanged, because the description, the category and the coverage",
+    "plan were not edited.",
+    "",
+    "WHAT MOVED AT SCORER VERSION 5",
+    "",
+    "`banded` is now `rows` on every case, because a row under a heading that declares no score range is a",
+    "band failure rather than an exemption. `cleanControl` is `ceiling` and both sets declare one, so the",
+    "seeded corpus is bounded too. `grounding` carries `topSeverityMissed`, the count of the set's",
+    "lowest-ranked risks that went unreported. Material risks are assigned by maximum matching rather than",
+    "first-come, and every row is tested against the exclusions whether or not it matched a material risk.",
+    "",
+    "AT SCORER VERSION 6",
+    "",
+    "`ordering` carries `flattened`, which is true when every material risk that reached a priority reached",
+    "the same one. A plan like that satisfies every pairwise constraint without ordering anything, so the",
+    "metric reports unmeasurable rather than a perfect score.",
+    "",
+    "AT SCORER VERSION 7",
+    "",
+    "`unscoredRiskTables` records every table that names risks with an `R-NNN` id and states no score. Such a",
+    "table cannot be scored and used to be skipped without a word, so a register split across a scored table",
+    "and an unscored one lost its second half silently. The threshold on the count is zero."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": false,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 5,
+      "wellFormedIds": 5,
+      "validCategories": 5,
+      "inScale": 5,
+      "arithmeticOk": 5,
+      "banded": 5,
+      "bandOk": 4,
+      "arithmeticTotal": 5
+    },
+    "shapeFailures": [
+      {
+        "id": "R-002",
+        "check": "band",
+        "score": 9,
+        "heading": "Low-Priority Risks (Score 1-2)",
+        "reason": "the score falls outside the range its heading declares"
+      }
+    ],
+    "links": {
+      "total": 5,
+      "resolved": 5,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 5,
+      "missed": [],
+      "topSeverityMissed": 0
+    },
+    "ungrounded": [],
+    "ceiling": {
+      "maxRisks": 8,
+      "excess": 0
+    },
+    "unscoredRiskTables": [],
+    "coverage": {
+      "evaluated": 5,
+      "satisfied": 5,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 9,
+      "satisfied": 9,
+      "flattened": false,
+      "failures": []
+    }
+  }
+}

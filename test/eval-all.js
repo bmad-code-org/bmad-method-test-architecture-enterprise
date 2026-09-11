@@ -10,12 +10,12 @@
  * single most expensive way to be wrong about your own quality gate.
  *
  * Each suite keeps its declared repetition count from the manifest. Fragment
- * selection and trace default to two runs, test review to three. The focused
- * harnesses remain available when one workflow or metric needs debugging.
+ * selection, test design and trace default to two runs, test review to three. The
+ * focused harnesses remain available when one workflow or metric needs debugging.
  *
  * REPETITION_OVERRIDES below names a command-line flag per suite and now covers two
- * of the three. A suite it does not name still runs at its manifest count, which is
- * why adding the trace suite needed no change here.
+ * of the four. A suite it does not name still runs at its manifest count, which is
+ * why adding the trace and test-design suites needed no change here.
  */
 
 'use strict';

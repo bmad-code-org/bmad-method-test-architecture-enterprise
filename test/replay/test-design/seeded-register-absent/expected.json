@@ -1,0 +1,45 @@
+{
+  "$comment": [
+    "A run that wrote a document with no risk register at all: an executive summary, a coverage plan, and no",
+    "table carrying a risk id and a score.",
+    "",
+    "It is in the corpus because a document the harness cannot read must be refused rather than scored as a",
+    "register with nothing wrong in it. Every ratio over an empty register is either 0 over 0 or vacuously",
+    "perfect, and a run that produced nothing would otherwise report clean. The refusal is an environment",
+    "failure at exit 2, which is a different claim from a measured quality failure at exit 1.",
+    "",
+    "It is also the one case that holds the contract's run-measured oracle to the same answer: the oracle",
+    "finds no R-NNN in any table cell, so it refuses the run the harness refuses."
+  ],
+  "id": "seeded-register-absent",
+  "suite": "test-design",
+  "scorerVersion": 7,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "readDesign parses the tables, finds none carrying both a risk id column and a score column, and returns",
+    "environment-parser with the reason that the document carries no such table. No scored object is produced,",
+    "so the stored result is the failure class and nothing else.",
+    "",
+    "The coverage table in the document has a Test Level column and no Risk Link column, which is the P3 shape",
+    "the template ships. It is not a risk register and the parser does not treat it as one.",
+    "",
+    "WHAT MOVED AT SCORER VERSION 5",
+    "",
+    "`banded` is now `rows` on every case, because a row under a heading that declares no score range is a",
+    "band failure rather than an exemption. `cleanControl` is `ceiling` and both sets declare one, so the",
+    "seeded corpus is bounded too. `grounding` carries `topSeverityMissed`, the count of the set's",
+    "lowest-ranked risks that went unreported. Material risks are assigned by maximum matching rather than",
+    "first-come, and every row is tested against the exclusions whether or not it matched a material risk."
+  ],
+  "result": {
+    "unmeasurable": "environment-parser"
+  }
+}

@@ -4,13 +4,14 @@ A contract says what a TEA skill has to do. A probe says what was wrong with the
 contract was asked, and `eval-quality`'s `runScore` reads the two together to answer the question the
 package exists for: did this contract's oracles catch the defect that was actually there?
 
-| Corpus                                      | Probes | What they are                                                        |
-| ------------------------------------------- | -----: | -------------------------------------------------------------------- |
-| `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe |
-| `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                        |
-| `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow             |
-| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                          |
-| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                          |
+| Corpus                                      | Probes | What they are                                                          |
+| ------------------------------------------- | -----: | ---------------------------------------------------------------------- |
+| `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe   |
+| `test-design.probes.json`                   |     16 | Fourteen defective documents, one clean control, one gameability probe |
+| `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                          |
+| `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow               |
+| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                            |
+| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                            |
 
 **Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all twelve
 files from the sources this repository already keeps: `test/fixtures/test-review-eval/ground-truth.json`
@@ -68,9 +69,10 @@ from the first witness leg's inputs, so eight planned legs cost two runs.
 
 ## What each class establishes
 
-- **`defect`**: a planted registry row or a withheld coverage gap. It is a controlled mutation whose
-  target artifact, baseline-pass evidence and mutated-fail evidence are all files this repository
-  keeps, and its signature states the observable the plant produces.
+- **`defect`**: a planted registry row, a withheld coverage gap, or a test design document that omits
+  a risk the epic supports or reports one it rules out. It is a controlled mutation whose target
+  artifact, baseline-pass evidence and mutated-fail evidence are all files this repository keeps, and
+  its signature states the observable the plant produces.
 - **`zero-action` with `expectedClean`**: the clean control. AD-7 keeps it out of the strength vector
   on purpose; what it establishes is that the contract does not fire where there is nothing to find.
 - **`gameability`**: the degenerate reply that clears a naive oracle and is rejected by a disciplined
@@ -78,6 +80,35 @@ from the first witness leg's inputs, so eight planned legs cost two runs.
   the containment oracle and violates the exclusion oracle. AD-9's gameability route qualifies a
   response rather than a seeded defect, so these probes declare no defect and owe no manifestation
   witness.
+
+## What test-design's corpus does and does not establish
+
+`bmad-testarch-test-design` declares one output and it is prose, so every oracle in that contract
+reads the whole document.
+`tools/generate-contracts.js` pairs each one with `documentMentions`, the harness's own
+document-global predicate, and the probes are held to the same reading.
+Each rationale therefore says what its oracle establishes rather than what the suite measures.
+The row-scoped grounding, the arithmetic, the band placement, the coverage mapping and the priority
+ordering are all `test/eval-test-design.js`'s, and no probe claims an oracle reaches them.
+
+Two of those probes are worth reading for what they say about the contract's edges.
+P-007 through P-015 seed a ruled-out risk, and the oracle that catches each one fires on any mention
+of the risk's vocabulary anywhere in the body, including a paragraph explaining why the risk does not
+apply.
+P-016 is the gameability probe and it is the weakness this contract has no way to close: a document
+with the reference run's mentions map and the generic register's grounding block satisfies all ten
+oracles the contract states for the seeded set while reporting nothing the epic supports.
+Its defect signature is the conjunction of those ten checks, because nothing expressible over a
+markdown body separates that document from a correct one.
+What separates them is the row-scoped scorer, which matches each declared risk against one register
+row in an admitted category.
+
+This corpus is generated and byte-checked and it is not scored yet.
+`test/lib/probe-scoring.js` declares one evidence source per suite and has none for `test-design`, so
+`npm run test:probe-corpus` never reaches these probes and `expected-strength.json` carries no line
+for them.
+The evidence a source would answer from is already on disk under `test/replay/test-design/` and every
+probe cites it, so what is left is the wiring.
 
 ## What the vocabulary cannot say
 

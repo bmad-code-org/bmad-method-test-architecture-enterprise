@@ -1,0 +1,153 @@
+{
+  "$comment": [
+    "Four defects the rest of the corpus never exercised, in one register: a category outside the six, a",
+    "probability off the 1-3 scale, a repeated risk id beside a malformed one, and two coverage rows citing",
+    "risks the register does not declare.",
+    "",
+    "It is here because a review found that scaleComplianceAccuracy, categoryValidityAccuracy,",
+    "riskIdWellFormedAccuracy and riskLinkResolutionAccuracy all gate at 1 and had no failing case anywhere",
+    "in the repository. Stubbing all four to constants left every suite green. Four gates that cannot fail",
+    "are four gates nobody would notice stopping.",
+    "",
+    "The document is CONSTRUCTED from seeded-correct-run with those four defects introduced and nothing",
+    "else changed."
+  ],
+  "id": "seeded-shape-defects",
+  "suite": "test-design",
+  "scorerVersion": 7,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "Five rows. R-002's category reads RISK, which is not one of the six, so validCategories is 4.",
+    "",
+    "R-003 states a probability of 7, off the 1-3 scale, so inScale is 4 and the arithmetic denominator is",
+    "4 with all four of those correct. The row is counted once as a scale defect and has no arithmetic",
+    "opinion, which is the rule that stops one wrong row being reported as two failures.",
+    "",
+    "Ids: R-001, R-002 and the first R-003 are well formed and unique. The second R-003 repeats an id and",
+    "R5 does not match R-NNN, so wellFormedIds is 3 of 5.",
+    "",
+    "Bands: the second R-003 states 4 and sits under Score >=6, so bandOk is 4 of 5.",
+    "",
+    "Risk links: five citations, of which R-008 and R-009 name nothing the register declares, so 3 of 5",
+    "resolve and both dangling ids are recorded.",
+    "",
+    "Grounding: four of the five material risks match. data-sync-conflict-overwrite is missed, because the",
+    "row carrying its description declares the category RISK and the risk admits DATA, TECH and BUS. It is",
+    "not the top-ranked risk, so topSeverityMissed stays 0 and the run fails on recall and on the four",
+    "shape gates instead.",
+    "",
+    "Coverage: four of the five material risks were reported, so four are evaluated. The two whose rows",
+    "cite R-008 and R-009 reach no coverage row at all, so two are satisfied.",
+    "",
+    "AT SCORER VERSION 6",
+    "",
+    "`ordering` carries `flattened`, which is true when every material risk that reached a priority reached",
+    "the same one. A plan like that satisfies every pairwise constraint without ordering anything, so the",
+    "metric reports unmeasurable rather than a perfect score.",
+    "",
+    "AT SCORER VERSION 7",
+    "",
+    "`unscoredRiskTables` records every table that names risks with an `R-NNN` id and states no score. Such a",
+    "table cannot be scored and used to be skipped without a word, so a register split across a scored table",
+    "and an unscored one lost its second half silently. The threshold on the count is zero."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": false,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 5,
+      "wellFormedIds": 3,
+      "validCategories": 4,
+      "inScale": 4,
+      "arithmeticOk": 4,
+      "banded": 5,
+      "bandOk": 4,
+      "arithmeticTotal": 4
+    },
+    "shapeFailures": [
+      {
+        "id": "R-002",
+        "check": "category",
+        "actual": "RISK"
+      },
+      {
+        "id": "R-003",
+        "check": "scale",
+        "probability": 7,
+        "impact": 2
+      },
+      {
+        "id": "R-003",
+        "check": "duplicate-risk-id"
+      },
+      {
+        "id": "R-003",
+        "check": "band",
+        "score": 4,
+        "heading": "High-Priority Risks (Score ≥6)",
+        "reason": "the score falls outside the range its heading declares"
+      },
+      {
+        "id": "R5",
+        "check": "risk-id-format"
+      }
+    ],
+    "links": {
+      "total": 5,
+      "resolved": 3,
+      "dangling": ["R-008", "R-009"]
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 4,
+      "missed": ["data-sync-conflict-overwrite"],
+      "topSeverityMissed": 0
+    },
+    "ungrounded": [],
+    "ceiling": {
+      "maxRisks": 8,
+      "excess": 0
+    },
+    "unscoredRiskTables": [],
+    "coverage": {
+      "evaluated": 4,
+      "satisfied": 2,
+      "failures": [
+        {
+          "riskId": "perf-backlog-sync-budget",
+          "reason": "no linked row uses an admitted level",
+          "levels": ["Unit"]
+        },
+        {
+          "riskId": "ops-no-release-kill-switch",
+          "reason": "no coverage row links this risk",
+          "levels": []
+        }
+      ]
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 3,
+      "satisfied": 3,
+      "flattened": true,
+      "failures": []
+    }
+  }
+}

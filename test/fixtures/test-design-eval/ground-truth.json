@@ -1,0 +1,478 @@
+{
+  "$comment": [
+    "The expected answer for the test-design behavioral eval, and the file the agent must never see.",
+    "",
+    "Two fixture sets, each one epic document and each its own case. The seeded set carries five",
+    "material risks the epic actually supports and four plausible risks it rules out in as many words.",
+    "The clean set carries a feature whose genuine risk set is small, which is what stops recall alone",
+    "from rewarding a run that reports everything it can think of.",
+    "",
+    "GROUNDING IS A SUBSTRING TEST, NOT A JUDGMENT",
+    "",
+    "Every material risk names the sentence of the epic that supports it in `groundingQuote`, and every",
+    "unsupported risk names the sentence that rules it out in `exclusionQuote`. --validate-only checks",
+    "each quote is present in the epic it names, with runs of whitespace collapsed on both sides so a",
+    "quote that spans a wrapped line still resolves. A fixture claiming the description supports a risk",
+    "the description never mentions fails before a model call is spent.",
+    "",
+    "A reported risk row matches a declared risk when its category is one the risk admits and every",
+    "group in `anyOf` has at least one token present in the row's description, case-insensitively. The",
+    "groups are an AND of ORs on purpose: one distinctive word is a coincidence and two are a claim.",
+    "Material risks are matched first and a matched row is consumed, so a row that names a real risk in",
+    "words that also appear in an exclusion is never counted twice.",
+    "",
+    "SEVERITY RANKS CONSTRAIN PAIRS, NOT LEVELS",
+    "",
+    "`severityRank` is an ordering and not a priority. Priority is a separate judgment the workflow",
+    "makes from business impact, user reach and workaround availability, which the risk score informs",
+    "and does not determine; `resources/knowledge/test-priorities-matrix.md` states that directly and",
+    "`resources/knowledge/probability-impact.md` repeats it. Asserting an absolute priority per risk",
+    "would measure this fixture's opinion rather than the workflow's rule, so what is checked instead is",
+    "that every pair of risks whose ranks are strictly ordered carries priorities in the same order.",
+    "Equal ranks constrain nothing and produce no pair.",
+    "",
+    "PROVENANCE",
+    "",
+    "The six categories, the 1-3 probability and impact scales and the P x I score are the workflow's",
+    "own, read from steps-c/step-03-risk-and-testability.md section 2 and from the two knowledge",
+    "fragments it names. The five test levels are the four steps-c/step-04-coverage-plan.md section 1",
+    "declares plus Integration, which resources/knowledge/test-levels-framework.md treats as a first",
+    "class level throughout. Both epics were written for this corpus and describe no real system.",
+    "",
+    "EVERY SET DECLARES A CEILING",
+    "",
+    "`maxRisks` bounds how many risks a run may report, and it is on both sets. It was on the clean",
+    "control alone, which left over-reporting on the seeded set unbounded: four risks this fixture never",
+    "anticipated could be appended to an otherwise correct run and every threshold still passed, because",
+    "precision counts only the rows matching a risk the epic rules out in as many words. The seeded",
+    "ceiling is 8 against 5 material risks, which leaves room for a real risk this fixture did not",
+    "foresee and stops a register that lists everything."
+  ],
+  "riskCategories": [
+    "TECH",
+    "SEC",
+    "PERF",
+    "DATA",
+    "BUS",
+    "OPS"
+  ],
+  "testLevels": [
+    "E2E",
+    "API",
+    "Component",
+    "Integration",
+    "Unit"
+  ],
+  "priorities": [
+    "P0",
+    "P1",
+    "P2",
+    "P3"
+  ],
+  "fixtureSets": [
+    {
+      "id": "seeded-offline-order-capture",
+      "root": "seeded",
+      "projectRoot": "field-order-capture",
+      "epicNum": "7",
+      "epicFile": "docs/epics/epic-7-offline-order-capture.md",
+      "maxRisks": 8,
+      "materialRisks": [
+        {
+          "id": "sec-unencrypted-offline-queue",
+          "categories": [
+            "SEC",
+            "DATA"
+          ],
+          "severityRank": 1,
+          "summary": "The outbound queue holds a card reference and a billing address unencrypted on the device.",
+          "groundingQuote": "It holds the full order payload, including the customer's stored card reference and billing address, and it is not encrypted at rest.",
+          "anyOf": [
+            [
+              "unencrypted",
+              "not encrypted",
+              "plaintext",
+              "plain text",
+              "cleartext",
+              "encryption",
+              "encrypt"
+            ],
+            [
+              "queue",
+              "local",
+              "device",
+              "sqlite",
+              "on-disk",
+              "at rest",
+              "storage",
+              "stored"
+            ]
+          ],
+          "acceptableCoverage": [
+            "Unit",
+            "Integration",
+            "E2E"
+          ],
+          "exampleDescription": "The outbound queue is stored unencrypted on the device, so anyone reaching the local file can read the stored card reference."
+        },
+        {
+          "id": "data-sync-conflict-overwrite",
+          "categories": [
+            "DATA",
+            "TECH",
+            "BUS"
+          ],
+          "severityRank": 2,
+          "summary": "Two offline edits to one work order silently overwrite each other, because the server orders by arrival and checks no version.",
+          "groundingQuote": "The server applies queued edits in the order they arrive and performs no version check and no timestamp check, so a later arrival overwrites an earlier one",
+          "anyOf": [
+            [
+              "conflict",
+              "overwrite",
+              "overwrit",
+              "clobber",
+              "last write",
+              "last-write",
+              "lost update"
+            ],
+            [
+              "concurrent",
+              "simultaneous",
+              "two technicians",
+              "second device",
+              "same work order",
+              "version",
+              "timestamp"
+            ]
+          ],
+          "acceptableCoverage": [
+            "API",
+            "Integration",
+            "E2E"
+          ],
+          "exampleDescription": "Concurrent offline edits to the same work order overwrite each other on sync, because the server applies queued edits by arrival with no version check."
+        },
+        {
+          "id": "tech-uncapped-retry-loop",
+          "categories": [
+            "TECH",
+            "OPS",
+            "PERF"
+          ],
+          "severityRank": 3,
+          "summary": "A payload the server will never accept is retried forever with no backoff, cap or dead-letter path.",
+          "groundingQuote": "There is no backoff, no attempt cap, and no dead-letter path",
+          "anyOf": [
+            [
+              "retry",
+              "retries",
+              "retried",
+              "backoff",
+              "back-off",
+              "dead letter",
+              "dead-letter"
+            ],
+            [
+              "cap",
+              "unbounded",
+              "indefinit",
+              "infinite",
+              "loop",
+              "storm",
+              "exhaust",
+              "no limit",
+              "forever"
+            ]
+          ],
+          "acceptableCoverage": [
+            "Unit",
+            "Integration",
+            "API"
+          ],
+          "exampleDescription": "A rejected payload is retried forever with no backoff and no attempt cap, so one bad item loops until the application is killed."
+        },
+        {
+          "id": "perf-backlog-sync-budget",
+          "categories": [
+            "PERF",
+            "TECH"
+          ],
+          "severityRank": 4,
+          "summary": "A full day's backlog of 2,000 queued items has to finish syncing within 30 seconds on mid-range hardware.",
+          "groundingQuote": "requires a full backlog of that size to finish syncing within 30 seconds of regaining connectivity",
+          "anyOf": [
+            [
+              "backlog",
+              "2,000",
+              "2000",
+              "bulk",
+              "volume",
+              "throughput",
+              "large queue"
+            ],
+            [
+              "30 second",
+              "30s",
+              "latency",
+              "slow",
+              "budget",
+              "within 30",
+              "sync time",
+              "duration"
+            ]
+          ],
+          "acceptableCoverage": [
+            "API",
+            "Integration",
+            "E2E"
+          ],
+          "exampleDescription": "A 2000 item backlog may not finish syncing inside the 30 second budget on the mid-range hardware the fleet carries."
+        },
+        {
+          "id": "ops-no-release-kill-switch",
+          "categories": [
+            "OPS",
+            "BUS"
+          ],
+          "severityRank": 4,
+          "summary": "The feature ships on for everyone with no flag, so recovery costs a store review of one to three days.",
+          "groundingQuote": "There is no feature flag, no staged rollout, and no way to disable it without shipping a new build",
+          "anyOf": [
+            [
+              "feature flag",
+              "kill switch",
+              "kill-switch",
+              "toggle",
+              "disable",
+              "disabled"
+            ],
+            [
+              "rollout",
+              "release",
+              "rollback",
+              "roll back",
+              "deploy",
+              "staged",
+              "store review",
+              "revert"
+            ]
+          ],
+          "acceptableCoverage": [
+            "E2E",
+            "Integration",
+            "Component"
+          ],
+          "exampleDescription": "There is no feature flag, so a bad release cannot be turned off without shipping a new store build."
+        }
+      ],
+      "unsupportedRisks": [
+        {
+          "id": "payment-gateway-failure",
+          "summary": "A card-processing failure. The epic does not call the billing service and does not change when it charges.",
+          "exclusionQuote": "the existing billing service charges the stored card reference on its own nightly schedule, and this epic does not touch it, call it, or change when it runs",
+          "anyOf": [
+            [
+              "payment gateway",
+              "gateway",
+              "charging",
+              "charge fail",
+              "settlement",
+              "card processor",
+              "payment provider"
+            ],
+            [
+              "outage",
+              "unavailable",
+              "declined",
+              "decline",
+              "third-party",
+              "third party",
+              "timeout",
+              "down"
+            ]
+          ],
+          "exampleDescription": "The payment gateway is unavailable when the queue uploads, so the customer is never charged for the work."
+        },
+        {
+          "id": "cross-tenant-data-leak",
+          "summary": "One organization reading another's orders. Each installation has its own database and shares no storage.",
+          "exclusionQuote": "one customer organization per installation, with its own database and its own application servers",
+          "anyOf": [
+            [
+              "tenant",
+              "cross-tenant",
+              "multi-tenant",
+              "other organizations",
+              "another organization",
+              "other customers"
+            ],
+            [
+              "leak",
+              "leakage",
+              "isolation",
+              "bleed",
+              "exposure",
+              "boundary",
+              "segregat"
+            ]
+          ],
+          "exampleDescription": "A queued order from one organization could be applied to another organization's data, so tenant isolation has to be proven."
+        },
+        {
+          "id": "browser-and-accessibility-regression",
+          "summary": "A browser or accessibility regression. The client is a native application with no browser surface.",
+          "exclusionQuote": "There is no browser surface and no web view in this epic",
+          "anyOf": [
+            [
+              "accessibility",
+              "a11y",
+              "screen reader",
+              "wcag",
+              "browser",
+              "cross-browser",
+              "safari",
+              "firefox",
+              "responsive layout"
+            ]
+          ],
+          "exampleDescription": "The order screen has to stay usable with a screen reader and has to render correctly in every supported browser."
+        },
+        {
+          "id": "data-residency-compliance",
+          "summary": "A residency or GDPR exposure. Residency is enforced by a routing layer this epic does not modify.",
+          "exclusionQuote": "Data residency is unchanged and is enforced by the platform's regional routing layer, which this epic does not modify.",
+          "anyOf": [
+            [
+              "residency",
+              "gdpr",
+              "sovereignty",
+              "data protection regulation"
+            ],
+            [
+              "compli",
+              "regulat",
+              "jurisdiction",
+              "cross-border",
+              "lawful",
+              "legal"
+            ]
+          ],
+          "exampleDescription": "Queued order data could leave its jurisdiction before it is uploaded, which is a GDPR and data residency exposure."
+        }
+      ]
+    },
+    {
+      "id": "clean-last-sync-indicator",
+      "root": "clean",
+      "projectRoot": "field-sync-indicator",
+      "epicNum": "9",
+      "epicFile": "docs/epics/epic-9-last-sync-indicator.md",
+      "maxRisks": 3,
+      "unsupportedRisks": [
+        {
+          "id": "data-loss-or-corruption",
+          "summary": "Losing or corrupting stored data. The change opens the settings store read-only and writes nothing.",
+          "exclusionQuote": "The settings store is opened read-only for this field, so no order, queue entry or setting can be altered or lost by it.",
+          "anyOf": [
+            [
+              "corrupt",
+              "data loss",
+              "lose data",
+              "lost",
+              "overwrite",
+              "delete",
+              "truncat"
+            ],
+            [
+              "store",
+              "storage",
+              "record",
+              "field",
+              "database",
+              "setting",
+              "queue"
+            ]
+          ],
+          "exampleDescription": "Reading the settings store could corrupt the stored record and drop a queued entry."
+        },
+        {
+          "id": "unauthorized-exposure",
+          "summary": "Exposing data to someone who should not see it. The value is the device's own timestamp shown to its holder.",
+          "exclusionQuote": "it is shown to the person holding the device, so the change exposes nothing to anyone who could not already see it, and it adds no personal data to the screen",
+          "anyOf": [
+            [
+              "unauthori",
+              "leak",
+              "exposure",
+              "expose",
+              "pii",
+              "personal data",
+              "sensitive",
+              "credential"
+            ],
+            [
+              "access",
+              "permission",
+              "auth",
+              "visible",
+              "disclos",
+              "privacy"
+            ]
+          ],
+          "exampleDescription": "The sync timestamp could expose sensitive personal data to an unauthorized person with access to the screen."
+        },
+        {
+          "id": "render-performance-degradation",
+          "summary": "A performance regression. One local key lookup on a screen that is already open, with no network call.",
+          "exclusionQuote": "The single local key lookup runs on a screen that is already open, so the screen's existing render budget is unchanged.",
+          "anyOf": [
+            [
+              "performance",
+              "slow",
+              "latency",
+              "jank",
+              "frame",
+              "degrad",
+              "throughput",
+              "render budget"
+            ],
+            [
+              "load",
+              "render",
+              "screen",
+              "startup",
+              "budget",
+              "network call",
+              "poll"
+            ]
+          ],
+          "exampleDescription": "The extra read could slow the home screen render and degrade startup latency."
+        },
+        {
+          "id": "rollout-without-kill-switch",
+          "summary": "An unrecoverable rollout. The row ships behind an existing flag the release process already toggles.",
+          "exclusionQuote": "an existing feature flag the release process already toggles per organization, so it can be turned off without a new build",
+          "anyOf": [
+            [
+              "kill switch",
+              "kill-switch",
+              "no feature flag",
+              "cannot be disabled",
+              "unrecoverable",
+              "no way to disable"
+            ],
+            [
+              "rollout",
+              "release",
+              "rollback",
+              "roll back",
+              "deploy",
+              "revert"
+            ]
+          ],
+          "exampleDescription": "The new row cannot be disabled without a new build, so a bad rollout has no kill switch."
+        }
+      ]
+    }
+  ]
+}

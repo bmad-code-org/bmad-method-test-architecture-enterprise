@@ -1,0 +1,125 @@
+{
+  "$comment": [
+    "One edit to seeded-correct-run: R-003 states a score of 5 where 3 x 2 is 6.",
+    "",
+    "It is in the corpus because it pins the one thing about this document a parser can settle without any",
+    "judgment at all, and because it shows the two shape checks are independent claims that a single wrong",
+    "cell can violate together. The row breaks arithmetic, and 5 also falls outside the Score >=6 heading it",
+    "sits under, so it breaks band placement as well. Both are reported, because a reader fixing the row",
+    "needs to know the band moved with it.",
+    "",
+    "The document is CONSTRUCTED, identical to seeded-correct-run apart from that one cell."
+  ],
+  "id": "seeded-arithmetic-off",
+  "suite": "test-design",
+  "scorerVersion": 7,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "Everything seeded-correct-run derives holds except the two checks the edited cell touches.",
+    "",
+    "Arithmetic: R-003 is 3 x 2, which is 6, and the row states 5. Both factors are still in 1..3, so the row",
+    "stays inside the denominator: inScale is 5, arithmeticTotal is 5, arithmeticOk falls to 4.",
+    "",
+    "Band: R-003 sits under Score >=6 and now states 5, which the range does not contain, so bandOk falls to",
+    "4 over a banded count of 5.",
+    "",
+    "Grounding is unchanged at 5 of 5: the description was not edited, and the scorer matches on the",
+    "description and the category, never on the score. Coverage is unchanged at 5 of 5 and all nine ordering",
+    "pairs still resolve and pass, because priority comes from the coverage plan, which was not edited.",
+    "",
+    "WHAT MOVED AT SCORER VERSION 5",
+    "",
+    "`banded` is now `rows` on every case, because a row under a heading that declares no score range is a",
+    "band failure rather than an exemption. `cleanControl` is `ceiling` and both sets declare one, so the",
+    "seeded corpus is bounded too. `grounding` carries `topSeverityMissed`, the count of the set's",
+    "lowest-ranked risks that went unreported. Material risks are assigned by maximum matching rather than",
+    "first-come, and every row is tested against the exclusions whether or not it matched a material risk.",
+    "",
+    "AT SCORER VERSION 6",
+    "",
+    "`ordering` carries `flattened`, which is true when every material risk that reached a priority reached",
+    "the same one. A plan like that satisfies every pairwise constraint without ordering anything, so the",
+    "metric reports unmeasurable rather than a perfect score.",
+    "",
+    "AT SCORER VERSION 7",
+    "",
+    "`unscoredRiskTables` records every table that names risks with an `R-NNN` id and states no score. Such a",
+    "table cannot be scored and used to be skipped without a word, so a register split across a scored table",
+    "and an unscored one lost its second half silently. The threshold on the count is zero."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": false,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 5,
+      "wellFormedIds": 5,
+      "validCategories": 5,
+      "inScale": 5,
+      "arithmeticOk": 4,
+      "banded": 5,
+      "bandOk": 4,
+      "arithmeticTotal": 5
+    },
+    "shapeFailures": [
+      {
+        "id": "R-003",
+        "check": "arithmetic",
+        "expected": 6,
+        "actual": 5
+      },
+      {
+        "id": "R-003",
+        "check": "band",
+        "score": 5,
+        "heading": "High-Priority Risks (Score ≥6)",
+        "reason": "the score falls outside the range its heading declares"
+      }
+    ],
+    "links": {
+      "total": 5,
+      "resolved": 5,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 5,
+      "missed": [],
+      "topSeverityMissed": 0
+    },
+    "ungrounded": [],
+    "ceiling": {
+      "maxRisks": 8,
+      "excess": 0
+    },
+    "unscoredRiskTables": [],
+    "coverage": {
+      "evaluated": 5,
+      "satisfied": 5,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 9,
+      "satisfied": 9,
+      "flattened": false,
+      "failures": []
+    }
+  }
+}

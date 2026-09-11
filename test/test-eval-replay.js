@@ -16,6 +16,9 @@
  *                       scoreVerdict against the eval's real ground truth
  *   fragment-selection  stdout.txt, parsed by parseSelection and scored by
  *                       scoreCase against a frozen copy of one eval case
+ *   test-design         design.md, the document a test-design run leaves on disk,
+ *                       read by readDesign and scored by scoreRun against one
+ *                       fixture set of the eval's real ground truth
  *   trace               test-artifacts/e2e-trace-summary.json and
  *                       test-artifacts/traceability-matrix.md, the two files a
  *                       trace run leaves in a staged workspace, read by
@@ -64,8 +67,8 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Twenty-three of the
- * forty-four cases produce a number and all but two of those are constructed. Two
+ * produces a number was written by hand to be parsed. Fifty-two of the
+ * fifty-five cases produce a number and all but two of those are constructed. Two
  * carry real captured bytes borrowed from the CLI parser fixtures, and both now
  * score as a measured miss rather than as unmeasurable: their reports document
  * no finding at all, and a verdict whose findings array is empty is a reviewer
@@ -146,20 +149,28 @@ const { parseSelection, scoreCase } = require('./eval-fragment-selection');
 const { readSummary, readMatrix, scoreRun, signatureOf } = require('./eval-trace');
 const { parseRouting } = require('../cli/lib/parse-routing');
 const { scoreCase: scoreRoutingCase, signatureOf: routingSignatureOf } = require('./eval-bmad-tea-routing');
+const {
+  readDesign: readTestDesign,
+  scoreRun: scoreTestDesignRun,
+  signatureOf: testDesignSignatureOf,
+  loadGroundTruth: loadTestDesignGroundTruth,
+} = require('./eval-test-design');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const REPLAY_ROOT = path.join(__dirname, 'replay');
 const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'ground-truth.json');
 const TRACE_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'trace-eval', 'ground-truth.json');
+const TEST_DESIGN_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-design-eval', 'ground-truth.json');
 
 /**
  * The version of the parsing and scoring behaviour this corpus was recorded
  * against. It covers admittedLinesFor and scoreVerdict in eval-test-review.js,
- * parseSelection and scoreCase in eval-fragment-selection.js, and readSummary,
+ * parseSelection and scoreCase in eval-fragment-selection.js, readSummary,
  * readMatrix, scoreRun with the eight scorers it calls, and signatureOf in
- * eval-trace.js. It does not cover the aggregation those feed or the thresholds
- * it is compared against; see the header for why.
+ * eval-trace.js, and readDesign with scoreRun in eval-test-design.js. It does not
+ * cover the aggregation those feed or the thresholds it is compared against; see
+ * the header for why.
  *
  * Bump it in the same commit as a deliberate change to any of those, then
  * re-record with --accept. Leaving it alone is what makes an accidental change
@@ -199,7 +210,7 @@ const TRACE_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'trace-eval', 'groun
  * recommendations name, all recomputed from the accepted evidence. No
  * test-review or fragment-selection case moved.
  */
-const SCORER_VERSION = 4;
+const SCORER_VERSION = 7;
 
 const colors = {
   reset: '[0m',
@@ -682,6 +693,59 @@ function checkRecordHygiene() {
  *
  * @param {Array<{id: string, set: string, result: object, scored: object}>} replayed
  */
+/**
+ * Hold the test-design signature to its contract on the stored corpus.
+ *
+ * `maxUnstableCases` cannot be breached by a stored case, because instability is a
+ * property of a pair of repetitions and a stored case is one document. What can be
+ * pinned is the function the gate is built on, and the useful question is not
+ * whether it signs correctly. It is which two genuinely different documents sign
+ * the same.
+ *
+ * Two answers are required and they pull against each other. Every distinction the
+ * scorer makes has to move the signature, or a case that wobbled between two
+ * different scored answers would be called stable. And a change to something the
+ * suite does not score has to leave it alone, or every repetition of a design task
+ * would be called unstable, since an agent rewords a mitigation, an owner and a
+ * requirement on every run.
+ *
+ * The second half is why the collisions this check tolerates are deliberate. A
+ * mitigation, an owner, a requirement's wording and a test count all sign
+ * identically, because none of them is scored. A coverage level does not, because
+ * it is.
+ *
+ * @param {Array<{id: string, scored: object}>} replayed
+ */
+function checkTestDesignSignatures(replayed) {
+  if (replayed.length === 0) return;
+  const mutationBlind = replayed
+    .filter((item) => testDesignSignatureOf(item.scored, 0) === testDesignSignatureOf(item.scored, 1))
+    .map((item) => item.id);
+  assert(
+    mutationBlind.length === 0,
+    'test-design signatures move when a fixture mutation is counted',
+    `unchanged for ${mutationBlind.join(', ')}`,
+  );
+
+  const disagreements = [];
+  for (const [index, left] of replayed.entries()) {
+    for (const right of replayed.slice(index + 1)) {
+      const sameSignature = testDesignSignatureOf(left.scored, 0) === testDesignSignatureOf(right.scored, 0);
+      const sameResult = JSON.stringify(left.result) === JSON.stringify(right.result);
+      if (sameSignature !== sameResult) {
+        disagreements.push(
+          `${left.id} and ${right.id} ${sameSignature ? 'sign alike and score differently' : 'score alike and sign differently'}`,
+        );
+      }
+    }
+  }
+  assert(
+    disagreements.length === 0,
+    'two stored test designs sign identically exactly when their scored results agree',
+    disagreements.join('; '),
+  );
+}
+
 function checkTraceSignatures(replayed) {
   if (replayed.length === 0) return;
   const mutationBlind = replayed.filter((item) => signatureOf(item.scored, 0) === signatureOf(item.scored, 1)).map((item) => item.id);
@@ -749,6 +813,96 @@ function checkRoutingSignatures(replayed) {
     'routing signatures agree exactly when two replies to one intent decided the same thing',
     disagreements.join('\n  '),
   );
+}
+
+/**
+ * The scoring inputs of one test-design fixture set, as a string a digest is taken
+ * over.
+ *
+ * Everything here changes an expected result if it moves: the admitted categories
+ * and levels the scorer validates against, and per declared risk its matcher, the
+ * categories it admits, its severity rank and its admitted coverage. A case stores
+ * this digest, so an edit to the seeded set fails no clean case and the reverse.
+ *
+ * @param {object} groundTruth
+ * @param {object} set
+ * @returns {string}
+ */
+function testDesignScoringInputs(groundTruth, set) {
+  const matcher = (risk) => risk.anyOf.map((group) => group.join('|')).join(' & ');
+  return [
+    `categories=${(groundTruth.riskCategories ?? []).join(',')}`,
+    `levels=${(groundTruth.testLevels ?? []).join(',')}`,
+    `set=${set.id}`,
+    `maxRisks=${set.maxRisks ?? 'none'}`,
+    ...(set.materialRisks ?? []).map(
+      (risk) =>
+        `material:${risk.id} categories=${risk.categories.join(',')} rank=${risk.severityRank} ` +
+        `coverage=${risk.acceptableCoverage.join(',')} match=${matcher(risk)}`,
+    ),
+    ...(set.unsupportedRisks ?? []).map((risk) => `unsupported:${risk.id} match=${matcher(risk)}`),
+  ].join('\n');
+}
+
+/**
+ * One stored test-design document, scored the way the harness scores it.
+ *
+ * The result is the scored object reduced to what a reader can check by hand: the
+ * document-global mentions the contract's oracles are paired with, the per-group
+ * shape counts, and the identity of every check that did not pass. A document
+ * readDesign refuses records `{ "unmeasurable": <failure class> }`, the class runCase
+ * reports for that environment failure.
+ *
+ * @param {{directory: string}} item
+ * @param {object} expected The case's expected.json.
+ * @param {object} set The fixture set it is scored against.
+ * @param {Set<string>} categories
+ * @returns {object}
+ */
+function replayTestDesignCase(item, expected, set, categories) {
+  const designPath = path.join(item.directory, expected.storedOutput?.design ?? 'design.md');
+  if (!fs.existsSync(designPath)) unreadable(`${item.id}: no stored document at ${path.relative(PROJECT_ROOT, designPath)}`);
+  const read = readTestDesign({ kind: 'text', value: fs.readFileSync(designPath, 'utf8') });
+  if (!read.ok) return { unmeasurable: read.failureClass };
+
+  const scored = scoreTestDesignRun(set, read.design, categories);
+  const resolvable = scored.orderingChecks.filter((check) => check.resolvable);
+  return {
+    mentions: scored.mentions,
+    shape: scored.shape,
+    shapeFailures: scored.shapeFailures,
+    links: { total: scored.links.total, resolved: scored.links.resolved, dangling: scored.links.dangling },
+    grounding: {
+      declared: scored.grounding.declared,
+      matched: scored.grounding.matched,
+      missed: scored.grounding.missed,
+      topSeverityMissed: scored.grounding.topSeverityMissed,
+    },
+    ungrounded: scored.ungrounded,
+    ceiling: scored.ceiling,
+    unscoredRiskTables: scored.unscoredRiskTables,
+    coverage: {
+      evaluated: scored.coverageChecks.length,
+      satisfied: scored.coverageChecks.filter((check) => check.ok).length,
+      failures: scored.coverageChecks
+        .filter((check) => !check.ok)
+        .map((check) => ({ riskId: check.riskId, reason: check.reason, levels: check.levels })),
+    },
+    ordering: {
+      pairs: scored.orderingChecks.length,
+      resolvable: resolvable.length,
+      satisfied: resolvable.filter((check) => check.ok).length,
+      flattened: scored.flattenedPriorities,
+      failures: resolvable
+        .filter((check) => !check.ok)
+        .map((check) => ({
+          higher: check.higher,
+          lower: check.lower,
+          higherPriority: check.higherPriority,
+          lowerPriority: check.lowerPriority,
+        })),
+    },
+  };
 }
 
 /**
@@ -827,8 +981,42 @@ function replayCase(item, expected, context) {
       if (replayed.scored) context.traceReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
       return { observed: replayed.result };
     }
+    case 'test-design': {
+      const setId = expected.inputs?.fixtureSet;
+      const set = context.testDesignSets.get(setId);
+      if (!set) {
+        unreadable(
+          `${item.id}: inputs.fixtureSet names "${setId ?? '(nothing)'}", which is not a set in ${path.relative(PROJECT_ROOT, TEST_DESIGN_GROUND_TRUTH)}`,
+        );
+      }
+      const recordedDigest = expected.inputs?.scoringInputsDigest;
+      const setDigest = digest(testDesignScoringInputs(context.testDesignGroundTruth, set));
+      if (recordedDigest !== setDigest) {
+        return {
+          failure:
+            `the ground truth moved. This result was derived against ${recordedDigest ?? '(nothing recorded)'} and fixture set ${setId} in ` +
+            `${path.relative(PROJECT_ROOT, TEST_DESIGN_GROUND_TRUTH)} now digests to ${setDigest}. A matcher, an admitted category, a severity ` +
+            'rank, an admitted coverage level or the clean ceiling changed, so the expected result has to be re-derived by hand and the digest ' +
+            'updated with it. --accept will not do this one.',
+        };
+      }
+      const observed = replayTestDesignCase(item, expected, set, context.testDesignCategories);
+      if (!observed.unmeasurable) {
+        const read = readTestDesign({
+          kind: 'text',
+          value: fs.readFileSync(path.join(item.directory, expected.storedOutput?.design ?? 'design.md'), 'utf8'),
+        });
+        context.testDesignReplayed.push({
+          id: item.id,
+          result: observed,
+          scored: scoreTestDesignRun(set, read.design, context.testDesignCategories),
+        });
+      }
+      return { observed };
+    }
     default: {
       return { failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection or trace` };
+      return { failure: `unknown suite directory "${item.suite}"; expected test-review, fragment-selection, test-design or trace` };
     }
   }
 }
@@ -848,6 +1036,10 @@ function main(argv) {
   const traceSets = new Map((traceGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
   const traceReplayed = [];
   const routingReplayed = [];
+  const testDesignGroundTruth = readJson(TEST_DESIGN_GROUND_TRUTH, 'test-design ground truth');
+  const testDesignSets = new Map((testDesignGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
+  const testDesignCategories = new Set(testDesignGroundTruth.riskCategories ?? []);
+  const testDesignReplayed = [];
   const cases = findCases();
 
   // A mistyped case id used to be a silent no-op that exited 0, which reads as
@@ -886,6 +1078,10 @@ function main(argv) {
       traceSets,
       traceReplayed,
       routingReplayed,
+      testDesignGroundTruth,
+      testDesignSets,
+      testDesignCategories,
+      testDesignReplayed,
     });
     if ('failure' in replayed) {
       assert(false, item.id, replayed.failure);
@@ -939,6 +1135,7 @@ function main(argv) {
     assert(false, item.id, detail);
   }
 
+  checkTestDesignSignatures(testDesignReplayed);
   checkTraceSignatures(traceReplayed);
   checkRoutingSignatures(routingReplayed);
   checkRecordHygiene();

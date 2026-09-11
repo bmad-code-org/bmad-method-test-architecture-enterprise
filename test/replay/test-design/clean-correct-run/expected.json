@@ -1,0 +1,105 @@
+{
+  "$comment": [
+    "The reference run of the clean control. The epic's genuine risk set is small and this run reports two",
+    "risks, under the ceiling of three, and reaches none of the four risks the epic rules out.",
+    "",
+    "The document is CONSTRUCTED. Its two risks are the ones the epic actually leaves open: a drifted device",
+    "clock making a relative time read as recent, and the absent-value case having to hide the row."
+  ],
+  "id": "clean-correct-run",
+  "suite": "test-design",
+  "scorerVersion": 7,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "clean-last-sync-indicator",
+    "scoringInputsDigest": "sha256:49a920fea137ea9bc41a7e518fbed590865814abae0a86f4710828128a86a90b"
+  },
+  "derivation": [
+    "Two risk rows, R-001 and R-002, so wellFormedIds is 2 and validCategories is 2 over BUS and TECH.",
+    "",
+    "Scale and arithmetic: 2x2=4 and 2x1=2. Both factors in range on both rows, so inScale is 2, the",
+    "arithmetic denominator is 2 and arithmeticOk is 2.",
+    "",
+    "Bands: 4 under Score 3-4 and 2 under Score 1-2, so banded is 2 and bandOk is 2.",
+    "",
+    "Risk links: two coverage rows, each naming a declared id, so 2 of 2 resolve.",
+    "",
+    "The clean set declares no material risk, so grounding is 0 of 0, coverage evaluates nothing and no",
+    "ordering pair exists. None of the four ruled-out matchers fires on either description, so ungrounded",
+    "is empty.",
+    "",
+    "Clean control: two rows against a ceiling of three, so the excess is 0.",
+    "",
+    "WHAT MOVED AT SCORER VERSION 5",
+    "",
+    "`banded` is now `rows` on every case, because a row under a heading that declares no score range is a",
+    "band failure rather than an exemption. `cleanControl` is `ceiling` and both sets declare one, so the",
+    "seeded corpus is bounded too. `grounding` carries `topSeverityMissed`, the count of the set's",
+    "lowest-ranked risks that went unreported. Material risks are assigned by maximum matching rather than",
+    "first-come, and every row is tested against the exclusions whether or not it matched a material risk.",
+    "",
+    "AT SCORER VERSION 6",
+    "",
+    "`ordering` carries `flattened`, which is true when every material risk that reached a priority reached",
+    "the same one. A plan like that satisfies every pairwise constraint without ordering anything, so the",
+    "metric reports unmeasurable rather than a perfect score.",
+    "",
+    "AT SCORER VERSION 7",
+    "",
+    "`unscoredRiskTables` records every table that names risks with an `R-NNN` id and states no score. Such a",
+    "table cannot be scored and used to be skipped without a word, so a register split across a scored table",
+    "and an unscored one lost its second half silently. The threshold on the count is zero."
+  ],
+  "result": {
+    "mentions": {
+      "data-loss-or-corruption": false,
+      "unauthorized-exposure": false,
+      "render-performance-degradation": false,
+      "rollout-without-kill-switch": false
+    },
+    "shape": {
+      "rows": 2,
+      "wellFormedIds": 2,
+      "validCategories": 2,
+      "inScale": 2,
+      "arithmeticOk": 2,
+      "banded": 2,
+      "bandOk": 2,
+      "arithmeticTotal": 2
+    },
+    "shapeFailures": [],
+    "links": {
+      "total": 2,
+      "resolved": 2,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 0,
+      "matched": 0,
+      "missed": [],
+      "topSeverityMissed": 0
+    },
+    "ungrounded": [],
+    "ceiling": {
+      "maxRisks": 3,
+      "excess": 0
+    },
+    "unscoredRiskTables": [],
+    "coverage": {
+      "evaluated": 0,
+      "satisfied": 0,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 0,
+      "resolvable": 0,
+      "satisfied": 0,
+      "flattened": false,
+      "failures": []
+    }
+  }
+}

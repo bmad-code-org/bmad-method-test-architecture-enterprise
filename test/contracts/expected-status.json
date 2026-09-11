@@ -42,6 +42,9 @@
     "fragment-selection/bmad-testarch-trace.contract.json": {
       "status": "compiles"
     },
+    "test-design.contract.json": {
+      "status": "compiles"
+    },
     "test-review.contract.json": {
       "status": "compiles"
     },

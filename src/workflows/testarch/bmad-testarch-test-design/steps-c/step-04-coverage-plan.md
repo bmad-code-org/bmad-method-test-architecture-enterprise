@@ -46,12 +46,14 @@ For each requirement or risk-driven scenario:
 - Assign priorities (P0–P3) using `test-priorities-matrix.md`
 - Map NFR-derived risks to planned validation scenarios and evidence sources
 
-**Priority rules:**
+**Priority rules:** decide each priority on business impact, user reach, and workaround
+availability. Risk score is supporting evidence and is not a required condition for any priority.
+Walk the Priority Decision Tree in `test-priorities-matrix.md` for each scenario.
 
-- P0: Blocks core functionality + high risk + no workaround
-- P1: Critical paths + medium/high risk
-- P2: Secondary flows + low/medium risk
-- P3: Nice-to-have, exploratory, benchmarks
+- P0: Critical business, security, data-integrity, or compliance impact with no safe workaround
+- P1: Core, frequent, or complex behavior with material user reach and a limited workaround
+- P2: Secondary behavior with narrower user reach and an acceptable workaround
+- P3: Rare, cosmetic, or experimental behavior with minimal impact and an easy workaround
 
 ---
 
