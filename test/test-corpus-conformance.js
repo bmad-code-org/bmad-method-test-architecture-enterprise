@@ -47,7 +47,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { expectedOutcomeCount } = require('./lib/conformance-counts');
-const { loadCorpus } = require('./lib/corpus-port');
+const { UNRESOLVABLE_MEMBER, loadCorpus } = require('./lib/corpus-port');
 
 const colors = {
   reset: '[0m',
@@ -84,15 +84,20 @@ function failingMechanism() {
   };
 }
 
-/** A mechanism that never settles on its own: the adapter's own abort handling is what has to answer. */
+/**
+ * A mechanism that never settles and never observes the signal.
+ *
+ * A mechanism that rejects on abort tests its own listener, and an adapter that
+ * did nothing but forward the signal would pass. What the port promises is that
+ * the adapter settles a pending operation promptly, so the only way to hold it
+ * to that is to hand it something that will never settle on its own.
+ */
 function hangingMechanism() {
   let calls = 0;
   return {
-    mechanism: (resolvedPath, signal) =>
-      new Promise((resolve, reject) => {
+    mechanism: () =>
+      new Promise(() => {
         calls += 1;
-        if (signal.aborted) reject(signal.reason);
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
       }),
     calls: () => calls,
   };
@@ -222,6 +227,22 @@ async function main() {
         refusedEscape = true;
       }
       if (!refusedEscape) wrapperProblems.push(`${what} was resolved instead of refused, so TEA is not reading through the corpus port`);
+    }
+
+    // An aborted signal keeps the port's own `aborted` fault rather than being
+    // relabelled a missing member. `test/eval-trace.js` reads the missing-member
+    // code as "a run deleted a corpus file", so a cancelled run wearing that
+    // code would be reported as a destroyed benchmark.
+    const cancelled = new AbortController();
+    cancelled.abort(new Error('cancelled before the corpus was read'));
+    let abortCode;
+    try {
+      await loadCorpus(workspaceFor, ['a.txt'], cancelled.signal);
+    } catch (error) {
+      abortCode = error?.code;
+    }
+    if (abortCode === UNRESOLVABLE_MEMBER || abortCode === undefined) {
+      wrapperProblems.push(`an aborted signal surfaced as ${JSON.stringify(abortCode ?? null)} rather than as the port's own abort fault`);
     }
 
     // A member nobody named is a named error. The helper this replaces would

@@ -87,6 +87,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Four resource and classification defects in the corpus cutover, found by automated review.
+  An aborted signal was relabelled a missing member, so a cancelled run would have been reported as a corpus file somebody deleted, which is the same "one code standing for every cause" the missing-member path exists to avoid. The port's own `aborted` fault propagates now, and the arm asserts it.
+  A staging failure and a refused authorization each left a temporary fixture tree behind, because both throw before the caller is handed the directory its cleanup uses. Both remove it on the way out.
+  The corpus arm's hanging mechanism rejected on abort, which tests the mechanism's own listener rather than the adapter's promise to settle a pending operation. It never settles and never observes the signal now, so only an adapter that answers can pass.
+
 - An unresolved merge conflict in `CHANGELOG.md` on `main`, shipped by the previous change and repaired here. The block sat between two bullets under `### Added`, so nothing in the gate reacted to it.
 - `test/test-port-totality.js` recorded the `environment-probe` conformance arm as "the generic arm beside the command-line specialization, not yet run", which is wrong in both halves. It is the `api` arm: `dist/testing/probe-conformance.d.ts` in the published 3.0.0 names the three arms `api`, `cli` and `mcp`, its subject wants denied loopback, private, link-local and metadata addresses, an unauthorized method, an unauthorized scheme and a redirect chain, and `eval-quality/adapters` ships no HTTP adapter to run it against. TEA authorizes no HTTP target, so the arm has no subject, which is the same standing `mcp-probe` already had two lines below. It is recorded that way now, and the planning artifact withdraws the requirement with the evidence rather than leaving it as owed work.
 - Two counts this change made stale, recounted from the merged tree rather than incremented.

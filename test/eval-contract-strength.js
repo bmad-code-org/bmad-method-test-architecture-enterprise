@@ -358,8 +358,16 @@ async function runOneSuite(suite, options, stats) {
     port = cachingPort({
       makePort: async (request) => {
         const staged = await stagedWorkspaceFor(suite.id, request);
-        const { port: realPort } = await createProbePort({ cwd: staged.cwd, interfaceIds, artifacts: staged.artifacts });
-        return { port: realPort, workspace: staged };
+        try {
+          const { port: realPort } = await createProbePort({ cwd: staged.cwd, interfaceIds, artifacts: staged.artifacts });
+          return { port: realPort, workspace: staged };
+        } catch (error) {
+          // The caller cleans up the workspace it was handed, and a throw here
+          // hands it none, so every refused authorization would leave a staged
+          // fixture tree behind.
+          fs.rmSync(staged.root, { recursive: true, force: true });
+          throw error;
+        }
       },
       contract: suite.contract,
       cacheDir,

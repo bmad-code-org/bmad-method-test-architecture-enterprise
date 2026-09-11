@@ -90,6 +90,11 @@ async function loadCorpus(root, members, signal = new AbortController().signal) 
     try {
       response = await port.resolve({ privateRef: reference }, signal);
     } catch (error) {
+      // An aborted signal is not a missing member. Labelling it one would let a
+      // cancelled run read as a corpus file somebody deleted, which is the same
+      // "a null standing for every cause" this code exists to avoid one level
+      // down.
+      if (signal.aborted) throw error;
       // The port's fault carries the artifact path and puts the cause
       // underneath, so an absent member arrives as "the underlying mechanism
       // threw" with no path in the message. The helper this replaces named the

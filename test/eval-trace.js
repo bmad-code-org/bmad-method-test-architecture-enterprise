@@ -1169,13 +1169,25 @@ async function stageWorkspace(set) {
   const corpusFiles = filesUnder(projectDir).filter(
     (relative) => !relative.startsWith(`test-artifacts${path.sep}`) && !relative.startsWith(`_bmad${path.sep}`),
   );
-  const corpusDigest = await digestTree(projectDir, corpusFiles);
   // A workspace whose own members do not resolve is a staging failure, not a
   // measurement. Left as null it would compare equal to a null post-run digest
   // and report every case as unmutated, which is the silent green this whole
   // comparison exists to prevent.
-  if (corpusDigest === null) {
-    throw new Error(`the staged workspace at ${projectDir} holds ${corpusFiles.length} corpus member(s) the corpus port could not resolve`);
+  //
+  // The directory is removed on the way out, because a throw here returns no
+  // `dir` for the caller's `finally` to clean up and every failed attempt would
+  // leave one behind.
+  let corpusDigest;
+  try {
+    corpusDigest = await digestTree(projectDir, corpusFiles);
+    if (corpusDigest === null) {
+      throw new Error(
+        `the staged workspace at ${projectDir} holds ${corpusFiles.length} corpus member(s) the corpus port could not resolve`,
+      );
+    }
+  } catch (error) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw error;
   }
   return { dir, projectDir, corpusFiles, corpusDigest };
 }
