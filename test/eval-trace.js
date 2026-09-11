@@ -148,13 +148,15 @@
  * seventeen below stay. They stay for three different reasons, and the
  * difference is worth stating rather than filing all of them under one:
  *
- * - Six existence checks the port has no method for. Four ask about a
- *   directory, which it cannot read at all: `testRoot` and `sourceRoot` in the
- *   declaration loop, the stray `test-artifacts` a clean set must not have, and
- *   the workflow directory. The others ask about files, and the port could
- *   answer those by reading every byte to learn a boolean, which is a different
- *   operation with a different cost. Those stay by choice; the directory ones by
- *   necessity.
+ * - Five existence checks the port has no method for, counted as call sites
+ *   rather than as declarations, because one of them covers three. Two ask about
+ *   a directory, which the port cannot read at all: the stray `test-artifacts` a
+ *   clean set must not have, and the workflow directory. Two ask about a file,
+ *   the ground truth at pre-flight and the staged artifact names, and the port
+ *   could answer those by reading every byte to learn a boolean, which is a
+ *   different operation with a different cost. The fifth is the declaration loop,
+ *   one call over `testRoot`, `sourceRoot` and `oracle.document`, so it is two
+ *   directory questions and a file question at one site.
  * - One directory walk and its guard, which enumerate a staged tree.
  * - Ten lifecycle calls: one `mkdtemp`, four `mkdir`, two `copyFile` and three
  *   `rm` that create and remove the staged workspace. Eight are directory
@@ -2364,9 +2366,16 @@ async function main() {
           refusal = { headline: `eval: ${set.id} would hand the agent the answers:`, problems: leaked };
         } else {
           const artifacts = path.join(workspace.projectDir, 'test-artifacts');
-          const inherited = ['live-verification-results.json', 'gate-waivers.md'].filter(
-            (name) => fs.existsSync(path.join(artifacts, name)) !== Boolean(set.liveResultsFile || set.waiverRegister),
-          );
+          // Each name against its own declaration. One `||` over both would flag
+          // a set declaring a live results file and no waiver register for a
+          // `gate-waivers.md` it never declared; the corpus has no such set
+          // today, which is the only reason it has never fired.
+          const inherited = [
+            ['live-verification-results.json', set.liveResultsFile],
+            ['gate-waivers.md', set.waiverRegister],
+          ]
+            .filter(([name, declared]) => fs.existsSync(path.join(artifacts, name)) !== Boolean(declared))
+            .map(([name]) => name);
           if (inherited.length > 0) {
             refusal = { headline: `eval: ${set.id} staged test-artifacts holds the wrong inputs: ${inherited.join(', ')}`, problems: [] };
           }

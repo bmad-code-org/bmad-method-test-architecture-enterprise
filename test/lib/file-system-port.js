@@ -41,7 +41,12 @@
  *
  * Bytes in, bytes out. `readText` decodes UTF-8 for the callers that want text,
  * and `readBytes` hands back what the port returned, because a digest over
- * decoded text is a digest over something the file does not contain.
+ * decoded text is a digest over something the file does not contain. Nothing in
+ * this repository imports `readBytes` yet: `digestFiles` in
+ * `test/lib/eval-record.js` is the caller that needs it, and moving that is
+ * Story 3.6's. It is exported rather than private because the byte reader is
+ * half of what this module is for, and the wrapper check exercises it through
+ * every `readText`.
  */
 
 'use strict';
@@ -122,16 +127,27 @@ function mechanism() {
   };
 }
 
-let port;
+let portPromise;
 
-/** One adapter for the process. It holds no state and the import is the only cost worth avoiding twice. */
-async function filePort() {
-  if (port === undefined) {
-    const { createNodeFileSystemAdapter } = await loadAdapters();
-    port = fixture === null ? createNodeFileSystemAdapter() : createNodeFileSystemAdapter(mechanism());
+/**
+ * One adapter for the process.
+ *
+ * The promise is memoized rather than the adapter, so two concurrent first calls
+ * await one import and one construction. Memoizing the adapter alone left the
+ * window between the `await` and the assignment open, which built two of them
+ * and made "one adapter for the process" a sentence rather than a fact.
+ */
+function filePort() {
+  if (portPromise === undefined) {
+    portPromise = loadAdapters().then(({ createNodeFileSystemAdapter }) =>
+      fixture === null ? createNodeFileSystemAdapter() : createNodeFileSystemAdapter(mechanism()),
+    );
   }
-  return port;
+  return portPromise;
 }
+
+/** One never-aborted signal, because a fresh `AbortController` per call allocates a controller nobody can reach. */
+const NEVER_ABORTED = new AbortController().signal;
 
 /**
  * The path a caller passed, refused when it is empty.
@@ -153,7 +169,7 @@ function requirePath(filePath, what) {
  * @param {AbortSignal} [signal]
  * @returns {Promise<{present: true, bytes: Buffer}|{present: false, bytes: null}>}
  */
-async function readBytes(filePath, signal = new AbortController().signal) {
+async function readBytes(filePath, signal = NEVER_ABORTED) {
   requirePath(filePath, 'the path to read');
   const resolved = await filePort();
   try {
@@ -225,7 +241,7 @@ async function readJson(filePath, signal) {
  * @param {AbortSignal} [signal]
  * @returns {Promise<number>} The byte length the port reports it wrote.
  */
-async function writeText(filePath, text, signal = new AbortController().signal) {
+async function writeText(filePath, text, signal = NEVER_ABORTED) {
   requirePath(filePath, 'the path to write');
   const resolved = await filePort();
   const response = await resolved.writeFile({ path: filePath, bytes: Buffer.from(text, 'utf8') }, signal);
