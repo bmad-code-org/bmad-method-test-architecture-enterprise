@@ -1434,6 +1434,10 @@ async function runCase(set, options, agent, runIndex, categories) {
       cwd: workspace.dir,
       interfaceIds: [TEST_DESIGN_INTERFACE],
       artifacts: { [TEST_DESIGN_INTERFACE]: designArtifactPaths(set) },
+      // The operator's own --env-pass, which widens this one authorization by the
+      // names it asks for and nothing else. The adapter refuses a request key the
+      // authorization does not permit, so the two lists are built from one source.
+      environmentKeys: { [TEST_DESIGN_INTERFACE]: options.envPass },
     });
     const result = await probeCommand(
       port,
@@ -1442,7 +1446,7 @@ async function runCase(set, options, agent, runIndex, categories) {
         interfaceId: TEST_DESIGN_INTERFACE,
         operationId: TEST_DESIGN_OPERATION,
         option: { ...runnerOptions(options), agent },
-        environment: hostEnvironment(options.envPass),
+        environment: hostEnvironment(TEST_DESIGN_INTERFACE, options.envPass),
         stdin: { kind: 'text', value: buildPrompt(set) },
       }),
       new AbortController().signal,

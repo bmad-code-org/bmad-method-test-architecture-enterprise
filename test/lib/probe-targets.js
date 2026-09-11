@@ -178,6 +178,11 @@ const EXECUTION_TARGETS = [
     // override; this is what a run gets when it supplies none. The epic number
     // is the workflow's own placeholder and a caller always overrides it.
     artifacts: { design: 'test-artifacts/test-design-epic-1.md' },
+    // The same list the other three carry: every variable a shipped vendor
+    // adapter consumes, plus HOME and USER, because both shipped vendors resolve
+    // a stored login through HOME. The contract declares the same set, and
+    // test/test-probe-targets.js holds the two equal in both directions.
+    environmentKeys: vendorEnvironmentNames(),
     // One minute above RUN_TIMEOUT_MS in test/eval-test-design.js, for the
     // reason the comment above EXECUTION_TARGETS gives: the inner clock
     // classifies, and this one only backstops.
