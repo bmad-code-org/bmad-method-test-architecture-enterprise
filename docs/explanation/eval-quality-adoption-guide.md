@@ -190,6 +190,14 @@ The mechanism is three exit codes and an ordered list of failure classes:
 
 `FAILURE_CLASSES` in `test/schema/eval-result.js` is ordered by ascending severity and `worstFailureClass` takes the highest index, so an environment failure always outranks a measured quality failure. The exit code is derived from the class rather than chosen separately.
 
+### The one promotion TEA declines, and why
+
+`eval-quality`'s own binary takes a `--strict` flag that promotes a CONCERNS verdict to exit `1`, except a CONCERNS whose only firing conditions are the two evidence conditions AD-21 names. The ladder settles that question itself and publishes the answer as `LadderResolution.strictPromotable`, which is the field a consumer is meant to read.
+
+TEA scores in process through `runScore` and reaches no binary, so nothing applies `--strict` unless TEA decides to. **TEA declines the promotion**, and `STRICT_CONCERNS_PROMOTION` in `test/lib/probe-scoring.js` is where that decision is written down. Exit `1` in this repository already means a measured quality failure decided by the failure classes above, and a probe corpus decides one by baseline movement. Promoting would give exit `1` a second meaning inside one repository, which is the same defect this section opens with, reached through the verdict ladder. It would also take `npm test` red today on the 32 CONCERNS the stored corpus scores, every one of which `test/probes/expected-strength.json` already records as expected.
+
+The field is still read every run. `test/test-probe-corpus.js` records `strictPromotable` for all 51 scored probes. It can only move on the 32 that resolve CONCERNS, and all 32 are `true` today because every one of them fires on an unsatisfied coverage gap, which AD-21 counts as a system claim; the other 19 sit on the Invalid rung, where the ladder hardcodes `true` and the field says nothing. The day a CONCERNS fires only on `below-minimum-trial-count` or `oracle-unreached`, the field goes `false`, the baseline moves, and somebody reads why. `ladderExitCode` is the single place a ladder resolution becomes an exit code TEA reports, so flipping the decision is one constant and its measured consequence is 32 baseline entries moving from `0` to `1`.
+
 One case belongs to the same rule and is easy to miss. **Every declared repetition must complete.** Stability and variance are claims about repeated runs, and a case that lost a run has fewer observations than the gate declared. The `test-review` harness once scored fewer runs than were requested, which made variance unmeasurable and weakened the stability claim while still reporting a pass. All three harnesses exit `2` on a short run now.
 
 ### Confine the run, and check afterwards

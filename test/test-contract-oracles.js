@@ -82,9 +82,11 @@
  * skip is printed.
  *
  * The evaluator is eval-quality's, loaded from the installed package's `dist/`
- * by file path. `test/test-contracts.js` already reaches `dist/cli/main.js` the
- * same way; neither is on the package's `exports` map, and the devDependency is
- * pinned to an exact version, so the coupling is stated here.
+ * by file path, because no barrel exports it and the package's `exports` map has
+ * no wildcard. `test/test-contracts.js` no longer reaches into `dist/` at all: it
+ * calls the exported `compile` and reads the fault it throws. This file is the
+ * one remaining path-level coupling, the devDependency is pinned to an exact
+ * version, and the coupling is stated here.
  *
  * Usage: node test/test-contract-oracles.js
  * Exit codes: 0 every oracle evaluated and agreed, 1 an oracle faulted or disagreed,

@@ -876,6 +876,85 @@ async function preflightSuite(suite, { port, runId, signal, sink }) {
 }
 
 /**
+ * A `DiagnosticSink` that keeps what the pre-flight stage reported.
+ *
+ * `runPreflight` emits one line as each leg is planned, one as it is observed,
+ * and one closing line carrying the leg count and the reduced verdict. Nothing
+ * else in the chain emits: `application/diagnostics.ts` states that only stages
+ * carrying a run identifier emit, and `compile` and `seal` carry none.
+ *
+ * One sink serves a whole suite and the diagnostics are partitioned afterwards
+ * by `runId`, which is the only structured field that tells two probes'
+ * pre-flights apart. `runSuite` mints a distinct run identifier per probe for
+ * exactly that reason.
+ */
+function collectingSink() {
+  const diagnostics = [];
+  return { sink: (diagnostic) => diagnostics.push(diagnostic), diagnostics };
+}
+
+/**
+ * What the sink reported for one run, as fields rather than as prose.
+ *
+ * `Diagnostic` carries `runId`, `stage` and a free-text `message`, so the two
+ * things a caller can read without parsing English are the run identity and how
+ * many lines arrived. The count is the leg count: two lines per leg and one
+ * closing line, so a run reporting an even number of diagnostics means that
+ * emission contract moved, and `legs` is `null` there rather than a fraction.
+ *
+ * The leg count is worth holding because the sink is the only channel that
+ * reports it. `PreflightVerdict` carries checks, and a check is not a leg: of
+ * the 51 probes the stored corpus scores, 26 plan a number of legs that differs
+ * from the number of checks their verdict reports.
+ */
+function preflightDiagnostics(diagnostics, runId) {
+  const mine = diagnostics.filter((diagnostic) => diagnostic.runId === runId);
+  const stages = [...new Set(mine.map((diagnostic) => diagnostic.stage))].sort();
+  return {
+    count: mine.length,
+    // A count of zero is already even, so it needs no case of its own: a run the
+    // sink never heard from reports `null` legs by the same rule as a run whose
+    // emission contract moved, and `diagnosticProblems` tells the two apart.
+    legs: mine.length % 2 === 1 ? (mine.length - 1) / 2 : null,
+    stages,
+  };
+}
+
+/**
+ * Whether TEA promotes a CONCERNS verdict to exit `1`, which is the decision
+ * `--strict` makes for `eval-quality`'s own binary.
+ *
+ * `false`, and the reason is TEA's exit classes rather than the ladder's.
+ * `docs/explanation/eval-quality-adoption-guide.md` fixes exit `1` as a measured
+ * quality failure and exit `2` as an environment that could not measure
+ * anything, and a TEA check decides the first by baseline movement. Promoting
+ * would give exit `1` a second meaning inside one repository, and it would take
+ * `npm test` red today on the 32 CONCERNS the stored corpus scores, every one of
+ * which the baseline already records as expected.
+ *
+ * The decision is declined rather than absent, and the field it turns on is read
+ * rather than assumed: `test/test-probe-corpus.js` records `strictPromotable`
+ * for every probe, so a CONCERNS that becomes evidence-only moves the baseline
+ * with this constant unchanged.
+ */
+const STRICT_CONCERNS_PROMOTION = false;
+
+/**
+ * The exit code one ladder resolution carries for TEA.
+ *
+ * `LadderResolution.exitCode` is the rung's own code and CONCERNS's is `0`, so
+ * a promotion cannot be read out of that field: `--strict` is applied on top of
+ * it, which is what `eval-quality`'s `cli/exit-codes.ts` does. `strictPromotable`
+ * is carried through from the ladder rather than re-derived here, because the
+ * package states that the ladder's field is the authority and that a locally
+ * invented `evidenceConditionsOnly` is the wrong shape to hold.
+ */
+function ladderExitCode(ladder) {
+  if (ladder.verdict === 'CONCERNS' && STRICT_CONCERNS_PROMOTION && ladder.strictPromotable) return 1;
+  return ladder.exitCode;
+}
+
+/**
  * One probe scored against its contract.
  *
  * Returns the ladder result and the evidence artifact whenever there is one. An
@@ -1007,18 +1086,27 @@ async function sealContract(contract) {
  *
  * `port` decides whether this is the deterministic half or the live one. Nothing
  * else differs.
+ *
+ * The sink is supplied here rather than taken from the caller. A sink threaded
+ * through the signatures and filled by nobody reports nothing, so every caller
+ * gets the pre-flight diagnostics whether or not it asked, and each entry
+ * carries its own probe's under `diagnostics`.
  */
-async function runSuite(suite, { port, runId, modelSnapshot, signal, sink }) {
+async function runSuite(suite, { port, runId, modelSnapshot, signal }) {
   const corpusDigest = corpusDigestOf(suite);
+  const { sink, diagnostics } = collectingSink();
   const scored = [];
   for (const probe of suite.probes) {
-    const preflightVerdict = await preflightSuite(
-      { ...suite, probes: [probe] },
-      { port, runId: `${runId}-${probe.probeId}`, signal, sink },
-    );
+    const probeRunId = `${runId}-${probe.probeId}`;
+    const preflightVerdict = await preflightSuite({ ...suite, probes: [probe] }, { port, runId: probeRunId, signal, sink });
     const preflightProblems = validateArtifact('preflight-verdict', preflightVerdict);
     const entry = await scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot, signal, corpusDigest });
-    scored.push({ ...entry, preflight: preflightVerdict, preflightProblems });
+    scored.push({
+      ...entry,
+      preflight: preflightVerdict,
+      preflightProblems,
+      diagnostics: preflightDiagnostics(diagnostics, probeRunId),
+    });
   }
   const sealed = await sealContract(suite.contract);
 
@@ -1026,7 +1114,10 @@ async function runSuite(suite, { port, runId, modelSnapshot, signal, sink }) {
 }
 
 module.exports = {
+  collectingSink,
   corpusDigestOf,
+  ladderExitCode,
+  preflightDiagnostics,
   preflightSuite,
   runSuite,
   scoreProbe,

@@ -262,12 +262,20 @@ runs, and every oracle here is a predicate over one interaction's evidence.
 ```bash
 node tools/generate-contracts.js --check   # are the contracts what their sources generate?
 npm run test:contracts                     # does the compiler still say what the baseline records?
-npm run test:contracts -- --cli /path/to/eval-quality/dist/cli/main.js
+npm run test:contracts -- --package /path/to/eval-quality/dist/index.js
 npm run test:contract-oracles              # does every oracle resolve, and agree with the harness scorer?
 ```
 
 The three answer different questions and none substitutes for another. The generator check is the
 one that runs unconditionally; the compile check and the oracle check need `eval-quality` on disk.
+
+The compile check calls `compile` in this process rather than spawning the binary, so the code and
+the issue locations it records are read off the thrown `RuntimeFault` or `StructuralFailure` and the
+Zod error a schema failure carries as its `cause`. Nothing is scraped back out of printed lines.
+Every contract here compiles, which would leave that blocked path unexercised, so the check also
+seeds five faults into every contract and holds each one against the code and the locations it must
+report. A compiler that stopped naming the failing field fails there rather than reading as thirteen
+passes.
 
 The oracle check is the one that reads the oracles. It evaluates every oracle in every contract with
 `eval-quality`'s own evaluator, loaded from the installed package, over evidence this repository

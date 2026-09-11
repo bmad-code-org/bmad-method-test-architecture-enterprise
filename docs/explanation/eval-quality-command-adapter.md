@@ -31,7 +31,7 @@ That last one had no TEA equivalent at all. A harness could spawn anything.
 
 ## The policy is the seam
 
-A contract names a logical executable and `ProbeRequest` enforces it: `executable` is constrained to `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`, so a filesystem path cannot be written into a contract or smuggled through a request. `test/lib/probe-targets.js` holds the mapping to a real file, the working directory, the artifact map, and both budgets. One module decides all of it, absolute paths stay out of nine contracts, and a free gate binds differently from a live run without touching one.
+A contract names a logical executable and `ProbeRequest` enforces it: `executable` is constrained to `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`, so a filesystem path cannot be written into a contract or smuggled through a request. `test/lib/probe-targets.js` holds the mapping to a real file, the working directory, the artifact map, and both budgets. One module decides all of it, absolute paths stay out of thirteen contracts, and a free gate binds differently from a live run without touching one.
 
 Two couplings the seam does not remove, both found by running it:
 
@@ -40,7 +40,7 @@ Two couplings the seam does not remove, both found by running it:
 
 ## Reaching more than one skill
 
-Twelve contracts declare four logical executables, each a command TEA ships. When there were nine they declared two, and one did not exist: `tea-fragment-selection-runner`, named by eight of them, was fiction, which is worse than a declared gap: the contract compiles, pre-flight schedules a leg against it, and the gate stays green over a command nobody can run.
+Thirteen contracts declare five logical executables, each a command TEA ships. When there were nine they declared two, and one did not exist: `tea-fragment-selection-runner`, named by eight of them, was fiction, which is worse than a declared gap: the contract compiles, pre-flight schedules a leg against it, and the gate stays green over a command nobody can run.
 
 `cli/fragment-selection-runner.js` is that command now. Its whole surface is the one turn those contracts declared: a prompt on standard input, `{"fragments": [...]}` on standard output. It builds no prompt, because a prompt belongs to the eval corpus, and knows no vendor, because it calls `runAgent`. `test/test-probe-targets.js` keeps the fiction from returning: every declared interface, executable, and subcommand path must be one the registry carries, and every registered command must be named by some contract.
 
@@ -66,15 +66,16 @@ inventory, kept honest by being a list of what is still unused rather than a lis
 
 | Published surface                                                                 | TEA's use                                                                                                                                                                                                                                                                                               |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `compile`, through the `eval-quality` binary                                      | `npm run test:contracts` compiles all thirteen contracts against `test/contracts/expected-status.json`                                                                                                                                                                                                  |
-| `createCommandLineAdapter`, `nodeCommandMechanism`, `CommandTargetPolicy`         | `test/lib/probe-targets.js` maps four logical executables to four real commands                                                                                                                                                                                                                         |
-| `runPreflight`                                                                    | `npm run eval:preflight` drives every contract's witness legs through the adapter for real                                                                                                                                                                                                              |
+| `compile`, in process                                                             | `npm run test:contracts` compiles all thirteen contracts against `test/contracts/expected-status.json`, and seeds six faults into each one so the refused path runs on every gate                                                                                                                       |
+| `createCommandLineAdapter`, `nodeCommandMechanism`, `CommandTargetPolicy`         | `test/lib/probe-targets.js` maps five logical executables to five real commands                                                                                                                                                                                                                         |
+| `runPreflight`, `RunPreflightOptions.sink`                                        | `npm run eval:preflight` drives every contract's witness legs through the adapter for real, and the sink reports how many legs each pre-flight planned, which the verdict does not carry                                                                                                                |
 | `runScore`                                                                        | `npm run test:probe-corpus` scores 51 probes across thirteen corpora; `npm run eval:contract-strength` scores them under a live pre-flight verdict                                                                                                                                                      |
 | `seal`                                                                            | one sealed evaluator brief per contract, written by the same script                                                                                                                                                                                                                                     |
 | `digestArtifact`                                                                  | every artifact digest the run record and the isolation manifest declare                                                                                                                                                                                                                                 |
 | the published JSON Schemas                                                        | `test/lib/eval-quality-inputs.js` validates every artifact TEA builds or receives against `eval-quality/schemas/*`                                                                                                                                                                                      |
 | `preflightFromObservations`                                                       | unused, and it cannot be used: a caller has to key its observations by leg identifier, and the leg identifiers are minted by the plan `runPreflight` builds. TEA holds a port for both halves, so the port entry point answers the same question with no ordering problem                               |
 | `validateLineageChain`, `INTERCHANGE_ARTIFACT_KEYS`, `digestComposite`            | unused. Every TEA artifact is `revisionCount: 0` with a null parent, so there is no chain to validate, and the digest helper TEA needs is the artifact one                                                                                                                                              |
+| `RuntimeFault`                                                                    | `npm run test:contracts` reads a refused compile's `code` and its Zod issue paths off the thrown fault, where it once reconstructed both from the binary's stderr                                                                                                                                       |
 | `serializeArtifact`, `digestBytes`, `StructuralFailure`, the `./corpus/*` subpath | `npm run test:eval-quality-corpus` seals the package's own compile-and-seal example and compares the serialized bytes with the shipped brief, digests every corpus file against the digest `corpus/dev/index.json` records, and reads a refused compile by its failure class rather than by duck-typing |
 | `createLocalCorpusAdapter`                                                        | `test/lib/corpus-port.js` resolves every corpus member the probe generator, the trace harness and the probe scorer digest, certified by `npm run test:corpus-conformance`                                                                                                                               |
 | `eval-quality/conformance`                                                        | `npm run test:probe-conformance` runs the published command-line arm against a fixture command, and `npm run test:corpus-conformance` runs the corpus arm against the shipped local corpus adapter                                                                                                      |
@@ -103,8 +104,9 @@ What the corpus scores, read off `test/probes/expected-strength.json` as it stan
 The two numbers that moved and what moved them: `test-review`'s defect class went from four exercised
 and four caught to nine and nine when `eval-quality` 1.4.0 dropped a clean leg that had issued the
 fault leg's own request, and `trace`'s three plants stopped failing pre-flight when its witness legs
-moved off the seeded set. Both are `seeded-faults-scoped`, and both are below. Every probe in the
-corpus now pre-flights, so what is left unscored is the qualification gate alone.
+moved off the seeded set. Both are `seeded-faults-scoped`, and both are below. Fourteen of
+`test-design`'s sixteen probes still fail pre-flight on `seeded-fault-fired`, and every probe in the
+other twelve corpora pre-flights, so what is left unscored elsewhere is the qualification gate alone.
 
 A clean control never enters the vector, which is AD-7's rule rather than a gap: what it establishes
 is that the contract does not fire where there is nothing to find.
@@ -113,9 +115,10 @@ is that the contract does not fire where there is nothing to find.
 `test/probes/expected-strength.json` rather than against pass and fail directly: 0 when every probe
 reached the outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome moved.
 Eight probes could not be pre-flighted when that rule was written, and both scripts would have been
-red on every run, which is how a script stops being read before the day it means something. All
-thirty-one pre-flight now, so the baseline is what says a green run is green rather than what excuses
-a red one, and the rule is what catches the first probe to stop.
+red on every run, which is how a script stops being read before the day it means something. Fourteen
+of the 51 cannot pre-flight today, all of them `test-design`'s, so the baseline is what says a green
+run is green rather than what excuses a red one, and the rule is what catches the first probe whose
+outcome moves in either direction.
 
 ### The behavior grouping was a defect, and it is fixed
 

@@ -49,8 +49,8 @@
  * Exit codes are read against `test/probes/expected-strength.json`, the same
  * baseline the deterministic gate compares to: 0 when every probe reached the
  * outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome
- * moved. Eight of the thirty-one probes could not be pre-flighted when that rule
- * was written, and the baseline said so; all thirty-one pre-flight now, so a
+ * or a pre-flight leg count moved. Fourteen of the 51 probes cannot be
+ * pre-flighted, all of them `test-design`'s, and the baseline says so, so a
  * failure here is news and the baseline is what says so.
  */
 
@@ -64,7 +64,7 @@ const { digest, refuseScriptedRecord } = require('./lib/eval-record');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { validateArtifact } = require('./lib/eval-quality-inputs');
 const { cliObservation, createProbePort, readEnvironment } = require('./lib/probe-targets');
-const { runSuite, sealContract, suites } = require('./lib/probe-scoring');
+const { collectingSink, ladderExitCode, preflightDiagnostics, runSuite, sealContract, suites } = require('./lib/probe-scoring');
 const { stageWorkspace, traceArtifactPaths } = require('./eval-trace');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -392,19 +392,27 @@ async function runOneSuite(suite, options, stats) {
   if (options.preflightOnly) {
     const { preflightSuite } = require('./lib/probe-scoring');
     const verdicts = [];
+    // The sink is filled here for the reason `runSuite` fills its own: the leg
+    // count is reported nowhere else, and this is the arm that spawns real legs,
+    // so an operator watching a paid run is the reader who most needs to see how
+    // many were planned.
+    const { sink, diagnostics } = collectingSink();
     for (const probe of suite.probes) {
+      const runId = `live-${slug(suite.id)}-${probe.probeId}`;
       const verdict = await preflightSuite(
         { ...suite, probes: [probe] },
         {
           port,
-          runId: `live-${slug(suite.id)}-${probe.probeId}`,
+          runId,
           signal: AbortSignal.timeout(60 * 60_000),
+          sink,
         },
       );
-      verdicts.push({ probeId: probe.probeId, passed: verdict.passed, preflight: preflightOutcome(verdict) });
+      const { legs } = preflightDiagnostics(diagnostics, runId);
+      verdicts.push({ probeId: probe.probeId, passed: verdict.passed, preflightLegs: legs, preflight: preflightOutcome(verdict) });
       writeArtifact(outDir, `preflight-${probe.probeId}.json`, verdict);
       console.log(
-        `  ${probe.probeId} ${probe.probeClass.padEnd(11)} pre-flight ${verdict.passed ? colors.green + 'passed' : colors.red + 'failed'}${colors.reset}`,
+        `  ${probe.probeId} ${probe.probeClass.padEnd(11)} ${legs ?? '?'} leg(s)  pre-flight ${verdict.passed ? colors.green + 'passed' : colors.red + 'failed'}${colors.reset}`,
       );
     }
     // Only when a leg was actually spawned. A cached or `--from-cache` run spent
@@ -432,7 +440,7 @@ async function runOneSuite(suite, options, stats) {
     writeArtifact(outDir, `preflight-${entry.probe.probeId}.json`, entry.preflight);
     if (entry.result.artifact !== null) writeArtifact(outDir, `evidence-${entry.probe.probeId}.json`, entry.result.artifact);
     console.log(
-      `  ${entry.probe.probeId} ${entry.probe.probeClass.padEnd(11)} pre-flight ${entry.preflight.passed ? 'passed' : 'failed'}  verdict ${String(entry.result.ladder.verdict)} (exit ${entry.result.ladder.exitCode})`,
+      `  ${entry.probe.probeId} ${entry.probe.probeClass.padEnd(11)} ${entry.diagnostics.legs ?? '?'} leg(s)  pre-flight ${entry.preflight.passed ? 'passed' : 'failed'}  verdict ${String(entry.result.ladder.verdict)} (exit ${ladderExitCode(entry.result.ladder)})`,
     );
   }
   if (suiteStats.spawns > 0)
@@ -451,8 +459,9 @@ async function runOneSuite(suite, options, stats) {
       probeId: entry.probe.probeId,
       probeClass: entry.probe.probeClass,
       preflightPassed: entry.preflight.passed,
+      preflightLegs: entry.diagnostics.legs,
       verdict: entry.result.ladder.verdict,
-      exitCode: entry.result.ladder.exitCode,
+      exitCode: ladderExitCode(entry.result.ladder),
       basis: entry.result.ladder.basis,
     })),
   });
@@ -470,8 +479,9 @@ async function runOneSuite(suite, options, stats) {
       probeId: entry.probe.probeId,
       passed: entry.preflight.passed,
       preflight: preflightOutcome(entry.preflight),
+      preflightLegs: entry.diagnostics.legs,
       verdict: entry.result.ladder.verdict,
-      exitCode: entry.result.ladder.exitCode,
+      exitCode: ladderExitCode(entry.result.ladder),
     })),
   };
 }
@@ -490,8 +500,8 @@ function preflightOutcome(verdict) {
  * What this run measured, against what the corpus records it measures.
  *
  * The alternative was to exit 2 whenever any probe's pre-flight failed, which is
- * true of this corpus every time it runs: eight of its thirty-one probes cannot
- * be pre-flighted, for reasons `docs/explanation/eval-quality-command-adapter.md`
+ * true of this corpus every time it runs: fourteen of its 51 probes cannot be
+ * pre-flighted, for reasons `docs/explanation/eval-quality-command-adapter.md`
  * records and no leg TEA can author repairs. A script that is red on every run
  * stops being read within a week, and then the day it means something is the day
  * nobody looks. That is the same defect as a declaration nothing enforces,
@@ -503,6 +513,12 @@ function preflightOutcome(verdict) {
  * direction is the finding. A probe recorded as unable to pre-flight and unable
  * to pre-flight is not news. One that starts passing is, and so is one that
  * stops.
+ *
+ * The leg count is compared on the same terms and in the same class. The plan is
+ * a pure function of the contract and the probes, which the live arm and the
+ * deterministic gate share, so the number here is guaranteed comparable to the
+ * recorded one, and a live run whose sink stopped being filled reports `null`
+ * against a recorded integer rather than printing a bare `?` and passing.
  */
 function baselineDifferences(results, baseline) {
   const environment = [];
@@ -521,6 +537,11 @@ function baselineDifferences(results, baseline) {
       }
       if (entry.preflight !== expected.preflight) {
         environment.push(`${result.suiteId} ${entry.probeId}: pre-flight ${entry.preflight}, recorded ${expected.preflight}`);
+      }
+      if (entry.preflightLegs !== expected.preflightLegs) {
+        environment.push(
+          `${result.suiteId} ${entry.probeId}: pre-flight planned ${String(entry.preflightLegs)} leg(s), recorded ${String(expected.preflightLegs)}`,
+        );
       }
       // `--preflight-only` scores nothing, so there is no verdict to compare.
       if (entry.verdict !== undefined && entry.verdict !== expected.verdict) {
@@ -589,4 +610,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { parseArgs, requestKey, stagedWorkspaceFor, validateArtifact };
+module.exports = { baselineDifferences, parseArgs, requestKey, stagedWorkspaceFor, validateArtifact };
