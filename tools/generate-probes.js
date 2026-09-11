@@ -193,11 +193,21 @@ function corpusMembers() {
     return (evals.contextFiles ?? []).map((file) => repositoryPath('src', 'workflows', 'testarch', workflow, file));
   });
   return [
-    ...filesUnder('test', 'fixtures', 'test-review-eval'),
-    ...filesUnder('test', 'fixtures', 'trace-eval'),
+    // Whole trees rather than named fixture directories, so a suite that brings
+    // its own fixtures is a member of this corpus the day it lands rather than
+    // the day somebody remembers to name it here. That is not hypothetical: the
+    // routing suite arrived with `test/fixtures/tea-routing-eval` while this
+    // named two fixture trees by hand.
+    ...filesUnder('test', 'fixtures'),
     ...filesUnder('test', 'replay'),
     ...filesUnder('test', 'evals'),
+    // Files outside those trees, named because their directories hold a great
+    // deal this corpus is not made of: the workflow step files each
+    // fragment-selection case cites, and the agent definition the routing probes
+    // digest.
     ...contextFiles,
+    repositoryPath('src', 'agents', 'bmad-tea', 'SKILL.md'),
+    repositoryPath('src', 'agents', 'bmad-tea', 'customize.toml'),
   ];
 }
 
