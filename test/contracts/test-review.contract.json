@@ -989,19 +989,10 @@
             },
             "environment": {
               "requiredKeys": [],
-              "permittedKeys": [
-                "ANTHROPIC_API_KEY",
-                "ANTHROPIC_BASE_URL",
-                "CI",
-                "CLAUDE_CODE_OAUTH_TOKEN",
-                "HOME",
-                "OPENAI_API_KEY",
-                "USER"
-              ],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "HOME", "OPENAI_API_KEY", "USER"],
               "types": {
                 "ANTHROPIC_API_KEY": "string",
                 "ANTHROPIC_BASE_URL": "string",
-                "CI": "string",
                 "CLAUDE_CODE_OAUTH_TOKEN": "string",
                 "HOME": "string",
                 "OPENAI_API_KEY": "string",

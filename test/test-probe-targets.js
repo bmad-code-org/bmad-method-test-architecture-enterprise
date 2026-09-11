@@ -285,6 +285,29 @@ async function checkDefaultDeny(runDir) {
     );
   }
 
+  // PATH cannot be introduced by the one mechanism that widens an
+  // authorization. The adapter and the schema both refuse it too, later; this
+  // is the boundary where an operator's `--env-pass PATH` would otherwise reach
+  // a policy at all.
+  let pathRefused = false;
+  try {
+    commandTargetPolicy({ cwd: runDir, interfaceIds: ['tea-test-review'], environmentKeys: { 'tea-test-review': ['PATH'] } });
+  } catch {
+    pathRefused = true;
+  }
+  assert(pathRefused, 'the policy builder refuses PATH through the environment widening');
+
+  // An override keyed by an interface the policy does not carry widens nothing.
+  // Unnoticed, every request of that harness would carry names the
+  // authorization never permitted and every live run would be a lost run.
+  let unknownOverrideRefused = false;
+  try {
+    commandTargetPolicy({ cwd: runDir, interfaceIds: ['tea-test-review'], environmentKeys: { 'tea-test-revue': ['STUB_MODE'] } });
+  } catch {
+    unknownOverrideRefused = true;
+  }
+  assert(unknownOverrideRefused, 'the policy builder refuses a per-interface override for an interface it does not authorize');
+
   // This port permits the three commands' own keys and nothing else, so a stub
   // variable is a key the authorization does not name. The denial is the
   // adapter's, and it happens before a process exists.

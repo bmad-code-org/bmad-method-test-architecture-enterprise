@@ -73,7 +73,7 @@ const { SELECTION_REQUEST_KEYS, DEFAULT_AGENT: SELECTION_DEFAULT_AGENT } = requi
 // the prompt its witness legs send and the literal each of its plan steps binds
 // are the harness's, because the harness is the only thing that assembles one.
 const { TRACE_REQUEST_KEYS, DEFAULT_AGENT: TRACE_DEFAULT_AGENT, EXIT_CODES: TRACE_EXIT_CODES } = require('../cli/trace-runner');
-const { reviewEnvironmentNames } = require('../cli/lib/runner-exit-codes');
+const { vendorEnvironmentNames } = require('../cli/lib/runner-exit-codes');
 const {
   buildPrompt: buildTracePrompt,
   SUMMARY_SCHEMA_MAJOR_MINOR: TRACE_SUMMARY_SCHEMA,
@@ -703,12 +703,7 @@ const REVIEW_REQUEST_SHAPE = {
   // environment to PATH plus what the request declares, so a leg run against
   // that shape could authenticate only from an API key and a machine with a
   // keychain login could not run its own pre-flight at all.
-  //
-  // This command's list carries CI on top of the vendor names, because
-  // cli/test-review.js reads it to decide filesystem isolation. The harness has
-  // always sent it and this shape did not permit it, so a contract-strength leg
-  // measured the command with isolation off where an eval run measured it on.
-  environment: stringShape([], reviewEnvironmentNames()),
+  environment: stringShape([], vendorEnvironmentNames()),
   stdin: stringShape([], []),
 };
 

@@ -6,13 +6,16 @@
  * which logical name maps to which file, which budgets apply, and how a thrown
  * fault becomes a TEA failure class. This asserts the other half, and it is the
  * package's assertion rather than TEA's: `eval-quality/conformance` publishes
- * the port boundary as an executable suite, fifteen outcomes for the command-line
- * arm, and running it is how an adapter user learns that the adapter behaves the
- * way the boundary says it does rather than the way this repository assumed.
+ * the port boundary as an executable suite, sixteen outcomes for the command-line
+ * arm on 3.0.0, and running it is how an adapter user learns that the adapter
+ * behaves the way the boundary says it does rather than the way this repository
+ * assumed. The count is read from `CONFORMANCE_OUTCOME_COUNTS` rather than
+ * stated, so the day the package adds an assertion this fails until TEA answers
+ * it.
  *
  * The mechanism is scripted per scenario because the shared six assertions need
  * a port that fails, one that hangs, and one that returns an in-band error, and
- * a real process does none of those on demand. The nine command-specific
+ * a real process does none of those on demand. The ten command-specific
  * assertions run against the real mechanism and a real fixture executable, which
  * is the point: a synthetic process would prove nothing about argv construction,
  * a wall clock, or an output cap.

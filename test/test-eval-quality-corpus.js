@@ -42,8 +42,11 @@
  *
  * Exit codes:
  *   0  the corpus compiled and sealed exactly as it declares
- *   1  a compile status, a digest, or the sealed brief moved
- *   2  the package or its corpus could not be read, so nothing was measured
+ *   1  a compile status, a digest or the sealed brief moved, or this repository
+ *      declares a pin this check cannot compare
+ *   2  the package, its corpus subpath or its index could not be read, an index
+ *      that names no contract, or a tree resolving a version other than the pin:
+ *      in each case nothing about the corpus was measured
  */
 
 'use strict';
@@ -53,8 +56,16 @@ const path = require('node:path');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CORPUS_INDEX_SUBPATH = 'eval-quality/corpus/dev/index.json';
-const EXAMPLE_CONTRACT = 'corpus/dev/compile-seal-example/contract.json';
-const EXAMPLE_BRIEF = 'corpus/dev/compile-seal-example/brief.json';
+
+/**
+ * The entry kinds this check knows how to read.
+ *
+ * An index entry of any other kind is corpus content nothing here measures, and
+ * it fails rather than passing unnoticed: a release that renames `contract` or
+ * adds a kind would otherwise leave this reporting a clean run over fewer
+ * artifacts than the corpus ships.
+ */
+const KNOWN_KINDS = new Set(['contract', 'sealed-evaluator-brief', 'readme']);
 
 const colors = {
   reset: '[0m',
@@ -152,10 +163,14 @@ async function main() {
     return 1;
   }
   if (resolvedVersion !== pinned) {
+    // Exit 2. A tree that is not the tree this repository declares is an
+    // environment that could not answer the question, and calling it a moved
+    // corpus would read an install fault as a package regression.
     console.error(
       `${colors.red}package.json pins eval-quality ${pinned} and the installed tree resolves ${resolvedVersion}${colors.reset}`,
     );
-    return 1;
+    console.error(`${colors.dim}Run npm ci. Nothing about the published corpus was measured.${colors.reset}`);
+    return 2;
   }
 
   const evalQuality = await import('eval-quality');
@@ -163,6 +178,15 @@ async function main() {
   const entries = index.entries ?? [];
   if (entries.length === 0) {
     console.error(`${colors.red}${CORPUS_INDEX_SUBPATH} names no entries${colors.reset}`);
+    return 2;
+  }
+  // Every summary this check prints counts what it compiled, and every one of
+  // those counts is true of zero. A corpus that declares no contract is a
+  // corpus this check cannot measure, so it says so rather than reporting a
+  // clean run over nothing.
+  if (!entries.some((entry) => entry.kind === 'contract')) {
+    console.error(`${colors.red}${CORPUS_INDEX_SUBPATH} names ${entries.length} entr(ies) and no contract among them${colors.reset}`);
+    console.error(`${colors.dim}Nothing was compiled, so nothing about the package was measured.${colors.reset}`);
     return 2;
   }
 
@@ -189,6 +213,10 @@ async function main() {
       failures.push(`${entry.path} digests to ${digest} and the index records ${entry.digest}`);
       continue;
     }
+    if (!KNOWN_KINDS.has(entry.kind)) {
+      failures.push(`${entry.path} is published as kind ${JSON.stringify(entry.kind)}, which this check measures in no way`);
+      continue;
+    }
     if (entry.kind === 'contract') contracts.push(entry);
   }
 
@@ -204,26 +232,43 @@ async function main() {
     failures.push(`${entry.path} ${JSON.stringify(actual)}, and the index declares ${JSON.stringify(declared)}`);
   }
 
-  // The example's own entries were digested above, so the bytes read here are
-  // the bytes the index vouches for.
-  const example = JSON.parse(fs.readFileSync(path.join(packageRoot, EXAMPLE_CONTRACT), 'utf8'));
-  let sealed;
-  try {
-    sealed = evalQuality.serializeArtifact(evalQuality.seal(example), EXAMPLE_BRIEF);
-  } catch (error) {
-    failures.push(`${EXAMPLE_CONTRACT} did not seal: ${error?.message ?? String(error)}`);
-  }
-  if (sealed !== undefined) {
-    const shipped = fs.readFileSync(path.join(packageRoot, EXAMPLE_BRIEF), 'utf8');
-    if (sealed === shipped) {
-      console.log(
-        `${colors.green}OK${colors.reset}   ${EXAMPLE_BRIEF} ${colors.dim}(sealed brief matches the shipped bytes)${colors.reset}`,
-      );
+  // Located from the index rather than transcribed, like every other fact in
+  // this file: the brief is the one sealed-evaluator-brief entry, and the
+  // contract it was sealed from is the contract entry beside it. A release that
+  // moves the example is then a finding here rather than a read of a path that
+  // no longer exists.
+  const briefEntry = entries.filter((entry) => entry.kind === 'sealed-evaluator-brief');
+  if (briefEntry.length === 1) {
+    const briefPath = briefEntry[0].path;
+    const directory = briefPath.slice(0, briefPath.lastIndexOf('/'));
+    const exampleEntry = entries.find((entry) => entry.kind === 'contract' && entry.path.startsWith(`${directory}/`));
+    if (exampleEntry === undefined) {
+      failures.push(`${briefPath} is a sealed brief with no contract beside it, so nothing names what it was sealed from`);
     } else {
-      failures.push(
-        `${EXAMPLE_BRIEF} sealed to ${evalQuality.digestBytes(Buffer.from(sealed, 'utf8'))} and the shipped bytes digest to ${evalQuality.digestBytes(Buffer.from(shipped, 'utf8'))}`,
-      );
+      // Both files were digested above, so the bytes read here are the bytes
+      // the index vouches for.
+      const example = JSON.parse(fs.readFileSync(path.join(packageRoot, exampleEntry.path), 'utf8'));
+      let sealed;
+      try {
+        sealed = evalQuality.serializeArtifact(evalQuality.seal(example), briefPath);
+      } catch (error) {
+        failures.push(`${exampleEntry.path} did not seal: ${error?.message ?? String(error)}`);
+      }
+      if (sealed !== undefined) {
+        const shipped = fs.readFileSync(path.join(packageRoot, briefPath), 'utf8');
+        if (sealed === shipped) {
+          console.log(
+            `${colors.green}OK${colors.reset}   ${briefPath} ${colors.dim}(sealed brief matches the shipped bytes)${colors.reset}`,
+          );
+        } else {
+          failures.push(
+            `${briefPath} sealed to ${evalQuality.digestBytes(Buffer.from(sealed, 'utf8'))} and the shipped bytes digest to ${evalQuality.digestBytes(Buffer.from(shipped, 'utf8'))}`,
+          );
+        }
+      }
     }
+  } else {
+    failures.push(`the corpus names ${briefEntry.length} sealed brief(s), and the compile-and-seal example is exactly one`);
   }
 
   if (failures.length > 0) {

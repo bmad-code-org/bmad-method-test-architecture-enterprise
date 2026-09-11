@@ -42,6 +42,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+const { probeObservation } = require('./lib/eval-quality-inputs');
 const { cliObservation, probeRequest } = require('./lib/probe-targets');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -85,18 +86,37 @@ const CONFORMANCE_ARMS = {
   'mcp-probe': { reason: 'TEA authorizes no tool server, so this arm has no subject to run against' },
 };
 
-/** The tagged members of one published union parser, read off the parser itself. */
+/**
+ * The tagged members of one published union parser, read off the parser itself.
+ *
+ * Every option has to decode. An option whose `kind` tag this cannot read is
+ * thrown on rather than skipped, because skipping it is the exact failure this
+ * file exists to prevent: a member added upstream in a shape this extraction
+ * does not understand would otherwise read as no new member at all, and the
+ * check would pass while TEA handled none of it.
+ *
+ * The extraction reaches into the parser's internals because the package
+ * publishes the parsers and no member registry beside them. That gap is
+ * recorded upstream rather than papered over here, and until it closes the
+ * throw below is what keeps this check honest: a parser shape this cannot read
+ * fails loudly instead of answering with a shorter list.
+ */
 function unionMembers(parser) {
   const options = parser?._def?.options ?? parser?.def?.options;
   if (!Array.isArray(options)) throw new Error('the published parser is not a union, so its members cannot be read');
-  return options
-    .map((option) => {
-      const shape = option.shape ?? option._def?.shape?.() ?? option.def?.shape;
-      const literal = shape?.kind?._def?.values ?? shape?.kind?.def?.values ?? [shape?.kind?.value];
-      return literal?.[0];
-    })
-    .filter((value) => typeof value === 'string')
-    .sort();
+  const members = options.map((option) => {
+    const shape = option.shape ?? option._def?.shape?.() ?? option.def?.shape;
+    const literal = shape?.kind?._def?.values ?? shape?.kind?.def?.values ?? [shape?.kind?.value];
+    return literal?.[0];
+  });
+  const undecodable = members.map((member, index) => (typeof member === 'string' ? null : index)).filter((index) => index !== null);
+  if (undecodable.length > 0) {
+    throw new Error(
+      `${undecodable.length} of ${options.length} union option(s) carry a kind tag this check cannot read, at index ${undecodable.join(', ')}; ` +
+        'a member read as nothing is a member TEA handles by accident, so this fails rather than reporting a shorter list',
+    );
+  }
+  return [...members].sort();
 }
 
 let failures = 0;
@@ -120,6 +140,14 @@ function checkUnion(name, members) {
       `${name}'s "${member}" member is handled or declined`,
       `the package declares a member this check has no entry for; handle it in test/lib/probe-targets.js or decline it here with the reason`,
     );
+    // The reason is the value of the ledger. An entry carrying none records
+    // that somebody noticed the member, which is not the same as deciding it.
+    if (entry === undefined) continue;
+    assert(
+      typeof entry.reason === 'string' && entry.reason.length > 0,
+      `${name}'s "${member}" member records why`,
+      'an entry with no reason is a member nobody decided about',
+    );
   }
   for (const declared of Object.keys(PROBE_KINDS)) {
     assert(
@@ -131,7 +159,18 @@ function checkUnion(name, members) {
 }
 
 async function main() {
-  const { probeParsers, CONFORMANCE_OUTCOME_COUNTS } = await import('eval-quality/conformance');
+  let probeParsers;
+  let CONFORMANCE_OUTCOME_COUNTS;
+  try {
+    ({ probeParsers, CONFORMANCE_OUTCOME_COUNTS } = await import('eval-quality/conformance'));
+  } catch (error) {
+    // Exit 2, the class every sibling check uses: a package that cannot be
+    // imported measured nothing, and reporting that as "TEA's branches are not
+    // total" files an environment fault as a quality failure.
+    console.error(`${colors.red}eval-quality/conformance could not be imported: ${error.message}${colors.reset}`);
+    console.error(`${colors.dim}Run npm ci. Nothing about TEA's branches was measured.${colors.reset}`);
+    return 2;
+  }
 
   const requestMembers = unionMembers(probeParsers.request);
   const observationMembers = unionMembers(probeParsers.response);
@@ -177,6 +216,25 @@ async function main() {
     JSON.stringify(parsed.error?.issues ?? []),
   );
 
+  // The observation half. `probeObservation` hand-mints the shape
+  // `preflightFromObservations` reduces over, for a caller that probed by some
+  // other means, so nothing else in this repository holds it against the
+  // package's own parser.
+  const minted = probeObservation({
+    legId: 'totality',
+    interfaceId: 'tea-test-review',
+    operationId: 'review-test-files',
+    exitCode: 0,
+    stdout: { kind: 'text', value: '' },
+  });
+  assert(PROBE_KINDS[minted.kind]?.handled === true, `probeObservation mints the "${minted.kind}" member`, JSON.stringify(minted.kind));
+  const parsedObservation = probeParsers.response.safeParse(minted);
+  assert(
+    parsedObservation.success,
+    'the observation TEA mints parses against the published ProbeObservation parser',
+    JSON.stringify(parsedObservation.error?.issues ?? []),
+  );
+
   console.log('\nevery published conformance arm is run or recorded as not run');
   const arms = Object.keys(CONFORMANCE_OUTCOME_COUNTS).sort();
   for (const arm of arms) {
@@ -186,10 +244,24 @@ async function main() {
       `the "${arm}" arm is run or recorded`,
       'the package publishes an arm this repository says nothing about; run it, or record here why it is not run',
     );
-    if (entry?.file === undefined) continue;
-    const source = fs.readFileSync(path.join(PROJECT_ROOT, entry.file), 'utf8');
+    if (entry === undefined) continue;
     assert(
-      source.includes(`CONFORMANCE_OUTCOME_COUNTS['${arm}']`),
+      typeof entry.file === 'string' || (typeof entry.reason === 'string' && entry.reason.length > 0),
+      `the "${arm}" arm names the check that runs it or records why none does`,
+      'an entry that is neither is an arm nobody decided about',
+    );
+    if (entry.file === undefined) continue;
+    // Live source only. A commented-out read would otherwise satisfy this while
+    // the count beside it was a transcribed literal.
+    const reads = fs
+      .readFileSync(path.join(PROJECT_ROOT, entry.file), 'utf8')
+      .split('\n')
+      .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
+      .some((line) =>
+        new RegExp(String.raw`CONFORMANCE_OUTCOME_COUNTS\[['"` + '`' + String.raw`]${arm}['"` + '`' + String.raw`]\]`).test(line),
+      );
+    assert(
+      reads,
       `${entry.file} reads the "${arm}" expected count from the package`,
       'an arm whose expected count is transcribed rather than read drifts the first time the package adds an assertion',
     );

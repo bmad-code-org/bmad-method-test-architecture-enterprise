@@ -36,7 +36,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { reviewEnvironmentNames, vendorEnvironmentNames } = require('../../cli/lib/runner-exit-codes');
+const { vendorEnvironmentNames } = require('../../cli/lib/runner-exit-codes');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
@@ -58,18 +58,27 @@ const PROJECT_ROOT = path.join(__dirname, '..', '..');
  *   consumes, plus `HOME` and `USER`, because both shipped vendors resolve a
  *   stored login through `HOME` and the adapter passes the child nothing else
  *   that could reach one.
- * - `CI` is `tea-test-review`'s alone. `cli/test-review.js:864` turns filesystem
- *   isolation on when it is set, so dropping it would quietly change how a
- *   measured run executes rather than failing, and the other two commands never
- *   read it.
+ * `CI` is deliberately on no list, and its absence is the decision that makes a
+ * measured review reproducible. `cli/test-review.js:864` reads it to decide
+ * filesystem isolation when `--isolate` is not stated, and no contract declares
+ * it, so permitting it would let the host decide how the measured run executes:
+ * isolation on in GitHub Actions, off on a laptop, with the two sealed records
+ * indistinguishable afterwards. The adapter closes the child environment to
+ * `PATH` plus what the request declares, so a command run through the port sees
+ * no `CI` at all and isolates the same way on every host. `test/eval-test-review.js`
+ * states `--isolate` explicitly and does not depend on the variable.
  *
  * The extra names are an operator's `--env-pass`, and a test harness's stub
  * variables. They widen one authorization deliberately and one call at a time,
  * which is what keeps the default deny.
  *
- * `PATH` appears on no list. The schema refuses it by refine and the adapter
- * refuses it again, because `target` may name a bare command and a declared
- * `PATH` would then choose which binary runs. The adapter supplies its own.
+ * `PATH` appears on no list, and this function refuses one rather than leaving
+ * it to be caught later: the schema refuses it by refine, the adapter refuses it
+ * again at the request parse, and TEA parses no policy, so an operator's
+ * `--env-pass PATH` would otherwise reach a built authorization before anything
+ * objected. `target` may name a bare command and the child environment is what
+ * resolves it, so a permitted `PATH` would choose which binary runs. The adapter
+ * supplies its own.
  *
  * @param {string} interfaceId
  * @param {string[]} [extraNames]
@@ -80,7 +89,18 @@ function permittedEnvironmentKeys(interfaceId, extraNames = []) {
   if (target === undefined) {
     throw new Error(`no execution target is registered for interface ${interfaceId}; TEA ships no such command`);
   }
-  return [...new Set([...target.environmentKeys, ...extraNames])].sort();
+  const keys = [...new Set([...target.environmentKeys, ...extraNames])].sort();
+  // Refused here rather than left to the request parse. The widening is the one
+  // way an operator can introduce `PATH`, through `--env-pass PATH`, and a
+  // policy that carries it is already wrong whether or not a request later
+  // declares it. The schema refuses it too, and TEA parses no policy.
+  const path = keys.find((key) => key.toUpperCase() === 'PATH');
+  if (path !== undefined) {
+    throw new Error(
+      `${interfaceId} cannot permit the environment key ${JSON.stringify(path)}: target may name a bare command, so a declared PATH would choose which binary runs`,
+    );
+  }
+  return keys;
 }
 
 /**
@@ -155,8 +175,7 @@ const EXECUTION_TARGETS = [
     // interaction plan passes on --json and --output, resolved against the run
     // directory the caller supplies as `cwd`.
     artifacts: { verdict: 'verdict.json', report: 'test-review.md' },
-    // The only target that reads CI, and the only one permitted it.
-    environmentKeys: reviewEnvironmentNames(),
+    environmentKeys: vendorEnvironmentNames(),
     maxElapsedMs: 16 * 60_000,
   },
   {
@@ -231,6 +250,24 @@ function commandTargetPolicy({ cwd, interfaceIds, artifacts = {}, budgets = {}, 
   if (missing.length > 0) {
     throw new Error(`no execution target is registered for interface(s) ${missing.join(', ')}; TEA ships no such command`);
   }
+  // The three per-interface overrides are keyed by interface id, and a key this
+  // policy does not carry widens nothing. Silently ignoring one is expensive in
+  // the only place it happens: a misspelled `environmentKeys` key leaves every
+  // request carrying names the authorization never permitted, and the first
+  // signal is a live run that measures nothing.
+  const selectedIds = new Set(selected.map((target) => target.interfaceId));
+  for (const [label, override] of [
+    ['artifacts', artifacts],
+    ['budgets', budgets],
+    ['environmentKeys', environmentKeys],
+  ]) {
+    const unknown = Object.keys(override).filter((id) => !selectedIds.has(id));
+    if (unknown.length > 0) {
+      throw new Error(
+        `${label} names interface(s) ${unknown.join(', ')}, which this policy does not authorize; an override for an interface outside the policy applies to nothing`,
+      );
+    }
+  }
   return {
     authorizations: selected.map((target) => {
       const budget = budgets[target.interfaceId] ?? {};
@@ -268,10 +305,12 @@ async function createProbePort(options) {
 /**
  * One thrown probe fault, as a TEA failure class.
  *
- * The four codes the port may throw are a policy denial, a cap, an abort, and a
- * transport failure, and none of them is a measured quality result. That is the
- * distinction every harness here already draws: a failed call must never report
- * as a low score. `budget-exhausted` splits on its own detail because the same
+ * The codes branched on here are a policy denial, a cap, an abort, and the two
+ * that mean the port itself was handed or produced something it could not read;
+ * every other code in the package's registry, and every fault carrying none,
+ * falls to a transport failure. None of them is a measured quality result, which
+ * is the distinction every harness here already draws: a failed call must never
+ * report as a low score. `budget-exhausted` splits on its own detail because the same
  * code covers a wall clock and an output cap, and a run killed for printing too
  * much is not a slow run.
  */
@@ -349,6 +388,9 @@ function observedText(channel) {
  * treats it as an observation and so must anything reading one: a review that
  * exits 1 on a blocking verdict has measured something.
  *
+ * @throws {Error} When the port answers a member of `ProbeObservation` other
+ * than `cli`. That is a defect in TEA rather than a lost run, so it is the one
+ * outcome this function does not report as a failure class.
  * @returns {Promise<{ok: true, observation: object}|{ok: false, failureClass: string, reason: string}>}
  */
 async function probeCommand(port, request, signal) {
@@ -436,11 +478,11 @@ module.exports = {
   createProbePort,
   failureClassForFault,
   hostEnvironment,
-  permittedEnvironmentKeys,
-  readEnvironment,
   observedText,
+  permittedEnvironmentKeys,
   probeCommand,
   probeRequest,
+  readEnvironment,
   targetFor,
   targetProblems,
 };
