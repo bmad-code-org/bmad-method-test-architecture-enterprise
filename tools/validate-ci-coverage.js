@@ -21,6 +21,12 @@
  * The reverse is allowed: a workflow may run more than the chain does, which is
  * how the packaged-install and CLI jobs work.
  *
+ * It also holds the chain against `scripts` itself: every name the chain calls
+ * has to be defined. `npm run` reports a missing script only when the chain
+ * reaches it, and a rebase resolution that takes one side of the chain string can
+ * drop a definition while keeping the entry that calls it, so the failure arrives
+ * after the commit with nothing naming the cause.
+ *
  * Usage: node tools/validate-ci-coverage.js
  */
 
@@ -126,6 +132,25 @@ function main() {
     return 1;
   }
 
+  // The other half of the same claim, and the half nothing held. `npm run` reports
+  // a missing script only when the chain reaches it, which on a rebase is after the
+  // commit, so a resolution that took one side of the chain string and dropped a
+  // definition while keeping its caller produced a red chain whose cause was
+  // invisible until it ran. This names the script instead.
+  //
+  // It exists because the hazard recurred within an hour on the author of its own
+  // finding, who caught it the second time only by having just written it down.
+  // Knowing to look is not a defence.
+  const undefinedScripts = chained.filter((script) => typeof manifest.scripts[script] !== 'string');
+  if (undefinedScripts.length > 0) {
+    console.error(`${colors.red}${undefinedScripts.length} name(s) the npm test chain calls have no definition in scripts:${colors.reset}`);
+    for (const script of undefinedScripts) console.error(`  - npm run ${script}`);
+    console.error(
+      `\n${colors.dim}Define the script in package.json, or remove its entry from the test chain. A chain entry whose definition was lost fails only when the chain runs.${colors.reset}`,
+    );
+    return 1;
+  }
+
   const inCi = scriptsRunInCi();
   const missing = chained.filter((script) => !inCi.has(script));
 
@@ -149,7 +174,7 @@ function main() {
   }
 
   console.log(
-    `${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) run in CI, and every one of the ` +
+    `${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) are defined and run in CI, and every one of the ` +
       `${cliSuiteNumbers().size} CLI suite(s) is in a shard`,
   );
   return 0;
