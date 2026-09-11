@@ -110,9 +110,9 @@ FR19: TEA reads and writes files through `FileSystemPort`, using the shipped `cr
 
 FR20: TEA measures elapsed time through `ClockPort`, using the shipped `createSystemClockAdapter`, and certifies it with `runClockPortConformance`.
 
-FR21: TEA runs `runEnvironmentProbePortConformance` against its adapter, the generic port arm beside the command-line specialization.
+FR21: ~~TEA runs `runEnvironmentProbePortConformance` against its adapter, the generic port arm beside the command-line specialization.~~ **Withdrawn.** The premise was wrong. `runEnvironmentProbePortConformance` is not a generic arm beside a command-line specialization; it is the `api` arm, and the package says so in `dist/testing/probe-conformance.d.ts`, which names the three as the `api`, `cli` and `mcp` arms of three sibling mechanisms. Its `ProbeSubject` requires denied loopback, private, link-local and metadata addresses, an unauthorized method, an unauthorized scheme, a redirect to a denied target, a chain past `maxRedirects`, an oversize response, a slow answer and a 500, over a `ProbeTargetPolicy` carrying `scheme`, `methods`, `safeMethods`, `maxRedirects`, `maxRequestBytes` and `maxResponseBytes`. None of that exists on a command authorization. `eval-quality/adapters` ships no HTTP adapter, so there is nothing to run the arm against, and TEA authorizes no HTTP target, so it has no subject either. Satisfying it would mean building a port TEA does not use, which is the opposite of what this epic was rewritten to be. The arm is out of scope, and `test/test-port-totality.js` records that as a fact about TEA rather than as a gap in it.
 
-FR22: Every expected conformance count TEA asserts reads from `CONFORMANCE_OUTCOME_COUNTS`. This already holds for the one arm TEA runs (`test/test-probe-conformance.js:177`), so the requirement is that each arm TEA adds does the same, and that a missing entry fails with the arm named.
+FR22: Every expected conformance count TEA asserts reads from `CONFORMANCE_OUTCOME_COUNTS`, each arm TEA adds does the same, and a missing entry fails with the arm named rather than reporting an undefined expected count.
 
 **Claims, codes and supply chain**
 
@@ -250,8 +250,8 @@ NFR9: Any gate that executes content rather than reading it runs isolated. Three
 | FR18 | Epic 3 | `createLocalCorpusAdapter` adopted and certified |
 | FR19 | Epic 3 | `createNodeFileSystemAdapter` adopted and certified |
 | FR20 | Epic 3 | `createSystemClockAdapter` adopted and certified |
-| FR21 | Epic 3 | Generic environment-probe arm runs |
-| FR22 | Epic 3 | Each added arm reads its count from the package |
+| FR21 | Epic 3 | Withdrawn: the api arm has no adapter and no subject in TEA |
+| FR22 | Epic 3 | Each arm reads its count from the package, and a missing entry names the arm |
 | FR23 | Epic 4 | Published counts computed from source |
 | FR24 | Epic 4 | Published prose claims held |
 | FR25 | Epic 4 | 23 files of fenced commands executed |
@@ -305,7 +305,9 @@ A consumer reads the schema stamp it must write, compares two results, and runs 
 
 ### Epic 3: Every port TEA hand-rolls runs on the shipped adapter
 
-The corpus digesting, file access and timing TEA performs by hand run through `eval-quality`'s reference adapters and are proven by its conformance suite. Five arms run where one runs today: the command-line arm TEA already has, plus the generic environment-probe, corpus, clock and file-system arms.
+The corpus digesting, file access and timing TEA performs by hand run through `eval-quality`'s reference adapters and are proven by its conformance suite.
+
+One arm is out of scope and the reason is recorded rather than left as a silence. `runEnvironmentProbePortConformance` is the `api` arm over HTTP, the package ships no HTTP adapter, and TEA authorizes no HTTP target, so the arm has no subject. FR21 is withdrawn above with the evidence. The arms this epic does adopt, `corpus`, `clock` and `file-system`, each have a shipped adapter behind them. Five arms run where one runs today: the command-line arm TEA already has, plus the generic environment-probe, corpus, clock and file-system arms.
 
 **FRs covered:** FR18, FR19, FR20, FR21, FR22
 
@@ -629,19 +631,28 @@ An earlier draft had TEA implement three ports. The package already exports `cre
 
 **FRs covered:** FR18, FR19, FR20, FR21, FR22
 
-### Story 3.1: Run the generic environment-probe conformance arm
+### Story 3.1: Hold every conformance count to the package
 
 As a TEA maintainer,
-I want TEA's adapter checked against the port's own assertions,
-So that TEA's probing is proven at the port contract and not only at the command-line specialization.
+I want every conformance count TEA asserts to come from the package,
+So that an arm whose assertion list moves upstream fails here instead of drifting.
+
+This story was `Run the generic environment-probe conformance arm` and half of it was withdrawn. FR21's premise was wrong and the record of why is in the requirements inventory above. What survives is FR22, which stands on its own: it holds the one arm TEA runs today and every arm Epics 3.2 through 3.4 adopt.
 
 **Acceptance Criteria:**
 
-**Given** `test/test-probe-conformance.js:182` invokes `runCommandLineProbeConformance` and no other arm
-**When** `runEnvironmentProbePortConformance` is added against the same adapter
-**Then** it reports the count `CONFORMANCE_OUTCOME_COUNTS['environment-probe']` names, all passing
-**And** the expected count is read from the package rather than written as a literal, and a missing entry for an arm TEA runs fails with the arm named
-**And** the arm runs as its own npm script with its own `quality.yaml` step
+**Given** `test/test-probe-conformance.js` reads `CONFORMANCE_OUTCOME_COUNTS['command-probe']` by subscript, so a key the package stopped publishing yields an undefined expected count and a message naming a count rather than a missing arm
+**When** the count is read through one shared accessor instead
+**Then** a missing entry fails with the arm named and with the arms the package does publish
+**And** the accessor is what every arm TEA adds later uses, so the rule holds without being restated per arm
+
+**Given** `test/test-port-totality.js` asserts that a running arm's check reads its count from the registry on a live source line
+**When** the accessor replaces the subscript
+**Then** that assertion still holds, against the accessor's own call shape
+
+**Given** a gate nobody has seen fire is a gate nobody has tested
+**When** the accessor is added
+**Then** a check drives it with an arm the package does not publish and asserts the arm is named in the failure
 
 ### Story 3.2: Resolve the corpus through the shipped adapter
 
