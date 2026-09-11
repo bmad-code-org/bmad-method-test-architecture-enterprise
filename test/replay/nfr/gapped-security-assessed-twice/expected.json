@@ -1,0 +1,116 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the run that assesses one domain twice and contradicts itself, and",
+    "it is the case that holds maxDuplicateDomainSections at 0. parseReport keeps the first section for the",
+    "domain's status, so every other number here is gapped-correct-audit's, unchanged. Without the duplicate",
+    "count this report would score exactly as the correct audit does, which is a gate passing for a reason",
+    "other than the one its name claims.",
+    "",
+    "It is gapped-correct-audit with a second Security Assessment section inserted before the evidence gaps,",
+    "and nothing else changed. The second section reads the same two evidence files the first one does and",
+    "reaches the opposite answer on both: CONCERNS on authentication and FAIL on the dependency scan the first",
+    "section reports as PASS. step-05-generate-report.md names a repeated section as a thing to consolidate,",
+    "so this is a shape the workflow itself expects a run to produce.",
+    "",
+    "The HTML comments around the second section tell markdownlint to allow it. It is right to flag a",
+    "duplicate heading and the report is wrong, which is the whole point of the case; no scorer reads them.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-security-assessed-twice",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Duplicate sections: one. Security is the only domain with two Assessment headings, and it is recorded",
+    "once however many times it is repeated beyond the first.",
+    "",
+    "Statuses: the first Security section wins, so security is four PASS and one N/A and rolls up to PASS, the",
+    "answer the report leads with. The second section's CONCERNS and FAIL are read by nothing: a domain that",
+    "already has a section closes the reader, so the statuses, the threshold lines and the evidence citations",
+    "under the second heading reach no check. Performance, reliability and maintainability are untouched.",
+    "",
+    "Coverage: four headings, four of them stating a readable status. A second section for a domain already",
+    "counted adds to neither tally.",
+    "",
+    "Thresholds: 4 of 4, the first section's, for the same reason.",
+    "",
+    "Evidence: the two citations under the second Security heading are not read, so the stored list is",
+    "gapped-correct-audit's nineteen and nothing is fabricated. The security list is checkable against the report for",
+    "that: the second section's Evidence lines name the security review and the dependency scan, and the list stays five",
+    "long, which is the first section's count on its own. One evidence gap is listed, for the missing coverage report.",
+    "",
+    "Overall: the Gate YAML is unchanged and says FAIL. Unknown threshold: the document still carries the word.",
+    "",
+    "cleanFalsePositives is 0 because this is not the clean bundle."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": ["security"],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

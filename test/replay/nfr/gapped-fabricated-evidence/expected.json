@@ -1,0 +1,108 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the judgment is right and the citation is invented. The run correctly reads",
+    "maintainability as CONCERNS for a missing coverage report and then cites coverage/lcov-report/index.html,",
+    "which is the path the report template offers as an example and which this bundle does not carry.",
+    "",
+    "A citation that resolves to nothing is worse than no citation, because it reads as grounding, and isolating",
+    "it from every other judgment is what makes maxFabricatedEvidence a measurement of invention alone.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-fabricated-evidence",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Every status, threshold, overall reading and evidence-gap entry is gapped-correct-audit's, because the only",
+    "edit is one Evidence line.",
+    "",
+    "Citations: gapped-correct-audit's nineteen with one path swapped. The Test Coverage Evidence line names",
+    "coverage/lcov-report/index.html where the correct audit names docs/tech-spec.md, so maintainability reads",
+    "coverage/lcov-report/index.html, docs/tech-spec.md, the dependency scan and the logging config, and the other three",
+    "sections are untouched.",
+    "",
+    "Fabricated: one citation, under maintainability, whose basename index.html is in none of the six files the bundle",
+    "declares. The edit is the same one-line shape as gapped-fault-tolerance-grounded-on-spec and the outcomes divide",
+    "there: swapping in a file the bundle carries moves the grounding alone, and swapping in one it does not carry moves",
+    "the grounding and the fabricated count together.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": [
+        "coverage/lcov-report/index.html",
+        "docs/tech-spec.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "config/logging.json"
+      ]
+    },
+    "fabricated": ["maintainability -> coverage/lcov-report/index.html"],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

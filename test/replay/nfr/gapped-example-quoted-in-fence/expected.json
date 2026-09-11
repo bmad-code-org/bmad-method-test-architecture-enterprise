@@ -1,0 +1,133 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: the workflow ships a complete worked assessment in",
+    "resources/nfr-assessment.example.md, and an agent that quotes the example it was shown used to be",
+    "scored on the example. The quote here is that file's four Assessment sections and its Gate YAML",
+    "snippet, verbatim, inside a fenced block placed ahead of the run's own sections, which is the",
+    "position where it decides every domain: the first section for a domain is the one that wins.",
+    "",
+    "It is gapped-correct-audit with that quote inserted and nothing else changed, so the result is that",
+    "case's result. A fix that leaves the quote readable does not produce these numbers, which is what",
+    "makes the case a measurement rather than a description.",
+    "",
+    "The example's own Gate YAML scalar reads FAIL, which is also what this bundle's four domain statuses",
+    "roll up to, so the overall_status reading is the same either way. That is not a property of the fix.",
+    "The scan for overall_status still reads the whole document, fences included, because the Gate YAML",
+    "snippet the template ends with is itself a fenced block; parseReport says so where it does it.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-example-quoted-in-fence",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Every line between the ````markdown fence and its close is dropped before the walk, so the quoted",
+    "example contributes no heading, no status, no threshold line and no citation. What is left is",
+    "gapped-correct-audit, and every number below is that case's.",
+    "",
+    "Statuses: performance four CONCERNS, so CONCERNS; security four PASS and one N/A, so PASS;",
+    "reliability five PASS and one FAIL, so FAIL; maintainability two CONCERNS and two PASS, so CONCERNS.",
+    "All four match the ground truth.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Duplicate sections: none. The example's four Assessment headings are inside the fence, so the run's",
+    "own four are the only ones the walk sees.",
+    "",
+    "Citations: gapped-correct-audit's nineteen, four under performance, five under security, six under",
+    "reliability and four under maintainability, and nothing fabricated. The twenty citations under the",
+    "example's Evidence lines name a different service's files and sit inside the fence, so the walk never",
+    "reaches them. Before the fenced lines were dropped all twenty were read and every one was fabricated.",
+    "",
+    "Thresholds: security names 0 critical, reliability names 0.5%, maintainability names 80%, and",
+    "performance records UNKNOWN. 4 of 4.",
+    "",
+    "Overall: the Gate YAML says FAIL. Unknown threshold: the document carries the word, in the run's own",
+    "Performance section and again inside the quote.",
+    "",
+    "Evidence gaps: one, for the missing coverage report. cleanFalsePositives is 0 because this is not",
+    "the clean bundle.",
+    "",
+    "The quote is fenced with four backticks because the example carries a three-backtick fence of its own.",
+    "stripFencedCodeBlocks does not track the length of the fence that opened a block, so the example's own",
+    "```yaml line closes the quote for it and the thirty-three lines of its Gate YAML survive into the walk.",
+    "They are read by nothing: the walk is between sections there, and none of them is a heading, a Status, a",
+    "Threshold, an Evidence or a gap item. Scoring this report with that inner block removed gives the",
+    "identical result, so nothing below rests on it.",
+    "",
+    "Before the fenced lines were dropped this same report scored performance FAIL, security FAIL,",
+    "reliability FAIL and maintainability CONCERNS, which are the example's answers; four duplicate domain",
+    "sections, the run's own, each read as a second section for a domain the example had already claimed;",
+    "and twenty fabricated citations."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

@@ -229,6 +229,26 @@ const EXECUTION_TARGETS = [
     maxElapsedMs: 6 * 60_000,
   },
   {
+    interfaceId: 'tea-nfr-runner',
+    executable: 'tea-nfr-runner',
+    script: path.join('cli', 'nfr-runner.js'),
+    subcommandPaths: [[]],
+    // The one deliverable the NFR workflow writes, at the workflow's own default
+    // location relative to the project root. A caller whose project root is not
+    // the run directory, which is every staged eval workspace, supplies its own
+    // path through `commandTargetPolicy`'s artifact override; this is what a run
+    // gets when it supplies none.
+    artifacts: { report: 'test-artifacts/nfr-assessment.md' },
+    // The vendor variables and nothing else, which is the list cli/nfr-runner.js
+    // declares through NFR_REQUEST_KEYS and the list nfr.contract.json carries.
+    // An audit reads the staged bundle off disk and needs no other key.
+    environmentKeys: vendorEnvironmentNames(),
+    // One minute above RUN_TIMEOUT_MS in test/eval-nfr.js, for the reason the
+    // comment above EXECUTION_TARGETS gives: the inner clock classifies, and this
+    // one only backstops.
+    maxElapsedMs: 21 * 60_000,
+  },
+  {
     interfaceId: 'tea-trace-runner',
     executable: 'tea-trace-runner',
     script: path.join('cli', 'trace-runner.js'),

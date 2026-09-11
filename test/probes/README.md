@@ -9,15 +9,18 @@ package exists for: did this contract's oracles catch the defect that was actual
 | `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe   |
 | `test-design.probes.json`                   |     16 | Fourteen defective documents, one clean control, one gameability probe |
 | `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                          |
+| `nfr.probes.json`                           |      4 | Three planted domains, one clean control                               |
 | `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow               |
 | `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                            |
 | `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                            |
 
-**Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all twelve
+**Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all fourteen
 files from the sources this repository already keeps: `test/fixtures/test-review-eval/ground-truth.json`
 and `criteria-registry.md` for the planted rows and their severities,
-`test/fixtures/trace-eval/ground-truth.json` for the seeded set's coverage gaps, each
-`test/evals/<workflow>/evals.json` for the required and forbidden fragment sets, and
+`test/fixtures/trace-eval/ground-truth.json` for the seeded set's coverage gaps,
+`test/fixtures/nfr-eval/ground-truth.json` for the domains one evidence bundle leaves undecidable or
+breached, `test/fixtures/test-design-eval/ground-truth.json` for the risks each epic supports and the
+risks it rules out, each `test/evals/<workflow>/evals.json` for the required and forbidden fragment sets, and
 `test/fixtures/tea-routing-eval/ground-truth.json` for the routing answers. Regenerate with
 `node tools/generate-probes.js`; `npm run test:probe-sources` fails when a file on disk differs from
 what its sources generate.
@@ -57,7 +60,8 @@ npm run eval:contract-strength    # the live pre-flight, then score and seal
 `npm run test:probe-corpus` is in `npm test`. It runs the whole chain (`runPreflight`, `runScore`,
 `seal`) against the outputs `test/replay/` already stores, answered through a port that reads them
 off disk, so it needs no credential and makes no paid call. A trace leg is answered with the fixture
-set its own prompt names, which is the same rule the live adapter stages by.
+set its own prompt names and an nfr leg with the evidence bundle its own prompt names, which is the
+same rule the live adapter stages by.
 `test/probes/expected-strength.json` records what every probe scores, and any movement in either
 direction fails the check until somebody has read why and regenerated it with
 `node test/test-probe-corpus.js --write`.
@@ -69,10 +73,11 @@ from the first witness leg's inputs, so eight planned legs cost two runs.
 
 ## What each class establishes
 
-- **`defect`**: a planted registry row, a withheld coverage gap, or a test design document that omits
-  a risk the epic supports or reports one it rules out. It is a controlled mutation whose target
-  artifact, baseline-pass evidence and mutated-fail evidence are all files this repository keeps, and
-  its signature states the observable the plant produces.
+- **`defect`**: a planted registry row, a withheld coverage gap, a test design document that omits a
+  risk the epic supports or reports one it rules out, or a domain whose threshold or whose evidence an
+  audited bundle does not carry. It is a controlled mutation whose target artifact, baseline-pass
+  evidence and mutated-fail evidence are all files this repository keeps, and its signature states the
+  observable the plant produces.
 - **`zero-action` with `expectedClean`**: the clean control. AD-7 keeps it out of the strength vector
   on purpose; what it establishes is that the contract does not fire where there is nothing to find.
 - **`gameability`**: the degenerate reply that clears a naive oracle and is rejected by a disciplined
@@ -119,10 +124,10 @@ pointer as `condition-artifact-channel-contract-local`, because an artifact iden
 contract and a signature carrying one resolves only against the contract it was authored on. A
 `stdout` pointer resolves only where the operation declares standard output as its descriptor
 channel. `tea-fragment-selection-runner` does, so its signatures qualify and its gameability probes
-score. `tea-test-review` and `tea-trace-runner` both write their deliverable to a file, so a
-signature that says something true about their plants is refused, and the refusal is recorded in
-`expected-strength.json` rather than replaced by an `exit-code` signature that would qualify and
-discriminate nothing.
+score. `tea-test-review`, `tea-trace-runner` and `tea-nfr-runner` all write their deliverable to a
+file, so a signature that says something true about their plants is refused, and the refusal is
+recorded in `expected-strength.json` rather than replaced by an `exit-code` signature that would
+qualify and discriminate nothing.
 
 The refusal is now measured per channel rather than asserted. Scoring `trace`'s three defect probes
 through `runScore` with each channel in turn, over the same stored evidence: the committed `artifact`
@@ -133,7 +138,19 @@ nothing: `cli/lib/runner-exit-codes.js` gives 0 to every run whose agent complet
 that wrote a summary full of gaps and the clean control both exit 0 and the condition is true on
 both. `tea-test-review` is the case where the exit code does discriminate, and its nine plant probes
 carry it. `tea-trace-runner` has no such channel, so its three probes keep the signature that states
-the truth about the plant and stay refused, with the reason code recorded per probe.
+the truth about the plant and stay refused, with the reason code recorded per probe. `tea-nfr-runner`
+is the same command shape and its three plant probes are refused the same way, on the same code and
+for the same reason: every completed audit exits 0 whatever it wrote, so the one channel that would
+qualify would separate nothing.
+
+**A document-level oracle reaches a domain only through the rollup.** The nfr contract addresses one
+markdown report, which is one string to this vocabulary, so its claims are about the document: the
+four sections exist, the Gate YAML publishes the expected overall status, a threshold no source
+states is recorded as `UNKNOWN`. Two of the three plants have an oracle that a run getting them wrong
+would violate. The third does not: a run that passed maintainability on a prose claim still publishes
+`FAIL`, because reliability breaches a threshold in the same bundle, and still records `UNKNOWN`,
+because performance states no target. `tools/generate-probes.js` points that probe at the gate oracle
+and says so, and the harness is where that domain's status is actually scored.
 
 **A rejected probe now names its reason.** The qualification gate computes a closed list of twenty
 reason codes. Through eval-quality 1.3.0 none of them reached the evidence artifact or any published

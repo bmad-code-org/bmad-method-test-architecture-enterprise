@@ -1,0 +1,112 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: Step 4 dispatches four workers and this report carries three sections, so",
+    "one dispatched domain was never reported. It is the case that holds domainCoverage below 1 and the one the",
+    "contract's own coverage oracle is seen failing on.",
+    "",
+    "It is gapped-correct-audit with the whole Maintainability section removed and nothing else changed, so the",
+    "evidence-gap entry for the missing coverage report survives it.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-domain-omitted",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Coverage: three headings of four, three of them stating a readable status. A domain with no section and a",
+    "domain whose section states no readable status both fall out of the graded count; the heading tally is",
+    "what tells them apart, and it is three here.",
+    "",
+    "Maintainability reports nothing, which is a status miss against an expected CONCERNS. It is not an",
+    "unsupported PASS: a domain nobody reported cannot have been passed.",
+    "",
+    "Thresholds: a domain with no section has no threshold line to read, so its check fails against the",
+    "expectation that a stated threshold is named. 3 of 4.",
+    "",
+    "The other three domains, the overall status, the unknown-threshold check, and the evidence-gap list are",
+    "gapped-correct-audit's, unchanged.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section.",
+    "",
+    "Citations: the three sections that survive carry gapped-correct-audit's, four under performance, five under",
+    "security and six under reliability, fifteen in all and nothing fabricated. Maintainability has no key at all,",
+    "because a domain with no section cites nothing. That is the third place this case and",
+    "gapped-maintainability-status-unreadable part, after the heading count and the threshold check: there the section",
+    "is present and cites four files while stating no status."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": null
+    },
+    "statusMisses": ["maintainability reported nothing, expected CONCERNS (undecidable)"],
+    "coverage": {
+      "present": 3,
+      "sections": 3,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 3,
+      "failed": [
+        {
+          "field": "threshold is stated",
+          "expected": true,
+          "actual": false
+        }
+      ]
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

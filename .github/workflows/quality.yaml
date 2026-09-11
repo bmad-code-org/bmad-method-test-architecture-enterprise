@@ -148,6 +148,9 @@ jobs:
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
 
+      - name: Validate NFR eval corpus
+        run: npm run test:eval-nfr-data
+
       - name: Validate test-design eval corpus
         run: npm run test:eval-test-design-data
 

@@ -24,6 +24,10 @@
  *                       trace run leaves in a staged workspace, read by
  *                       readSummary and readMatrix and scored by scoreRun against
  *                       one fixture set of the eval's real ground truth
+ *   nfr                 test-artifacts/nfr-assessment.md, the one file an NFR run
+ *                       leaves in a staged workspace, read by readReport and scored
+ *                       by scoreRun against one evidence bundle of the eval's real
+ *                       ground truth
  *
  * Each expected.json carries the result, the arithmetic that produced it, and
  * whether the stored output is a real capture or was constructed. The numbers
@@ -42,14 +46,27 @@
  * records `{ "unmeasurable": <failure class> }`, the class runCase reports for that
  * environment failure.
  *
- * The trace cases also pin signatureOf, the string main() compares across
+ * An nfr case is one evidence bundle's report, so its expected.json names the
+ * bundle and digests that bundle's scoring inputs, and its result is the scored
+ * object reduced the same way: the reported status per domain, the heading count
+ * beside the count of domains it states a status for, the evidence each domain
+ * cited in report order, the two ceilings, the threshold checks as a count with
+ * their failures named, and the two single-check groups. A report readReport
+ * refuses, because it is absent or because it declares no section for any of the
+ * four audited domains, records `{ "unmeasurable": <failure class> }`.
+ *
+ * The trace and nfr cases also pin signatureOf, the string main() compares across
  * repetitions to call a case stable. Its contract is that nothing scored is left
  * out and nothing environmental is let in, and the corpus is what makes that
- * checkable: two cases scored against the same set must sign identically exactly
- * when their results are identical, and every case must sign differently once a
- * fixture mutation is counted against it. A run whose live records land as
+ * checkable: two cases scored against the same set or bundle must sign identically
+ * exactly when their results are identical, and every case must sign differently
+ * once a fixture mutation is counted against it. A run whose live records land as
  * unverifiable sits in the corpus beside its stale twin for this reason, and so
- * does a run whose matrix carries lines the parser must ignore.
+ * does a run whose matrix carries lines the parser must ignore. On the nfr side
+ * the pair that carries it is gapped-correct-audit beside
+ * gapped-fault-tolerance-grounded-on-spec: one resolving citation apart, equal on
+ * every status, count and ceiling the suite grades, and signing differently
+ * because the grounding is in the signature.
  *
  * Each stored verdict is also re-derived from its own report through
  * cli/lib/parse-report.js and has to reproduce. Without that, a stored verdict
@@ -67,15 +84,16 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Fifty-two of the
- * fifty-five cases produce a number and all but two of those are constructed. Two
+ * produces a number was written by hand to be parsed. Sixty-six of the
+ * seventy cases produce a number and all but two of those are constructed. Two
  * carry real captured bytes borrowed from the CLI parser fixtures, and both now
  * score as a measured miss rather than as unmeasurable: their reports document
  * no finding at all, and a verdict whose findings array is empty is a reviewer
- * that named nothing. The live runs of 2026-09-08 measured the three suites that existed then and
- * none of their output was committed, so this repository still holds no captured
- * output that this suite can turn into a number a vendor actually earned, and
- * the trace suite in particular has no real capture at all.
+ * that named nothing. The live runs of 2026-09-08 measured the three suites that
+ * existed then and none of their output was committed, so this repository still
+ * holds no captured output that this suite can turn into a number a vendor
+ * actually earned, and the trace, nfr, test-design and bmad-tea-routing suites in
+ * particular have no real capture at all.
  *
  * Two more things sit outside what a green run covers:
  *
@@ -134,7 +152,8 @@
  * Exit codes:
  *   0  every case reproduced its stored result
  *   1  a case moved, its ground truth moved, its verdict and report disagree, or
- *      a trace signature disagrees with the results it is supposed to summarize
+ *      a trace, nfr, test-design or routing signature disagrees with the results
+ *      it is supposed to summarize
  *   2  the corpus could not be read, or --accept named a case that does not exist
  */
 
@@ -155,6 +174,7 @@ const {
   signatureOf: testDesignSignatureOf,
   loadGroundTruth: loadTestDesignGroundTruth,
 } = require('./eval-test-design');
+const { readReport: readNfrReport, scoreRun: scoreNfrRun, signatureOf: nfrSignatureOf, DOMAINS: NFR_DOMAINS } = require('./eval-nfr');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -162,15 +182,18 @@ const REPLAY_ROOT = path.join(__dirname, 'replay');
 const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'ground-truth.json');
 const TRACE_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'trace-eval', 'ground-truth.json');
 const TEST_DESIGN_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-design-eval', 'ground-truth.json');
+const NFR_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'nfr-eval', 'ground-truth.json');
 
 /**
  * The version of the parsing and scoring behaviour this corpus was recorded
  * against. It covers admittedLinesFor and scoreVerdict in eval-test-review.js,
  * parseSelection and scoreCase in eval-fragment-selection.js, readSummary,
  * readMatrix, scoreRun with the eight scorers it calls, and signatureOf in
- * eval-trace.js, and readDesign with scoreRun in eval-test-design.js. It does not
- * cover the aggregation those feed or the thresholds it is compared against; see
- * the header for why.
+ * eval-trace.js, readDesign with scoreRun in eval-test-design.js, readReport,
+ * parseReport, scoreRun and signatureOf in eval-nfr.js, and the four projections
+ * in this file, which decide what a stored result records of all of them. It does
+ * not cover the aggregation those feed or the thresholds it is compared against;
+ * see the header for why.
  *
  * Bump it in the same commit as a deliberate change to any of those, then
  * re-record with --accept. Leaving it alone is what makes an accidental change
@@ -209,8 +232,59 @@ const TEST_DESIGN_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-design-e
  * tests.files, tests.cases, by_level.*.tests and the requirement ids the gap
  * recommendations name, all recomputed from the accepted evidence. No
  * test-review or fragment-selection case moved.
+ *
+ * 5 is the nfr scorers entering the corpus: readReport and parseReport, scoreRun
+ * with the threshold and rollup checks it calls, and signatureOf in eval-nfr.js.
+ * No test-review, fragment-selection, test-design or trace case moved with it, so
+ * every case recorded at an earlier version reproduces and is reported as a
+ * version stamp only.
+ *
+ * 6 is parseReport counting a second section for a domain that already has one,
+ * carried through scoreRun as `duplicateDomainSections` and scored against a
+ * ceiling of zero. The first section still decides the domain's status, which is
+ * unchanged; what moved is that the second one is counted and reaches a ceiling
+ * of zero, so a run that writes a correct section and then a contradictory one
+ * fails the suite on the contradiction. Every stored nfr
+ * result grew the field at `[]`, and one new case,
+ * gapped-security-assessed-twice, carries the one that is not empty. No
+ * test-review, fragment-selection, test-design or trace case moved.
+ *
+ * 7 is two nfr readings that were counting quoted or unreadable text as an answer.
+ * parseReport now drops every line inside a fenced code block before walking the
+ * report, through the same stripFencedCodeBlocks cli/lib/parse-report.js applies to
+ * a test-review report, so an assessment quoted inside a fence stops being scored
+ * as the run's own; the new case gapped-example-quoted-in-fence is the correct
+ * gapped audit with the workflow's own worked example quoted ahead of it, and it
+ * scored four duplicate sections, twenty fabricated citations and the example's
+ * statuses before the change. And a domain counts toward coverage only when the
+ * report states a status the four-value enum recognises, where a heading alone had
+ * been enough; gapped-maintainability-status-unreadable is that case. Every stored
+ * nfr result grew `coverage.sections`, the heading count the contract's coverage
+ * oracle restates, which is what separates a section the report never wrote from
+ * one it wrote without an answer. No test-review, fragment-selection, test-design
+ * or trace case moved.
+ *
+ * 8 is the grounding entering the stored result. `citations`, the file-shaped
+ * citations each domain's section made in report order, was read by scoreRun and
+ * carried by signatureOf and recorded by nothing the corpus could see. Two
+ * consequences followed. The corpus could not pin the signature, because a pair of
+ * cases differing only in which resolving file a section cites had agreeing results
+ * and differing signatures, which checkNfrSignatures reads as a defect; and a later
+ * removal of the field from signatureOf would have failed nothing. projectNfrResult
+ * records it now, and one new case, gapped-fault-tolerance-grounded-on-spec, is the
+ * correct gapped audit with the Fault Tolerance citation swapped from the
+ * reliability export to the tech spec, the other half of that dimension's threshold
+ * and equally a file the bundle carries. The four domain statuses, both coverage
+ * counts, the four threshold checks, the empty fabricated list, the evidence gap
+ * and the overall status are identical to gapped-correct-audit's, and the grounding
+ * is the only field that separates the two. Measured on that pair before the field
+ * reached signatureOf, the two reports signed one string. Every stored nfr result
+ * that scores at all grew the field. The nfr scorers themselves did not move at
+ * this version: what moved is what the corpus records of them, and a stored result
+ * that grows a field has to be re-recorded exactly as a moved number does. No
+ * test-review, fragment-selection, test-design or trace case moved.
  */
-const SCORER_VERSION = 7;
+const SCORER_VERSION = 8;
 
 const colors = {
   reset: '[0m',
@@ -338,6 +412,38 @@ function traceScoringInputs(groundTruth, set) {
   ];
 }
 
+/**
+ * The scoring-relevant half of one nfr evidence bundle, as canonical strings.
+ *
+ * Only what scoreRun reads: the overall status and the unknown-threshold
+ * expectation, the basenames a citation may resolve to, and each domain's
+ * expected status, undecidable flag, and threshold expectation. The per-criterion
+ * lists stay out because validateCorpus already holds them equal to the domain
+ * status they roll up to, and every `why`, `title` and `mustNotReport` string
+ * stays out so an editorial pass moves no digest.
+ *
+ * @param {object} set One entry of groundTruth.fixtureSets.
+ * @returns {string[]}
+ */
+function nfrScoringInputs(set) {
+  return [
+    `set=${set.id}`,
+    `overall=${set.expectedOverallStatus}`,
+    `unknownThreshold=${set.expectedUnknownThresholdDeclared}`,
+    `files=${[...(set.evidenceFiles ?? [])].sort().join(' ')}`,
+    ...NFR_DOMAINS.map((name) => {
+      const domain = set.domains?.[name] ?? {};
+      return [
+        name,
+        domain.expectedStatus,
+        domain.isUndecidable === true,
+        domain.thresholdStated === true,
+        (domain.thresholdTokens ?? []).join(' '),
+      ].join('|');
+    }),
+  ];
+}
+
 /** Every case directory under test/replay, suite by suite, in a stable order. */
 function findCases() {
   if (!fs.existsSync(REPLAY_ROOT)) unreadable(`no replay corpus at ${path.relative(PROJECT_ROOT, REPLAY_ROOT)}`);
@@ -439,6 +545,58 @@ function projectTraceResult(scored) {
     rejectedEvidence: group(scored.rejectedEvidence),
     waivers: { scored: scored.waivers.scored, ...group(scored.waivers.checks) },
     live: group(scored.live),
+    cleanFalsePositives: scored.cleanFalsePositives,
+  };
+}
+
+/**
+ * scoreRun's return value for one nfr case, reduced to what a stored result can
+ * hold and a reader can derive by hand.
+ *
+ * The four reported domain statuses, the misses spelled out, the two section
+ * counts, the domains the report assessed twice, the evidence each domain cited,
+ * the two ceilings that carry the suite,
+ * the threshold checks as a count with its failures named, and the two
+ * single-check groups. A check whose actual value was undefined is stored with no
+ * `actual` key, which is how JSON spells undefined.
+ *
+ * `citations` is here because signatureOf carries it, and the projection and the
+ * signature have to see one thing. Two runs that reach the same four statuses off
+ * different files have given different answers, so with the grounding outside the
+ * projection a pair differing only in a resolving citation would have agreeing
+ * results and differing signatures, which checkNfrSignatures reports as the
+ * signature reading something the scorer does not. Inside, that pair is what makes
+ * the invariant load-bearing: gapped-correct-audit and
+ * gapped-fault-tolerance-grounded-on-spec differ in this field alone, so dropping
+ * it from either side fails.
+ *
+ * @param {object} scored One return value of eval-nfr's scoreRun.
+ * @returns {object}
+ */
+function projectNfrResult(scored) {
+  const thresholds = scored.domainResults.map((item) => item.threshold);
+  return {
+    isCleanSet: scored.isCleanSet,
+    statuses: Object.fromEntries(scored.domainResults.map((item) => [item.domain, item.reported])),
+    statusMisses: scored.domainResults
+      .filter((item) => !item.ok)
+      .map(
+        (item) =>
+          `${item.domain} reported ${item.reported ?? 'nothing'}, expected ${item.expected}${item.undecidable ? ' (undecidable)' : ''}`,
+      ),
+    coverage: scored.coverage,
+    duplicateDomainSections: scored.duplicateDomainSections,
+    unsupportedPass: scored.unsupportedPass,
+    citations: scored.citations,
+    fabricated: scored.fabricated,
+    evidenceGaps: scored.evidenceGaps,
+    thresholds: {
+      checks: thresholds.length,
+      passed: thresholds.filter((item) => item.ok).length,
+      failed: thresholds.filter((item) => !item.ok).map(({ field, expected, actual }) => ({ field, expected, actual })),
+    },
+    overall: scored.overall,
+    unknownThreshold: scored.unknownThreshold,
     cleanFalsePositives: scored.cleanFalsePositives,
   };
 }
@@ -606,6 +764,28 @@ function replayRoutingCase(item, expected) {
   if (typeof intent !== 'string') unreadable(`${item.id}: expected.json has no inputs.intent, so the scope bound cannot be applied`);
   const answer = parseRouting(fs.readFileSync(stdoutPath, 'utf8'));
   return { answer, score: scoreRoutingCase(oracle, answer, menu, intent) };
+}
+
+/**
+ * Read and score one stored nfr case, the way runCase does after the agent
+ * returns.
+ *
+ * The report has to be on disk, because a case missing it would record an
+ * environment failure that says nothing about the scorer. A report that is there
+ * and declares no section for any of the four audited domains is a real result:
+ * runCase reports it as an environment failure with a class, and the stored
+ * result names that class.
+ *
+ * @returns {{result: object, scored?: object}}
+ */
+function replayNfrCase(item, set) {
+  if (!fs.existsSync(path.join(item.directory, 'test-artifacts', 'nfr-assessment.md'))) {
+    unreadable(`${item.id}: no test-artifacts/nfr-assessment.md beside expected.json`);
+  }
+  const report = readNfrReport(item.directory);
+  if (!report.ok) return { result: { unmeasurable: report.failureClass } };
+  const scored = scoreNfrRun(set, report.report);
+  return { result: projectNfrResult(scored), scored };
 }
 
 /** Parse and score one stored fragment-selection case. */
@@ -911,6 +1091,40 @@ function replayTestDesignCase(item, expected, set, categories) {
 }
 
 /**
+ * signatureOf held to its own contract over every scored nfr case.
+ *
+ * The same two halves checkTraceSignatures asserts, for the same reason: main()
+ * in eval-nfr.js calls a case stable when every repetition signs the same, so the
+ * signature has to cover everything scored and nothing environmental. Two cases
+ * scored against the same bundle have identical stored results exactly when they
+ * sign identically, and the mutation count is the one input the signature takes
+ * from outside the scored object, so it has to move it.
+ *
+ * @param {Array<{id: string, set: string, result: object, scored: object}>} replayed
+ */
+function checkNfrSignatures(replayed) {
+  if (replayed.length === 0) return;
+  const mutationBlind = replayed.filter((item) => nfrSignatureOf(item.scored, 0) === nfrSignatureOf(item.scored, 1)).map((item) => item.id);
+  assert(mutationBlind.length === 0, 'nfr signatures move when a fixture mutation is counted', `unchanged for ${mutationBlind.join(', ')}`);
+
+  const disagreements = [];
+  for (const [index, left] of replayed.entries()) {
+    for (const right of replayed.slice(index + 1)) {
+      if (left.set !== right.set) continue;
+      const sameResult = same(left.result, right.result);
+      const sameSignature = nfrSignatureOf(left.scored, 0) === nfrSignatureOf(right.scored, 0);
+      if (sameResult === sameSignature) continue;
+      disagreements.push(
+        sameResult
+          ? `${left.id} and ${right.id} score identically and sign differently, so the signature reads something the scorer does not`
+          : `${left.id} and ${right.id} score differently and sign identically, so a scored field is outside the signature`,
+      );
+    }
+  }
+  assert(disagreements.length === 0, 'nfr signatures agree exactly when the scored results agree', disagreements.join('\n  '));
+}
+
+/**
  * Score one stored case the way its suite scores it.
  *
  * A failure here is a reason the case cannot be compared at all, as opposed to a
@@ -962,6 +1176,29 @@ async function replayCase(item, expected, context) {
     }
     case 'fragment-selection': {
       return { observed: replaySelectionCase(item, expected) };
+    }
+    case 'nfr': {
+      const setId = expected.inputs?.fixtureSet;
+      const set = context.nfrSets.get(setId);
+      if (!set) {
+        unreadable(
+          `${item.id}: inputs.fixtureSet names "${setId ?? '(nothing)'}", which is not a bundle in ${path.relative(PROJECT_ROOT, NFR_GROUND_TRUTH)}`,
+        );
+      }
+      const recordedDigest = expected.inputs?.scoringInputsDigest;
+      const setDigest = digest(nfrScoringInputs(set));
+      if (recordedDigest !== setDigest) {
+        return {
+          failure:
+            `the ground truth moved. This result was derived against ${recordedDigest ?? '(nothing recorded)'} and bundle ${setId} in ` +
+            `${path.relative(PROJECT_ROOT, NFR_GROUND_TRUTH)} now digests to ${setDigest}. A domain status, an undecidable flag, a threshold ` +
+            'expectation, or the evidence file list changed, so the expected result has to be re-derived by hand and the digest updated ' +
+            'with it. --accept will not do this one.',
+        };
+      }
+      const replayed = replayNfrCase(item, set);
+      if (replayed.scored) context.nfrReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
+      return { observed: replayed.result };
     }
     case 'trace': {
       const setId = expected.inputs?.fixtureSet;
@@ -1020,8 +1257,9 @@ async function replayCase(item, expected, context) {
       return { observed };
     }
     default: {
-      return { failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection or trace` };
-      return { failure: `unknown suite directory "${item.suite}"; expected test-review, fragment-selection, test-design or trace` };
+      return {
+        failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection, nfr, test-design or trace`,
+      };
     }
   }
 }
@@ -1045,6 +1283,9 @@ async function main(argv) {
   const testDesignSets = new Map((testDesignGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
   const testDesignCategories = new Set(testDesignGroundTruth.riskCategories ?? []);
   const testDesignReplayed = [];
+  const nfrGroundTruth = readJson(NFR_GROUND_TRUTH, 'nfr ground truth');
+  const nfrSets = new Map((nfrGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
+  const nfrReplayed = [];
   const cases = findCases();
 
   // A mistyped case id used to be a silent no-op that exited 0, which reads as
@@ -1087,6 +1328,8 @@ async function main(argv) {
       testDesignSets,
       testDesignCategories,
       testDesignReplayed,
+      nfrSets,
+      nfrReplayed,
     });
     if ('failure' in replayed) {
       assert(false, item.id, replayed.failure);
@@ -1143,6 +1386,7 @@ async function main(argv) {
   checkTestDesignSignatures(testDesignReplayed);
   checkTraceSignatures(traceReplayed);
   checkRoutingSignatures(routingReplayed);
+  checkNfrSignatures(nfrReplayed);
   checkRecordHygiene();
 
   console.log(`\n${colors.cyan}========================================${colors.reset}`);
@@ -1170,9 +1414,11 @@ module.exports = {
   SCORER_VERSION,
   scoringInputs,
   traceScoringInputs,
+  nfrScoringInputs,
   projectReviewResult,
   projectSelectionResult,
   projectTraceResult,
+  projectNfrResult,
   differences,
   verdictDriftFromReport,
   findCases,

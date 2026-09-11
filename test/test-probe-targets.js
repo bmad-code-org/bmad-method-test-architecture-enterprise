@@ -24,11 +24,12 @@
  * 3. **The adapter really drives a TEA command.** A real `tea-test-review` run
  *    against the checked-in fixture project, through the port, producing a
  *    verdict artifact the adapter reads back as JSON; a real
- *    `tea-fragment-selection-runner` run producing a selection on stdout; and a
+ *    `tea-fragment-selection-runner` run producing a selection on stdout; a
  *    real `tea-trace-runner` run leaving a summary and a matrix the adapter reads
  *    back as JSON and as text, at the registry's default paths and at the
- *    per-run paths a staged workspace supplies. All are free: the vendor is a
- *    stub, and the only assertions are about the plumbing.
+ *    per-run paths a staged workspace supplies; and a real `tea-nfr-runner` run
+ *    leaving its one report, read back the same two ways. All are free: the
+ *    vendor is a stub, and the only assertions are about the plumbing.
  *
  * 4. **A killed run is classified, not scored.** A budget exhaustion comes back
  *    as an environment failure with a class, never as a measurement.
@@ -94,6 +95,14 @@ const {
   RUNNER_CAPABILITIES: TEST_DESIGN_HARNESS_DECLARED_CAPABILITIES,
   THRESHOLDS: TEST_DESIGN_THRESHOLDS,
 } = require('./eval-test-design');
+const {
+  EXIT_CODES: NFR_EXIT_CODES,
+  RUNNER_CAPABILITIES: NFR_RUNNER_DECLARED_CAPABILITIES,
+  NFR_REQUEST_KEYS,
+  classOfAgentError: nfrClassOfAgentError,
+  failureClassForExit: nfrFailureClassForExit,
+} = require('../cli/nfr-runner');
+const { RUNNER_CAPABILITIES: NFR_HARNESS_DECLARED_CAPABILITIES } = require('./eval-nfr');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -103,7 +112,9 @@ const REVIEW_FIXTURE_PROJECT = path.join(__dirname, 'fixtures', 'test-review-cli
 const REVIEW_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-review-cli', 'stub-agent.js');
 const SELECTION_STUB_AGENT = path.join(__dirname, 'fixtures', 'fragment-selection-runner', 'stub-agent.js');
 const TRACE_STUB_AGENT = path.join(__dirname, 'fixtures', 'trace-runner', 'stub-agent.js');
+const NFR_STUB_AGENT = path.join(__dirname, 'fixtures', 'nfr-runner', 'stub-agent.js');
 const TRACE_HARNESS = path.join(__dirname, 'eval-trace.js');
+const NFR_HARNESS = path.join(__dirname, 'eval-nfr.js');
 const TEST_DESIGN_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-design-runner', 'stub-agent.js');
 const TEST_DESIGN_HARNESS = path.join(__dirname, 'eval-test-design.js');
 
@@ -657,6 +668,90 @@ async function checkTraceProbe(runDir) {
   assert(Date.now() - started < 30_000, 'the hung trace run is actually killed rather than waited out');
 }
 
+/**
+ * One tea-nfr-runner probe against the stub, in a fresh working directory under
+ * `runDir`, because the stub writes where the previous probe wrote and a second
+ * probe expecting `absent` would otherwise read the first probe's file.
+ */
+async function nfrProbe(runDir, probeId, stubMode, { artifacts, prompt } = {}) {
+  const cwd = fs.mkdtempSync(path.join(runDir, 'nfr-'));
+  const { port } = await createProbePort({
+    cwd,
+    interfaceIds: ['tea-nfr-runner'],
+    ...(artifacts ? { artifacts: { 'tea-nfr-runner': artifacts } } : {}),
+    environmentKeys: { 'tea-nfr-runner': STUB_ENVIRONMENT_KEYS },
+  });
+  return probeCommand(
+    port,
+    probeRequest({
+      probeId,
+      interfaceId: 'tea-nfr-runner',
+      operationId: 'audit-evidence-bundle',
+      option: { agent: 'custom', 'agent-cmd': NFR_STUB_AGENT, 'env-pass': 'STUB_MODE', 'timeout-ms': '60000' },
+      environment: { STUB_MODE: stubMode },
+      stdin: { kind: 'text', value: prompt ?? 'Audit the evidence bundle and write the report the workflow declares.' },
+    }),
+    new AbortController().signal,
+  );
+}
+
+async function checkNfrProbe(runDir) {
+  console.log('\ntea-nfr-runner through the adapter');
+
+  // The registry's default artifact map: the workflow's own path under a project
+  // root that is the working directory. The stub, given no project root in the
+  // prompt, writes there.
+  const complete = await nfrProbe(runDir, 'nfr-complete', 'complete');
+  assert(complete.ok, 'the probe returned an observation', complete.ok ? '' : complete.reason);
+  if (complete.ok) {
+    const { observation } = complete;
+    assert(observation.exitCode === NFR_EXIT_CODES.none, 'a completed NFR run exits 0', `exitCode ${observation.exitCode}`);
+    assert(
+      observation.artifacts.report.kind === 'text' && /^#{2,6}\s+Security Assessment$/m.test(observation.artifacts.report.value),
+      'the report artifact is read back as text at the registry default path',
+      JSON.stringify(observation.artifacts.report).slice(0, 200),
+    );
+    assert(
+      observation.stdout.kind === 'text' && /Wrote .*nfr-assessment\.md/.test(observation.stdout.value),
+      'the runner forwards what the agent printed',
+      JSON.stringify(observation.stdout).slice(0, 200),
+    );
+  }
+
+  // The per-run override the harness supplies: the workspace holds the bundle
+  // under its own project root, so the report sits one directory down from the
+  // authorization cwd. The prompt names that root, and the stub picks its report
+  // by it, so the overall status read back says which artifact map won.
+  const staged = await nfrProbe(runDir, 'nfr-staged', 'complete', {
+    artifacts: { report: path.join('atlas-notification-relay', 'test-artifacts', 'nfr-assessment.md') },
+    prompt: '- `{project-root}`: `atlas-notification-relay`\n',
+  });
+  assert(
+    staged.ok &&
+      staged.observation.artifacts.report.kind === 'text' &&
+      /overall_status: 'PASS'/.test(staged.observation.artifacts.report.value),
+    'a per-run artifact override reads the report the stub wrote under the project root the prompt named',
+    JSON.stringify(staged.ok ? staged.observation.artifacts.report : staged).slice(0, 200),
+  );
+
+  // An artifact the run never wrote is `absent`, not a throw and not an empty
+  // string, which is what lets the harness classify it as a missing artifact.
+  const nothing = await nfrProbe(runDir, 'nfr-nothing', 'nothing');
+  assert(
+    nothing.ok && nothing.observation.exitCode === NFR_EXIT_CODES.none && nothing.observation.artifacts.report.kind === 'absent',
+    'a run that wrote no report exits 0 with the artifact absent',
+    JSON.stringify(nothing.ok ? nothing.observation.artifacts : nothing),
+  );
+
+  // A vendor that exits nonzero is the runner's transport class, on the exit code.
+  const failed = await nfrProbe(runDir, 'nfr-fail', 'fail');
+  assert(
+    failed.ok && nfrFailureClassForExit(failed.observation.exitCode) === 'environment-transport',
+    'a vendor that exits nonzero is reported as a transport failure on the exit code',
+    JSON.stringify(failed.ok ? failed.observation.exitCode : failed),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // 5. the behavioral harnesses run end to end against the stub
 // ---------------------------------------------------------------------------
@@ -698,6 +793,77 @@ function runTestDesignHarness(runDir, stubMode, extraArgs) {
     path.join(runDir, `test-design-harness-${stubMode}.json`),
     stubMode,
     extraArgs,
+  );
+}
+
+function runNfrHarness(runDir, stubMode, extraArgs) {
+  return runHarnessAgainstStub(NFR_HARNESS, NFR_STUB_AGENT, path.join(runDir, `nfr-harness-${stubMode}.json`), stubMode, extraArgs);
+}
+
+/**
+ * The nfr harness end to end against its stub.
+ *
+ * This is the check whose absence let the suite ship having never completed a
+ * run. `npm test` drives `test/eval-nfr.js --validate-only`, which returns before
+ * the pre-flight and before any `runCase`, and the manifest's declared
+ * `preflightArgs` stop at the vendor CLI. So the request assembly one line later
+ * was broken, every gate in the tree was green, and the skill's `deferred` entry
+ * was deleted on the strength of it. `hostEnvironment` had gained an interface id
+ * as its first parameter and this harness was still passing its `--env-pass`
+ * array there, which threw before a process started.
+ *
+ * What it asserts is what the trace and test-design smokes assert, because the
+ * three harnesses fail in the same ways: every declared repetition completes on a
+ * correct run, a run that writes into the corpus is a measured quality failure
+ * naming the ceiling it broke, and a run that wrote no artifact is an environment
+ * failure with a class rather than a low score.
+ */
+function checkNfrHarnessSmoke(runDir) {
+  console.log('\nthe nfr harness end to end against the stub');
+
+  const complete = runNfrHarness(runDir, 'complete', ['--runs', '2']);
+  assert(
+    complete.status === 0,
+    'a correct audit of both bundles, twice, exits 0',
+    complete.stderr.trim().split('\n').slice(-3).join(' | '),
+  );
+  assert(
+    complete.record?.mode === 'live' && complete.record?.failureClass === 'none',
+    'the record is a live run with no failure class',
+    JSON.stringify(complete.record && { mode: complete.record.mode, failureClass: complete.record.failureClass }),
+  );
+  const runner = complete.record?.runners?.[0];
+  assert(
+    runner?.repetitions?.expected === 4 && runner?.repetitions?.completed === 4,
+    'every declared repetition completed: two bundles, two runs each',
+    JSON.stringify(runner?.repetitions),
+  );
+  assert(runner?.failures?.length === 0, 'every threshold is met on the correct audit', JSON.stringify(runner?.failures));
+  assert(
+    runner?.version === 'stub-agent 1.0.0',
+    'the pre-flight recorded the version the stub answered --version with',
+    JSON.stringify(runner?.version),
+  );
+  assert(runner?.parameters?.envPassNames?.includes('STUB_MODE'), 'the record names the environment variable the operator passed through');
+
+  // The workflow audits evidence and produces none, so a write into the bundle is
+  // a measured quality failure. This is the only path that reaches
+  // maxFixtureMutations at all, which is what its threshold comment promises.
+  const mutate = runNfrHarness(runDir, 'mutate', ['--runs', '1', '--set', 'gapped-harbor-billing-ledger']);
+  assert(mutate.status === 1, 'a run that writes into the evidence bundle exits 1', `exit ${mutate.status}`);
+  assert(
+    mutate.record?.failureClass === 'quality' && mutate.record?.runners?.[0]?.failures?.includes('fixture mutations'),
+    'the record carries a quality failure naming fixture mutations',
+    JSON.stringify(mutate.record?.runners?.[0]?.failures),
+  );
+
+  // Nothing written is an environment failure with a class, never a low score.
+  const nothing = runNfrHarness(runDir, 'nothing', ['--runs', '1', '--set', 'gapped-harbor-billing-ledger']);
+  assert(nothing.status === 2, 'a run that wrote no report exits 2', `exit ${nothing.status}`);
+  assert(
+    nothing.record?.failureClass === 'environment-missing-artifact' && nothing.record?.runners?.[0]?.repetitions?.completed === 0,
+    'the record classifies the lost run as a missing artifact and counts no completed repetition',
+    JSON.stringify(nothing.record && { failureClass: nothing.record.failureClass, repetitions: nothing.record.runners?.[0]?.repetitions }),
   );
 }
 
@@ -965,24 +1131,33 @@ function checkRunnerDeclarations() {
     `harness ${JSON.stringify(TEST_DESIGN_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(TEST_DESIGN_RUNNER_DECLARED_CAPABILITIES)}`,
   );
   assert(
+    JSON.stringify([...NFR_HARNESS_DECLARED_CAPABILITIES].sort()) === JSON.stringify([...NFR_RUNNER_DECLARED_CAPABILITIES].sort()),
+    'the nfr harness and tea-nfr-runner declare the same runner capabilities',
+    `harness ${JSON.stringify(NFR_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(NFR_RUNNER_DECLARED_CAPABILITIES)}`,
+  );
+  assert(
     TRACE_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
+      NFR_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
+      TEST_DESIGN_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       !RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes'),
-    'a trace run may write its deliverables and a selection may not; that is the one capability the two commands differ in',
+    'a trace, NFR or test-design run may write its deliverable and a selection may not; that is the one capability the commands differ in',
   );
 
-  // The two runner commands share one exit-code table, because a caller holding
-  // an observation cannot tell which command produced it. The table lives in
-  // cli/lib/runner-exit-codes.js and both re-export it; this is the check that
-  // neither has grown a spelling of its own.
+  // The three runner commands checked here share one exit-code table, because a
+  // caller holding an observation cannot tell which command produced it. The table
+  // lives in cli/lib/runner-exit-codes.js and each re-exports it; this is the check
+  // that none has grown a spelling of its own.
   assert(
-    JSON.stringify(TRACE_EXIT_CODES) === JSON.stringify(EXIT_CODES),
-    'tea-trace-runner and tea-fragment-selection-runner spell every failure class with the same exit code',
-    `${JSON.stringify(TRACE_EXIT_CODES)} vs ${JSON.stringify(EXIT_CODES)}`,
+    JSON.stringify(TRACE_EXIT_CODES) === JSON.stringify(EXIT_CODES) && JSON.stringify(NFR_EXIT_CODES) === JSON.stringify(EXIT_CODES),
+    'all three runner commands spell every failure class with the same exit code',
+    `${JSON.stringify(TRACE_EXIT_CODES)} and ${JSON.stringify(NFR_EXIT_CODES)} vs ${JSON.stringify(EXIT_CODES)}`,
   );
   for (const [failureClass, code] of Object.entries(EXIT_CODES)) {
     assert(
-      failureClassForExit(code) === failureClass && traceFailureClassForExit(code) === failureClass,
-      `exit ${code} maps back to ${failureClass} in both runners`,
+      failureClassForExit(code) === failureClass &&
+        traceFailureClassForExit(code) === failureClass &&
+        nfrFailureClassForExit(code) === failureClass,
+      `exit ${code} maps back to ${failureClass} in all three runners`,
     );
   }
   assert(
@@ -991,8 +1166,14 @@ function checkRunnerDeclarations() {
   );
   assert(TRACE_REQUEST_KEYS.stdin.required.includes('prompt'), 'the trace prompt is required on standard input');
   assert(
-    JSON.stringify(TRACE_REQUEST_KEYS.environment) === JSON.stringify(SELECTION_REQUEST_KEYS.environment),
-    'both runners permit the same environment names, because both wrap the same vendor call',
+    NFR_REQUEST_KEYS.option.required.every((key) => NFR_REQUEST_KEYS.option.permitted.includes(key)),
+    'every required nfr option key is also permitted',
+  );
+  assert(NFR_REQUEST_KEYS.stdin.required.includes('prompt'), 'the nfr prompt is required on standard input');
+  assert(
+    JSON.stringify(TRACE_REQUEST_KEYS.environment) === JSON.stringify(SELECTION_REQUEST_KEYS.environment) &&
+      JSON.stringify(NFR_REQUEST_KEYS.environment) === JSON.stringify(SELECTION_REQUEST_KEYS.environment),
+    'all three runners permit the same environment names, because all three wrap the same vendor call',
   );
 
   // cli/fragment-selection-runner.js restates test/lib/eval-record.js's error
@@ -1020,6 +1201,7 @@ function checkRunnerDeclarations() {
       `${probe.code} classifies the same in tea-trace-runner`,
       traceClassOfAgentError(error),
     );
+    assert(nfrClassOfAgentError(error) === shared, `${probe.code} classifies the same in tea-nfr-runner`, nfrClassOfAgentError(error));
     assert(FAILURE_CLASSES.includes(runner), `${probe.code} classifies to a declared TEA failure class`, runner);
     assert(Object.hasOwn(EXIT_CODES, runner), `${probe.code} classifies to a class this command can exit with`, runner);
   }
@@ -1101,7 +1283,9 @@ async function main() {
     await checkTestReviewProbe(runDir);
     await checkFragmentSelectionProbe(runDir);
     await checkTraceProbe(runDir);
+    await checkNfrProbe(runDir);
     await checkBudgets(runDir);
+    checkNfrHarnessSmoke(runDir);
     checkTraceHarnessSmoke(runDir);
     checkTestDesignHarnessSmoke(runDir);
   } finally {

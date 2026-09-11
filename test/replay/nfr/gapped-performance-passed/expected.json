@@ -1,0 +1,112 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the unsupported PASS the suite exists to refuse, in its first form.",
+    "The load test is healthy and the run supplies its own target for it, which the workflow's checklist forbids",
+    "outright, and then passes the domain against the target it invented.",
+    "",
+    "It is gapped-correct-audit with only the Performance section changed, so every other number in the result",
+    "is that case's and the two differ in exactly what the deviation touches.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-performance-passed",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Performance: four PASS, so PASS against an expected CONCERNS. One status miss, and because the ground truth",
+    "marks the domain undecidable it is also one unsupported PASS. The other three domains are unchanged.",
+    "",
+    "Thresholds: the Performance section no longer records UNKNOWN, so its check fails; the other three still",
+    "name their tokens. 3 of 4.",
+    "",
+    "Unknown threshold: UNKNOWN appeared nowhere else in the correct report, so removing it from this section",
+    "removes it from the document, and the check fails against an expected true.",
+    "",
+    "Overall stays FAIL, because reliability is still FAIL and a FAIL domain decides the roll-up whatever",
+    "performance says. That is what makes this case a measurement of the domain judgment rather than of the",
+    "headline.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section.",
+    "",
+    "Citations: gapped-correct-audit's nineteen, unchanged. The Performance section keeps the four load-test citations it",
+    "had, because the error this case measures is the target the run supplied and not the file it read."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "PASS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": ["performance reported PASS, expected CONCERNS (undecidable)"],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": ["performance"],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 3,
+      "failed": [
+        {
+          "field": "threshold is recorded as UNKNOWN",
+          "expected": true,
+          "actual": false
+        }
+      ]
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": false,
+      "ok": false
+    },
+    "cleanFalsePositives": 0
+  }
+}

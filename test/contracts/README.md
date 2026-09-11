@@ -9,16 +9,19 @@ against it.
 
 | Contract                                      | Suite                                                    | Cases                                               |
 | --------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
+| `nfr.contract.json`                           | The full behavioral eval for `bmad-testarch-nfr`         | 1 bundle with known gaps, 1 clean control           |
 | `test-review.contract.json`                   | The full behavioral eval for `bmad-testarch-test-review` | 9 planted defects, 1 clean control, 1 scope control |
 | `test-design.contract.json`                   | The full behavioral eval for `bmad-testarch-test-design` | 1 seeded set of 5 material risks, 1 clean control   |
 | `trace.contract.json`                         | The full behavioral eval for `bmad-testarch-trace`       | 1 seeded set of 10 criteria, 1 clean set of 5       |
 | `fragment-selection/<workflow>.contract.json` | Fragment routing for eight workflows                     | 24 cases                                            |
 
 **Every contract here is generated. Do not hand-edit one.** `tools/generate-contracts.js` writes all
-eleven from their sources: `test-review.contract.json` from
+twelve from their sources: `test-review.contract.json` from
 `test/fixtures/test-review-eval/ground-truth.json` and `criteria-registry.md`; `trace.contract.json`
 from `test/fixtures/trace-eval/ground-truth.json`, the request shape `cli/trace-runner.js` declares,
 the prompt `test/eval-trace.js` assembles, and the summary literal in the trace workflow's step-05;
+`nfr.contract.json` from `test/fixtures/nfr-eval/ground-truth.json`, the request shape
+`cli/nfr-runner.js` declares, and the prompt `test/eval-nfr.js` assembles;
 `test-design.contract.json` from `test/fixtures/test-design-eval/ground-truth.json`, the request shape
 `cli/test-design-runner.js` declares, the prompt `test/eval-test-design.js` assembles, and a digest
 over the test-design workflow's step-03, step-04, step-05 and `test-design-template.md`; and
@@ -95,7 +98,7 @@ without the located issue list the table below breaks down. The list comes from 
 the renderer. The issues themselves are the same either way; only whether the tool prints them
 differs.
 
-## Thirteen of thirteen compile
+## Fourteen of fourteen compile
 
 `package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08. All 58
 parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
@@ -136,6 +139,15 @@ artifact-writing command. The contract itself states this reasoning in `testData
 `SensitivityWitness` is a strict object with no prose field of its own; do not look for it on the
 witness. The section "A plan cannot declare that two steps must receive different inputs" below
 records what those literals cost and what they bought.
+
+`nfr.contract.json` is the same shape and reaches for a different value. Its two plan
+steps send two prompts, one per evidence bundle, each binding its own `stdin.prompt` literal, and its
+witness differs its legs on `custom_nfr_categories` while both stage the clean bundle. The reasoning is
+trace's: the two bundles' reports differ because of the staged evidence, so a differential between them
+would attribute to the prompt a difference the evidence produced. `custom_nfr_categories` is a value
+step-02 adds to the categories it elicits and the report template carries a section for, so a run given
+one names it and a run given none does not, which is a true and checkable claim that the command reads
+its standard input.
 
 ## The routing suite is two contracts, and the bound is why
 
@@ -240,6 +252,18 @@ gate, the gap buckets. The harness reads the matrix and the contract does not, a
 matrix declares no criterion section is refused by the harness and unseen by the contract, which
 `test/test-contract-oracles.js` prints as a skip rather than counting as agreement.
 
+`nfr.contract.json` is the case where that limit binds hardest, because the NFR workflow declares one
+deliverable and it is markdown. There is no summary to state a consequence in, so the contract's eight
+oracles say the four things a substring test can reach about a whole document: the four
+`## <Domain> Assessment` sections exist, the Gate YAML publishes the expected `overall_status`, a
+threshold no source states is recorded as `UNKNOWN` and one every source states is not, and the run
+wrote a report and exited 0. `containment` rather than `regex` throughout, because `regex`'s step
+estimate is `(1 + quantifiers) * length` and a "contains X anywhere" pattern costs three times the
+document's length against a budget an ordinary report exceeds. The four domain statuses, the per-domain
+thresholds and every evidence citation are the harness's to read. The alternative was to invent a
+machine-readable artifact for the workflow to write, which would score a contract the workflow does not
+declare, so the gap is recorded here and in `test/fixtures/nfr-eval/README.md` instead.
+
 **A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator
 refuses a quantifier nested inside a quantified group before matching anything, as a
 catastrophic-backtracking risk, and reports it as a `budget-exhausted` fault. Every regex oracle in
@@ -282,10 +306,12 @@ The oracle check is the one that reads the oracles. It evaluates every oracle in
 already holds: each stored verdict under `test/replay/test-review/` as one observation of the
 `review-corpus` step, each fragment-selection case over three constructed selections and the stored
 captures, each stored test design under `test/replay/test-design/` as the `design` artifact of its
-fixture set's plan step, and each stored trace run under `test/replay/trace/` as one observation of its
-fixture set's plan step, the last two evaluated under both sets' oracles so that every oracle is also
-seen failing. Each answer is compared with the harness scorer's on the same evidence: a plant oracle
-holds exactly when `scoreVerdict` counts the plant as a hit, the scope oracle exactly when it counts no finding as out of
+fixture set's plan step, each stored trace run under `test/replay/trace/` as one observation of its
+fixture set's plan step, and each stored NFR run under `test/replay/nfr/` as one observation of its
+evidence bundle's plan step, the last three evaluated under both of their suite's sets so that every
+test-design, trace and nfr oracle is also seen failing. Each answer is compared with the harness
+scorer's on the same evidence: a plant oracle holds exactly when `scoreVerdict` counts the plant as a
+hit, the scope oracle exactly when it counts no finding as out of
 scope, a containment oracle exactly when `scoreCase` misses nothing, each test-design oracle exactly
 when `documentMentions` says the document carries that risk's vocabulary, and each trace oracle exactly
 when the `scoreRun` checks it restates all pass, through a correspondence `tools/generate-contracts.js`
@@ -304,7 +330,7 @@ absent, so the deterministic gate stays credential-free and runs with no network
 silently: a skip says it skipped.
 
 When the compiler is available, the check compares each contract against the status
-`expected-status.json` records for it. All thirteen contracts `compile` today. A baseline is what keeps a
+`expected-status.json` records for it. All fourteen contracts `compile` today. A baseline is what keeps a
 known failure from reading as a passing check, and what makes the day a contract's status moves
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.
@@ -315,7 +341,7 @@ status changing.
 
 ## What the generator enforces
 
-`node tools/generate-contracts.js --check` regenerates all eleven in memory and fails when the bytes on
+`node tools/generate-contracts.js --check` regenerates all twelve in memory and fails when the bytes on
 disk differ, naming the contract and the first line that moved. It runs in `npm test`, so a fixture
 edit that leaves a contract stale fails the deterministic gate.
 

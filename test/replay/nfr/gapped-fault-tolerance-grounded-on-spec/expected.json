@@ -1,0 +1,126 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is gapped-correct-audit's verdict reached off different evidence, and it is the pair",
+    "that makes signatureOf's contract load-bearing on the nfr side. Both runs report the same four domain statuses, the same",
+    "two coverage counts, the same four threshold readings, the same overall status, the same evidence gap and no fabricated",
+    "citation. Everything the suite grades agrees. One Evidence line inside Reliability is the whole difference.",
+    "",
+    "Fault Tolerance states a threshold with two halves: three retries with exponential backoff, and a quarterly failover",
+    "drill. gapped-correct-audit grounds the dimension on the drill recorded in the observability export, and this run grounds",
+    "it on the retry policy recorded in section 2.3 of the tech spec. The bundle carries both files, so neither citation is",
+    "fabricated, and no number the suite scores can tell the two runs apart.",
+    "",
+    "That is the collapse the signature exists to catch. Two repetitions of one bundle that agree on the verdict and disagree",
+    "on the evidence have not given one answer, and while signatureOf was built from the statuses and the fabricated list",
+    "alone these two reports signed the same string, so maxUnstableCases counted the pair stable. With the grounding in the",
+    "signature and in the stored result, this pair holds both halves of the contract: drop citations from signatureOf and two",
+    "cases with different results sign identically, drop it from projectNfrResult and two cases with one result sign",
+    "differently. Either way test:eval-replay fails.",
+    "",
+    "The report is CONSTRUCTED: gapped-correct-audit's report with the Fault Tolerance entry regrounded and nothing else",
+    "touched."
+  ],
+  "id": "gapped-fault-tolerance-grounded-on-spec",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "One Evidence line moved and nothing else did. The citation scan is the only reader of an Evidence line, so every status,",
+    "count and ceiling below is gapped-correct-audit's, derived there and reproduced here.",
+    "",
+    "Statuses: performance four CONCERNS, so CONCERNS. Security four PASS and one N/A, and N/A never wins, so PASS.",
+    "Reliability five PASS and one FAIL, so FAIL. Maintainability two CONCERNS and two PASS, so CONCERNS. All four match the",
+    "ground truth, so there is no status miss and neither undecidable domain was passed.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Thresholds: security names 0 critical, reliability names 0.5%, maintainability names 80%, and performance records",
+    "UNKNOWN. 4 of 4. The Fault Tolerance threshold line is untouched, which is what confines the edit to the grounding.",
+    "",
+    "Overall: the Gate YAML says FAIL, which is what a FAIL domain rolls up to. Unknown threshold: the document carries the",
+    "word, which the gapped bundle expects. One evidence gap is listed, for the missing coverage report.",
+    "",
+    "cleanFalsePositives is 0 because this is not the clean bundle. Duplicate sections: none.",
+    "",
+    "Citations, per section and in report order, one per Evidence line. Performance cites the load test on all four",
+    "dimensions. Security cites the security review on authentication, authorization, data protection and compliance, and the",
+    "dependency scan on vulnerability management. Reliability cites the observability export on availability, error rate,",
+    "MTTR, burn-in and disaster recovery, and the tech spec on fault tolerance, which is the fourth of its six entries.",
+    "Maintainability cites the tech spec on coverage and duplication, the dependency scan on the vulnerability scan, and the",
+    "logging config on observability. Nineteen citations over the six files the bundle declares, every one of them resolving,",
+    "so the fabricated list is empty.",
+    "",
+    "The reliability list is where this case and gapped-correct-audit part. Its fourth entry is docs/tech-spec.md here and",
+    "evidence/reliability-2026-08.json there, and that single entry is the whole difference between the two stored results",
+    "and the whole difference between the two signatures."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "docs/tech-spec.md",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

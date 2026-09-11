@@ -10,6 +10,8 @@
  * carries nine planted rows with their severities, files, lines and admitted
  * lines; `test/fixtures/trace-eval/ground-truth.json` carries a seeded set whose
  * coverage gaps are the plant and a clean set that is the control;
+ * `test/fixtures/nfr-eval/ground-truth.json` carries an evidence bundle whose
+ * domains are undecidable or breached and a clean bundle that is the control;
  * `test/fixtures/test-design-eval/ground-truth.json` carries the risks each epic
  * supports and the risks each epic rules out in as many words; each
  * `test/evals/<workflow>/evals.json` carries a required set and a forbidden set
@@ -39,15 +41,16 @@
  *   resolves only against the contract it was authored on. A `stdout` pointer
  *   resolves only where the operation declares standard output as its descriptor
  *   channel. `tea-fragment-selection-runner` does, so its signatures address the
- *   selection itself. `tea-test-review`, `tea-trace-runner` and
+ *   selection itself. `tea-test-review`, `tea-trace-runner`, `tea-nfr-runner` and
  *   `tea-test-design-runner` all write their deliverable to a file, so a
  *   signature that reads it is refused, and what is left is the exit code. For
  *   `tea-test-review` that discriminates: the seeded fixture exits 1 and the
  *   clean control exits 0, so the condition is false on a review that found
- *   nothing gating. For the other two it does not: every completed trace run and
- *   every completed design run exits 0 whatever it wrote, so their probes keep
- *   the signature that states the truth about the plant and are recorded as
- *   refused rather than given one that would qualify and discriminate nothing.
+ *   nothing gating. For the other three it does not: every completed trace run,
+ *   every completed audit and every completed design run exits 0 whatever it
+ *   wrote, so their probes keep the signature that states the truth about the
+ *   plant and are recorded as refused rather than given one that would qualify
+ *   and discriminate nothing.
  * - `seeded-faults-scoped` treats every leg already registered for an operation
  *   as a clean leg, and the only legs a TEA contract registers are its sensitivity
  *   witness legs. `test-review`'s differential drives one leg at a seeded fixture
@@ -88,6 +91,18 @@ const { parseRegistryRows } = require('./validate-criteria-fragments');
 // legs below read their own harness's buildPrompt on the same rule.
 const { buildPrompt: buildTracePrompt } = require('../test/eval-trace');
 const { DEFAULT_AGENT: TRACE_DEFAULT_AGENT } = require('../cli/trace-runner');
+// And the same for the nfr command: the prompt a manifestation witness sends is
+// the prompt the harness assembles, and the domain names and the UNKNOWN spelling
+// are the harness's own, so a probe and the contract it names cannot spell one of
+// them differently.
+const {
+  buildPrompt: buildNfrPrompt,
+  DOMAINS: NFR_DOMAINS,
+  UNKNOWN_TOKEN: NFR_UNKNOWN_TOKEN,
+  NFR_INTERFACE,
+  NFR_OPERATION,
+} = require('../test/eval-nfr');
+const { DEFAULT_AGENT: NFR_DEFAULT_AGENT } = require('../cli/nfr-runner');
 // The routing probes name the oracle they game by the pointer it reads, which is
 // how they stay attached to the right oracle when a case is added to the corpus
 // and every id after it shifts.
@@ -101,11 +116,13 @@ const PROBE_ROOT = path.join(PROJECT_ROOT, 'test', 'probes');
 const EVAL_ROOT = path.join(PROJECT_ROOT, 'test', 'evals');
 const REVIEW_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval');
 const TRACE_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval');
+const NFR_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval');
 const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
 const TEST_DESIGN_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval');
 const TEST_DESIGN_REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design');
 const REVIEW_FIXTURE_PREFIX = 'test/fixtures/test-review-eval/';
 const TRACE_FIXTURE_PREFIX = 'test/fixtures/trace-eval/';
+const NFR_FIXTURE_PREFIX = 'test/fixtures/nfr-eval/';
 const TEST_DESIGN_FIXTURE_PREFIX = 'test/fixtures/test-design-eval/';
 const TEST_DESIGN_REPLAY_PREFIX = 'test/replay/test-design/';
 
@@ -1118,6 +1135,214 @@ function buildTestDesignProbes() {
 }
 
 // ---------------------------------------------------------------------------
+// nfr
+// ---------------------------------------------------------------------------
+
+/** Every literal a check tree carries, flattened, so an oracle is found by the claim it makes. */
+function literalsOf(node) {
+  if (node === null || typeof node !== 'object') return [];
+  if (Array.isArray(node)) return node.flatMap(literalsOf);
+  if (Object.hasOwn(node, 'literal')) return [node.literal];
+  return Object.values(node).flatMap(literalsOf);
+}
+
+/** The oracles this contract states about one evidence bundle, read off the requirement each behavior links. */
+function nfrOraclesFor(contract, setId) {
+  const ids = new Set(
+    contract.behaviors
+      .filter((behavior) => behavior.requirementLinks.some((link) => link.id.startsWith(`${setId}/`)))
+      .flatMap((behavior) => behavior.oracles),
+  );
+  assert(ids.size > 0, `nfr.contract.json declares no behavior linked to ${setId}`);
+  return contract.oracles.filter((oracle) => ids.has(oracle.id));
+}
+
+/**
+ * The one oracle among a bundle's that reads the report for a given literal.
+ *
+ * Found by the literal it checks. The numbering is an ordering convention that
+ * nothing holds to a meaning and the literal is the claim itself, so a contract
+ * edit that moves a claim fails here and a probe is never pointed at whichever
+ * oracle kept the number. It throws when the search names none or several.
+ */
+function nfrOracleReading(oracles, literal, setId) {
+  const found = oracles.filter((oracle) => literalsOf(oracle.check).includes(literal));
+  assert(found.length === 1, `${setId}: ${found.length} oracle(s) check the report for "${literal}", and a probe needs exactly one`);
+  return found[0].id;
+}
+
+/** The three spellings a YAML scalar takes, as the `any` the nfr contract's own overall-status oracle is written with. */
+function overallStatusAny(pointer, status) {
+  return {
+    op: 'any',
+    operands: [`'${status}'`, `"${status}"`, status].map((spelling) => ({
+      op: 'containment',
+      operands: [{ pointer }, { literal: `overall_status: ${spelling}` }],
+    })),
+  };
+}
+
+/**
+ * The probe corpus for the nfr contract.
+ *
+ * Three plants and one control, all read out of `test/fixtures/nfr-eval/ground-truth.json`.
+ * A domain is planted when the corpus flags it undecidable, which is a threshold
+ * no source states or evidence the bundle does not carry, or when its evidence
+ * breaches a threshold the bundle does state. Which oracle each plant answers to
+ * is decided by the same field:
+ *
+ *   threshold never stated   the oracle demanding the report record UNKNOWN. This
+ *                            bundle leaves exactly one threshold unstated, so a run
+ *                            that supplied its own writes a report without the word
+ *                            and that oracle is violated.
+ *   everything else          the oracle reading the Gate YAML's overall_status, which
+ *                            is the rollup of the four domain statuses the plant is
+ *                            one of.
+ *
+ * The second is the nearest claim this contract can make and it is not always a
+ * catch. A markdown report is one string to this vocabulary, so the four oracles
+ * are document-level, and a domain whose status the rollup does not move on its
+ * own has no oracle of its own: a run that passed maintainability on a prose claim
+ * still publishes FAIL, because reliability breaches a threshold in the same
+ * bundle. Nothing is measured either way, because every signature here is refused
+ * at the qualification gate for the reason the header records, and the rationale
+ * says which domain and which rule each probe rests on so a later contract with a
+ * per-domain claim can be pointed at the right one.
+ */
+function buildNfrProbes() {
+  const contract = loadContract('nfr.contract.json');
+  const groundTruth = JSON.parse(fs.readFileSync(path.join(NFR_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
+  const isGapped = (set) => Object.values(set.domains ?? {}).some((domain) => domain.isUndecidable === true);
+  const gapped = groundTruth.fixtureSets.find((set) => isGapped(set));
+  const clean = groundTruth.fixtureSets.find((set) => Object.values(set.domains ?? {}).every((domain) => domain.expectedStatus === 'PASS'));
+  assert(gapped && clean, 'nfr ground truth carries no bundle with an undecidable domain or no clean control');
+
+  const groundTruthPath = `${NFR_FIXTURE_PREFIX}ground-truth.json`;
+  const corpusDigest = digestOf([groundTruthPath]);
+  const citations = groundTruth.skillRuleCitations ?? {};
+
+  // The stored runs the two evidence fields point at. The clean bundle's audit is
+  // the baseline: four PASS domains and no gap. The gapped bundle's audit is what
+  // the plants produce, and it is the same document test/replay/nfr/ scores.
+  const baselineReport = 'test/replay/nfr/clean-correct-audit/test-artifacts/nfr-assessment.md';
+  const mutatedReport = 'test/replay/nfr/gapped-correct-audit/test-artifacts/nfr-assessment.md';
+
+  const gappedOracles = nfrOraclesFor(contract, gapped.id);
+  const unknownOracleId = nfrOracleReading(gappedOracles, NFR_UNKNOWN_TOKEN, gapped.id);
+  const gateOracleId = nfrOracleReading(gappedOracles, `overall_status: '${gapped.expectedOverallStatus}'`, gapped.id);
+
+  // The domains this bundle plants a defect in, in the order the harness scores
+  // them: the ones the corpus flags undecidable, plus the one whose evidence
+  // breaches a threshold the bundle states.
+  const planted = NFR_DOMAINS.map((name) => ({ name, domain: gapped.domains[name] })).filter(
+    ({ domain }) => domain.isUndecidable === true || domain.expectedStatus === 'FAIL',
+  );
+  assert(planted.length > 0, `${gapped.id} plants no defect in any domain, so it seeds nothing`);
+
+  const probes = planted.map(({ name, domain }, index) => {
+    const citation = citations[domain.rule];
+    assert(citation, `${gapped.id}.domains.${name}: rule "${domain.rule}" names no entry in skillRuleCitations`);
+    const oracleId = domain.thresholdStated === false ? unknownOracleId : gateOracleId;
+    const behaviorId = soleBehaviorFor(contract, oracleId);
+    const legId = `manifest-${name}`;
+    return {
+      schemaVersion: PROBE_SCHEMA_VERSION,
+      parentDigest: null,
+      revisionCount: 0,
+      probeId: `P-${pad(index + 1)}`,
+      probeClass: 'defect',
+      behaviorId,
+      systemId: `tea-nfr-${gapped.id}`,
+      implementationDigest: corpusDigest,
+      artifactDigest: corpusDigest,
+      commitDigest: corpusDigest,
+      rationale:
+        `${name} is ${domain.expectedStatus} on ${gapped.id}, under skillRuleCitations.${domain.rule}: ${citation.rule} ` +
+        `The bundle is the plant, and ${oracleId} is the oracle that has to see its consequence in the report the run wrote.`,
+      qualification: {
+        route: 'controlled-mutation',
+        mutationSource: groundTruthPath,
+        mutationOperator: `plant-${name}-${domain.expectedStatus.toLowerCase()}`,
+        targetArtifact: fileReference(groundTruthPath),
+        expectedObservableFailure:
+          `The ${name} findings of the report are recorded as ${domain.expectedStatus}, and the Gate YAML publishes ` +
+          `overall_status ${gapped.expectedOverallStatus}.`,
+        baselinePassEvidence: fileReference(baselineReport),
+        mutatedFailEvidence: fileReference(mutatedReport),
+        rollbackVerified: true,
+      },
+      expectedClean: false,
+      defects: [
+        {
+          defectId: `D-${pad(index + 1)}`,
+          behaviorId,
+          summary: `${name} can only reach ${domain.expectedStatus} on this bundle, under the workflow's own ${domain.rule} rule.`,
+          severity: domain.expectedStatus === 'FAIL' ? 'critical' : 'material',
+          oracleEvidence: [fileReference(groundTruthPath)],
+          source: 'controlled-mutation',
+          // One audit of the gapped bundle, and the gate its own sections roll up
+          // to. The status is read off the ground truth, so a bundle whose plants
+          // stop rolling up to it moves this relation with them. The two legs AD-10 reads as clean both stage the clean bundle,
+          // whose audit publishes PASS, so the relation is false there.
+          manifestationWitness: {
+            legId,
+            interfaceId: NFR_INTERFACE,
+            operationId: NFR_OPERATION,
+            inputs: {
+              argument: {},
+              option: { agent: NFR_DEFAULT_AGENT },
+              environment: {},
+              stdin: { kind: 'text', value: buildNfrPrompt(gapped) },
+            },
+            relation: overallStatusAny(`/interactions/${legId}/artifact/report`, gapped.expectedOverallStatus),
+          },
+        },
+      ],
+      defectSignature: {
+        interfaceKind: 'cli',
+        invocation: { executable: NFR_INTERFACE, subcommandPath: [] },
+        observableChannel: 'artifact',
+        condition: {
+          selector: selector({ option: { agent: { matcher: 'any' } } }),
+          predicate: overallStatusAny('/interactions/observed/artifact/report', gapped.expectedOverallStatus),
+        },
+      },
+    };
+  });
+
+  // The clean bundle's control answers to the same claim on its own side: the
+  // audit of a bundle that states every threshold and meets every one publishes
+  // the overall status its four PASS domains roll up to.
+  const cleanOracles = nfrOraclesFor(contract, clean.id);
+  const cleanOracleId = nfrOracleReading(cleanOracles, `overall_status: '${clean.expectedOverallStatus}'`, clean.id);
+  probes.push({
+    schemaVersion: PROBE_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    probeId: `P-${pad(planted.length + 1)}`,
+    probeClass: 'zero-action',
+    behaviorId: soleBehaviorFor(contract, cleanOracleId),
+    systemId: `tea-nfr-${clean.id}`,
+    implementationDigest: corpusDigest,
+    artifactDigest: corpusDigest,
+    commitDigest: corpusDigest,
+    rationale:
+      `${clean.id} states a threshold for all ${NFR_DOMAINS.length} of its domains and meets every one, so any gap the run ` +
+      'reports is a false positive. It is the control that stops an nfr suite scoring well by refusing to pass anything.',
+    qualification: {
+      route: 'clean-control',
+      baselinePassEvidence: fileReference(baselineReport),
+      revisionCommitDigest: corpusDigest,
+      noKnownDefectStatement: clean.title,
+    },
+    expectedClean: true,
+    defects: [],
+  });
+
+  return probes;
+}
+
+// ---------------------------------------------------------------------------
 // fragment selection
 // ---------------------------------------------------------------------------
 
@@ -1335,6 +1560,7 @@ function targets() {
     { relativePath: 'test-review.probes.json', build: buildTestReviewProbes },
     { relativePath: 'test-design.probes.json', build: buildTestDesignProbes },
     { relativePath: 'trace.probes.json', build: buildTraceProbes },
+    { relativePath: 'nfr.probes.json', build: buildNfrProbes },
     ...fragmentSelectionWorkflows().map((workflow) => ({
       relativePath: path.join('fragment-selection', `${workflow}.probes.json`),
       build: () => buildFragmentSelectionProbes(workflow),

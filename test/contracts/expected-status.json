@@ -36,6 +36,9 @@
     "fragment-selection/bmad-testarch-trace.contract.json": {
       "status": "compiles"
     },
+    "nfr.contract.json": {
+      "status": "compiles"
+    },
     "tea-routing-controls.contract.json": {
       "status": "compiles"
     },

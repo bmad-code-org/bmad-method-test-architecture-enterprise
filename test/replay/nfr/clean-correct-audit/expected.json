@@ -1,0 +1,113 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the control the suite cannot do without. Every threshold this bundle",
+    "states is measured by a pipeline job and every measurement meets it, so the correct audit reports four PASS",
+    "results, no evidence gap, and no threshold recorded as unknown.",
+    "",
+    "Without it a workflow that answered CONCERNS to everything would clear maxUnsupportedPass and read as",
+    "careful. This is the case that makes that impossible.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "clean-correct-audit",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "clean-atlas-notification-relay",
+    "scoringInputsDigest": "sha256:3848bbe1b0d7a0721993899b738b5398daecf748fa40bff070f50f0f8ed0e19f"
+  },
+  "derivation": [
+    "Every domain section carries only PASS findings, so all four roll up to PASS and there is no status miss.",
+    "isCleanSet is true because the ground truth expects PASS on all four.",
+    "",
+    "Coverage: four headings, four of them stating a readable status. Thresholds: performance names 300 ms,",
+    "security names 0 critical, reliability names",
+    "99.9%, maintainability names 80%. 4 of 4.",
+    "",
+    "Overall: the Gate YAML says PASS, which is what four PASS domains roll up to. Unknown threshold: the word",
+    "appears nowhere in the document, which is what a bundle stating every target owes.",
+    "",
+    "cleanFalsePositives: no domain below PASS, no evidence gap listed, no threshold recorded as unknown. 0.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section.",
+    "",
+    "Citations, per section and in report order, one per Evidence line: the load test on all four performance",
+    "dimensions; the security review on authentication, authorization, data protection and compliance, with the",
+    "dependency scan on vulnerability management; the observability export on all six reliability dimensions; and the",
+    "coverage summary, the duplication report, the dependency scan and the logging config on the four maintainability",
+    "dimensions. Nineteen citations over seven of the eight files this bundle declares, every one of them resolving, so",
+    "the fabricated list is empty. The tech spec is the file nothing cites, because every threshold here has a",
+    "measurement behind it."
+  ],
+  "result": {
+    "isCleanSet": true,
+    "statuses": {
+      "performance": "PASS",
+      "security": "PASS",
+      "reliability": "PASS",
+      "maintainability": "PASS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-09-01.md",
+        "evidence/security-review-2026-09-01.md",
+        "evidence/security-review-2026-09-01.md",
+        "evidence/dependency-scan-2026-09-01.json",
+        "evidence/security-review-2026-09-01.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json"
+      ],
+      "maintainability": [
+        "evidence/coverage-summary-2026-09-01.json",
+        "evidence/duplication-report-2026-09-01.json",
+        "evidence/dependency-scan-2026-09-01.json",
+        "config/logging.json"
+      ]
+    },
+    "fabricated": [],
+    "evidenceGaps": [],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "PASS",
+      "actual": "PASS",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": false,
+      "actual": false,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

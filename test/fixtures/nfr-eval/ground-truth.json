@@ -1,0 +1,619 @@
+{
+  "$comment": [
+    "Ground truth for the bmad-testarch-nfr behavioral eval. It was authored from the fixture design",
+    "and from the skill's own step files. No NFR run produced any value in this file.",
+    "",
+    "Every expected domain status below is the consequence of a rule the workflow itself states, and",
+    "each domain names the citation that states it. That is the whole discipline of this corpus: a",
+    "status nobody can trace to a rule in the workflow is an opinion, and an opinion cannot be a",
+    "benchmark. test/eval-nfr.js fails the corpus when a cited section is gone from the file it names.",
+    "",
+    "A domain's status is the worst status the report records inside that domain's section, which is",
+    "the aggregation step-04e already performs over a domain's findings. The per-criterion lists under",
+    "each domain exist so a reader can check the rollup by hand and so the harness can assert that the",
+    "declared domain status is the rollup of the criteria beside it, rather than a number typed twice.",
+    "",
+    "The gapped bundle tempts an unsupported PASS twice, and both temptations look like thorough",
+    "evidence rather than like an empty directory:",
+    "",
+    "  performance      a real load-test report with a healthy p95, and no threshold anywhere in the",
+    "                   bundle to judge it against. A run that supplies its own target has guessed,",
+    "                   which the workflow's own checklist forbids.",
+    "  maintainability  a tech-spec sentence asserting the ledger is well covered, and no coverage",
+    "                   report at all. A run that reads a prose claim as evidence has passed on an",
+    "                   assertion.",
+    "",
+    "An obviously empty evidence set would prove nothing about the behavior being claimed, which is",
+    "why rejectedCases records it as a case this corpus deliberately does not contain.",
+    "",
+    "The clean bundle is not optional. A suite that only rewards refusing PASS would be cleared by a",
+    "workflow that never passes anything, so the control carries four supportable PASS results and any",
+    "finding against it is a false positive.",
+    "",
+    "The harness must not put this file into the agent's context, and it asserts that rather than",
+    "assuming it: no staged file carries these bytes, no staged path is named for it, and the assembled",
+    "prompt carries none of the keys that appear only here.",
+    "",
+    "projectRoot is the directory each bundle is staged under, and it is the one fact about a set the",
+    "prompt carries. It names the service and never the set's role, because a run that reads `gapped`",
+    "in its own working directory has been told the answer."
+  ],
+  "domains": [
+    "security",
+    "performance",
+    "reliability",
+    "maintainability"
+  ],
+  "skillRuleCitations": {
+    "fourAuditedDomains": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-04-evaluate-and-score.md",
+      "section": "3. Dispatch 4 NFR Workers",
+      "lines": "142-174",
+      "rule": "Step 4 dispatches exactly four domain workers: Security, Performance, Reliability, and Maintainability. A report missing one of the four has left a dispatched worker's domain unreported.",
+      "requiredPhrase": "step-04d-subagent-maintainability.md"
+    },
+    "markUnknownThreshold": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-02-define-thresholds.md",
+      "section": "2. Define Thresholds",
+      "lines": "77",
+      "rule": "If a threshold is still unknown after checking all sources, mark it UNKNOWN and plan to report CONCERNS.",
+      "requiredPhrase": "mark it **UNKNOWN** and plan to report **CONCERNS**"
+    },
+    "undefinedThresholdIsConcerns": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/nfr-status-definitions.md",
+      "section": "Default Rule for Undefined Thresholds",
+      "lines": "32-37",
+      "rule": "A finding whose threshold was marked UNKNOWN in Step 2 must be CONCERNS, never PASS. An absent measurement is not evidence that the target was met.",
+      "requiredPhrase": "the finding must be **CONCERNS**, never PASS"
+    },
+    "undecidableDowngradeEnforced": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-04e-aggregate-nfr.md",
+      "section": "1a. Enforce the Undefined-Threshold Default",
+      "lines": "44-71",
+      "rule": "Aggregation downgrades a worker's PASS to CONCERNS for any domain whose threshold was UNKNOWN at Step 2, so the rule is checked rather than merely stated.",
+      "requiredPhrase": "finding.status = 'CONCERNS'"
+    },
+    "missingEvidenceIsConcerns": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-03-gather-evidence.md",
+      "section": "3. Evidence Gaps",
+      "lines": "71",
+      "rule": "If evidence is missing for a category, mark that category as CONCERNS.",
+      "competingReading": "checklist.md's FAIL Criteria Verified is a four-limb OR whose second limb is \"Critical evidence is MISSING (documented)\", which would admit FAIL for a domain whose evidence is absent. This corpus rests on step-03 instead, because step-03 is the unconditional instruction on the execution path and the checklist is the validation pass that runs after it. The alternative was weighed rather than missed, and domainStatusAccuracy admits one such disagreement across the eight domain judgments, so a run reading it the other way costs one judgment and does not fail the suite.",
+      "requiredPhrase": "If evidence is missing for a category, mark that category as **CONCERNS**"
+    },
+    "passNeedsEvidenceMeetingThreshold": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "section": "PASS Criteria Verified",
+      "lines": "165-168",
+      "rule": "PASS requires evidence that exists, meets or exceeds the threshold, flags no concerns, and is of acceptable quality.",
+      "requiredPhrase": "Evidence meets or exceeds threshold"
+    },
+    "failIsEvidenceBelowThreshold": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "section": "FAIL Criteria Verified",
+      "lines": "179-182",
+      "rule": "FAIL is evidence that exists and does not meet the threshold.",
+      "requiredPhrase": "Evidence exists BUT does not meet threshold"
+    },
+    "noThresholdGuessing": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "section": "No Threshold Guessing",
+      "lines": "186-188",
+      "rule": "Every threshold is either defined or marked UNKNOWN, no threshold is guessed or inferred, and every UNKNOWN threshold results in CONCERNS.",
+      "requiredPhrase": "No thresholds were guessed or inferred"
+    },
+    "domainStatusIsWorstFinding": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-04e-aggregate-nfr.md",
+      "section": "3. Aggregate Compliance Status",
+      "lines": "108-113",
+      "rule": "An aggregate status is FAIL when any contributing status is FAIL, PARTIAL when any is CONCERNS, and PASS otherwise. This corpus reads a domain's status as that same rollup over the findings inside the domain's section.",
+      "requiredPhrase": "hasFail ? 'FAIL' : hasPartial ? 'PARTIAL' : 'PASS'"
+    },
+    "releaseBlockerOnFail": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "section": "Release Blocker (FAIL)",
+      "lines": "323-325",
+      "rule": "A release blocker is flagged when a critical NFR has FAIL status, so an audit carrying a FAIL domain reports FAIL overall.",
+      "requiredPhrase": "Release blocker flagged if critical NFR has FAIL status"
+    },
+    "warningOnConcerns": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "section": "Warning (CONCERNS)",
+      "lines": "335-337",
+      "rule": "Any NFR with CONCERNS status is flagged, so an audit whose worst domain is CONCERNS reports CONCERNS overall.",
+      "requiredPhrase": "Any NFR with CONCERNS status flagged"
+    },
+    "passWhenAllPass": {
+      "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
+      "section": "Pass (PASS)",
+      "lines": "341-343",
+      "rule": "PASS requires every NFR to have PASS status and no blockers or concerns to exist.",
+      "requiredPhrase": "All NFRs have PASS status"
+    }
+  },
+  "negativeControls": [
+    {
+      "id": "prose-claim-is-not-evidence",
+      "what": "A sentence in the tech spec asserting the service is well covered is not a coverage report, and a run that passes maintainability on it has passed on an assertion.",
+      "howToExercise": "The gapped bundle states an 80% coverage threshold and carries no coverage report. Maintainability is undecidable there, so a PASS is counted as an unsupported PASS."
+    },
+    {
+      "id": "no-threshold-invention",
+      "what": "A run must not supply a threshold the bundle never states. The workflow's checklist forbids a guessed or inferred threshold outright.",
+      "howToExercise": "The gapped bundle states no performance target. The threshold-fidelity check requires the performance section to record its threshold as UNKNOWN."
+    },
+    {
+      "id": "no-evidence-invention",
+      "what": "A run must not cite an evidence file the bundle does not contain. A citation of a file nobody shipped is worse than no citation, because it reads as grounding.",
+      "howToExercise": "Every file-shaped evidence citation is resolved against the staged bundle by basename; one that resolves to nothing is counted as fabricated."
+    },
+    {
+      "id": "no-finding-against-a-clean-bundle",
+      "what": "A run must report no gap, no CONCERNS, and no FAIL against a bundle whose every threshold is stated and met.",
+      "howToExercise": "The clean bundle's four domains are all PASS. A domain below PASS, a listed evidence gap, or a threshold recorded as UNKNOWN counts as a clean false positive."
+    },
+    {
+      "id": "evidence-bundle-is-read-only",
+      "what": "The workflow audits evidence and produces none. A run that writes into the bundle it was handed has changed the benchmark the next run is measured against.",
+      "howToExercise": "The harness digests the staged bundle before and after every run; a changed or added file is a fixture mutation."
+    }
+  ],
+  "rejectedCases": [
+    {
+      "id": "absent-evidence-bundle",
+      "why": "A bundle with no evidence at all would make every domain CONCERNS for one obvious reason, and a run could clear the suite by never passing anything. Each bundle here carries evidence that looks thorough, which is what makes the two undecidable domains a real temptation."
+    },
+    {
+      "id": "domain-marked-not-applicable",
+      "why": "A domain the corpus expects to be N/A is a domain nothing measures, and Step 4 dispatches a worker for all four. Every domain here reaches a decidable PASS, CONCERNS, or FAIL."
+    }
+  ],
+  "fixtureSets": [
+    {
+      "id": "gapped-harbor-billing-ledger",
+      "root": "gapped",
+      "projectRoot": "harbor-billing-ledger",
+      "title": "A ledger service whose evidence is thorough in two domains, breached in one, and absent in one",
+      "thresholdSource": "docs/tech-spec.md",
+      "evidenceFiles": [
+        "docs/tech-spec.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/reliability-2026-08.json",
+        "config/logging.json"
+      ],
+      "expectedOverallStatus": "FAIL",
+      "expectedUnknownThresholdDeclared": true,
+      "domains": {
+        "security": {
+          "expectedStatus": "PASS",
+          "isUndecidable": false,
+          "rule": "passNeedsEvidenceMeetingThreshold",
+          "thresholdStated": true,
+          "thresholdTokens": [
+            "0 critical",
+            "no critical",
+            "zero critical",
+            "15 minute",
+            "15-minute",
+            "tls 1.3",
+            "aes-256",
+            "rbac"
+          ],
+          "why": "Every security requirement in the tech spec has evidence that meets it: 15-minute OAuth 2.1 tokens verified by test, tenant-scoped RBAC refused on all five statement routes, AES-256 at rest with TLS 1.3 in transit, and a release scan at 0 critical and 0 high. Compliance is confirmed out of scope in writing rather than left to be inferred from silence.",
+          "criteria": [
+            {
+              "name": "Authentication Strength",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/security-review-2026-08-29.md"
+              ]
+            },
+            {
+              "name": "Authorization Controls",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/security-review-2026-08-29.md"
+              ]
+            },
+            {
+              "name": "Data Protection",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/security-review-2026-08-29.md"
+              ]
+            },
+            {
+              "name": "Vulnerability Management",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/dependency-scan-2026-08-30.json"
+              ]
+            },
+            {
+              "name": "Compliance",
+              "expectedStatus": "N/A",
+              "evidence": [
+                "evidence/security-review-2026-08-29.md",
+                "docs/tech-spec.md"
+              ]
+            }
+          ]
+        },
+        "performance": {
+          "expectedStatus": "CONCERNS",
+          "isUndecidable": true,
+          "rule": "undefinedThresholdIsConcerns",
+          "thresholdStated": false,
+          "thresholdTokens": [],
+          "why": "The load test is real, recent, and healthy: p95 214 ms, 344 requests per second, peak CPU 58% and peak heap 61%. The tech spec records no response-time, throughput, or resource-usage target and says so in as many words. With no threshold to judge the numbers against, every performance finding is CONCERNS and a PASS is an unsupported PASS.",
+          "criteria": [
+            {
+              "name": "Response Time (p95)",
+              "expectedStatus": "CONCERNS",
+              "evidence": [
+                "evidence/load-test-2026-08-28.json"
+              ]
+            },
+            {
+              "name": "Throughput",
+              "expectedStatus": "CONCERNS",
+              "evidence": [
+                "evidence/load-test-2026-08-28.json"
+              ]
+            },
+            {
+              "name": "Resource Usage: CPU",
+              "expectedStatus": "CONCERNS",
+              "evidence": [
+                "evidence/load-test-2026-08-28.json"
+              ]
+            },
+            {
+              "name": "Resource Usage: Memory",
+              "expectedStatus": "CONCERNS",
+              "evidence": [
+                "evidence/load-test-2026-08-28.json"
+              ]
+            }
+          ]
+        },
+        "reliability": {
+          "expectedStatus": "FAIL",
+          "isUndecidable": false,
+          "rule": "failIsEvidenceBelowThreshold",
+          "thresholdStated": true,
+          "thresholdTokens": [
+            "0.5%",
+            "0.5 %",
+            "99.5%",
+            "99.5 %",
+            "15 minute",
+            "15-minute"
+          ],
+          "why": "The tech spec sets the monthly 5xx rate below 0.5% and the observability export records 1.94%. Evidence exists and does not meet the threshold, which is the checklist's FAIL limb. Availability, MTTR, fault tolerance, burn-in, and the disaster-recovery drill all meet their thresholds, and the domain is still FAIL because one breached threshold is the worst status in the section.",
+          "criteria": [
+            {
+              "name": "Availability (Uptime)",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-08.json"
+              ]
+            },
+            {
+              "name": "Error Rate",
+              "expectedStatus": "FAIL",
+              "evidence": [
+                "evidence/reliability-2026-08.json"
+              ]
+            },
+            {
+              "name": "MTTR",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-08.json"
+              ]
+            },
+            {
+              "name": "Fault Tolerance",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-08.json"
+              ]
+            },
+            {
+              "name": "CI Burn-In",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-08.json"
+              ]
+            },
+            {
+              "name": "Disaster Recovery",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-08.json"
+              ]
+            }
+          ]
+        },
+        "maintainability": {
+          "expectedStatus": "CONCERNS",
+          "isUndecidable": true,
+          "rule": "missingEvidenceIsConcerns",
+          "thresholdStated": true,
+          "thresholdTokens": [
+            "80%",
+            "80 %",
+            "80 percent",
+            "0 critical"
+          ],
+          "why": "The tech spec sets statement coverage at or above 80% and the bundle carries no coverage report. The only thing standing in for one is an engineering note asserting the service is well covered, which is a claim rather than a measurement. Evidence is missing for the category, so the category is CONCERNS and a PASS is an unsupported PASS. Duplication has neither a threshold nor a report; the dependency scan and the logging configuration are real and pass.",
+          "criteria": [
+            {
+              "name": "Test Coverage",
+              "expectedStatus": "CONCERNS",
+              "evidence": []
+            },
+            {
+              "name": "Code Duplication",
+              "expectedStatus": "CONCERNS",
+              "evidence": []
+            },
+            {
+              "name": "Vulnerability Scan",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/dependency-scan-2026-08-30.json"
+              ]
+            },
+            {
+              "name": "Observability",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "config/logging.json"
+              ]
+            }
+          ]
+        }
+      },
+      "mustNotReport": [
+        "A performance threshold of any value. The bundle states none, and a run that supplies one has guessed.",
+        "Maintainability PASS on the strength of the engineering note in section 3 of the tech spec.",
+        "An evidence file the bundle does not carry, in particular a coverage report or a duplication report."
+      ]
+    },
+    {
+      "id": "clean-atlas-notification-relay",
+      "root": "clean",
+      "projectRoot": "atlas-notification-relay",
+      "title": "A relay service whose every threshold is stated and met",
+      "thresholdSource": "docs/tech-spec.md",
+      "evidenceFiles": [
+        "docs/tech-spec.md",
+        "evidence/security-review-2026-09-01.md",
+        "evidence/dependency-scan-2026-09-01.json",
+        "evidence/load-test-2026-09-02.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/coverage-summary-2026-09-01.json",
+        "evidence/duplication-report-2026-09-01.json",
+        "config/logging.json"
+      ],
+      "expectedOverallStatus": "PASS",
+      "expectedUnknownThresholdDeclared": false,
+      "domains": {
+        "security": {
+          "expectedStatus": "PASS",
+          "isUndecidable": false,
+          "rule": "passNeedsEvidenceMeetingThreshold",
+          "thresholdStated": true,
+          "thresholdTokens": [
+            "0 critical",
+            "no critical",
+            "zero critical",
+            "15 minute",
+            "15-minute",
+            "tls 1.3",
+            "aes-256",
+            "rbac",
+            "gdpr"
+          ],
+          "why": "Every security requirement has evidence that meets it, including the one the gapped bundle rules out of scope: GDPR applies here, the data-processing record is current, and the 24-hour retention control was audited across 1.2 million messages.",
+          "criteria": [
+            {
+              "name": "Authentication Strength",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/security-review-2026-09-01.md"
+              ]
+            },
+            {
+              "name": "Authorization Controls",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/security-review-2026-09-01.md"
+              ]
+            },
+            {
+              "name": "Data Protection",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/security-review-2026-09-01.md"
+              ]
+            },
+            {
+              "name": "Vulnerability Management",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/dependency-scan-2026-09-01.json"
+              ]
+            },
+            {
+              "name": "Compliance",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/security-review-2026-09-01.md"
+              ]
+            }
+          ]
+        },
+        "performance": {
+          "expectedStatus": "PASS",
+          "isUndecidable": false,
+          "rule": "passNeedsEvidenceMeetingThreshold",
+          "thresholdStated": true,
+          "thresholdTokens": [
+            "300 ms",
+            "300ms",
+            "250 rps",
+            "250 request",
+            "70%",
+            "75%"
+          ],
+          "why": "All four performance targets are stated in the tech spec and carried into the load test as declared targets: p95 168 ms against 300, 402 requests per second against 250, peak CPU 51% against 70, peak heap 62% against 75.",
+          "criteria": [
+            {
+              "name": "Response Time (p95)",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/load-test-2026-09-02.json"
+              ]
+            },
+            {
+              "name": "Throughput",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/load-test-2026-09-02.json"
+              ]
+            },
+            {
+              "name": "Resource Usage: CPU",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/load-test-2026-09-02.json"
+              ]
+            },
+            {
+              "name": "Resource Usage: Memory",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/load-test-2026-09-02.json"
+              ]
+            }
+          ]
+        },
+        "reliability": {
+          "expectedStatus": "PASS",
+          "isUndecidable": false,
+          "rule": "passNeedsEvidenceMeetingThreshold",
+          "thresholdStated": true,
+          "thresholdTokens": [
+            "99.9%",
+            "99.9 %",
+            "0.5%",
+            "0.5 %",
+            "15 minute",
+            "15-minute",
+            "4 hour"
+          ],
+          "why": "Uptime 99.96% against 99.9%, a 0.07% error rate against a 0.5% ceiling, MTTR 6 minutes against 15, a circuit breaker exercised by a real incident, 312 consecutive green runs against a floor of 100, and a disaster-recovery drill at RTO 1.5 hours and RPO 6 minutes against 4 hours and 15 minutes.",
+          "criteria": [
+            {
+              "name": "Availability (Uptime)",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-09.json"
+              ]
+            },
+            {
+              "name": "Error Rate",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-09.json"
+              ]
+            },
+            {
+              "name": "MTTR",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-09.json"
+              ]
+            },
+            {
+              "name": "Fault Tolerance",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-09.json"
+              ]
+            },
+            {
+              "name": "CI Burn-In",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-09.json"
+              ]
+            },
+            {
+              "name": "Disaster Recovery",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/reliability-2026-09.json"
+              ]
+            }
+          ]
+        },
+        "maintainability": {
+          "expectedStatus": "PASS",
+          "isUndecidable": false,
+          "rule": "passNeedsEvidenceMeetingThreshold",
+          "thresholdStated": true,
+          "thresholdTokens": [
+            "80%",
+            "80 %",
+            "80 percent",
+            "5%",
+            "5 %",
+            "0 critical"
+          ],
+          "why": "Coverage 88.4% against an 80% floor with three builds of rising trend, duplication 2.1% against a 5% ceiling, a dependency scan at 0 critical and 0 high, and a structured-logging schema with an automated format assertion beside a configured error tracker.",
+          "criteria": [
+            {
+              "name": "Test Coverage",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/coverage-summary-2026-09-01.json"
+              ]
+            },
+            {
+              "name": "Code Duplication",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/duplication-report-2026-09-01.json"
+              ]
+            },
+            {
+              "name": "Vulnerability Scan",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "evidence/dependency-scan-2026-09-01.json"
+              ]
+            },
+            {
+              "name": "Observability",
+              "expectedStatus": "PASS",
+              "evidence": [
+                "config/logging.json"
+              ]
+            }
+          ]
+        }
+      },
+      "mustNotReport": [
+        "Any domain below PASS. Every threshold this bundle states is met by a file in it.",
+        "Any evidence gap. Nothing is missing.",
+        "Any threshold recorded as UNKNOWN. All four domains state theirs."
+      ]
+    }
+  ]
+}

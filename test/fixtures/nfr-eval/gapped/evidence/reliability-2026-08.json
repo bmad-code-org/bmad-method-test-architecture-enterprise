@@ -1,0 +1,20 @@
+{
+  "source": "platform observability export",
+  "window": "2026-08-01T00:00:00Z/2026-08-31T23:59:59Z",
+  "service": "harbor-billing-ledger",
+  "availability": { "uptime_pct": 99.71, "downtime_minutes": 128 },
+  "errors": {
+    "requests": 18420000,
+    "server_errors": 357348,
+    "error_rate_pct": 1.94,
+    "top_error": "500 from POST /v2/tenants/{tenant}/statements:generate during the close window"
+  },
+  "incidents": [
+    { "id": "INC-4471", "opened": "2026-08-03T01:14:00Z", "restored_minutes": 9, "summary": "statement worker pool exhaustion" },
+    { "id": "INC-4498", "opened": "2026-08-17T23:52:00Z", "restored_minutes": 13, "summary": "ledger write retries saturated the primary" }
+  ],
+  "mttr_minutes": 11,
+  "failover_drill": { "date": "2026-08-12", "result": "passed", "observed_failover_seconds": 38, "data_loss": "none" },
+  "ci_burn_in": { "suite": "ledger", "consecutive_green_runs": 214, "last_failure": "2026-06-30" },
+  "disaster_recovery_drill": { "date": "2026-08-19", "result": "passed", "observed_rto_hours": 2.5, "observed_rpo_minutes": 8 }
+}

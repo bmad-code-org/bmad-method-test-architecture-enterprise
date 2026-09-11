@@ -1,0 +1,118 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: domainStatusAccuracy is 0.875, which admits one wrong judgment of the",
+    "eight this corpus holds and no more, and until this case no stored report carried two. A bar nothing",
+    "has ever been seen failing is a bar nobody has checked.",
+    "",
+    "The two wrong judgments are swapped rather than piled up. The run reads the dependency scan's three",
+    "moderate findings as blocking and fails Security, which the bundle's stated threshold passes on 0",
+    "critical and 0 high; and it reads the 1.94% monthly 5xx rate against a stated 0.5% ceiling as a",
+    "caveat on one endpoint, which drops Reliability from FAIL to CONCERNS. Both domains are decidable, so",
+    "undecidableDomainAccuracy is untouched and this case rests on domainStatusAccuracy alone.",
+    "",
+    "The headline survives the swap. Security FAIL rolls the four statuses up to FAIL, which is what the",
+    "bundle expects, so the run publishes the right overall status having blamed the wrong domain for it.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-two-domains-misjudged",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Security: three PASS, one FAIL and one N/A, so FAIL against an expected PASS. Reliability: five PASS",
+    "and one CONCERNS, so CONCERNS against an expected FAIL. Two status misses, neither on an undecidable",
+    "domain. Performance and maintainability are gapped-correct-audit's and still right.",
+    "",
+    "Two of the four domains of this bundle are wrong, and the corpus scores eight domain judgments across",
+    "its two bundles, so a run of both that is otherwise correct measures 6 of 8, which is 0.75 against a",
+    "bar of 0.875.",
+    "",
+    "Unsupported PASS: none. Neither wrong judgment is a PASS, and neither domain is undecidable.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Thresholds: both edited findings keep the threshold line they had, because the run's error is the",
+    "judgment rather than the target. Security still names 0 critical, reliability still names 0.5%,",
+    "maintainability names 80% and performance records UNKNOWN. 4 of 4. That is what isolates this case",
+    "to the status reading: a run can quote a threshold correctly and still judge it wrong.",
+    "",
+    "Overall: the Gate YAML says FAIL, which is what the run's own four statuses roll up to and what the",
+    "bundle expects, so the check passes. Unknown threshold: the document carries the word.",
+    "",
+    "Evidence: gapped-correct-audit's nineteen citations, unchanged, because both edited findings keep the Evidence line",
+    "they had. Every one is a file the bundle carries, so nothing is fabricated. One evidence gap is listed, for the",
+    "missing coverage report. cleanFalsePositives is 0 because this is not the clean bundle.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "FAIL",
+      "reliability": "CONCERNS",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": ["security reported FAIL, expected PASS", "reliability reported CONCERNS, expected FAIL"],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

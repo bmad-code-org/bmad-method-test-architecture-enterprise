@@ -1,4 +1,101 @@
 {
+  "nfr": {
+    "contractId": "tea-nfr-behavioral",
+    "corpusDigest": "sha256:a91bcc1812ea02c218457df3243b003111bd21660ab73140c5b43a4f83ed7af1",
+    "probeCount": 4,
+    "strength": {
+      "defect": {
+        "exercised": 0,
+        "caught": 0,
+        "rate": null
+      },
+      "gameability": null,
+      "zero-action": null
+    },
+    "unsatisfiedCoverageRules": [
+      "malformed-input",
+      "omission-and-completeness",
+      "per-record",
+      "state-change-read-back",
+      "success-indicator-separation"
+    ],
+    "probes": {
+      "P-001": {
+        "probeClass": "defect",
+        "expectedClean": false,
+        "behaviorId": "B-003",
+        "preflight": "passed",
+        "preflightLegs": 3,
+        "verdict": null,
+        "exitCode": 3,
+        "strictPromotable": true,
+        "basis": ["oracle resolved infrastructure-error"],
+        "qualification": [
+          "condition-artifact-channel-contract-local",
+          "condition-artifact-channel-contract-local",
+          "condition-artifact-channel-contract-local"
+        ],
+        "strength": null
+      },
+      "P-002": {
+        "probeClass": "defect",
+        "expectedClean": false,
+        "behaviorId": "B-002",
+        "preflight": "passed",
+        "preflightLegs": 3,
+        "verdict": null,
+        "exitCode": 3,
+        "strictPromotable": true,
+        "basis": ["oracle resolved infrastructure-error"],
+        "qualification": [
+          "condition-artifact-channel-contract-local",
+          "condition-artifact-channel-contract-local",
+          "condition-artifact-channel-contract-local"
+        ],
+        "strength": null
+      },
+      "P-003": {
+        "probeClass": "defect",
+        "expectedClean": false,
+        "behaviorId": "B-002",
+        "preflight": "passed",
+        "preflightLegs": 3,
+        "verdict": null,
+        "exitCode": 3,
+        "strictPromotable": true,
+        "basis": ["oracle resolved infrastructure-error"],
+        "qualification": [
+          "condition-artifact-channel-contract-local",
+          "condition-artifact-channel-contract-local",
+          "condition-artifact-channel-contract-local"
+        ],
+        "strength": null
+      },
+      "P-004": {
+        "probeClass": "zero-action",
+        "expectedClean": true,
+        "behaviorId": "B-006",
+        "preflight": "passed",
+        "preflightLegs": 2,
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "strictPromotable": true,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap omission-and-completeness unsatisfied at or above the severity floor",
+          "coverage gap per-record unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap success-indicator-separation unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": null,
+          "gameability": null,
+          "zero-action": null
+        }
+      }
+    }
+  },
   "tea-routing-intents": {
     "contractId": "tea-routing-intents-behavioral",
     "corpusDigest": "sha256:d635cfdf72fcd249df5c3d6827ff2c2cad49116b483143a9c9c9573262259c5f",

@@ -47,6 +47,10 @@ const { loadCorpus } = require('./corpus-port');
 // step's stdin literal. One function on both sides is the whole guard; `legs` in
 // traceEvidence says what a restated prompt would cost.
 const { buildPrompt: buildTracePrompt } = require('../eval-trace');
+// The same rule for the nfr contract, whose plan steps bind the same function's
+// output as their stdin literal; `legs` in nfrEvidence says what a restated prompt
+// would cost.
+const { buildPrompt: buildNfrPrompt } = require('../eval-nfr');
 // The routing evidence sends the prompt the live run sends, for the reason the
 // trace evidence does: the plan binds standard input as a literal, so a described
 // prompt selects nothing and the record is scored against no evidence at all.
@@ -532,6 +536,177 @@ function testDesignEvidence(contract) {
 }
 
 // ---------------------------------------------------------------------------
+// evidence: nfr
+// ---------------------------------------------------------------------------
+
+/** The one artifact an nfr run leaves behind, as the stored case for one evidence bundle holds it. */
+function nfrArtifacts(caseId) {
+  return {
+    report: { kind: 'text', value: fs.readFileSync(path.join(REPLAY_ROOT, 'nfr', caseId, 'test-artifacts', 'nfr-assessment.md'), 'utf8') },
+  };
+}
+
+/** The `custom_nfr_categories` value one assembled prompt carries, which is empty on every leg but one. */
+const NFR_CUSTOM_CATEGORIES = /`custom_nfr_categories`: `([^`]*)`/;
+
+/**
+ * The report a run given a custom NFR category writes.
+ *
+ * step-02 adds any `custom_nfr_categories` it is given to the categories it
+ * elicits, and `nfr-report-template.md` carries a Custom NFR Evidence Audits
+ * section for them, so the same bundle audited with one named produces a report
+ * that names it and one audited with none produces a report that does not. That
+ * difference is the contract's sensitivity witness, so the stored report answers
+ * both legs and the section is what the prompt adds to it.
+ *
+ * @param {string} report The stored audit of the bundle the leg named.
+ * @param {string[]} categories
+ * @returns {string}
+ */
+function withCustomCategories(report, categories) {
+  return [
+    report,
+    '## Custom NFR Evidence Audits',
+    '',
+    ...categories.flatMap((name) => [
+      `### ${name}`,
+      '',
+      '- **Status:** PASS',
+      '- **Threshold:** The category was requested by the run configuration and is audited against the same bundle.',
+      '- **Actual:** Assessed from the evidence the bundle carries.',
+      '- **Evidence:** `docs/tech-spec.md`',
+      '',
+    ]),
+  ].join('\n');
+}
+
+function nfrEvidence(contract) {
+  const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval', 'ground-truth.json'));
+
+  /**
+   * One entry per evidence bundle: the plan step that audits it, the stored run
+   * its project root names, and the prompt the harness assembles for it.
+   *
+   * `buildNfrPrompt` is test/eval-nfr.js's own `buildPrompt`, which is also what
+   * tools/generate-contracts.js calls to build each step's stdin literal. A
+   * literal is compared with `deepEquals`, so a prompt restated here in any other
+   * form would select nothing, all eight oracles would resolve `unreached`, and
+   * the run would report clean at exit 0 having examined no evidence. The equality
+   * below is the tripwire: the prompt this record will carry is checked against
+   * the literal the contract on disk binds, so a divergence fails the run where it
+   * would otherwise pass it silently.
+   *
+   * The plan steps are generated one per bundle in the order the ground truth
+   * lists them, which is why a step is paired with a bundle by position and then
+   * held to its own literal.
+   */
+  const legs = groundTruth.fixtureSets.map((set, index) => {
+    const gapped = Object.values(set.domains ?? {}).some((domain) => domain.isUndecidable === true);
+    const step = contract.interactionPlan[index];
+    const prompt = buildNfrPrompt(set);
+    if (step?.inputBinding.stdin?.prompt?.literal !== prompt) {
+      throw new Error(
+        `${step?.stepId ?? `interactionPlan[${index}]`} binds a stdin literal that is not the prompt the harness assembles for ${set.id}; run node tools/generate-contracts.js`,
+      );
+    }
+    return {
+      caseId: gapped ? 'gapped-correct-audit' : 'clean-correct-audit',
+      observationId: gapped ? 'nfr-gapped-run' : 'nfr-clean-run',
+      gapped,
+      projectRoot: set.projectRoot,
+      step,
+      prompt,
+    };
+  });
+
+  // The stored run each bundle's project root names. An nfr prompt is written
+  // against one project root, and that root is the only thing in the request that
+  // says which bundle the leg is asking for, so it is what the port stages against.
+  const caseByProjectRoot = new Map(legs.map((leg) => [leg.projectRoot, leg.caseId]));
+  const gappedCaseId = legs.find((leg) => leg.gapped).caseId;
+
+  return {
+    /**
+     * Two things decide a leg's answer, and both are in its request. The project
+     * root the prompt is written against says which evidence bundle was staged, so
+     * a leg naming the gapped bundle's root gets the audit of that bundle and a leg
+     * naming the clean bundle's root gets the audit of the clean one. Then
+     * `custom_nfr_categories` decides the rest: a leg naming one gets the report a
+     * run given that category writes, and a leg naming none gets the report as it
+     * is stored.
+     */
+    answer(request) {
+      const prompt = String(request.channels.stdin?.value ?? '');
+      const matched = [...caseByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
+      if (matched === undefined) {
+        throw new Error('an nfr leg sent a prompt naming no evidence bundle project root, so no staged run answers it');
+      }
+      const artifacts = nfrArtifacts(matched[1]);
+      const categories = (NFR_CUSTOM_CATEGORIES.exec(prompt)?.[1] ?? '')
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      if (categories.length > 0) {
+        artifacts.report = { kind: 'text', value: withCustomCategories(artifacts.report.value, categories) };
+      }
+      return { exitCode: 0, stdout: { kind: 'text', value: '' }, stderr: { kind: 'text', value: '' }, artifacts };
+    },
+    recordInputs(probe) {
+      const clean = probe.expectedClean;
+      // The clean control's record carries both audits, for the reason the trace
+      // control does: each step binds its own bundle's prompt as a literal, so the
+      // gapped step selects the gapped observation and the clean step selects the
+      // clean one, and the oracles of each read the report their own bundle
+      // produced. With one observation the other step selects nothing and its four
+      // oracles resolve against no interaction at all.
+      //
+      // A defect probe carries its gapped audit alone. AD-9's qualification gate
+      // resolves every one of its oracles before a selection is read, so a second
+      // observation would add evidence nothing reaches.
+      const selected = clean ? legs : legs.filter((leg) => leg.caseId === gappedCaseId);
+      const observations = selected.map((leg, index) =>
+        recordObservation({
+          observationId: leg.observationId,
+          sequence: index + 1,
+          operationId: leg.step.operationId,
+          callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
+          stdout: { kind: 'text', value: '' },
+          stderr: { kind: 'text', value: '' },
+          exitCode: 0,
+          artifacts: nfrArtifacts(leg.caseId),
+        }),
+      );
+      // Every nfr oracle reads one step's interaction, so its disposition cites that
+      // step's observation. A record carrying one audit has nothing of the other
+      // step's to cite, and a `held` disposition citing nothing is scored as an
+      // unsupported claim, so those oracles cite the audit the record does carry.
+      const observationIdByStep = new Map(selected.map((leg) => [leg.step.stepId, leg.observationId]));
+      const stepOf = (pointer) => String(pointer).split('/')[2];
+      const citedObservationId = (oracle) => {
+        const target = (oracle.direction?.evidenceTargets ?? []).find((pointer) => observationIdByStep.has(stepOf(pointer)));
+        return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
+      };
+      return {
+        observations,
+        findings: [],
+        // Both stored audits are correct ones: four domain sections, the overall
+        // status their own sections roll up to, and the UNKNOWN spelling on the
+        // bundle that leaves a threshold unstated and nowhere else. Every oracle
+        // held on the evidence the harness read.
+        oracleDispositions: contract.oracles.map((oracle) => ({
+          oracleId: oracle.id,
+          disposition: 'held',
+          observationIds: [citedObservationId(oracle)],
+          note: null,
+        })),
+        evaluatorRecommendation: 'PASS',
+        conditionArm: clean ? 'clean-correct-audit' : gappedCaseId,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // evidence: fragment selection
 // ---------------------------------------------------------------------------
 
@@ -787,6 +962,14 @@ function routingEvidence(contract) {
  */
 async function suites() {
   const entries = [
+    // The nfr entry leads the list so its id sorts ahead of every other, which
+    // keeps a sibling branch adding an entry of its own out of this one's lines.
+    {
+      id: 'nfr',
+      contractPath: path.join(CONTRACT_ROOT, 'nfr.contract.json'),
+      probesPath: path.join(PROBE_ROOT, 'nfr.probes.json'),
+      evidenceFor: nfrEvidence,
+    },
     ...ROUTING_CONTRACTS.map((spec) => ({
       id: spec.relativePath.replace('.contract.json', ''),
       contractPath: path.join(CONTRACT_ROOT, spec.relativePath),

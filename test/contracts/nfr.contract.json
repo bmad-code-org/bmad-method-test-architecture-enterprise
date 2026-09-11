@@ -1,0 +1,730 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-nfr-behavioral",
+  "sourceSpecDigest": "sha256:1e95e4b6491c12e5db35f279d76998a63a83bf2022b09c480c003a2f63a29ffd",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "gapped-harbor-billing-ledger: the report declares a section for each of the four domains Step 4 dispatches a worker for. A report missing one has left a dispatched domain unreported, whatever it said about the rest.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each report declares an Assessment section for every one of the four domains Step 4 dispatches a worker for.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "gapped-harbor-billing-ledger/domains"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "domain-left-unreported"
+        }
+      ],
+      "oracles": ["O-001"]
+    },
+    {
+      "id": "B-002",
+      "description": "gapped-harbor-billing-ledger: the Gate YAML publishes overall_status FAIL, which is what the four domain statuses roll up to under the checklist's own gate rules. A run publishing anything else has a headline its own sections do not support.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The report for the bundle with known gaps records a threshold as UNKNOWN and publishes the overall status its own domain statuses roll up to.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "gapped-harbor-billing-ledger/domains[isUndecidable]"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unsupported-pass-published-as-a-grounded-one"
+        }
+      ],
+      "oracles": ["O-002"]
+    },
+    {
+      "id": "B-003",
+      "description": "gapped-harbor-billing-ledger: the report records a threshold as UNKNOWN, which is the workflow's own spelling for a target no source states. This bundle leaves one unstated, so a report carrying the word noticed it and a report without it supplied a target the bundle never gave.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The report for the bundle with known gaps records a threshold as UNKNOWN and publishes the overall status its own domain statuses roll up to.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "gapped-harbor-billing-ledger/domains[isUndecidable]"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unsupported-pass-published-as-a-grounded-one"
+        }
+      ],
+      "oracles": ["O-003"]
+    },
+    {
+      "id": "B-004",
+      "description": "gapped-harbor-billing-ledger: the run wrote the report the workflow declares and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad audit.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each run left the report the workflow declares on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "gapped-harbor-billing-ledger/evidenceFiles"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-004"]
+    },
+    {
+      "id": "B-005",
+      "description": "clean-atlas-notification-relay: the report declares a section for each of the four domains Step 4 dispatches a worker for. A report missing one has left a dispatched domain unreported, whatever it said about the rest.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each report declares an Assessment section for every one of the four domains Step 4 dispatches a worker for.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-atlas-notification-relay/domains"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "domain-left-unreported"
+        }
+      ],
+      "oracles": ["O-005"]
+    },
+    {
+      "id": "B-006",
+      "description": "clean-atlas-notification-relay: the Gate YAML publishes overall_status PASS, which is what the four domain statuses roll up to under the checklist's own gate rules. A run publishing anything else has a headline its own sections do not support.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The report for the bundle whose every threshold is stated and met records no threshold as UNKNOWN and publishes a PASS overall status.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-atlas-notification-relay/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-006"]
+    },
+    {
+      "id": "B-007",
+      "description": "clean-atlas-notification-relay: no threshold in the report is recorded as UNKNOWN. Every domain of this bundle states its own target, so the word appearing at all is a gap the run invented.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The report for the bundle whose every threshold is stated and met records no threshold as UNKNOWN and publishes a PASS overall status.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-atlas-notification-relay/mustNotReport"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "reports-gaps-everywhere"
+        }
+      ],
+      "oracles": ["O-007"]
+    },
+    {
+      "id": "B-008",
+      "description": "clean-atlas-notification-relay: the run wrote the report the workflow declares and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad audit.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each run left the report the workflow declares on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "clean-atlas-notification-relay/evidenceFiles"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-008"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "gapped-harbor-billing-ledger: the report declares a section for each of the four domains Step 4 dispatches a worker for. A report missing one has left a dispatched domain unreported, whatever it said about the rest.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The domain section headings of the report written for gapped-harbor-billing-ledger.",
+        "negativeDomain": "A run that omits the Assessment section of any of performance, security, reliability, maintainability.",
+        "evidenceTargets": ["/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+              },
+              {
+                "literal": "# Performance Assessment"
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+              },
+              {
+                "literal": "# Security Assessment"
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+              },
+              {
+                "literal": "# Reliability Assessment"
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+              },
+              {
+                "literal": "# Maintainability Assessment"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "gapped-harbor-billing-ledger: the Gate YAML publishes overall_status FAIL, which is what the four domain statuses roll up to under the checklist's own gate rules. A run publishing anything else has a headline its own sections do not support.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "any",
+        "scope": "The overall_status scalar in the Gate YAML snippet of the report written for gapped-harbor-billing-ledger.",
+        "negativeDomain": "A run publishing any overall status other than FAIL, or publishing none at all.",
+        "evidenceTargets": ["/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"]
+      },
+      "check": {
+        "op": "any",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+              },
+              {
+                "literal": "overall_status: 'FAIL'"
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+              },
+              {
+                "literal": "overall_status: \"FAIL\""
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+              },
+              {
+                "literal": "overall_status: FAIL"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "gapped-harbor-billing-ledger: the report records a threshold as UNKNOWN, which is the workflow's own spelling for a target no source states. This bundle leaves one unstated, so a report carrying the word noticed it and a report without it supplied a target the bundle never gave.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The report written for gapped-harbor-billing-ledger, read as one document.",
+        "negativeDomain": "A run that supplied its own target for a threshold no source in the bundle states.",
+        "evidenceTargets": ["/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+          },
+          {
+            "literal": "UNKNOWN"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "gapped-harbor-billing-ledger: the run wrote the report the workflow declares and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad audit.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the report artifact of the run for gapped-harbor-billing-ledger.",
+        "negativeDomain": "A run that left no report behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report",
+          "/interactions/nfr-gapped-harbor-billing-ledger/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-gapped-harbor-billing-ledger/artifact/report"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "clean-atlas-notification-relay: the report declares a section for each of the four domains Step 4 dispatches a worker for. A report missing one has left a dispatched domain unreported, whatever it said about the rest.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The domain section headings of the report written for clean-atlas-notification-relay.",
+        "negativeDomain": "A run that omits the Assessment section of any of performance, security, reliability, maintainability.",
+        "evidenceTargets": ["/interactions/nfr-clean-atlas-notification-relay/artifact/report"]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              },
+              {
+                "literal": "# Performance Assessment"
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              },
+              {
+                "literal": "# Security Assessment"
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              },
+              {
+                "literal": "# Reliability Assessment"
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              },
+              {
+                "literal": "# Maintainability Assessment"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "clean-atlas-notification-relay: the Gate YAML publishes overall_status PASS, which is what the four domain statuses roll up to under the checklist's own gate rules. A run publishing anything else has a headline its own sections do not support.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "any",
+        "scope": "The overall_status scalar in the Gate YAML snippet of the report written for clean-atlas-notification-relay.",
+        "negativeDomain": "A run publishing any overall status other than PASS, or publishing none at all.",
+        "evidenceTargets": ["/interactions/nfr-clean-atlas-notification-relay/artifact/report"]
+      },
+      "check": {
+        "op": "any",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              },
+              {
+                "literal": "overall_status: 'PASS'"
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              },
+              {
+                "literal": "overall_status: \"PASS\""
+              }
+            ]
+          },
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              },
+              {
+                "literal": "overall_status: PASS"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-007",
+      "polarity": "expects-hold",
+      "commentary": "clean-atlas-notification-relay: no threshold in the report is recorded as UNKNOWN. Every domain of this bundle states its own target, so the word appearing at all is a gap the run invented.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The report written for clean-atlas-notification-relay, read as one document.",
+        "negativeDomain": "A run that recorded a threshold as unknown on a bundle that states every one of them.",
+        "evidenceTargets": ["/interactions/nfr-clean-atlas-notification-relay/artifact/report"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              },
+              {
+                "literal": "UNKNOWN"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-008",
+      "polarity": "expects-hold",
+      "commentary": "clean-atlas-notification-relay: the run wrote the report the workflow declares and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad audit.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the report artifact of the run for clean-atlas-notification-relay.",
+        "negativeDomain": "A run that left no report behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/nfr-clean-atlas-notification-relay/artifact/report",
+          "/interactions/nfr-clean-atlas-notification-relay/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-clean-atlas-notification-relay/artifact/report"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-nfr-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "audit-evidence-bundle",
+          "invocation": {
+            "executable": "tea-nfr-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": true,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": ["agent"],
+              "permittedKeys": ["agent", "agent-cmd", "agent-arg", "env-pass", "model", "timeout-ms"],
+              "types": {
+                "agent": "string",
+                "agent-cmd": "string",
+                "agent-arg": "string",
+                "env-pass": "string",
+                "model": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "HOME", "OPENAI_API_KEY", "USER"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "HOME": "string",
+                "OPENAI_API_KEY": "string",
+                "USER": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": ["report"],
+          "descriptorChannel": {
+            "kind": "artifact",
+            "artifactId": "report"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [],
+            "permittedKeys": [],
+            "types": {},
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "custom-category-follows-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-custom-category-named",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `atlas-notification-relay/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `atlas-notification-relay`\n- `{config_source}`: `atlas-notification-relay/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `atlas-notification-relay/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: `Data Residency`\n\nThe NFR requirements and the thresholds for this service are stated under `atlas-notification-relay/docs/`. The\nevidence to audit them against is what you find under `atlas-notification-relay/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\n\n----- what to produce -----\nWrite `atlas-notification-relay/test-artifacts/nfr-assessment.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `atlas-notification-relay/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status`.\n\nDo not add, edit, or delete any file under `atlas-notification-relay/docs/`, `atlas-notification-relay/evidence/`, or\n`atlas-notification-relay/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+                  }
+                }
+              },
+              {
+                "legId": "witness-custom-category-absent",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `atlas-notification-relay/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `atlas-notification-relay`\n- `{config_source}`: `atlas-notification-relay/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `atlas-notification-relay/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `atlas-notification-relay/docs/`. The\nevidence to audit them against is what you find under `atlas-notification-relay/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\n\n----- what to produce -----\nWrite `atlas-notification-relay/test-artifacts/nfr-assessment.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `atlas-notification-relay/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status`.\n\nDo not add, edit, or delete any file under `atlas-notification-relay/docs/`, `atlas-notification-relay/evidence/`, or\n`atlas-notification-relay/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "containment",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-custom-category-named/artifact/report"
+                    },
+                    {
+                      "literal": "Data Residency"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "containment",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-custom-category-absent/artifact/report"
+                        },
+                        {
+                          "literal": "Data Residency"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "nfr-gapped-harbor-billing-ledger",
+      "operationId": "audit-evidence-bundle",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `harbor-billing-ledger/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `harbor-billing-ledger`\n- `{config_source}`: `harbor-billing-ledger/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `harbor-billing-ledger/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `harbor-billing-ledger/docs/`. The\nevidence to audit them against is what you find under `harbor-billing-ledger/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\n\n----- what to produce -----\nWrite `harbor-billing-ledger/test-artifacts/nfr-assessment.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `harbor-billing-ledger/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status`.\n\nDo not add, edit, or delete any file under `harbor-billing-ledger/docs/`, `harbor-billing-ledger/evidence/`, or\n`harbor-billing-ledger/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+          }
+        }
+      }
+    },
+    {
+      "stepId": "nfr-clean-atlas-notification-relay",
+      "operationId": "audit-evidence-bundle",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-nfr` against the project in `atlas-notification-relay/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `atlas-notification-relay`\n- `{config_source}`: `atlas-notification-relay/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `atlas-notification-relay/test-artifacts`\n- `{skill-root}`: `skill`\n- `custom_nfr_categories`: ``\n\nThe NFR requirements and the thresholds for this service are stated under `atlas-notification-relay/docs/`. The\nevidence to audit them against is what you find under `atlas-notification-relay/`. Discover both the way step-01\nand step-03 say to; nothing outside that directory is evidence about this service.\n\n----- what to produce -----\nWrite `atlas-notification-relay/test-artifacts/nfr-assessment.md` from `skill/nfr-report-template.md`, carrying:\n\n- one `## <Domain> Assessment` section for each of Performance, Security, Reliability, and\n  Maintainability, in that order;\n- inside each section, one finding per dimension the workflow evaluates, each stating its\n  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;\n- an evidence citation that names the file it rests on, by a path under `atlas-notification-relay/`;\n- the `## Evidence Gaps` section the template declares; and\n- the Gate YAML snippet the template ends with, carrying `overall_status`.\n\nDo not add, edit, or delete any file under `atlas-notification-relay/docs/`, `atlas-notification-relay/evidence/`, or\n`atlas-notification-relay/config/`. This workflow audits evidence and generates none.\n\nWhen you are done, print one line naming the file you wrote. Nothing else you print is read."
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Each plan step stages one evidence bundle from test/fixtures/nfr-eval/ into a disposable workspace: the bundle's files under its own project root (harbor-billing-ledger/ for gapped-harbor-billing-ledger, atlas-notification-relay/ for clean-atlas-notification-relay), a resolved _bmad/tea/config.yaml whose test_artifacts points inside that workspace, and the bmad-testarch-nfr workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root and skill/ and resolves every placeholder against them. The project root is the one fact about the bundle the prompt carries, and it names the service rather than the bundle's role, so it says which bundle a step is asking for and suggests no status. The sensitivity witness differs its two legs on custom_nfr_categories rather than between the two bundles: the two reports differ because of the staged evidence, so a differential between the bundles would attribute to the prompt a difference the evidence produced, and an invariance claim would be false. custom_nfr_categories is a value step-02 adds to the categories it elicits and the report template carries a section for, so a run given one names it and a run given none does not. Both witness legs stage the clean bundle, because they are the only other legs this operation has and AD-10 reads them as its clean legs.",
+    "cleanup": "Delete the workspace. The corpus under test/fixtures/nfr-eval/ is read-only and the harness digests it before and after every run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 600,
+    "maxWallClockMinutes": 40,
+    "maxCostUsd": "8.00"
+  },
+  "safetyLimits": [
+    "The runner writes only inside the staged workspace, and only its one deliverable under the bundle's own test-artifacts/; the harness fails a run that changed the repository or the staged bundle.",
+    "The run adds, edits, and deletes nothing under the bundle's docs/, evidence/, or config/. This workflow audits evidence and generates none.",
+    "No credential value appears in a prompt, an artifact, a log, or a result file."
+  ],
+  "requiredEvidence": [
+    "The nfr-assessment.md each run wrote, in full.",
+    "The exit code of each invocation.",
+    "The digest of the prompt each run was given, so an edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 4,
+  "fixtureReset": null
+}

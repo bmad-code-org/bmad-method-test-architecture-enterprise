@@ -1,0 +1,136 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is clean-gaps-invented's evasion. maxCleanFalsePositives counts the",
+    "gaps the report lists against a bundle that has nothing to find, and the parser recognised one spelling of",
+    "a gap. Measured against the stored clean-correct-audit report with one invented gap under it, a gap under",
+    "`## Evidence Gaps` written as a `- ` bullet scored one clean false positive, the identical gap under",
+    "`## Evidence Gaps and Risks` scored zero, and the identical gap written as a `1. ` item scored zero. A",
+    "ceiling of zero that a four-word heading clears is not a ceiling.",
+    "",
+    "This report invents two security findings against the clean bundle, under a reworded heading, one as a",
+    "bullet and one as an ordered item. The two markers differ on purpose, so the case says which half of the",
+    "widening broke if either is reverted: reverting the heading takes the count to 0, reverting the ordered",
+    "item takes it to 1, and both together take it to 0.",
+    "",
+    "The four domain statuses stay PASS and the gate still says PASS, so the two gaps are the only false",
+    "positives in the result and cleanFalsePositives measures nothing else. That is the difference from",
+    "clean-gaps-invented, which drops a domain and the headline as well and so cannot isolate the gap count.",
+    "",
+    "What this case does not move is the indent exclusion, which stays. Each of these gaps carries the",
+    "template's four indented sub-bullets for its owner, deadline, suggested evidence and impact, and each is",
+    "counted once.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "clean-gaps-invented-off-template",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "clean-atlas-notification-relay",
+    "scoringInputsDigest": "sha256:3848bbe1b0d7a0721993899b738b5398daecf748fa40bff070f50f0f8ed0e19f"
+  },
+  "derivation": [
+    "Every domain section is clean-correct-audit's, untouched. The only edits are in the Evidence Gaps section,",
+    "in one line of the executive summary, and in the gate snippet's evidence_gaps scalar, so every status,",
+    "threshold, citation and overall reading below is clean-correct-audit's.",
+    "",
+    "Statuses: four PASS, all four matching the ground truth, so no status miss and no unsupported PASS. The",
+    "ground truth marks no domain of this bundle undecidable.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section.",
+    "",
+    "Thresholds: performance names 300 ms, security names 0 critical, reliability names 99.9%, maintainability",
+    "names 80%. 4 of 4, unchanged.",
+    "",
+    "Overall: the Gate YAML says PASS, which is what four PASS domains roll up to. Unknown threshold: the word",
+    "appears nowhere in the document, which is what a bundle stating every target owes.",
+    "",
+    "evidenceGaps: two, in document order. The heading is `## Evidence Gaps and Risks`, which the parser now",
+    "reads by prefix, and under it Retention Verification is a `- [ ]` bullet at indent 0 and Key Rotation",
+    "Proof is a `1. [ ]` item at indent 0. Both carry the bolded name the template writes, so each stores its",
+    "name and not its whole line. Eight indented sub-bullets sit under the two of them, four at indent 2 under",
+    "the bullet and four at indent 3 under the ordered item, which is the continuation indent an ordered list",
+    "takes. None is counted, and that exclusion is what keeps one gap from reporting as five.",
+    "",
+    "cleanFalsePositives: no domain below PASS, two evidence gaps listed, no threshold recorded as unknown. 2.",
+    "",
+    "Citations: clean-correct-audit's nineteen, unchanged. Nothing was added to a domain section, and the",
+    "Suggested Evidence lines of the two invented gaps sit under the gaps heading rather than under a domain,",
+    "so no citation is read from them. The fabricated list is empty: this run invents findings and cites",
+    "nothing that is not in the bundle, which is what separates it from",
+    "gapped-fabricated-evidence-on-a-source-label."
+  ],
+  "result": {
+    "isCleanSet": true,
+    "statuses": {
+      "performance": "PASS",
+      "security": "PASS",
+      "reliability": "PASS",
+      "maintainability": "PASS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-09-01.md",
+        "evidence/security-review-2026-09-01.md",
+        "evidence/security-review-2026-09-01.md",
+        "evidence/dependency-scan-2026-09-01.json",
+        "evidence/security-review-2026-09-01.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json"
+      ],
+      "maintainability": [
+        "evidence/coverage-summary-2026-09-01.json",
+        "evidence/duplication-report-2026-09-01.json",
+        "evidence/dependency-scan-2026-09-01.json",
+        "config/logging.json"
+      ]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Retention Verification", "Key Rotation Proof"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "PASS",
+      "actual": "PASS",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": false,
+      "actual": false,
+      "ok": true
+    },
+    "cleanFalsePositives": 2
+  }
+}
