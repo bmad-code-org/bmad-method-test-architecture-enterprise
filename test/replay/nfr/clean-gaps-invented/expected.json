@@ -1,0 +1,112 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the false positive the clean control exists to catch. The response",
+    "time is 168 ms against a stated 300 ms target and the run reports it as CONCERNS on a threshold it says it",
+    "could not confirm, lists an evidence gap for it, and drops the headline to CONCERNS.",
+    "",
+    "Every one of those is a finding against a bundle that has nothing to find, which is the failure mode a suite",
+    "measuring only refused PASS results would reward.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "clean-gaps-invented",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "clean-atlas-notification-relay",
+    "scoringInputsDigest": "sha256:3848bbe1b0d7a0721993899b738b5398daecf748fa40bff070f50f0f8ed0e19f"
+  },
+  "derivation": [
+    "Performance: one CONCERNS and three PASS, so CONCERNS against an expected PASS. One status miss. It is not",
+    "an unsupported PASS, because the ground truth marks no domain of this bundle undecidable.",
+    "",
+    "Thresholds: the section's other three threshold lines still name 250 requests per second, 70% and 75%, and",
+    "the check asks for any one of the bundle's tokens, so it passes. 4 of 4. The invented gap is caught by the",
+    "document-level unknown-threshold check instead, which is the check that exists for exactly this shape.",
+    "",
+    "Overall: the Gate YAML says CONCERNS against an expected PASS, so the check fails. Unknown threshold: the",
+    "document now carries the word against an expected false, so that check fails too.",
+    "",
+    "cleanFalsePositives: one domain below PASS, one evidence gap listed, one threshold recorded as unknown. 3.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section.",
+    "",
+    "Citations: clean-correct-audit's nineteen, unchanged, four under performance, five under security, six under",
+    "reliability and four under maintainability. The invented gap is a status, a threshold sentence and a gap entry, and",
+    "it moved no Evidence line, so this run and the correct audit are grounded identically and part on what they",
+    "concluded from that grounding."
+  ],
+  "result": {
+    "isCleanSet": true,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "PASS",
+      "maintainability": "PASS"
+    },
+    "statusMisses": ["performance reported CONCERNS, expected PASS"],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json",
+        "evidence/load-test-2026-09-02.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-09-01.md",
+        "evidence/security-review-2026-09-01.md",
+        "evidence/security-review-2026-09-01.md",
+        "evidence/dependency-scan-2026-09-01.json",
+        "evidence/security-review-2026-09-01.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json",
+        "evidence/reliability-2026-09.json"
+      ],
+      "maintainability": [
+        "evidence/coverage-summary-2026-09-01.json",
+        "evidence/duplication-report-2026-09-01.json",
+        "evidence/dependency-scan-2026-09-01.json",
+        "config/logging.json"
+      ]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Response Time (p95)"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "PASS",
+      "actual": "CONCERNS",
+      "ok": false
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": false,
+      "actual": true,
+      "ok": false
+    },
+    "cleanFalsePositives": 3
+  }
+}

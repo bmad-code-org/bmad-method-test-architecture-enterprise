@@ -1,0 +1,17 @@
+{
+  "source": "platform observability export",
+  "window": "2026-08-01T00:00:00Z/2026-08-31T23:59:59Z",
+  "service": "atlas-notification-relay",
+  "availability": { "uptime_pct": 99.96, "downtime_minutes": 17 },
+  "errors": { "requests": 62140000, "server_errors": 43498, "error_rate_pct": 0.07, "top_error": "502 from a downstream webhook endpoint" },
+  "incidents": [{ "id": "INC-4482", "opened": "2026-08-09T14:03:00Z", "restored_minutes": 6, "summary": "SMS transport credential rotation lag" }],
+  "mttr_minutes": 6,
+  "circuit_breaker": {
+    "configured_in": "relay/src/delivery/circuit-breaker.ts",
+    "opens_after_consecutive_failures": 5,
+    "exercised": "2026-08-09 incident, opened and closed automatically"
+  },
+  "failover_drill": { "date": "2026-08-21", "result": "passed", "observed_failover_seconds": 22, "data_loss": "none" },
+  "ci_burn_in": { "suite": "relay", "consecutive_green_runs": 312, "last_failure": "2026-05-11" },
+  "disaster_recovery_drill": { "date": "2026-08-26", "result": "passed", "observed_rto_hours": 1.5, "observed_rpo_minutes": 6 }
+}

@@ -1,0 +1,10 @@
+{
+  "tool": "jscpd",
+  "generated": "2026-09-01T05:53:00Z",
+  "build": "relay@2.3.0",
+  "statistics": { "total_lines": 24180, "duplicated_lines": 508, "duplicated_pct": 2.1, "clones": 11 },
+  "largest_clones": [
+    { "lines": 61, "files": ["relay/src/transports/email.ts", "relay/src/transports/webhook.ts"], "note": "shared retry envelope" },
+    { "lines": 44, "files": ["relay/test/transports/email.spec.ts", "relay/test/transports/sms.spec.ts"], "note": "shared fixture setup" }
+  ]
+}

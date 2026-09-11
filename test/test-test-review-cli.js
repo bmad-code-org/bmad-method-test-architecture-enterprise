@@ -937,6 +937,89 @@ async function runTests() {
         assert(false, 'fenced fixture parses with fenced content ignored', error.message);
       }
 
+      // The spoof defence has to survive a Windows checkout. The fence pattern
+      // once ended `(.*)$`, and JavaScript's `.` excludes `\r`, so on a CRLF
+      // document no line matched the pattern and nothing was stripped at all:
+      // this fixture's nine Critical violations reached the verdict and took an
+      // Approve report down with them. Every gate stayed green through it
+      // because, until this fixture, no report in this repository used CRLF line
+      // endings. The bytes are the test, so `.gitattributes` gives this one path
+      // `text eol=crlf`, which restores them on every checkout on every platform
+      // even if an editor normalizes them in between.
+      const crlfSource = readFixture('reports', 'fenced-recommendation-crlf.md');
+      const lfTwinSource = readFixture('reports', 'fenced-recommendation.md');
+      assert(
+        crlfSource.includes('\r\n') && !/[^\r]\n/.test(crlfSource),
+        'the CRLF fixture still ships with CRLF line endings on every line (check .gitattributes if this fails)',
+        JSON.stringify(crlfSource.slice(0, 40)),
+      );
+      assert(
+        !lfTwinSource.includes('\r'),
+        'the LF twin still ships with LF line endings, so the comparison below is between two different documents',
+        JSON.stringify(lfTwinSource.slice(0, 40)),
+      );
+      assert(crlfSource.replaceAll('\r\n', '\n') === lfTwinSource, 'the CRLF fixture is its LF twin byte for byte apart from line endings');
+      try {
+        const crlf = parseReport(crlfSource);
+        assert(
+          JSON.stringify(crlf) === JSON.stringify(parseReport(lfTwinSource)),
+          'CRLF fenced fixture: a report with Windows line endings parses to the same verdict as its LF twin',
+          JSON.stringify(crlf),
+        );
+        assert(
+          crlf.violations.critical === 0 && crlf.recommendation === 'Approve with Comments',
+          'CRLF fenced fixture: the nine Critical violations quoted inside the fence contribute nothing',
+          JSON.stringify(crlf.violations),
+        );
+      } catch (error) {
+        assert(false, 'CRLF fenced fixture parses with fenced content ignored', error.message);
+      }
+
+      // CommonMark fences with three tildes as readily as with three backticks,
+      // and a reviewer quoting a document that already contains backticks reaches
+      // for tildes. Deleting `|~{3,}` from the fence pattern makes this example
+      // content again.
+      try {
+        const tilde = parseReport(readFixture('reports', 'tilde-fence-recommendation.md'));
+        assert(
+          tilde.recommendation === 'Approve with Comments' && tilde.rawQualityScore === 98 && tilde.violations.critical === 0,
+          'tilde-fence fixture: a ~~~ fenced example is stripped exactly as a ``` one is',
+          JSON.stringify(tilde),
+        );
+      } catch (error) {
+        assert(false, 'tilde-fence fixture parses with tilde-fenced content ignored', error.message);
+      }
+
+      // A fence closes only on its own character, at least as long, with nothing
+      // else on the line, so a four-backtick quote carries a three-backtick block
+      // inside it. Under the three-backtick toggle this replaced, that inner
+      // opener closed the outer block and the remainder of the example surfaced.
+      try {
+        const nested = parseReport(readFixture('reports', 'nested-fence-recommendation.md'));
+        assert(
+          nested.recommendation === 'Approve with Comments' && nested.rawQualityScore === 98 && nested.violations.critical === 0,
+          'nested-fence fixture: a ``` block quoted inside a ```` block does not end the quote',
+          JSON.stringify(nested),
+        );
+      } catch (error) {
+        assert(false, 'nested-fence fixture parses with the whole quoted example ignored', error.message);
+      }
+
+      // Inside an open block every line is literal content until the matching
+      // closer, so an unclosed tilde opener quoted inside a backtick example is
+      // text. Treating it as an opener pushed a depth the real closer could not
+      // pop, and the rest of the document stayed hidden at a level it never left.
+      try {
+        const mixed = parseReport(readFixture('reports', 'mixed-fence-recommendation.md'));
+        assert(
+          mixed.recommendation === 'Approve with Comments' && mixed.rawQualityScore === 98 && mixed.violations.critical === 0,
+          'mixed-fence fixture: an unclosed ~~~ opener inside a ``` example neither opens a block nor swallows the rest of the report',
+          JSON.stringify(mixed),
+        );
+      } catch (error) {
+        assert(false, 'mixed-fence fixture parses with the report after the example intact', error.message);
+      }
+
       try {
         const colon = parseReport(readFixture('reports', 'colon-in-bold.md'));
         assert(

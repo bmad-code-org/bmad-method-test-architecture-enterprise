@@ -51,6 +51,19 @@
  *                        evaluated over the same run too, so every oracle is seen
  *                        resolving false on evidence that fails it.
  *
+ *   nfr                  Every stored NFR run under test/replay/nfr is one
+ *                        observation of the plan step for the evidence bundle it
+ *                        was frozen from: the report as the `report` artifact,
+ *                        exit code 0. The same two rules as trace: each oracle is
+ *                        compared with the check it restates, and the other
+ *                        bundle's oracles are evaluated over the same run so every
+ *                        oracle is seen resolving false. A report the harness
+ *                        refuses, because it declares no section for any of the
+ *                        four audited domains, is skipped entirely rather than
+ *                        compared, for the reason the trace matrix is: the
+ *                        deliverable is markdown and every oracle reads it as one
+ *                        string, so there is no measurement to compare with.
+ *
  * AGREEMENT
  *
  * An oracle may never contradict the scorer. Where the scorer passes, the oracle
@@ -110,6 +123,12 @@ const {
   summaryFromArtifact,
   TRACE_OPERATION,
 } = require('./eval-trace');
+const {
+  loadGroundTruth: loadNfrGroundTruth,
+  reportFromArtifact: nfrReportFromArtifact,
+  scoreRun: scoreNfrRun,
+  NFR_OPERATION,
+} = require('./eval-nfr');
 const { parseRouting } = require('../cli/lib/parse-routing');
 const {
   correctRoutingAnswer,
@@ -119,9 +138,16 @@ const {
   ROUTING_OPERATION,
 } = require('./eval-bmad-tea-routing');
 const { findCases } = require('./test-eval-replay');
-// The correspondence between each trace oracle and the scoreRun check it
+// The correspondence between each trace or nfr oracle and the scoreRun check it
 // restates is written once, in the generator beside the oracle itself.
-const { traceOracleSpecs, traceStepId, routingOracleSpecs, ROUTING_CONTRACTS } = require('../tools/generate-contracts');
+const {
+  nfrOracleSpecs,
+  nfrStepId,
+  traceOracleSpecs,
+  traceStepId,
+  routingOracleSpecs,
+  ROUTING_CONTRACTS,
+} = require('../tools/generate-contracts');
 // Same rule for test-design: the generator owns the correspondence between each
 // oracle and the harness predicate it is paired with, so it is imported rather
 // than restated here.
@@ -899,6 +925,90 @@ function checkTestDesignOracles(evaluator) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// nfr
+// ---------------------------------------------------------------------------
+
+/** One stored nfr run as the artifact a probe observation would carry: the report as text. */
+function nfrArtifactsOf(directory, expected) {
+  const reportPath = path.join(directory, expected.storedOutput?.report ?? path.join('test-artifacts', 'nfr-assessment.md'));
+  if (!fs.existsSync(reportPath)) return { report: { kind: 'absent' } };
+  return { report: { kind: 'text', value: fs.readFileSync(reportPath, 'utf8') } };
+}
+
+/**
+ * The harness's answer for one stored nfr run: the scored object, or the reason it
+ * refused to score at all.
+ */
+function scoreNfrArtifacts(set, artifacts) {
+  const report = nfrReportFromArtifact(artifacts.report);
+  if (!report.ok) return { refused: report.reason };
+  return { scored: scoreNfrRun(set, report.report) };
+}
+
+function checkNfrOracles(evaluator) {
+  console.log('\nnfr.contract.json over every stored NFR run');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'nfr.contract.json'), 'the nfr contract');
+  const groundTruth = loadNfrGroundTruth();
+  if (!groundTruth) unreadable('the nfr ground truth is missing or not valid JSON');
+  const specs = nfrOracleSpecs(groundTruth);
+  assert(
+    contract.oracles.length === specs.length && contract.oracles.every((oracle, index) => oracle.id === specs[index].id),
+    'the contract declares exactly the oracles the generator specifies, in order',
+    `${contract.oracles.length} on disk, ${specs.length} specified`,
+  );
+
+  let evaluated = 0;
+  let skippedUnscored = 0;
+  const seenFalse = new Set();
+  const cases = findCases().filter((item) => item.suite === 'nfr');
+  assert(cases.length > 0, 'test/replay/nfr holds at least one stored NFR run');
+  for (const item of cases) {
+    const expected = readJson(path.join(item.directory, 'expected.json'), `${item.id} expected result`);
+    const artifacts = nfrArtifactsOf(item.directory, expected);
+    // Every bundle's oracles over this run. The bundle the run was frozen from is
+    // the agreement check proper; the other bundle is the run seen as a wrong
+    // answer to a different question, which is what makes an oracle resolve false.
+    for (const set of groundTruth.fixtureSets) {
+      const results = evaluateOracles(evaluator, contract, {
+        [nfrStepId(set)]: observation({ operationId: NFR_OPERATION, exitCode: 0, artifacts }),
+      });
+      const answer = scoreNfrArtifacts(set, artifacts);
+      const label = `${item.id} as ${set.id === expected.inputs?.fixtureSet ? 'its own bundle' : set.id}`;
+      const own = specs.filter((spec) => spec.setId === set.id);
+      // A report the harness will not score at all. Unlike trace, the refusal is
+      // never about a second artifact: the deliverable is one markdown document,
+      // and a document with no domain section is outside the operator vocabulary
+      // altogether, because every oracle here reads the document as one string.
+      // Nothing is compared and the skip is printed.
+      if (answer.refused) {
+        skippedUnscored += own.length;
+        continue;
+      }
+      for (const spec of own) {
+        const result = results.get(spec.id);
+        const scorer = spec.scorer(answer.scored);
+        if (scorer === false) seenFalse.add(spec.id);
+        assert(
+          agrees(result, scorer),
+          `${label}: ${spec.id} (${spec.kind}) agrees with scoreRun`,
+          `scoreRun says ${scorer ? 'pass' : 'fail'}, oracle ${describe(result)}`,
+        );
+        evaluated += 1;
+      }
+    }
+  }
+  // Every oracle but the run-shape one has to have been seen failing somewhere, or
+  // this check has only ever confirmed that a correct run passes.
+  for (const spec of specs) {
+    if (spec.kind === 'run-measured') continue;
+    assert(seenFalse.has(spec.id), `${spec.id} (${spec.kind} on ${spec.setId}) was seen resolving false on some stored run`);
+  }
+  console.log(
+    `  ${colors.dim}${evaluated} oracle evaluation(s) across ${cases.length} stored run(s) and ${groundTruth.fixtureSets.length} bundle(s); ${skippedUnscored} on a report the harness refused${colors.reset}`,
+  );
+}
+
 async function main() {
   console.log('contract oracles, evaluated with eval-quality and compared with the harness scorers');
   const evaluator = await loadEvaluator();
@@ -909,6 +1019,7 @@ async function main() {
   checkRoutingOracles(evaluator);
   checkTestDesignOracles(evaluator);
   await checkTraceOracles(evaluator);
+  checkNfrOracles(evaluator);
 
   console.log('');
   if (failed > 0) {

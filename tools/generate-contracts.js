@@ -90,6 +90,16 @@ const { buildPrompt: buildTestDesignPrompt, TEST_DESIGN_INTERFACE, TEST_DESIGN_O
 // well: a leg carrying a description of a prompt parses, compiles, schedules,
 // and then measures nothing when it is finally run.
 const { buildPrompt: buildSelectionPrompt } = require('../test/eval-fragment-selection');
+// And for the nfr command, on the same two rules: the runner owns its request
+// shape and its default agent, and the harness owns every prompt.
+const { NFR_REQUEST_KEYS, DEFAULT_AGENT: NFR_DEFAULT_AGENT } = require('../cli/nfr-runner');
+const {
+  buildPrompt: buildNfrPrompt,
+  DOMAINS: NFR_DOMAINS,
+  UNKNOWN_TOKEN: NFR_UNKNOWN_TOKEN,
+  NFR_INTERFACE,
+  NFR_OPERATION,
+} = require('../test/eval-nfr');
 // And for the routing command the bmad-tea suite names: its request and response
 // shapes and its default agent are its own, and the prompt, the menu reading and
 // the three pattern sources are the harness's. The patterns matter most. An
@@ -129,6 +139,8 @@ const TEST_DESIGN_SPEC_FILES = [
   path.join(WORKFLOW_ROOT, 'bmad-testarch-test-design', 'steps-c', 'step-05-generate-output.md'),
   path.join(WORKFLOW_ROOT, 'bmad-testarch-test-design', 'test-design-template.md'),
 ];
+const NFR_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval');
+const NFR_GROUND_TRUTH_PATH = path.join(NFR_FIXTURE_ROOT, 'ground-truth.json');
 
 /**
  * The Eval Contract schema version this generator writes. A bump arrives as a
@@ -2393,6 +2405,469 @@ function buildTraceContract() {
 }
 
 // ---------------------------------------------------------------------------
+// nfr.contract.json
+// ---------------------------------------------------------------------------
+
+// The interface and operation ids are the harness's, imported above, so the
+// request the harness issues and the operation the contract declares cannot
+// spell them differently.
+
+/** The plan step one evidence bundle is audited under, and the root of every pointer into what that step wrote. */
+function nfrStepId(set) {
+  return `nfr-${set.id}`;
+}
+
+/** The whole report one plan step wrote, which is the only pointer this contract has into a run. */
+function nfrReportPointer(stepId) {
+  return `/interactions/${stepId}/artifact/report`;
+}
+
+const NFR_REQUEST_SHAPE = Object.fromEntries(
+  Object.entries(NFR_REQUEST_KEYS).map(([channel, keys]) => [channel, stringShape(keys.required, keys.permitted)]),
+);
+
+/**
+ * The custom NFR category the sensitivity witness differs its two legs on.
+ *
+ * Authored here and nowhere else: it is a value this contract invents in order
+ * to have something the run demonstrably reads off standard input, rather than a
+ * fact about either evidence bundle.
+ */
+const NFR_WITNESS_CATEGORY = 'Data Residency';
+
+function contains(pointer, literal) {
+  return { op: 'containment', operands: [{ pointer }, { literal }] };
+}
+
+/**
+ * The domain section headings a report has to declare, spelled as the suffix
+ * every heading depth shares.
+ *
+ * `containment` is a plain substring test, and `# Performance Assessment` is
+ * inside `## Performance Assessment` and inside `### Performance Assessment`
+ * alike, so the claim is about the heading and not about how deep the run nested
+ * it. A regex would say the same thing and would be charged against the
+ * evaluator's step budget once per kilobyte of report; test/contracts/README.md
+ * records why that budget is the reason a markdown deliverable is addressed this
+ * way.
+ */
+function domainHeadingLiteral(domain) {
+  return `# ${domain[0].toUpperCase()}${domain.slice(1)} Assessment`;
+}
+
+/**
+ * The three spellings a YAML scalar takes, as the `any` a report's overall
+ * status is checked through.
+ *
+ * The harness reads the same field with one regular expression that admits all
+ * three, so the contract and the scorer make one claim rather than two similar
+ * ones. test/test-contract-oracles.js is what holds them to it.
+ */
+function overallStatusCheck(pointer, status) {
+  return {
+    op: 'any',
+    operands: [`'${status}'`, `"${status}"`, status].map((spelling) => contains(pointer, `overall_status: ${spelling}`)),
+  };
+}
+
+/**
+ * Every oracle the nfr contract states, one spec per claim, in the order they are
+ * numbered.
+ *
+ * Each spec carries the oracle as the contract will render it and, beside it, the
+ * scorer's answer for the same evidence as a function over one `scoreRun` result.
+ * test/test-contract-oracles.js reads the second half: an oracle here may never
+ * contradict `scoreRun` on the same report, and this is the one place the
+ * correspondence between an oracle and the check it restates is written.
+ *
+ * There are four claims per bundle and no more, and the reason is the one
+ * test/contracts/README.md already records for the traceability matrix: a
+ * markdown deliverable is one string to this vocabulary, so a claim it can make
+ * is a claim about the document as a whole. The per-domain statuses, the
+ * threshold of each domain, and every evidence citation are read by the harness
+ * out of the sections that carry them, and the contract states the four
+ * consequences a substring test can reach: that the four domain sections exist,
+ * that the Gate YAML publishes the expected overall status, that a threshold the
+ * bundle never states is recorded as UNKNOWN and one it does state is not, and
+ * that the run wrote a report and exited clean.
+ *
+ * @returns {Array<{id: string, kind: string, setId: string, oracle: object, scorer: Function}>}
+ */
+function nfrOracleSpecs(groundTruth) {
+  const specs = [];
+  const push = (setId, kind, oracle, scorer) =>
+    specs.push({ id: `O-${String(specs.length + 1).padStart(3, '0')}`, kind, setId, oracle, scorer });
+
+  for (const set of groundTruth.fixtureSets) {
+    const label = set.id;
+    const stepId = nfrStepId(set);
+    const report = nfrReportPointer(stepId);
+    assert(set.expectedOverallStatus, `${label}: declares no expectedOverallStatus`);
+
+    push(
+      set.id,
+      'domain-coverage',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: the report declares a section for each of the ${numberWord(NFR_DOMAINS.length)} domains Step 4 dispatches a worker for. A report missing one has left a dispatched domain unreported, whatever it said about the rest.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `The domain section headings of the report written for ${label}.`,
+          negativeDomain: `A run that omits the Assessment section of any of ${NFR_DOMAINS.join(', ')}.`,
+          evidenceTargets: [report],
+        },
+        check: { op: 'all', operands: NFR_DOMAINS.map((domain) => contains(report, domainHeadingLiteral(domain))) },
+      },
+      // `sections`, the heading count, rather than `present`, the count of domains
+      // the report states a status for. The oracle reads the report as one string
+      // and `containment` cannot bind a status line to the heading above it, so a
+      // section carrying a heading and no readable status is a claim this oracle
+      // cannot make. The harness grades the stricter `present` against
+      // domainCoverage; test/replay/nfr/gapped-maintainability-status-unreadable is
+      // the case where the two numbers differ.
+      (scored) => scored.coverage.sections === scored.coverage.total,
+    );
+
+    push(
+      set.id,
+      'overall-status',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: the Gate YAML publishes overall_status ${set.expectedOverallStatus}, which is what the ${numberWord(NFR_DOMAINS.length)} domain statuses roll up to under the checklist's own gate rules. A run publishing anything else has a headline its own sections do not support.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'any',
+          scope: `The overall_status scalar in the Gate YAML snippet of the report written for ${label}.`,
+          negativeDomain: `A run publishing any overall status other than ${set.expectedOverallStatus}, or publishing none at all.`,
+          evidenceTargets: [report],
+        },
+        check: overallStatusCheck(report, set.expectedOverallStatus),
+      },
+      (scored) => scored.overall.ok,
+    );
+
+    const expectsUnknown = set.expectedUnknownThresholdDeclared === true;
+    push(
+      set.id,
+      'threshold-unknown',
+      {
+        polarity: 'expects-hold',
+        commentary: expectsUnknown
+          ? `${label}: the report records a threshold as ${NFR_UNKNOWN_TOKEN}, which is the workflow's own spelling for a target no source states. This bundle leaves one unstated, so a report carrying the word noticed it and a report without it supplied a target the bundle never gave.`
+          : `${label}: no threshold in the report is recorded as ${NFR_UNKNOWN_TOKEN}. Every domain of this bundle states its own target, so the word appearing at all is a gap the run invented.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: expectsUnknown ? 'containment' : 'not',
+          scope: `The report written for ${label}, read as one document.`,
+          negativeDomain: expectsUnknown
+            ? 'A run that supplied its own target for a threshold no source in the bundle states.'
+            : 'A run that recorded a threshold as unknown on a bundle that states every one of them.',
+          evidenceTargets: [report],
+        },
+        check: expectsUnknown ? contains(report, NFR_UNKNOWN_TOKEN) : { op: 'not', operands: [contains(report, NFR_UNKNOWN_TOKEN)] },
+      },
+      (scored) => scored.unknownThreshold.ok,
+    );
+
+    push(
+      set.id,
+      'run-measured',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: the run wrote the report the workflow declares and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad audit.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `The exit code and the report artifact of the run for ${label}.`,
+          negativeDomain: 'A run that left no report behind, or whose command reported a failure class through its exit code.',
+          evidenceTargets: [report, `/interactions/${stepId}/exit-code`],
+        },
+        check: {
+          op: 'all',
+          operands: [
+            { op: 'equality', operands: [{ pointer: `/interactions/${stepId}/exit-code` }, { literal: 0 }] },
+            { op: 'existence', operands: [{ pointer: report }] },
+          ],
+        },
+      },
+      () => true,
+    );
+  }
+  return specs;
+}
+
+/**
+ * The authored half of the nfr contract: how hard each group of claims grades,
+ * which risk it names, and the sentence that says what the group is about. The
+ * claims themselves come from ground-truth.json.
+ */
+const NFR_BEHAVIORS = [
+  {
+    id: 'A-001',
+    role: 'gapped',
+    kinds: ['overall-status', 'threshold-unknown'],
+    severity: 'critical',
+    risk: 'unsupported-pass-published-as-a-grounded-one',
+    success:
+      'The report for the bundle with known gaps records a threshold as UNKNOWN and publishes the overall status its own domain statuses roll up to.',
+    requirement: 'domains[isUndecidable]',
+  },
+  {
+    id: 'A-002',
+    role: 'clean',
+    kinds: ['overall-status', 'threshold-unknown'],
+    severity: 'critical',
+    risk: 'reports-gaps-everywhere',
+    success:
+      'The report for the bundle whose every threshold is stated and met records no threshold as UNKNOWN and publishes a PASS overall status.',
+    requirement: 'mustNotReport',
+  },
+  {
+    id: 'A-003',
+    role: 'both',
+    kinds: ['domain-coverage'],
+    severity: 'critical',
+    risk: 'domain-left-unreported',
+    success: 'Each report declares an Assessment section for every one of the four domains Step 4 dispatches a worker for.',
+    requirement: 'domains',
+  },
+  {
+    id: 'A-004',
+    role: 'both',
+    kinds: ['run-measured'],
+    severity: 'critical',
+    risk: 'unmeasurable-run-scored-as-a-miss',
+    success: 'Each run left the report the workflow declares on disk and exited 0.',
+    requirement: 'evidenceFiles',
+  },
+];
+
+function buildNfrContract() {
+  const groundTruth = JSON.parse(fs.readFileSync(NFR_GROUND_TRUTH_PATH, 'utf8'));
+  const sets = groundTruth.fixtureSets ?? [];
+  assert(
+    sets.length >= 2,
+    'nfr ground-truth.json declares fewer than two evidence bundles, so there is no clean control to hold the gapped bundle against',
+  );
+  const gapped = sets.filter((set) => Object.values(set.domains ?? {}).some((domain) => domain.isUndecidable === true));
+  const clean = sets.filter((set) => Object.values(set.domains ?? {}).every((domain) => domain.expectedStatus === 'PASS'));
+  assert(
+    gapped.length === 1 && clean.length === 1,
+    `expected one gapped and one clean evidence bundle; found ${gapped.length} and ${clean.length}`,
+  );
+
+  const specs = nfrOracleSpecs(groundTruth);
+  const oracles = specs.map((spec) => ({ id: spec.id, ...spec.oracle }));
+
+  const roleOf = (set) => (gapped.includes(set) ? 'gapped' : 'clean');
+  // One behavior per oracle, in oracle order, for the reason the trace contract
+  // records: AD-40 resolves a behavior's designated oracle only when the behavior
+  // declares exactly one, and a behavior grouping several resolves none.
+  const oracleById = new Map(oracles.map((oracle) => [oracle.id, oracle]));
+  const behaviors = [];
+  for (const authored of NFR_BEHAVIORS) {
+    const targetSets = authored.role === 'both' ? sets : sets.filter((set) => roleOf(set) === authored.role);
+    const matched = specs
+      .filter((spec) => targetSets.some((set) => set.id === spec.setId))
+      .filter((spec) => authored.kinds.includes(spec.kind));
+    assert(matched.length > 0, `${authored.id}: no oracle matches kinds [${authored.kinds.join(', ')}] on the ${authored.role} bundle(s)`);
+    for (const spec of matched) {
+      behaviors.push({
+        id: spec.id,
+        description: oracleById.get(spec.id).commentary,
+        severity: authored.severity,
+        observableSuccessCriterion: authored.success,
+        requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${spec.setId}/${authored.requirement}` }],
+        riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
+        oracles: [spec.id],
+      });
+    }
+  }
+  behaviors.sort((left, right) => (left.id < right.id ? -1 : 1));
+  // The identifier is minted from the oracle's, so B-00n and O-00n are one thing.
+  for (const behavior of behaviors) behavior.id = behavior.id.replace('O-', 'B-');
+  const claimed = new Set(behaviors.flatMap((behavior) => behavior.oracles));
+  for (const spec of specs) {
+    assert(claimed.has(spec.id), `${spec.id} (${spec.kind} on ${spec.setId}) is stated by no behavior, so nothing would demand it`);
+  }
+
+  // The specification the run is scored against is the set of skill files the
+  // corpus cites for its rules, so an edit to any of them changes what this
+  // contract demands.
+  const citedFiles = [...new Set(Object.values(groundTruth.skillRuleCitations ?? {}).map((citation) => citation.file))].sort();
+  assert(citedFiles.length > 0, 'nfr ground-truth.json cites no skill file, so there is no specification to digest');
+  for (const file of citedFiles) {
+    assert(fs.existsSync(path.join(PROJECT_ROOT, file)), `nfr ground-truth.json cites ${file}, which does not exist`);
+  }
+
+  // The witness runs the clean bundle. AD-10 treats every other leg of an
+  // operation as a clean leg when it asks whether a seeded fault is scoped to its
+  // own leg, and these two legs are the only other legs this operation has.
+  const witnessSet = clean[0];
+
+  return {
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    contractId: 'tea-nfr-behavioral',
+    sourceSpecDigest: digestOf(citedFiles.map((file) => path.join(PROJECT_ROOT, file))),
+    behaviors,
+    oracles,
+    rubrics: [],
+    waivers: [],
+    permittedInterfaces: [
+      {
+        logicalId: NFR_INTERFACE,
+        kind: 'cli',
+        operations: [
+          {
+            operationId: NFR_OPERATION,
+            invocation: { executable: NFR_INTERFACE, subcommandPath: [] },
+            stateChangeMarker: true,
+            requestShape: NFR_REQUEST_SHAPE,
+            artifacts: ['report'],
+            // The report is the only thing the workflow declares, and it is
+            // markdown. The operator vocabulary addresses a text artifact as one
+            // whole document, so the descriptor declares no keys: there is no
+            // key set to declare, and a transcribed one nobody could address
+            // would be a claim about a structure the deliverable does not have.
+            // The per-domain statuses inside it are the harness's to read.
+            descriptorChannel: { kind: 'artifact', artifactId: 'report' },
+            responseDescriptor: {
+              requiredKeys: [],
+              permittedKeys: [],
+              types: {},
+              successIndicator: null,
+              channelRoles: null,
+              collectionLocations: null,
+            },
+            volatilePointers: [],
+            sensitivityWitness: {
+              // The differential is custom_nfr_categories, the one prompt value
+              // this corpus can establish an effect for without asserting a
+              // judgment: step-02 adds any category it is given to the ones it
+              // elicits, and the report template carries a Custom NFR section
+              // for them, so a run given one names it and a run given none does
+              // not. That is a true and checkable claim that the command reads
+              // its standard input.
+              //
+              // The alternative would have been a differential between the two
+              // bundles, and it would be false in the other direction: the two
+              // reports differ because of the staged workspace rather than
+              // because of the prompt, so it would attribute to standard input a
+              // difference the evidence produced. The trace contract records the
+              // same reasoning for its own witness.
+              //
+              // Both legs stage the clean bundle, because they are the only
+              // other legs this operation has and AD-10 reads them as its clean
+              // legs.
+              witnessId: 'custom-category-follows-the-prompt',
+              channel: 'stdin',
+              legs: [
+                {
+                  legId: 'witness-custom-category-named',
+                  inputs: witnessInputs(
+                    NFR_REQUEST_SHAPE,
+                    { option: { agent: NFR_DEFAULT_AGENT } },
+                    { kind: 'text', value: buildNfrPrompt(witnessSet, { customCategories: [NFR_WITNESS_CATEGORY] }) },
+                  ),
+                },
+                {
+                  legId: 'witness-custom-category-absent',
+                  inputs: witnessInputs(
+                    NFR_REQUEST_SHAPE,
+                    { option: { agent: NFR_DEFAULT_AGENT } },
+                    { kind: 'text', value: buildNfrPrompt(witnessSet) },
+                  ),
+                },
+              ],
+              relation: {
+                op: 'all',
+                operands: [
+                  contains(nfrReportPointer('witness-custom-category-named'), NFR_WITNESS_CATEGORY),
+                  { op: 'not', operands: [contains(nfrReportPointer('witness-custom-category-absent'), NFR_WITNESS_CATEGORY)] },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ],
+    referenceSets: {},
+    siblingGroups: { operations: [], parameters: [] },
+    interactionPlan: sets.map((set) => ({
+      stepId: nfrStepId(set),
+      operationId: NFR_OPERATION,
+      after: null,
+      cardinality: 'exactly-one',
+      // The agent is bound as `any`: which vendor answered is the runner
+      // record's to state.
+      //
+      // Standard input is bound as a literal, and the literal is the prompt the
+      // harness assembles for this bundle. Both steps declare the same
+      // operation, so under a matcher binding every observation satisfies both
+      // steps and one set's oracles quantify over evidence that is not theirs.
+      // The prompt is the only part of the request that tells the two steps
+      // apart, because the project root it is written against is the one fact
+      // about the bundle the request carries. buildNfrPrompt is
+      // test/eval-nfr.js's own buildPrompt, for the reason the trace contract
+      // records: a literal is compared with deepEquals, so a prompt restated
+      // here in any other form would select nothing, every oracle would resolve
+      // `unreached`, and a run that examined no evidence at all would report
+      // clean at exit 0.
+      inputBinding: {
+        argument: null,
+        option: { agent: { matcher: 'any' } },
+        environment: null,
+        stdin: { prompt: { literal: buildNfrPrompt(set) } },
+      },
+    })),
+    scopedResources: null,
+    forbiddenInputs: FORBIDDEN_INPUTS,
+    testData: {
+      setup:
+        `Each plan step stages one evidence bundle from test/fixtures/nfr-eval/ into a disposable workspace: the bundle's files under its own project root ` +
+        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/tea/config.yaml whose test_artifacts points inside that ` +
+        `workspace, and the bmad-testarch-nfr workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries ` +
+        `its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root ` +
+        `and skill/ and resolves every placeholder against them. The project root is the one fact about the bundle the prompt carries, and it names the service ` +
+        `rather than the bundle's role, so it says which bundle a step is asking for and suggests no status. ` +
+        `The sensitivity witness differs its two legs on custom_nfr_categories rather than between the two bundles: the two reports differ because of the ` +
+        `staged evidence, so a differential between the bundles would attribute to the prompt a difference the evidence produced, and an invariance claim ` +
+        `would be false. custom_nfr_categories is a value step-02 adds to the categories it elicits and the report template carries a section for, so a run ` +
+        `given one names it and a run given none does not. Both witness legs stage the clean bundle, because they are the only other legs this operation has ` +
+        `and AD-10 reads them as its clean legs.`,
+      cleanup:
+        'Delete the workspace. The corpus under test/fixtures/nfr-eval/ is read-only and the harness digests it before and after every run.',
+      principals: null,
+      resources: null,
+    },
+    // A full NFR audit is a six-step run over a whole evidence bundle, so the
+    // bounds are the harness's own twenty-minute clock per bundle and a generous
+    // tool and cost allowance beside it, scaled with the bundle count.
+    budgets: {
+      maxToolCalls: 300 * sets.length,
+      maxWallClockMinutes: 20 * sets.length,
+      maxCostUsd: (4 * sets.length).toFixed(2),
+    },
+    safetyLimits: [
+      "The runner writes only inside the staged workspace, and only its one deliverable under the bundle's own test-artifacts/; the harness fails a run that changed the repository or the staged bundle.",
+      "The run adds, edits, and deletes nothing under the bundle's docs/, evidence/, or config/. This workflow audits evidence and generates none.",
+      'No credential value appears in a prompt, an artifact, a log, or a result file.',
+    ],
+    requiredEvidence: [
+      'The nfr-assessment.md each run wrote, in full.',
+      'The exit code of each invocation.',
+      'The digest of the prompt each run was given, so an edit that changed the question is visible in the record.',
+    ],
+    // One step per evidence bundle, plus room for the two probe steps the compiler may add.
+    probeStepBound: sets.length + 2,
+    fixtureReset: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // tea-routing-intents.contract.json and tea-routing-controls.contract.json
 // ---------------------------------------------------------------------------
 
@@ -3256,6 +3731,7 @@ function firstDifference(expected, actual) {
 
 function targets() {
   return [
+    { relativePath: 'nfr.contract.json', build: buildNfrContract },
     ...ROUTING_CONTRACTS.map((spec) => ({ relativePath: spec.relativePath, build: () => buildRoutingContract(spec) })),
     { relativePath: 'test-review.contract.json', build: buildTestReviewContract },
     { relativePath: 'test-design.contract.json', build: buildTestDesignContract },
@@ -3325,7 +3801,10 @@ module.exports = {
   testDesignStepId,
   buildTestReviewContract,
   buildFragmentSelectionContract,
+  buildNfrContract,
   buildTraceContract,
+  nfrOracleSpecs,
+  nfrStepId,
   traceOracleSpecs,
   traceStepId,
   render,

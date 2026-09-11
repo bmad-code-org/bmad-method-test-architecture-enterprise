@@ -7,9 +7,9 @@
     "way is the most expensive possible mistake to make about your own quality gate.",
     "",
     "Only `evalType: behavioral` discharges a skill's coverage obligation. Fragment selection measures which",
-    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so five of the",
-    "eight skills it spans are still listed under `deferred`. The other three, `test-design`, `test-review` and",
-    "`trace`, each carry a behavioral suite of their own, and that is what discharges them.",
+    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so four of the",
+    "eight skills it spans are still listed under `deferred`. The other four, `nfr`, `test-design`, `test-review`",
+    "and `trace`, each carry a behavioral suite of their own, and that is what discharges them.",
     "",
     "`ciTier` is the tier at which a suite runs in full. `npm run eval:all -- --preflight-only` runs each suite's",
     "`harnessOptions.preflightArgs` instead, which validates the data and then probes the runner: the executable",
@@ -137,6 +137,68 @@
       "caseCount": 24,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["read-only"]
+    },
+    {
+      "$comment": [
+        "Two evidence bundles, each its own set of thresholds, each audited in its own staged workspace.",
+        "Combining them would judge one service's measurement against another service's target, which is",
+        "why they are never one run.",
+        "",
+        "`fixtures` lists every file the agent is given and `groundTruth` names the file it must never see.",
+        "The harness asserts that separation on the staged workspace and on the prompt before it spends a call.",
+        "",
+        "`caseCount` is 2: one case per bundle, which is one staged workspace and one agent call. The",
+        "fourteen fixture files are the inputs those two cases read, and the harness exports the case ids so",
+        "tools/validate-eval-schemas.js checks this number against the list the run actually scores.",
+        "",
+        "The headline is `maxUnsupportedPass` at 0. The gapped bundle carries two domains the workflow's own",
+        "rules say cannot reach a PASS on the evidence it holds, and the clean bundle carries four that can,",
+        "so a workflow that never passes anything fails this suite as surely as one that passes everything."
+      ],
+      "id": "nfr",
+      "skill": "bmad-testarch-nfr",
+      "evalType": "behavioral",
+      "harness": "test/eval-nfr.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": [
+        "test/fixtures/nfr-eval/gapped/config/logging.json",
+        "test/fixtures/nfr-eval/gapped/docs/tech-spec.md",
+        "test/fixtures/nfr-eval/gapped/evidence/dependency-scan-2026-08-30.json",
+        "test/fixtures/nfr-eval/gapped/evidence/load-test-2026-08-28.json",
+        "test/fixtures/nfr-eval/gapped/evidence/reliability-2026-08.json",
+        "test/fixtures/nfr-eval/gapped/evidence/security-review-2026-08-29.md",
+        "test/fixtures/nfr-eval/clean/config/logging.json",
+        "test/fixtures/nfr-eval/clean/docs/tech-spec.md",
+        "test/fixtures/nfr-eval/clean/evidence/coverage-summary-2026-09-01.json",
+        "test/fixtures/nfr-eval/clean/evidence/dependency-scan-2026-09-01.json",
+        "test/fixtures/nfr-eval/clean/evidence/duplication-report-2026-09-01.json",
+        "test/fixtures/nfr-eval/clean/evidence/load-test-2026-09-02.json",
+        "test/fixtures/nfr-eval/clean/evidence/reliability-2026-09.json",
+        "test/fixtures/nfr-eval/clean/evidence/security-review-2026-09-01.md"
+      ],
+      "groundTruth": ["test/fixtures/nfr-eval/ground-truth.json"],
+      "contracts": ["test/contracts/nfr.contract.json"],
+      "thresholds": {
+        "domainStatusAccuracy": 0.875,
+        "undecidableDomainAccuracy": 1,
+        "thresholdFidelityAccuracy": 0.9,
+        "overallStatusAccuracy": 1,
+        "domainCoverage": 1,
+        "maxUnsupportedPass": 0,
+        "maxFabricatedEvidence": 0,
+        "maxCleanFalsePositives": 0,
+        "maxDuplicateDomainSections": 0,
+        "maxUnstableCases": 0,
+        "maxFixtureMutations": 0
+      },
+      "repetitions": 2,
+      "caseCount": 2,
+      "ciTier": "full-matrix",
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -340,12 +402,6 @@
       "owner": "TEA maintainers",
       "missingEvidence": "Fragment selection only. No generated scaffold is ever installed or smoke-tested, so nothing shows the output runs.",
       "exitCondition": "A behavioral suite proves the workflow produces a scaffold that installs, validates, runs a smoke test, and contains the expected configuration, fixtures, scripts, and hook registration."
-    },
-    {
-      "skill": "bmad-testarch-nfr",
-      "owner": "TEA maintainers",
-      "missingEvidence": "Fragment selection only. No evidence fixture with known gaps exists, so an unsupported PASS cannot be distinguished from a grounded one.",
-      "exitCondition": "A behavioral suite proves the workflow grounds every status in supplied evidence, covers all four NFR domains, returns CONCERNS for unknown thresholds, and avoids unsupported PASS results."
     }
   ]
 }

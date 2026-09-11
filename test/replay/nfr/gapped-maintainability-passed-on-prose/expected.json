@@ -1,0 +1,110 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the unsupported PASS in its second form, and the harder one. No",
+    "threshold is invented here. The threshold is real and stated, and the run passes it on a sentence in the",
+    "tech spec asserting the service is well covered, which is a claim rather than a measurement. It then lists",
+    "no evidence gap, because a run that believes the claim has nothing to report.",
+    "",
+    "Duplication moves to N/A in the same edit, because the domain status is the worst status in the section and",
+    "a CONCERNS left there would hold the domain at CONCERNS and hide the judgment this case is about.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-maintainability-passed-on-prose",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Maintainability: PASS, N/A, PASS, PASS, and N/A never wins, so PASS against an expected CONCERNS. One status",
+    "miss and one unsupported PASS, on the domain the ground truth marks undecidable for missing evidence.",
+    "",
+    "Thresholds: the section still names 80% in its coverage threshold line, so the check passes. All four pass.",
+    "",
+    "Unknown threshold: the Performance section is untouched and still carries UNKNOWN, so the document-level",
+    "check passes.",
+    "",
+    "Evidence gaps: the list is empty, which is the reading this run committed to. On the gapped bundle an empty",
+    "list is not scored as a false positive; it is the maintainability status that carries the judgment.",
+    "",
+    "Overall stays FAIL for the same reason as the previous case.",
+    "",
+    "Citations: gapped-correct-audit's nineteen, unchanged. The Test Coverage line cites docs/tech-spec.md in both runs,",
+    "which is the point of the case: this run and the correct audit read one file and reach opposite answers from it, so",
+    "the grounding is identical and the judgment is the whole of what moved. The file is one the bundle carries, so",
+    "nothing is fabricated, and reading a real file as the wrong kind of evidence is a judgment error, counted apart",
+    "from an invention.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "PASS"
+    },
+    "statusMisses": ["maintainability reported PASS, expected CONCERNS (undecidable)"],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": ["maintainability"],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+    },
+    "fabricated": [],
+    "evidenceGaps": [],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

@@ -215,20 +215,98 @@ function unparseable(message) {
   throw error;
 }
 
-/** Remove fenced code blocks (fence lines included) from report text. */
-function stripFencedCodeBlocks(text) {
-  const kept = [];
-  let inFence = false;
+/**
+ * A fence opener or closer: any leading whitespace, then three or more backticks
+ * or three or more tildes, then whatever follows on the line.
+ *
+ * CommonMark bounds a fence's indent at three spaces and reads four as an
+ * indented code block. This admits any indent on purpose, and the reason is what
+ * the function is for. It is a spoof defence: its job is to stop a quoted example
+ * being read as the report's own content, so over-stripping costs a reader
+ * nothing and under-stripping restores the defect. A fence indented four spaces,
+ * which is what a fence takes inside a list item, is content either way under
+ * CommonMark, and refusing to strip it would hand the scanner a quoted example
+ * that the implementation this replaced did strip.
+ *
+ * The trailing `\r?` is load-bearing. JavaScript's `.` excludes a carriage
+ * return, so a pattern ending `(.*)$` matched no line at all on a CRLF document
+ * and stripping was silently disabled on every report written on Windows.
+ */
+const FENCE_LINE = /^[ \t]*(`{3,}|~{3,})([^\r\n]*?)\r?$/;
+
+/**
+ * Every line of `text` paired with the fence depth it sits at: 0 outside any
+ * fenced block and 1 inside one. A fence line itself carries the depth of the
+ * block it opens or closes.
+ *
+ * Only those two values occur, and that is the point rather than an omission.
+ * Fenced blocks do not nest: inside an open block every line is literal content
+ * until the matching closer, which is the same character, at least as long, with
+ * nothing else on the line. So a longer opener carries a shorter fence inside it
+ * as text, and a `~~~` line inside a backtick block opens nothing. The toggle
+ * this replaced got both wrong, and each was the spoof the function exists to
+ * prevent reached by a different spelling: a `~~~` block was not a fence at all,
+ * so an example quoted that way was read as content, and a block opened with four
+ * backticks was closed by its first inner ```` ``` ````, so the rest of a quoted
+ * example surfaced.
+ *
+ * The depth is returned rather than a boolean because a caller can need to ask
+ * the question per line and keep the line numbering. `test/eval-nfr.js` reads it
+ * that way: it locates the run's own `## Gate YAML Snippet` heading among the
+ * lines at depth 0, because a heading inside a fence is quoted content, and then
+ * reads the gate scalar out of that section of the original document. Depth alone
+ * would not answer it, since the report's own snippet and one quoted inside a
+ * longer fence both sit at depth 1.
+ *
+ * @param {string} text
+ * @returns {number[]} One depth per line, in order.
+ */
+function fenceDepths(text) {
+  const depths = [];
+  const open = [];
   for (const line of text.split('\n')) {
-    if (/^\s*```/.test(line)) {
-      inFence = !inFence;
+    const match = FENCE_LINE.exec(line);
+    if (!match) {
+      depths.push(open.length);
       continue;
     }
-    if (!inFence) {
-      kept.push(line);
+    const marker = match[1];
+    const info = match[2];
+    const enclosing = open.at(-1);
+    if (enclosing) {
+      // Inside an open block every line is literal content until the matching
+      // closer, which is the same character, at least as long, with nothing else
+      // on the line. A fence of the other character does not open anything here;
+      // treating it as an opener pushed a level the real closer could not pop, and
+      // the rest of the document stayed hidden at a depth it never left.
+      if (marker[0] === enclosing.char && marker.length >= enclosing.length && info.trim() === '') {
+        depths.push(open.length);
+        open.pop();
+      } else {
+        depths.push(open.length);
+      }
+      continue;
     }
+    // A backtick opener may not carry a backtick in its info string. Without
+    // this an inline span such as `` `a` `` on its own line would open a block
+    // that never closes.
+    if (marker[0] === '`' && info.includes('`')) {
+      depths.push(open.length);
+      continue;
+    }
+    open.push({ char: marker[0], length: marker.length });
+    depths.push(open.length);
   }
-  return kept.join('\n');
+  return depths;
+}
+
+/** Remove fenced code blocks (fence lines included) from report text. */
+function stripFencedCodeBlocks(text) {
+  const depths = fenceDepths(text);
+  return text
+    .split('\n')
+    .filter((_, index) => depths[index] === 0)
+    .join('\n');
 }
 
 /** Escape a literal string for interpolation into a RegExp source. */
@@ -1621,6 +1699,15 @@ function scoreFails(score, minScore) {
 
 module.exports = {
   parseReport,
+  // Exported because test/eval-nfr.js reads a different markdown deliverable and
+  // needs the same answer to "is this line the report's own content". A second
+  // implementation there would be a fourth parser with its own opinion about what
+  // a fence is, which is the class of defect this function exists to close.
+  // `fenceDepths` is the same reading one level finer: the nfr report's own gate
+  // scalar sits inside a fence and a quoted example's sits inside a fence within
+  // a fence, so that reader needs the depth and not only the boolean.
+  fenceDepths,
+  stripFencedCodeBlocks,
   normalizeReportScore,
   deriveRecommendation,
   effectiveScoreFor,

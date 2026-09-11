@@ -1,0 +1,132 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is gapped-fabricated-evidence's evasion. maxFabricatedEvidence was",
+    "computed only from lines labelled `**Evidence:**`, so the same invented file under any other label was not",
+    "a citation at all. Measured against the stored gapped-fabricated-evidence report, the nonexistent",
+    "coverage/lcov-report/index.html scored one fabricated citation under `**Evidence:**`, and zero under",
+    "`**Source:**`, zero under `**Evidence Source:**`, and zero written into the `**Actual:**` prose.",
+    "",
+    "This report is the correct gapped audit with the Code Duplication citation moved onto a `**Source:**`",
+    "label and pointed at reports/jscpd/jscpd-report.json, which is the path nfr-report-template.md offers as",
+    "its jscpd example and which this bundle does not carry. It is the same provenance as the lcov path",
+    "gapped-fabricated-evidence invents: the run copied the template's example instead of reading the bundle.",
+    "",
+    "Every judgment stays correct, which is the point. The run reaches the right four statuses, the right gate",
+    "and the right evidence gap, and grounds one of them on a file that does not exist, so the fabrication is",
+    "the only thing the result measures.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-fabricated-evidence-on-a-source-label",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Every status, threshold, overall reading and evidence-gap entry is gapped-correct-audit's, because the",
+    "only edit is one line of the Code Duplication finding: `- **Evidence:** `docs/tech-spec.md`` became",
+    "`- **Source:** `reports/jscpd/jscpd-report.json``. The finding's Status line is untouched, so Code",
+    "Duplication is still CONCERNS and maintainability still rolls up to CONCERNS.",
+    "",
+    "Statuses: performance CONCERNS, security PASS, reliability FAIL, maintainability CONCERNS. All four match",
+    "the ground truth, so no status miss and neither undecidable domain was passed.",
+    "",
+    "Coverage: four headings, four of them stating a readable status.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section.",
+    "",
+    "Thresholds: security names 0 critical, reliability names 0.5%, maintainability names 80%, and performance",
+    "records UNKNOWN. 4 of 4. The edited line is not a Threshold line and the Code Duplication threshold line",
+    "is untouched, so nothing here moves.",
+    "",
+    "Overall: the Gate YAML says FAIL, which is what a FAIL domain rolls up to. Unknown threshold: the document",
+    "carries the word, which the gapped bundle expects. One evidence gap, for the missing coverage report.",
+    "",
+    "Citations: gapped-correct-audit's nineteen with one path swapped, at the second maintainability entry. The",
+    "performance, security and reliability sections are untouched. Maintainability now reads the tech spec on",
+    "Test Coverage, reports/jscpd/jscpd-report.json on Code Duplication, the dependency scan on the",
+    "vulnerability scan and the logging config on observability. The count is unchanged because the label moved",
+    "rather than the line: the parser reads a citation from any line of a domain section except the Threshold",
+    "line, so `**Source:**` contributes exactly one citation where `**Evidence:**` contributed one.",
+    "",
+    "Fabricated: one citation, under maintainability, whose basename jscpd-report.json is in none of the six",
+    "files the bundle declares. This is the pair gapped-fabricated-evidence is the other half of: the same",
+    "invented-citation defect, one on the label the old parser read and one on a label it did not, and the two",
+    "must now score the same kind of miss.",
+    "",
+    "cleanFalsePositives is 0 because this is not the clean bundle."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": [
+        "docs/tech-spec.md",
+        "reports/jscpd/jscpd-report.json",
+        "evidence/dependency-scan-2026-08-30.json",
+        "config/logging.json"
+      ]
+    },
+    "fabricated": ["maintainability -> reports/jscpd/jscpd-report.json"],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

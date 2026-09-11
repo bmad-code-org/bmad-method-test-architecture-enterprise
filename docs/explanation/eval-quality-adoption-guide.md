@@ -15,18 +15,20 @@ A skill is measured when a run of it produces evidence that a checked-in oracle 
 
 TEA's state today, as `test/evals/suite-manifest.json` registers it:
 
-| Layer                           | What it covers                                                                                                    | Where                             |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Deterministic repository checks | The `npm test` chain, credential-free, no network, no model call                                                  | `package.json`                    |
-| Fragment-selection eval         | 24 cases across the eight workflow skills that ship a knowledge index, measuring which knowledge a run loads      | `test/eval-fragment-selection.js` |
-| Behavioral eval, `test-review`  | 9 planted defects across two seeded files, one clean control, one scope control, repeated three times             | `test/eval-test-review.js`        |
-| Behavioral eval, `trace`        | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice | `test/eval-trace.js`              |
-| Behavioral Evaluation Contracts | Ten, all compiling, all generated, every oracle evaluated against stored evidence                                 | `test/contracts/`                 |
-| Replay corpus                   | 27 stored outputs scored with no model call: 3 selections, 10 verdicts, 14 trace artifact pairs                   | `test/replay/`                    |
+| Layer                           | What it covers                                                                                                     | Where                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------- |
+| Deterministic repository checks | The `npm test` chain, credential-free, no network, no model call                                                   | `package.json`                    |
+| Fragment-selection eval         | 24 cases across the eight workflow skills that ship a knowledge index, measuring which knowledge a run loads       | `test/eval-fragment-selection.js` |
+| Behavioral eval, `test-review`  | 9 planted defects across two seeded files, one clean control, one scope control, repeated three times              | `test/eval-test-review.js`        |
+| Behavioral eval, `trace`        | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice  | `test/eval-trace.js`              |
+| Behavioral eval, `bmad-tea`     | 18 intents put to the agent, one call each, measuring which menu item a sentence routes to, repeated twice         | `test/eval-bmad-tea-routing.js`   |
+| Behavioral eval, `nfr`          | An evidence bundle with known gaps and a clean control, each audited in its own staged workspace, repeated twice   | `test/eval-nfr.js`                |
+| Behavioral Evaluation Contracts | Thirteen, all compiling, all generated, every oracle evaluated against stored evidence                             | `test/contracts/`                 |
+| Replay corpus                   | 57 stored outputs scored with no model call: 3 selections, 10 verdicts, 14 trace pairs, 13 nfr reports, 17 replies | `test/replay/`                    |
 
-Two of the ten skills, `bmad-tea` and `bmad-teach-me-testing`, have no suite of any kind. They carry deferred entries in the manifest naming their owner, their missing evidence, and the condition that retires the entry, because a suite list with a skill quietly missing from it reads as coverage.
+One of the ten skills, `bmad-teach-me-testing`, has no suite of any kind. It carries a deferred entry in the manifest naming its owner, its missing evidence, and the condition that retires the entry, because a suite list with a skill quietly missing from it reads as coverage.
 
-The three suites that existed then were measured live for the first time on 2026-09-08 and all three were green. No result artifact is committed, so the numbers live in `docs/explanation/eval-quality-roadmap.md` and any claim about them needs a fresh measurement. The `bmad-tea-routing` suite was added afterwards and has never been run live, so it has a declared threshold and no measurement behind it.
+The three suites that existed then were measured live for the first time on 2026-09-08 and all three were green. No result artifact is committed, so the numbers live in `docs/explanation/eval-quality-roadmap.md` and any claim about them needs a fresh measurement. The `bmad-tea-routing`, `nfr` and `test-design` suites were added afterwards and have never been run live, so each has declared thresholds and no measurement behind them.
 
 ## 1. What you need before you start
 
@@ -196,9 +198,9 @@ The mechanism is three exit codes and an ordered list of failure classes:
 
 TEA scores in process through `runScore` and reaches no binary, so nothing applies `--strict` unless TEA decides to. **TEA declines the promotion**, and `STRICT_CONCERNS_PROMOTION` in `test/lib/probe-scoring.js` is where that decision is written down. Exit `1` in this repository already means a measured quality failure decided by the failure classes above, and a probe corpus decides one by baseline movement. Promoting would give exit `1` a second meaning inside one repository, which is the same defect this section opens with, reached through the verdict ladder. It would also take `npm test` red today on the 32 CONCERNS the stored corpus scores, every one of which `test/probes/expected-strength.json` already records as expected.
 
-The field is still read every run. `test/test-probe-corpus.js` records `strictPromotable` for all 51 scored probes. It can only move on the 32 that resolve CONCERNS, and all 32 are `true` today because every one of them fires on an unsatisfied coverage gap, which AD-21 counts as a system claim; the other 19 sit on the Invalid rung, where the ladder hardcodes `true` and the field says nothing. The day a CONCERNS fires only on `below-minimum-trial-count` or `oracle-unreached`, the field goes `false`, the baseline moves, and somebody reads why. `ladderExitCode` is the single place a ladder resolution becomes an exit code TEA reports, so flipping the decision is one constant and its measured consequence is 32 baseline entries moving from `0` to `1`.
+The field is still read every run. `test/test-probe-corpus.js` records `strictPromotable` for every scored probe. It can only move on probes that resolve CONCERNS, and every current CONCERNS is `true` because each one fires on an unsatisfied coverage gap, which AD-21 counts as a system claim. The day a CONCERNS fires only on `below-minimum-trial-count` or `oracle-unreached`, the field goes `false`, the baseline moves, and somebody reads why. `ladderExitCode` is the single place a ladder resolution becomes an exit code TEA reports, so flipping the decision is one constant with a measured consequence.
 
-One case belongs to the same rule and is easy to miss. **Every declared repetition must complete.** Stability and variance are claims about repeated runs, and a case that lost a run has fewer observations than the gate declared. The `test-review` harness once scored fewer runs than were requested, which made variance unmeasurable and weakened the stability claim while still reporting a pass. All three harnesses exit `2` on a short run now.
+One case belongs to the same rule and is easy to miss. **Every declared repetition must complete.** Stability and variance are claims about repeated runs, and a case that lost a run has fewer observations than the gate declared. The `test-review` harness once scored fewer runs than were requested, which made variance unmeasurable and weakened the stability claim while still reporting a pass. All six harnesses exit `2` on a short run now.
 
 ### Confine the run, and check afterwards
 
@@ -220,14 +222,14 @@ Every harness supports the same three:
 
 ### Replay the scorers without a model
 
-A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 27 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
+A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 57 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
 
 - **Derive each expected result by hand from the ground truth**, before running the code under test. A result generated from the scorer proves the scorer agrees with itself.
 - **Carry a scorer version.** A parser or scorer change either reproduces every stored result or bumps `SCORER_VERSION` in an edit somebody has to review. `--accept` refuses to re-record until that bump happens.
 
 Deriving by hand is not ceremony. Writing the `trace` parser-rejection case by hand found a defect: `readMatrix` closed a criterion section only at the next criterion-shaped heading, so a `### Gap Analysis` heading left the last section open and a test cited beneath it was recorded as that criterion's evidence. The derivation gave 10 citations and the code gave 11.
 
-Two of the 27 stored outputs are real captures. The other 25 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
+Two of the 57 stored outputs are real captures. The other 55 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
 
 ## 5. Express the skill as a contract
 
@@ -235,7 +237,7 @@ A Behavioral Evaluation Contract states what a skill has to do in a vocabulary t
 
 ### Generate contracts, never hand-write them
 
-All ten TEA contracts are written by `tools/generate-contracts.js` from their sources, and `node tools/generate-contracts.js --check` regenerates them in memory and fails when the bytes on disk differ. It runs in `npm test`, so a fixture edit that leaves a contract stale fails the deterministic gate.
+All fourteen TEA contracts are written by `tools/generate-contracts.js` from their sources, and `node tools/generate-contracts.js --check` regenerates them in memory and fails when the bytes on disk differ. It runs in `npm test`, so a fixture edit that leaves a contract stale fails the deterministic gate.
 
 What the generator reads rather than transcribes is the interesting part: every planted row and its admitted-line set from the ground truth; which behavior a row belongs to and how hard it grades, from the row's severity in the criteria registry; every required and forbidden fragment list from each `evals.json`; the verdict descriptor's key set and types from `VERDICT_KEYS` in `cli/test-review.js`; each runner's request shape from the runner itself; the trace summary's key set from the object literal in the workflow's step-05; and both source-spec digests, recomputed from the files they pin through a helper that length-prefixes each file, so a byte moved from the tail of one step file to the head of the next changes the answer.
 
@@ -281,7 +283,7 @@ The `npm test` chain is credential-free, makes no network call and no model call
 npm run test:eval-data          # fragment-selection corpus, static
 npm run test:eval-trace-data    # trace corpus, static
 npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # 27 stored outputs against the scorers
+npm run test:eval-replay        # 57 stored outputs against the scorers
 npm run test:contract-sources   # are the contracts what their sources generate?
 npm run test:contracts          # does the compiler still say what the baseline records?
 npm run test:contract-oracles   # does every oracle resolve, and agree with the scorer?
@@ -315,7 +317,7 @@ Run live against more than one vendor when you can. The confirming `trace` run w
 
 ### Model calls
 
-One `npm run eval:all` for one runner spends 55 calls: 48 fragment selections (24 cases at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), and 4 complete traces (two cases at two repetitions).
+One `npm run eval:all` for one runner spends 95 calls: 48 fragment selections (24 cases at two repetitions), 36 routing intents (18 intents at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), 4 complete audits (two evidence bundles at two repetitions), and 4 complete traces (two cases at two repetitions).
 
 Repetition counts are a real cost multiplier and are declared per suite. Two is the smallest number that can say whether an answer is reproducible. `test-review` uses three because it also measures score variance.
 
@@ -331,7 +333,7 @@ Each harness bounds its own vendor call and the adapter backstops it a minute or
 | test-review        | 15 minutes    | 16 minutes       |
 | trace              | 20 minutes    | 21 minutes       |
 
-Those are bounds rather than measured durations. One real data point: the first `test-review` measurement defaulted to the codex runner, hit the fifteen-minute bound, and measured nothing, so the recorded numbers come from an explicit `--agent claude`. All three harnesses default to `claude` now. Budget a full matrix in tens of minutes, and note that `eval-all.js` deliberately keeps its own child spawn with `stdio: 'inherit'` so a long matrix prints as it goes.
+Those are bounds rather than measured durations. One real data point: the first `test-review` measurement defaulted to the codex runner, hit the fifteen-minute bound, and measured nothing, so the recorded numbers come from an explicit `--agent claude`. All six harnesses default to `claude` now. Budget a full matrix in tens of minutes, and note that `eval-all.js` deliberately keeps its own child spawn with `stdio: 'inherit'` so a long matrix prints as it goes.
 
 ### The parts that stay manual
 
@@ -369,7 +371,7 @@ TEA's contracts lean on the fact that TEA workflows write files. A skill whose o
 
 - **One request and one observation is not a transcript.** The command adapter probes an interface once and returns an observation. `bmad-tea` routes a user's intent across turns and `bmad-teach-me-testing` runs a multi-session teaching arc, and neither shape fits. Both stay deferred in TEA's manifest for exactly this reason.
 - **A skill with no knowledge index gets no fragment-selection floor either.** `bmad-teach-me-testing` ships none, so even the routing measurement does not apply to it. Fragment selection is the cheap first layer for the other eight, and it is not universal.
-- **Fragment selection is not behavioral coverage.** It measures which knowledge a run loads, which is a routing decision taken before the workflow produces anything. TEA's manifest is explicit that only `evalType: behavioral` discharges a skill's coverage obligation, and five of the eight skills fragment selection spans are still listed as deferred. The other three, `test-design`, `test-review` and `trace`, are discharged by their own behavioral suites.
+- **Fragment selection is not behavioral coverage.** It measures which knowledge a run loads, which is a routing decision taken before the workflow produces anything. TEA's manifest is explicit that only `evalType: behavioral` discharges a skill's coverage obligation, and four of the eight skills fragment selection spans are still listed as deferred. The other four, `nfr`, `test-design`, `test-review` and `trace`, are discharged by their own behavioral suites.
 - **A tree is not an artifact map.** The artifact map addresses files by name. A skill whose deliverable is a generated project or pipeline needs a different addressing story before its contract can say anything about the output.
 - **Semantic judgments still need a human in the loop.** Adjudication, corpus correction, and the decision that a case still exercises its behavior are all unautomated here, and the AC-4 story is what that looks like when it goes right.
 

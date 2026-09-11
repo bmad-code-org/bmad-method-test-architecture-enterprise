@@ -1,0 +1,21 @@
+# Line endings.
+#
+# Every text file in this repository is stored and checked out with LF, whatever
+# a contributor's core.autocrlf happens to be set to. prettier.config.mjs pins
+# `endOfLine: 'lf'` and `npm test` runs `prettier --check .`, so a checkout that
+# rewrote line endings would fail the gate on every file it touched.
+* text=auto eol=lf
+
+# The one exception, where the line endings ARE the payload.
+#
+# cli/lib/parse-report.js strips fenced code blocks before scanning a review
+# report, so a finding quoted inside a fenced example can never spoof a verdict.
+# That stripper reads line endings: its fence pattern once ended `(.*)$`, and
+# JavaScript's `.` excludes `\r`, so on a CRLF report no line matched, nothing
+# was stripped, and the whole defence was off. `eol=crlf` checks this one file
+# out with CRLF on every platform, whatever the contributor's settings are, so
+# the bytes the test reads are restored by the next checkout even if an editor
+# normalizes them in between. Without it the fixture becomes its own LF twin and
+# the suite goes on passing over a defence that is no longer tested.
+# Asserted by test/test-test-review-cli.js, Suite 1.
+test/fixtures/test-review-cli/reports/fenced-recommendation-crlf.md text eol=crlf

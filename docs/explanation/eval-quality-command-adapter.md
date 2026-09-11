@@ -27,7 +27,7 @@ That last one had no TEA equivalent at all. A harness could spawn anything.
 
 **`eval-all.js`'s child spawn stays.** It uses `stdio: 'inherit'` so a forty-minute matrix prints as it goes. A probe captures and returns at the end, which is wrong for an operator watching one.
 
-**The `--version`, `git`, and keychain probes stay.** They interrogate the environment rather than probe a system under test, so the adapter does not cover them. None passed a timeout, so any one could hang CI rather than fail it; all eight now go through `test/lib/bounded-probe.js`, which is a ten-second deadline, a SIGKILL, and a reason the caller can act on. Eight is four `--version` probes, three `git` reads, and the keychain lookup.
+**The `--version`, `git`, and keychain probes stay.** They interrogate the environment rather than probe a system under test, so the adapter does not cover them. None passed a timeout, so any one could hang CI rather than fail it; all ten now go through `test/lib/bounded-probe.js`, which is a ten-second deadline, a SIGKILL, and a reason the caller can act on. Ten is six `--version` probes, three `git` reads, and the keychain lookup.
 
 ## The policy is the seam
 
@@ -36,18 +36,18 @@ A contract names a logical executable and `ProbeRequest` enforces it: `executabl
 Two couplings the seam does not remove, both found by running it:
 
 - **`--json` and `--output` resolve against `--project-root`; the artifact map resolves against the policy `cwd`.** `test-review.contract.json`'s witness legs pass a bare `verdict.json` and name no project root, so its live pre-flight writes into whichever directory also has to satisfy its repository-relative `--files`. Those legs need an explicit project root and run-scoped artifact paths.
-- **The child environment is closed** to `PATH` plus what the request declares, and from `eval-quality` 3.0.0 the authorization declares which of those keys a request may carry at all. All three commands permit the vendor names plus `HOME` and `USER`, because both vendors resolve a stored login through `HOME`; `tea-test-review` permits `CI` on top of them, which it reads to decide filesystem isolation. A key outside a command's list is refused before a process spawns, and `PATH` is on no list: `target` may name a bare command, so a declared `PATH` would choose which binary runs. The adapter supplies its own.
+- **The child environment is closed** to `PATH` plus what the request declares, and from `eval-quality` 3.0.0 the authorization declares which of those keys a request may carry at all. All six commands permit the vendor names plus `HOME` and `USER`, because both vendors resolve a stored login through `HOME`. `CI` is on no list, which is what makes a measured review reproducible: `cli/test-review.js` reads it to decide filesystem isolation, so permitting it would let the host decide how the measured run executed. A key outside a command's list is refused before a process spawns, and `PATH` is on no list: `target` may name a bare command, so a declared `PATH` would choose which binary runs. The adapter supplies its own.
 
 ## Reaching more than one skill
 
-Thirteen contracts declare five logical executables, each a command TEA ships. When there were nine they declared two, and one did not exist: `tea-fragment-selection-runner`, named by eight of them, was fiction, which is worse than a declared gap: the contract compiles, pre-flight schedules a leg against it, and the gate stays green over a command nobody can run.
+Fourteen contracts declare six logical executables, each a command TEA ships. When there were nine they declared two, and one did not exist: `tea-fragment-selection-runner`, named by eight of them, was fiction, which is worse than a declared gap: the contract compiles, pre-flight schedules a leg against it, and the gate stays green over a command nobody can run.
 
 `cli/fragment-selection-runner.js` is that command now. Its whole surface is the one turn those contracts declared: a prompt on standard input, `{"fragments": [...]}` on standard output. It builds no prompt, because a prompt belongs to the eval corpus, and knows no vendor, because it calls `runAgent`. `test/test-probe-targets.js` keeps the fiction from returning: every declared interface, executable, and subcommand path must be one the registry carries, and every registered command must be named by some contract.
 
 One runner covers eight skills because the eight contracts declare one interface. The rest is per-skill: each item below is one registry entry, one contract, and no change to the probe layer:
 
 - ~~`trace`~~ and `automate`, writing into a staged tree. `trace` is done, below. `automate` is the same shape: one runner wrapping the agent in a staged workspace, and an artifact map over what it writes.
-- `nfr` and `test-design`, each writing its assessment artifact. Medium: neither has a harness, so the corpus is the work.
+- ~~`nfr`~~ and `test-design`, each writing its assessment artifact. `nfr` is done: `tea-nfr-runner`, `test/eval-nfr.js`, and two evidence bundles under `test/fixtures/nfr-eval/`. `test-design` is the same shape, and the corpus is still the work.
 - `atdd`, and `automate`'s fail-before leg, one command against two revisions. Medium: the fixture reset such a plan needs does not exist.
 - `framework` and `ci`, scaffolding a project or pipeline. High: the artifact is a tree and the artifact map addresses files.
 - `bmad-tea` and `bmad-teach-me-testing`. Unknown: one request and one observation is not a multi-turn transcript.
@@ -66,10 +66,10 @@ inventory, kept honest by being a list of what is still unused rather than a lis
 
 | Published surface                                                                 | TEA's use                                                                                                                                                                                                                                                                                               |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `compile`, in process                                                             | `npm run test:contracts` compiles all thirteen contracts against `test/contracts/expected-status.json`, and seeds six faults into each one so the refused path runs on every gate                                                                                                                       |
-| `createCommandLineAdapter`, `nodeCommandMechanism`, `CommandTargetPolicy`         | `test/lib/probe-targets.js` maps five logical executables to five real commands                                                                                                                                                                                                                         |
+| `compile`, in process                                                             | `npm run test:contracts` compiles all fourteen contracts against `test/contracts/expected-status.json`, and seeds six faults into each one so the refused path runs on every gate                                                                                                                       |
+| `createCommandLineAdapter`, `nodeCommandMechanism`, `CommandTargetPolicy`         | `test/lib/probe-targets.js` maps six logical executables to six real commands                                                                                                                                                                                                                           |
 | `runPreflight`, `RunPreflightOptions.sink`                                        | `npm run eval:preflight` drives every contract's witness legs through the adapter for real, and the sink reports how many legs each pre-flight planned, which the verdict does not carry                                                                                                                |
-| `runScore`                                                                        | `npm run test:probe-corpus` scores 51 probes across thirteen corpora; `npm run eval:contract-strength` scores them under a live pre-flight verdict                                                                                                                                                      |
+| `runScore`                                                                        | `npm run test:probe-corpus` scores 55 probes across fourteen corpora; `npm run eval:contract-strength` scores them under a live pre-flight verdict                                                                                                                                                      |
 | `seal`                                                                            | one sealed evaluator brief per contract, written by the same script                                                                                                                                                                                                                                     |
 | `digestArtifact`                                                                  | every artifact digest the run record and the isolation manifest declare                                                                                                                                                                                                                                 |
 | the published JSON Schemas                                                        | `test/lib/eval-quality-inputs.js` validates every artifact TEA builds or receives against `eval-quality/schemas/*`                                                                                                                                                                                      |
@@ -82,12 +82,13 @@ inventory, kept honest by being a list of what is still unused rather than a lis
 
 ### What the corpus is
 
-`tools/generate-probes.js` writes 51 probes from the ground truth this repository already keeps.
+`tools/generate-probes.js` writes 55 probes from the ground truth this repository already keeps.
 Nine defect probes for `test-review`, one per planted registry row, each a controlled mutation whose
 target artifact, baseline-pass evidence and mutated-fail evidence are files on disk. Three for
-`trace`, one per criterion the seeded set deliberately leaves short. A clean control for every
-contract, and a gameability probe for each of the eight fragment-selection contracts and for
-`test-review`. `test/probes/README.md` carries the whole record.
+`trace`, one per criterion the seeded set deliberately leaves short. Three for `nfr`, one per domain
+the audited bundle leaves undecidable or breached. A clean control for every contract, and a
+gameability probe for each of the eight fragment-selection contracts and for `test-review`.
+`test/probes/README.md` carries the whole record.
 
 Every probe names the oracle that catches it, and that is enforced rather than intended: the
 generator reads a probe's `behaviorId` out of the contract and refuses one whose behavior discharges
@@ -100,6 +101,7 @@ What the corpus scores, read off `test/probes/expected-strength.json` as it stan
 | `test-review`                          | 9 of 9 caught | refused               | the gameability signature reads a written file, so AD-9's gate refuses it                               |
 | the eight fragment-selection contracts | none authored | 1 of 1 caught on each | fragment selection seeds no defect; it is a routing measurement with a required set and a forbidden set |
 | `trace`                                | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
+| `nfr`                                  | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
 
 The two numbers that moved and what moved them: `test-review`'s defect class went from four exercised
 and four caught to nine and nine when `eval-quality` 1.4.0 dropped a clean leg that had issued the
@@ -116,7 +118,7 @@ is that the contract does not fire where there is nothing to find.
 reached the outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome moved.
 Eight probes could not be pre-flighted when that rule was written, and both scripts would have been
 red on every run, which is how a script stops being read before the day it means something. Fourteen
-of the 51 cannot pre-flight today, all of them `test-design`'s, so the baseline is what says a green
+of the 55 cannot pre-flight today, all of them `test-design`'s, so the baseline is what says a green
 run is green rather than what excuses a red one, and the rule is what catches the first probe whose
 outcome moves in either direction.
 

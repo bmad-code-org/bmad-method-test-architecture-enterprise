@@ -1,0 +1,116 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: a domain is covered when the report states a status for it, and this",
+    "report states none for Maintainability. Every finding in that section is spelled PARTIAL, which is",
+    "outside the four statuses nfr-status-definitions.md defines, so the section carries a heading, four",
+    "thresholds, four evidence citations, and no answer.",
+    "",
+    "It is the shape a heading-counting coverage check cannot see. The section is there, so the count that",
+    "reads headings alone is four of four, and the domain Step 4 dispatched a worker for is still",
+    "unreported.",
+    "",
+    "It is gapped-correct-audit with the Maintainability section's four Status lines respelled and the",
+    "prose around them made to agree; the thresholds, the evidence and every other section are unchanged.",
+    "",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-maintainability-status-unreadable",
+  "suite": "nfr",
+  "scorerVersion": 8,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Maintainability: STATUS_LINE recognises PASS, CONCERNS, FAIL and N/A, so it matches none of the four",
+    "lines and the section records no status at all. rollupStatus over an empty list is null.",
+    "",
+    "Coverage: four headings, three of them stating a readable status. The two numbers differ here and",
+    "nowhere else in the corpus, which is what the pair is for: gapped-domain-omitted has three of each.",
+    "",
+    "Maintainability reports nothing, which is a status miss against an expected CONCERNS. It is not an",
+    "unsupported PASS: a domain with no status was not passed.",
+    "",
+    "Thresholds: the section exists, so its threshold lines are read, and the first of them still names",
+    "80%. 4 of 4. This is what separates the case from gapped-domain-omitted, where the absent section",
+    "leaves no threshold line to read at all.",
+    "",
+    "The other three domains, the overall status, the unknown-threshold check and the evidence-gap list",
+    "are gapped-correct-audit's, unchanged. Overall stays FAIL because reliability is still FAIL.",
+    "",
+    "Duplicate sections: none. Every domain this report assesses has exactly one section.",
+    "",
+    "Before a stated status was required, coverage read four of four on this report and the only thing",
+    "that fell to the unreadable section was the status miss.",
+    "",
+    "Citations: gapped-correct-audit's nineteen, unchanged. Only the four Status lines were respelled, so the",
+    "Maintainability section still carries its four Evidence lines and cites four files while stating no status",
+    "at all."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": null
+    },
+    "statusMisses": ["maintainability reported nothing, expected CONCERNS (undecidable)"],
+    "coverage": {
+      "present": 3,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

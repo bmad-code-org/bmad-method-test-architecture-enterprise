@@ -1,0 +1,15 @@
+{
+  "tool": "c8",
+  "generated": "2026-09-01T05:51:00Z",
+  "build": "relay@2.3.0",
+  "totals": { "statements_pct": 88.4, "branches_pct": 84.1, "functions_pct": 90.2, "lines_pct": 88.6 },
+  "trend": [
+    { "build": "relay@2.1.0", "statements_pct": 85.9 },
+    { "build": "relay@2.2.0", "statements_pct": 87.2 },
+    { "build": "relay@2.3.0", "statements_pct": 88.4 }
+  ],
+  "lowest_covered_files": [
+    { "path": "relay/src/transports/sms-fallback.ts", "statements_pct": 79.1 },
+    { "path": "relay/src/admin/replay-console.ts", "statements_pct": 81.4 }
+  ]
+}

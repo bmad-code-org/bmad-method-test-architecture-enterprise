@@ -1,0 +1,19 @@
+{
+  "tool": "k6",
+  "run_id": "harbor-ledger-close-2026-08-28",
+  "generated": "2026-08-28T02:41:00Z",
+  "scenario": "Month-end statement generation, 250 virtual users, 20 minutes, production-shaped tenant mix",
+  "target_values_supplied": false,
+  "note": "No target values were supplied to this run. The harness recorded observed values only; judging them is the reader's.",
+  "results": {
+    "requests": 412800,
+    "response_time_ms": { "p50": 96, "p95": 214, "p99": 388 },
+    "throughput_rps": 344,
+    "resource_usage": { "peak_cpu_pct": 58, "peak_heap_pct": 61, "db_connection_pool_peak": 34, "db_connection_pool_size": 60 }
+  },
+  "slowest_endpoints": [
+    { "route": "GET /v2/tenants/{tenant}/statements", "p95_ms": 214 },
+    { "route": "GET /v2/tenants/{tenant}/statements/{id}/lines", "p95_ms": 173 },
+    { "route": "POST /v2/tenants/{tenant}/statements:generate", "p95_ms": 151 }
+  ]
+}

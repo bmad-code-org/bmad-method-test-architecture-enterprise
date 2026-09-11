@@ -1,0 +1,10 @@
+{
+  "tool": "npm audit",
+  "generated": "2026-09-01T05:47:00Z",
+  "build": "relay@2.3.0",
+  "summary": { "critical": 0, "high": 0, "moderate": 1, "low": 4, "info": 0, "total": 5 },
+  "findings": [
+    { "id": "GHSA-4k2p-9v6m-1x8b", "severity": "moderate", "package": "mime-sniff", "fixed_in": "1.7.4", "path": "webhook-transport" }
+  ],
+  "note": "0 critical and 0 high, which is the tech-spec requirement for both the security and the maintainability threshold."
+}
