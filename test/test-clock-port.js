@@ -125,6 +125,10 @@ function runHarnessUnderScriptedClock(fixturePath, jsonPath) {
 function main() {
   console.log(`${colors.dim}the clock port is in the path that produces a duration${colors.reset}\n`);
 
+  // Heals a tree where an earlier run was killed between creating the probe skill
+  // and removing it. Nothing else creates this path.
+  fs.rmSync(path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'tea-clock-port-probe'), { recursive: true, force: true });
+
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-clock-port-'));
   try {
     const fixturePath = path.join(workspace, 'instants.txt');
@@ -219,6 +223,15 @@ function main() {
     // and nothing else. Git does not track an empty directory, so a crash between
     // the two calls below leaves the working tree clean.
     const probeSkill = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'tea-clock-port-probe');
+    // A `finally` covers a throw and covers no signal. A run killed during the
+    // spawn below would leave a directory that `git status` cannot show, because
+    // git does not track an empty one, and the next `npm run test:eval-schemas`
+    // would fail on an unaccounted skill that appears in no diff. The signal
+    // handlers close that, and the unconditional sweep at the top of main() heals
+    // a tree where it already happened.
+    const removeProbeSkill = () => fs.rmSync(probeSkill, { recursive: true, force: true });
+    process.once('SIGINT', removeProbeSkill);
+    process.once('SIGTERM', removeProbeSkill);
     const allJson = path.join(workspace, 'eval-all.json');
     fs.mkdirSync(probeSkill, { recursive: true });
     let allRun;
@@ -238,7 +251,9 @@ function main() {
         },
       );
     } finally {
-      fs.rmSync(probeSkill, { recursive: true, force: true });
+      removeProbeSkill();
+      process.off('SIGINT', removeProbeSkill);
+      process.off('SIGTERM', removeProbeSkill);
     }
     if (fs.existsSync(allJson)) {
       const allRecord = JSON.parse(fs.readFileSync(allJson, 'utf8'));
@@ -299,7 +314,14 @@ function main() {
   // while reintroducing the defect. `new Date(value)` with an argument is a
   // conversion rather than a reading, and the harnesses use it to render a mark
   // the port already gave them, so only the no-argument form is refused.
-  const wallClockRead = /\b(?:Date\.now|performance\.now|process\.hrtime)\s*\(|new\s+Date\s*\(\s*\)/;
+  // No call parenthesis is required. Requiring one named `process.hrtime` as
+  // refused while refusing only the deprecated tuple spelling: `process.hrtime.bigint()`
+  // is the documented current form and the one new timing code reaches for, and it
+  // sailed through. Dropping the parenthesis also catches a deferred reference such
+  // as `const f = Date.now`, and `new Date` without parentheses, which is valid and
+  // returns the current time. `new Date(mark)` stays allowed because an argument
+  // makes it a conversion of a mark the port already gave.
+  const wallClockRead = /\b(?:Date\.now|performance\.now|process\.hrtime)\b|new\s+Date\s*\(\s*\)|new\s+Date\s*(?![(\w.])/;
   const withWallClock = harnessFiles.filter((name) => {
     const body = fs.readFileSync(path.join(PROJECT_ROOT, 'test', name), 'utf8');
     return body

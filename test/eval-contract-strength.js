@@ -335,10 +335,12 @@ function costReport(agent, stats, startedAt, totalElapsedMs) {
 }
 
 function writeArtifact(dir, name, value) {
-  // The cost report carries a scripted `startedAt` and a scripted
-  // `totalWallClockSeconds` under a fixture, which is the same artifact class
-  // `refuseScriptedRecord` exists to prevent. This harness writes through its own
-  // writer rather than through eval-record.js, so the guard is applied here too.
+  // Every artifact this harness writes, which is the cost report, the sealed
+  // evaluator brief and the verdict files. Under a fixture the cost report's
+  // `startedAt` and `totalWallClockSeconds` are scripted, which is the artifact
+  // class `refuseScriptedRecord` exists to prevent, and the rest are evidence on
+  // the same run. This harness writes through its own writer rather than through
+  // eval-record.js, so the guard is applied here too.
   refuseScriptedRecord(path.join(dir, name));
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, name), `${JSON.stringify(value, null, 2)}\n`, 'utf8');
