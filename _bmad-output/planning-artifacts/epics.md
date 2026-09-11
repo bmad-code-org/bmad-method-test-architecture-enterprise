@@ -214,7 +214,7 @@ NFR9: Any gate that executes content rather than reading it runs isolated. Three
 - Both TEA contracts already carry two sensitivity witnesses each, so that capability needs verification rather than first-time adoption.
 - TEA's contracts declare the `cli` interface kind only, over `artifact`, `text` and `absent` response descriptors.
 - `test/contracts/expected-status.json` records `{"status": "compiles"}` for all 10 contracts and no failure code, so there is no code in that file to check against a registry today.
-- The conformance arms this work adopts were already available on the installed 1.4.0 (`corpus` 6, `clock` 6, `file-system` 12, `environment-probe` 19), so nothing about them is gated on the pin move.
+- The conformance arms this work adopts were already available on the installed 1.4.0 (`corpus` 6, `clock` 6, `file-system` 12), so nothing about them is gated on the pin move. `environment-probe` 19 was counted here too until FR21 was withdrawn; it is the api arm and TEA adopts no HTTP port, so it is not among them.
 - `schemas/artifact-reference.schema.json` carries no `schemaVersion` by design. It is a reference shape embedded in other artifacts, the exemption is asserted by a test against the registry's `carriesLineage` flag, and no story may add a version to it.
 - Cross-repository authorization is granted: pull requests and releases against `~/opensource/bmad-eval-quality` are in scope.
 
@@ -307,9 +307,9 @@ A consumer reads the schema stamp it must write, compares two results, and runs 
 
 The corpus digesting, file access and timing TEA performs by hand run through `eval-quality`'s reference adapters and are proven by its conformance suite.
 
-One arm is out of scope and the reason is recorded rather than left as a silence. `runEnvironmentProbePortConformance` is the `api` arm over HTTP, the package ships no HTTP adapter, and TEA authorizes no HTTP target, so the arm has no subject. FR21 is withdrawn above with the evidence. The arms this epic does adopt, `corpus`, `clock` and `file-system`, each have a shipped adapter behind them. Five arms run where one runs today: the command-line arm TEA already has, plus the generic environment-probe, corpus, clock and file-system arms.
+One arm is out of scope and the reason is recorded rather than left as a silence. `runEnvironmentProbePortConformance` is the `api` arm over HTTP, the package ships no HTTP adapter, and TEA authorizes no HTTP target, so the arm has no subject. FR21 is withdrawn above with the evidence. The arms this epic does adopt, `corpus`, `clock` and `file-system`, each have a shipped adapter behind them. Four arms run where one runs today: the command-line arm TEA already has, plus the corpus, clock and file-system arms.
 
-**FRs covered:** FR18, FR19, FR20, FR21, FR22
+**FRs covered:** FR18, FR19, FR20, FR21 (withdrawn), FR22
 
 ### Epic 4: TEA's claims, codes and supply chain are machine-held
 
@@ -629,7 +629,7 @@ The corpus digesting, file access and timing TEA performs by hand run through `e
 
 An earlier draft had TEA implement three ports. The package already exports `createLocalCorpusAdapter`, `createNodeFileSystemAdapter` and `createSystemClockAdapter` from `eval-quality/adapters`, beside the command-line adapter TEA already consumes. The work is adoption and cutover, and the cutover is what carries the risk.
 
-**FRs covered:** FR18, FR19, FR20, FR21, FR22
+**FRs covered:** FR18, FR19, FR20, FR21 (withdrawn), FR22
 
 ### Story 3.1: Hold every conformance count to the package
 
@@ -637,7 +637,7 @@ As a TEA maintainer,
 I want every conformance count TEA asserts to come from the package,
 So that an arm whose assertion list moves upstream fails here instead of drifting.
 
-This story was `Run the generic environment-probe conformance arm` and half of it was withdrawn. FR21's premise was wrong and the record of why is in the requirements inventory above. What survives is FR22, which stands on its own: it holds the one arm TEA runs today and every arm Epics 3.2 through 3.4 adopt.
+This story was `Run the generic environment-probe conformance arm` and half of it was withdrawn. FR21's premise was wrong and the record of why is in the requirements inventory above. What survives is FR22, which stands on its own: it holds the one arm TEA runs today and every arm this epic's remaining stories adopt.
 
 **Acceptance Criteria:**
 

@@ -28,7 +28,8 @@
  *   TEA handles, and parses against the package's own parser for it.
  * - Every conformance arm `CONFORMANCE_OUTCOME_COUNTS` names is either run by a
  *   TEA check that reads its expected count from that registry, or recorded
- *   here as not yet run, with the reason. An arm in neither fails, naming it.
+ *   here with the reason no check runs it, which is either planned adoption or a
+ *   decline. An arm in neither fails, naming it.
  *
  * Usage: node test/test-port-totality.js
  *
@@ -74,10 +75,14 @@ const PROBE_KINDS = {
 /**
  * Which TEA check runs each published conformance arm.
  *
- * `file` is the check that runs it. `reason` is why an arm has no check yet, and
- * every one of those is adoption work TEA has planned rather than a capability
- * it declines: the arms were already available on the release TEA ran before
- * this upgrade, so nothing about them waits on a package change.
+ * `file` is the check that runs it. `reason` is why no check does, and a reason
+ * is one of two things. Three of them are adoption work TEA has planned: the
+ * corpus, clock and file-system arms were already available on the release TEA
+ * ran before this upgrade, so nothing about them waits on a package change. The
+ * other two are declines. `environment-probe` and `mcp-probe` are the api and mcp
+ * arms, TEA measures neither an HTTP service nor a tool server, and the package
+ * ships no adapter for the first, so neither has a subject to run against. A
+ * decline is not deferral and each one says which it is.
  */
 const CONFORMANCE_ARMS = {
   'command-probe': { file: 'test/test-probe-conformance.js' },
@@ -88,7 +93,10 @@ const CONFORMANCE_ARMS = {
   // authorizes no HTTP target, so the arm has no subject, the same way
   // `mcp-probe` below has none. FR21 is withdrawn in the requirements inventory
   // with the evidence.
-  'environment-probe': { reason: 'TEA authorizes no HTTP target, so the api arm has no subject to run against' },
+  'environment-probe': {
+    reason:
+      'eval-quality ships no HTTP adapter and TEA measures no HTTP service, so the api arm has neither an implementation to certify nor a subject',
+  },
   corpus: { reason: 'TEA digests its corpora by hand and has not moved to the shipped corpus adapter' },
   clock: { reason: 'TEA measures elapsed time by hand and has not moved to the shipped clock adapter' },
   'file-system': { reason: 'TEA reads and writes files directly and has not moved to the shipped file-system adapter' },
@@ -260,52 +268,97 @@ async function main() {
       'an entry that is neither is an arm nobody decided about',
     );
     if (entry.file === undefined) continue;
+    // The count for an arm this file says TEA runs, resolved here so a registry
+    // whose shape moved is exit 2 with the rest of the package failures rather
+    // than a thrown stack at exit 1. Exit 1 in this file means a member or an arm
+    // is handled by nothing and declined by nothing, which is a statement about
+    // TEA; a package that stopped publishing a count measured nothing about TEA
+    // at all.
+    try {
+      expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, arm);
+    } catch (error) {
+      console.error(`${colors.red}the "${arm}" arm's expected count could not be read: ${error.message}${colors.reset}`);
+      console.error(`${colors.dim}Nothing about TEA's branches was measured.${colors.reset}`);
+      return 2;
+    }
     // Live source only. A commented-out read would otherwise satisfy this while
     // the count beside it was a transcribed literal.
     //
-    // Two shapes count, and both read the package rather than a literal. The
-    // subscript is the direct one. The accessor in test/lib/conformance-counts.js
-    // is the one every arm should use, because it is what turns an arm the
-    // package stopped publishing into a failure naming that arm; it takes the
-    // registry and the arm name, so the arm is still on the line and this check
-    // still reads as the arm's own.
-    const quoted = String.raw`['"` + '`' + String.raw`]${arm}['"` + '`' + String.raw`]`;
-    const readsCount = new RegExp(String.raw`CONFORMANCE_OUTCOME_COUNTS\[` + quoted + String.raw`\]`);
+    // The accessor, and only the accessor. A bare `CONFORMANCE_OUTCOME_COUNTS[arm]`
+    // subscript also reads the package and was accepted here until this check had
+    // a second clause to enforce: FR22 asks that a missing entry fail with the arm
+    // named, and a subscript cannot do that. Leaving the subscript admissible
+    // would let each arm Stories 3.2 through 3.4 add satisfy this gate while
+    // producing the very "is undefined" message the requirement forbids, and the
+    // rule that every later arm uses the accessor would live in a comment with
+    // nothing holding it. Nothing in the repository uses the subscript now.
+    //
+    // The call has to fit one source line, which is what lets this read the arm
+    // name off it. Prettier's printWidth here is 140 and the call is 85.
+    // The arm name is escaped because it comes from the package: every published
+    // name is metacharacter-free today and a future one carrying a dot would
+    // otherwise match more than itself.
+    const escapedArm = arm.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+    const quoted = String.raw`['"` + '`' + String.raw`]` + escapedArm + String.raw`['"` + '`' + String.raw`]`;
     const readsThroughAccessor = new RegExp(String.raw`expectedOutcomeCount\(\s*CONFORMANCE_OUTCOME_COUNTS\s*,\s*` + quoted);
     const reads = fs
       .readFileSync(path.join(PROJECT_ROOT, entry.file), 'utf8')
       .split('\n')
       .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
-      .some((line) => readsCount.test(line) || readsThroughAccessor.test(line));
+      .some((line) => readsThroughAccessor.test(line));
     assert(
       reads,
-      `${entry.file} reads the "${arm}" expected count from the package`,
-      'an arm whose expected count is transcribed rather than read drifts the first time the package adds an assertion',
+      `${entry.file} reads the "${arm}" expected count from the package through expectedOutcomeCount`,
+      'an arm whose expected count is transcribed rather than read drifts the first time the package adds an assertion, and one read by subscript cannot name the arm when the entry goes',
     );
   }
-  // The accessor's own failure path, driven rather than described. A gate nobody
-  // has seen fire is a gate nobody has tested, and this one exists precisely for
-  // the day the package stops publishing an arm TEA runs, which is a day nobody
-  // will be looking for it.
-  const absent = 'no-such-arm';
-  let named = null;
-  try {
-    expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, absent);
-  } catch (error) {
-    named = error.message;
-  }
+  // The accessor's three failures, driven rather than described. A gate nobody has
+  // seen fire is a gate nobody has tested, and all three of these exist for days
+  // nobody will be looking for them.
+  //
+  // Each is a registry built here rather than the published one, because the
+  // published one is correct and cannot be made to produce any of them. There is
+  // deliberately no "the accessor returns the published count" assertion beside
+  // them: the success path returns `counts[arm]`, so comparing it with
+  // `counts[arm]` is `x === x` and cannot report false whatever the accessor did.
+  const throwsFrom = (counts, arm) => {
+    try {
+      expectedOutcomeCount(counts, arm);
+      return null;
+    } catch (error) {
+      return error.message;
+    }
+  };
+
+  const absentArm = throwsFrom(CONFORMANCE_OUTCOME_COUNTS, 'no-such-arm');
   assert(
-    named !== null && named.includes(`"${absent}"`) && arms.every((arm) => named.includes(arm)),
-    'a conformance count the package does not publish fails with the arm named and the published arms listed',
-    named === null ? 'it returned instead of throwing' : named,
+    absentArm !== null && absentArm.includes('"no-such-arm"') && arms.every((arm) => absentArm.includes(arm)),
+    'an arm the package does not publish fails with the arm named and the published arms listed',
+    absentArm ?? 'it returned instead of throwing',
   );
-  for (const arm of arms) {
-    assert(
-      expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, arm) === CONFORMANCE_OUTCOME_COUNTS[arm],
-      `the accessor returns the published count for the "${arm}" arm`,
-      String(CONFORMANCE_OUTCOME_COUNTS[arm]),
-    );
-  }
+
+  const absentRegistry = throwsFrom(undefined, 'command-probe');
+  assert(
+    absentRegistry !== null &&
+      absentRegistry.includes('CONFORMANCE_OUTCOME_COUNTS') &&
+      !absentRegistry.includes('renamed or withdrawn upstream, so the check'),
+    'a registry the package no longer publishes names the registry rather than blaming the arm',
+    absentRegistry ?? 'it returned instead of throwing',
+  );
+
+  const badCount = throwsFrom({ 'command-probe': 0 }, 'command-probe');
+  assert(
+    badCount !== null && badCount.includes('"command-probe"') && badCount.includes('not a positive whole number'),
+    'a count that is present and not a positive whole number names the count rather than the arm',
+    badCount ?? 'it returned instead of throwing',
+  );
+
+  const presentButUndefined = throwsFrom({ 'command-probe': undefined }, 'command-probe');
+  assert(
+    presentButUndefined !== null && presentButUndefined.includes('not a positive whole number'),
+    'an entry present with no value is a bad count rather than a missing arm',
+    presentButUndefined ?? 'it returned instead of throwing',
+  );
 
   for (const declared of Object.keys(CONFORMANCE_ARMS)) {
     assert(

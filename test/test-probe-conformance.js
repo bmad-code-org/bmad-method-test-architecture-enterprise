@@ -143,6 +143,11 @@ async function main() {
   const { createCommandLineAdapter, nodeCommandMechanism } = await import('eval-quality/adapters');
   const { runCommandLineProbeConformance, formatConformanceReport, CONFORMANCE_OUTCOME_COUNTS } = await import('eval-quality/conformance');
 
+  // Resolved before anything is staged. It throws when the package's registry has
+  // moved, and every throw above the `try` below is a temporary directory left
+  // behind, which this file has already had to fix once.
+  const expected = expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, 'command-probe');
+
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-probe-conformance-'));
   const policy = {
     authorizations: [
@@ -196,7 +201,6 @@ async function main() {
     },
   };
 
-  const expected = expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, 'command-probe');
   const problems = [];
   // In a `finally`, because a throw out of the suite or the renderer would
   // otherwise leave one temporary directory behind per failed invocation.
