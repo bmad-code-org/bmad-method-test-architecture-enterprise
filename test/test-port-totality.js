@@ -97,7 +97,7 @@ const CONFORMANCE_ARMS = {
     reason:
       'eval-quality ships no HTTP adapter and TEA measures no HTTP service, so the api arm has neither an implementation to certify nor a subject',
   },
-  corpus: { reason: 'TEA digests its corpora by hand and has not moved to the shipped corpus adapter' },
+  corpus: { file: 'test/test-corpus-conformance.js' },
   clock: { reason: 'TEA measures elapsed time by hand and has not moved to the shipped clock adapter' },
   'file-system': { reason: 'TEA reads and writes files directly and has not moved to the shipped file-system adapter' },
   'mcp-probe': { reason: 'TEA authorizes no tool server, so this arm has no subject to run against' },
