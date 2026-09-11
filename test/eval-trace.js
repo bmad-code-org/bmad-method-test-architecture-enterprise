@@ -146,7 +146,7 @@ const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { failureClassForExit } = require('../cli/trace-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
-const { loadCorpus } = require('./lib/corpus-port');
+const { UNRESOLVABLE_MEMBER, loadCorpus } = require('./lib/corpus-port');
 const {
   digest,
   digestFiles,
@@ -1083,17 +1083,28 @@ function filesUnder(root) {
  * value this returns is the value it has always returned.
  *
  * Null when a member cannot be resolved, which is what a run deleting a corpus
- * file looks like. The caller reads that as a mutation: before this, the read
- * threw out of the scoring path and a benchmark-destroying run crashed the
- * harness instead of being reported as one.
+ * file looks like. The caller reads that as a mutation whatever the baseline
+ * holds: before this, the read threw out of the scoring path, so a run that
+ * destroyed the benchmark took the harness down instead of being scored for it.
+ *
+ * Only a resolution failure becomes null. Anything else, an import that did not
+ * resolve or an aborted signal, is rethrown, because a null standing for every
+ * possible cause is how a systemic failure reads as a clean corpus.
+ *
+ * @returns {Promise<string|null>}
  */
 async function digestTree(root, relativePaths) {
   const sorted = [...relativePaths].sort();
   try {
     const corpus = await loadCorpus(root, sorted);
     return corpus.digest(sorted);
-  } catch {
-    return null;
+  } catch (error) {
+    // Only an unresolvable member, which is what a run deleting a corpus file
+    // looks like. An import that did not resolve or an aborted signal is a
+    // different failure and is rethrown, because a null standing for every cause
+    // is how a systemic failure reads as a clean corpus.
+    if (error?.code === UNRESOLVABLE_MEMBER) return null;
+    throw error;
   }
 }
 
@@ -1129,7 +1140,7 @@ function configYaml() {
  * feed the discovery pass tests that are not part of the corpus.
  *
  * @param {object} set
- * @returns {Promise<{dir: string, projectDir: string, corpusFiles: string[], corpusDigest: string}>}
+ * @returns {Promise<{dir: string, projectDir: string, corpusFiles: string[], corpusDigest: string}>} `corpusDigest` is never null; an unresolvable member throws here.
  */
 async function stageWorkspace(set) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-eval-'));
@@ -1158,7 +1169,15 @@ async function stageWorkspace(set) {
   const corpusFiles = filesUnder(projectDir).filter(
     (relative) => !relative.startsWith(`test-artifacts${path.sep}`) && !relative.startsWith(`_bmad${path.sep}`),
   );
-  return { dir, projectDir, corpusFiles, corpusDigest: await digestTree(projectDir, corpusFiles) };
+  const corpusDigest = await digestTree(projectDir, corpusFiles);
+  // A workspace whose own members do not resolve is a staging failure, not a
+  // measurement. Left as null it would compare equal to a null post-run digest
+  // and report every case as unmutated, which is the silent green this whole
+  // comparison exists to prevent.
+  if (corpusDigest === null) {
+    throw new Error(`the staged workspace at ${projectDir} holds ${corpusFiles.length} corpus member(s) the corpus port could not resolve`);
+  }
+  return { dir, projectDir, corpusFiles, corpusDigest };
 }
 
 /**
@@ -1997,7 +2016,10 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
     // The workflow states that it does not generate tests. A run that wrote one has
     // moved the benchmark, and the next run would be measured against a corpus this
     // one edited.
-    const mutations = (await digestTree(workspace.projectDir, workspace.corpusFiles)) === workspace.corpusDigest ? 0 : 1;
+    // Null counts as a mutation rather than as equality with anything: a member
+    // that stopped resolving is a corpus file the run removed.
+    const afterRun = await digestTree(workspace.projectDir, workspace.corpusFiles);
+    const mutations = afterRun !== null && afterRun === workspace.corpusDigest ? 0 : 1;
     const added = filesUnder(workspace.projectDir).filter(
       (relative) =>
         !relative.startsWith(`test-artifacts${path.sep}`) &&
@@ -2499,6 +2521,7 @@ module.exports = {
   recomputeExpectations,
   deriveGate,
   expectedRejectedEvidence,
+  digestTree,
   stageWorkspace,
   traceArtifactPaths,
   assertGroundTruthAbsent,

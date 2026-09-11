@@ -833,7 +833,6 @@ async function suites() {
     return {
       ...entry,
       contract,
-      corpusReference: reference,
       probes: JSON.parse(corpus.bytes(reference).toString('utf8')),
       evidence: entry.evidenceFor(contract),
     };
@@ -1023,7 +1022,7 @@ async function runSuite(suite, { port, runId, modelSnapshot, signal, sink }) {
   }
   const sealed = await sealContract(suite.contract);
 
-  return { suite, scored, strength: strengthVector(scored), sealed };
+  return { suite, scored, strength: strengthVector(scored), sealed, corpusDigest };
 }
 
 module.exports = {

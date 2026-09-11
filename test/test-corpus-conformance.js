@@ -11,10 +11,17 @@
  * abort is honored promptly, and a mechanism that answers in a shape the port
  * does not admit is a fault rather than a value.
  *
- * This is the certification of that adapter, and it lands before any TEA call
- * site moves onto it. Certifying after the cutover would mean a failing arm and
- * three changed harnesses arriving together, with nothing to say which of them
- * was wrong.
+ * The arm landed before any TEA call site moved onto the adapter, in its own
+ * commit and touching nothing else. Certifying after a cutover would mean a
+ * failing arm and three changed harnesses arriving together, with nothing to say
+ * which of them was wrong.
+ *
+ * The block at the end of this file arrived with the cutover rather than with
+ * the arm, and it is about TEA's own reader rather than about the adapter: that
+ * `test/lib/corpus-port.js` keeps the caller's order, refuses a member nobody
+ * named, and refuses the two escapes only the port refuses. That last pair is
+ * what holds TEA to the adapter, since every other assertion here passes against
+ * any reader that returns bytes.
  *
  * The arm is the six shared assertions every port method answers, driven by a
  * scripted mechanism per scenario: one that resolves, one that rejects, one
@@ -134,7 +141,6 @@ async function main() {
   }
 
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-corpus-conformance-'));
-  fs.writeFileSync(path.join(workspace, MEMBER), MEMBER_BYTES);
 
   const subject = {
     name: 'tea local corpus adapter',
@@ -151,6 +157,7 @@ async function main() {
   // In a `finally`, because a throw out of the suite or the renderer would
   // otherwise leave one temporary directory behind per failed invocation.
   try {
+    fs.writeFileSync(path.join(workspace, MEMBER), MEMBER_BYTES);
     const report = await runCorpusPortConformance(subject);
     console.log(formatConformanceReport(report));
     if (report.outcomes.length !== expected) {
@@ -174,10 +181,15 @@ async function main() {
   // is the adapter's and is certified by the arm; these two are this
   // repository's and nothing else executes them.
   const workspaceFor = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-corpus-wrapper-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-corpus-outside-'));
   const wrapperProblems = [];
   try {
     fs.writeFileSync(path.join(workspaceFor, 'a.txt'), 'a');
     fs.writeFileSync(path.join(workspaceFor, 'b.txt'), 'b');
+    // One file outside the corpus, reachable two ways: by climbing out of the
+    // root lexically, and by a symlink inside it.
+    fs.writeFileSync(path.join(outside, 'outside.txt'), 'outside the corpus');
+    fs.symlinkSync(path.join(outside, 'outside.txt'), path.join(workspaceFor, 'escape.txt'));
     const corpus = await loadCorpus(workspaceFor, ['a.txt', 'b.txt']);
 
     // The order is the caller's. Every digest recorded in a committed probe
@@ -187,6 +199,28 @@ async function main() {
       wrapperProblems.push(
         'the corpus digests two orders of the same members to one value, so the caller order it promises is not honored',
       );
+    }
+
+    // The two refusals only the port makes, which is what holds TEA's reader to
+    // the adapter rather than to any reader that happens to return bytes. A
+    // `readFileSync` written back into `loadCorpus` passes every other
+    // assertion in this file, including the two above; it resolves both of
+    // these happily.
+    // The climbing reference names the real file outside the root, so a reader
+    // that resolves it succeeds rather than failing on a path that happens not
+    // to exist, which would pass this assertion for the wrong reason.
+    const climbing = path.relative(workspaceFor, path.join(outside, 'outside.txt')).split(path.sep).join('/');
+    for (const [reference, what] of [
+      [climbing, 'a reference climbing out of the root'],
+      ['escape.txt', 'a symlink inside the root pointing out of it'],
+    ]) {
+      let refusedEscape = false;
+      try {
+        await loadCorpus(workspaceFor, [reference]);
+      } catch {
+        refusedEscape = true;
+      }
+      if (!refusedEscape) wrapperProblems.push(`${what} was resolved instead of refused, so TEA is not reading through the corpus port`);
     }
 
     // A member nobody named is a named error. The helper this replaces would
@@ -201,6 +235,7 @@ async function main() {
     if (!refused) wrapperProblems.push('a reference outside the loaded corpus was digested instead of refused');
   } finally {
     fs.rmSync(workspaceFor, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
   }
 
   if (wrapperProblems.length > 0) {
@@ -224,5 +259,3 @@ if (require.main === module) {
     },
   );
 }
-
-module.exports = { MEMBER, MEMBER_BYTES };

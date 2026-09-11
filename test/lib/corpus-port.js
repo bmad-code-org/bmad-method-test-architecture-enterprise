@@ -1,6 +1,14 @@
 /**
  * Corpus resolution through `eval-quality`'s shipped corpus port.
  *
+ * The three corpus digests this module owns, and only those three. A fourth
+ * reader remains: `digestFiles` in `test/lib/eval-record.js` takes the
+ * `fixtureDigest` four live harnesses record, and it substitutes a `<missing>`
+ * marker for an absent file precisely so a reporting path does not crash on the
+ * condition it is reporting. FR18 names the three sites below; moving the
+ * fourth means deciding what the port's fault becomes in a reporting path, and
+ * that is its own change rather than a side effect of this one.
+ *
  * TEA digested corpora in three places and each one read the files itself:
  * `tools/generate-probes.js` walked repository paths, `test/eval-trace.js`
  * walked a staged workspace, and `test/lib/probe-scoring.js` digested a parsed
@@ -45,6 +53,9 @@ const path = require('node:path');
 
 const { digest } = require('./eval-record');
 
+/** The code a caller narrows on to tell "this member is gone" from any other failure. */
+const UNRESOLVABLE_MEMBER = 'corpus-member-unresolvable';
+
 /** `eval-quality` is ESM and this repository is CommonJS, so every entry point through it is asynchronous. */
 async function loadAdapters() {
   return import('eval-quality/adapters');
@@ -62,7 +73,7 @@ function asReference(relativePath) {
  * @param {string} root Absolute path the references resolve against. The port refuses anything outside it.
  * @param {string[]} members References relative to `root`.
  * @param {AbortSignal} [signal]
- * @returns {Promise<{root: string, members: string[], bytes: (reference: string) => Buffer, digest: (references: string[]) => string}>}
+ * @returns {Promise<{root: string, bytes: (reference: string) => Buffer, digest: (references: string[]) => string}>}
  */
 async function loadCorpus(root, members, signal = new AbortController().signal) {
   const { createLocalCorpusAdapter } = await loadAdapters();
@@ -75,7 +86,25 @@ async function loadCorpus(root, members, signal = new AbortController().signal) 
     // is a missing member, and a rejected promise inside a parallel batch
     // reports whichever one lost the race rather than the one a caller asked
     // about first.
-    const response = await port.resolve({ privateRef: reference }, signal);
+    let response;
+    try {
+      response = await port.resolve({ privateRef: reference }, signal);
+    } catch (error) {
+      // The port's fault carries the artifact path and puts the cause
+      // underneath, so an absent member arrives as "the underlying mechanism
+      // threw" with no path in the message. The helper this replaces named the
+      // file, and a caller reading a generator failure needs the name more than
+      // it needs the fault's own vocabulary.
+      const unresolvable = new Error(
+        `${reference} could not be resolved from the corpus at ${root}: ${error?.cause?.message ?? error?.message ?? String(error)}`,
+        { cause: error },
+      );
+      // TEA's own code rather than the port's. A caller narrowing on this is
+      // asking whether a member is gone, which is a question about this function
+      // rather than about whichever fault the adapter happened to raise.
+      unresolvable.code = UNRESOLVABLE_MEMBER;
+      throw unresolvable;
+    }
     resolved.set(reference, Buffer.from(response.bytes));
   }
 
@@ -92,7 +121,6 @@ async function loadCorpus(root, members, signal = new AbortController().signal) 
 
   return {
     root,
-    members: [...resolved.keys()].sort(),
     bytes,
     /**
      * A digest over a set of members, each contributing its reference and then
@@ -115,4 +143,4 @@ async function loadCorpus(root, members, signal = new AbortController().signal) 
   };
 }
 
-module.exports = { asReference, loadCorpus };
+module.exports = { UNRESOLVABLE_MEMBER, loadCorpus };
