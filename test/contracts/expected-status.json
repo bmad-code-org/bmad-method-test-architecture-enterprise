@@ -9,15 +9,9 @@
     "`compiles` is the good direction and still fails, on purpose: a baseline nobody has to update is",
     "a baseline nobody reads.",
     "",
-    "Regenerate with: node test/test-contracts.js --cli <path to eval-quality dist/cli/main.js> --write"
+    "Regenerate with: node test/test-contracts.js --package <path to eval-quality dist/index.js> --write"
   ],
   "contracts": {
-    "tea-routing-controls.contract.json": {
-      "status": "compiles"
-    },
-    "tea-routing-intents.contract.json": {
-      "status": "compiles"
-    },
     "fragment-selection/bmad-testarch-atdd.contract.json": {
       "status": "compiles"
     },
@@ -40,6 +34,12 @@
       "status": "compiles"
     },
     "fragment-selection/bmad-testarch-trace.contract.json": {
+      "status": "compiles"
+    },
+    "tea-routing-controls.contract.json": {
+      "status": "compiles"
+    },
+    "tea-routing-intents.contract.json": {
       "status": "compiles"
     },
     "test-design.contract.json": {

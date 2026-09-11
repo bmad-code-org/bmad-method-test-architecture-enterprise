@@ -20,10 +20,12 @@
  * probe carrying one is refused by the qualification gate, which is why
  * test-review's gameability probe and trace's three defect probes score nothing.
  * tools/generate-probes.js states it in full. The other blocker was a defect
- * probe whose manifestation witness fired on a leg the contract called clean;
- * every probe pre-flights now. A baseline is what makes the day one of them
- * closes visible instead of silent, so movement in either direction fails this
- * check until somebody has read why and regenerated it.
+ * probe whose manifestation witness fired on a leg the contract called clean.
+ * Fourteen of `test-design`'s sixteen probes still fail pre-flight with
+ * `seeded-fault-fired`, and every probe in the other twelve corpora pre-flights.
+ * A baseline is what makes the day one of them closes visible instead of silent,
+ * so movement in either direction fails this check until somebody has read why
+ * and regenerated it.
  *
  * Usage:
  *   node test/test-probe-corpus.js
@@ -37,8 +39,8 @@ const path = require('node:path');
 const prettier = require('prettier');
 
 const { validateArtifact } = require('./lib/eval-quality-inputs');
-const { runSuite, storedProbePort, suites } = require('./lib/probe-scoring');
-const { stagedWorkspaceFor } = require('./eval-contract-strength');
+const { ladderExitCode, runSuite, storedProbePort, suites } = require('./lib/probe-scoring');
+const { baselineDifferences, stagedWorkspaceFor } = require('./eval-contract-strength');
 const { digestTree, stageWorkspace } = require('./eval-trace');
 
 const BASELINE_PATH = path.join(__dirname, 'probes', 'expected-strength.json');
@@ -77,12 +79,103 @@ function probeSummary(entry) {
     expectedClean: entry.probe.expectedClean,
     behaviorId: entry.probe.behaviorId,
     preflight: entry.preflight.passed ? 'passed' : `failed: ${[...new Set(failedChecks)].sort().join(', ')}`,
+    // Read from the diagnostic sink, which is the only channel that reports how
+    // many legs a pre-flight planned. It is not the check count: 26 of these 51
+    // probes plan a number of legs that differs from the number of checks their
+    // verdict carries.
+    preflightLegs: entry.diagnostics.legs,
     verdict: entry.result.ladder.verdict,
-    exitCode: entry.result.ladder.exitCode,
+    exitCode: ladderExitCode(entry.result.ladder),
+    // The ladder's own answer to whether `--strict` would promote this CONCERNS,
+    // recorded whatever TEA decides to do with it, so the day a CONCERNS fires
+    // only on AD-21's evidence conditions is the day this file moves.
+    strictPromotable: entry.result.ladder.strictPromotable,
     basis: basisShapes(entry.result.ladder.basis),
     qualification: qualificationCodes(entry.result.qualification),
     strength: entry.result.artifact?.strength?.vector ?? null,
   };
+}
+
+/**
+ * What the sink said that the returned artifacts cannot say for themselves.
+ *
+ * A sink nobody fills reports nothing and reads in a diff as adoption, so the
+ * three facts checked here are the ones that go wrong silently: a stage that is
+ * not `preflight` means a stage TEA does not handle started emitting, an even
+ * diagnostic count means the planned/observed/closing emission contract moved,
+ * and no diagnostics at all means the sink stopped being passed.
+ */
+function diagnosticProblems(suiteId, entry) {
+  const { count, legs, stages } = entry.diagnostics;
+  const where = `${suiteId} ${entry.probe.probeId}`;
+  const problems = [];
+  if (count === 0) problems.push(`${where}: the pre-flight diagnostic sink received nothing, so no leg was reported`);
+  else if (legs === null)
+    problems.push(`${where}: the sink reported ${count} diagnostic(s), which is not one closing line over two lines per leg`);
+  // A zero-leg plan reduces to `passed` having probed nothing, which is the one
+  // pre-flight outcome that looks like success and measures nothing. Every probe
+  // in every corpus plans two, three or four, so zero is a finding here.
+  else if (legs === 0) problems.push(`${where}: the pre-flight planned no legs, so it passed without probing anything`);
+  const unexpected = stages.filter((stage) => stage !== 'preflight');
+  if (unexpected.length > 0) problems.push(`${where}: the sink reported stage(s) TEA does not read: ${unexpected.join(', ')}`);
+  return problems;
+}
+
+/**
+ * One suite's outcome in the shape the live harness reports, so the live
+ * harness's baseline comparator can be driven from here.
+ *
+ * `test/eval-contract-strength.js` is exposed only as `eval:contract-strength`
+ * and `eval:preflight`, neither of which is in `npm test`, so `baselineDifferences`
+ * had no gate at all: it is the function that decides whether a paid run passed,
+ * and nothing ran it. The rows it reads are a pure function of the score, and
+ * this file has already computed one for every probe, so driving it needs no
+ * credential and no model call. That is the same argument the staging check
+ * below makes for the same file.
+ */
+function liveShapedVerdicts(outcome) {
+  return outcome.scored.map((entry) => ({
+    probeId: entry.probe.probeId,
+    passed: entry.preflight.passed,
+    preflight: entry.preflight.passed ? 'passed' : probeSummary(entry).preflight,
+    preflightLegs: entry.diagnostics.legs,
+    verdict: entry.result.ladder.verdict,
+  }));
+}
+
+/**
+ * The live comparator, driven over the rows this run just measured and then over
+ * one row deliberately moved.
+ *
+ * A comparator that reports nothing on matching rows proves only that it is
+ * silent, so each of the three fields it reads is moved in turn and the finding
+ * it must produce is named. A field it stops reading fails here.
+ */
+function comparatorProblems(results, baseline) {
+  const problems = [];
+  const clean = baselineDifferences(results, baseline);
+  if (clean.environment.length > 0 || clean.measured.length > 0) {
+    problems.push(
+      `the live comparator reported differences against the corpus that produced them: ${[...clean.environment, ...clean.measured].join('; ')}`,
+    );
+  }
+  const moves = [
+    { field: 'preflightLegs', value: 99, bucket: 'environment' },
+    { field: 'preflight', value: 'failed: moved', bucket: 'environment' },
+    { field: 'verdict', value: 'MOVED', bucket: 'measured' },
+  ];
+  for (const { field, value, bucket } of moves) {
+    const [first, ...rest] = results;
+    const [head, ...tail] = first.verdicts;
+    const mutated = [{ ...first, verdicts: [{ ...head, [field]: value }, ...tail] }, ...rest];
+    const seen = baselineDifferences(mutated, baseline);
+    if (seen[bucket].length !== 1) {
+      problems.push(
+        `the live comparator reported ${seen[bucket].length} ${bucket} difference(s) for a moved ${field}, where it must report exactly one`,
+      );
+    }
+  }
+  return problems;
 }
 
 function suiteSummary(outcome) {
@@ -109,6 +202,7 @@ async function main() {
   const signal = AbortSignal.timeout(600_000);
   const problems = [];
   const summary = {};
+  const liveShaped = [];
 
   console.log('\nprobe corpora scored through eval-quality, against stored evidence\n');
 
@@ -123,16 +217,20 @@ async function main() {
     for (const entry of outcome.scored) {
       for (const message of entry.schemaProblems) problems.push(`${suite.id} ${entry.probe.probeId}: ${message}`);
       for (const message of entry.preflightProblems) problems.push(`${suite.id} ${entry.probe.probeId}: PreflightVerdict${message}`);
+      problems.push(...diagnosticProblems(suite.id, entry));
     }
     for (const message of outcome.sealed.schemaProblems) problems.push(`${suite.id}: SealedEvaluatorBrief${message}`);
 
     summary[suite.id] = suiteSummary(outcome);
+    liveShaped.push({ suiteId: suite.id, verdicts: liveShapedVerdicts(outcome) });
     const vector = outcome.strength;
     const rate = (entry) => (entry === null || entry.rate === null ? '  -  ' : `${(entry.rate * 100).toFixed(0).padStart(3)}%`);
     console.log(
       `  ${suite.id.padEnd(42)} ${outcome.scored.length} probe(s)  defect ${rate(vector.defect)}  gameability ${rate(vector.gameability)}  zero-action ${rate(vector['zero-action'])}`,
     );
   }
+
+  problems.push(...comparatorProblems(liveShaped, summary));
 
   // The live harness's staging, which nothing else in the chain reaches.
   //
