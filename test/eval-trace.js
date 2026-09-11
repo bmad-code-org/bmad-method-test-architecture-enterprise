@@ -1915,6 +1915,9 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
       cwd: workspace.dir,
       interfaceIds: [TRACE_INTERFACE],
       artifacts: { [TRACE_INTERFACE]: traceArtifactPaths(set) },
+      // The operator's own pass-through names, so the authorization permits
+      // exactly what the request below declares.
+      environmentKeys: { [TRACE_INTERFACE]: options.envPass },
     });
     const result = await probeCommand(
       port,
@@ -1923,7 +1926,7 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
         interfaceId: TRACE_INTERFACE,
         operationId: TRACE_OPERATION,
         option: { ...runnerOptions(options), agent },
-        environment: hostEnvironment(options.envPass),
+        environment: hostEnvironment(TRACE_INTERFACE, options.envPass),
         stdin: { kind: 'text', value: buildPrompt(set) },
       }),
       new AbortController().signal,

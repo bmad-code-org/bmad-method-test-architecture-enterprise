@@ -1,6 +1,6 @@
 [
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-001",
@@ -140,7 +140,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -158,7 +159,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-002",
@@ -298,7 +299,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -316,7 +318,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-003",
@@ -456,7 +458,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -474,7 +477,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-004",
@@ -614,7 +617,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -632,7 +636,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-005",
@@ -772,7 +776,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -790,7 +795,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-006",
@@ -930,7 +935,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -948,7 +954,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-007",
@@ -1088,7 +1094,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -1106,7 +1113,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-008",
@@ -1246,7 +1253,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -1264,7 +1272,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-009",
@@ -1404,7 +1412,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {
@@ -1422,7 +1431,7 @@
     }
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-010",
@@ -1448,7 +1457,7 @@
     "defects": []
   },
   {
-    "schemaVersion": 3,
+    "schemaVersion": 5,
     "parentDigest": null,
     "revisionCount": 0,
     "probeId": "P-011",
@@ -1498,7 +1507,8 @@
               }
             },
             "environment": null,
-            "stdin": null
+            "stdin": null,
+            "arguments": null
           }
         },
         "predicate": {

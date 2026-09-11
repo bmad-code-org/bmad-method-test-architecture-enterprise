@@ -58,6 +58,7 @@ const {
   createProbePort,
   failureClassForFault,
   observedText,
+  permittedEnvironmentKeys,
   probeCommand,
   probeRequest,
   targetFor,
@@ -90,6 +91,16 @@ const REVIEW_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-review-cli', 's
 const SELECTION_STUB_AGENT = path.join(__dirname, 'fixtures', 'fragment-selection-runner', 'stub-agent.js');
 const TRACE_STUB_AGENT = path.join(__dirname, 'fixtures', 'trace-runner', 'stub-agent.js');
 const TRACE_HARNESS = path.join(__dirname, 'eval-trace.js');
+
+/**
+ * The environment names the three stub agents read, passed through `--env-pass`.
+ *
+ * They belong to no contract: they are how this file drives a stub instead of a
+ * vendor. The authorization has to name them, because the adapter refuses any
+ * key a request declares that the authorization does not permit, which is what
+ * makes them the exact demonstration of the widening `environmentKeys` is for.
+ */
+const STUB_ENVIRONMENT_KEYS = ['STUB_FRAGMENTS', 'STUB_MODE'];
 
 const colors = {
   reset: '[0m',
@@ -152,6 +163,20 @@ function checkContractsAgainstRegistry() {
           target !== undefined && target.subcommandPaths.some((permitted) => JSON.stringify(permitted) === JSON.stringify(subcommandPath)),
           `${relative}: ${operation.operationId}'s subcommand path is authorized`,
           `[${subcommandPath.join(' ')}] is not among the registered paths`,
+        );
+        // The environment channel, held the same way the subcommand path is.
+        // The contract states which keys a request may carry and the policy
+        // states which reach the process, and on 3.0.0 a key the policy omits
+        // is refused before anything spawns. Equal rather than contained,
+        // because a policy narrower than the contract turns a declared key into
+        // a run-time denial and a policy wider than it permits a key no
+        // behavioral statement mentions.
+        const contractKeys = [...(operation.requestShape?.environment?.permittedKeys ?? [])].sort();
+        const policyKeys = target === undefined ? [] : permittedEnvironmentKeys(iface.logicalId);
+        assert(
+          JSON.stringify(contractKeys) === JSON.stringify(policyKeys),
+          `${relative}: ${operation.operationId}'s environment keys are the ones its authorization permits`,
+          `contract ${JSON.stringify(contractKeys)}, policy ${JSON.stringify(policyKeys)}`,
         );
       }
     }
@@ -242,6 +267,88 @@ async function checkDefaultDeny(runDir) {
     JSON.stringify(wrongSubcommand),
   );
 
+  // The environment channel. `permittedEnvironmentKeys` is required on 3.0.0
+  // with no default, so every authorization states it, and no authorization may
+  // state PATH: `target` may name a bare command and a declared PATH would then
+  // choose which binary runs.
+  const { authorizations } = commandTargetPolicy({ cwd: runDir });
+  for (const authorization of authorizations) {
+    assert(
+      Array.isArray(authorization.permittedEnvironmentKeys),
+      `${authorization.interfaceId} declares permittedEnvironmentKeys`,
+      JSON.stringify(authorization.permittedEnvironmentKeys),
+    );
+    assert(
+      !authorization.permittedEnvironmentKeys.some((key) => key.toUpperCase() === 'PATH'),
+      `${authorization.interfaceId} permits no PATH`,
+      JSON.stringify(authorization.permittedEnvironmentKeys),
+    );
+  }
+
+  // PATH cannot be introduced by the one mechanism that widens an
+  // authorization. The adapter and the schema both refuse it too, later; this
+  // is the boundary where an operator's `--env-pass PATH` would otherwise reach
+  // a policy at all.
+  let pathRefused = false;
+  try {
+    commandTargetPolicy({ cwd: runDir, interfaceIds: ['tea-test-review'], environmentKeys: { 'tea-test-review': ['PATH'] } });
+  } catch {
+    pathRefused = true;
+  }
+  assert(pathRefused, 'the policy builder refuses PATH through the environment widening');
+
+  // An override keyed by an interface the policy does not carry widens nothing.
+  // Unnoticed, every request of that harness would carry names the
+  // authorization never permitted and every live run would be a lost run.
+  let unknownOverrideRefused = false;
+  try {
+    commandTargetPolicy({ cwd: runDir, interfaceIds: ['tea-test-review'], environmentKeys: { 'tea-test-revue': ['STUB_MODE'] } });
+  } catch {
+    unknownOverrideRefused = true;
+  }
+  assert(unknownOverrideRefused, 'the policy builder refuses a per-interface override for an interface it does not authorize');
+
+  // This port permits the three commands' own keys and nothing else, so a stub
+  // variable is a key the authorization does not name. The denial is the
+  // adapter's, and it happens before a process exists.
+  const undeclaredEnvironmentKey = await probeCommand(
+    port,
+    probeRequest({
+      probeId: 'deny-5',
+      interfaceId: 'tea-fragment-selection-runner',
+      operationId: 'select-fragments',
+      environment: { STUB_MODE: 'approve' },
+      stdin: { kind: 'text', value: 'never reaches a process' },
+    }),
+    new AbortController().signal,
+  );
+  assert(
+    !undeclaredEnvironmentKey.ok && /not permitted by this authorization/.test(undeclaredEnvironmentKey.reason),
+    'an environment key the authorization does not permit is denied',
+    JSON.stringify(undeclaredEnvironmentKey),
+  );
+
+  // A name that is not a legal environment key fails at the port boundary, on
+  // the request parse, rather than being handed to a spawned process. The
+  // package's own `EnvironmentKeyName` decides what is legal; TEA asserts the
+  // refusal rather than restating the pattern.
+  const malformedEnvironmentKey = await probeCommand(
+    port,
+    probeRequest({
+      probeId: 'deny-6',
+      interfaceId: 'tea-fragment-selection-runner',
+      operationId: 'select-fragments',
+      environment: { 'not a key': 'value' },
+      stdin: { kind: 'text', value: 'never reaches a process' },
+    }),
+    new AbortController().signal,
+  );
+  assert(
+    !malformedEnvironmentKey.ok && malformedEnvironmentKey.failureClass === 'environment-parser',
+    'an environment key that is not a legal name fails at the port boundary',
+    JSON.stringify(malformedEnvironmentKey),
+  );
+
   // An interface outside the policy is refused by the builder too, before any
   // request is shaped, so a caller cannot ask for one and get an empty policy
   // that denies everything for the wrong reason.
@@ -260,7 +367,11 @@ async function checkDefaultDeny(runDir) {
 
 async function checkTestReviewProbe(runDir) {
   console.log('\ntea-test-review through the adapter');
-  const { port, policy } = await createProbePort({ cwd: runDir, interfaceIds: ['tea-test-review'] });
+  const { port, policy } = await createProbePort({
+    cwd: runDir,
+    interfaceIds: ['tea-test-review'],
+    environmentKeys: { 'tea-test-review': STUB_ENVIRONMENT_KEYS },
+  });
   const authorization = policy.authorizations[0];
   assert(authorization.cwd === runDir, 'the authorization pins the run directory the caller supplied');
   assert(authorization.maxOutputBytes > 0 && authorization.maxElapsedMs > 0, 'the authorization carries both budgets');
@@ -316,6 +427,7 @@ async function checkTestReviewProbe(runDir) {
     cwd: runDir,
     interfaceIds: ['tea-test-review'],
     artifacts: { 'tea-test-review': { verdict: 'nothing-wrote-this.json' } },
+    environmentKeys: { 'tea-test-review': STUB_ENVIRONMENT_KEYS },
   });
   const missing = await probeCommand(
     absent.port,
@@ -345,7 +457,11 @@ async function checkTestReviewProbe(runDir) {
 
 async function checkFragmentSelectionProbe(runDir) {
   console.log('\ntea-fragment-selection-runner through the adapter');
-  const { port } = await createProbePort({ cwd: runDir, interfaceIds: ['tea-fragment-selection-runner'] });
+  const { port } = await createProbePort({
+    cwd: runDir,
+    interfaceIds: ['tea-fragment-selection-runner'],
+    environmentKeys: { 'tea-fragment-selection-runner': STUB_ENVIRONMENT_KEYS },
+  });
   const signal = new AbortController().signal;
 
   // Two environment names through one `--env-pass`, which is the repeatable
@@ -422,6 +538,7 @@ async function traceProbe(runDir, probeId, stubMode, { artifacts, budgets, stage
     interfaceIds: ['tea-trace-runner'],
     ...(artifacts ? { artifacts: { 'tea-trace-runner': artifacts } } : {}),
     ...(budgets ? { budgets: { 'tea-trace-runner': budgets } } : {}),
+    environmentKeys: { 'tea-trace-runner': STUB_ENVIRONMENT_KEYS },
   });
   return probeCommand(
     port,
@@ -605,6 +722,7 @@ async function checkBudgets(runDir) {
     cwd: runDir,
     interfaceIds: ['tea-fragment-selection-runner'],
     budgets: { 'tea-fragment-selection-runner': { maxElapsedMs: 1500 } },
+    environmentKeys: { 'tea-fragment-selection-runner': STUB_ENVIRONMENT_KEYS },
   });
   const started = Date.now();
   const killed = await probeCommand(

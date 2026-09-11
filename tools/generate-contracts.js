@@ -97,6 +97,13 @@ const TRACE_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-ev
 const TRACE_GROUND_TRUTH_PATH = path.join(TRACE_FIXTURE_ROOT, 'ground-truth.json');
 const TRACE_STEP_05 = path.join(WORKFLOW_ROOT, 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
 
+/**
+ * The Eval Contract schema version this generator writes. A bump arrives as a
+ * `schema-version-mismatch` fault on the first compile after an upgrade, which
+ * is what version 3.0.0 of the package did to every contract stamped 4.
+ */
+const EVAL_CONTRACT_SCHEMA_VERSION = 5;
+
 /** The forbidden-input list is fixed by the contract schema and is the same for every contract here. */
 const FORBIDDEN_INPUTS = [
   'original-spec',
@@ -501,7 +508,7 @@ function buildTestReviewContract() {
   const criticalRows = sortRows(plants.filter((plant) => severityOfRow.get(plant.row) === 'CRITICAL').map((plant) => plant.row));
 
   return {
-    schemaVersion: 4,
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
     contractId: 'tea-test-review-behavioral',
@@ -1206,7 +1213,7 @@ function buildFragmentSelectionContract(spec) {
   }
 
   return {
-    schemaVersion: 4,
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
     contractId: `tea-fragment-selection-${workflow.replace('bmad-testarch-', '')}`,
@@ -2191,7 +2198,7 @@ function buildTraceContract() {
   const witnessSet = clean[0];
 
   return {
-    schemaVersion: 4,
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
     contractId: 'tea-trace-behavioral',

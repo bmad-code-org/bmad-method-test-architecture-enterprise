@@ -154,6 +154,9 @@ jobs:
       - name: Replay stored eval outputs against the scorers
         run: npm run test:eval-replay
 
+      - name: Compile eval-quality's own published corpus against the pinned release
+        run: npm run test:eval-quality-corpus
+
       - name: Check the eval contracts against the sources they are generated from
         run: npm run test:contract-sources
 
@@ -174,6 +177,9 @@ jobs:
 
       - name: Probe every TEA command target through the eval-quality adapter
         run: npm run test:probe-targets
+
+      - name: Check TEA's branches are total over the published port vocabularies
+        run: npm run test:port-totality
 
       - name: Test changelog stamping
         run: npm run test:changelog

@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `npm run test:eval-quality-corpus` compiles `eval-quality`'s own published corpus against the pinned release, before any TEA artifact is asked to run on it.
+  TEA's every other check feeds the package TEA's own bytes, so a package regression and a bad migration read identically, and this upgrade moved 31 probes, 10 contracts and both command policies at once.
+  This check feeds the package nothing of TEA's. The `./corpus/*` subpath ships `corpus/dev/index.json`, which names 27 entries with a `sha256:` digest each: 24 contracts under `contracts/`, the compile-and-seal example's contract and its sealed brief, and the corpus README. The index also records the failure code each of the three deliberately-refused contracts raises, and it carries no digest of itself, which is the one corpus file it cannot list.
+  So the corpus states the expected result and the package computes the observed one. Measured against 3.0.0: 27 entry digests match the shipped bytes, 22 contracts compile, 3 are refused with the code the index records, and the sealed brief the example produces is byte for byte the shipped `brief.json`.
+  It also holds the resolved version against the exact pin in `package.json`, so a tree that is not the tree the repository declares fails here rather than somewhere downstream.
+  Exit 1 is a moved status, a moved digest or a moved brief; exit 2 is a package, subpath or index that could not be read, an index naming no contract, or a tree resolving a version other than the pin. So an unresolvable install, an empty corpus and a tree nobody installed are each reported as nothing measured rather than as a package regression.
+- `npm run test:port-totality` holds TEA's branches against the port vocabularies the installed package declares.
+  `ProbeRequest` and `ProbeObservation` are three-member unions tagged by `kind` and the conformance surface publishes six arms, and TEA is CommonJS with no typechecker, so no compiler and no reviewer will notice the day a fourth member arrives: the failure mode is code that keeps working on the members it knows.
+  Every member is now handled or declined with the reason recorded, every arm is run or recorded as not yet run, and a member or arm in neither fails the check by name.
+  `probeCommand` narrows every observation to the `cli` member and raises a named error otherwise, which the check proves by calling the narrowing with the two members TEA declines.
+  Three of the four harnesses reach the port through `probeCommand`; `test/eval-contract-strength.js` caches every observation itself, so it narrows at its own boundary, on the live answer and on the cached one.
+  The narrowing throws outside the fault handler on purpose: a member TEA cannot read is a defect in TEA, and classifying it as an environment failure would file that defect as a lost run.
+
+### Changed
+
+- `eval-quality` moves from 1.4.0 to 3.0.0.
+  The pin alone left four checks red, which is why every migration below lands with it.
+- Every `CommandTargetPolicy` TEA builds declares `permittedEnvironmentKeys`, required on 3.0.0 with no default.
+  The environment channel was the one command channel with no operator bound: the contract author declared it and everything declared reached the process.
+  The list is stated per target rather than once for every command TEA ships, because a key a command never reads has no business reaching it. All three permit exactly what their own contracts declare, the vendor names plus `HOME` and `USER`, read from `vendorEnvironmentNames()` so the contract and the policy cannot drift.
+  `PATH` is on no list, refused where the widening happens as well as by the schema and by the adapter, because `target` may name a bare command and a declared `PATH` would then choose which binary runs.
+  A per-interface override naming an interface the policy does not authorize is refused too: it widens nothing, and unnoticed it leaves every request of that harness carrying names the authorization never permitted.
+  A caller widens an authorization one call at a time through `environmentKeys`, which is how an operator's `--env-pass` names and this repository's two stub variables reach a process.
+- `CI` reaches no measured run, and its absence is what makes a review reproducible.
+  `cli/test-review.js` reads it to decide filesystem isolation when `--isolate` is not stated, and no contract declares it, so passing it through let the host decide how the measured run executed: isolation on in GitHub Actions, off on a laptop, with the two sealed records indistinguishable afterwards.
+  TEA's harness had been sending it since before the environment channel had an operator bound, and `test/eval-contract-strength.js` had been filtering it back out against the contract, so the two halves of the same suite were already measuring different commands.
+  A command run through the port now sees no `CI` at all and isolates the same way on every host; `test/eval-test-review.js` states `--isolate` explicitly and never depended on the variable.
+  `test/test-probe-targets.js` holds each contract's declared keys equal to its authorization's permitted keys, in both directions, so neither side can drift from the other again.
+- All 31 probes carry `schemaVersion: 5` and all 10 contracts carry `5`, written by their generators rather than by hand.
+  On 3.0.0 a stale stamp is a `schema-version-mismatch` runtime fault at exit 5 in both `preflight` and `score`, so every probe corpus and every contract compile was failing on the version alone.
+  The load-bearing edit is the ninth input channel: each of the 21 `inputBinding` selectors gains `"arguments": null`, which version 5 added so a signature against a tool call can filter on what the call supplied.
+  `tools/generate-contracts.js` now names its stamp `EVAL_CONTRACT_SCHEMA_VERSION` instead of repeating the literal in three places.
+- TEA's sealed run records carry `schemaVersion: 6` and no `invalidReason`, and their observations carry the ninth `arguments` call-input channel.
+  Version 6 drops `invalidReason` because nothing in the package ever read it, so a caller attesting that a run was invalid was ignored by every stage while the field looked like a supported channel.
+  `SCHEMA_VERSIONS` in `test/lib/eval-quality-inputs.js` read 3 for both the probe and the record; the record entry is the one with a reader, and it was emitting version-3 records against a version-6 parser.
+- The command-probe conformance arm reports 16 outcomes where it reported 15. The count is the package's and moved with the version; what TEA supplies is `unauthorizedEnvironmentKeyRequest`, which is what makes the sixteenth assertion pass rather than fail.
+  That request is authorized in every other respect and declares exactly one environment key its authorization omits, and the suite checks that the refusal costs zero calls into the underlying mechanism, so no process is spawned.
+  TEA reads the expected count from `CONFORMANCE_OUTCOME_COUNTS` rather than stating it, so the next assertion the package adds fails this check until TEA answers it.
+  The conformance policy permits no environment key at all, which is both the honest allowlist for a fixture command that reads none and AD-35's default-deny base case.
+
+- Scores computed before and after this release are comparable on every input, with one exception that nothing recorded depends on.
+  Every replay-scored result is comparable across this change, and none of them moved.
+  `npm run test:probe-corpus` recomputes each probe's pre-flight, verdict, exit code, basis, qualification and strength vector from the stored evidence under 3.0.0, against `test/probes/expected-strength.json` unchanged by this release.
+  The probe and contract bytes moved, so `corpusDigest` and `contractDigest` move with them at scoring time, and nothing under `test/replay/` pins either or pins a scoring version, which is why no stored score moved.
+  No digest stored inside a probe or a contract moved either: those are taken over the harness implementation and its artifacts rather than over the files themselves.
+  The live `eval:test-review` numbers in `docs/explanation/eval-quality-roadmap.md` are comparable.
+  That harness states `--isolate` explicitly on every run, so its filesystem isolation never depended on `CI`, before or after.
+  A live `eval:preflight` or `eval:contract-strength` measurement of `tea-test-review` taken on a host where `CI` was set is not comparable with one taken after this release, because such a run isolated where this one does not.
+  No such measurement is recorded here: no workflow invokes any `eval:` script, the pre-flight cache under `test/eval-artifacts/` is not committed, and every contract-strength result this repository records is a finding rather than a figure.
+  So nothing recorded is invalidated; what changes is that the next contract-strength run and the next eval run measure the same command on every host.
+  `tea-fragment-selection-runner` and `tea-trace-runner` stop carrying `CI` as well, and nothing observable moves.
+  Only `cli/test-review.js` reads it, and `buildMinimalEnv` in `cli/lib/run-agent.js` never passes it to a vendor, so no measured run of those two could have read it.
+
+### Fixed
+
+- Two statements in `docs/explanation/eval-quality-roadmap.md` and `docs/explanation/eval-quality-command-adapter.md` that this upgrade falsified or that were already false.
+  The roadmap counted the published conformance suite at fifteen assertions, which is sixteen now.
+  The adapter page said `tea-test-review` permits neither `HOME` nor `USER`, so its live pre-flight must use an API key. That stopped being true one release earlier when its request shape moved to `vendorEnvironmentNames()`, and the same page recorded the correction two hundred lines further down while the first statement stayed, so the page contradicted itself.
+  The page's adoption inventory also listed `serializeArtifact` and `digestBytes` as unused, which the new corpus check falsifies, and its "done, and covered by npm test" section named none of the three checks this change adds.
+
 ## [1.26.0] - 2026-09-09
 
 ### Changed

@@ -589,7 +589,7 @@ async function main() {
   // authorization's maxElapsedMs is a minute longer and SIGKILLs, so the inner
   // bound is the one that fires and the classification survives.
   runnerOption['timeout-ms'] = String(RUN_TIMEOUT_MS);
-  const runnerEnvironment = hostEnvironment(options.envPass);
+  const runnerEnvironment = hostEnvironment('tea-fragment-selection-runner', options.envPass);
 
   const runners = [];
 
@@ -627,7 +627,13 @@ async function main() {
           let written = [];
           let treeChanges = [];
           try {
-            const { port } = await createProbePort({ cwd: scratch, interfaceIds: ['tea-fragment-selection-runner'] });
+            const { port } = await createProbePort({
+              cwd: scratch,
+              interfaceIds: ['tea-fragment-selection-runner'],
+              // The operator's own pass-through names, so the authorization
+              // permits exactly what the request above declares.
+              environmentKeys: { 'tea-fragment-selection-runner': options.envPass },
+            });
             result = await probeCommand(
               port,
               probeRequest({
