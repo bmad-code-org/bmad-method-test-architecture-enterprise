@@ -76,13 +76,18 @@ const PROBE_KINDS = {
  * Which TEA check runs each published conformance arm.
  *
  * `file` is the check that runs it. `reason` is why no check does, and a reason
- * is one of two things. Three of them are adoption work TEA has planned: the
- * corpus, clock and file-system arms were already available on the release TEA
- * ran before this upgrade, so nothing about them waits on a package change. The
- * other two are declines. `environment-probe` and `mcp-probe` are the api and mcp
- * arms, TEA measures neither an HTTP service nor a tool server, and the package
- * ships no adapter for the first, so neither has a subject to run against. A
+ * is one of two things, and as of this release every remaining reason is the
+ * second. `environment-probe` and `mcp-probe` are the api and mcp arms, TEA
+ * measures neither an HTTP service nor a tool server, and the package ships no
+ * adapter for the first, so neither has a subject to run against. The adoption
+ * reasons are gone: corpus, clock and file-system each name a check now. A
  * decline is not deferral and each one says which it is.
+ *
+ * This paragraph enumerates the entries below and nothing holds it to them, so a
+ * reason moving to a file leaves it wrong. It has now been wrong twice in one
+ * night, once when `file-system` became a file and again when `clock` did, each
+ * time in a pull request that was not looking at it. Read it against the map
+ * rather than instead of it.
  */
 const CONFORMANCE_ARMS = {
   'command-probe': { file: 'test/test-probe-conformance.js' },
@@ -99,7 +104,7 @@ const CONFORMANCE_ARMS = {
   },
   corpus: { file: 'test/test-corpus-conformance.js' },
   clock: { file: 'test/test-probe-conformance.js' },
-  'file-system': { reason: 'TEA reads and writes files directly and has not moved to the shipped file-system adapter' },
+  'file-system': { file: 'test/test-file-system-conformance.js' },
   'mcp-probe': { reason: 'TEA authorizes no tool server, so this arm has no subject to run against' },
 };
 
@@ -263,9 +268,9 @@ async function main() {
     );
     if (entry === undefined) continue;
     assert(
-      typeof entry.file === 'string' || (typeof entry.reason === 'string' && entry.reason.length > 0),
+      (typeof entry.file === 'string' && entry.file.length > 0) || (typeof entry.reason === 'string' && entry.reason.length > 0),
       `the "${arm}" arm names the check that runs it or records why none does`,
-      'an entry that is neither is an arm nobody decided about',
+      'an entry that is neither is an arm nobody decided about, and an empty file path reads as a check that exists and then throws EISDIR on the repository root',
     );
     if (entry.file === undefined) continue;
     // The count for an arm this file says TEA runs, resolved here so a registry
