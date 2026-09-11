@@ -88,9 +88,9 @@ FR9: `eval-quality` exports `PROBE_SCHEMA_VERSION` and `EVAL_CONTRACT_SCHEMA_VER
 
 FR10: `eval-quality` exports `compareDominance`, with `ComparableResult`, `DominanceRelationValue` and `Severity`. It is declared at `src/core/score/strength.ts:254` and reachable from no barrel, so FR30 has no way to run without this.
 
-FR11: The three artifacts whose versions are scattered literals in `eval-quality` get a named constant each: `sealed-evaluator-brief` at `src/core/seal/seal.ts:98`, `evidence-artifact` at `src/core/emit/emit.ts:110`, and `preflight-verdict` at `src/core/preflight/reduce.ts:475`. These are the three the package itself stamps.
+FR11: Every artifact version a consumer must write or match is a named, exported constant. Three are scattered literals the package itself stamps: `sealed-evaluator-brief` at `src/core/seal/seal.ts:98`, `evidence-artifact` at `src/core/emit/emit.ts:110`, `preflight-verdict` at `src/core/preflight/reduce.ts:475`. A fourth is needed for a different reason: `sealed-run-record` is caller-produced, so the package stamps it nowhere, yet it reads version 6 and TEA must write that number. Without an exported source for it, FR13 cannot resolve without a literal or a refused deep import.
 
-FR12: TEA validates each artifact's `schemaVersion` against the constant the package exports, before the artifact reaches a pipeline stage. This meets the need behind pinning a JSON Schema `const` without reversing the package's written decision against it, which is argued in the schema: a `const` "exports as `{"type":"number","const":1}`, losing `integer` for a non-TypeScript consumer" and turns a version mismatch into an anonymous parse failure instead of the dedicated `schema-version-mismatch` fault.
+FR12: TEA validates the `schemaVersion` of every artifact it authors against the constant the package exports, before the artifact reaches a pipeline stage. This covers the stamped artifacts TEA builds or reads, and excludes `artifact-reference`, which deliberately carries no `schemaVersion`. This meets the need behind pinning a JSON Schema `const` without reversing the package's written decision against it, which is argued in the schema: a `const` "exports as `{"type":"number","const":1}`, losing `integer` for a non-TypeScript consumer" and turns a version mismatch into an anonymous parse failure instead of the dedicated `schema-version-mismatch` fault.
 
 FR13: TEA derives its expected artifact versions from the package. `test/lib/eval-quality-inputs.js:48` hardcodes a five-entry `SCHEMA_VERSIONS` table whose comment concedes the versions are "stated rather than derived". Two entries are wrong for 3.0.0: `probe` reads 3 and must read 5, and `sealedRunRecord` reads 3 and must read 6 (`sealed-run-record.ts:429`; a version-5 record carrying `invalidReason` fails to parse against version 6). TEA builds a sealed run record from that entry at `eval-quality-inputs.js:300`, so it currently emits version-3 records. `probe` and `scoringPolicy` are dead entries with no reader.
 
@@ -148,6 +148,8 @@ FR37: TEA's suppression allowlists are justified or removed. `.markdownlint-cli2
 
 FR38: TEA's coverage is enforced or the tooling is removed. The `c8` block declares no `check-coverage` and no threshold, `test:coverage` is in neither the `npm test` chain nor any workflow.
 
+FR56: TEA fails closed when `eval-quality` cannot be resolved. `test/test-contracts.js:174` prints a skip notice and returns `0`, so a broken install leaves 10 contracts unchecked and reads as a pass. This was recorded as a known shape in an earlier draft and owned by no requirement, which is the state this plan exists to end.
+
 FR39: Every new npm script is covered by CI. `tools/validate-ci-coverage.js` enforces only that scripts in the `npm test` chain run somewhere in CI, and states "the reverse is allowed", so a script outside that chain needs no step.
 
 **Proving it**
@@ -203,6 +205,8 @@ NFR6: Any `eval-quality` release cut for this work passes that repository's `npm
 NFR7: A story's acceptance criteria are mechanically checkable. Where a judgment is unavoidable, the story names the fixture, rubric or registry that decides it.
 
 NFR8: A capability is either adopted or explicitly declined with the reason recorded on the page that describes it.
+
+NFR9: Any gate that executes content rather than reading it runs isolated. Three do: the fenced documentation commands, the generated acceptance tests, and the generated scaffold's install and smoke run. Each runs in a disposable non-privileged workspace with no credentials in its environment, no network beyond what the step declares, and bounded CPU and wall clock, and the workspace is removed on both the passing and the throwing path. The isolation is proven before the gate is enabled, not after.
 
 ### Additional Requirements
 
@@ -265,6 +269,7 @@ NFR8: A capability is either adopted or explicitly declined with the reason reco
 | FR37 | Epic 4 | Suppression allowlists justified or removed |
 | FR38 | Epic 4 | Coverage enforced or tooling removed |
 | FR39 | Epic 4 | CI coverage extended past the `test` chain |
+| FR56 | Epic 4 | TEA fails closed on an unresolvable `eval-quality` |
 | FR40 | Epic 1 | Published corpus compiled as the pin-move smoke test |
 | FR41 | Epic 5 | `eval:all` run live, exit class recorded |
 | FR42 | Epic 5 | Roadmap states the shipped baseline |
@@ -282,7 +287,7 @@ NFR8: A capability is either adopted or explicitly declined with the reason reco
 | FR54 | Epic 6 | `teach-me-testing` suite |
 | FR55 | Epic 6 | The manifest `deferred` array is empty |
 
-Every FR from FR1 to FR55 is mapped, and no epic requires a later epic to function.
+Every FR from FR1 to FR56 is mapped, and no epic requires a later epic to function.
 
 ## Epic List
 
@@ -300,7 +305,7 @@ A consumer reads the schema stamp it must write, compares two results, and runs 
 
 ### Epic 3: Every port TEA hand-rolls runs on the shipped adapter
 
-The corpus digesting, file access and timing TEA performs by hand run through `eval-quality`'s reference adapters and are proven by its conformance suite. Four arms run where one runs today.
+The corpus digesting, file access and timing TEA performs by hand run through `eval-quality`'s reference adapters and are proven by its conformance suite. Five arms run where one runs today: the command-line arm TEA already has, plus the generic environment-probe, corpus, clock and file-system arms.
 
 **FRs covered:** FR18, FR19, FR20, FR21, FR22
 
@@ -308,7 +313,7 @@ The corpus digesting, file access and timing TEA performs by hand run through `e
 
 Nothing TEA publishes or depends on is trusted because someone remembered to check it. Counts, prose, fenced commands, fault types, vocabularies, lockfiles, layering, package boundary, publish authorization, lint exclusions and coverage are each held by a gate that fails.
 
-**FRs covered:** FR23, FR24, FR25, FR26, FR27, FR28, FR29, FR31, FR32, FR33, FR34, FR35, FR36, FR37, FR38, FR39
+**FRs covered:** FR23, FR24, FR25, FR26, FR27, FR28, FR29, FR31, FR32, FR33, FR34, FR35, FR36, FR37, FR38, FR39, FR56
 
 ### Epic 5: Drift is measured and the upgrade is proven live
 
@@ -496,6 +501,12 @@ So that the number cannot disagree with itself between the writer and the reader
 **Then** the writer reads the constant and a grep for a bare `schemaVersion: <integer>` assignment under `src/` returns nothing
 **And** each constant is exported alongside those from Story 2.1
 
+**Given** `sealed-run-record` is caller-produced, so the package stamps it nowhere while its reader accepts version 6 (`sealed-run-record.ts:429`)
+**When** the version a caller must write is published
+**Then** `SEALED_RUN_RECORD_SCHEMA_VERSION` is exported from the same entry point as the others
+**And** it is derived from the reader rather than restated beside it, so the two cannot drift
+**And** the same treatment is applied to every caller-produced artifact whose reader pins a version, so FR13 resolves for all five of TEA's entries without a literal
+
 **Given** `schemas/artifact-reference.schema.json` deliberately carries no `schemaVersion`, an exemption asserted by a test against the registry's `carriesLineage` flag
 **When** this story runs
 **Then** that artifact is left alone and the exemption test still passes
@@ -576,7 +587,11 @@ So that the next bump fails TEA's gate loudly instead of passing until a runtime
 **Given** two entries are wrong for 3.0.0
 **When** the table is derived
 **Then** `probe` resolves to 5, not 3
-**And** `sealedRunRecord` resolves to 6, not 3, so the record TEA builds at `eval-quality-inputs.js:300` stops emitting a version-3 artifact against a build that reads 6
+**And** `sealedRunRecord` resolves to 6, not 3, read from the constant Story 2.2 exports, so the record TEA builds at `eval-quality-inputs.js:300` stops emitting a version-3 artifact against a build that reads 6
+
+**Given** a version TEA writes and a version the installed package reads disagree
+**When** the derived table is exercised
+**Then** a test covers that mismatch path explicitly, rather than waiting for a live run to find it
 **And** the `probe` and `scoringPolicy` entries, which no code reads, are removed rather than derived
 
 **Given** a future release moves an artifact version
@@ -712,7 +727,7 @@ So that no eval harness reaches the file system directly.
 
 **Given** Epic 3 is otherwise complete
 **When** `npm test` and every `quality.yaml` job run
-**Then** all pass, four conformance arms are reported where one was reported before, and every new script has its own workflow step
+**Then** all pass, five conformance arms are reported where one was reported before, and every new script has its own workflow step
 
 ## Epic 4: TEA's claims, codes and supply chain are machine-held
 
@@ -720,7 +735,7 @@ Nothing TEA publishes or depends on is trusted because someone remembered to che
 
 FR39 is satisfied across this epic rather than by one story: `tools/validate-ci-coverage.js` enforces only that scripts in the `npm test` chain run in CI and states "the reverse is allowed", so Story 4.8 extends it to every script and each other story adds its own workflow step.
 
-**FRs covered:** FR23, FR24, FR25, FR26, FR27, FR28, FR29, FR31, FR32, FR33, FR34, FR35, FR36, FR37, FR38, FR39
+**FRs covered:** FR23, FR24, FR25, FR26, FR27, FR28, FR29, FR31, FR32, FR33, FR34, FR35, FR36, FR37, FR38, FR39, FR56
 
 ### Story 4.1: Hold every published count against its source
 
@@ -777,6 +792,10 @@ So that a renamed script or a changed flag is caught by the build rather than by
 **When** the gate runs
 **Then** it fails naming the page and the command
 
+**Given** this gate executes content that a page author wrote
+**When** it runs
+**Then** it runs under NFR9's isolation, and the isolation is proven before the gate is enabled
+
 ### Story 4.4: Narrow faults by type and assert every vocabulary
 
 As a TEA maintainer,
@@ -798,6 +817,11 @@ So that a renamed code or a stray `ENOENT` cannot pass as something it is not.
 **Given** `test/contracts/expected-status.json` records `{"status": "compiles"}` for all 10 contracts and no failure code
 **When** this story runs
 **Then** the registry check applies to codes recovered at runtime, and the story records that the fixture carries no code to check today
+
+**Given** `test/test-contracts.js:174` prints a skip notice and returns `0` when `require.resolve('eval-quality/package.json')` fails, leaving 10 contracts unchecked
+**When** the resolution path is made fail-closed
+**Then** an unresolvable `eval-quality` exits non-zero and names how many contracts went unchecked
+**And** a test drives the unresolvable path and asserts the non-zero exit, so the behavior is pinned rather than described
 
 ### Story 4.5: Read diagnostics from the sink and decide the strict rung
 
@@ -858,6 +882,11 @@ So that a violation fails the build rather than surviving review.
 **Given** `tools/generate-probes.js` and `tools/generate-contracts.js` write fields several readers consume
 **When** the lineage gate runs
 **Then** ownership drift between writer and readers fails
+
+**Given** TEA has no publish lifecycle hook, so a laptop holding a valid npm token can publish outside the release workflow
+**When** a publish authorization guard is added
+**Then** a publish attempted outside the authorized release workflow is refused before any tarball is uploaded, proven by a test that runs the guard with a token present and asserts the refusal
+**And** a publish through the authorized release workflow still succeeds, proven on the next release rather than asserted
 
 ### Story 4.8: Gate the ungated trees, allowlists, coverage and CI
 
@@ -1004,11 +1033,17 @@ So that the dependency change is visible to anyone installing TEA.
 **Then** the published version is confirmed against the npm registry
 **And** no `file:` or `link:` dependency on a local checkout is present in the released tree
 
+**Given** Epic 5 is otherwise complete
+**When** `npm test` and every `quality.yaml` job run
+**Then** all pass, and every new script added in this epic has its own workflow step
+
 ## Epic 6: Every TEA skill is covered by a behavioral suite
 
 Eight skills are declared deferred in `test/evals/suite-manifest.json`, each with an owner and a statement of missing evidence, and `test/eval-all.js` exits `2` when a skill is in neither a suite nor that list.
 
-Each skill's `exitCondition` was written when the deferral was declared, and each story turns one into an executable suite. Stories 6.1 through 6.9 depend on nothing in Epics 1 through 5 and on nothing in each other. Story 6.10 closes the epic and depends on all of them, and on Story 4.1 for its documentation clause.
+Each skill's `exitCondition` was written when the deferral was declared, and each story turns one into an executable suite.
+
+No story in this epic depends on anything in Epics 1 through 5. Four dependencies run inside it, each backwards and each stated in the dependent story's own first Given: Story 6.7 needs the fixture Story 6.6 builds, Story 6.9 needs the static scoring Story 6.8 establishes, Story 6.11 needs the harness Story 6.10 builds, and Story 6.12 needs all eleven. Stories 6.1 through 6.6, 6.8 and 6.10 depend on nothing and can run in any order or in parallel. Story 6.12's documentation clause additionally depends on Story 4.1.
 
 Every suite carries clean or negative controls as well as positive cases, because recall alone rewards a system that reports everything.
 
@@ -1122,6 +1157,10 @@ So that a red test proves the behavior is absent rather than that the test is br
 **When** the run completes
 **Then** no production file has changed, and a changed production file scores as a defect regardless of the test result
 
+**Given** this suite executes generated test code
+**When** it runs
+**Then** it runs under NFR9's isolation, and the isolation is proven before the suite is enabled
+
 ### Story 6.6: Build the fixed implementation and qualified regression fixture
 
 As a TEA maintainer,
@@ -1180,6 +1219,7 @@ So that its contents being right is not mistaken for it working.
 **Then** the scaffold is installed in a disposable workspace, validated, and a smoke test executed
 **And** the suite is declared separately from Story 6.8's so its wall clock and its network dependency do not gate the static scoring
 **And** the workspace is removed on both the passing and the throwing path
+**And** the install runs under NFR9's isolation, with the network access it needs declared explicitly and nothing else reachable, proven before the suite is enabled
 
 ### Story 6.10: Build the multi-turn transcript harness
 
@@ -1248,16 +1288,16 @@ Checked mechanically where possible.
 
 | Check | Result |
 | --- | --- |
-| Functional requirements defined | 55 |
-| Covered in the FR coverage map | 55 |
-| Assigned to an epic | 55 |
+| Functional requirements defined | 56 |
+| Covered in the FR coverage map | 56 |
+| Assigned to an epic | 56 |
 | Stories carrying acceptance criteria | 43 of 43 |
 | Stories in the As a / I want / So that form | 43 of 43 |
 | Stories carrying Given / When / Then criteria | 43 of 43 |
 | Stories referencing a later story or epic | 0 |
 | Unreplaced template placeholders | 0 |
 
-**Epic independence.** Epic 1 depends on nothing. Epic 2 depends on Epic 1 only for the pin. Epic 3 depends on Epic 1. Epic 4's first three stories depend on Epic 2's release; the rest depend on nothing. Epic 5 depends on Epic 2 for `compareDominance` and on Epics 1, 3 and 4 for what it documents. Epic 6's suite stories depend on nothing, and only Story 6.12 depends on other stories. Every dependency points backwards.
+**Epic independence.** Epic 1 depends on nothing. Epic 2 depends on Epic 1 only for the pin. Epic 3 depends on Epic 1. Epic 4's first three stories depend on Epic 2's release; the rest depend on nothing. Epic 5 depends on Epic 2 for `compareDominance` and on Epics 1, 3 and 4 for what it documents. Epic 6's stories depend on nothing outside the epic; inside it, 6.7 needs 6.6, 6.9 needs 6.8, 6.11 needs 6.10, and 6.12 needs all eleven. Every dependency points backwards.
 
 **File overlap.** Epics 1 and 3 both touch `test/test-probe-conformance.js` and `tools/generate-probes.js`. Consolidation was considered and rejected: on `test-probe-conformance.js` the touches are three localized sequential edits in one file, and on `generate-probes.js` they fall in different regions of a 720-line file. Merging would give a ten-story epic that cannot be green until all of it lands.
 
@@ -1296,3 +1336,20 @@ Three independent reviewers read this document against both repositories before 
 **Requirements the review added that the first draft missed entirely:** the three shipped adapters, validating `eval-contract` and `scoring-policy`, `check:boundary`, `check:lineage`, the publish-authorization guard, `.npmrc` `min-release-age`, the published corpus as a pin-move smoke test, `--strict` and `strictPromotable`, `DiagnosticSink`, `instanceof RuntimeFault` narrowing, `VERDICTS` and `EVALUATOR_RECOMMENDATIONS`, a gate over `_bmad-output/`, the markdownlint and eslint suppression allowlists, unenforced coverage, and the limit of what `validate-ci-coverage.js` actually enforces. The first draft had 43 requirements; it now has 55.
 
 **One defect found in `eval-quality` itself:** `dist/index.d.ts` declares `VERSION = "2.0.0"` while `package.json` reads `3.0.0`. Story 2.3 fixes it.
+
+## CodeRabbit Round 1
+
+Eight findings, each verified against the document before it was acted on. Seven were valid as stated, one partly.
+
+| Finding | Verdict | Change |
+| --- | --- | --- |
+| Epic 3 says four conformance arms where there are five | Valid | Corrected in the epic summary and the closing criterion, and the five are now named |
+| Epic 6's independence claim contradicts its own stories | Valid | The four in-epic dependencies are stated, and the eight stories that really are independent are named |
+| FR12 overreaches to artifacts with no stamp | Partly valid | Scoped to the artifacts TEA authors and `artifact-reference` excluded by name. The suggested narrowing to `eval-contract` and `scoring-policy` was declined: that is FR14's scope, and the stamp check matters most for probes |
+| Story 5.5 lacks the standing gate criteria every other closing story has | Valid | Added |
+| The skip-reads-as-pass in `test-contracts.js` is documented and owned by nothing | Valid | Now FR56, with a fail-closed criterion and a test on Story 4.4 |
+| FR35 has no executable criterion | Valid, and understated | FR35 was mapped to Epic 4 and implemented by no story at all. A criterion is now on Story 4.7 |
+| FR13 cannot resolve `sealedRunRecord` without a literal | Valid | `sealed-run-record` is caller-produced, so the package stamps it nowhere. FR11 and Story 2.2 now export a constant for it and for every caller-produced artifact whose reader pins a version, and Story 2.6 gains a mismatch-path test |
+| Three gates execute content with no stated isolation | Valid | NFR9 states the isolation, and Stories 4.3, 6.5 and 6.9 each carry it as a criterion proven before the gate is enabled |
+
+The document moved from 55 requirements to 56 and from 8 non-functional requirements to 9.
