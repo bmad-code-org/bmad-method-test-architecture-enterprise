@@ -27,7 +27,7 @@ const { spawnSync } = require('node:child_process');
 
 const { loadSuiteManifest, unaccountedSkills } = require('./lib/suite-manifest');
 const { teaSkills } = require('./lib/tea-skills');
-const { nowMs, elapsedMsSince } = require('./lib/clock');
+const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { digestFiles, repositoryState, suiteResultRecord, runSummaryRecord, writeRunSummary } = require('./lib/eval-record');
 const { exitCodeForFailureClass, worstFailureClass } = require('./schema/eval-result');
 
@@ -259,8 +259,9 @@ function aggregateExitCodes(codes) {
  * before writing still has to appear in the summary, otherwise the run reads as
  * though that suite was never part of it.
  */
-function placeholderRecord(suite, options, exitStatus, durationMs) {
+async function placeholderRecord(suite, options, exitStatus, durationMs) {
   return suiteResultRecord({
+    generatedAt: await nowIso(),
     mode: options.preflightOnly ? 'preflight-only' : 'live',
     suite,
     repository: repositoryState(PROJECT_ROOT),
@@ -273,7 +274,7 @@ function placeholderRecord(suite, options, exitStatus, durationMs) {
   });
 }
 
-function readChildRecord(invocation, options, exitStatus, durationMs) {
+async function readChildRecord(invocation, options, exitStatus, durationMs) {
   if (invocation.jsonPath && fs.existsSync(invocation.jsonPath)) {
     try {
       return JSON.parse(fs.readFileSync(invocation.jsonPath, 'utf8'));
@@ -281,11 +282,10 @@ function readChildRecord(invocation, options, exitStatus, durationMs) {
       console.error(`eval:all: ${invocation.label} wrote an unreadable result record: ${error.message}`);
     }
   }
-  return placeholderRecord(invocation.suite, options, exitStatus, durationMs);
+  return await placeholderRecord(invocation.suite, options, exitStatus, durationMs);
 }
 
 async function main() {
-  const startedAt = await nowMs();
   let options;
   try {
     options = parseArgs(process.argv.slice(2));
@@ -309,6 +309,11 @@ async function main() {
     process.exit(2);
   }
 
+  // Taken after argv is parsed, so a usage error and `--help` cost no clock read.
+  // Under a scripted fixture an early read would consume an instant for a run that
+  // never measures anything.
+  const startedAt = await nowMs();
+
   const skills = teaSkills(PROJECT_ROOT);
   const unaccounted = unaccountedSkills(manifest, skills);
   if (unaccounted.length > 0) {
@@ -321,6 +326,7 @@ async function main() {
       writeRunSummary(
         options.jsonPath,
         runSummaryRecord({
+          generatedAt: await nowIso(),
           repository: repositoryState(PROJECT_ROOT),
           suites: [],
           unaccountedSkills: unaccounted,
@@ -360,7 +366,7 @@ async function main() {
         console.error(`eval:all: ${invocation.label} could not start: ${result.error.message}`);
         status = 2;
       }
-      children.push({ exitCode: status, record: options.jsonPath ? readChildRecord(invocation, options, status, durationMs) : null });
+      children.push({ exitCode: status, record: options.jsonPath ? await readChildRecord(invocation, options, status, durationMs) : null });
     }
 
     // The summary is built whether or not one was asked for, and the process exits
@@ -371,6 +377,7 @@ async function main() {
     // record against it, and a child that exited 0 while recording a quality failure
     // came out of it as exit 0 beside an artifact reading exitCode 1.
     const summary = runSummaryRecord({
+      generatedAt: await nowIso(),
       repository: repositoryState(PROJECT_ROOT),
       suites: children.map((child) => child.record).filter(Boolean),
       unaccountedSkills: [],
@@ -390,6 +397,17 @@ async function main() {
   process.exit(aggregate);
 }
 
-if (require.main === module) main();
+// A rejected promise is exit 2 with the reason printed, which is what the other
+// six harnesses do. `main` became asynchronous when durations moved to the clock
+// port, and an unhandled rejection exits 1 on node: in this repository exit 1 is
+// the `quality` class and every environment class is 2, so an infrastructure
+// throw would otherwise have reported as a measured quality failure with no
+// record.
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`eval:all: ${error?.stack ?? error}`);
+    process.exit(2);
+  });
+}
 
 module.exports = { parseArgs, sharedRunnerArgs, buildInvocations, aggregateExitCodes, runFailureClass, repetitionsFor, USAGE };

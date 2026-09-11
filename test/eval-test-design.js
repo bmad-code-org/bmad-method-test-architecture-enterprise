@@ -115,7 +115,7 @@ const {
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
-const { nowMs, elapsedMsSince } = require('./lib/clock');
+const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
@@ -1568,6 +1568,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
     writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
+        generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),

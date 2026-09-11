@@ -43,6 +43,29 @@ const { spawnSync } = require('node:child_process');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const HARNESS = path.join(PROJECT_ROOT, 'test', 'eval-test-design.js');
+
+/**
+ * Every harness that reads the clock, with the cheapest argv that still writes a
+ * result record.
+ *
+ * Pinning one harness was the hole a review found: five of the thirty-eight port
+ * call sites live in `eval-test-design.js`, so reverting the other thirty-three
+ * shipped with a green gate. A scripted run of each one closes it, and
+ * `--validate-only` and `--preflight-only` both write a record with a duration in
+ * it while spending no model call and no credential.
+ *
+ * `eval-contract-strength.js` is absent because it writes no suite-result record:
+ * its artifact is a cost report under its own shape, and its pre-flight declines
+ * `--agent-cmd` entirely. Its seven readings are covered by the source scan
+ * below, which is the weaker check and the only one that fits it.
+ */
+const HARNESSES = [
+  { file: 'eval-test-design.js', args: ['--validate-only'] },
+  { file: 'eval-trace.js', args: ['--validate-only'] },
+  { file: 'eval-fragment-selection.js', args: ['--validate-only'] },
+  { file: 'eval-bmad-tea-routing.js', args: ['--validate-only'] },
+  { file: 'eval-test-review.js', args: ['--preflight-only', '--agent', 'custom', '--agent-cmd', process.execPath] },
+];
 const STUB = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-runner', 'stub-agent.js');
 
 const colors = { reset: '[0m', red: '[31m', green: '[32m', dim: '[2m' };
@@ -68,9 +91,15 @@ function assert(condition, name, detail = '') {
  * in order. Twelve is more than any single-set, single-repetition run needs; the
  * mechanism throws rather than falling back when a run asks for more, so a short
  * fixture fails loudly instead of quietly measuring the system clock.
+ *
+ * The base sits decades away from wall-clock time, and the distance is doing
+ * work. A half-reverted run that takes its start mark from `Date.now()` and its
+ * end mark from the scripted clock produces a delta of that distance, which the
+ * whole-hour check rejects. Move the base near the current date and that
+ * detection narrows to the chance the two happen to differ by a whole hour.
  */
 function scriptedInstants() {
-  const base = Date.parse('2026-03-01T00:00:00.000Z');
+  const base = Date.parse('2001-01-01T00:00:00.000Z');
   const hour = 3_600_000;
   return Array.from({ length: 12 }, (_, index) => new Date(base + index * hour).toISOString());
 }
@@ -83,7 +112,7 @@ function runHarnessUnderScriptedClock(fixturePath, jsonPath) {
       cwd: PROJECT_ROOT,
       encoding: 'utf8',
       timeout: 300_000,
-      env: { ...process.env, TEA_CLOCK_FIXTURE: fixturePath, STUB_MODE: 'correct' },
+      env: { ...process.env, TEA_CLOCK_FIXTURE: fixturePath, TEA_CLOCK_FIXTURE_ALLOW_RECORD: '1', STUB_MODE: 'correct' },
     },
   );
 }
@@ -137,6 +166,45 @@ function main() {
       `durations ${JSON.stringify(durations)}; ${JSON.stringify(plausiblyReal)} are within the range a real stub run produces`,
     );
 
+    // Every other harness, under the same scripted clock. One harness proving the
+    // port is in its own path says nothing about the other six.
+    for (const harness of HARNESSES) {
+      const perFixture = path.join(workspace, `${harness.file}.txt`);
+      fs.writeFileSync(perFixture, `${instants.join('\n')}\n`, 'utf8');
+      const perJson = path.join(workspace, `${harness.file}.json`);
+      const result = spawnSync(process.execPath, [path.join(PROJECT_ROOT, 'test', harness.file), ...harness.args, '--json', perJson], {
+        cwd: PROJECT_ROOT,
+        encoding: 'utf8',
+        timeout: 300_000,
+        env: { ...process.env, TEA_CLOCK_FIXTURE: perFixture, TEA_CLOCK_FIXTURE_ALLOW_RECORD: '1' },
+      });
+      if (!fs.existsSync(perJson)) {
+        assert(false, `${harness.file} wrote a record under the scripted clock`, `exit ${result.status}`);
+        continue;
+      }
+      const perRecord = JSON.parse(fs.readFileSync(perJson, 'utf8'));
+      const perDurations = [perRecord.durationMs, ...(perRecord.runners ?? []).map((runner) => runner.durationMs)].filter(
+        (value) => typeof value === 'number',
+      );
+      // Zero is rejected here for the same reason it is rejected above. A run that
+      // takes its start mark from the wall clock and its end mark from a clock
+      // scripted decades earlier produces a negative delta, which `elapsedMsSince`
+      // clamps to zero, so zero is the signature of a half-revert rather than a
+      // fast run. Under a scripted clock every legitimate duration is at least one
+      // scripted hour.
+      const offScriptHere = perDurations.filter((value) => value === 0 || value % hour !== 0);
+      assert(
+        perDurations.length > 0 && offScriptHere.length === 0,
+        `${harness.file} takes every duration from the clock port`,
+        `durations ${JSON.stringify(perDurations)}`,
+      );
+      assert(
+        typeof perRecord.generatedAt === 'string' && perRecord.generatedAt.startsWith(instants[0].slice(0, 4)),
+        `${harness.file} stamps generatedAt from the clock port`,
+        `generatedAt ${perRecord.generatedAt}`,
+      );
+    }
+
     // The fixture is exhaustible on purpose. A run that asked for more instants
     // than it scripts has to fail rather than silently read the system clock,
     // which is what keeps the assertions above meaningful.
@@ -169,6 +237,23 @@ function main() {
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });
   }
+
+  // Cheap insurance over the spawn loop above, and the only cover for the one
+  // harness that writes no suite-result record. A reading reintroduced anywhere
+  // in a harness fails here even where no scripted run reaches it.
+  const harnessFiles = fs.readdirSync(path.join(PROJECT_ROOT, 'test')).filter((name) => name.startsWith('eval-') && name.endsWith('.js'));
+  const withWallClock = harnessFiles.filter((name) => {
+    const body = fs.readFileSync(path.join(PROJECT_ROOT, 'test', name), 'utf8');
+    return body
+      .split('\n')
+      .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
+      .some((line) => /\bDate\.now\(\)/.test(line));
+  });
+  assert(
+    withWallClock.length === 0,
+    `none of the ${harnessFiles.length} harnesses reads the wall clock directly`,
+    `${withWallClock.join(', ')} still call Date.now(); every duration reaches a record through test/lib/clock.js`,
+  );
 
   console.log(`\n${failed === 0 ? colors.green : colors.red}${passed} passed, ${failed} failed${colors.reset}\n`);
   return failed === 0 ? 0 : 1;

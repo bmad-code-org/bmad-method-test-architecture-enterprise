@@ -125,9 +125,27 @@ async function elapsedMsSince(markMs, signal) {
   return Math.max(0, Math.round((await nowMs(signal)) - markMs));
 }
 
+/**
+ * The current instant as an ISO-8601 string, read through the port.
+ *
+ * Every result record carries a `generatedAt`, and it used to come from
+ * `new Date().toISOString()` inside `test/lib/eval-record.js`. Under a scripted
+ * clock that produced a record whose durations were scripted and whose stamp was
+ * real, describing a run that began in March and was generated in September, and
+ * nothing in the schema objected. A record states one run and it reads one clock.
+ *
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<string>}
+ */
+async function nowIso(signal) {
+  const port = await clockPort();
+  const response = await port.read({}, signal ?? new AbortController().signal);
+  return response.now;
+}
+
 /** Whether this process is running on a scripted clock, which only the checks that script one should be. */
 function isScripted() {
   return SCRIPTED !== null;
 }
 
-module.exports = { nowMs, elapsedMsSince, isScripted, clockPort };
+module.exports = { nowMs, nowIso, elapsedMsSince, isScripted, clockPort };

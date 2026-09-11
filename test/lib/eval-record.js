@@ -10,6 +10,8 @@
 
 'use strict';
 
+const { isScripted } = require('./clock');
+
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
@@ -216,6 +218,7 @@ function measured(value) {
  * @returns {object} A record shaped for evalResultSchema.
  */
 function suiteResultRecord({
+  generatedAt,
   mode,
   suite,
   repository,
@@ -231,7 +234,11 @@ function suiteResultRecord({
   return {
     schemaVersion: SCHEMA_VERSION,
     kind: 'suite-result',
-    generatedAt: new Date().toISOString(),
+    // Read through the clock port by the caller, never off the wall clock here.
+    // A record whose durations came from a scripted clock and whose stamp came
+    // from `new Date()` describes a run that began in March and was generated in
+    // September, and nothing in the schema objects.
+    generatedAt,
     mode,
     repository,
     suite: {
@@ -263,12 +270,12 @@ function suiteResultRecord({
  * @param {object} input
  * @returns {object} A record shaped for evalRunSchema.
  */
-function runSummaryRecord({ repository, suites, unaccountedSkills, durationMs, runFailureClasses = [] }) {
+function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, durationMs, runFailureClasses = [] }) {
   const failureClass = worstFailureClass([...suites.map((suite) => suite.failureClass), ...runFailureClasses]);
   return {
     schemaVersion: SCHEMA_VERSION,
     kind: 'run-summary',
-    generatedAt: new Date().toISOString(),
+    generatedAt,
     repository,
     suites,
     unaccountedSkills,
@@ -304,7 +311,30 @@ function writeRecord(jsonPath, record, validator) {
  * @param {string} jsonPath
  * @param {object} record
  */
+/**
+ * Refuse to write an evidence record produced under a scripted clock.
+ *
+ * `TEA_CLOCK_FIXTURE` exists so `test/test-clock-port.js` can prove the clock
+ * port is in the path that produces a duration. Left set in a shell it turns a
+ * real eval run scripted in silence, and `test/eval-all.js` spawns its children
+ * with the parent environment, so it reaches every one of them. The output is a
+ * committed evidence record carrying fabricated durations that passes its own
+ * schema, which is the worst artifact this repository can produce.
+ *
+ * The check that scripts the clock opts in through `TEA_CLOCK_FIXTURE_ALLOW_RECORD`,
+ * so the one caller that needs a record under a fixture gets one and nothing else
+ * does.
+ */
+function refuseScriptedRecord(filePath) {
+  if (!isScripted() || process.env.TEA_CLOCK_FIXTURE_ALLOW_RECORD === '1') return;
+  throw new Error(
+    `refusing to write ${filePath}: TEA_CLOCK_FIXTURE is set, so every duration in this record came from a scripted clock. ` +
+      'Unset it, or set TEA_CLOCK_FIXTURE_ALLOW_RECORD=1 if this run is the check that scripts the clock.',
+  );
+}
+
 function writeSuiteResult(jsonPath, record) {
+  refuseScriptedRecord(jsonPath);
   writeRecord(jsonPath, record, validateEvalResult);
 }
 
@@ -313,6 +343,7 @@ function writeSuiteResult(jsonPath, record) {
  * @param {object} record
  */
 function writeRunSummary(jsonPath, record) {
+  refuseScriptedRecord(jsonPath);
   writeRecord(jsonPath, record, validateEvalRun);
 }
 
