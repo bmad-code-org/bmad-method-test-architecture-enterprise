@@ -58,6 +58,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
+const { readText, writeText } = require('./lib/file-system-port');
+
 const PROJECT_ROOT = path.join(__dirname, '..');
 const HARNESS = path.join(PROJECT_ROOT, 'test', 'eval-trace.js');
 const GROUND_TRUTH = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json');
@@ -102,7 +104,15 @@ function runUnderFixture(workspace, { reads }) {
   };
 }
 
-function main() {
+/** A file the process cannot read, for the permission half of the absence decision. */
+function unreadable(directory) {
+  const target = path.join(directory, 'unreadable.txt');
+  fs.writeFileSync(target, 'secret');
+  fs.chmodSync(target, 0o000);
+  return target;
+}
+
+async function main() {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-file-system-port-'));
   try {
     console.log('\nthe trace harness reads the ground truth through the port\n');
@@ -144,6 +154,67 @@ function main() {
     fs.rmSync(workspace, { recursive: true, force: true });
   }
 
+  console.log("\nTEA's own wrapper decides absence, and nothing else decides it\n");
+
+  // The arm certifies the adapter and builds its own; it never imports this
+  // module. So the three decisions the wrapper makes on top of the adapter are
+  // held here or by nothing: which fault is absence, which propagate, and what
+  // an empty path does.
+  const wrapper = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-file-system-wrapper-'));
+  try {
+    const present = path.join(wrapper, 'present.txt');
+    const empty = path.join(wrapper, 'empty.txt');
+    fs.writeFileSync(present, 'bytes');
+    fs.writeFileSync(empty, '');
+
+    const read = await readText(present);
+    assert(read.present && read.text === 'bytes', 'a file that is there reads back as present with its text', JSON.stringify(read));
+
+    // A 0-byte file is present and empty, which is a different answer from
+    // absent. Every caller converted in this change tests `.present` rather
+    // than truthiness, and this is what makes that distinction real.
+    const emptyRead = await readText(empty);
+    assert(emptyRead.present && emptyRead.text === '', 'an empty file reads as present with empty text', JSON.stringify(emptyRead));
+
+    const absent = await readText(path.join(wrapper, 'no-such-file.txt'));
+    assert(absent.present === false && absent.text === null, 'an absent file reads as not present', JSON.stringify(absent));
+
+    // The decision the module exists for. A directory and a permission error are
+    // not absence, and a caller told "absent" about either records a clean
+    // reading of a file it never read.
+    for (const [target, what] of [
+      [wrapper, 'a directory where a file was expected'],
+      [unreadable(wrapper), 'a file the process cannot read'],
+    ]) {
+      let thrown;
+      try {
+        await readText(target);
+      } catch (error) {
+        thrown = error;
+      }
+      assert(thrown !== undefined, `${what} throws rather than reading as absent`, thrown === undefined ? 'it returned a value' : '');
+    }
+
+    for (const [call, what] of [
+      [() => readText(''), 'reading'],
+      [() => writeText('', 'anything'), 'writing'],
+    ]) {
+      let refused = false;
+      try {
+        await call();
+      } catch (error) {
+        refused = /empty path/.test(error.message);
+      }
+      assert(refused, `an empty path is refused before the port sees it, when ${what}`);
+    }
+
+    const wrote = await writeText(path.join(wrapper, 'written.txt'), 'four');
+    assert(wrote === 4, 'a write reports the byte length the port wrote', String(wrote));
+  } finally {
+    fs.chmodSync(wrapper, 0o700);
+    fs.rmSync(wrapper, { recursive: true, force: true });
+  }
+
   if (failures > 0) {
     console.error(`\n${colors.red}${failures} call site(s) did not go through the file-system port.${colors.reset}`);
     return 1;
@@ -152,6 +223,14 @@ function main() {
   return 0;
 }
 
-if (require.main === module) process.exit(main());
+if (require.main === module) {
+  main().then(
+    (code) => process.exit(code),
+    (error) => {
+      console.error(error?.stack ?? error);
+      process.exit(1);
+    },
+  );
+}
 
 module.exports = { runUnderFixture };

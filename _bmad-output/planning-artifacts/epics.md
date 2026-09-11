@@ -721,7 +721,7 @@ So that the largest harness is converted on its own and reviewable on its own.
 
 **Acceptance Criteria:**
 
-**Given** `test/eval-trace.js` is 2,502 lines carrying 36 direct `fs` calls, and the port's dynamic import makes every read asynchronous so the conversion cascades up each call chain
+**Given** `test/eval-trace.js` is the largest harness in the repository and carries 37 direct `fs` calls, and the port's dynamic import makes every read asynchronous so the conversion cascades up each call chain
 **When** the harness is cut over
 **Then** the story names the exact call sites before work begins, and the diff size is reported before it lands
 **And** every temporary workspace is still removed on both the passing and the throwing path
@@ -746,14 +746,14 @@ So that no eval harness reaches the file system directly.
 
 **Given** two shared readers sit under `test/lib/` and belong to no harness, so Story 3.5 found them and assigned them here rather than converting them
 **When** this story runs
-**Then** `writeSuiteResult` at `test/lib/eval-record.js:299` and `loadSuiteManifest` at `test/lib/suite-manifest.js:32` read and write through the port
+**Then** `writeSuiteResult` in `test/lib/eval-record.js` and `loadSuiteManifest` in `test/lib/suite-manifest.js` read and write through the port
 **And** they are converted here rather than in Story 3.5 because every harness that calls them becomes asynchronous with them, and those call sites are this story's
 
 **Given** the file-system port declares `readFile` and `writeFile` and nothing else
 **When** a call site this story reaches is an existence check, a directory walk, or a directory lifecycle operation
 **Then** it stays on `fs` and the record says which calls those are and that the port cannot express them
-**And** `workingTreeState` at `test/lib/runner-capabilities.js:38` is one of them, a repository walk that is the largest file-access surface these harnesses touch and is invisible at its call site
-**And** `missingCredential` at `test/eval-test-review.js:241` is declined rather than converted, because it reads outside the repository in the user's home and AD-18 keeps credential material out of a declaration, so routing a credential probe through a port whose requests are logged is the wrong direction
+**And** `workingTreeState` in `test/lib/runner-capabilities.js` is one of them, a repository walk that is the largest file-access surface these harnesses touch and is invisible at its call site
+**And** `missingCredential` in `test/eval-test-review.js` is declined rather than converted, because it reads outside the repository in the user's home and AD-18 keeps credential material out of a declaration, so routing a credential probe through a port whose requests are logged is the wrong direction
 
 **Given** Epic 3 is otherwise complete
 **When** `npm test` and every `quality.yaml` job run

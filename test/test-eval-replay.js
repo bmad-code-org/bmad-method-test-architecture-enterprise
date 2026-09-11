@@ -922,7 +922,7 @@ function replayTestDesignCase(item, expected, set, categories) {
  * @param {object} expected The case's expected.json.
  * @param {object} context The loaded ground truths, their digests, and the list a
  *   scored trace case is appended to for checkTraceSignatures.
- * @returns {{observed: object|null}|{failure: string}}
+ * @returns {Promise<{observed: object|null}|{failure: string}>}
  */
 async function replayCase(item, expected, context) {
   switch (item.suite) {

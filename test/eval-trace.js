@@ -142,26 +142,32 @@
  * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
  *
  * `eval-quality`'s file-system port declares two methods, `readFile` and
- * `writeFile`, each a byte-level operation at a path. Eighteen calls below stay
- * on `node:fs` because the port cannot express them, and that is a statement
- * about the port's surface rather than a decision to leave work undone:
+ * `writeFile`, each a byte-level operation at a path. This file made 37 direct
+ * `fs` calls. Twelve became port calls, seven existence checks were deleted
+ * because the read each one guarded now answers absence itself, and the
+ * seventeen below stay. They stay for three different reasons, and the
+ * difference is worth stating rather than filing all of them under one:
  *
- * - Six existence checks that answer a question rather than guard a read: a
- *   declared fixture file, a declared artifact directory, the ground truth and
- *   the workflow directory. Two of the six are over directories, which the port
- *   cannot read at all. The other four the port could answer, badly: asking "is
- *   this there" through a byte read means loading every byte of a file to learn
- *   a boolean, which is a different operation with a different cost, so these
- *   stay by choice rather than by necessity and the distinction is worth the
- *   sentence.
+ * - Six existence checks the port has no method for. Four ask about a
+ *   directory, which it cannot read at all: `testRoot` and `sourceRoot` in the
+ *   declaration loop, the stray `test-artifacts` a clean set must not have, and
+ *   the workflow directory. The others ask about files, and the port could
+ *   answer those by reading every byte to learn a boolean, which is a different
+ *   operation with a different cost. Those stay by choice; the directory ones by
+ *   necessity.
  * - One directory walk and its guard, which enumerate a staged tree.
  * - Ten lifecycle calls: one `mkdtemp`, four `mkdir`, two `copyFile` and three
- *   `rm` that create and remove the staged workspace.
+ *   `rm` that create and remove the staged workspace. Eight are directory
+ *   operations the port has no method for. The two `copyFile` calls are not: a
+ *   copy is a byte read followed by a byte write, and what stops them is
+ *   `test/lib/file-system-port.js` publishing `readBytes` with no `writeBytes`
+ *   beside it, so a copy would round-trip a file's bytes through UTF-8 to reach
+ *   a port that never needed the text. That is a wrapper omission rather than a
+ *   port limit, and saying which is the point of this list.
  *
  * Every read of a file's contents and the one write of one go through
- * `test/lib/file-system-port.js`. An existence check that used to guard such a
- * read is gone rather than converted, because the port answers absence and
- * asking first was the same question twice with a window in between.
+ * `test/lib/file-system-port.js`, and `npm run test:file-system-port` is what
+ * makes that falsifiable rather than asserted.
  */
 const fs = require('node:fs');
 const os = require('node:os');
@@ -545,8 +551,14 @@ async function loadGroundTruth() {
   try {
     const read = await readJson(GROUND_TRUTH);
     return read.present ? read.value : null;
-  } catch {
-    return null;
+  } catch (error) {
+    // A parse failure only. The catch used to swallow every class the read can
+    // raise, so a permission error, a directory in place of the file, an aborted
+    // signal or a failed adapter import all reported as "missing or not valid
+    // JSON": the caller was told about the corpus when the fault was the tree or
+    // the install.
+    if (error instanceof SyntaxError) return null;
+    throw error;
   }
 }
 
@@ -698,6 +710,10 @@ function expectedRejectedEvidence(set) {
 
 /** Line count of a corpus-relative fixture file, or null when it does not exist. */
 async function fixtureLineCount(relative) {
+  // An empty path joins to the fixture root itself, which is a directory: the
+  // wrapper's empty-path guard never sees it, and the read fails with `EISDIR`
+  // where the caller wanted "cites nothing, which does not exist".
+  if (typeof relative !== 'string' || relative.length === 0) return null;
   const read = await readText(path.join(FIXTURE_ROOT, relative));
   return read.present ? read.text.split('\n').length : null;
 }
@@ -709,15 +725,64 @@ function headingText(line) {
 }
 
 /**
- * Every markdown heading text in a file, for checking a citation's named section.
+ * Every markdown heading text in a file's contents.
  *
- * An absent file yields no headings rather than throwing, because every caller
- * has already reported the absence and is now asking what the file contains.
+ * Takes the text rather than the path, because the one caller has already read
+ * the file to count its lines: reading it a second time is the same question
+ * twice with a window in between, which is the argument this whole change is
+ * built on.
  */
-async function headingsOf(absolute) {
+/**
+ * One file's text for the validator, or null with the reason recorded.
+ *
+ * Absence, a directory, a permission error and a path with a file in the middle
+ * of it are all things the corpus can be wrong about, and this function's
+ * callers exist to report them. The port distinguishes them and this turns each
+ * into a problem rather than a throw out of the validator.
+ *
+ * @param {string} absolute
+ * @param {string} label What to call the file in the message, in the caller's own terms.
+ * @param {string[]} problems
+ * @returns {Promise<{present: true, text: string}|null>}
+ */
+async function readOrProblem(absolute, label, problems) {
+  try {
+    const read = await readText(absolute);
+    if (read.present) return read;
+    problems.push(`${label} does not exist`);
+  } catch (error) {
+    problems.push(`${label} could not be read: ${error?.cause?.code ?? error?.code ?? error?.message}`);
+  }
+  return null;
+}
+
+/**
+ * One file's parsed JSON for the validator, or null with the reason recorded.
+ *
+ * A file that is there and malformed is a different finding from a file that is
+ * not there, and neither is a crash: `readJson` lets a parse failure propagate
+ * by design, and the validator is the one caller that has to report it rather
+ * than raise it.
+ *
+ * @param {string} absolute
+ * @param {string} label
+ * @param {string[]} problems
+ * @returns {Promise<object|null>}
+ */
+async function readJsonOrProblem(absolute, label, problems) {
+  const read = await readOrProblem(absolute, label, problems);
+  if (read === null) return null;
+  try {
+    return JSON.parse(read.text);
+  } catch (error) {
+    problems.push(`${label} is not valid JSON: ${error.message}`);
+    return null;
+  }
+}
+
+function headingsIn(text) {
   const headings = new Set();
-  const read = await readText(absolute);
-  for (const line of (read.text ?? '').split('\n')) {
+  for (const line of text.split('\n')) {
     const text = headingText(line);
     if (text) headings.add(text);
   }
@@ -752,7 +817,7 @@ function sectionRange(lines, section) {
  * ground truth itself says to prefer the section name when the lines drift.
  *
  * @param {object} groundTruth
- * @returns {{problems: string[], notices: string[]}}
+ * @returns {Promise<{problems: string[], notices: string[]}>}
  */
 async function validateCorpus(groundTruth) {
   const problems = [];
@@ -772,13 +837,14 @@ async function validateCorpus(groundTruth) {
   // and drifts whenever a step file is edited, which is a notice rather than a failure.
   for (const [key, citation] of Object.entries(groundTruth.skillRuleCitations ?? {})) {
     const absolute = path.join(PROJECT_ROOT, citation.file);
-    const cited = await readText(absolute);
-    if (!cited.present) {
-      problems.push(`skillRuleCitations.${key}: ${citation.file} does not exist`);
-      continue;
-    }
+    // Unreadable is reported rather than thrown. The port answers absence and
+    // raises everything else, and a validator whose job is reporting what is
+    // wrong with the corpus must not crash on a citation naming a directory, a
+    // file it cannot read, or a path with a file in the middle of it.
+    const cited = await readOrProblem(absolute, `skillRuleCitations.${key}: ${citation.file}`, problems);
+    if (cited === null) continue;
     const lines = cited.text.split('\n');
-    if (citation.section && !(await headingsOf(absolute)).has(citation.section)) {
+    if (citation.section && !headingsIn(cited.text).has(citation.section)) {
       problems.push(`skillRuleCitations.${key}: ${citation.file} has no section titled "${citation.section}"`);
       continue;
     }
@@ -839,13 +905,6 @@ async function validateCorpus(groundTruth) {
       }
       if (!fs.existsSync(path.join(FIXTURE_ROOT, relative))) problems.push(`${label}: ${field} ${relative} does not exist`);
     }
-    for (const [field, relative] of [
-      ['liveResultsFile', set.liveResultsFile],
-      ['waiverRegister', set.waiverRegister],
-    ]) {
-      const absolute = relative ? path.join(FIXTURE_ROOT, relative) : null;
-      if (relative && !fs.existsSync(absolute)) problems.push(`${label}: ${field} ${relative} does not exist`);
-    }
 
     // A clean set that grew a test-artifacts directory would hand the control run a
     // waiver register and a live file, which is the failure the two-workspace design
@@ -877,12 +936,11 @@ async function validateCorpus(groundTruth) {
           // A live entry names a record id instead of a span, so it is checked against
           // the results file the set declares.
           const liveFile = set.liveResultsFile ? path.join(FIXTURE_ROOT, set.liveResultsFile) : null;
-          const live = liveFile === null ? { present: false, value: null } : await readJson(liveFile);
-          if (!live.present) {
+          const parsed = liveFile === null ? null : await readJsonOrProblem(liveFile, `${criterionLabel}: liveResultsFile`, []);
+          if (parsed === null) {
             problems.push(`${criterionLabel}: names live record ${entry.recordId} but the set declares no readable live results file`);
             continue;
           }
-          const parsed = live.value;
           if (!(parsed.results ?? []).some((record) => record.id === entry.recordId)) {
             problems.push(`${criterionLabel}: live record ${entry.recordId} is not in ${set.liveResultsFile}`);
           }
@@ -1001,11 +1059,17 @@ async function validateCorpus(groundTruth) {
 
     // Waiver expectations are field reads against the register the set declares.
     if (set.waiverRegister) {
-      const registerRead = await readText(path.join(FIXTURE_ROOT, set.waiverRegister));
-      if (!registerRead.present) problems.push(`${label}: declares waiverRegister ${set.waiverRegister}, which does not exist`);
-      const register = registerRead.text ?? '';
+      const registerRead = await readOrProblem(
+        path.join(FIXTURE_ROOT, set.waiverRegister),
+        `${label}: waiverRegister ${set.waiverRegister}`,
+        problems,
+      );
+      const register = registerRead?.text ?? '';
       for (const waiver of [...(set.expectedWaiverHandling?.valid ?? []), ...(set.expectedWaiverHandling?.invalid ?? [])]) {
-        if (!new RegExp(`^##\\s+${waiver.id}:`, 'm').test(register)) {
+        // Only when there is a register to look in. An absent one is reported
+        // once above; saying a heading is missing from a file that does not
+        // exist is a second message that asserts something false.
+        if (registerRead !== null && !new RegExp(`^##\\s+${waiver.id}:`, 'm').test(register)) {
           problems.push(`${label}: expectedWaiverHandling names ${waiver.id}, which is not a heading in ${set.waiverRegister}`);
         }
         if (!(set.criteria ?? []).some((item) => item.id === waiver.waives)) {
@@ -1033,21 +1097,26 @@ async function validateCorpus(groundTruth) {
 
     // Live expectations are counts over the records the results file carries.
     if (set.liveResultsFile) {
-      const liveRead = await readJson(path.join(FIXTURE_ROOT, set.liveResultsFile));
-      // An absent file is reported as itself. Before the port answered absence,
-      // this read threw `ENOENT` out of a validator whose whole job is to report
-      // what is wrong with the corpus.
-      const parsed = liveRead.present ? liveRead.value : { results: [] };
-      if (!liveRead.present) problems.push(`${label}: declares liveResultsFile ${set.liveResultsFile}, which does not exist`);
-      const declaredBlockers = set.expectedLiveEvidence?.expectedBlockers ?? [];
-      if (declaredBlockers.length !== (parsed.results ?? []).length) {
-        problems.push(
-          `${label}: expects ${declaredBlockers.length} live blocker(s) from a file carrying ${(parsed.results ?? []).length} record(s)`,
-        );
-      }
-      for (const blocker of declaredBlockers) {
-        if (!(parsed.results ?? []).some((record) => record.id === blocker.id)) {
-          problems.push(`${label}: expects a blocker for live record ${blocker.id}, which the results file does not carry`);
+      const liveRead = await readJsonOrProblem(
+        path.join(FIXTURE_ROOT, set.liveResultsFile),
+        `${label}: liveResultsFile ${set.liveResultsFile}`,
+        problems,
+      );
+      // An absent file is reported as itself, once, and the counts below are not
+      // attempted. Before the port answered absence this read threw `ENOENT` out
+      // of a validator whose whole job is to report what is wrong with the
+      // corpus; substituting an empty record set instead would report every
+      // declared blocker as missing from a file nobody could open.
+      if (liveRead !== null) {
+        const records = liveRead.results ?? [];
+        const declaredBlockers = set.expectedLiveEvidence?.expectedBlockers ?? [];
+        if (declaredBlockers.length !== records.length) {
+          problems.push(`${label}: expects ${declaredBlockers.length} live blocker(s) from a file carrying ${records.length} record(s)`);
+        }
+        for (const blocker of declaredBlockers) {
+          if (!records.some((record) => record.id === blocker.id)) {
+            problems.push(`${label}: expects a blocker for live record ${blocker.id}, which the results file does not carry`);
+          }
         }
       }
     } else if (set.expectedLiveEvidence?.present !== false) {
@@ -1189,6 +1258,21 @@ function configYaml() {
  */
 async function stageWorkspace(set) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-eval-'));
+  try {
+    return await stageInto(dir, set);
+  } catch (error) {
+    // Everything after the `mkdtemp` is inside this, because a throw anywhere in
+    // staging returns no `dir` for the caller's `finally` to clean up and leaves
+    // the tree behind. The window used to be the copy loop's `ENOSPC`; it now
+    // also holds a failed adapter import, any fault the port raises, and the
+    // wrapper's own path refusal.
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+/** The staging itself, in a directory the caller owns and removes on any throw. */
+async function stageInto(dir, set) {
   const projectDir = path.join(dir, projectRootOf(set));
   const setRoot = path.join(FIXTURE_ROOT, set.root);
 
@@ -1218,21 +1302,9 @@ async function stageWorkspace(set) {
   // measurement. Left as null it would compare equal to a null post-run digest
   // and report every case as unmutated, which is the silent green this whole
   // comparison exists to prevent.
-  //
-  // The directory is removed on the way out, because a throw here returns no
-  // `dir` for the caller's `finally` to clean up and every failed attempt would
-  // leave one behind.
-  let corpusDigest;
-  try {
-    corpusDigest = await digestTree(projectDir, corpusFiles);
-    if (corpusDigest === null) {
-      throw new Error(
-        `the staged workspace at ${projectDir} holds ${corpusFiles.length} corpus member(s) the corpus port could not resolve`,
-      );
-    }
-  } catch (error) {
-    fs.rmSync(dir, { recursive: true, force: true });
-    throw error;
+  const corpusDigest = await digestTree(projectDir, corpusFiles);
+  if (corpusDigest === null) {
+    throw new Error(`the staged workspace at ${projectDir} holds ${corpusFiles.length} corpus member(s) the corpus port could not resolve`);
   }
   return { dir, projectDir, corpusFiles, corpusDigest };
 }
@@ -1244,10 +1316,14 @@ async function stageWorkspace(set) {
  * path is named for the ground truth, no staged file carries its bytes, and no staged
  * file carries a key that appears only in it.
  *
- * A staged file that vanished between the walk and the read contributes no text
- * rather than throwing: this runs on the way into a measurement and on the way
- * out of a failed one, and a validity check that crashes reports nothing about
- * validity.
+ * An empty walk is a problem rather than a pass. `filesUnder` answers `[]` for a
+ * directory that does not exist as readily as for one that is empty, and this
+ * check is the only guarantee that the agent was not handed the answers, so
+ * reporting a clean workspace it never opened is the worst thing it could do.
+ *
+ * A staged file that vanished between the walk and the read is reported too. It
+ * contributed an empty string until now, which is the same silence one file at a
+ * time.
  *
  * @param {string} dir Workspace root.
  * @returns {Promise<string[]>} Problems, empty when the workspace is clean.
@@ -1255,13 +1331,22 @@ async function stageWorkspace(set) {
 async function assertGroundTruthAbsent(dir) {
   const problems = [];
   const groundTruthBytes = (await readText(GROUND_TRUTH)).text;
-  for (const relative of filesUnder(dir)) {
+  const staged = filesUnder(dir);
+  if (staged.length === 0) {
+    return [`the staged workspace at ${dir} holds no files, so nothing about the ground truth was checked`];
+  }
+  for (const relative of staged) {
     if (path.basename(relative) === 'ground-truth.json') {
       problems.push(`staged workspace contains ${relative}`);
       continue;
     }
-    const text = (await readText(path.join(dir, relative))).text ?? '';
-    if (groundTruthBytes && text === groundTruthBytes) {
+    const read = await readText(path.join(dir, relative));
+    if (!read.present) {
+      problems.push(`staged file ${relative} disappeared between the walk and the read, so it was not checked`);
+      continue;
+    }
+    const text = read.text;
+    if (groundTruthBytes !== null && text === groundTruthBytes) {
       problems.push(`staged file ${relative} carries the ground truth verbatim`);
       continue;
     }
@@ -2260,7 +2345,14 @@ async function main() {
     // workspace is the measurement's validity, and a check that only runs when a model
     // runs is a check nobody runs.
     for (const set of sets) {
+      // `finish` ends in `process.exit`, which terminates without unwinding, so
+      // a call to it inside the `try` below would skip the `finally` and leave
+      // the staged tree on disk. Every one of them did: nine were found in the
+      // system temporary directory, seven from one day. So the checks record
+      // what they found, the workspace is removed, and the reporting happens
+      // after.
       const workspace = await stageWorkspace(set);
+      let refusal = null;
       try {
         const leaked = [
           ...(await assertGroundTruthAbsent(workspace.dir)),
@@ -2269,24 +2361,25 @@ async function main() {
           ),
         ];
         if (leaked.length > 0) {
-          console.error(`${colors.red}eval: ${set.id} would hand the agent the answers:${colors.reset}`);
-          for (const problem of leaked) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
-          await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
-        }
-        const artifacts = path.join(workspace.projectDir, 'test-artifacts');
-        const inherited = ['live-verification-results.json', 'gate-waivers.md'].filter(
-          (name) => fs.existsSync(path.join(artifacts, name)) !== Boolean(set.liveResultsFile || set.waiverRegister),
-        );
-        if (inherited.length > 0) {
-          console.error(
-            `${colors.red}eval: ${set.id} staged test-artifacts holds the wrong inputs: ${inherited.join(', ')}${colors.reset}`,
+          refusal = { headline: `eval: ${set.id} would hand the agent the answers:`, problems: leaked };
+        } else {
+          const artifacts = path.join(workspace.projectDir, 'test-artifacts');
+          const inherited = ['live-verification-results.json', 'gate-waivers.md'].filter(
+            (name) => fs.existsSync(path.join(artifacts, name)) !== Boolean(set.liveResultsFile || set.waiverRegister),
           );
-          await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+          if (inherited.length > 0) {
+            refusal = { headline: `eval: ${set.id} staged test-artifacts holds the wrong inputs: ${inherited.join(', ')}`, problems: [] };
+          }
         }
-        console.log(`  ${colors.green}✓${colors.reset} ${set.id}: staged workspace carries no ground truth and the right test-artifacts`);
       } finally {
         fs.rmSync(workspace.dir, { recursive: true, force: true });
       }
+      if (refusal !== null) {
+        console.error(`${colors.red}${refusal.headline}${colors.reset}`);
+        for (const problem of refusal.problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
+        await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+      }
+      console.log(`  ${colors.green}✓${colors.reset} ${set.id}: staged workspace carries no ground truth and the right test-artifacts`);
     }
     if (validateOnly) {
       console.log(`\n${colors.green}corpus valid; nothing measured (--validate-only).${colors.reset}\n`);

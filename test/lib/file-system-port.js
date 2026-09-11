@@ -79,8 +79,17 @@ async function loadAdapters() {
 function scriptedFixture() {
   const declared = process.env.TEA_FILE_SYSTEM_FIXTURE;
   if (!declared) return null;
-  const parsed = JSON.parse(fs.readFileSync(declared, 'utf8'));
-  return { reads: parsed.reads ?? {}, log: parsed.log ?? null };
+  try {
+    const parsed = JSON.parse(fs.readFileSync(declared, 'utf8'));
+    return { reads: parsed.reads ?? {}, log: parsed.log ?? null };
+  } catch (error) {
+    // Named, because this runs at module load of a file eight modules require:
+    // a raw ENOENT or SyntaxError out of `require` names no variable and no
+    // path, and reads as the requiring module being broken.
+    throw new Error(`TEA_FILE_SYSTEM_FIXTURE names ${JSON.stringify(declared)}, which could not be read as JSON: ${error.message}`, {
+      cause: error,
+    });
+  }
 }
 
 const fixture = scriptedFixture();
@@ -92,14 +101,22 @@ function record(line) {
 /** The mechanism the adapter runs on: the real filesystem, or the scripted one over it. */
 function mechanism() {
   return {
-    readFile: async (filePath) => {
+    // The signal is passed through, because the package's own mechanism does and
+    // AD-28 puts the obligation to honour it on the adapter's mechanism rather
+    // than on the boundary alone. A scripted filesystem that dropped it would
+    // exercise a weaker abort contract than production, and the abort path is
+    // one of the things this seam exists to test.
+    readFile: async (filePath, signal) => {
       record(`read ${filePath}`);
-      if (Object.hasOwn(fixture.reads, filePath)) return Buffer.from(fixture.reads[filePath], 'utf8');
-      return fs.promises.readFile(filePath);
+      if (Object.hasOwn(fixture.reads, filePath)) {
+        signal?.throwIfAborted();
+        return Buffer.from(fixture.reads[filePath], 'utf8');
+      }
+      return fs.promises.readFile(filePath, { signal });
     },
-    writeFile: async (filePath, bytes) => {
+    writeFile: async (filePath, bytes, signal) => {
       record(`write ${filePath}`);
-      await fs.promises.writeFile(filePath, bytes);
+      await fs.promises.writeFile(filePath, bytes, { signal });
       return bytes.byteLength;
     },
   };
@@ -155,7 +172,14 @@ async function readBytes(filePath, signal = new AbortController().signal) {
     // The corpus wrapper met the same shape from the other side and got it
     // wrong first: it labelled every rejection "member unresolvable", so a
     // cancelled run reported as a corpus file somebody had deleted.
-    if (error?.cause?.code === 'ENOENT') return { present: false, bytes: null };
+    //
+    // Both halves are tested, not just the cause. `port-boundary.js` wraps a
+    // mechanism rejection in a `RuntimeFault` whose own code says what kind of
+    // failure it was, and an abort is built the same way with the mechanism's
+    // rejection underneath: an abort that lands while the filesystem rejection
+    // is in flight carries `ENOENT` in its cause and `aborted` as its own code.
+    // Reading the cause alone would hand that back as "the file is not there".
+    if (error?.code === 'port-failure' && error?.cause?.code === 'ENOENT') return { present: false, bytes: null };
     throw error;
   }
 }
