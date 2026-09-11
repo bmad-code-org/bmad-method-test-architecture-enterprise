@@ -100,6 +100,7 @@ const {
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
+const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
@@ -456,7 +457,7 @@ function caseIds() {
  * Write the machine-readable record when --json asked for one, then exit with
  * the code the failure class carries.
  */
-function finish({ options, startedAt, mode, suites, runners, suiteFailureClasses = [] }) {
+async function finish({ options, startedAt, mode, suites, runners, suiteFailureClasses = [] }) {
   const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
   const exitCode = exitCodeForFailureClass(failureClass);
 
@@ -472,6 +473,7 @@ function finish({ options, startedAt, mode, suites, runners, suiteFailureClasses
     writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
+        generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
@@ -479,7 +481,7 @@ function finish({ options, startedAt, mode, suites, runners, suiteFailureClasses
         promptDigest: digestPrompts(caseIndex(suites)),
         cases,
         runners,
-        durationMs: Date.now() - startedAt,
+        durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
     );
@@ -513,7 +515,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
 }
 
 async function main() {
-  const startedAt = Date.now();
+  const startedAt = await nowMs();
   const options = parseArgs(process.argv.slice(2));
   const { agents, workflows, runs, validateOnly, preflightOnly } = options;
   const staticMode = validateOnly ? 'validate-only' : preflightOnly ? 'preflight-only' : 'live';
@@ -536,7 +538,7 @@ async function main() {
     //
     // No suites are handed to the record: building a prompt out of data that
     // just failed validation is how a reporting path turns into a second crash.
-    finish({
+    await finish({
       options,
       startedAt,
       mode: staticMode,
@@ -552,7 +554,7 @@ async function main() {
 
   if (validateOnly) {
     console.log(`\n${colors.green}eval data valid; nothing measured (--validate-only).${colors.reset}\n`);
-    finish({ options, startedAt, mode: 'validate-only', suites, runners: [] });
+    await finish({ options, startedAt, mode: 'validate-only', suites, runners: [] });
   }
 
   const { problems: readiness, versions } = preflight(options);
@@ -560,7 +562,7 @@ async function main() {
     console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
     for (const problem of readiness) console.error(`  - ${problem.message}`);
     console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
-    finish({
+    await finish({
       options,
       startedAt,
       mode: staticMode,
@@ -572,7 +574,7 @@ async function main() {
   if (preflightOnly) {
     console.log(`${colors.green}✓${colors.reset} runner executable(s) answer --version; built-in credentials checked`);
     console.log(`\n${colors.green}pre-flight only; nothing measured.${colors.reset}\n`);
-    finish({ options, startedAt, mode: 'preflight-only', suites, runners: [] });
+    await finish({ options, startedAt, mode: 'preflight-only', suites, runners: [] });
   }
   console.log(`${colors.dim}${runs} run(s) per case per agent${colors.reset}\n`);
 
@@ -595,7 +597,7 @@ async function main() {
 
   for (const agent of agents) {
     console.log(`${colors.cyan}${agent}${colors.reset}`);
-    const agentStartedAt = Date.now();
+    const agentStartedAt = await nowMs();
     let requiredTotal = 0;
     let hitTotal = 0;
     let forbiddenHits = 0;
@@ -774,7 +776,7 @@ async function main() {
           expected: expectedRuns,
           completed: completedRuns,
           measurements,
-          durationMs: Date.now() - agentStartedAt,
+          durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
         }),
@@ -793,14 +795,14 @@ async function main() {
         expected: expectedRuns,
         completed: completedRuns,
         measurements,
-        durationMs: Date.now() - agentStartedAt,
+        durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
       }),
     );
   }
 
-  finish({ options, startedAt, mode: 'live', suites, runners });
+  await finish({ options, startedAt, mode: 'live', suites, runners });
 }
 
 // A rejected promise is exit 2 with the reason printed. `main` is asynchronous

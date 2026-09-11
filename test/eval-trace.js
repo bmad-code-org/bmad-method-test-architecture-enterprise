@@ -158,6 +158,7 @@ const {
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
+const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
@@ -2099,7 +2100,7 @@ const passed = (checks) => checks.filter((item) => item.ok).length;
  * Write the machine-readable record when --json asked for one, then exit with the
  * code the failure class carries.
  */
-function finish({ options, startedAt, mode, sets, runners, suiteFailureClasses = [] }) {
+async function finish({ options, startedAt, mode, sets, runners, suiteFailureClasses = [] }) {
   const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
   const exitCode = exitCodeForFailureClass(failureClass);
 
@@ -2115,6 +2116,7 @@ function finish({ options, startedAt, mode, sets, runners, suiteFailureClasses =
     writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
+        generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
@@ -2122,7 +2124,7 @@ function finish({ options, startedAt, mode, sets, runners, suiteFailureClasses =
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,
-        durationMs: Date.now() - startedAt,
+        durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
     );
@@ -2156,7 +2158,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
 }
 
 async function main() {
-  const startedAt = Date.now();
+  const startedAt = await nowMs();
   const options = parseArgs(process.argv.slice(2));
   const { agents, runs, validateOnly, preflightOnly } = options;
   const staticMode = validateOnly ? 'validate-only' : preflightOnly ? 'preflight-only' : 'live';
@@ -2168,7 +2170,7 @@ async function main() {
   const groundTruth = loadGroundTruth();
   if (!groundTruth) {
     console.error(`${colors.red}eval: ground truth at ${GROUND_TRUTH} is missing or not valid JSON${colors.reset}`);
-    finish({
+    await finish({
       options,
       startedAt,
       mode: staticMode,
@@ -2181,7 +2183,7 @@ async function main() {
   const sets = selectSets(groundTruth, options.sets);
   if (sets.length === 0) {
     console.error(`${colors.red}eval: no fixture set matched ${options.sets.join(', ')}${colors.reset}`);
-    finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
   }
 
   const { problems, notices } = validateCorpus(groundTruth);
@@ -2194,7 +2196,7 @@ async function main() {
     // a model call, so it keeps the exit 1 the sibling harnesses give the same case.
     // No sets are handed to the record: building prompts out of data that just failed
     // validation is how a reporting path turns into a second crash.
-    finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
   }
 
   const criteriaCount = sets.reduce((sum, set) => sum + (set.criteria ?? []).length, 0);
@@ -2218,7 +2220,7 @@ async function main() {
         if (leaked.length > 0) {
           console.error(`${colors.red}eval: ${set.id} would hand the agent the answers:${colors.reset}`);
           for (const problem of leaked) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
-          finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+          await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
         }
         const artifacts = path.join(workspace.projectDir, 'test-artifacts');
         const inherited = ['live-verification-results.json', 'gate-waivers.md'].filter(
@@ -2228,7 +2230,7 @@ async function main() {
           console.error(
             `${colors.red}eval: ${set.id} staged test-artifacts holds the wrong inputs: ${inherited.join(', ')}${colors.reset}`,
           );
-          finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+          await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
         }
         console.log(`  ${colors.green}✓${colors.reset} ${set.id}: staged workspace carries no ground truth and the right test-artifacts`);
       } finally {
@@ -2237,7 +2239,7 @@ async function main() {
     }
     if (validateOnly) {
       console.log(`\n${colors.green}corpus valid; nothing measured (--validate-only).${colors.reset}\n`);
-      finish({ options, startedAt, mode: 'validate-only', sets, runners: [] });
+      await finish({ options, startedAt, mode: 'validate-only', sets, runners: [] });
     }
   }
 
@@ -2246,7 +2248,7 @@ async function main() {
     console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
     for (const problem of readiness) console.error(`  - ${problem.message}`);
     console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
-    finish({
+    await finish({
       options,
       startedAt,
       mode: staticMode,
@@ -2258,7 +2260,7 @@ async function main() {
   if (preflightOnly) {
     console.log(`${colors.green}✓${colors.reset} runner executable(s) answer --version; built-in credentials checked`);
     console.log(`\n${colors.green}pre-flight only; nothing measured.${colors.reset}\n`);
-    finish({ options, startedAt, mode: 'preflight-only', sets, runners: [] });
+    await finish({ options, startedAt, mode: 'preflight-only', sets, runners: [] });
   }
   console.log(`${colors.dim}${runs} run(s) per fixture set per agent${colors.reset}\n`);
 
@@ -2268,7 +2270,7 @@ async function main() {
 
   for (const agent of agents) {
     console.log(`${colors.cyan}${agent}${colors.reset}`);
-    const agentStartedAt = Date.now();
+    const agentStartedAt = await nowMs();
     const totals = {
       statusTotal: 0,
       statusHits: 0,
@@ -2484,7 +2486,7 @@ async function main() {
           expected: expectedRuns,
           completed: completedRuns,
           measurements,
-          durationMs: Date.now() - agentStartedAt,
+          durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
         }),
@@ -2503,14 +2505,14 @@ async function main() {
         expected: expectedRuns,
         completed: completedRuns,
         measurements,
-        durationMs: Date.now() - agentStartedAt,
+        durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
       }),
     );
   }
 
-  finish({ options, startedAt, mode: 'live', sets, runners });
+  await finish({ options, startedAt, mode: 'live', sets, runners });
 }
 
 // Only when invoked directly, so the scoring internals can be exercised and the

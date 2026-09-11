@@ -60,7 +60,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { digest } = require('./lib/eval-record');
+const { digest, refuseScriptedRecord } = require('./lib/eval-record');
+const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { validateArtifact } = require('./lib/eval-quality-inputs');
 const { cliObservation, createProbePort, readEnvironment } = require('./lib/probe-targets');
 const { runSuite, sealContract, suites } = require('./lib/probe-scoring');
@@ -274,7 +275,7 @@ function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log
       };
       log(`  ${colors.yellow}running${colors.reset} leg ${request.probeId} (${key})`);
       const { port: realPort, workspace } = await makePort(augmented);
-      const startedAt = Date.now();
+      const startedAt = await nowMs();
       let observation;
       try {
         // This harness is the fourth port caller and the one that does not go
@@ -284,7 +285,7 @@ function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log
       } finally {
         fs.rmSync(workspace.root, { recursive: true, force: true });
       }
-      const elapsedMs = Date.now() - startedAt;
+      const elapsedMs = await elapsedMsSince(startedAt);
       const leg = { key, legId: request.probeId, operationId: request.operationId, elapsedMs, exitCode: observation.exitCode };
       for (const counter of counters) {
         counter.spawns += 1;
@@ -293,7 +294,7 @@ function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log
       }
       fs.writeFileSync(
         file,
-        `${JSON.stringify({ key, agent, at: new Date().toISOString(), elapsedMs, request: { ...augmented, channels: { ...augmented.channels, environment: Object.keys(augmented.channels.environment) } }, observation }, null, 2)}\n`,
+        `${JSON.stringify({ key, agent, at: await nowIso(), elapsedMs, request: { ...augmented, channels: { ...augmented.channels, environment: Object.keys(augmented.channels.environment) } }, observation }, null, 2)}\n`,
         'utf8',
       );
       log(
@@ -321,19 +322,26 @@ function cacheOnlyPort(cacheDir, counters) {
 }
 
 /** What one run of the legs cost, in the terms an operator planning the next one needs. */
-function costReport(agent, stats, startedAt) {
+function costReport(agent, stats, startedAt, totalElapsedMs) {
   return {
     startedAt: new Date(startedAt).toISOString(),
     agent,
     spawnedLegs: stats.spawns,
     cachedLegs: stats.hits,
     spawnedWallClockSeconds: Math.round(stats.elapsedMs / 1000),
-    totalWallClockSeconds: Math.round((Date.now() - startedAt) / 1000),
+    totalWallClockSeconds: Math.round(totalElapsedMs / 1000),
     legs: stats.legs,
   };
 }
 
 function writeArtifact(dir, name, value) {
+  // Every artifact this harness writes, which is the cost report, the sealed
+  // evaluator brief and the verdict files. Under a fixture the cost report's
+  // `startedAt` and `totalWallClockSeconds` are scripted, which is the artifact
+  // class `refuseScriptedRecord` exists to prevent, and the rest are evidence on
+  // the same run. This harness writes through its own writer rather than through
+  // eval-record.js, so the guard is applied here too.
+  refuseScriptedRecord(path.join(dir, name));
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, name), `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
@@ -379,7 +387,7 @@ async function runOneSuite(suite, options, stats) {
   }
 
   console.log(`\n${suite.id} ${colors.dim}(${suite.probes.length} probe(s), a staged workspace per spawned leg)${colors.reset}`);
-  const suiteStartedAt = Date.now();
+  const suiteStartedAt = await nowMs();
 
   if (options.preflightOnly) {
     const { preflightSuite } = require('./lib/probe-scoring');
@@ -402,7 +410,12 @@ async function runOneSuite(suite, options, stats) {
     // Only when a leg was actually spawned. A cached or `--from-cache` run spent
     // nothing, and overwriting the record of the run that did spend something
     // with a row of zeros loses the only thing this file is for.
-    if (suiteStats.spawns > 0) writeArtifact(outDir, 'preflight-cost.json', costReport(options.agent, suiteStats, suiteStartedAt));
+    if (suiteStats.spawns > 0)
+      writeArtifact(
+        outDir,
+        'preflight-cost.json',
+        costReport(options.agent, suiteStats, suiteStartedAt, await elapsedMsSince(suiteStartedAt)),
+      );
     return { suiteId: suite.id, preflightOnly: true, verdicts };
   }
 
@@ -422,7 +435,12 @@ async function runOneSuite(suite, options, stats) {
       `  ${entry.probe.probeId} ${entry.probe.probeClass.padEnd(11)} pre-flight ${entry.preflight.passed ? 'passed' : 'failed'}  verdict ${String(entry.result.ladder.verdict)} (exit ${entry.result.ladder.exitCode})`,
     );
   }
-  if (suiteStats.spawns > 0) writeArtifact(outDir, 'preflight-cost.json', costReport(options.agent, suiteStats, suiteStartedAt));
+  if (suiteStats.spawns > 0)
+    writeArtifact(
+      outDir,
+      'preflight-cost.json',
+      costReport(options.agent, suiteStats, suiteStartedAt, await elapsedMsSince(suiteStartedAt)),
+    );
   const sealed = await sealContract(suite.contract);
   problems.push(...sealed.schemaProblems);
   writeArtifact(outDir, 'sealed-evaluator-brief.json', sealed.brief);
@@ -520,7 +538,7 @@ async function main(argv) {
 
   const stats = { spawns: 0, hits: 0, elapsedMs: 0, legs: [] };
   const results = [];
-  const startedAt = Date.now();
+  const startedAt = await nowMs();
 
   for (const suite of selected) {
     try {
@@ -531,7 +549,7 @@ async function main(argv) {
     }
   }
 
-  const cost = costReport(options.agent, stats, startedAt);
+  const cost = costReport(options.agent, stats, startedAt, await elapsedMsSince(startedAt));
   if (cost.spawnedLegs > 0) writeArtifact(options.out, 'preflight-cost.json', cost);
   console.log(
     `\n${cost.spawnedLegs} leg(s) run and ${cost.cachedLegs} answered from cache, ${cost.spawnedWallClockSeconds}s spent in the model, ${cost.totalWallClockSeconds}s total.`,

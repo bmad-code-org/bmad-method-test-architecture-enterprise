@@ -91,6 +91,7 @@ const {
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
+const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
@@ -737,6 +738,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
     writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
+        generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
@@ -744,7 +746,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         promptDigest,
         cases: caseIds().map((id) => ({ id, promptDigest })),
         runners,
-        durationMs: Date.now() - startedAt,
+        durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
     );
@@ -778,7 +780,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
 }
 
 async function main() {
-  const startedAt = Date.now();
+  const startedAt = await nowMs();
   const options = parseArgs(process.argv.slice(2));
   const { agents, runs, preflightOnly } = options;
 
@@ -813,7 +815,7 @@ async function main() {
 
   for (const agent of agents) {
     console.log(`${colors.cyan}${agent}${colors.reset}`);
-    const agentStartedAt = Date.now();
+    const agentStartedAt = await nowMs();
     const results = [];
     const lostRunClasses = [];
 
@@ -846,7 +848,7 @@ async function main() {
           expected: runs,
           completed: 0,
           measurements: {},
-          durationMs: Date.now() - agentStartedAt,
+          durationMs: await elapsedMsSince(agentStartedAt),
           failureClass: worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']),
           failures: ['no run produced a scorable result'],
         }),
@@ -927,7 +929,7 @@ async function main() {
           expected: runs,
           completed: results.length,
           measurements,
-          durationMs: Date.now() - agentStartedAt,
+          durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [`${results.length} of ${runs} declared repetitions completed`],
         }),
@@ -963,7 +965,7 @@ async function main() {
         expected: runs,
         completed: results.length,
         measurements,
-        durationMs: Date.now() - agentStartedAt,
+        durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
       }),

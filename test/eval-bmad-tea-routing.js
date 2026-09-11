@@ -143,6 +143,7 @@ const {
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
+const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
@@ -852,7 +853,7 @@ function preflight({ agents, agentCmd }) {
  * Write the machine-readable record when --json asked for one, then exit with
  * the code the failure class carries.
  */
-function finish({ options, startedAt, mode, cases, runners, suiteFailureClasses = [] }) {
+async function finish({ options, startedAt, mode, cases, runners, suiteFailureClasses = [] }) {
   const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
   const exitCode = exitCodeForFailureClass(failureClass);
 
@@ -868,6 +869,7 @@ function finish({ options, startedAt, mode, cases, runners, suiteFailureClasses 
     writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
+        generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
@@ -875,7 +877,7 @@ function finish({ options, startedAt, mode, cases, runners, suiteFailureClasses 
         promptDigest: digestPrompts(index),
         cases: index.map((item) => ({ id: item.id, promptDigest: digest(item.prompt) })),
         runners,
-        durationMs: Date.now() - startedAt,
+        durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
     );
@@ -914,7 +916,7 @@ function ratio(hits, opportunities) {
 }
 
 async function main() {
-  const startedAt = Date.now();
+  const startedAt = await nowMs();
   const options = parseArgs(process.argv.slice(2));
   const { agents, runs, validateOnly, preflightOnly } = options;
   const staticMode = validateOnly ? 'validate-only' : preflightOnly ? 'preflight-only' : 'live';
@@ -934,7 +936,7 @@ async function main() {
     // with no model call. No cases are handed to the record, because building a
     // prompt out of data that just failed validation is how a reporting path
     // turns into a second crash.
-    finish({ options, startedAt, mode: staticMode, cases: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({ options, startedAt, mode: staticMode, cases: [], runners: [], suiteFailureClasses: ['quality'] });
   }
 
   const menu = menuItems();
@@ -949,7 +951,7 @@ async function main() {
 
   if (validateOnly) {
     console.log(`\n${colors.green}routing corpus valid; nothing measured (--validate-only).${colors.reset}\n`);
-    finish({ options, startedAt, mode: 'validate-only', cases: corpus.cases, runners: [] });
+    await finish({ options, startedAt, mode: 'validate-only', cases: corpus.cases, runners: [] });
   }
 
   const { problems: readiness, versions } = preflight(options);
@@ -957,7 +959,7 @@ async function main() {
     console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
     for (const problem of readiness) console.error(`  - ${problem.message}`);
     console.error(`\n${colors.dim}A failed pre-flight is exit 2, never a 0% score.${colors.reset}`);
-    finish({
+    await finish({
       options,
       startedAt,
       mode: staticMode,
@@ -969,7 +971,7 @@ async function main() {
   if (preflightOnly) {
     console.log(`${colors.green}✓${colors.reset} runner executable(s) answer --version; built-in credentials checked`);
     console.log(`\n${colors.green}pre-flight only; nothing measured.${colors.reset}\n`);
-    finish({ options, startedAt, mode: 'preflight-only', cases: corpus.cases, runners: [] });
+    await finish({ options, startedAt, mode: 'preflight-only', cases: corpus.cases, runners: [] });
   }
   console.log(`${colors.dim}${runs} run(s) per intent per agent${colors.reset}\n`);
 
@@ -988,7 +990,7 @@ async function main() {
 
   for (const agent of agents) {
     console.log(`${colors.cyan}${agent}${colors.reset}`);
-    const agentStartedAt = Date.now();
+    const agentStartedAt = await nowMs();
     let routeHits = 0;
     let routeOpportunities = 0;
     let tokensFound = 0;
@@ -1205,7 +1207,7 @@ async function main() {
           expected: expectedRuns,
           completed: completedRuns,
           measurements,
-          durationMs: Date.now() - agentStartedAt,
+          durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
         }),
@@ -1224,14 +1226,14 @@ async function main() {
         expected: expectedRuns,
         completed: completedRuns,
         measurements,
-        durationMs: Date.now() - agentStartedAt,
+        durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
       }),
     );
   }
 
-  finish({ options, startedAt, mode: 'live', cases: corpus.cases, runners });
+  await finish({ options, startedAt, mode: 'live', cases: corpus.cases, runners });
 }
 
 // A rejected promise is exit 2 with the reason printed. `main` is asynchronous
