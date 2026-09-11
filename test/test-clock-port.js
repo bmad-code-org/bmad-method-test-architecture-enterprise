@@ -142,11 +142,29 @@ function main() {
     // which is what keeps the assertions above meaningful.
     const shortFixture = path.join(workspace, 'short.txt');
     fs.writeFileSync(shortFixture, `${instants[0]}\n`, 'utf8');
-    const shortRun = runHarnessUnderScriptedClock(shortFixture, path.join(workspace, 'short.json'));
+    const shortJson = path.join(workspace, 'short.json');
+    const shortRun = runHarnessUnderScriptedClock(shortFixture, shortJson);
     assert(
       shortRun.status !== 0,
       'a fixture too short to serve the run fails rather than falling back to the system clock',
       `exit ${shortRun.status}`,
+    );
+    // The exit code alone is not enough. `test/eval-test-design.js` converts a
+    // throw inside one run into a scored lost run, which also exits non-zero, so
+    // an exhausted clock swallowed there would satisfy the assertion above for a
+    // reason that has nothing to do with the clock. The failure has to name the
+    // port, and no result record may be written, which is what distinguishes a
+    // clock that refused from a run that merely went wrong.
+    const shortOutput = String(shortRun.stderr || '') + String(shortRun.stdout || '');
+    assert(
+      /ClockReadResponse|scripted clock/.test(shortOutput),
+      'the short-fixture failure names the clock rather than some other lost run',
+      shortOutput.trim().split('\n').slice(-3).join(' | '),
+    );
+    assert(
+      !fs.existsSync(shortJson),
+      'the exhausted clock wrote no result record, so no duration was recorded from a fallback',
+      `a record exists at ${shortJson}`,
     );
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });
