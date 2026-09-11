@@ -126,7 +126,14 @@ FR26: TEA narrows package faults by type rather than by duck-typing. `test/lib/p
 
 FR27: TEA asserts its recognized vocabularies against the package's exported registries: `FAILURE_CODES`, `RUNTIME_FAULT_CODES`, `QUALIFICATION_FAILURES`, `VERDICTS` and `EVALUATOR_RECOMMENDATIONS`. None is referenced by any TEA source file. `test/test-contracts.js:114` recovers a code with `/^eval-quality: ([a-z-]+):/` and an unrecognized code becomes the string `unknown`.
 
+**Half the evidence moved under Story 4.5.** The regex is gone: `test/test-contracts.js` reads the code off the thrown fault as a field. The `unknown` fallback survives at the same site, so a code the fault does not carry still becomes a string nothing holds against `RUNTIME_FAULT_CODES`, and the requirement stands on that half.
+
 FR28: TEA reads structured diagnostics from `DiagnosticSink` rather than parsing stderr. `RunPreflightOptions.sink` and `PreflightFromObservationsOptions.sink` are exported and unused by TEA.
+
+**Satisfied, and the premise was half wrong.** The two halves of this requirement are two different surfaces and neither reaches the other, which the wording joins into one sentence.
+The sink does not carry the reason. `Diagnostic` is `{ runId, stage, message }` with `message` as free prose (`application/diagnostics.ts`), so it is a run-identity and lifecycle channel; the reason a check resolved lives in `PreflightVerdict.checks[].outcome`, which TEA already read. What the sink alone carries is the leg count, and that is worth having: 26 of the 51 probes the stored corpus scores plan a number of legs that differs from the number of checks their verdict reports, and nothing else in TEA records it.
+The stderr TEA parsed was never the sink's to replace. It was `test/test-contracts.js` scraping the `compile` binary, and `compile` emits no diagnostics at all, because the package emits only from stages carrying a run identifier. Its structured replacement is `compile` throwing in process: a `RuntimeFault` or `StructuralFailure` carrying `code` as a field, with the Zod error as `cause` for a schema failure.
+`PreflightFromObservationsOptions.sink` stays unused, and it is not deferred work. TEA holds a port for both halves of the pre-flight, so it calls `runPreflight` and never `preflightFromObservations`, which `docs/explanation/eval-quality-command-adapter.md` already records as unusable here for a reason unrelated to the sink.
 
 FR29: TEA makes the `--strict` CONCERNS-promotion decision explicitly, reading `LadderResolution.strictPromotable`, since TEA scores in process through `runScore` and NFR3 fixes exit `1` as the same rung.
 
