@@ -56,8 +56,13 @@ const HARNESS = path.join(PROJECT_ROOT, 'test', 'eval-test-design.js');
  *
  * `eval-contract-strength.js` is absent because it writes no suite-result record:
  * its artifact is a cost report under its own shape, and its pre-flight declines
- * `--agent-cmd` entirely. Its seven readings are covered by the source scan
- * below, which is the weaker check and the only one that fits it.
+ * `--agent-cmd` entirely. Its readings are covered by the source scan below,
+ * which is the weaker check and the only one that fits it.
+ *
+ * `eval-all.js` is absent from this list and covered separately, because every
+ * route through it that writes a suite record spawns one child per suite, which
+ * is a whole eval run. It is reached below through the one branch that writes a
+ * full summary and spawns nothing.
  */
 const HARNESSES = [
   { file: 'eval-test-design.js', args: ['--validate-only'] },
@@ -205,6 +210,52 @@ function main() {
       );
     }
 
+    // `eval-all.js` reaches its record through a path the loop above cannot use,
+    // because every other route spawns one child process per suite and that is a
+    // whole eval run. Its unaccounted-skills branch writes a full run summary,
+    // with a port duration and a port stamp, and exits before spawning anything.
+    // A TEA skill is a directory under `src/workflows/testarch` or `src/agents`,
+    // so an empty directory the manifest does not account for reaches that branch
+    // and nothing else. Git does not track an empty directory, so a crash between
+    // the two calls below leaves the working tree clean.
+    const probeSkill = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'tea-clock-port-probe');
+    const allJson = path.join(workspace, 'eval-all.json');
+    fs.mkdirSync(probeSkill, { recursive: true });
+    let allRun;
+    try {
+      const allFixture = path.join(workspace, 'eval-all.txt');
+      fs.writeFileSync(allFixture, `${instants.join('\n')}\n`, 'utf8');
+      // `--agent` is required before argv parsing completes, and the branch this
+      // reaches exits before any child is spawned, so the value never runs.
+      allRun = spawnSync(
+        process.execPath,
+        [path.join(PROJECT_ROOT, 'test', 'eval-all.js'), '--agent', 'custom', '--agent-cmd', process.execPath, '--json', allJson],
+        {
+          cwd: PROJECT_ROOT,
+          encoding: 'utf8',
+          timeout: 120_000,
+          env: { ...process.env, TEA_CLOCK_FIXTURE: allFixture, TEA_CLOCK_FIXTURE_ALLOW_RECORD: '1' },
+        },
+      );
+    } finally {
+      fs.rmSync(probeSkill, { recursive: true, force: true });
+    }
+    if (fs.existsSync(allJson)) {
+      const allRecord = JSON.parse(fs.readFileSync(allJson, 'utf8'));
+      assert(
+        typeof allRecord.durationMs === 'number' && allRecord.durationMs !== 0 && allRecord.durationMs % hour === 0,
+        'eval-all.js takes its duration from the clock port',
+        `durationMs ${allRecord.durationMs}`,
+      );
+      assert(
+        typeof allRecord.generatedAt === 'string' && allRecord.generatedAt.startsWith(instants[0].slice(0, 4)),
+        'eval-all.js stamps generatedAt from the clock port',
+        `generatedAt ${allRecord.generatedAt}`,
+      );
+    } else {
+      assert(false, 'eval-all.js wrote a run summary under the scripted clock', `exit ${allRun?.status}`);
+    }
+
     // The fixture is exhaustible on purpose. A run that asked for more instants
     // than it scripts has to fail rather than silently read the system clock,
     // which is what keeps the assertions above meaningful.
@@ -242,12 +293,19 @@ function main() {
   // harness that writes no suite-result record. A reading reintroduced anywhere
   // in a harness fails here even where no scripted run reaches it.
   const harnessFiles = fs.readdirSync(path.join(PROJECT_ROOT, 'test')).filter((name) => name.startsWith('eval-') && name.endsWith('.js'));
+  // Every way of reading the host clock, not only `Date.now()`. Scanning for that
+  // one form missed the exact line finding 2 removed: putting
+  // `generatedAt: new Date().toISOString()` back into a harness passed the scan
+  // while reintroducing the defect. `new Date(value)` with an argument is a
+  // conversion rather than a reading, and the harnesses use it to render a mark
+  // the port already gave them, so only the no-argument form is refused.
+  const wallClockRead = /\b(?:Date\.now|performance\.now|process\.hrtime)\s*\(|new\s+Date\s*\(\s*\)/;
   const withWallClock = harnessFiles.filter((name) => {
     const body = fs.readFileSync(path.join(PROJECT_ROOT, 'test', name), 'utf8');
     return body
       .split('\n')
       .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
-      .some((line) => /\bDate\.now\(\)/.test(line));
+      .some((line) => wallClockRead.test(line));
   });
   assert(
     withWallClock.length === 0,

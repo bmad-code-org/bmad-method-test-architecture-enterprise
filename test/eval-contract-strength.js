@@ -60,8 +60,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-const { digest } = require('./lib/eval-record');
-const { nowMs, elapsedMsSince } = require('./lib/clock');
+const { digest, refuseScriptedRecord } = require('./lib/eval-record');
+const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { validateArtifact } = require('./lib/eval-quality-inputs');
 const { cliObservation, createProbePort, readEnvironment } = require('./lib/probe-targets');
 const { runSuite, sealContract, suites } = require('./lib/probe-scoring');
@@ -294,7 +294,7 @@ function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log
       }
       fs.writeFileSync(
         file,
-        `${JSON.stringify({ key, agent, at: new Date().toISOString(), elapsedMs, request: { ...augmented, channels: { ...augmented.channels, environment: Object.keys(augmented.channels.environment) } }, observation }, null, 2)}\n`,
+        `${JSON.stringify({ key, agent, at: await nowIso(), elapsedMs, request: { ...augmented, channels: { ...augmented.channels, environment: Object.keys(augmented.channels.environment) } }, observation }, null, 2)}\n`,
         'utf8',
       );
       log(
@@ -335,6 +335,11 @@ function costReport(agent, stats, startedAt, totalElapsedMs) {
 }
 
 function writeArtifact(dir, name, value) {
+  // The cost report carries a scripted `startedAt` and a scripted
+  // `totalWallClockSeconds` under a fixture, which is the same artifact class
+  // `refuseScriptedRecord` exists to prevent. This harness writes through its own
+  // writer rather than through eval-record.js, so the guard is applied here too.
+  refuseScriptedRecord(path.join(dir, name));
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, name), `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }

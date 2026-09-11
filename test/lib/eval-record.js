@@ -308,10 +308,6 @@ function writeRecord(jsonPath, record, validator) {
 }
 
 /**
- * @param {string} jsonPath
- * @param {object} record
- */
-/**
  * Refuse to write an evidence record produced under a scripted clock.
  *
  * `TEA_CLOCK_FIXTURE` exists so `test/test-clock-port.js` can prove the clock
@@ -333,6 +329,10 @@ function refuseScriptedRecord(filePath) {
   );
 }
 
+/**
+ * @param {string} jsonPath
+ * @param {object} record
+ */
 function writeSuiteResult(jsonPath, record) {
   refuseScriptedRecord(jsonPath);
   writeRecord(jsonPath, record, validateEvalResult);
@@ -348,6 +348,7 @@ function writeRunSummary(jsonPath, record) {
 }
 
 module.exports = {
+  refuseScriptedRecord,
   digest,
   digestFiles,
   digestPrompts,
