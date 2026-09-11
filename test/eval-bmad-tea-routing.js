@@ -38,21 +38,37 @@
  *                          guess scores perfectly on the intents that have an
  *                          answer and sends everyone else into a workflow that
  *                          cannot help them. Zero is the bar
- *   hedged clear intents — a skill that answers "which did you mean?" to
+ *   confident routes on ambiguous intents — the same disease on the class the
+ *                          corpus was built to make ambiguous. Without it a
+ *                          skill that guesses on every close call raises no
+ *                          control at all. Zero is the bar
+ *   clear intents left unrouted — a skill that answers "which did you mean?" to
  *                          everything never routes anything wrong and is
  *                          useless. Step 8 of the skill calls this out by name:
  *                          clarify only when two or more items are genuinely
- *                          close, and not as a confirmation ritual. Zero is the
- *                          bar
+ *                          close, and not as a confirmation ritual. A decline on
+ *                          a servable intent counts here too, and the run log
+ *                          names which of the two happened. Zero is the bar
  *
- * THE ORACLE IS THE SKILL'S OWN TEXT
+ * WHERE THE ORACLE COMES FROM, AND WHERE IT DOES NOT
  *
- * All three actions come from Step 8 of `src/agents/bmad-tea/SKILL.md`: dispatch
- * a clear match directly, pause to clarify only when two or more items are
- * genuinely close, and do not dispatch when nothing on the menu fits. The corpus
- * asserts nothing the skill was not already told to do, and the harness checks
- * every expected menu code against the live `customize.toml`, so editing the menu
- * fails this corpus rather than quietly invalidating it.
+ * `route` and `clarify` are Step 8 of `src/agents/bmad-tea/SKILL.md` verbatim:
+ * dispatch a clear match directly, and pause to clarify only when two or more
+ * items are genuinely close.
+ *
+ * `decline` is not. Step 8's third clause says that when nothing on the menu fits
+ * the agent should just continue the conversation, and it names chat, clarifying
+ * questions and `bmad-help` as fair game. It forbids a dispatch and it asks for no
+ * refusal. The requirement that an unservable intent be declined, and that the
+ * answer say what is missing, is this suite's own exit condition in
+ * `test/evals/suite-manifest.json`. `buildPrompt` states it outright, so the
+ * agent is scored against a rule it was handed rather than one inferred from a
+ * skill that does not carry it. That is the whole of what makes the decline class
+ * fair, and it is worth knowing that if the skill is ever taught to decline in its
+ * own words, this suite stops needing to supply the rule.
+ *
+ * The harness checks every expected menu code against the live `customize.toml`,
+ * so editing the menu fails this corpus rather than quietly invalidating it.
  *
  * GROUND TRUTH NEVER REACHES THE AGENT
  *
@@ -166,36 +182,75 @@ const GROUND_TRUTH_ONLY_KEYS = [
   'decidingTokens',
   'scopeTokens',
   'candidateCodes',
+  // `rationale` is prose and it spells the answer out in sentences, which makes
+  // it the most damaging key of the seven to leak and the easiest to forget: the
+  // whole-file byte search only catches a verbatim paste of the entire oracle,
+  // so a prompt assembled from the wrong object would carry this one and pass.
+  'rationale',
 ];
 
 /**
- * Five fractions and three counts.
+ * Five fractions and four counts.
  *
- * The fractions are deliberately not 1. A bar nobody clears teaches nothing and a
- * bar everyone clears teaches nothing, and each of these sits on a boundary the
- * corpus can actually land on: `routeAccuracy` at 0.9 is nine of the ten intents
- * with one right answer, `clarifyRecall` and `declineRecall` at 0.75 are three of
- * four, and `scopeFidelity` at 0.8 is five of the six intents that name a scope.
+ * Every denominator is per case per repetition rather than per case, so at the
+ * manifest's two repetitions the fractions are read off grids of 20, 70, 16 and
+ * 8, and each threshold sits on a value those grids can actually produce. A
+ * threshold between two reachable values is not the gate it reads as: the real
+ * gate is the next value up, and nobody looking at the number would know it.
  *
- * The counts are the controls and two of them are zero, because the behavior they
- * forbid is named in Step 8 of the skill rather than inferred here. A confident
- * route on an intent nothing on the menu serves is the defect this suite exists
- * to catch; hedging on an intent that is already clear is the confirmation ritual
- * the same paragraph rules out.
+ *   routeAccuracy       0.9   is 18 of 20, so two of the ten intents may be
+ *                             routed wrong across both runs
+ *   reasonTokenRecall   0.8   is 56 of 70 deciding tokens
+ *   scopeFidelity       0.875 is 14 of 16, so two of the eight intents that name
+ *                             a scope may lose it
+ *   clarifyRecall       0.75  is 6 of 8
+ *   declineRecall       0.75  is 6 of 8
+ *
+ * The counts are the controls and three of them are zero. Two come straight out
+ * of Step 8 of the skill: it says to dispatch a clear match directly, so leaving
+ * a clear intent unrouted is the confirmation ritual that paragraph rules out,
+ * and it forbids dispatching when nothing fits, so a confident route on an
+ * unservable intent is the defect this suite exists to catch. The third,
+ * `maxConfidentRoutesOnAmbiguous`, closes the cell the first two leave open:
+ * without it a skill that guesses confidently on every deliberately ambiguous
+ * intent raises no control at all, which is the same disease on the class the
+ * corpus was built to make ambiguous.
+ *
+ * Every one of these except the last has a stored replay case that fails it and
+ * nothing else, so none of them is a gate nobody has ever seen fire:
+ * `wrong-menu-code` for route accuracy, `reason-not-grounded` for reason token
+ * recall, `scope-dropped` and `scope-echoes-the-message` for the two halves of
+ * scope fidelity, `clarification-names-one-side` for clarification recall,
+ * `decline-without-saying-what-is-missing` for decline recall, and one case named
+ * for each of the three controls. `maxUnstableCases` is the exception and cannot
+ * have one: instability is a property of a pair of repetitions and a stored case
+ * is one reply. What is pinned instead is `signatureOf`, which the run measures
+ * stability with, held in `test/test-eval-replay.js` to agreeing exactly when two
+ * replies to one intent decided the same thing.
+ *
+ * No branch here drops a case out of a denominator. An answer with no reason, an
+ * empty reason, no question or no `missing` scores a miss and still counts, so a
+ * reply that omits every optional field scores zero rather than scoring perfectly
+ * against nothing. The one skip is `scopeTokens > 0`, which the fixture decides
+ * and no answer can trigger, and `validateCorpus` refuses an empty token set.
  *
  * `maxUnstableCases` is 2 rather than 0. A routing decision that flips between
  * repetitions is not a decision, and zero is the honest target, but the suite
- * runs at two repetitions over eighteen cases and four of those cases hold two
- * menu items deliberately close together. One flip there is one observation.
+ * runs at two repetitions over eighteen cases and four of those cases hold menu
+ * items deliberately close together. One flip there is one observation. The
+ * signature a flip is measured against carries the named candidate set as well
+ * as the action and the menu item, so two clarifications that ask between
+ * different pairs count as a flip rather than as agreement.
  */
 const THRESHOLDS = {
   routeAccuracy: 0.9,
   reasonTokenRecall: 0.8,
-  scopeFidelity: 0.8,
+  scopeFidelity: 0.875,
   clarifyRecall: 0.75,
   declineRecall: 0.75,
   maxConfidentRoutesOnUnservable: 0,
-  maxHedgedClearIntents: 0,
+  maxConfidentRoutesOnAmbiguous: 0,
+  maxUnroutedClearIntents: 0,
   maxUnstableCases: 2,
 };
 
@@ -309,7 +364,7 @@ function parseArgs(argv) {
  * @returns {Array<{code: string, description: string, label: string, skill: string|null}>}
  */
 function menuItems() {
-  const source = fs.readFileSync(MENU_FILE, 'utf8');
+  const source = skillSources().menu;
   const items = [];
   for (const block of source.split('[[agent.menu]]').slice(1)) {
     const body = block.split(/^\[/m)[0];
@@ -388,20 +443,30 @@ function validateCorpus({ intents, groundTruth, cases }) {
     if (!Array.isArray(expected.decidingTokens) || expected.decidingTokens.length === 0) {
       problems.push(`${label}: no decidingTokens, so its stated reason could not be scored against anything`);
     }
-    // A deciding token has to be reachable from what the agent is shown, which is
-    // the intent plus the skill and its menu. The deciding feature is often a
-    // paraphrase: "no Playwright, no Cypress, nothing" is the absence of a
-    // framework, and `framework` is the menu's own word for it. A token in
-    // neither place is a token no grounded reason could be expected to carry,
-    // and the score would be measuring the fixture rather than the skill.
-    const prompt = buildPrompt(item);
+    // A deciding token has to be a word of the user's own message, and the rule
+    // is this strict for the reason the metric exists. The prompt asks the agent
+    // to state the feature of the message that decided the answer, in the
+    // message's own words. A token reachable only from the menu row the agent is
+    // being scored for choosing can be satisfied by echoing that row without
+    // reading the message at all, which turns a grounding score into a
+    // vocabulary score, and a token in neither place is one no grounded reason
+    // could carry, which makes the threshold unreachable for a skill doing
+    // exactly what it was told.
     for (const token of expected.decidingTokens ?? []) {
-      if (!containsToken(prompt, token))
-        problems.push(`${label}: decidingToken ${JSON.stringify(token)} is in neither the intent nor the skill the agent is shown`);
+      if (typeof token !== 'string' || token.trim().length === 0) {
+        // `\b` followed by nothing holds against any string carrying a word
+        // character, so an empty token scores every reply and reports a full
+        // mark for a case that measured nothing.
+        problems.push(`${label}: a decidingToken is empty, which would hold against any reason at all`);
+        continue;
+      }
+      if (!containsToken(item.intent, token)) problems.push(`${label}: decidingToken ${JSON.stringify(token)} is not in the intent`);
     }
-    // A scope token is held to the stricter rule, because scope is what the user
-    // named and nothing else can supply it.
     for (const token of expected.scopeTokens ?? []) {
+      if (typeof token !== 'string' || token.trim().length === 0) {
+        problems.push(`${label}: a scopeToken is empty, which would hold against any scope at all`);
+        continue;
+      }
       if (!containsToken(item.intent, token)) problems.push(`${label}: scopeToken ${JSON.stringify(token)} is not in the intent`);
     }
 
@@ -450,8 +515,13 @@ function escapeRegex(text) {
 }
 
 /**
- * A literal that matches in either case, spelled as character classes rather
- * than as a flag.
+ * An ASCII literal that matches in either case, spelled as character classes
+ * rather than as a flag.
+ *
+ * ASCII because the expansion only fires on A-Z and a-z: a cased non-ASCII
+ * character is emitted as itself and matches only its own case. No fixture token
+ * is non-ASCII, and the restriction is what keeps the expansion away from the
+ * case pairs that change length.
  *
  * The flag would be the obvious way to write this, and it cannot cross the
  * boundary: `tools/generate-contracts.js` turns each of these into a contract
@@ -471,9 +541,14 @@ function caseInsensitiveLiteral(text) {
  * `eval-quality`'s `AnchoredPattern` requires every oracle pattern to begin `^`
  * and end `$`, so "the reason contains this somewhere" has to be written as "the
  * whole reason matches anything, then this, then anything". The shape is also
- * chosen to clear the evaluator's two-tier backtracking gate: no group, so the
- * nested-quantifier check cannot fire, and two quantifiers, so the linear step
- * estimate is three times the string length against a budget of a million.
+ * chosen to clear the evaluator's two-tier backtracking gate. The wrapper adds no
+ * group of its own, and the one caller that passes a group passes an alternation
+ * of plain literals, so the nested-quantifier check cannot fire either way. The
+ * step estimate is linear: the evaluator counts quantifier markers, which is two
+ * for a token pattern and three for a candidate pattern, whose `(?:` contributes
+ * one, so the estimate is three or four times the length of the value being
+ * matched. `test/probes/scoring-policy.json` declares a budget of a million and
+ * `test/test-contract-oracles.js` restates a far smaller one of its own.
  */
 function containmentPatternSource(inner) {
   return String.raw`^[\s\S]*` + inner + String.raw`[\s\S]*$`;
@@ -485,7 +560,7 @@ function containmentPatternSource(inner) {
  * `implemented`, in either case.
  *
  * This is the whole of how a stated reason is scored, and it is a source string
- * because `test/contracts/tea-routing.contract.json` carries the same bytes. A
+ * because the generated routing contracts carry the same bytes. A
  * reason judged by a model would be a second eval with its own error rate sitting
  * inside this one, and its disagreements would be indistinguishable from the
  * routing failures this suite is trying to see.
@@ -496,6 +571,20 @@ function tokenPatternSource(token) {
 
 function containsToken(text, token) {
   return new RegExp(tokenPatternSource(token)).test(String(text ?? ''));
+}
+
+/**
+ * The bound a restated scope is held to, as a pattern for the same reason every
+ * other rule here is one: `tools/generate-contracts.js` writes it into the scope
+ * oracle, so the oracle and this scorer cannot disagree about what counts.
+ *
+ * A scope that repeats the whole message satisfies any token set drawn from that
+ * message, and the prompt asks for the scope in the message's own words, so
+ * containment on its own has no precision half at all. Half the message is the
+ * line: a scope longer than that is the message rather than the scope inside it.
+ */
+function scopeBoundPatternSource(intent) {
+  return String.raw`^[\s\S]{0,` + Math.floor(String(intent).length / 2) + '}$';
 }
 
 /**
@@ -534,7 +623,7 @@ const MISSING_PATTERN_SOURCE = containmentPatternSource(String.raw`\S`);
  * @param {object|null} answer - The parsed routing answer.
  * @param {Array<object>} menu - The live menu, for candidate spellings.
  */
-function scoreCase(expected, answer, menu) {
+function scoreCase(expected, answer, menu, intent = '') {
   if (answer === null) return null;
   const tokens = expected.decidingTokens ?? [];
   const tokensFound = tokens.filter((token) => containsToken(answer.reason, token));
@@ -542,6 +631,7 @@ function scoreCase(expected, answer, menu) {
   const scopeFound = scopeTokens.filter((token) => containsToken(answer.scope, token));
   const candidates = expected.candidateCodes ?? [];
   const candidatesNamed = candidates.filter((code) => namesCandidate(answer.question, code, menu));
+  const scopeWithinBound = new RegExp(scopeBoundPatternSource(intent)).test(String(answer.scope ?? ''));
 
   const actionCorrect = answer.action === expected.expectedAction;
   const routeCase = expected.expectedAction === 'route';
@@ -558,6 +648,10 @@ function scoreCase(expected, answer, menu) {
     // both right. GATE expects a null workflow, because it is a menu item whose
     // target is a prompt, and naming a skill for it is the merge its own prompt
     // text forbids.
+    // The workflow behind the menu item, alone, which is what the contract's
+    // workflow oracle reads. GATE expects null here because the menu maps it to a
+    // prompt, and naming a skill behind it is the merge its own prompt forbids.
+    workflowCorrect: routeCase && answer.workflow === (expected.expectedWorkflow ?? null),
     routeCorrect:
       routeCase &&
       actionCorrect &&
@@ -568,9 +662,15 @@ function scoreCase(expected, answer, menu) {
     tokensMissed: tokens.filter((token) => !containsToken(answer.reason, token)),
     scopeTokens: scopeTokens.length,
     scopeFound: scopeFound.length,
-    scopeOk: scopeTokens.length > 0 && scopeFound.length === scopeTokens.length,
+    scopeWithinBound,
+    scopeOk: scopeTokens.length > 0 && scopeFound.length === scopeTokens.length && scopeWithinBound,
     candidates: candidates.length,
     candidatesNamed: candidatesNamed.length,
+    // The codes themselves, not just how many, because the stability signature
+    // reads them: a clarify answer carries a null menu code and a null workflow,
+    // so without this two clarifications asking between different pairs would
+    // sign identically and the stability gate would have nothing to see.
+    candidateCodesNamed: candidatesNamed,
     clarifyOk:
       expected.expectedAction === 'clarify' && actionCorrect && candidates.length > 0 && candidatesNamed.length === candidates.length,
     // Whether the answer says what is missing at all, which is what the
@@ -579,22 +679,76 @@ function scoreCase(expected, answer, menu) {
     missingStated: new RegExp(MISSING_PATTERN_SOURCE).test(String(answer.missing ?? '')),
     declineOk:
       expected.expectedAction === 'decline' && actionCorrect && new RegExp(MISSING_PATTERN_SOURCE).test(String(answer.missing ?? '')),
-    // The two controls. A confident route on an intent nothing serves, and a
-    // hedge on an intent that is already clear.
+    // The three controls. A confident route on an intent nothing serves, a
+    // confident route on one where two items are genuinely close, and a clear
+    // intent left unrouted. The last counts a decline as well as a clarify,
+    // because refusing a servable intent is the worse of the two and neither is
+    // a dispatch; the run log names which one happened.
     confidentRouteOnUnservable: expected.expectedAction === 'decline' && answer.action === 'route',
-    hedgedClearIntent: routeCase && answer.action !== 'route',
+    confidentRouteOnAmbiguous: expected.expectedAction === 'clarify' && answer.action === 'route',
+    unroutedClearIntent: routeCase && answer.action !== 'route',
   };
 }
 
-/** The stability key: two repetitions agree when they picked the same thing, not when they worded it the same. */
+/**
+ * The answer the corpus says is right for one case, in the shape the runner
+ * prints.
+ *
+ * Lives here rather than in each consumer because `test/lib/probe-scoring.js` and
+ * `test/test-contract-oracles.js` both need it and two copies drift, which is the
+ * argument this suite makes about the pattern rule and the prompt. It is a
+ * synthetic answer: its reason is the deciding tokens joined, so it satisfies the
+ * reason oracle by construction. That is fine for what it is for, proving an
+ * oracle can resolve true and false, and it is exactly why it is no evidence
+ * about a token set. `validateCorpus` is what holds a token set to the user's
+ * message, and the stored replay replies are what test realistic phrasing.
+ */
+function correctRoutingAnswer(expected) {
+  return {
+    action: expected.expectedAction,
+    menuCode: expected.expectedAction === 'route' ? expected.expectedMenuCode : null,
+    workflow: expected.expectedAction === 'route' ? (expected.expectedWorkflow ?? null) : null,
+    scope: (expected.scopeTokens ?? []).length > 0 ? expected.scopeTokens.join(', ') : null,
+    reason: (expected.decidingTokens ?? []).join(', '),
+    question: expected.expectedAction === 'clarify' ? (expected.candidateCodes ?? []).join(' or ') : null,
+    missing: expected.expectedAction === 'decline' ? 'nothing on the menu covers this' : null,
+  };
+}
+
+/**
+ * The stability key: two repetitions agree when they picked the same thing,
+ * whatever words they picked it in.
+ *
+ * The named candidate set is part of the key. Without it every clarify answer
+ * signs as `clarify||` whatever it asked between, so the four cases most likely
+ * to wobble would be the four the gate could not see wobble.
+ */
 function signatureOf(score) {
-  return score === null ? 'unmeasured' : [score.action, score.menuCode ?? '', score.workflow ?? ''].join('|');
+  return score === null
+    ? 'unmeasured'
+    : [score.action, score.menuCode ?? '', score.workflow ?? '', [...(score.candidateCodesNamed ?? [])].sort().join('+')].join('|');
+}
+
+/**
+ * The skill and its menu, read once per process.
+ *
+ * Memoized because the prompt is assembled hundreds of times in one gate run, by
+ * validation, by the case index, by the contract generator, by the witness
+ * builder and by the probe evidence, and because every one of those assemblies
+ * has to produce byte-identical output: the contracts bind standard input as a
+ * literal, so two reads that disagreed would stop the plan selecting anything.
+ */
+const skillText = { skill: null, menu: null };
+
+function skillSources() {
+  skillText.skill ??= fs.readFileSync(SKILL_FILE, 'utf8');
+  skillText.menu ??= fs.readFileSync(MENU_FILE, 'utf8');
+  return skillText;
 }
 
 /** The prompt one case gets: the skill as it ships, its menu as it ships, and one user message. */
 function buildPrompt(item) {
-  const skill = fs.readFileSync(SKILL_FILE, 'utf8');
-  const menu = fs.readFileSync(MENU_FILE, 'utf8');
+  const { skill, menu } = skillSources();
   return [
     'You are the TEA agent `bmad-tea`. Below are the skill definition you run under and the capabilities menu it dispatches from.',
     '',
@@ -846,7 +1000,8 @@ async function main() {
     let declineHits = 0;
     let declineOpportunities = 0;
     let confidentRoutesOnUnservable = 0;
-    let hedgedClearIntents = 0;
+    let confidentRoutesOnAmbiguous = 0;
+    let unroutedClearIntents = 0;
     let unmeasuredRuns = 0;
     let completedRuns = 0;
     let unstableCases = 0;
@@ -915,7 +1070,7 @@ async function main() {
         // The runner prints the response descriptor the contract declares, so the
         // reply is already parsed by the time it crosses the boundary.
         const answer = observation.stdout.kind === 'json' ? observation.stdout.value : null;
-        const score = scoreCase(item.expected, answer && ROUTING_ACTIONS.includes(answer.action) ? answer : null, menu);
+        const score = scoreCase(item.expected, answer && ROUTING_ACTIONS.includes(answer.action) ? answer : null, menu, item.intent);
         if (score === null) {
           console.error(`  ${colors.red}${item.id} run ${runIndex + 1}: no routing answer in the runner's reply${colors.reset}`);
           lostRunClasses.push('environment-parser');
@@ -944,10 +1099,11 @@ async function main() {
         if (expectedAction === 'route') {
           routeOpportunities += 1;
           if (score.routeCorrect) routeHits += 1;
-          if (score.hedgedClearIntent) hedgedClearIntents += 1;
+          if (score.unroutedClearIntent) unroutedClearIntents += 1;
         } else if (expectedAction === 'clarify') {
           clarifyOpportunities += 1;
           if (score.clarifyOk) clarifyHits += 1;
+          if (score.confidentRouteOnAmbiguous) confidentRoutesOnAmbiguous += 1;
         } else {
           declineOpportunities += 1;
           if (score.declineOk) declineHits += 1;
@@ -972,7 +1128,12 @@ async function main() {
       if (first.tokensMissed.length > 0)
         console.log(`      ${colors.yellow}reason never named:${colors.reset} ${first.tokensMissed.join(', ')}`);
       if (first.confidentRouteOnUnservable) console.log(`      ${colors.red}routed an intent nothing on the menu serves${colors.reset}`);
-      if (first.hedgedClearIntent) console.log(`      ${colors.red}hedged an intent with one right answer${colors.reset}`);
+      if (first.confidentRouteOnAmbiguous)
+        console.log(`      ${colors.red}routed an intent whose menu items are genuinely close${colors.reset}`);
+      if (first.unroutedClearIntent)
+        console.log(
+          `      ${colors.red}${first.action === 'decline' ? 'declined' : 'asked about'} an intent with one right answer${colors.reset}`,
+        );
       if (!complete) incompleteCases += 1;
       else if (!stable) unstableCases += 1;
     }
@@ -993,7 +1154,11 @@ async function main() {
     console.log(
       `  confident routes on unservable intents ${confidentRoutesOnUnservable}   (max ${THRESHOLDS.maxConfidentRoutesOnUnservable})`,
     );
-    console.log(`  hedged clear intents                   ${hedgedClearIntents}   (max ${THRESHOLDS.maxHedgedClearIntents})`);
+    console.log(
+      `  confident routes on ambiguous intents  ${confidentRoutesOnAmbiguous}   (max ${THRESHOLDS.maxConfidentRoutesOnAmbiguous})`,
+    );
+    console.log(`  clear intents left unrouted            ${unroutedClearIntents}   (max ${THRESHOLDS.maxUnroutedClearIntents})`);
+    console.log(`  unstable cases                         ${unstableCases}   (max ${THRESHOLDS.maxUnstableCases})`);
     if (unmeasuredRuns > 0) console.log(`  ${colors.yellow}${unmeasuredRuns} run(s) produced nothing measurable${colors.reset}`);
 
     const expectedRuns = corpus.cases.length * runs;
@@ -1004,7 +1169,8 @@ async function main() {
       clarifyRecall: measured(clarifyRecall),
       declineRecall: measured(declineRecall),
       confidentRoutesOnUnservable,
-      hedgedClearIntents,
+      confidentRoutesOnAmbiguous,
+      unroutedClearIntents,
       unstableCases,
       incompleteCases,
       unmeasuredRuns,
@@ -1023,7 +1189,10 @@ async function main() {
     if (confidentRoutesOnUnservable > THRESHOLDS.maxConfidentRoutesOnUnservable) {
       failures.push(`${confidentRoutesOnUnservable} confident route(s) on an unservable intent`);
     }
-    if (hedgedClearIntents > THRESHOLDS.maxHedgedClearIntents) failures.push(`${hedgedClearIntents} hedged clear intent(s)`);
+    if (confidentRoutesOnAmbiguous > THRESHOLDS.maxConfidentRoutesOnAmbiguous) {
+      failures.push(`${confidentRoutesOnAmbiguous} confident route(s) on an intent whose menu items are genuinely close`);
+    }
+    if (unroutedClearIntents > THRESHOLDS.maxUnroutedClearIntents) failures.push(`${unroutedClearIntents} clear intent(s) left unrouted`);
     if (unstableCases > THRESHOLDS.maxUnstableCases) failures.push(`${unstableCases} unstable case(s)`);
 
     if (incompleteCases > 0) {
@@ -1083,6 +1252,7 @@ module.exports = {
   caseIndex,
   caseInsensitiveLiteral,
   containsToken,
+  correctRoutingAnswer,
   loadCorpus,
   menuItems,
   namesCandidate,
@@ -1090,6 +1260,7 @@ module.exports = {
   parseRouting,
   scoreCase,
   signatureOf,
+  scopeBoundPatternSource,
   tokenPatternSource,
   validateCorpus,
   GROUND_TRUTH_ONLY_KEYS,

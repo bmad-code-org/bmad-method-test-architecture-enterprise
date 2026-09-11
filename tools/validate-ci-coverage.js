@@ -66,6 +66,58 @@ function scriptsRunInCi() {
   return found;
 }
 
+const CLI_SUITE_FILE = path.join(PROJECT_ROOT, 'test', 'test-test-review-cli.js');
+
+/**
+ * The suite numbers test/test-test-review-cli.js defines, read off its own
+ * `suiteEnabled(n)` call sites.
+ *
+ * A text scan rather than a require, for the reason `scriptsRunInCi` scans rather
+ * than parses, and because requiring that file executes a 90-spawn suite.
+ */
+function cliSuiteNumbers() {
+  if (!fs.existsSync(CLI_SUITE_FILE)) return new Set();
+  const text = fs.readFileSync(CLI_SUITE_FILE, 'utf8');
+  const found = new Set();
+  for (const match of text.matchAll(/\bif \(suiteEnabled\((\d+)\)\)/g)) found.add(Number.parseInt(match[1], 10));
+  return found;
+}
+
+/** Every suite number the CLI job's shard matrix names, across all its shards. */
+function shardedSuiteNumbers() {
+  const found = new Set();
+  const files = fs.existsSync(WORKFLOW_ROOT) ? fs.readdirSync(WORKFLOW_ROOT) : [];
+  for (const name of files) {
+    if (!name.endsWith('.yml') && !name.endsWith('.yaml')) continue;
+    const text = fs.readFileSync(path.join(WORKFLOW_ROOT, name), 'utf8');
+    for (const match of text.matchAll(/^\s*suites:\s*"([\d,\s]+)"\s*$/gm)) {
+      for (const raw of match[1].split(',')) {
+        const parsed = Number.parseInt(raw.trim(), 10);
+        if (Number.isInteger(parsed)) found.add(parsed);
+      }
+    }
+  }
+  return found;
+}
+
+/** The CLI shard partition against the suites the file defines, both directions. */
+function shardProblems() {
+  const defined = cliSuiteNumbers();
+  if (defined.size === 0) return [];
+  const sharded = shardedSuiteNumbers();
+  if (sharded.size === 0) return [];
+  const problems = [];
+  for (const suite of [...defined].sort((a, b) => a - b)) {
+    if (!sharded.has(suite))
+      problems.push(`Suite ${suite} is defined in test/test-test-review-cli.js and is in no shard, so it runs in no CI job`);
+  }
+  for (const suite of [...sharded].sort((a, b) => a - b)) {
+    if (!defined.has(suite))
+      problems.push(`Suite ${suite} is named by a shard and is defined by no suiteEnabled() block, so that shard asks for nothing`);
+  }
+  return problems;
+}
+
 function main() {
   const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
   const chained = chainedScripts(manifest);
@@ -86,10 +138,23 @@ function main() {
     return 1;
   }
 
-  console.log(`${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) run in CI`);
+  const shards = shardProblems();
+  if (shards.length > 0) {
+    console.error(`${colors.red}the CLI job's shard partition does not match the suites it splits:${colors.reset}`);
+    for (const problem of shards) console.error(`  - ${problem}`);
+    console.error(
+      `\n${colors.dim}Edit the shard matrix in .github/workflows/quality.yaml so its lists cover every suite exactly once.${colors.reset}`,
+    );
+    return 1;
+  }
+
+  console.log(
+    `${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) run in CI, and every one of the ` +
+      `${cliSuiteNumbers().size} CLI suite(s) is in a shard`,
+  );
   return 0;
 }
 
 if (require.main === module) process.exit(main());
 
-module.exports = { chainedScripts, scriptsRunInCi };
+module.exports = { chainedScripts, cliSuiteNumbers, scriptsRunInCi, shardProblems, shardedSuiteNumbers };

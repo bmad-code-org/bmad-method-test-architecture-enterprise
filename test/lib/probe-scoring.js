@@ -49,7 +49,7 @@ const { buildPrompt: buildTracePrompt } = require('../eval-trace');
 // The routing evidence sends the prompt the live run sends, for the reason the
 // trace evidence does: the plan binds standard input as a literal, so a described
 // prompt selects nothing and the record is scored against no evidence at all.
-const { buildPrompt: buildRoutingPrompt } = require('../eval-bmad-tea-routing');
+const { buildPrompt: buildRoutingPrompt, correctRoutingAnswer } = require('../eval-bmad-tea-routing');
 const { ROUTING_CONTRACTS } = require('../../tools/generate-contracts');
 const {
   evaluatorConfiguration,
@@ -538,20 +538,11 @@ function routingBody(answer) {
  */
 function routingOracleFor(contract, caseId, field) {
   const pointer = `/interactions/${caseId}/stdout/${field}`;
-  return contract.oracles.find((oracle) => oracle.direction.evidenceTargets[0] === pointer);
-}
-
-/** The answer the corpus says is right for one case, in the shape the runner prints. */
-function correctRoutingAnswer(expected) {
-  return {
-    action: expected.expectedAction,
-    menuCode: expected.expectedAction === 'route' ? expected.expectedMenuCode : null,
-    workflow: expected.expectedAction === 'route' ? (expected.expectedWorkflow ?? null) : null,
-    scope: (expected.scopeTokens ?? []).length > 0 ? expected.scopeTokens.join(', ') : null,
-    reason: (expected.decidingTokens ?? []).join(', '),
-    question: expected.expectedAction === 'clarify' ? (expected.candidateCodes ?? []).join(' or ') : null,
-    missing: expected.expectedAction === 'decline' ? 'nothing on the menu covers this' : null,
-  };
+  const found = contract.oracles.find((oracle) => oracle.direction.evidenceTargets[0] === pointer);
+  // Named rather than dereferenced blind: the caller reads `.id` off this, and a
+  // TypeError there says nothing about which pointer went missing.
+  if (found === undefined) throw new Error(`${contract.contractId}: no oracle reads ${pointer}`);
+  return found;
 }
 
 function routingEvidence(contract) {
@@ -559,7 +550,6 @@ function routingEvidence(contract) {
   const intents = readJson(path.join(ROUTING_FIXTURE_ROOT, 'intents.json'));
   const promptOf = new Map(intents.cases.map((entry) => [entry.id, buildRoutingPrompt(entry)]));
   const first = contract.interactionPlan[0].stepId;
-  const step = contract.interactionPlan[0];
   const expected = corpus.cases[first];
   const gamedField = contract.contractId === 'tea-routing-intents-behavioral' ? 'menuCode' : 'question';
 

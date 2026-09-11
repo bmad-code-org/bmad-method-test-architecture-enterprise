@@ -1,7 +1,7 @@
 {
   "$comment": [
-    "The other control, pointing the other way. The intent has one right answer and the reply asks a question about",
-    "it anyway. Step 8 rules this out by name: clarify when two or more items are genuinely close, and not as a",
+    "The control that points the other way. The intent has one right answer and the reply asks a question about it",
+    "anyway. Step 8 rules this out by name: clarify when two or more items are genuinely close, and not as a",
     "confirmation ritual.",
     "",
     "Without this case a skill that asks about everything would score a perfect clarification recall and never route",
@@ -9,7 +9,7 @@
     "",
     "The reply is CONSTRUCTED."
   ],
-  "id": "hedged-clear-intent",
+  "id": "clear-intent-left-unrouted",
   "suite": "bmad-tea-routing",
   "scorerVersion": 4,
   "storedOutput": {
@@ -18,22 +18,23 @@
   },
   "inputs": {
     "$comment": [
-      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
-      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
-      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
       "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
     ],
     "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: no-framework-yet",
-    "frozenOn": "2026-09-10",
+    "frozenOn": "2026-09-11",
     "expected": {
       "expectedAction": "route",
       "expectedMenuCode": "TF",
       "expectedWorkflow": "bmad-testarch-framework",
-      "decidingTokens": ["framework", "playwright"],
+      "decidingTokens": ["playwright", "cypress"],
       "scopeTokens": [],
       "candidateCodes": [],
-      "rationale": "There is no framework to expand or review. Nothing else on the menu can run until one exists."
+      "rationale": "There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test."
     },
+    "intent": "Our repo has no browser test setup at all. No Playwright, no Cypress, no fixtures, nothing. Can you stand up a proper structure for us?",
     "menu": [
       {
         "code": "TMT",
@@ -98,13 +99,14 @@
     ]
   },
   "derivation": [
-    "The oracle expects route/TF, so actionCorrect is false and hedgedClearIntent is true.",
+    "The oracle expects route/TF, so actionCorrect is false and unroutedClearIntent is true.",
     "",
-    "decidingTokens is [framework, playwright] and the reason carries both, so tokensFound is 2 of 2. A hedge can be",
+    "decidingTokens is [playwright, cypress] and the reason carries both, so tokensFound is 2 of 2. A hedge can be",
     "perfectly well reasoned and still be the wrong kind of answer, which is why the token score does not save it.",
     "",
     "clarifyOk is false because this case is not a clarify case, and its candidateCodes list is empty.",
-    "confidentRouteOnUnservable is false, because the intent is servable."
+    "confidentRouteOnUnservable and confidentRouteOnAmbiguous are both false, because the intent is servable and it",
+    "is not close."
   ],
   "result": {
     "answer": {
@@ -122,20 +124,24 @@
       "workflow": null,
       "actionCorrect": false,
       "menuCorrect": false,
+      "workflowCorrect": false,
       "routeCorrect": false,
       "tokens": 2,
       "tokensFound": 2,
       "tokensMissed": [],
       "scopeTokens": 0,
       "scopeFound": 0,
+      "scopeWithinBound": true,
       "scopeOk": false,
       "candidates": 0,
       "candidatesNamed": 0,
+      "candidateCodesNamed": [],
       "clarifyOk": false,
       "missingStated": false,
       "declineOk": false,
       "confidentRouteOnUnservable": false,
-      "hedgedClearIntent": true
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": true
     }
   }
 }

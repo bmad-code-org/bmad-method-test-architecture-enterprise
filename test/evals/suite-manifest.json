@@ -39,9 +39,10 @@
         "and the harness searches every assembled prompt for its keys and its bytes before it spends a call, so the",
         "separation is asserted rather than assumed.",
         "",
-        "Two of the eight thresholds are the controls and they point in opposite directions. Recall alone rewards a",
-        "system that routes everything, and `maxConfidentRoutesOnUnservable` is what refuses that; a system that asks",
-        "about everything never routes wrong, and `maxHedgedClearIntents` is what refuses that.",
+        "Three of the nine thresholds are the controls and they close the cells recall leaves open. Recall alone rewards",
+        "a system that routes everything, and the two `maxConfidentRoutesOn...` counts refuse that on both the",
+        "unservable and the genuinely close intents; a system that asks about everything never routes wrong, and",
+        "`maxUnroutedClearIntents` refuses that.",
         "",
         "Two repetitions. Each case is one short reply rather than a whole workflow, so the cost is low, and two is",
         "the smallest number that can say whether a routing decision is reproducible."
@@ -61,11 +62,12 @@
       "thresholds": {
         "routeAccuracy": 0.9,
         "reasonTokenRecall": 0.8,
-        "scopeFidelity": 0.8,
+        "scopeFidelity": 0.875,
         "clarifyRecall": 0.75,
         "declineRecall": 0.75,
         "maxConfidentRoutesOnUnservable": 0,
-        "maxHedgedClearIntents": 0,
+        "maxConfidentRoutesOnAmbiguous": 0,
+        "maxUnroutedClearIntents": 0,
         "maxUnstableCases": 2
       },
       "repetitions": 2,

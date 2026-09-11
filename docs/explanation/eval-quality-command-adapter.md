@@ -40,7 +40,7 @@ Two couplings the seam does not remove, both found by running it:
 
 ## Reaching more than one skill
 
-Ten contracts declare three logical executables, each a command TEA ships. When there were nine they declared two, and one did not exist: `tea-fragment-selection-runner`, named by eight of them, was fiction, which is worse than a declared gap: the contract compiles, pre-flight schedules a leg against it, and the gate stays green over a command nobody can run.
+Twelve contracts declare four logical executables, each a command TEA ships. When there were nine they declared two, and one did not exist: `tea-fragment-selection-runner`, named by eight of them, was fiction, which is worse than a declared gap: the contract compiles, pre-flight schedules a leg against it, and the gate stays green over a command nobody can run.
 
 `cli/fragment-selection-runner.js` is that command now. Its whole surface is the one turn those contracts declared: a prompt on standard input, `{"fragments": [...]}` on standard output. It builds no prompt, because a prompt belongs to the eval corpus, and knows no vendor, because it calls `runAgent`. `test/test-probe-targets.js` keeps the fiction from returning: every declared interface, executable, and subcommand path must be one the registry carries, and every registered command must be named by some contract.
 
@@ -80,7 +80,7 @@ inventory, kept honest by being a list of what is still unused rather than a lis
 
 ### What the corpus is
 
-`tools/generate-probes.js` writes 31 probes from the ground truth this repository already keeps.
+`tools/generate-probes.js` writes 35 probes from the ground truth this repository already keeps.
 Nine defect probes for `test-review`, one per planted registry row, each a controlled mutation whose
 target artifact, baseline-pass evidence and mutated-fail evidence are files on disk. Three for
 `trace`, one per criterion the seeded set deliberately leaves short. A clean control for every
@@ -386,7 +386,7 @@ asserted equal in both directions by `npm run test:probe-targets`.
 
 ## Done, and owed
 
-Done, and covered by `npm test`: the registry, policy, port, and fault-to-failure-class mapping in `test/lib/probe-targets.js`; the runner, whose request shape and default agent `tools/generate-contracts.js` reads rather than transcribes; and `npm run test:probe-targets`, which drives all three real commands through the real adapter against checked-in fixtures with a stub vendor. It asserts default-deny, the observation shape, artifact read-back, an absent artifact, a real budget kill classified as a timeout, and contract-to-registry agreement both ways, with no model call and no credential.
+Done, and covered by `npm test`: the registry, policy, port, and fault-to-failure-class mapping in `test/lib/probe-targets.js`; the runner, whose request shape and default agent `tools/generate-contracts.js` reads rather than transcribes; and `npm run test:probe-targets`, which drives every real command through the real adapter against checked-in fixtures with a stub vendor. It asserts default-deny, the observation shape, artifact read-back, an absent artifact, a real budget kill classified as a timeout, and contract-to-registry agreement both ways, with no model call and no credential.
 
 Three more checks joined that list with the move to 3.0.0. `npm run test:probe-targets` now also holds each contract's declared environment keys equal to its authorization's permitted keys in both directions, and asserts that an unpermitted key is denied before a process spawns and that a malformed key fails at the port parse. `npm run test:eval-quality-corpus` compiles the package's own published corpus, which is the one check here that feeds the package nothing of TEA's. `npm run test:port-totality` holds TEA's branches total over both probe unions and all six published conformance arms.
 

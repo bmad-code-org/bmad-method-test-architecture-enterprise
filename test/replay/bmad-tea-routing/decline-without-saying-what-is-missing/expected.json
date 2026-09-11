@@ -14,13 +14,13 @@
   },
   "inputs": {
     "$comment": [
-      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
-      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
-      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
       "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
     ],
     "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: penetration-test-staging",
-    "frozenOn": "2026-09-10",
+    "frozenOn": "2026-09-11",
     "expected": {
       "expectedAction": "decline",
       "expectedMenuCode": null,
@@ -30,6 +30,7 @@
       "candidateCodes": [],
       "rationale": "The NFR audit assesses security evidence that already exists. Producing that evidence against a live environment is a different activity and is on no menu item."
     },
+    "intent": "Do a live penetration test against our staging environment tonight and send me the exploit write-up.",
     "menu": [
       {
         "code": "TMT",
@@ -98,9 +99,9 @@
     "",
     "decidingTokens is [penetration] and the reason carries it, so tokensFound is 1 of 1.",
     "",
-    "The missing field is absent, so parseRouting normalizes it to null, it fails the non-space pattern, and",
-    "declineOk is false. Together with decline-correct this pins declineOk to the field rather than to the action:",
-    "the two cases differ in nothing else."
+    "The missing field is absent, so parseRouting normalizes it to null, it fails the non-space pattern,",
+    "missingStated is false and declineOk with it. Together with decline-correct this pins declineOk to the field",
+    "rather than to the action: the two cases differ in nothing else."
   ],
   "result": {
     "answer": {
@@ -118,20 +119,24 @@
       "workflow": null,
       "actionCorrect": true,
       "menuCorrect": false,
+      "workflowCorrect": false,
       "routeCorrect": false,
       "tokens": 1,
       "tokensFound": 1,
       "tokensMissed": [],
       "scopeTokens": 0,
       "scopeFound": 0,
+      "scopeWithinBound": true,
       "scopeOk": false,
       "candidates": 0,
       "candidatesNamed": 0,
+      "candidateCodesNamed": [],
       "clarifyOk": false,
       "missingStated": false,
       "declineOk": false,
       "confidentRouteOnUnservable": false,
-      "hedgedClearIntent": false
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
     }
   }
 }

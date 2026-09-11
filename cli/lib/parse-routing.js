@@ -2,10 +2,12 @@
  * The routing answer out of a runner reply.
  *
  * Lives here rather than inside the harness for the reason cli/lib/parse-selection.js
- * records: `cli/tea-routing-runner.js` has to accept exactly the spellings
+ * records: `cli/routing-runner.js` has to accept exactly the spellings
  * `test/eval-bmad-tea-routing.js` and `test/test-eval-replay.js` score, and two
  * copies of that rule would let a fenced-block reply be accepted by the runner
- * and rejected by the scorer.
+ * and rejected by the scorer. This file owns how a reply is parsed and nothing
+ * about how one is scored; the pattern rules the oracles share live in
+ * `test/eval-bmad-tea-routing.js`.
  *
  * Returns null when nothing parseable came back, so "the reply was prose" never
  * reports as "the agent declined", which is a real and very different answer.

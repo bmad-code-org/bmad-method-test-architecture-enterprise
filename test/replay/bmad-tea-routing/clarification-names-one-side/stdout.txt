@@ -1,1 +1,1 @@
-{"action":"clarify","menuCode":null,"workflow":null,"scope":null,"reason":"this could be about the quality of the tests or about their coverage","question":"Could you tell me a bit more about what you want?","missing":null}
+{"action":"clarify","menuCode":null,"workflow":null,"scope":null,"reason":"this could be about whether the tests are any good or about what they cover","question":"Could you tell me a bit more about what you want?","missing":null}

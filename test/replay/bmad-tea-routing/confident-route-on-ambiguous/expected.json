@@ -1,12 +1,15 @@
 {
   "$comment": [
-    "A correct answer wrapped in prose and a fenced block, which is the shape a chatty vendor returns however",
-    "plainly the prompt asks for JSON only. The parser has to find it, because an unparseable reply is an",
-    "environment failure and a correct answer reported as one would hide a run that worked.",
+    "An intent whose two menu items are genuinely close, answered with a confident dispatch to one of them.",
+    "",
+    "This is the control the suite was missing until it was added. A confident route here fails no recall metric on",
+    "its own: the case is not a route case, so route accuracy never sees it, and clarification recall only counts",
+    "the clarifications that happened. Without maxConfidentRoutesOnAmbiguous a skill that guesses on every close",
+    "call raises nothing at all.",
     "",
     "The reply is CONSTRUCTED."
   ],
-  "id": "fenced-json",
+  "id": "confident-route-on-ambiguous",
   "suite": "bmad-tea-routing",
   "scorerVersion": 4,
   "storedOutput": {
@@ -20,18 +23,18 @@
       "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
       "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
     ],
-    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: learn-testing-properly",
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: story-half-done",
     "frozenOn": "2026-09-11",
     "expected": {
-      "expectedAction": "route",
-      "expectedMenuCode": "TMT",
-      "expectedWorkflow": "bmad-teach-me-testing",
-      "decidingTokens": ["learn", "fundamentals"],
-      "scopeTokens": [],
-      "candidateCodes": [],
-      "rationale": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of."
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["half", "UI"],
+      "scopeTokens": ["12.3"],
+      "candidateCodes": ["AT", "TA"],
+      "rationale": "Half the story is built and half is not, and the menu has one item for tests written ahead of an implementation and one for tests written against it. The message supports both at once, which is the definition of two items being genuinely close."
     },
-    "intent": "I am three months into my first QA job. I want to learn testing properly from the fundamentals up instead of copying what the team already does.",
+    "intent": "Story 12.3 is half done. The API is built and the UI has not been started. I want tests for it.",
     "menu": [
       {
         "code": "TMT",
@@ -96,48 +99,53 @@
     ]
   },
   "derivation": [
-    "parseRouting tries the fenced candidates before the bare text, so the block between the fences parses and the",
-    "surrounding prose is ignored.",
+    "The oracle expects clarify and the action is route, so actionCorrect is false and confidentRouteOnAmbiguous is",
+    "true. menuCorrect and workflowCorrect are both false for a second reason as well: they are only ever true on a",
+    "case whose oracle expects a route, and this one does not.",
     "",
-    "route/TMT/bmad-teach-me-testing matches the oracle, so routeCorrect is true.",
+    "decidingTokens is [half, UI]. The reason carries \"half\" and not \"UI\", so tokensFound is 1 of 2. Naming half the",
+    "ambiguity and then resolving it unilaterally is the characteristic shape of this failure.",
     "",
-    "decidingTokens is [learn, fundamentals] and the reason carries both, so tokensFound is 2 of 2. The oracle names",
-    "no scope, so scopeTokens is 0 and scopeOk stays false without counting against anything: the harness only takes",
-    "a scope opportunity where the fixture declares one."
+    "scopeTokens is [12.3] and the scope is null, so scopeOk is false.",
+    "",
+    "candidates is 2 because the oracle declares two close menu items, and it counts what the case asked for rather",
+    "than what the reply did: a route answer carries no question, so candidatesNamed is 0 and clarifyOk is false.",
+    "",
+    "confidentRouteOnUnservable is false, because the menu does serve this intent; the question is only which item."
   ],
   "result": {
     "answer": {
       "action": "route",
-      "menuCode": "TMT",
-      "workflow": "bmad-teach-me-testing",
+      "menuCode": "AT",
+      "workflow": "bmad-testarch-atdd",
       "scope": null,
-      "reason": "the deliverable is that you learn testing from the fundamentals up rather than any artifact",
+      "reason": "the story is half done, so acceptance tests come first",
       "question": null,
       "missing": null
     },
     "score": {
       "action": "route",
-      "menuCode": "TMT",
-      "workflow": "bmad-teach-me-testing",
-      "actionCorrect": true,
-      "menuCorrect": true,
-      "workflowCorrect": true,
-      "routeCorrect": true,
+      "menuCode": "AT",
+      "workflow": "bmad-testarch-atdd",
+      "actionCorrect": false,
+      "menuCorrect": false,
+      "workflowCorrect": false,
+      "routeCorrect": false,
       "tokens": 2,
-      "tokensFound": 2,
-      "tokensMissed": [],
-      "scopeTokens": 0,
+      "tokensFound": 1,
+      "tokensMissed": ["UI"],
+      "scopeTokens": 1,
       "scopeFound": 0,
       "scopeWithinBound": true,
       "scopeOk": false,
-      "candidates": 0,
+      "candidates": 2,
       "candidatesNamed": 0,
       "candidateCodesNamed": [],
       "clarifyOk": false,
       "missingStated": false,
       "declineOk": false,
       "confidentRouteOnUnservable": false,
-      "confidentRouteOnAmbiguous": false,
+      "confidentRouteOnAmbiguous": true,
       "unroutedClearIntent": false
     }
   }

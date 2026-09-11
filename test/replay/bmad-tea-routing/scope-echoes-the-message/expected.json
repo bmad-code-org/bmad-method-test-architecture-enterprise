@@ -1,12 +1,14 @@
 {
   "$comment": [
-    "A correct answer wrapped in prose and a fenced block, which is the shape a chatty vendor returns however",
-    "plainly the prompt asks for JSON only. The parser has to find it, because an unparseable reply is an",
-    "environment failure and a correct answer reported as one would hide a run that worked.",
+    "The right workflow, a grounded reason, and the whole user message copied into the scope field.",
+    "",
+    "This is the precision half of scope fidelity and the reason the metric is not containment alone. The prompt",
+    "asks for the scope in the message's own words, so echoing the message satisfies any token set that was drawn",
+    "from it, and a workflow handed the whole message as its scope has been handed no scope at all.",
     "",
     "The reply is CONSTRUCTED."
   ],
-  "id": "fenced-json",
+  "id": "scope-echoes-the-message",
   "suite": "bmad-tea-routing",
   "scorerVersion": 4,
   "storedOutput": {
@@ -20,18 +22,18 @@
       "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
       "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
     ],
-    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: learn-testing-properly",
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: epic-risk-before-tests",
     "frozenOn": "2026-09-11",
     "expected": {
       "expectedAction": "route",
-      "expectedMenuCode": "TMT",
-      "expectedWorkflow": "bmad-teach-me-testing",
-      "decidingTokens": ["learn", "fundamentals"],
-      "scopeTokens": [],
+      "expectedMenuCode": "TD",
+      "expectedWorkflow": "bmad-testarch-test-design",
+      "decidingTokens": ["risk", "coverage"],
+      "scopeTokens": ["epic 4"],
       "candidateCodes": [],
-      "rationale": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of."
+      "rationale": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so."
     },
-    "intent": "I am three months into my first QA job. I want to learn testing properly from the fundamentals up instead of copying what the team already does.",
+    "intent": "We just wrapped epic 4, the tenant data export work. No test code exists for it yet. I want to know where the risk actually sits and how much coverage each area deserves before anyone starts writing.",
     "menu": [
       {
         "code": "TMT",
@@ -96,29 +98,27 @@
     ]
   },
   "derivation": [
-    "parseRouting tries the fenced candidates before the bare text, so the block between the fences parses and the",
-    "surrounding prose is ignored.",
+    "route/TD/bmad-testarch-test-design matches the oracle, so routeCorrect is true, and the reason carries both",
+    "deciding tokens.",
     "",
-    "route/TMT/bmad-teach-me-testing matches the oracle, so routeCorrect is true.",
-    "",
-    "decidingTokens is [learn, fundamentals] and the reason carries both, so tokensFound is 2 of 2. The oracle names",
-    "no scope, so scopeTokens is 0 and scopeOk stays false without counting against anything: the harness only takes",
-    "a scope opportunity where the fixture declares one."
+    "scopeTokens is [epic 4] and the scope contains it, so scopeFound is 1 of 1. The scope is the whole message,",
+    "so twice its length exceeds the message length, scopeWithinBound is false, and scopeOk is false. Containment",
+    "alone would have scored this a pass."
   ],
   "result": {
     "answer": {
       "action": "route",
-      "menuCode": "TMT",
-      "workflow": "bmad-teach-me-testing",
-      "scope": null,
-      "reason": "the deliverable is that you learn testing from the fundamentals up rather than any artifact",
+      "menuCode": "TD",
+      "workflow": "bmad-testarch-test-design",
+      "scope": "We just wrapped epic 4, the tenant data export work. No test code exists for it yet. I want to know where the risk actually sits and how much coverage each area deserves before anyone starts writing.",
+      "reason": "the ask is where the risk sits and how much coverage each area deserves",
       "question": null,
       "missing": null
     },
     "score": {
       "action": "route",
-      "menuCode": "TMT",
-      "workflow": "bmad-teach-me-testing",
+      "menuCode": "TD",
+      "workflow": "bmad-testarch-test-design",
       "actionCorrect": true,
       "menuCorrect": true,
       "workflowCorrect": true,
@@ -126,9 +126,9 @@
       "tokens": 2,
       "tokensFound": 2,
       "tokensMissed": [],
-      "scopeTokens": 0,
-      "scopeFound": 0,
-      "scopeWithinBound": true,
+      "scopeTokens": 1,
+      "scopeFound": 1,
+      "scopeWithinBound": false,
       "scopeOk": false,
       "candidates": 0,
       "candidatesNamed": 0,

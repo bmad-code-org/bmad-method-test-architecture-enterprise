@@ -1,12 +1,13 @@
 {
   "$comment": [
-    "A correct answer wrapped in prose and a fenced block, which is the shape a chatty vendor returns however",
-    "plainly the prompt asks for JSON only. The parser has to find it, because an unparseable reply is an",
-    "environment failure and a correct answer reported as one would hide a run that worked.",
+    "A correct route whose reason is written the way a person writes, rather than as a list of the tokens the",
+    "fixture names. It is here because the constructed answers the contract oracles are checked against build their",
+    "reason out of the fixture's own tokens, which proves an oracle can resolve and proves nothing about whether a",
+    "real sentence clears it. This one is that sentence.",
     "",
     "The reply is CONSTRUCTED."
   ],
-  "id": "fenced-json",
+  "id": "route-in-the-messages-own-words",
   "suite": "bmad-tea-routing",
   "scorerVersion": 4,
   "storedOutput": {
@@ -20,18 +21,18 @@
       "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
       "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
     ],
-    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: learn-testing-properly",
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: review-existing-tests",
     "frozenOn": "2026-09-11",
     "expected": {
       "expectedAction": "route",
-      "expectedMenuCode": "TMT",
-      "expectedWorkflow": "bmad-teach-me-testing",
-      "decidingTokens": ["learn", "fundamentals"],
+      "expectedMenuCode": "RV",
+      "expectedWorkflow": "bmad-testarch-test-review",
+      "decidingTokens": ["spec files", "badly written"],
       "scopeTokens": [],
       "candidateCodes": [],
-      "rationale": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of."
+      "rationale": "The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats."
     },
-    "intent": "I am three months into my first QA job. I want to learn testing properly from the fundamentals up instead of copying what the team already does.",
+    "intent": "Here are thirty spec files the team wrote last quarter. Tell me which ones are badly written and what to fix.",
     "menu": [
       {
         "code": "TMT",
@@ -96,29 +97,26 @@
     ]
   },
   "derivation": [
-    "parseRouting tries the fenced candidates before the bare text, so the block between the fences parses and the",
-    "surrounding prose is ignored.",
+    "route/RV/bmad-testarch-test-review matches the oracle, so routeCorrect is true.",
     "",
-    "route/TMT/bmad-teach-me-testing matches the oracle, so routeCorrect is true.",
-    "",
-    "decidingTokens is [learn, fundamentals] and the reason carries both, so tokensFound is 2 of 2. The oracle names",
-    "no scope, so scopeTokens is 0 and scopeOk stays false without counting against anything: the harness only takes",
-    "a scope opportunity where the fixture declares one."
+    "decidingTokens is [spec files, badly written]. Both are multi-word tokens and the reason carries each of them",
+    "as a phrase, so tokensFound is 2 of 2. The oracle names no scope, so scopeTokens is 0 and no scope opportunity",
+    "is taken."
   ],
   "result": {
     "answer": {
       "action": "route",
-      "menuCode": "TMT",
-      "workflow": "bmad-teach-me-testing",
+      "menuCode": "RV",
+      "workflow": "bmad-testarch-test-review",
       "scope": null,
-      "reason": "the deliverable is that you learn testing from the fundamentals up rather than any artifact",
+      "reason": "the spec files already exist and the ask is which of them are badly written, which is a judgment on how they are written rather than on what they cover",
       "question": null,
       "missing": null
     },
     "score": {
       "action": "route",
-      "menuCode": "TMT",
-      "workflow": "bmad-teach-me-testing",
+      "menuCode": "RV",
+      "workflow": "bmad-testarch-test-review",
       "actionCorrect": true,
       "menuCorrect": true,
       "workflowCorrect": true,

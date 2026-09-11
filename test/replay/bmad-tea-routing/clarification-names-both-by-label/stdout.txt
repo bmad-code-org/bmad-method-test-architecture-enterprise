@@ -1,0 +1,1 @@
+{"action":"clarify","menuCode":null,"workflow":null,"scope":"the checkout service","reason":"you have already measured one side and planned nothing on the other, and those are two different pieces of work","question":"Do you want the NFR Evidence Audit on what you measured, or Test Design to plan the next epic?","missing":null}

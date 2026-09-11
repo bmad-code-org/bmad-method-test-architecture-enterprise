@@ -98,6 +98,7 @@ const {
   candidatePatternSource,
   loadCorpus: loadRoutingCorpus,
   menuItems: routingMenuItems,
+  scopeBoundPatternSource,
   tokenPatternSource,
   MISSING_PATTERN_SOURCE,
   ROUTING_INTERFACE,
@@ -2378,7 +2379,7 @@ function buildTraceContract() {
 }
 
 // ---------------------------------------------------------------------------
-// tea-routing.contract.json
+// tea-routing-intents.contract.json and tea-routing-controls.contract.json
 // ---------------------------------------------------------------------------
 
 const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
@@ -2431,6 +2432,12 @@ const ROUTING_ORACLE_KINDS = {
     pointer: 'menuCode',
     severity: 'critical',
     risk: 'wrong-workflow-dispatched',
+  },
+  workflow: {
+    field: 'expectedWorkflow',
+    pointer: 'workflow',
+    severity: 'critical',
+    risk: 'menu-item-dispatched-to-the-wrong-target',
   },
   reason: {
     field: 'decidingTokens',
@@ -2498,6 +2505,28 @@ function routingOracleSpecs(cases, menu) {
         `Any menu code other than ${expected.expectedMenuCode}, including none.`,
         `The dispatch for ${item.id} names menu code ${expected.expectedMenuCode}.`,
       );
+      // The workflow behind the menu item, which the scorer reads and no oracle
+      // did until this was added. GATE is the case that needs it: the menu maps
+      // it to a prompt rather than a skill, and a reply naming a workflow behind
+      // it has done the merge GATE's own prompt text forbids, while its menu code
+      // is still right.
+      const expectsNoWorkflow = (expected.expectedWorkflow ?? null) === null;
+      push(
+        'workflow',
+        expectsNoWorkflow
+          ? {
+              op: 'not',
+              operands: [{ op: 'regex', operands: [{ pointer: routingPointer(item.id, 'workflow') }], pattern: MISSING_PATTERN_SOURCE }],
+            }
+          : { op: 'equality', operands: [{ pointer: routingPointer(item.id, 'workflow') }, { literal: expected.expectedWorkflow }] },
+        `The workflow named behind the menu item for ${item.id}.`,
+        expectsNoWorkflow
+          ? 'Any workflow at all, on a menu item whose target is a prompt rather than a skill.'
+          : `Any workflow other than ${expected.expectedWorkflow}, including none.`,
+        expectsNoWorkflow
+          ? `The dispatch for ${item.id} names no workflow, because its menu item carries a prompt rather than a skill.`
+          : `The dispatch for ${item.id} names workflow ${expected.expectedWorkflow}.`,
+      );
     }
 
     const tokens = expected.decidingTokens ?? [];
@@ -2512,12 +2541,18 @@ function routingOracleSpecs(cases, menu) {
 
     const scopeTokens = expected.scopeTokens ?? [];
     if (scopeTokens.length > 0) {
+      // Containment and the length bound together, because the scorer's scopeOk
+      // is both and an oracle that checked only containment would hold on a
+      // scope that repeated the whole message back.
       push(
         'scope',
-        allPatterns(scopeTokens.map((token) => routingRegex(item.id, 'scope', tokenPatternSource(token)))),
-        `The scope carried out of ${item.id}, against what the intent named.`,
-        'A scope that drops what the user asked about, so the workflow runs against something wider or narrower than the request.',
-        `The scope for ${item.id} still names ${scopeTokens.join(', ')}.`,
+        allPatterns([
+          ...scopeTokens.map((token) => routingRegex(item.id, 'scope', tokenPatternSource(token))),
+          routingRegex(item.id, 'scope', scopeBoundPatternSource(item.intent)),
+        ]),
+        `The scope carried out of ${item.id}, against what the intent named and against the length of the message it came from.`,
+        'A scope that drops what the user asked about, or one that repeats the whole message, so the workflow runs against something wider or narrower than the request.',
+        `The scope for ${item.id} still names ${scopeTokens.join(', ')} and is no longer than half the message.`,
       );
     }
 
@@ -2637,7 +2672,7 @@ const ROUTING_CONTRACTS = [
     actions: ['clarify', 'decline'],
     witnessId: 'the-refusal-follows-the-intent',
     witnessField: 'action',
-    witnessCases: ['look-at-our-tests', 'run-and-fix-ci-failures'],
+    witnessCases: ['good-or-covering-what-matters', 'run-and-fix-ci-failures'],
     setupLead:
       'Each plan step sends one control intent: one where two or more menu items are genuinely close, or one nothing on the menu serves.',
     gamedField: 'question',
@@ -2672,7 +2707,7 @@ function buildRoutingContract(spec) {
     commentary: oracleSpec.rationale,
     direction: {
       polarity: 'expects-hold',
-      relation: oracleSpec.check.op === 'equality' ? 'equality' : oracleSpec.check.op === 'all' ? 'all' : 'regex',
+      relation: oracleSpec.check.op,
       scope: oracleSpec.scope,
       negativeDomain: oracleSpec.negativeDomain,
       evidenceTargets: [routingPointer(oracleSpec.caseId, ROUTING_ORACLE_KINDS[oracleSpec.kind].pointer)],

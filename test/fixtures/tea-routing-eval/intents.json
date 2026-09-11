@@ -6,12 +6,17 @@
     "the menu describes itself. Not one of them quotes a menu code, a workflow name, or a trigger phrase out of a",
     "workflow's frontmatter, because a corpus that does is measuring string matching and reporting it as routing.",
     "",
+    "The four ambiguous intents are ambiguous from what the agent is shown, which is this file plus SKILL.md and",
+    "customize.toml. An intent whose second reading only opens once you have read a workflow's frontmatter or the",
+    "knowledge index is not ambiguous to the agent, and scoring it as a clarification measures a fact the agent was",
+    "never given.",
+    "",
     "The answers live in ground-truth.json and never enter a prompt. test/eval-bmad-tea-routing.js asserts that",
     "separation on the assembled prompt before it spends a model call, the way test/eval-trace.js does.",
     "",
     "`id` is the case id the manifest's caseCount is checked against and the id every stored replay case names."
   ],
-  "corpusVersion": 1,
+  "corpusVersion": 2,
   "cases": [
     {
       "id": "epic-risk-before-tests",
@@ -54,20 +59,20 @@
       "intent": "We are at the release gate for epic 7. I have test results and a partial NFR write-up. What order should I run your workflows in to get a go or no-go?"
     },
     {
-      "id": "look-at-our-tests",
-      "intent": "Can you take a look at our tests?"
+      "id": "good-or-covering-what-matters",
+      "intent": "We have a lot of tests and I honestly do not know whether they are any good, or whether they cover the things that matter. Both worry me."
     },
     {
-      "id": "audit-our-nfrs",
-      "intent": "Audit our NFRs."
+      "id": "measured-some-nfrs-planned-none",
+      "intent": "We already measured latency and error rates on the checkout service, and we have planned nothing at all for the next epic on that front. Which of those should we take first?"
     },
     {
-      "id": "better-coverage-for-payments",
-      "intent": "We need better coverage on the payments feature."
+      "id": "thin-coverage-on-payments",
+      "intent": "Coverage on the payments feature is thin and I want that dealt with before the next release."
     },
     {
-      "id": "flaky-e2e-suite",
-      "intent": "About half our end-to-end tests fail at random. What do we do about it?"
+      "id": "story-half-done",
+      "intent": "Story 12.3 is half done. The API is built and the UI has not been started. I want tests for it."
     },
     {
       "id": "run-and-fix-ci-failures",

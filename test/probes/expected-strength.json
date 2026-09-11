@@ -39,7 +39,7 @@
       "P-002": {
         "probeClass": "zero-action",
         "expectedClean": true,
-        "behaviorId": "B-003",
+        "behaviorId": "B-004",
         "preflight": "passed",
         "verdict": "CONCERNS",
         "exitCode": 0,

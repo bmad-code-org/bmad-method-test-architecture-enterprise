@@ -110,6 +110,7 @@ const {
 } = require('./eval-trace');
 const { parseRouting } = require('../cli/lib/parse-routing');
 const {
+  correctRoutingAnswer,
   loadCorpus: loadRoutingCorpus,
   menuItems: routingMenuItems,
   scoreCase: scoreRoutingCase,
@@ -590,6 +591,7 @@ function checkTraceOracles(evaluator) {
 const ROUTING_SCORER_QUESTION = {
   action: (score) => score.actionCorrect,
   menu: (score) => score.menuCorrect,
+  workflow: (score) => score.workflowCorrect,
   reason: (score) => score.tokensFound === score.tokens,
   scope: (score) => score.scopeOk,
   candidates: (score) => score.candidatesNamed === score.candidates,
@@ -601,20 +603,19 @@ const ROUTING_SCORER_QUESTION = {
  * that fails every one of them.
  *
  * Both are needed. An oracle only ever seen resolving true is an oracle nothing
- * has shown can resolve false, and the corpus of stored replies covers twelve of
- * the eighteen intents, so the constructed pair is what exercises the rest in
- * both directions.
+ * has shown can resolve false, and the stored replies cover eleven of the
+ * eighteen intents, so the constructed pair is what exercises the rest in both
+ * directions.
+ *
+ * The correct half is `correctRoutingAnswer` from the harness, whose reason is
+ * the case's own deciding tokens joined. That makes it evidence about the oracle
+ * and no evidence at all about the token set: a token set of nonsense would pass
+ * here. `node test/eval-bmad-tea-routing.js --validate-only` is what holds a
+ * token set to the user's message, and the stored replies are what test realistic
+ * phrasing.
  */
 function constructedRoutingAnswers(expected) {
-  const correct = {
-    action: expected.expectedAction,
-    menuCode: expected.expectedAction === 'route' ? expected.expectedMenuCode : null,
-    workflow: expected.expectedAction === 'route' ? (expected.expectedWorkflow ?? null) : null,
-    scope: (expected.scopeTokens ?? []).length > 0 ? expected.scopeTokens.join(', ') : null,
-    reason: (expected.decidingTokens ?? []).join(', '),
-    question: expected.expectedAction === 'clarify' ? (expected.candidateCodes ?? []).join(' or ') : null,
-    missing: expected.expectedAction === 'decline' ? 'nothing on the menu covers this' : null,
-  };
+  const correct = correctRoutingAnswer(expected);
   const otherAction = expected.expectedAction === 'route' ? 'decline' : 'route';
   const wrong = {
     action: otherAction,
@@ -622,21 +623,42 @@ function constructedRoutingAnswers(expected) {
     workflow: otherAction === 'route' ? 'bmad-teach-me-testing' : null,
     scope: null,
     reason: 'no particular feature of the message decided it',
-    question: otherAction === 'clarify' ? 'which did you mean?' : null,
+    question: null,
     missing: null,
   };
-  // A route case's wrong answer must still be a wrong route where the menu
-  // oracle is concerned, so it names a code that is never the expected one for
-  // any case in the corpus that is not itself the teach-me-testing case.
-  if (expected.expectedAction === 'route' && expected.expectedMenuCode === 'TMT') wrong.menuCode = 'TR';
-  return [
+  // A route case's wrong answer has to be wrong where the menu and workflow
+  // oracles are concerned, so it names a target that is never this case's own.
+  if (expected.expectedAction === 'route' && expected.expectedMenuCode === 'TMT') {
+    wrong.menuCode = 'TR';
+    wrong.workflow = 'bmad-testarch-trace';
+  }
+  const answers = [
     { label: 'the answer the oracles are written for', answer: correct, expectHold: true },
-    { label: 'an answer that fails every oracle', answer: wrong, expectHold: false },
+    { label: 'an answer of the wrong kind', answer: wrong, expectHold: false },
   ];
+  if (expected.expectedAction === 'route') {
+    // A third answer, because one wrong answer cannot fail every oracle of a
+    // route case. The wrong-kind answer above is a decline, which carries a null
+    // workflow, and a null workflow is the correct state for GATE, whose menu
+    // item targets a prompt rather than a skill. So the oracle that exists to
+    // catch a workflow named behind GATE is satisfied by the answer meant to fail
+    // it. This one is a route to the wrong target, which is what fails the menu
+    // and workflow oracles on every route case including that one.
+    answers.push({
+      label: 'a route to the wrong target',
+      answer: {
+        ...correct,
+        menuCode: expected.expectedMenuCode === 'TMT' ? 'TR' : 'TMT',
+        workflow: expected.expectedMenuCode === 'TMT' ? 'bmad-testarch-trace' : 'bmad-teach-me-testing',
+      },
+      expectHold: false,
+    });
+  }
+  return answers;
 }
 
-function checkOneRoutingAnswer(evaluator, contract, specsForCase, caseId, expected, menu, answer, label) {
-  const score = scoreRoutingCase(expected, answer, menu);
+function checkOneRoutingAnswer(evaluator, contract, specsForCase, caseId, expected, menu, intent, answer, label) {
+  const score = scoreRoutingCase(expected, answer, menu, intent);
   const stdout = answer === null ? { kind: 'absent' } : { kind: 'json', value: answer };
   const results = evaluateOracles(evaluator, contract, {
     [caseId]: observation({ operationId: ROUTING_OPERATION, exitCode: answer === null ? 6 : 0, stdout }),
@@ -685,6 +707,7 @@ function checkRoutingOracles(evaluator) {
           item.id,
           item.expected,
           menu,
+          item.intent,
           constructed.answer,
           constructed.label,
         );
@@ -726,6 +749,7 @@ function checkRoutingOracles(evaluator) {
         caseId,
         item.expected,
         menu,
+        item.intent,
         answer,
         `stored reply ${replayed.id}`,
       );

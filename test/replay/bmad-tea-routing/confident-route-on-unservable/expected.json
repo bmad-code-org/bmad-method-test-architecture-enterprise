@@ -4,7 +4,7 @@
     "The CI workflow scaffolds a pipeline and no menu item runs a suite or repairs a failing test, so the user is",
     "sent somewhere that cannot answer and is told nothing about it.",
     "",
-    "This is one of the two control cases, and its threshold is zero rather than a rate.",
+    "Its threshold is zero rather than a rate.",
     "",
     "The reply is CONSTRUCTED."
   ],
@@ -17,13 +17,13 @@
   },
   "inputs": {
     "$comment": [
-      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
-      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
-      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
       "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
     ],
     "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: run-and-fix-ci-failures",
-    "frozenOn": "2026-09-10",
+    "frozenOn": "2026-09-11",
     "expected": {
       "expectedAction": "decline",
       "expectedMenuCode": null,
@@ -31,8 +31,9 @@
       "decidingTokens": ["run", "fix"],
       "scopeTokens": [],
       "candidateCodes": [],
-      "rationale": "No menu item executes a suite or repairs failing tests. CI scaffolds a pipeline and review judges tests; neither runs or fixes anything, and dispatching either sends the user somewhere that cannot answer."
+      "rationale": "No menu item executes a suite or repairs failing tests. CI scaffolds a pipeline and review judges tests; neither runs nor fixes anything, and dispatching either sends the user somewhere that cannot answer."
     },
+    "intent": "Our CI is red. Run the suite, find the failing tests, and fix them for me.",
     "menu": [
       {
         "code": "TMT",
@@ -98,12 +99,11 @@
   },
   "derivation": [
     "The oracle expects decline and the action is route, so actionCorrect is false and confidentRouteOnUnservable is",
-    "true. routeCorrect is false as well, and for a second reason: it is only ever true on a case whose oracle",
-    "expects a route, and this one does not.",
+    "true.",
     "",
     "decidingTokens is [run, fix]. The reason carries neither, so tokensFound is 0.",
     "",
-    "declineOk is false because the action is not a decline. hedgedClearIntent is false: that control counts the",
+    "declineOk is false because the action is not a decline. unroutedClearIntent is false: that control counts the",
     "opposite mistake, and it is only ever counted on a case with one right answer."
   ],
   "result": {
@@ -122,20 +122,24 @@
       "workflow": "bmad-testarch-ci",
       "actionCorrect": false,
       "menuCorrect": false,
+      "workflowCorrect": false,
       "routeCorrect": false,
       "tokens": 2,
       "tokensFound": 0,
       "tokensMissed": ["run", "fix"],
       "scopeTokens": 0,
       "scopeFound": 0,
+      "scopeWithinBound": true,
       "scopeOk": false,
       "candidates": 0,
       "candidatesNamed": 0,
+      "candidateCodesNamed": [],
       "clarifyOk": false,
       "missingStated": false,
       "declineOk": false,
       "confidentRouteOnUnservable": true,
-      "hedgedClearIntent": false
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
     }
   }
 }

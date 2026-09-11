@@ -15,22 +15,23 @@
   },
   "inputs": {
     "$comment": [
-      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
-      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
-      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
       "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
     ],
-    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: better-coverage-for-payments",
-    "frozenOn": "2026-09-10",
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: thin-coverage-on-payments",
+    "frozenOn": "2026-09-11",
     "expected": {
       "expectedAction": "clarify",
       "expectedMenuCode": null,
       "expectedWorkflow": null,
-      "decidingTokens": ["coverage"],
+      "decidingTokens": ["coverage", "thin"],
       "scopeTokens": ["payments"],
       "candidateCodes": ["TD", "TA", "TR"],
-      "rationale": "'Better coverage' is planning it, writing it, or measuring it, and three menu items each own one of those. The scope is named and has to survive the question."
+      "rationale": "Thin coverage is planning it, writing it, or measuring how thin it actually is, and three menu items each own one of those. The feature is named and has to survive the question."
     },
+    "intent": "Coverage on the payments feature is thin and I want that dealt with before the next release.",
     "menu": [
       {
         "code": "TMT",
@@ -97,14 +98,14 @@
   "derivation": [
     "The action is clarify, as the oracle expects.",
     "",
-    "decidingTokens is [coverage] and the reason carries \"coverage\", so tokensFound is 1 of 1.",
+    "decidingTokens is [coverage, thin] and the reason carries both, so tokensFound is 2 of 2.",
     "",
     "candidateCodes is [TD, TA, TR] and the question names each of them twice over, by menu label and by code in",
-    "parentheses, so candidatesNamed is 3 and clarifyOk is true.",
+    "parentheses, so candidatesNamed is 3, candidateCodesNamed lists all three, and clarifyOk is true.",
     "",
-    "scopeTokens is [payments] and the scope reads \"the payments feature\", so scopeOk is true. Scope is scored",
-    "wherever the fixture names one, and not only on a route: a clarification that drops the feature makes the user",
-    "say it again."
+    "scopeTokens is [payments] and the scope reads \"the payments feature\", inside the bound, so scopeOk is true.",
+    "Scope is scored wherever the fixture names one, and not only on a route: a clarification that drops the feature",
+    "makes the user say it again."
   ],
   "result": {
     "answer": {
@@ -112,7 +113,7 @@
       "menuCode": null,
       "workflow": null,
       "scope": "the payments feature",
-      "reason": "better coverage could mean planning it, writing it, or measuring what is already there",
+      "reason": "thin coverage could mean planning it, writing it, or measuring how thin it actually is",
       "question": "For payments, do you want Test Design (TD) to plan it, Test Automation (TA) to write it, or Trace Coverage (TR) to measure it?",
       "missing": null
     },
@@ -122,20 +123,24 @@
       "workflow": null,
       "actionCorrect": true,
       "menuCorrect": false,
+      "workflowCorrect": false,
       "routeCorrect": false,
-      "tokens": 1,
-      "tokensFound": 1,
+      "tokens": 2,
+      "tokensFound": 2,
       "tokensMissed": [],
       "scopeTokens": 1,
       "scopeFound": 1,
+      "scopeWithinBound": true,
       "scopeOk": true,
       "candidates": 3,
       "candidatesNamed": 3,
+      "candidateCodesNamed": ["TD", "TA", "TR"],
       "clarifyOk": true,
       "missingStated": false,
       "declineOk": false,
       "confidentRouteOnUnservable": false,
-      "hedgedClearIntent": false
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
     }
   }
 }

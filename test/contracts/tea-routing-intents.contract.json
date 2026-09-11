@@ -3,11 +3,11 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-routing-intents-behavioral",
-  "sourceSpecDigest": "sha256:b6beb5881657128ece7dc41a3b811ada030c41e6193a35538f399776d2318c70",
+  "sourceSpecDigest": "sha256:070805ac08ec88aefa9ea9dfeb1de107d980f3abdc05ecda95a42f99da7200ed",
   "behaviors": [
     {
       "id": "B-001",
-      "description": "The action returned for epic-risk-before-tests. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence.",
+      "description": "The action returned for epic-risk-before-tests. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for epic-risk-before-tests is a route.",
       "requirementLinks": [
@@ -26,7 +26,7 @@
     },
     {
       "id": "B-002",
-      "description": "The menu code returned for epic-risk-before-tests, against the one item the intent names. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence.",
+      "description": "The menu code returned for epic-risk-before-tests, against the one item the intent names. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for epic-risk-before-tests names menu code TD.",
       "requirementLinks": [
@@ -45,9 +45,28 @@
     },
     {
       "id": "B-003",
-      "description": "The stated reason for epic-risk-before-tests, against the three token(s) the fixture names as the deciding feature. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence.",
+      "description": "The workflow named behind the menu item for epic-risk-before-tests. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for epic-risk-before-tests names workflow bmad-testarch-test-design.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "epic-risk-before-tests/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-003"]
+    },
+    {
+      "id": "B-004",
+      "description": "The stated reason for epic-risk-before-tests, against the two token(s) the fixture names as the deciding feature. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for epic-risk-before-tests names risk, coverage, epic.",
+      "observableSuccessCriterion": "The reason for epic-risk-before-tests names risk, coverage.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -60,13 +79,13 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-003"]
+      "oracles": ["O-004"]
     },
     {
-      "id": "B-004",
-      "description": "The scope carried out of epic-risk-before-tests, against what the intent named. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence.",
+      "id": "B-005",
+      "description": "The scope carried out of epic-risk-before-tests, against what the intent named and against the length of the message it came from. An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
       "severity": "material",
-      "observableSuccessCriterion": "The scope for epic-risk-before-tests still names epic 4.",
+      "observableSuccessCriterion": "The scope for epic-risk-before-tests still names epic 4 and is no longer than half the message.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -79,11 +98,11 @@
           "id": "scope-dropped-on-dispatch"
         }
       ],
-      "oracles": ["O-004"]
+      "oracles": ["O-005"]
     },
     {
-      "id": "B-005",
-      "description": "The action returned for no-framework-yet. There is no framework to expand or review. Nothing else on the menu can run until one exists.",
+      "id": "B-006",
+      "description": "The action returned for no-framework-yet. There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for no-framework-yet is a route.",
       "requirementLinks": [
@@ -98,11 +117,11 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-005"]
+      "oracles": ["O-006"]
     },
     {
-      "id": "B-006",
-      "description": "The menu code returned for no-framework-yet, against the one item the intent names. There is no framework to expand or review. Nothing else on the menu can run until one exists.",
+      "id": "B-007",
+      "description": "The menu code returned for no-framework-yet, against the one item the intent names. There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for no-framework-yet names menu code TF.",
       "requirementLinks": [
@@ -117,13 +136,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-006"]
+      "oracles": ["O-007"]
     },
     {
-      "id": "B-007",
-      "description": "The stated reason for no-framework-yet, against the two token(s) the fixture names as the deciding feature. There is no framework to expand or review. Nothing else on the menu can run until one exists.",
+      "id": "B-008",
+      "description": "The workflow named behind the menu item for no-framework-yet. There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for no-framework-yet names workflow bmad-testarch-framework.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "no-framework-yet/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-008"]
+    },
+    {
+      "id": "B-009",
+      "description": "The stated reason for no-framework-yet, against the two token(s) the fixture names as the deciding feature. There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for no-framework-yet names framework, playwright.",
+      "observableSuccessCriterion": "The reason for no-framework-yet names playwright, cypress.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -136,11 +174,11 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-007"]
+      "oracles": ["O-009"]
     },
     {
-      "id": "B-008",
-      "description": "The action returned for pipeline-quality-gates. The deliverable is pipeline configuration with gates, which is the only menu item that writes CI.",
+      "id": "B-010",
+      "description": "The action returned for pipeline-quality-gates. The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for pipeline-quality-gates is a route.",
       "requirementLinks": [
@@ -155,11 +193,11 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-008"]
+      "oracles": ["O-010"]
     },
     {
-      "id": "B-009",
-      "description": "The menu code returned for pipeline-quality-gates, against the one item the intent names. The deliverable is pipeline configuration with gates, which is the only menu item that writes CI.",
+      "id": "B-011",
+      "description": "The menu code returned for pipeline-quality-gates, against the one item the intent names. The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for pipeline-quality-gates names menu code CI.",
       "requirementLinks": [
@@ -174,13 +212,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-009"]
+      "oracles": ["O-011"]
     },
     {
-      "id": "B-010",
-      "description": "The stated reason for pipeline-quality-gates, against the three token(s) the fixture names as the deciding feature. The deliverable is pipeline configuration with gates, which is the only menu item that writes CI.",
+      "id": "B-012",
+      "description": "The workflow named behind the menu item for pipeline-quality-gates. The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for pipeline-quality-gates names workflow bmad-testarch-ci.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "pipeline-quality-gates/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-012"]
+    },
+    {
+      "id": "B-013",
+      "description": "The stated reason for pipeline-quality-gates, against the two token(s) the fixture names as the deciding feature. The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for pipeline-quality-gates names pipeline, gate, github actions.",
+      "observableSuccessCriterion": "The reason for pipeline-quality-gates names pipeline, quality gate.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -193,11 +250,11 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-010"]
+      "oracles": ["O-013"]
     },
     {
-      "id": "B-011",
-      "description": "The action returned for acceptance-tests-before-code. Criteria exist and the implementation does not. Tests that are meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "id": "B-014",
+      "description": "The action returned for acceptance-tests-before-code. Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for acceptance-tests-before-code is a route.",
       "requirementLinks": [
@@ -212,11 +269,11 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-011"]
+      "oracles": ["O-014"]
     },
     {
-      "id": "B-012",
-      "description": "The menu code returned for acceptance-tests-before-code, against the one item the intent names. Criteria exist and the implementation does not. Tests that are meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "id": "B-015",
+      "description": "The menu code returned for acceptance-tests-before-code, against the one item the intent names. Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for acceptance-tests-before-code names menu code AT.",
       "requirementLinks": [
@@ -231,13 +288,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-012"]
+      "oracles": ["O-015"]
     },
     {
-      "id": "B-013",
-      "description": "The stated reason for acceptance-tests-before-code, against the three token(s) the fixture names as the deciding feature. Criteria exist and the implementation does not. Tests that are meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "id": "B-016",
+      "description": "The workflow named behind the menu item for acceptance-tests-before-code. Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for acceptance-tests-before-code names workflow bmad-testarch-atdd.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "acceptance-tests-before-code/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-016"]
+    },
+    {
+      "id": "B-017",
+      "description": "The stated reason for acceptance-tests-before-code, against the two token(s) the fixture names as the deciding feature. Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for acceptance-tests-before-code names acceptance, fail, implement.",
+      "observableSuccessCriterion": "The reason for acceptance-tests-before-code names acceptance criteria, failing.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -250,13 +326,13 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-013"]
+      "oracles": ["O-017"]
     },
     {
-      "id": "B-014",
-      "description": "The scope carried out of acceptance-tests-before-code, against what the intent named. Criteria exist and the implementation does not. Tests that are meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "id": "B-018",
+      "description": "The scope carried out of acceptance-tests-before-code, against what the intent named and against the length of the message it came from. Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
       "severity": "material",
-      "observableSuccessCriterion": "The scope for acceptance-tests-before-code still names 12.3.",
+      "observableSuccessCriterion": "The scope for acceptance-tests-before-code still names 12.3 and is no longer than half the message.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -269,11 +345,11 @@
           "id": "scope-dropped-on-dispatch"
         }
       ],
-      "oracles": ["O-014"]
+      "oracles": ["O-018"]
     },
     {
-      "id": "B-015",
-      "description": "The action returned for implemented-feature-no-tests. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case and the pair is what separates them.",
+      "id": "B-019",
+      "description": "The action returned for implemented-feature-no-tests. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for implemented-feature-no-tests is a route.",
       "requirementLinks": [
@@ -288,11 +364,11 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-015"]
+      "oracles": ["O-019"]
     },
     {
-      "id": "B-016",
-      "description": "The menu code returned for implemented-feature-no-tests, against the one item the intent names. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case and the pair is what separates them.",
+      "id": "B-020",
+      "description": "The menu code returned for implemented-feature-no-tests, against the one item the intent names. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for implemented-feature-no-tests names menu code TA.",
       "requirementLinks": [
@@ -307,13 +383,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-016"]
+      "oracles": ["O-020"]
     },
     {
-      "id": "B-017",
-      "description": "The stated reason for implemented-feature-no-tests, against the two token(s) the fixture names as the deciding feature. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case and the pair is what separates them.",
+      "id": "B-021",
+      "description": "The workflow named behind the menu item for implemented-feature-no-tests. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for implemented-feature-no-tests names workflow bmad-testarch-automate.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "implemented-feature-no-tests/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-021"]
+    },
+    {
+      "id": "B-022",
+      "description": "The stated reason for implemented-feature-no-tests, against the two token(s) the fixture names as the deciding feature. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for implemented-feature-no-tests names implement, api test.",
+      "observableSuccessCriterion": "The reason for implemented-feature-no-tests names api test, already built.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -326,13 +421,13 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-017"]
+      "oracles": ["O-022"]
     },
     {
-      "id": "B-018",
-      "description": "The scope carried out of implemented-feature-no-tests, against what the intent named. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case and the pair is what separates them.",
+      "id": "B-023",
+      "description": "The scope carried out of implemented-feature-no-tests, against what the intent named and against the length of the message it came from. The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
       "severity": "material",
-      "observableSuccessCriterion": "The scope for implemented-feature-no-tests still names checkout.",
+      "observableSuccessCriterion": "The scope for implemented-feature-no-tests still names checkout and is no longer than half the message.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -345,11 +440,11 @@
           "id": "scope-dropped-on-dispatch"
         }
       ],
-      "oracles": ["O-018"]
+      "oracles": ["O-023"]
     },
     {
-      "id": "B-019",
-      "description": "The action returned for review-existing-tests. The tests exist and the judgment asked for is about how they are written, not about what they cover.",
+      "id": "B-024",
+      "description": "The action returned for review-existing-tests. The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for review-existing-tests is a route.",
       "requirementLinks": [
@@ -364,11 +459,11 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-019"]
+      "oracles": ["O-024"]
     },
     {
-      "id": "B-020",
-      "description": "The menu code returned for review-existing-tests, against the one item the intent names. The tests exist and the judgment asked for is about how they are written, not about what they cover.",
+      "id": "B-025",
+      "description": "The menu code returned for review-existing-tests, against the one item the intent names. The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for review-existing-tests names menu code RV.",
       "requirementLinks": [
@@ -383,13 +478,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-020"]
+      "oracles": ["O-025"]
     },
     {
-      "id": "B-021",
-      "description": "The stated reason for review-existing-tests, against the three token(s) the fixture names as the deciding feature. The tests exist and the judgment asked for is about how they are written, not about what they cover.",
+      "id": "B-026",
+      "description": "The workflow named behind the menu item for review-existing-tests. The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for review-existing-tests names workflow bmad-testarch-test-review.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "review-existing-tests/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-026"]
+    },
+    {
+      "id": "B-027",
+      "description": "The stated reason for review-existing-tests, against the two token(s) the fixture names as the deciding feature. The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for review-existing-tests names quality, review, written.",
+      "observableSuccessCriterion": "The reason for review-existing-tests names spec files, badly written.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -402,11 +516,11 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-021"]
+      "oracles": ["O-027"]
     },
     {
-      "id": "B-022",
-      "description": "The action returned for nfr-evidence-on-hand. The NFR audit's own description gates on implementation evidence existing, and three pieces of it are named in the intent. That is what makes this a route and the bare 'audit our NFRs' a clarify.",
+      "id": "B-028",
+      "description": "The action returned for nfr-evidence-on-hand. Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for nfr-evidence-on-hand is a route.",
       "requirementLinks": [
@@ -421,11 +535,11 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-022"]
+      "oracles": ["O-028"]
     },
     {
-      "id": "B-023",
-      "description": "The menu code returned for nfr-evidence-on-hand, against the one item the intent names. The NFR audit's own description gates on implementation evidence existing, and three pieces of it are named in the intent. That is what makes this a route and the bare 'audit our NFRs' a clarify.",
+      "id": "B-029",
+      "description": "The menu code returned for nfr-evidence-on-hand, against the one item the intent names. Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for nfr-evidence-on-hand names menu code NR.",
       "requirementLinks": [
@@ -440,13 +554,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-023"]
+      "oracles": ["O-029"]
     },
     {
-      "id": "B-024",
-      "description": "The stated reason for nfr-evidence-on-hand, against the three token(s) the fixture names as the deciding feature. The NFR audit's own description gates on implementation evidence existing, and three pieces of it are named in the intent. That is what makes this a route and the bare 'audit our NFRs' a clarify.",
+      "id": "B-030",
+      "description": "The workflow named behind the menu item for nfr-evidence-on-hand. Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for nfr-evidence-on-hand names workflow bmad-testarch-nfr.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "nfr-evidence-on-hand/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-030"]
+    },
+    {
+      "id": "B-031",
+      "description": "The stated reason for nfr-evidence-on-hand, against the three token(s) the fixture names as the deciding feature. Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for nfr-evidence-on-hand names evidence, k6, pen test.",
+      "observableSuccessCriterion": "The reason for nfr-evidence-on-hand names k6, uptime, non-functional.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -459,11 +592,11 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-024"]
+      "oracles": ["O-031"]
     },
     {
-      "id": "B-025",
-      "description": "The action returned for trace-criteria-to-tests. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases.",
+      "id": "B-032",
+      "description": "The action returned for trace-criteria-to-tests. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for trace-criteria-to-tests is a route.",
       "requirementLinks": [
@@ -478,11 +611,11 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-025"]
+      "oracles": ["O-032"]
     },
     {
-      "id": "B-026",
-      "description": "The menu code returned for trace-criteria-to-tests, against the one item the intent names. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases.",
+      "id": "B-033",
+      "description": "The menu code returned for trace-criteria-to-tests, against the one item the intent names. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for trace-criteria-to-tests names menu code TR.",
       "requirementLinks": [
@@ -497,13 +630,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-026"]
+      "oracles": ["O-033"]
     },
     {
-      "id": "B-027",
-      "description": "The stated reason for trace-criteria-to-tests, against the three token(s) the fixture names as the deciding feature. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases.",
+      "id": "B-034",
+      "description": "The workflow named behind the menu item for trace-criteria-to-tests. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for trace-criteria-to-tests names workflow bmad-testarch-trace.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "trace-criteria-to-tests/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-034"]
+    },
+    {
+      "id": "B-035",
+      "description": "The stated reason for trace-criteria-to-tests, against the two token(s) the fixture names as the deciding feature. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for trace-criteria-to-tests names acceptance criteria, cover, gate.",
+      "observableSuccessCriterion": "The reason for trace-criteria-to-tests names covered, ship.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -516,13 +668,13 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-027"]
+      "oracles": ["O-035"]
     },
     {
-      "id": "B-028",
-      "description": "The scope carried out of trace-criteria-to-tests, against what the intent named. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases.",
+      "id": "B-036",
+      "description": "The scope carried out of trace-criteria-to-tests, against what the intent named and against the length of the message it came from. Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
       "severity": "material",
-      "observableSuccessCriterion": "The scope for trace-criteria-to-tests still names epic 5.",
+      "observableSuccessCriterion": "The scope for trace-criteria-to-tests still names epic 5 and is no longer than half the message.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -535,10 +687,10 @@
           "id": "scope-dropped-on-dispatch"
         }
       ],
-      "oracles": ["O-028"]
+      "oracles": ["O-036"]
     },
     {
-      "id": "B-029",
+      "id": "B-037",
       "description": "The action returned for learn-testing-properly. The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for learn-testing-properly is a route.",
@@ -554,10 +706,10 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-029"]
+      "oracles": ["O-037"]
     },
     {
-      "id": "B-030",
+      "id": "B-038",
       "description": "The menu code returned for learn-testing-properly, against the one item the intent names. The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for learn-testing-properly names menu code TMT.",
@@ -573,13 +725,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-030"]
+      "oracles": ["O-038"]
     },
     {
-      "id": "B-031",
+      "id": "B-039",
+      "description": "The workflow named behind the menu item for learn-testing-properly. The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for learn-testing-properly names workflow bmad-teach-me-testing.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "learn-testing-properly/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-039"]
+    },
+    {
+      "id": "B-040",
       "description": "The stated reason for learn-testing-properly, against the two token(s) the fixture names as the deciding feature. The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for learn-testing-properly names learn, fundamental.",
+      "observableSuccessCriterion": "The reason for learn-testing-properly names learn, fundamentals.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -592,11 +763,11 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-031"]
+      "oracles": ["O-040"]
     },
     {
-      "id": "B-032",
-      "description": "The action returned for release-gate-sequence. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null.",
+      "id": "B-041",
+      "description": "The action returned for release-gate-sequence. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
       "severity": "critical",
       "observableSuccessCriterion": "The answer for release-gate-sequence is a route.",
       "requirementLinks": [
@@ -611,11 +782,11 @@
           "id": "intent-answered-with-the-wrong-kind-of-answer"
         }
       ],
-      "oracles": ["O-032"]
+      "oracles": ["O-041"]
     },
     {
-      "id": "B-033",
-      "description": "The menu code returned for release-gate-sequence, against the one item the intent names. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null.",
+      "id": "B-042",
+      "description": "The menu code returned for release-gate-sequence, against the one item the intent names. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
       "severity": "critical",
       "observableSuccessCriterion": "The dispatch for release-gate-sequence names menu code GATE.",
       "requirementLinks": [
@@ -630,13 +801,32 @@
           "id": "wrong-workflow-dispatched"
         }
       ],
-      "oracles": ["O-033"]
+      "oracles": ["O-042"]
     },
     {
-      "id": "B-034",
-      "description": "The stated reason for release-gate-sequence, against the two token(s) the fixture names as the deciding feature. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null.",
+      "id": "B-043",
+      "description": "The workflow named behind the menu item for release-gate-sequence. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The dispatch for release-gate-sequence names no workflow, because its menu item carries a prompt rather than a skill.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "release-gate-sequence/expectedWorkflow"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "menu-item-dispatched-to-the-wrong-target"
+        }
+      ],
+      "oracles": ["O-043"]
+    },
+    {
+      "id": "B-044",
+      "description": "The stated reason for release-gate-sequence, against the two token(s) the fixture names as the deciding feature. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
       "severity": "material",
-      "observableSuccessCriterion": "The reason for release-gate-sequence names release gate, evidence.",
+      "observableSuccessCriterion": "The reason for release-gate-sequence names release gate, order.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -649,13 +839,13 @@
           "id": "reason-not-grounded-in-the-intent"
         }
       ],
-      "oracles": ["O-034"]
+      "oracles": ["O-044"]
     },
     {
-      "id": "B-035",
-      "description": "The scope carried out of release-gate-sequence, against what the intent named. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null.",
+      "id": "B-045",
+      "description": "The scope carried out of release-gate-sequence, against what the intent named and against the length of the message it came from. The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
       "severity": "material",
-      "observableSuccessCriterion": "The scope for release-gate-sequence still names epic 7.",
+      "observableSuccessCriterion": "The scope for release-gate-sequence still names epic 7 and is no longer than half the message.",
       "requirementLinks": [
         {
           "scheme": "tea-eval-ground-truth",
@@ -668,14 +858,14 @@
           "id": "scope-dropped-on-dispatch"
         }
       ],
-      "oracles": ["O-035"]
+      "oracles": ["O-045"]
     }
   ],
   "oracles": [
     {
       "id": "O-001",
       "polarity": "expects-hold",
-      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence.",
+      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -698,7 +888,7 @@
     {
       "id": "O-002",
       "polarity": "expects-hold",
-      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence.",
+      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -721,11 +911,34 @@
     {
       "id": "O-003",
       "polarity": "expects-hold",
-      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence.",
+      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for epic-risk-before-tests.",
+        "negativeDomain": "Any workflow other than bmad-testarch-test-design, including none.",
+        "evidenceTargets": ["/interactions/epic-risk-before-tests/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/epic-risk-before-tests/stdout/workflow"
+          },
+          {
+            "literal": "bmad-testarch-test-design"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "The stated reason for epic-risk-before-tests, against the three token(s) the fixture names as the deciding feature.",
+        "scope": "The stated reason for epic-risk-before-tests, against the two token(s) the fixture names as the deciding feature.",
         "negativeDomain": "A reason that names none of them, which is a reason that did not use the intent.",
         "evidenceTargets": ["/interactions/epic-risk-before-tests/stdout/reason"]
       },
@@ -749,44 +962,49 @@
               }
             ],
             "pattern": "^[\\s\\S]*\\b[Cc][Oo][Vv][Ee][Rr][Aa][Gg][Ee][\\s\\S]*$"
-          },
-          {
-            "op": "regex",
-            "operands": [
-              {
-                "pointer": "/interactions/epic-risk-before-tests/stdout/reason"
-              }
-            ],
-            "pattern": "^[\\s\\S]*\\b[Ee][Pp][Ii][Cc][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-004",
+      "id": "O-005",
       "polarity": "expects-hold",
-      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence.",
+      "commentary": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "regex",
-        "scope": "The scope carried out of epic-risk-before-tests, against what the intent named.",
-        "negativeDomain": "A scope that drops what the user asked about, so the workflow runs against something wider or narrower than the request.",
+        "relation": "all",
+        "scope": "The scope carried out of epic-risk-before-tests, against what the intent named and against the length of the message it came from.",
+        "negativeDomain": "A scope that drops what the user asked about, or one that repeats the whole message, so the workflow runs against something wider or narrower than the request.",
         "evidenceTargets": ["/interactions/epic-risk-before-tests/stdout/scope"]
       },
       "check": {
-        "op": "regex",
+        "op": "all",
         "operands": [
           {
-            "pointer": "/interactions/epic-risk-before-tests/stdout/scope"
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/epic-risk-before-tests/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]*\\b[Ee][Pp][Ii][Cc] 4[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/epic-risk-before-tests/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]{0,99}$"
           }
-        ],
-        "pattern": "^[\\s\\S]*\\b[Ee][Pp][Ii][Cc] 4[\\s\\S]*$"
+        ]
       }
     },
     {
-      "id": "O-005",
+      "id": "O-006",
       "polarity": "expects-hold",
-      "commentary": "There is no framework to expand or review. Nothing else on the menu can run until one exists.",
+      "commentary": "There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -807,9 +1025,9 @@
       }
     },
     {
-      "id": "O-006",
+      "id": "O-007",
       "polarity": "expects-hold",
-      "commentary": "There is no framework to expand or review. Nothing else on the menu can run until one exists.",
+      "commentary": "There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -830,9 +1048,32 @@
       }
     },
     {
-      "id": "O-007",
+      "id": "O-008",
       "polarity": "expects-hold",
-      "commentary": "There is no framework to expand or review. Nothing else on the menu can run until one exists.",
+      "commentary": "There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for no-framework-yet.",
+        "negativeDomain": "Any workflow other than bmad-testarch-framework, including none.",
+        "evidenceTargets": ["/interactions/no-framework-yet/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/no-framework-yet/stdout/workflow"
+          },
+          {
+            "literal": "bmad-testarch-framework"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-009",
+      "polarity": "expects-hold",
+      "commentary": "There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
@@ -850,7 +1091,7 @@
                 "pointer": "/interactions/no-framework-yet/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Ff][Rr][Aa][Mm][Ee][Ww][Oo][Rr][Kk][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Pp][Ll][Aa][Yy][Ww][Rr][Ii][Gg][Hh][Tt][\\s\\S]*$"
           },
           {
             "op": "regex",
@@ -859,15 +1100,15 @@
                 "pointer": "/interactions/no-framework-yet/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Pp][Ll][Aa][Yy][Ww][Rr][Ii][Gg][Hh][Tt][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Cc][Yy][Pp][Rr][Ee][Ss][Ss][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-008",
+      "id": "O-010",
       "polarity": "expects-hold",
-      "commentary": "The deliverable is pipeline configuration with gates, which is the only menu item that writes CI.",
+      "commentary": "The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -888,9 +1129,9 @@
       }
     },
     {
-      "id": "O-009",
+      "id": "O-011",
       "polarity": "expects-hold",
-      "commentary": "The deliverable is pipeline configuration with gates, which is the only menu item that writes CI.",
+      "commentary": "The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -911,13 +1152,36 @@
       }
     },
     {
-      "id": "O-010",
+      "id": "O-012",
       "polarity": "expects-hold",
-      "commentary": "The deliverable is pipeline configuration with gates, which is the only menu item that writes CI.",
+      "commentary": "The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for pipeline-quality-gates.",
+        "negativeDomain": "Any workflow other than bmad-testarch-ci, including none.",
+        "evidenceTargets": ["/interactions/pipeline-quality-gates/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/pipeline-quality-gates/stdout/workflow"
+          },
+          {
+            "literal": "bmad-testarch-ci"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-013",
+      "polarity": "expects-hold",
+      "commentary": "The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "The stated reason for pipeline-quality-gates, against the three token(s) the fixture names as the deciding feature.",
+        "scope": "The stated reason for pipeline-quality-gates, against the two token(s) the fixture names as the deciding feature.",
         "negativeDomain": "A reason that names none of them, which is a reason that did not use the intent.",
         "evidenceTargets": ["/interactions/pipeline-quality-gates/stdout/reason"]
       },
@@ -940,24 +1204,15 @@
                 "pointer": "/interactions/pipeline-quality-gates/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Gg][Aa][Tt][Ee][\\s\\S]*$"
-          },
-          {
-            "op": "regex",
-            "operands": [
-              {
-                "pointer": "/interactions/pipeline-quality-gates/stdout/reason"
-              }
-            ],
-            "pattern": "^[\\s\\S]*\\b[Gg][Ii][Tt][Hh][Uu][Bb] [Aa][Cc][Tt][Ii][Oo][Nn][Ss][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Qq][Uu][Aa][Ll][Ii][Tt][Yy] [Gg][Aa][Tt][Ee][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-011",
+      "id": "O-014",
       "polarity": "expects-hold",
-      "commentary": "Criteria exist and the implementation does not. Tests that are meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "commentary": "Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -978,9 +1233,9 @@
       }
     },
     {
-      "id": "O-012",
+      "id": "O-015",
       "polarity": "expects-hold",
-      "commentary": "Criteria exist and the implementation does not. Tests that are meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "commentary": "Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1001,13 +1256,36 @@
       }
     },
     {
-      "id": "O-013",
+      "id": "O-016",
       "polarity": "expects-hold",
-      "commentary": "Criteria exist and the implementation does not. Tests that are meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "commentary": "Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for acceptance-tests-before-code.",
+        "negativeDomain": "Any workflow other than bmad-testarch-atdd, including none.",
+        "evidenceTargets": ["/interactions/acceptance-tests-before-code/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/acceptance-tests-before-code/stdout/workflow"
+          },
+          {
+            "literal": "bmad-testarch-atdd"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-017",
+      "polarity": "expects-hold",
+      "commentary": "Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "The stated reason for acceptance-tests-before-code, against the three token(s) the fixture names as the deciding feature.",
+        "scope": "The stated reason for acceptance-tests-before-code, against the two token(s) the fixture names as the deciding feature.",
         "negativeDomain": "A reason that names none of them, which is a reason that did not use the intent.",
         "evidenceTargets": ["/interactions/acceptance-tests-before-code/stdout/reason"]
       },
@@ -1021,7 +1299,7 @@
                 "pointer": "/interactions/acceptance-tests-before-code/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Aa][Cc][Cc][Ee][Pp][Tt][Aa][Nn][Cc][Ee][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Aa][Cc][Cc][Ee][Pp][Tt][Aa][Nn][Cc][Ee] [Cc][Rr][Ii][Tt][Ee][Rr][Ii][Aa][\\s\\S]*$"
           },
           {
             "op": "regex",
@@ -1030,45 +1308,50 @@
                 "pointer": "/interactions/acceptance-tests-before-code/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Ff][Aa][Ii][Ll][\\s\\S]*$"
-          },
-          {
-            "op": "regex",
-            "operands": [
-              {
-                "pointer": "/interactions/acceptance-tests-before-code/stdout/reason"
-              }
-            ],
-            "pattern": "^[\\s\\S]*\\b[Ii][Mm][Pp][Ll][Ee][Mm][Ee][Nn][Tt][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Ff][Aa][Ii][Ll][Ii][Nn][Gg][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-014",
+      "id": "O-018",
       "polarity": "expects-hold",
-      "commentary": "Criteria exist and the implementation does not. Tests that are meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
+      "commentary": "Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "regex",
-        "scope": "The scope carried out of acceptance-tests-before-code, against what the intent named.",
-        "negativeDomain": "A scope that drops what the user asked about, so the workflow runs against something wider or narrower than the request.",
+        "relation": "all",
+        "scope": "The scope carried out of acceptance-tests-before-code, against what the intent named and against the length of the message it came from.",
+        "negativeDomain": "A scope that drops what the user asked about, or one that repeats the whole message, so the workflow runs against something wider or narrower than the request.",
         "evidenceTargets": ["/interactions/acceptance-tests-before-code/stdout/scope"]
       },
       "check": {
-        "op": "regex",
+        "op": "all",
         "operands": [
           {
-            "pointer": "/interactions/acceptance-tests-before-code/stdout/scope"
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/acceptance-tests-before-code/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]*\\b12\\.3[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/acceptance-tests-before-code/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]{0,77}$"
           }
-        ],
-        "pattern": "^[\\s\\S]*\\b12\\.3[\\s\\S]*$"
+        ]
       }
     },
     {
-      "id": "O-015",
+      "id": "O-019",
       "polarity": "expects-hold",
-      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case and the pair is what separates them.",
+      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1089,9 +1372,9 @@
       }
     },
     {
-      "id": "O-016",
+      "id": "O-020",
       "polarity": "expects-hold",
-      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case and the pair is what separates them.",
+      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1112,9 +1395,32 @@
       }
     },
     {
-      "id": "O-017",
+      "id": "O-021",
       "polarity": "expects-hold",
-      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case and the pair is what separates them.",
+      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for implemented-feature-no-tests.",
+        "negativeDomain": "Any workflow other than bmad-testarch-automate, including none.",
+        "evidenceTargets": ["/interactions/implemented-feature-no-tests/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/implemented-feature-no-tests/stdout/workflow"
+          },
+          {
+            "literal": "bmad-testarch-automate"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-022",
+      "polarity": "expects-hold",
+      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
@@ -1132,7 +1438,7 @@
                 "pointer": "/interactions/implemented-feature-no-tests/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Ii][Mm][Pp][Ll][Ee][Mm][Ee][Nn][Tt][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Aa][Pp][Ii] [Tt][Ee][Ss][Tt][\\s\\S]*$"
           },
           {
             "op": "regex",
@@ -1141,36 +1447,50 @@
                 "pointer": "/interactions/implemented-feature-no-tests/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Aa][Pp][Ii] [Tt][Ee][Ss][Tt][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Aa][Ll][Rr][Ee][Aa][Dd][Yy] [Bb][Uu][Ii][Ll][Tt][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-018",
+      "id": "O-023",
       "polarity": "expects-hold",
-      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case and the pair is what separates them.",
+      "commentary": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "regex",
-        "scope": "The scope carried out of implemented-feature-no-tests, against what the intent named.",
-        "negativeDomain": "A scope that drops what the user asked about, so the workflow runs against something wider or narrower than the request.",
+        "relation": "all",
+        "scope": "The scope carried out of implemented-feature-no-tests, against what the intent named and against the length of the message it came from.",
+        "negativeDomain": "A scope that drops what the user asked about, or one that repeats the whole message, so the workflow runs against something wider or narrower than the request.",
         "evidenceTargets": ["/interactions/implemented-feature-no-tests/stdout/scope"]
       },
       "check": {
-        "op": "regex",
+        "op": "all",
         "operands": [
           {
-            "pointer": "/interactions/implemented-feature-no-tests/stdout/scope"
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/implemented-feature-no-tests/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]*\\b[Cc][Hh][Ee][Cc][Kk][Oo][Uu][Tt][\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/implemented-feature-no-tests/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]{0,63}$"
           }
-        ],
-        "pattern": "^[\\s\\S]*\\b[Cc][Hh][Ee][Cc][Kk][Oo][Uu][Tt][\\s\\S]*$"
+        ]
       }
     },
     {
-      "id": "O-019",
+      "id": "O-024",
       "polarity": "expects-hold",
-      "commentary": "The tests exist and the judgment asked for is about how they are written, not about what they cover.",
+      "commentary": "The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1191,9 +1511,9 @@
       }
     },
     {
-      "id": "O-020",
+      "id": "O-025",
       "polarity": "expects-hold",
-      "commentary": "The tests exist and the judgment asked for is about how they are written, not about what they cover.",
+      "commentary": "The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1214,13 +1534,36 @@
       }
     },
     {
-      "id": "O-021",
+      "id": "O-026",
       "polarity": "expects-hold",
-      "commentary": "The tests exist and the judgment asked for is about how they are written, not about what they cover.",
+      "commentary": "The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for review-existing-tests.",
+        "negativeDomain": "Any workflow other than bmad-testarch-test-review, including none.",
+        "evidenceTargets": ["/interactions/review-existing-tests/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/review-existing-tests/stdout/workflow"
+          },
+          {
+            "literal": "bmad-testarch-test-review"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-027",
+      "polarity": "expects-hold",
+      "commentary": "The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "The stated reason for review-existing-tests, against the three token(s) the fixture names as the deciding feature.",
+        "scope": "The stated reason for review-existing-tests, against the two token(s) the fixture names as the deciding feature.",
         "negativeDomain": "A reason that names none of them, which is a reason that did not use the intent.",
         "evidenceTargets": ["/interactions/review-existing-tests/stdout/reason"]
       },
@@ -1234,7 +1577,7 @@
                 "pointer": "/interactions/review-existing-tests/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Qq][Uu][Aa][Ll][Ii][Tt][Yy][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Ss][Pp][Ee][Cc] [Ff][Ii][Ll][Ee][Ss][\\s\\S]*$"
           },
           {
             "op": "regex",
@@ -1243,24 +1586,15 @@
                 "pointer": "/interactions/review-existing-tests/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Rr][Ee][Vv][Ii][Ee][Ww][\\s\\S]*$"
-          },
-          {
-            "op": "regex",
-            "operands": [
-              {
-                "pointer": "/interactions/review-existing-tests/stdout/reason"
-              }
-            ],
-            "pattern": "^[\\s\\S]*\\b[Ww][Rr][Ii][Tt][Tt][Ee][Nn][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Bb][Aa][Dd][Ll][Yy] [Ww][Rr][Ii][Tt][Tt][Ee][Nn][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-022",
+      "id": "O-028",
       "polarity": "expects-hold",
-      "commentary": "The NFR audit's own description gates on implementation evidence existing, and three pieces of it are named in the intent. That is what makes this a route and the bare 'audit our NFRs' a clarify.",
+      "commentary": "Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1281,9 +1615,9 @@
       }
     },
     {
-      "id": "O-023",
+      "id": "O-029",
       "polarity": "expects-hold",
-      "commentary": "The NFR audit's own description gates on implementation evidence existing, and three pieces of it are named in the intent. That is what makes this a route and the bare 'audit our NFRs' a clarify.",
+      "commentary": "Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1304,9 +1638,32 @@
       }
     },
     {
-      "id": "O-024",
+      "id": "O-030",
       "polarity": "expects-hold",
-      "commentary": "The NFR audit's own description gates on implementation evidence existing, and three pieces of it are named in the intent. That is what makes this a route and the bare 'audit our NFRs' a clarify.",
+      "commentary": "Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for nfr-evidence-on-hand.",
+        "negativeDomain": "Any workflow other than bmad-testarch-nfr, including none.",
+        "evidenceTargets": ["/interactions/nfr-evidence-on-hand/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/nfr-evidence-on-hand/stdout/workflow"
+          },
+          {
+            "literal": "bmad-testarch-nfr"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-031",
+      "polarity": "expects-hold",
+      "commentary": "Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
@@ -1324,15 +1681,6 @@
                 "pointer": "/interactions/nfr-evidence-on-hand/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Ee][Vv][Ii][Dd][Ee][Nn][Cc][Ee][\\s\\S]*$"
-          },
-          {
-            "op": "regex",
-            "operands": [
-              {
-                "pointer": "/interactions/nfr-evidence-on-hand/stdout/reason"
-              }
-            ],
             "pattern": "^[\\s\\S]*\\b[Kk]6[\\s\\S]*$"
           },
           {
@@ -1342,15 +1690,24 @@
                 "pointer": "/interactions/nfr-evidence-on-hand/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Pp][Ee][Nn] [Tt][Ee][Ss][Tt][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Uu][Pp][Tt][Ii][Mm][Ee][\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/nfr-evidence-on-hand/stdout/reason"
+              }
+            ],
+            "pattern": "^[\\s\\S]*\\b[Nn][Oo][Nn]-[Ff][Uu][Nn][Cc][Tt][Ii][Oo][Nn][Aa][Ll][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-025",
+      "id": "O-032",
       "polarity": "expects-hold",
-      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases.",
+      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1371,9 +1728,9 @@
       }
     },
     {
-      "id": "O-026",
+      "id": "O-033",
       "polarity": "expects-hold",
-      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases.",
+      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1394,13 +1751,36 @@
       }
     },
     {
-      "id": "O-027",
+      "id": "O-034",
       "polarity": "expects-hold",
-      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases.",
+      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for trace-criteria-to-tests.",
+        "negativeDomain": "Any workflow other than bmad-testarch-trace, including none.",
+        "evidenceTargets": ["/interactions/trace-criteria-to-tests/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/trace-criteria-to-tests/stdout/workflow"
+          },
+          {
+            "literal": "bmad-testarch-trace"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-035",
+      "polarity": "expects-hold",
+      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
-        "scope": "The stated reason for trace-criteria-to-tests, against the three token(s) the fixture names as the deciding feature.",
+        "scope": "The stated reason for trace-criteria-to-tests, against the two token(s) the fixture names as the deciding feature.",
         "negativeDomain": "A reason that names none of them, which is a reason that did not use the intent.",
         "evidenceTargets": ["/interactions/trace-criteria-to-tests/stdout/reason"]
       },
@@ -1414,7 +1794,7 @@
                 "pointer": "/interactions/trace-criteria-to-tests/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Aa][Cc][Cc][Ee][Pp][Tt][Aa][Nn][Cc][Ee] [Cc][Rr][Ii][Tt][Ee][Rr][Ii][Aa][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Cc][Oo][Vv][Ee][Rr][Ee][Dd][\\s\\S]*$"
           },
           {
             "op": "regex",
@@ -1423,43 +1803,48 @@
                 "pointer": "/interactions/trace-criteria-to-tests/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Cc][Oo][Vv][Ee][Rr][\\s\\S]*$"
-          },
-          {
-            "op": "regex",
-            "operands": [
-              {
-                "pointer": "/interactions/trace-criteria-to-tests/stdout/reason"
-              }
-            ],
-            "pattern": "^[\\s\\S]*\\b[Gg][Aa][Tt][Ee][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Ss][Hh][Ii][Pp][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-028",
+      "id": "O-036",
       "polarity": "expects-hold",
-      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases.",
+      "commentary": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "regex",
-        "scope": "The scope carried out of trace-criteria-to-tests, against what the intent named.",
-        "negativeDomain": "A scope that drops what the user asked about, so the workflow runs against something wider or narrower than the request.",
+        "relation": "all",
+        "scope": "The scope carried out of trace-criteria-to-tests, against what the intent named and against the length of the message it came from.",
+        "negativeDomain": "A scope that drops what the user asked about, or one that repeats the whole message, so the workflow runs against something wider or narrower than the request.",
         "evidenceTargets": ["/interactions/trace-criteria-to-tests/stdout/scope"]
       },
       "check": {
-        "op": "regex",
+        "op": "all",
         "operands": [
           {
-            "pointer": "/interactions/trace-criteria-to-tests/stdout/scope"
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-criteria-to-tests/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]*\\b[Ee][Pp][Ii][Cc] 5[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/trace-criteria-to-tests/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]{0,70}$"
           }
-        ],
-        "pattern": "^[\\s\\S]*\\b[Ee][Pp][Ii][Cc] 5[\\s\\S]*$"
+        ]
       }
     },
     {
-      "id": "O-029",
+      "id": "O-037",
       "polarity": "expects-hold",
       "commentary": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of.",
       "direction": {
@@ -1482,7 +1867,7 @@
       }
     },
     {
-      "id": "O-030",
+      "id": "O-038",
       "polarity": "expects-hold",
       "commentary": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of.",
       "direction": {
@@ -1505,7 +1890,30 @@
       }
     },
     {
-      "id": "O-031",
+      "id": "O-039",
+      "polarity": "expects-hold",
+      "commentary": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "equality",
+        "scope": "The workflow named behind the menu item for learn-testing-properly.",
+        "negativeDomain": "Any workflow other than bmad-teach-me-testing, including none.",
+        "evidenceTargets": ["/interactions/learn-testing-properly/stdout/workflow"]
+      },
+      "check": {
+        "op": "equality",
+        "operands": [
+          {
+            "pointer": "/interactions/learn-testing-properly/stdout/workflow"
+          },
+          {
+            "literal": "bmad-teach-me-testing"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-040",
       "polarity": "expects-hold",
       "commentary": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of.",
       "direction": {
@@ -1534,15 +1942,15 @@
                 "pointer": "/interactions/learn-testing-properly/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Ff][Uu][Nn][Dd][Aa][Mm][Ee][Nn][Tt][Aa][Ll][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Ff][Uu][Nn][Dd][Aa][Mm][Ee][Nn][Tt][Aa][Ll][Ss][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-032",
+      "id": "O-041",
       "polarity": "expects-hold",
-      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null.",
+      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1563,9 +1971,9 @@
       }
     },
     {
-      "id": "O-033",
+      "id": "O-042",
       "polarity": "expects-hold",
-      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null.",
+      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "equality",
@@ -1586,9 +1994,35 @@
       }
     },
     {
-      "id": "O-034",
+      "id": "O-043",
       "polarity": "expects-hold",
-      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null.",
+      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow named behind the menu item for release-gate-sequence.",
+        "negativeDomain": "Any workflow at all, on a menu item whose target is a prompt rather than a skill.",
+        "evidenceTargets": ["/interactions/release-gate-sequence/stdout/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/release-gate-sequence/stdout/workflow"
+              }
+            ],
+            "pattern": "^[\\s\\S]*\\S[\\s\\S]*$"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-044",
+      "polarity": "expects-hold",
+      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
       "direction": {
         "polarity": "expects-hold",
         "relation": "all",
@@ -1615,30 +2049,44 @@
                 "pointer": "/interactions/release-gate-sequence/stdout/reason"
               }
             ],
-            "pattern": "^[\\s\\S]*\\b[Ee][Vv][Ii][Dd][Ee][Nn][Cc][Ee][\\s\\S]*$"
+            "pattern": "^[\\s\\S]*\\b[Oo][Rr][Dd][Ee][Rr][\\s\\S]*$"
           }
         ]
       }
     },
     {
-      "id": "O-035",
+      "id": "O-045",
       "polarity": "expects-hold",
-      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null.",
+      "commentary": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids.",
       "direction": {
         "polarity": "expects-hold",
-        "relation": "regex",
-        "scope": "The scope carried out of release-gate-sequence, against what the intent named.",
-        "negativeDomain": "A scope that drops what the user asked about, so the workflow runs against something wider or narrower than the request.",
+        "relation": "all",
+        "scope": "The scope carried out of release-gate-sequence, against what the intent named and against the length of the message it came from.",
+        "negativeDomain": "A scope that drops what the user asked about, or one that repeats the whole message, so the workflow runs against something wider or narrower than the request.",
         "evidenceTargets": ["/interactions/release-gate-sequence/stdout/scope"]
       },
       "check": {
-        "op": "regex",
+        "op": "all",
         "operands": [
           {
-            "pointer": "/interactions/release-gate-sequence/stdout/scope"
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/release-gate-sequence/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]*\\b[Ee][Pp][Ii][Cc] 7[\\s\\S]*$"
+          },
+          {
+            "op": "regex",
+            "operands": [
+              {
+                "pointer": "/interactions/release-gate-sequence/stdout/scope"
+              }
+            ],
+            "pattern": "^[\\s\\S]{0,75}$"
           }
-        ],
-        "pattern": "^[\\s\\S]*\\b[Ee][Pp][Ii][Cc] 7[\\s\\S]*$"
+        ]
       }
     }
   ],

@@ -15,13 +15,13 @@
   },
   "inputs": {
     "$comment": [
-      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
-      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
-      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
       "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
     ],
     "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: write-production-code",
-    "frozenOn": "2026-09-10",
+    "frozenOn": "2026-09-11",
     "expected": {
       "expectedAction": "decline",
       "expectedMenuCode": null,
@@ -31,6 +31,7 @@
       "candidateCodes": [],
       "rationale": "Writing production code is outside every item on the menu, and the item that comes closest, ATDD, is defined by not doing it."
     },
+    "intent": "Forget tests for a second. Write the production code for the refund endpoint and I will test it later.",
     "menu": [
       {
         "code": "TMT",
@@ -101,8 +102,7 @@
     "scored, so tokensFound is 1 of 1.",
     "",
     "declineOk needs the right action and a missing field that says something. The field is a sentence, so it",
-    "matches the non-space pattern and declineOk is true. confidentRouteOnUnservable is false, because the action is",
-    "not a route."
+    "matches the non-space pattern, missingStated is true and declineOk with it."
   ],
   "result": {
     "answer": {
@@ -120,20 +120,24 @@
       "workflow": null,
       "actionCorrect": true,
       "menuCorrect": false,
+      "workflowCorrect": false,
       "routeCorrect": false,
       "tokens": 1,
       "tokensFound": 1,
       "tokensMissed": [],
       "scopeTokens": 0,
       "scopeFound": 0,
+      "scopeWithinBound": true,
       "scopeOk": false,
       "candidates": 0,
       "candidatesNamed": 0,
+      "candidateCodesNamed": [],
       "clarifyOk": false,
       "missingStated": true,
       "declineOk": true,
       "confidentRouteOnUnservable": false,
-      "hedgedClearIntent": false
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
     }
   }
 }

@@ -125,26 +125,39 @@ for each of its ground-truth-only keys and for its own bytes before spending a c
 the way the trace harness guards its own.
 
 Ten of the intents have a single right menu item, four are ones where two or more items
-are genuinely close, and four are ones nothing on the menu serves. All three of those
-answers come from Step 8 of `src/agents/bmad-tea/SKILL.md` rather than from anything
-invented for the eval, and every expected menu code is checked against the live
-`customize.toml`, so a menu edit fails the corpus instead of quietly invalidating it.
+are genuinely close, and four are ones nothing on the menu serves. The first two answers
+are Step 8 of `src/agents/bmad-tea/SKILL.md` verbatim. The third is not: Step 8 says to
+continue the conversation when nothing fits and asks for no refusal, so the requirement
+that an unservable intent be declined comes from this suite's own exit condition and the
+prompt states it outright, which is what makes scoring it fair. Every expected menu code
+is checked against the live `customize.toml`, so a menu edit fails the corpus instead of
+quietly invalidating it.
 
-Five metrics and three counts. The metrics are the menu item chosen, whether the stated
+Each ambiguous intent is ambiguous from what the agent is actually shown, which is the
+message plus `SKILL.md` and `customize.toml`. An intent whose second reading only opens
+once you have read a workflow's frontmatter or the knowledge index is not ambiguous to
+the agent, and scoring it as a clarification would measure a fact the agent was never
+given.
+
+Five metrics and four counts. The metrics are the menu item chosen, whether the stated
 reason names the deciding feature of the message, whether the scope the user named
 survives into the dispatch, whether a genuinely ambiguous intent is asked about by name,
-and whether an unservable one is declined with a reason. The counts are the controls and
-two of them are zero: a confident route on an intent nothing serves, and a hedge on an
-intent that has one right answer. They point in opposite directions on purpose, because
-a skill that routes everything and a skill that asks about everything both score well
-against recall alone.
+and whether an unservable one is declined with a reason. Three of the counts are the
+controls and all three are zero: a confident route on an intent nothing serves, a
+confident route on one whose menu items are genuinely close, and a clear intent left
+unrouted. They close the cells recall leaves open, because a skill that routes everything
+and a skill that asks about everything both score well against recall alone.
 
 The stated reason is scored by token containment against a set the fixture declares,
-never by judgment. A reason judged by a model would be a second eval with its own error
+never by judgment, and every token in that set has to be a word of the user's own
+message. The harness refuses one that is not, because a token reachable only from the
+menu row the agent is being scored for choosing can be satisfied without reading the
+message at all. A reason judged by a model would be a second eval with its own error
 rate sitting inside this one, and its disagreements would be indistinguishable from the
-routing failures the suite exists to see. `cli/lib/parse-routing.js` owns the one
-pattern rule, and `tools/generate-contracts.js` writes the same pattern source into the
-contracts, so the oracle and the scorer cannot drift apart.
+routing failures the suite exists to see. `eval-bmad-tea-routing.js` owns the one
+pattern rule, `tools/generate-contracts.js` writes the same pattern sources into the
+contracts, and `cli/lib/parse-routing.js` owns the separate question of how a reply is
+parsed, so the oracle and the scorer cannot drift apart.
 
 The suite is expressed as two contracts rather than one. `eval-quality`'s AD-39
 scripting bound caps an interaction plan at sixteen steps and the corpus is eighteen
@@ -188,8 +201,8 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every case that produces a number was written by hand to be parsed, so a green
 run proves the scorers are deterministic and reproduce history, and proves
-nothing about whether they handle real agent output correctly. Thirty-five of the
-forty cases produce a number and thirty-three of those are constructed. Two carry
+nothing about whether they handle real agent output correctly. Forty-three of the
+forty-four cases produce a number and forty-one of those are constructed. Two carry
 real captured bytes, both borrowed from `fixtures/test-review-cli/`, and both
 score zero recall: their reports document no finding at all. The live runs of
 2026-09-08 produced real numbers for the three suites that existed then, and none
