@@ -31,6 +31,11 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+// The expected count comes from the package through one accessor, which is what
+// turns an arm the package stopped publishing into a failure naming that arm
+// rather than a count comparison against `undefined`.
+const { expectedOutcomeCount } = require('./lib/conformance-counts');
+
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'probe-conformance', 'fixture-command.js');
 
@@ -191,7 +196,7 @@ async function main() {
     },
   };
 
-  const expected = CONFORMANCE_OUTCOME_COUNTS['command-probe'];
+  const expected = expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, 'command-probe');
   const problems = [];
   // In a `finally`, because a throw out of the suite or the renderer would
   // otherwise leave one temporary directory behind per failed invocation.

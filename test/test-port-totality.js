@@ -45,6 +45,8 @@ const path = require('node:path');
 const { probeObservation } = require('./lib/eval-quality-inputs');
 const { cliObservation, probeRequest } = require('./lib/probe-targets');
 
+const { expectedOutcomeCount } = require('./lib/conformance-counts');
+
 const PROJECT_ROOT = path.join(__dirname, '..');
 
 const colors = {
@@ -79,7 +81,14 @@ const PROBE_KINDS = {
  */
 const CONFORMANCE_ARMS = {
   'command-probe': { file: 'test/test-probe-conformance.js' },
-  'environment-probe': { reason: 'the generic arm beside the command-line specialization, not yet run' },
+  // Not deferral. This is the `api` arm, over HTTP: the package names the three
+  // arms `api`, `cli` and `mcp` in dist/testing/probe-conformance.d.ts, its
+  // subject wants denied address classes, a method, a scheme and a redirect
+  // chain, and eval-quality ships no HTTP adapter to run it against. TEA
+  // authorizes no HTTP target, so the arm has no subject, the same way
+  // `mcp-probe` below has none. FR21 is withdrawn in the requirements inventory
+  // with the evidence.
+  'environment-probe': { reason: 'TEA authorizes no HTTP target, so the api arm has no subject to run against' },
   corpus: { reason: 'TEA digests its corpora by hand and has not moved to the shipped corpus adapter' },
   clock: { reason: 'TEA measures elapsed time by hand and has not moved to the shipped clock adapter' },
   'file-system': { reason: 'TEA reads and writes files directly and has not moved to the shipped file-system adapter' },
@@ -253,19 +262,51 @@ async function main() {
     if (entry.file === undefined) continue;
     // Live source only. A commented-out read would otherwise satisfy this while
     // the count beside it was a transcribed literal.
+    //
+    // Two shapes count, and both read the package rather than a literal. The
+    // subscript is the direct one. The accessor in test/lib/conformance-counts.js
+    // is the one every arm should use, because it is what turns an arm the
+    // package stopped publishing into a failure naming that arm; it takes the
+    // registry and the arm name, so the arm is still on the line and this check
+    // still reads as the arm's own.
+    const quoted = String.raw`['"` + '`' + String.raw`]${arm}['"` + '`' + String.raw`]`;
+    const readsCount = new RegExp(String.raw`CONFORMANCE_OUTCOME_COUNTS\[` + quoted + String.raw`\]`);
+    const readsThroughAccessor = new RegExp(String.raw`expectedOutcomeCount\(\s*CONFORMANCE_OUTCOME_COUNTS\s*,\s*` + quoted);
     const reads = fs
       .readFileSync(path.join(PROJECT_ROOT, entry.file), 'utf8')
       .split('\n')
       .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
-      .some((line) =>
-        new RegExp(String.raw`CONFORMANCE_OUTCOME_COUNTS\[['"` + '`' + String.raw`]${arm}['"` + '`' + String.raw`]\]`).test(line),
-      );
+      .some((line) => readsCount.test(line) || readsThroughAccessor.test(line));
     assert(
       reads,
       `${entry.file} reads the "${arm}" expected count from the package`,
       'an arm whose expected count is transcribed rather than read drifts the first time the package adds an assertion',
     );
   }
+  // The accessor's own failure path, driven rather than described. A gate nobody
+  // has seen fire is a gate nobody has tested, and this one exists precisely for
+  // the day the package stops publishing an arm TEA runs, which is a day nobody
+  // will be looking for it.
+  const absent = 'no-such-arm';
+  let named = null;
+  try {
+    expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, absent);
+  } catch (error) {
+    named = error.message;
+  }
+  assert(
+    named !== null && named.includes(`"${absent}"`) && arms.every((arm) => named.includes(arm)),
+    'a conformance count the package does not publish fails with the arm named and the published arms listed',
+    named === null ? 'it returned instead of throwing' : named,
+  );
+  for (const arm of arms) {
+    assert(
+      expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, arm) === CONFORMANCE_OUTCOME_COUNTS[arm],
+      `the accessor returns the published count for the "${arm}" arm`,
+      String(CONFORMANCE_OUTCOME_COUNTS[arm]),
+    );
+  }
+
   for (const declared of Object.keys(CONFORMANCE_ARMS)) {
     assert(
       arms.includes(declared),
