@@ -1302,6 +1302,7 @@ Checked mechanically where possible.
 | Functional requirements defined | 56 |
 | Covered in the FR coverage map | 56 |
 | Assigned to an epic | 56 |
+| Withdrawn, struck in place with the evidence | 1 (FR21) |
 | Stories carrying acceptance criteria | 43 of 43 |
 | Stories in the As a / I want / So that form | 43 of 43 |
 | Stories carrying Given / When / Then criteria | 43 of 43 |
