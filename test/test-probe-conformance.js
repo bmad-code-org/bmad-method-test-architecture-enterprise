@@ -273,7 +273,7 @@ async function main() {
     fs.rmSync(workspace, { recursive: true, force: true });
   }
 
-  const clockExpected = CONFORMANCE_OUTCOME_COUNTS['clock'];
+  const clockExpected = expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, 'clock');
   const clockReport = await runClockPortConformance(clockSubject());
   console.log(formatConformanceReport(clockReport));
   if (clockReport.outcomes.length !== clockExpected) {
