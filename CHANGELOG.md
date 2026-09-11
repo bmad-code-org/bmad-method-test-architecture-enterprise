@@ -140,7 +140,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The NFR command rejects malformed timeout values before parsing, and the NFR eval records deleted evidence as a fixture mutation while preserving other read failures.
+- The NFR command rejects malformed timeout values before parsing, the NFR eval records deleted evidence as a fixture mutation while preserving other read failures, and the eval documentation reports the current contract and replay counts.
 - Six defects in the trace cutover, found by peer review and each verified by executing it.
   Two were mislabels the change itself introduced: an absent waiver register reported every waiver as "not a heading in" a file nobody could open, and an absent live-results file reported every declared blocker as missing from it. Both now report the absence once and stop, which takes a corpus with two missing files from eleven problems, five of them false, to four that are all true.
   A third was the duplicate underneath them: a surviving existence check reported both absences 160 lines earlier, so it was deleted and the port answers at the point of use.
