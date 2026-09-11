@@ -14,7 +14,7 @@
   ],
   "id": "seeded-shape-defects",
   "suite": "test-design",
-  "scorerVersion": 5,
+  "scorerVersion": 7,
   "storedOutput": {
     "origin": "constructed",
     "design": "design.md"
@@ -45,7 +45,19 @@
     "shape gates instead.",
     "",
     "Coverage: four of the five material risks were reported, so four are evaluated. The two whose rows",
-    "cite R-008 and R-009 reach no coverage row at all, so two are satisfied."
+    "cite R-008 and R-009 reach no coverage row at all, so two are satisfied.",
+    "",
+    "AT SCORER VERSION 6",
+    "",
+    "`ordering` carries `flattened`, which is true when every material risk that reached a priority reached",
+    "the same one. A plan like that satisfies every pairwise constraint without ordering anything, so the",
+    "metric reports unmeasurable rather than a perfect score.",
+    "",
+    "AT SCORER VERSION 7",
+    "",
+    "`unscoredRiskTables` records every table that names risks with an `R-NNN` id and states no score. Such a",
+    "table cannot be scored and used to be skipped without a word, so a register split across a scored table",
+    "and an unscored one lost its second half silently. The threshold on the count is zero."
   ],
   "result": {
     "mentions": {
@@ -113,6 +125,7 @@
       "maxRisks": 8,
       "excess": 0
     },
+    "unscoredRiskTables": [],
     "coverage": {
       "evaluated": 4,
       "satisfied": 2,
@@ -133,6 +146,7 @@
       "pairs": 9,
       "resolvable": 3,
       "satisfied": 3,
+      "flattened": true,
       "failures": []
     }
   }

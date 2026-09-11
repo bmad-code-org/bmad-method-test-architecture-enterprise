@@ -221,6 +221,7 @@ const THRESHOLDS = {
   riskLinkResolutionAccuracy: 1,
   priorityOrderingAccuracy: 1,
   coverageMappingAccuracy: 0.8,
+  maxUnscoredRiskTables: 0,
   maxUngroundedRisks: 0,
   maxTopSeverityMissed: 0,
   maxRiskCeilingExcess: 0,
@@ -575,6 +576,23 @@ function validateCorpus(groundTruth) {
         continue;
       }
       if (!matchesGroups(risk.anyOf, example)) problems.push(`${label}: its own matcher does not fire on its own exampleDescription`);
+      // An empty group holds against nothing and an empty token holds against
+      // everything, so either one makes the matcher's verdict meaningless while the
+      // case still scores. Both are refused here rather than left to be noticed by a
+      // full-marks run that measured nothing.
+      if (!Array.isArray(risk.anyOf) || risk.anyOf.length === 0)
+        problems.push(`${label}: declares no token group, so its matcher decides nothing`);
+      for (const [groupIndex, group] of (risk.anyOf ?? []).entries()) {
+        if (!Array.isArray(group) || group.length === 0) {
+          problems.push(`${label}: token group ${groupIndex} is empty, so no row can ever satisfy it`);
+          continue;
+        }
+        for (const token of group) {
+          if (typeof token !== 'string' || token.trim().length === 0) {
+            problems.push(`${label}: token group ${groupIndex} holds an empty token, which matches every description`);
+          }
+        }
+      }
       for (const other of [...material, ...unsupported]) {
         if (other.id === risk.id) continue;
         if (matchesGroups(other.anyOf, example)) {
@@ -886,10 +904,16 @@ function columnIndex(header, names) {
   const exact = header.findIndex((cell) => names.some((name) => cell.toLowerCase() === name.toLowerCase()));
   if (exact !== -1) return exact;
   // Exact equality alone lost a whole register to a decorated header: `| Score (P×I) |`
-  // matched neither `Score` nor `Risk Score`, readRisks skipped the table, and the
-  // run was reported as an environment failure rather than scored. Exact wins where
-  // it applies, so `Risk Link` is never captured by a search for `Risk`.
-  return header.findIndex((cell) => names.some((name) => cell.toLowerCase().includes(name.toLowerCase())));
+  // matched neither `Score` nor `Risk Score`, readRisks skipped the table, and the run
+  // was reported as an environment failure rather than scored.
+  //
+  // The fallback is restricted to names of two words or more. A bare `ID` matched the
+  // substring inside Validation, Evidence and Guidance, and a bare `Level` matched
+  // `Tool / Level` on the QA template's NFR table, so a document with a Score column
+  // and no exact `Risk ID` header would have had an arbitrary column read as its ids
+  // and every value fail a check that gates at 1.
+  const distinctive = names.filter((name) => name.trim().includes(' ') || /[A-Z].*[A-Z]/.test(name));
+  return header.findIndex((cell) => distinctive.some((name) => cell.toLowerCase().includes(name.toLowerCase())));
 }
 
 /**
@@ -910,6 +934,11 @@ function columnIndex(header, names) {
  */
 function scoreBandOf(heading) {
   const text = String(heading ?? '').toLowerCase();
+  // A heading that opens with a risk identifier is that risk's own detail section,
+  // which the template spells `### R-001: {Risk Description} (Score: 6)`. The exact
+  // fallback below would read it as a one-value band and pin every row of any table
+  // beneath it to that single score, and band placement gates at 1.
+  if (/^\s*\**r-\d{3}\b/.test(text)) return null;
   const after = text.indexOf('score');
   if (after === -1) return null;
   // Only the run of text immediately after the word `score` is read. Scanning the
@@ -961,9 +990,22 @@ function integerCell(value) {
  */
 function readRisks(tables) {
   const risks = [];
+  // A table that names risks and states no score is a register this parser cannot
+  // score, and skipping it silently loses the rows in it: a run that put its
+  // high-priority risks in a scored table and its low-priority ones in an unscored
+  // one had the second half vanish with nothing reported. They are counted so the
+  // caller can fail on them.
+  const unscored = [];
   for (const table of tables) {
     const idColumn = columnIndex(table.header, ['Risk ID', 'RiskID', 'ID']);
     const scoreColumn = columnIndex(table.header, ['Score', 'Risk Score']);
+    if (
+      idColumn !== -1 &&
+      scoreColumn === -1 &&
+      table.rows.some((row) => RISK_ID_PATTERN.test(String(row[idColumn] ?? '').toUpperCase()))
+    ) {
+      unscored.push({ headings: table.headings, rows: table.rows.length });
+    }
     if (idColumn === -1 || scoreColumn === -1) continue;
     const categoryColumn = columnIndex(table.header, ['Category', 'Risk Category']);
     const descriptionColumn = columnIndex(table.header, ['Description', 'Risk', 'Summary']);
@@ -987,6 +1029,7 @@ function readRisks(tables) {
       });
     }
   }
+  risks.unscoredTables = unscored;
   return risks;
 }
 
@@ -1046,7 +1089,7 @@ function readDesign(artifact) {
       reason: 'the test design document carries no table with a risk id column and a score column',
     };
   }
-  return { ok: true, design: { risks, coverage: readCoverage(tables), text: artifact.value } };
+  return { ok: true, design: { risks, unscoredTables: risks.unscoredTables ?? [], coverage: readCoverage(tables), text: artifact.value } };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1267,6 +1310,10 @@ function scoreRun(set, design, categories) {
     const ranks = coverage.filter((row) => row.riskIds.includes(rowId) && row.priority !== null).map((row) => PRIORITY_RANK[row.priority]);
     return ranks.length === 0 ? null : Math.min(...ranks);
   };
+  // A plan that files every risk at one priority satisfies `higher <= lower` on every
+  // pair without ordering anything, so the constraint set is trivially met. Two or
+  // more risks reaching a priority, all of them the same one, is an answer the metric
+  // cannot read, and it is reported unmeasurable rather than as a perfect score.
   const orderingChecks = [];
   for (const pair of orderedPairsFor(set)) {
     const higherRow = rowIdFor.get(pair.higher);
@@ -1287,6 +1334,15 @@ function scoreRun(set, design, categories) {
       lowerPriority: `P${lower}`,
     });
   }
+
+  const resolvedPriorities = new Set(
+    material
+      .map((declared) => rowIdFor.get(declared.id))
+      .filter((rowId) => rowId !== undefined)
+      .map((rowId) => priorityFor(rowId))
+      .filter((rank) => rank !== null),
+  );
+  const flattened = resolvedPriorities.size === 1 && orderingChecks.some((check) => check.resolvable);
 
   return {
     set: set.id,
@@ -1309,6 +1365,8 @@ function scoreRun(set, design, categories) {
     ceiling,
     coverageChecks,
     orderingChecks,
+    flattenedPriorities: flattened,
+    unscoredRiskTables: design.unscoredTables ?? [],
   };
 }
 
@@ -1331,6 +1389,8 @@ function signatureOf(scored, mutations) {
     scored.ceiling,
     scored.coverageChecks,
     scored.orderingChecks,
+    scored.flattenedPriorities,
+    scored.unscoredRiskTables,
     mutations,
   ]);
 }
@@ -1662,6 +1722,7 @@ async function main() {
       ungrounded: 0,
       ceilingExcess: 0,
       topSeverityMissed: 0,
+      unscoredTables: 0,
       mutations: 0,
     };
     const recallRatios = [];
@@ -1721,6 +1782,7 @@ async function main() {
         totals.ungrounded += scored.ungrounded.length;
         if (scored.ceiling) totals.ceilingExcess += scored.ceiling.excess;
         totals.topSeverityMissed += scored.grounding.topSeverityMissed;
+        totals.unscoredTables += scored.unscoredRiskTables.length;
 
         // Recall, coverage and ordering are meaned over the runs that can answer
         // them. A set declaring no material risk has no opinion on any of the three,
@@ -1732,7 +1794,9 @@ async function main() {
           coverageRatios.push(ratio(scored.coverageChecks.filter((check) => check.ok).length, scored.coverageChecks.length));
         }
         const resolvable = scored.orderingChecks.filter((check) => check.resolvable);
-        if (resolvable.length > 0) orderingRatios.push(ratio(resolvable.filter((check) => check.ok).length, resolvable.length));
+        if (resolvable.length > 0 && !scored.flattenedPriorities) {
+          orderingRatios.push(ratio(resolvable.filter((check) => check.ok).length, resolvable.length));
+        }
       }
 
       const first = caseScores[0];
@@ -1788,6 +1852,7 @@ async function main() {
       priorityOrderingAccuracy: measured(mean(orderingRatios)),
       coverageMappingAccuracy: measured(mean(coverageRatios)),
       ungroundedRisks: totals.ungrounded,
+      unscoredRiskTables: totals.unscoredTables,
       topSeverityMissed: totals.topSeverityMissed,
       riskCeilingExcess: totals.ceilingExcess,
       // Null rather than 0 on a single repetition: a count of zero reads as measured
@@ -1814,6 +1879,7 @@ async function main() {
       console.log(`  ${label} ${pct(value)}   (threshold ${pct(THRESHOLDS[key])})`);
     }
     console.log(`  ungrounded risks     ${String(totals.ungrounded).padStart(3)}   (max ${THRESHOLDS.maxUngroundedRisks})`);
+    console.log(`  unscored registers   ${String(totals.unscoredTables).padStart(3)}   (max ${THRESHOLDS.maxUnscoredRiskTables})`);
     console.log(`  top-severity missed  ${String(totals.topSeverityMissed).padStart(3)}   (max ${THRESHOLDS.maxTopSeverityMissed})`);
     console.log(`  over the ceiling     ${String(totals.ceilingExcess).padStart(3)}   (max ${THRESHOLDS.maxRiskCeilingExcess})`);
     console.log(`  fixture mutations    ${String(totals.mutations).padStart(3)}   (max ${THRESHOLDS.maxFixtureMutations})`);
@@ -1836,6 +1902,9 @@ async function main() {
       // bar it never met. Unmeasurable is a failure, and it says which metric.
       if (value === null) failures.push(`${key} (unmeasurable)`);
       else if (value < THRESHOLDS[key]) failures.push(key);
+    }
+    if (totals.unscoredTables > THRESHOLDS.maxUnscoredRiskTables) {
+      failures.push(`${totals.unscoredTables} risk table(s) state no score, so their rows were never scored`);
     }
     if (totals.ungrounded > THRESHOLDS.maxUngroundedRisks) {
       failures.push(`${totals.ungrounded} risk(s) the epic rules out in as many words`);

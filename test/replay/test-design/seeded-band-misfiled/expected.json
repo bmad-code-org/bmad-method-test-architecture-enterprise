@@ -10,7 +10,7 @@
   ],
   "id": "seeded-band-misfiled",
   "suite": "test-design",
-  "scorerVersion": 5,
+  "scorerVersion": 7,
   "storedOutput": {
     "origin": "constructed",
     "design": "design.md"
@@ -39,7 +39,19 @@
     "band failure rather than an exemption. `cleanControl` is `ceiling` and both sets declare one, so the",
     "seeded corpus is bounded too. `grounding` carries `topSeverityMissed`, the count of the set's",
     "lowest-ranked risks that went unreported. Material risks are assigned by maximum matching rather than",
-    "first-come, and every row is tested against the exclusions whether or not it matched a material risk."
+    "first-come, and every row is tested against the exclusions whether or not it matched a material risk.",
+    "",
+    "AT SCORER VERSION 6",
+    "",
+    "`ordering` carries `flattened`, which is true when every material risk that reached a priority reached",
+    "the same one. A plan like that satisfies every pairwise constraint without ordering anything, so the",
+    "metric reports unmeasurable rather than a perfect score.",
+    "",
+    "AT SCORER VERSION 7",
+    "",
+    "`unscoredRiskTables` records every table that names risks with an `R-NNN` id and states no score. Such a",
+    "table cannot be scored and used to be skipped without a word, so a register split across a scored table",
+    "and an unscored one lost its second half silently. The threshold on the count is zero."
   ],
   "result": {
     "mentions": {
@@ -88,6 +100,7 @@
       "maxRisks": 8,
       "excess": 0
     },
+    "unscoredRiskTables": [],
     "coverage": {
       "evaluated": 5,
       "satisfied": 5,
@@ -97,6 +110,7 @@
       "pairs": 9,
       "resolvable": 9,
       "satisfied": 9,
+      "flattened": false,
       "failures": []
     }
   }

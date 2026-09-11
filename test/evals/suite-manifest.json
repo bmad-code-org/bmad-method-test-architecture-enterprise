@@ -199,6 +199,7 @@
         "riskLinkResolutionAccuracy": 1,
         "priorityOrderingAccuracy": 1,
         "coverageMappingAccuracy": 0.8,
+        "maxUnscoredRiskTables": 0,
         "maxUngroundedRisks": 0,
         "maxTopSeverityMissed": 0,
         "maxRiskCeilingExcess": 0,

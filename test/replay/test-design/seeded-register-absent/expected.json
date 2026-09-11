@@ -13,7 +13,7 @@
   ],
   "id": "seeded-register-absent",
   "suite": "test-design",
-  "scorerVersion": 5,
+  "scorerVersion": 7,
   "storedOutput": {
     "origin": "constructed",
     "design": "design.md"

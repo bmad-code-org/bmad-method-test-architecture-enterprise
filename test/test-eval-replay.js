@@ -152,6 +152,7 @@ const { scoreCase: scoreRoutingCase, signatureOf: routingSignatureOf } = require
 const {
   readDesign: readTestDesign,
   scoreRun: scoreTestDesignRun,
+  signatureOf: testDesignSignatureOf,
   loadGroundTruth: loadTestDesignGroundTruth,
 } = require('./eval-test-design');
 const { digest, redactArgs } = require('./lib/eval-record');
@@ -209,7 +210,7 @@ const TEST_DESIGN_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-design-e
  * recommendations name, all recomputed from the accepted evidence. No
  * test-review or fragment-selection case moved.
  */
-const SCORER_VERSION = 5;
+const SCORER_VERSION = 7;
 
 const colors = {
   reset: '[0m',
@@ -692,6 +693,59 @@ function checkRecordHygiene() {
  *
  * @param {Array<{id: string, set: string, result: object, scored: object}>} replayed
  */
+/**
+ * Hold the test-design signature to its contract on the stored corpus.
+ *
+ * `maxUnstableCases` cannot be breached by a stored case, because instability is a
+ * property of a pair of repetitions and a stored case is one document. What can be
+ * pinned is the function the gate is built on, and the useful question is not
+ * whether it signs correctly. It is which two genuinely different documents sign
+ * the same.
+ *
+ * Two answers are required and they pull against each other. Every distinction the
+ * scorer makes has to move the signature, or a case that wobbled between two
+ * different scored answers would be called stable. And a change to something the
+ * suite does not score has to leave it alone, or every repetition of a design task
+ * would be called unstable, since an agent rewords a mitigation, an owner and a
+ * requirement on every run.
+ *
+ * The second half is why the collisions this check tolerates are deliberate. A
+ * mitigation, an owner, a requirement's wording and a test count all sign
+ * identically, because none of them is scored. A coverage level does not, because
+ * it is.
+ *
+ * @param {Array<{id: string, scored: object}>} replayed
+ */
+function checkTestDesignSignatures(replayed) {
+  if (replayed.length === 0) return;
+  const mutationBlind = replayed
+    .filter((item) => testDesignSignatureOf(item.scored, 0) === testDesignSignatureOf(item.scored, 1))
+    .map((item) => item.id);
+  assert(
+    mutationBlind.length === 0,
+    'test-design signatures move when a fixture mutation is counted',
+    `unchanged for ${mutationBlind.join(', ')}`,
+  );
+
+  const disagreements = [];
+  for (const [index, left] of replayed.entries()) {
+    for (const right of replayed.slice(index + 1)) {
+      const sameSignature = testDesignSignatureOf(left.scored, 0) === testDesignSignatureOf(right.scored, 0);
+      const sameResult = JSON.stringify(left.result) === JSON.stringify(right.result);
+      if (sameSignature !== sameResult) {
+        disagreements.push(
+          `${left.id} and ${right.id} ${sameSignature ? 'sign alike and score differently' : 'score alike and sign differently'}`,
+        );
+      }
+    }
+  }
+  assert(
+    disagreements.length === 0,
+    'two stored test designs sign identically exactly when their scored results agree',
+    disagreements.join('; '),
+  );
+}
+
 function checkTraceSignatures(replayed) {
   if (replayed.length === 0) return;
   const mutationBlind = replayed.filter((item) => signatureOf(item.scored, 0) === signatureOf(item.scored, 1)).map((item) => item.id);
@@ -823,6 +877,7 @@ function replayTestDesignCase(item, expected, set, categories) {
     },
     ungrounded: scored.ungrounded,
     ceiling: scored.ceiling,
+    unscoredRiskTables: scored.unscoredRiskTables,
     coverage: {
       evaluated: scored.coverageChecks.length,
       satisfied: scored.coverageChecks.filter((check) => check.ok).length,
@@ -834,6 +889,7 @@ function replayTestDesignCase(item, expected, set, categories) {
       pairs: scored.orderingChecks.length,
       resolvable: resolvable.length,
       satisfied: resolvable.filter((check) => check.ok).length,
+      flattened: scored.flattenedPriorities,
       failures: resolvable
         .filter((check) => !check.ok)
         .map((check) => ({
@@ -941,7 +997,19 @@ function replayCase(item, expected, context) {
             'updated with it. --accept will not do this one.',
         };
       }
-      return { observed: replayTestDesignCase(item, expected, set, context.testDesignCategories) };
+      const observed = replayTestDesignCase(item, expected, set, context.testDesignCategories);
+      if (!observed.unmeasurable) {
+        const read = readTestDesign({
+          kind: 'text',
+          value: fs.readFileSync(path.join(item.directory, expected.storedOutput?.design ?? 'design.md'), 'utf8'),
+        });
+        context.testDesignReplayed.push({
+          id: item.id,
+          result: observed,
+          scored: scoreTestDesignRun(set, read.design, context.testDesignCategories),
+        });
+      }
+      return { observed };
     }
     default: {
       return { failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection or trace` };
@@ -968,6 +1036,7 @@ function main(argv) {
   const testDesignGroundTruth = readJson(TEST_DESIGN_GROUND_TRUTH, 'test-design ground truth');
   const testDesignSets = new Map((testDesignGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
   const testDesignCategories = new Set(testDesignGroundTruth.riskCategories ?? []);
+  const testDesignReplayed = [];
   const cases = findCases();
 
   // A mistyped case id used to be a silent no-op that exited 0, which reads as
@@ -1009,6 +1078,7 @@ function main(argv) {
       testDesignGroundTruth,
       testDesignSets,
       testDesignCategories,
+      testDesignReplayed,
     });
     if ('failure' in replayed) {
       assert(false, item.id, replayed.failure);
@@ -1062,6 +1132,7 @@ function main(argv) {
     assert(false, item.id, detail);
   }
 
+  checkTestDesignSignatures(testDesignReplayed);
   checkTraceSignatures(traceReplayed);
   checkRoutingSignatures(routingReplayed);
   checkRecordHygiene();
