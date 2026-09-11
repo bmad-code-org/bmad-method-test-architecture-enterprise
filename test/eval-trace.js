@@ -138,6 +138,39 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * `eval-quality`'s file-system port declares two methods, `readFile` and
+ * `writeFile`, each a byte-level operation at a path. This file made 37 direct
+ * `fs` calls. Twelve became port calls, seven existence checks were deleted
+ * because the read each one guarded now answers absence itself, and the
+ * seventeen below stay. They stay for three different reasons, and the
+ * difference is worth stating rather than filing all of them under one:
+ *
+ * - Five existence checks the port has no method for, counted as call sites
+ *   rather than as declarations, because one of them covers three. Two ask about
+ *   a directory, which the port cannot read at all: the stray `test-artifacts` a
+ *   clean set must not have, and the workflow directory. Two ask about a file,
+ *   the ground truth at pre-flight and the staged artifact names, and the port
+ *   could answer those by reading every byte to learn a boolean, which is a
+ *   different operation with a different cost. The fifth is the declaration loop,
+ *   one call over `testRoot`, `sourceRoot` and `oracle.document`, so it is two
+ *   directory questions and a file question at one site.
+ * - One directory walk and its guard, which enumerate a staged tree.
+ * - Ten lifecycle calls: one `mkdtemp`, four `mkdir`, two `copyFile` and three
+ *   `rm` that create and remove the staged workspace. Eight are directory
+ *   operations the port has no method for. The two `copyFile` calls are not: a
+ *   copy is a byte read followed by a byte write, and what stops them is
+ *   `test/lib/file-system-port.js` publishing `readBytes` with no `writeBytes`
+ *   beside it, so a copy would round-trip a file's bytes through UTF-8 to reach
+ *   a port that never needed the text. That is a wrapper omission rather than a
+ *   port limit, and saying which is the point of this list.
+ *
+ * Every read of a file's contents and the one write of one go through
+ * `test/lib/file-system-port.js`, and `npm run test:file-system-port` is what
+ * makes that falsifiable rather than asserted.
+ */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -147,6 +180,7 @@ const { failureClassForExit } = require('../cli/trace-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const { UNRESOLVABLE_MEMBER, loadCorpus } = require('./lib/corpus-port');
+const { readJson, readText, writeText } = require('./lib/file-system-port');
 const {
   digest,
   digestFiles,
@@ -508,15 +542,25 @@ function parseArgs(argv) {
 /**
  * Parse ground-truth.json.
  *
- * @returns {object|null} Null when the file is missing or unparseable, so the caller
- *   can report that as an environment failure rather than crash inside a reporter.
+ * The existence check this used to open with is gone rather than converted: the
+ * port answers absence, so asking first was a second reading of the same
+ * question with a window between them.
+ *
+ * @returns {Promise<object|null>} Null when the file is missing or unparseable, so the
+ *   caller can report that as an environment failure rather than crash inside a reporter.
  */
-function loadGroundTruth() {
-  if (!fs.existsSync(GROUND_TRUTH)) return null;
+async function loadGroundTruth() {
   try {
-    return JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
-  } catch {
-    return null;
+    const read = await readJson(GROUND_TRUTH);
+    return read.present ? read.value : null;
+  } catch (error) {
+    // A parse failure only. The catch used to swallow every class the read can
+    // raise, so a permission error, a directory in place of the file, an aborted
+    // signal or a failed adapter import all reported as "missing or not valid
+    // JSON": the caller was told about the corpus when the fault was the tree or
+    // the install.
+    if (error instanceof SyntaxError) return null;
+    throw error;
   }
 }
 
@@ -667,10 +711,13 @@ function expectedRejectedEvidence(set) {
 /* -------------------------------------------------------------------------- */
 
 /** Line count of a corpus-relative fixture file, or null when it does not exist. */
-function fixtureLineCount(relative) {
-  const absolute = path.join(FIXTURE_ROOT, relative);
-  if (!fs.existsSync(absolute)) return null;
-  return fs.readFileSync(absolute, 'utf8').split('\n').length;
+async function fixtureLineCount(relative) {
+  // An empty path joins to the fixture root itself, which is a directory: the
+  // wrapper's empty-path guard never sees it, and the read fails with `EISDIR`
+  // where the caller wanted "cites nothing, which does not exist".
+  if (typeof relative !== 'string' || relative.length === 0) return null;
+  const read = await readText(path.join(FIXTURE_ROOT, relative));
+  return read.present ? read.text.split('\n').length : null;
 }
 
 /** The heading text of one markdown line, or null when the line is not a heading. */
@@ -679,10 +726,65 @@ function headingText(line) {
   return match ? match[1].replaceAll(/[#*`]/g, '').trim() : null;
 }
 
-/** Every markdown heading text in a file, for checking a citation's named section. */
-function headingsOf(absolute) {
+/**
+ * Every markdown heading text in a file's contents.
+ *
+ * Takes the text rather than the path, because the one caller has already read
+ * the file to count its lines: reading it a second time is the same question
+ * twice with a window in between, which is the argument this whole change is
+ * built on.
+ */
+/**
+ * One file's text for the validator, or null with the reason recorded.
+ *
+ * Absence, a directory, a permission error and a path with a file in the middle
+ * of it are all things the corpus can be wrong about, and this function's
+ * callers exist to report them. The port distinguishes them and this turns each
+ * into a problem rather than a throw out of the validator.
+ *
+ * @param {string} absolute
+ * @param {string} label What to call the file in the message, in the caller's own terms.
+ * @param {string[]} problems
+ * @returns {Promise<{present: true, text: string}|null>}
+ */
+async function readOrProblem(absolute, label, problems) {
+  try {
+    const read = await readText(absolute);
+    if (read.present) return read;
+    problems.push(`${label} does not exist`);
+  } catch (error) {
+    problems.push(`${label} could not be read: ${error?.cause?.code ?? error?.code ?? error?.message}`);
+  }
+  return null;
+}
+
+/**
+ * One file's parsed JSON for the validator, or null with the reason recorded.
+ *
+ * A file that is there and malformed is a different finding from a file that is
+ * not there, and neither is a crash: `readJson` lets a parse failure propagate
+ * by design, and the validator is the one caller that has to report it rather
+ * than raise it.
+ *
+ * @param {string} absolute
+ * @param {string} label
+ * @param {string[]} problems
+ * @returns {Promise<object|null>}
+ */
+async function readJsonOrProblem(absolute, label, problems) {
+  const read = await readOrProblem(absolute, label, problems);
+  if (read === null) return null;
+  try {
+    return JSON.parse(read.text);
+  } catch (error) {
+    problems.push(`${label} is not valid JSON: ${error.message}`);
+    return null;
+  }
+}
+
+function headingsIn(text) {
   const headings = new Set();
-  for (const line of fs.readFileSync(absolute, 'utf8').split('\n')) {
+  for (const line of text.split('\n')) {
     const text = headingText(line);
     if (text) headings.add(text);
   }
@@ -717,9 +819,9 @@ function sectionRange(lines, section) {
  * ground truth itself says to prefer the section name when the lines drift.
  *
  * @param {object} groundTruth
- * @returns {{problems: string[], notices: string[]}}
+ * @returns {Promise<{problems: string[], notices: string[]}>}
  */
-function validateCorpus(groundTruth) {
+async function validateCorpus(groundTruth) {
   const problems = [];
   const notices = [];
   const tolerance = groundTruth.evidenceLineTolerance;
@@ -737,12 +839,14 @@ function validateCorpus(groundTruth) {
   // and drifts whenever a step file is edited, which is a notice rather than a failure.
   for (const [key, citation] of Object.entries(groundTruth.skillRuleCitations ?? {})) {
     const absolute = path.join(PROJECT_ROOT, citation.file);
-    if (!fs.existsSync(absolute)) {
-      problems.push(`skillRuleCitations.${key}: ${citation.file} does not exist`);
-      continue;
-    }
-    const lines = fs.readFileSync(absolute, 'utf8').split('\n');
-    if (citation.section && !headingsOf(absolute).has(citation.section)) {
+    // Unreadable is reported rather than thrown. The port answers absence and
+    // raises everything else, and a validator whose job is reporting what is
+    // wrong with the corpus must not crash on a citation naming a directory, a
+    // file it cannot read, or a path with a file in the middle of it.
+    const cited = await readOrProblem(absolute, `skillRuleCitations.${key}: ${citation.file}`, problems);
+    if (cited === null) continue;
+    const lines = cited.text.split('\n');
+    if (citation.section && !headingsIn(cited.text).has(citation.section)) {
       problems.push(`skillRuleCitations.${key}: ${citation.file} has no section titled "${citation.section}"`);
       continue;
     }
@@ -803,13 +907,6 @@ function validateCorpus(groundTruth) {
       }
       if (!fs.existsSync(path.join(FIXTURE_ROOT, relative))) problems.push(`${label}: ${field} ${relative} does not exist`);
     }
-    for (const [field, relative] of [
-      ['liveResultsFile', set.liveResultsFile],
-      ['waiverRegister', set.waiverRegister],
-    ]) {
-      const absolute = relative ? path.join(FIXTURE_ROOT, relative) : null;
-      if (relative && !fs.existsSync(absolute)) problems.push(`${label}: ${field} ${relative} does not exist`);
-    }
 
     // A clean set that grew a test-artifacts directory would hand the control run a
     // waiver register and a live file, which is the failure the two-workspace design
@@ -841,17 +938,17 @@ function validateCorpus(groundTruth) {
           // A live entry names a record id instead of a span, so it is checked against
           // the results file the set declares.
           const liveFile = set.liveResultsFile ? path.join(FIXTURE_ROOT, set.liveResultsFile) : null;
-          if (!liveFile || !fs.existsSync(liveFile)) {
+          const parsed = liveFile === null ? null : await readJsonOrProblem(liveFile, `${criterionLabel}: liveResultsFile`, []);
+          if (parsed === null) {
             problems.push(`${criterionLabel}: names live record ${entry.recordId} but the set declares no readable live results file`);
             continue;
           }
-          const parsed = JSON.parse(fs.readFileSync(liveFile, 'utf8'));
           if (!(parsed.results ?? []).some((record) => record.id === entry.recordId)) {
             problems.push(`${criterionLabel}: live record ${entry.recordId} is not in ${set.liveResultsFile}`);
           }
           continue;
         }
-        const lineCount = fixtureLineCount(entry.file);
+        const lineCount = await fixtureLineCount(entry.file);
         if (lineCount === null) {
           problems.push(`${criterionLabel}: cites ${entry.file}, which does not exist`);
           continue;
@@ -964,9 +1061,17 @@ function validateCorpus(groundTruth) {
 
     // Waiver expectations are field reads against the register the set declares.
     if (set.waiverRegister) {
-      const register = fs.readFileSync(path.join(FIXTURE_ROOT, set.waiverRegister), 'utf8');
+      const registerRead = await readOrProblem(
+        path.join(FIXTURE_ROOT, set.waiverRegister),
+        `${label}: waiverRegister ${set.waiverRegister}`,
+        problems,
+      );
+      const register = registerRead?.text ?? '';
       for (const waiver of [...(set.expectedWaiverHandling?.valid ?? []), ...(set.expectedWaiverHandling?.invalid ?? [])]) {
-        if (!new RegExp(`^##\\s+${waiver.id}:`, 'm').test(register)) {
+        // Only when there is a register to look in. An absent one is reported
+        // once above; saying a heading is missing from a file that does not
+        // exist is a second message that asserts something false.
+        if (registerRead !== null && !new RegExp(`^##\\s+${waiver.id}:`, 'm').test(register)) {
           problems.push(`${label}: expectedWaiverHandling names ${waiver.id}, which is not a heading in ${set.waiverRegister}`);
         }
         if (!(set.criteria ?? []).some((item) => item.id === waiver.waives)) {
@@ -994,16 +1099,26 @@ function validateCorpus(groundTruth) {
 
     // Live expectations are counts over the records the results file carries.
     if (set.liveResultsFile) {
-      const parsed = JSON.parse(fs.readFileSync(path.join(FIXTURE_ROOT, set.liveResultsFile), 'utf8'));
-      const declaredBlockers = set.expectedLiveEvidence?.expectedBlockers ?? [];
-      if (declaredBlockers.length !== (parsed.results ?? []).length) {
-        problems.push(
-          `${label}: expects ${declaredBlockers.length} live blocker(s) from a file carrying ${(parsed.results ?? []).length} record(s)`,
-        );
-      }
-      for (const blocker of declaredBlockers) {
-        if (!(parsed.results ?? []).some((record) => record.id === blocker.id)) {
-          problems.push(`${label}: expects a blocker for live record ${blocker.id}, which the results file does not carry`);
+      const liveRead = await readJsonOrProblem(
+        path.join(FIXTURE_ROOT, set.liveResultsFile),
+        `${label}: liveResultsFile ${set.liveResultsFile}`,
+        problems,
+      );
+      // An absent file is reported as itself, once, and the counts below are not
+      // attempted. Before the port answered absence this read threw `ENOENT` out
+      // of a validator whose whole job is to report what is wrong with the
+      // corpus; substituting an empty record set instead would report every
+      // declared blocker as missing from a file nobody could open.
+      if (liveRead !== null) {
+        const records = liveRead.results ?? [];
+        const declaredBlockers = set.expectedLiveEvidence?.expectedBlockers ?? [];
+        if (declaredBlockers.length !== records.length) {
+          problems.push(`${label}: expects ${declaredBlockers.length} live blocker(s) from a file carrying ${records.length} record(s)`);
+        }
+        for (const blocker of declaredBlockers) {
+          if (!records.some((record) => record.id === blocker.id)) {
+            problems.push(`${label}: expects a blocker for live record ${blocker.id}, which the results file does not carry`);
+          }
         }
       }
     } else if (set.expectedLiveEvidence?.present !== false) {
@@ -1145,6 +1260,21 @@ function configYaml() {
  */
 async function stageWorkspace(set) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-trace-eval-'));
+  try {
+    return await stageInto(dir, set);
+  } catch (error) {
+    // Everything after the `mkdtemp` is inside this, because a throw anywhere in
+    // staging returns no `dir` for the caller's `finally` to clean up and leaves
+    // the tree behind. The window used to be the copy loop's `ENOSPC`; it now
+    // also holds a failed adapter import, any fault the port raises, and the
+    // wrapper's own path refusal.
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+/** The staging itself, in a directory the caller owns and removes on any throw. */
+async function stageInto(dir, set) {
   const projectDir = path.join(dir, projectRootOf(set));
   const setRoot = path.join(FIXTURE_ROOT, set.root);
 
@@ -1157,7 +1287,7 @@ async function stageWorkspace(set) {
   // with it; the clean set gets the directory empty, which is what it must have.
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
   fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  fs.writeFileSync(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml(), 'utf8');
+  await writeText(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml());
 
   for (const relative of filesUnder(SKILL_ROOT)) {
     const target = path.join(dir, 'skill', relative);
@@ -1174,21 +1304,9 @@ async function stageWorkspace(set) {
   // measurement. Left as null it would compare equal to a null post-run digest
   // and report every case as unmutated, which is the silent green this whole
   // comparison exists to prevent.
-  //
-  // The directory is removed on the way out, because a throw here returns no
-  // `dir` for the caller's `finally` to clean up and every failed attempt would
-  // leave one behind.
-  let corpusDigest;
-  try {
-    corpusDigest = await digestTree(projectDir, corpusFiles);
-    if (corpusDigest === null) {
-      throw new Error(
-        `the staged workspace at ${projectDir} holds ${corpusFiles.length} corpus member(s) the corpus port could not resolve`,
-      );
-    }
-  } catch (error) {
-    fs.rmSync(dir, { recursive: true, force: true });
-    throw error;
+  const corpusDigest = await digestTree(projectDir, corpusFiles);
+  if (corpusDigest === null) {
+    throw new Error(`the staged workspace at ${projectDir} holds ${corpusFiles.length} corpus member(s) the corpus port could not resolve`);
   }
   return { dir, projectDir, corpusFiles, corpusDigest };
 }
@@ -1200,19 +1318,37 @@ async function stageWorkspace(set) {
  * path is named for the ground truth, no staged file carries its bytes, and no staged
  * file carries a key that appears only in it.
  *
+ * An empty walk is a problem rather than a pass. `filesUnder` answers `[]` for a
+ * directory that does not exist as readily as for one that is empty, and this
+ * check is the only guarantee that the agent was not handed the answers, so
+ * reporting a clean workspace it never opened is the worst thing it could do.
+ *
+ * A staged file that vanished between the walk and the read is reported too. It
+ * contributed an empty string until now, which is the same silence one file at a
+ * time.
+ *
  * @param {string} dir Workspace root.
- * @returns {string[]} Problems, empty when the workspace is clean.
+ * @returns {Promise<string[]>} Problems, empty when the workspace is clean.
  */
-function assertGroundTruthAbsent(dir) {
+async function assertGroundTruthAbsent(dir) {
   const problems = [];
-  const groundTruthBytes = fs.existsSync(GROUND_TRUTH) ? fs.readFileSync(GROUND_TRUTH, 'utf8') : null;
-  for (const relative of filesUnder(dir)) {
+  const groundTruthBytes = (await readText(GROUND_TRUTH)).text;
+  const staged = filesUnder(dir);
+  if (staged.length === 0) {
+    return [`the staged workspace at ${dir} holds no files, so nothing about the ground truth was checked`];
+  }
+  for (const relative of staged) {
     if (path.basename(relative) === 'ground-truth.json') {
       problems.push(`staged workspace contains ${relative}`);
       continue;
     }
-    const text = fs.readFileSync(path.join(dir, relative), 'utf8');
-    if (groundTruthBytes && text === groundTruthBytes) {
+    const read = await readText(path.join(dir, relative));
+    if (!read.present) {
+      problems.push(`staged file ${relative} disappeared between the walk and the read, so it was not checked`);
+      continue;
+    }
+    const text = read.text;
+    if (groundTruthBytes !== null && text === groundTruthBytes) {
       problems.push(`staged file ${relative} carries the ground truth verbatim`);
       continue;
     }
@@ -1311,10 +1447,10 @@ function caseIndex(sets) {
  * `caseCount` against the length of this, the same way it checks its thresholds
  * against THRESHOLDS.
  *
- * @returns {string[]}
+ * @returns {Promise<string[]>}
  */
-function caseIds() {
-  return (loadGroundTruth()?.fixtureSets ?? []).map((set) => set.id);
+async function caseIds() {
+  return ((await loadGroundTruth())?.fixtureSets ?? []).map((set) => set.id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1358,17 +1494,20 @@ function summaryFromArtifact(artifact) {
  * read through summaryFromArtifact, so a stored replay case and a live observation
  * go through one reader.
  *
+ * Absent, empty and malformed are three outcomes rather than one. The port
+ * answers absence, an empty file parses as no JSON and reads back as text, and
+ * the artifact reader decides what each means.
+ *
  * @param {string} projectDir
- * @returns {{ok: true, summary: object}|{ok: false, failureClass: string, reason: string}}
+ * @returns {Promise<{ok: true, summary: object}|{ok: false, failureClass: string, reason: string}>}
  */
-function readSummary(projectDir) {
-  const summaryPath = path.join(projectDir, 'test-artifacts', 'e2e-trace-summary.json');
-  if (!fs.existsSync(summaryPath)) return summaryFromArtifact({ kind: 'absent' });
-  const text = fs.readFileSync(summaryPath, 'utf8');
+async function readSummary(projectDir) {
+  const read = await readText(path.join(projectDir, 'test-artifacts', 'e2e-trace-summary.json'));
+  if (!read.present) return summaryFromArtifact({ kind: 'absent' });
   try {
-    return summaryFromArtifact({ kind: 'json', value: JSON.parse(text) });
+    return summaryFromArtifact({ kind: 'json', value: JSON.parse(read.text) });
   } catch {
-    return summaryFromArtifact({ kind: 'text', value: text });
+    return summaryFromArtifact({ kind: 'text', value: read.text });
   }
 }
 
@@ -1489,10 +1628,9 @@ function parseMatrix(text, set) {
 }
 
 /** The matrix as a file on disk, for a stored replay case; a live run reads it off the observation. */
-function readMatrix(projectDir, set) {
-  const matrixPath = path.join(projectDir, 'test-artifacts', 'traceability-matrix.md');
-  if (!fs.existsSync(matrixPath)) return null;
-  return parseMatrix(fs.readFileSync(matrixPath, 'utf8'), set);
+async function readMatrix(projectDir, set) {
+  const read = await readText(path.join(projectDir, 'test-artifacts', 'traceability-matrix.md'));
+  return read.present ? parseMatrix(read.text, set) : null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1952,7 +2090,7 @@ function runnerOptions(options) {
 async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
   const workspace = await stageWorkspace(set);
   try {
-    const leaked = assertGroundTruthAbsent(workspace.dir);
+    const leaked = await assertGroundTruthAbsent(workspace.dir);
     if (leaked.length > 0) {
       return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
     }
@@ -2167,7 +2305,7 @@ async function main() {
   console.log('tea trace eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const groundTruth = loadGroundTruth();
+  const groundTruth = await loadGroundTruth();
   if (!groundTruth) {
     console.error(`${colors.red}eval: ground truth at ${GROUND_TRUTH} is missing or not valid JSON${colors.reset}`);
     await finish({
@@ -2186,7 +2324,7 @@ async function main() {
     await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
   }
 
-  const { problems, notices } = validateCorpus(groundTruth);
+  const { problems, notices } = await validateCorpus(groundTruth);
   for (const notice of notices) console.log(`  ${colors.yellow}drift${colors.reset} ${notice}`);
   if (problems.length > 0) {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
@@ -2209,33 +2347,48 @@ async function main() {
     // workspace is the measurement's validity, and a check that only runs when a model
     // runs is a check nobody runs.
     for (const set of sets) {
+      // `finish` ends in `process.exit`, which terminates without unwinding, so
+      // a call to it inside the `try` below would skip the `finally` and leave
+      // the staged tree on disk. Every one of them did: nine were found in the
+      // system temporary directory, seven from one day. So the checks record
+      // what they found, the workspace is removed, and the reporting happens
+      // after.
       const workspace = await stageWorkspace(set);
+      let refusal = null;
       try {
         const leaked = [
-          ...assertGroundTruthAbsent(workspace.dir),
+          ...(await assertGroundTruthAbsent(workspace.dir)),
           ...GROUND_TRUTH_ONLY_TOKENS.filter((token) => buildPrompt(set).includes(token)).map(
             (token) => `prompt carries the ground-truth-only key "${token}"`,
           ),
         ];
         if (leaked.length > 0) {
-          console.error(`${colors.red}eval: ${set.id} would hand the agent the answers:${colors.reset}`);
-          for (const problem of leaked) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
-          await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+          refusal = { headline: `eval: ${set.id} would hand the agent the answers:`, problems: leaked };
+        } else {
+          const artifacts = path.join(workspace.projectDir, 'test-artifacts');
+          // Each name against its own declaration. One `||` over both would flag
+          // a set declaring a live results file and no waiver register for a
+          // `gate-waivers.md` it never declared; the corpus has no such set
+          // today, which is the only reason it has never fired.
+          const inherited = [
+            ['live-verification-results.json', set.liveResultsFile],
+            ['gate-waivers.md', set.waiverRegister],
+          ]
+            .filter(([name, declared]) => fs.existsSync(path.join(artifacts, name)) !== Boolean(declared))
+            .map(([name]) => name);
+          if (inherited.length > 0) {
+            refusal = { headline: `eval: ${set.id} staged test-artifacts holds the wrong inputs: ${inherited.join(', ')}`, problems: [] };
+          }
         }
-        const artifacts = path.join(workspace.projectDir, 'test-artifacts');
-        const inherited = ['live-verification-results.json', 'gate-waivers.md'].filter(
-          (name) => fs.existsSync(path.join(artifacts, name)) !== Boolean(set.liveResultsFile || set.waiverRegister),
-        );
-        if (inherited.length > 0) {
-          console.error(
-            `${colors.red}eval: ${set.id} staged test-artifacts holds the wrong inputs: ${inherited.join(', ')}${colors.reset}`,
-          );
-          await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
-        }
-        console.log(`  ${colors.green}✓${colors.reset} ${set.id}: staged workspace carries no ground truth and the right test-artifacts`);
       } finally {
         fs.rmSync(workspace.dir, { recursive: true, force: true });
       }
+      if (refusal !== null) {
+        console.error(`${colors.red}${refusal.headline}${colors.reset}`);
+        for (const problem of refusal.problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
+        await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
+      }
+      console.log(`  ${colors.green}✓${colors.reset} ${set.id}: staged workspace carries no ground truth and the right test-artifacts`);
     }
     if (validateOnly) {
       console.log(`\n${colors.green}corpus valid; nothing measured (--validate-only).${colors.reset}\n`);

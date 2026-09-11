@@ -88,11 +88,16 @@ function loadHarness(entry, problems) {
  * misreported: the trace suite reads fourteen fixture files across two cases, so
  * the tautology declared fourteen while the result record wrote two case ids.
  *
+ * Asynchronous because a harness may read its corpus through `eval-quality`'s
+ * file-system port, which is asynchronous. `await` on a harness that still
+ * returns an array is the identity, so the harnesses that have not converted
+ * are unaffected.
+ *
  * @param {object} entry
  * @param {string[]} problems
- * @returns {string[]|null}
+ * @returns {Promise<string[]|null>}
  */
-function harnessCaseIds(entry, problems) {
+async function harnessCaseIds(entry, problems) {
   const harness = loadHarness(entry, problems);
   if (!harness) return null;
   if (typeof harness.caseIds !== 'function') {
@@ -100,7 +105,7 @@ function harnessCaseIds(entry, problems) {
     return null;
   }
   try {
-    return harness.caseIds();
+    return await harness.caseIds();
   } catch (error) {
     problems.push(`${entry.id}: ${entry.harness} caseIds() threw: ${error.message}`);
     return null;
@@ -254,7 +259,7 @@ function checkContractsAreClaimed(manifest, problems) {
   }
 }
 
-function main() {
+async function main() {
   const write = process.argv.slice(2).includes('--write');
   const problems = [];
 
@@ -279,7 +284,7 @@ function main() {
     compareRunnerCapabilities(entry, problems);
     checkPreflightProbesRunner(entry, problems);
 
-    const ids = harnessCaseIds(entry, problems);
+    const ids = await harnessCaseIds(entry, problems);
     if (ids && ids.length !== entry.caseCount) {
       problems.push(`${entry.id}: manifest declares ${entry.caseCount} case(s), ${entry.harness} scores ${ids.length}`);
     }
@@ -330,6 +335,11 @@ function main() {
   console.log(`✅ ${RESULT_SCHEMA_RELATIVE_PATH} matches test/schema/eval-result.js`);
 }
 
-if (require.main === module) main();
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error?.stack ?? error);
+    process.exit(1);
+  });
+}
 
 module.exports = { generateResultSchema, generatedContracts };

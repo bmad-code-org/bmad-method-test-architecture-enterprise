@@ -516,10 +516,10 @@ function scoreTraceArtifacts(set, artifacts, groundTruth) {
   return { scored: scoreTraceRun(set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance) };
 }
 
-function checkTraceOracles(evaluator) {
+async function checkTraceOracles(evaluator) {
   console.log('\ntrace.contract.json over every stored trace run');
   const contract = readJson(path.join(CONTRACT_ROOT, 'trace.contract.json'), 'the trace contract');
-  const groundTruth = loadTraceGroundTruth();
+  const groundTruth = await loadTraceGroundTruth();
   if (!groundTruth) unreadable('the trace ground truth is missing or not valid JSON');
   const specs = traceOracleSpecs(groundTruth);
   assert(
@@ -908,7 +908,7 @@ async function main() {
   checkFragmentSelectionOracles(evaluator);
   checkRoutingOracles(evaluator);
   checkTestDesignOracles(evaluator);
-  checkTraceOracles(evaluator);
+  await checkTraceOracles(evaluator);
 
   console.log('');
   if (failed > 0) {

@@ -563,16 +563,21 @@ function verdictDriftFromReport(verdict, reportPath) {
  * criterion section out of, is a real result: runCase reports each as an
  * environment failure with a class, and the stored result names that class.
  *
- * @returns {{result: object, scored?: object}}
+ * Asynchronous because `readSummary` and `readMatrix` read through
+ * `eval-quality`'s file-system port, which is asynchronous. The existence check
+ * above them stays: it reports a stored case missing its artifacts as a corpus
+ * defect, which is a different finding from a run that produced none.
+ *
+ * @returns {Promise<{result: object, scored?: object}>}
  */
-function replayTraceCase(item, set, groundTruth) {
+async function replayTraceCase(item, set, groundTruth) {
   for (const name of ['e2e-trace-summary.json', 'traceability-matrix.md']) {
     if (!fs.existsSync(path.join(item.directory, 'test-artifacts', name)))
       unreadable(`${item.id}: no test-artifacts/${name} beside expected.json`);
   }
-  const summary = readSummary(item.directory);
+  const summary = await readSummary(item.directory);
   if (!summary.ok) return { result: { unmeasurable: summary.failureClass } };
-  const matrix = readMatrix(item.directory, set);
+  const matrix = await readMatrix(item.directory, set);
   if (matrix === null) return { result: { unmeasurable: 'environment-missing-artifact' } };
   const scored = scoreRun(set, summary.summary, matrix, groundTruth.evidenceLineTolerance, groundTruth.coveragePercentTolerance);
   return { result: projectTraceResult(scored), scored };
@@ -917,9 +922,9 @@ function replayTestDesignCase(item, expected, set, categories) {
  * @param {object} expected The case's expected.json.
  * @param {object} context The loaded ground truths, their digests, and the list a
  *   scored trace case is appended to for checkTraceSignatures.
- * @returns {{observed: object|null}|{failure: string}}
+ * @returns {Promise<{observed: object|null}|{failure: string}>}
  */
-function replayCase(item, expected, context) {
+async function replayCase(item, expected, context) {
   switch (item.suite) {
     case 'test-review': {
       const recordedDigest = expected.inputs?.scoringInputsDigest;
@@ -977,7 +982,7 @@ function replayCase(item, expected, context) {
             'updated with it. --accept will not do this one.',
         };
       }
-      const replayed = replayTraceCase(item, set, context.traceGroundTruth);
+      const replayed = await replayTraceCase(item, set, context.traceGroundTruth);
       if (replayed.scored) context.traceReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
       return { observed: replayed.result };
     }
@@ -1021,7 +1026,7 @@ function replayCase(item, expected, context) {
   }
 }
 
-function main(argv) {
+async function main(argv) {
   const acceptIndex = argv.indexOf('--accept');
   const accepting = acceptIndex !== -1;
   const acceptTargets = accepting ? argv.slice(acceptIndex + 1).filter((value) => !value.startsWith('--')) : [];
@@ -1071,7 +1076,7 @@ function main(argv) {
       continue;
     }
 
-    const replayed = replayCase(item, expected, {
+    const replayed = await replayCase(item, expected, {
       groundTruth,
       groundTruthDigest,
       traceGroundTruth,
@@ -1151,7 +1156,15 @@ function main(argv) {
   return failed > 0 ? 1 : 0;
 }
 
-if (require.main === module) process.exit(main(process.argv.slice(2)));
+if (require.main === module) {
+  main(process.argv.slice(2)).then(
+    (code) => process.exit(code),
+    (error) => {
+      console.error(error?.stack ?? error);
+      process.exit(1);
+    },
+  );
+}
 
 module.exports = {
   SCORER_VERSION,

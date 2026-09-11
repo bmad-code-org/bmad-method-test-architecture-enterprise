@@ -193,6 +193,9 @@ jobs:
       - name: Run the published port conformance suite against the file-system adapter
         run: npm run test:file-system-conformance
 
+      - name: Prove the trace harness reads and writes through the file-system port
+        run: npm run test:file-system-port
+
       - name: Probe every TEA command target through the eval-quality adapter
         run: npm run test:probe-targets
 
