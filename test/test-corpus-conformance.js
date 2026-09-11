@@ -46,6 +46,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
+const { expectedOutcomeCount } = require('./lib/conformance-counts');
 const { loadCorpus } = require('./lib/corpus-port');
 
 const colors = {
@@ -152,7 +153,7 @@ async function main() {
     },
   };
 
-  const expected = CONFORMANCE_OUTCOME_COUNTS['corpus'];
+  const expected = expectedOutcomeCount(CONFORMANCE_OUTCOME_COUNTS, 'corpus');
   const problems = [];
   // In a `finally`, because a throw out of the suite or the renderer would
   // otherwise leave one temporary directory behind per failed invocation.
