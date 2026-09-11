@@ -46,6 +46,11 @@ const { digest } = require('./eval-record');
 // step's stdin literal. One function on both sides is the whole guard; `legs` in
 // traceEvidence says what a restated prompt would cost.
 const { buildPrompt: buildTracePrompt } = require('../eval-trace');
+// The routing evidence sends the prompt the live run sends, for the reason the
+// trace evidence does: the plan binds standard input as a literal, so a described
+// prompt selects nothing and the record is scored against no evidence at all.
+const { buildPrompt: buildRoutingPrompt } = require('../eval-bmad-tea-routing');
+const { ROUTING_CONTRACTS } = require('../../tools/generate-contracts');
 const {
   evaluatorConfiguration,
   isolationManifest,
@@ -61,6 +66,7 @@ const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
 const PROBE_ROOT = path.join(PROJECT_ROOT, 'test', 'probes');
 const REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay');
 const EVAL_ROOT = path.join(PROJECT_ROOT, 'test', 'evals');
+const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 const stripComment = (value) => {
@@ -512,12 +518,165 @@ function fragmentSelectionEvidence(contract, workflow) {
 }
 
 // ---------------------------------------------------------------------------
+// evidence: bmad-tea routing
+// ---------------------------------------------------------------------------
+
+function routingBody(answer) {
+  return {
+    exitCode: 0,
+    stdout: { kind: 'json', value: answer },
+    stderr: { kind: 'text', value: '' },
+    artifacts: {},
+  };
+}
+
+/**
+ * The oracle of one routing contract that reads one field of one case's answer,
+ * found by its evidence pointer rather than by its id, for the reason
+ * tools/generate-probes.js gives: ids are positional and a case added to the
+ * corpus renumbers every oracle after it.
+ */
+function routingOracleFor(contract, caseId, field) {
+  const pointer = `/interactions/${caseId}/stdout/${field}`;
+  return contract.oracles.find((oracle) => oracle.direction.evidenceTargets[0] === pointer);
+}
+
+/** The answer the corpus says is right for one case, in the shape the runner prints. */
+function correctRoutingAnswer(expected) {
+  return {
+    action: expected.expectedAction,
+    menuCode: expected.expectedAction === 'route' ? expected.expectedMenuCode : null,
+    workflow: expected.expectedAction === 'route' ? (expected.expectedWorkflow ?? null) : null,
+    scope: (expected.scopeTokens ?? []).length > 0 ? expected.scopeTokens.join(', ') : null,
+    reason: (expected.decidingTokens ?? []).join(', '),
+    question: expected.expectedAction === 'clarify' ? (expected.candidateCodes ?? []).join(' or ') : null,
+    missing: expected.expectedAction === 'decline' ? 'nothing on the menu covers this' : null,
+  };
+}
+
+function routingEvidence(contract) {
+  const corpus = readJson(path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json'));
+  const intents = readJson(path.join(ROUTING_FIXTURE_ROOT, 'intents.json'));
+  const promptOf = new Map(intents.cases.map((entry) => [entry.id, buildRoutingPrompt(entry)]));
+  const first = contract.interactionPlan[0].stepId;
+  const step = contract.interactionPlan[0];
+  const expected = corpus.cases[first];
+  const gamedField = contract.contractId === 'tea-routing-intents-behavioral' ? 'menuCode' : 'question';
+
+  return {
+    /**
+     * A witness leg carries the whole assembled prompt for one case, so the case
+     * it is asking about is the one whose prompt it matches, and the answer is
+     * that case's own. The two legs differ by construction, which is what
+     * buildRoutingWitness asserts before it writes the witness, so the
+     * differential holds on correct answers and would fail on a runner that
+     * returned one answer whatever it was asked.
+     */
+    answer(request) {
+      const prompt = String(request.channels.stdin?.value ?? '');
+      const matched = intents.cases.find((entry) => promptOf.get(entry.id) === prompt) ?? { id: first };
+      return routingBody(correctRoutingAnswer(corpus.cases[matched.id] ?? expected));
+    },
+    recordInputs(probe) {
+      // One observation per plan step, and the degenerate answer only on the
+      // first. A record carrying one observation against a ten-step plan leaves
+      // nine cases' oracles unreached, and an oracle nothing reached is an oracle
+      // this corpus says nothing about. The other suites' records look cleaner
+      // than that only because their plans bind standard input with a matcher, so
+      // their single observation is selected by every step at once and each case's
+      // oracles quantify over another case's evidence.
+      const gamedCase = probe.probeClass === 'gameability' ? first : null;
+      const observations = contract.interactionPlan.map((planStep, index) => {
+        const caseId = planStep.stepId;
+        const answer = correctRoutingAnswer(corpus.cases[caseId]);
+        if (caseId === gamedCase) {
+          // The degenerate reply quotes the user's message back as its reason,
+          // which satisfies every deciding token, and gets the decision wrong.
+          // That is the whole shape token containment invites, and the decision
+          // oracle is what refuses it.
+          answer.reason = intents.cases.find((entry) => entry.id === caseId).intent;
+          if (gamedField === 'menuCode') answer.menuCode = corpus.cases[caseId].expectedMenuCode === 'TMT' ? 'TR' : 'TMT';
+          else answer.question = 'Could you tell me a bit more about what you are after?';
+        }
+        const body = routingBody(answer);
+        return recordObservation({
+          observationId: `${caseId}-run`,
+          sequence: index + 1,
+          operationId: planStep.operationId,
+          // The plan binds standard input as a literal, and a literal is compared
+          // with deepEquals, so this has to be the prompt itself rather than a
+          // description of it: anything else selects nothing and every oracle
+          // resolves unreached over a record that examined no evidence.
+          callInputs: { option: { agent: 'claude' }, stdin: { prompt: promptOf.get(caseId) } },
+          stdout: body.stdout,
+          stderr: body.stderr,
+          exitCode: body.exitCode,
+          artifacts: {},
+        });
+      });
+
+      const naive = routingOracleFor(contract, first, 'reason');
+      const disciplined = routingOracleFor(contract, first, gamedField);
+      const gamedAnswer = observations.find((entry) => entry.observationId === `${first}-run`)?.stdout.value;
+      const findings =
+        gamedCase === null
+          ? []
+          : [
+              {
+                findingType: 'defect',
+                findingId: 'F-001',
+                oracleId: disciplined.id,
+                probeId: probe.probeId,
+                behaviorId: probe.behaviorId,
+                severity: 'critical',
+                summary:
+                  gamedField === 'menuCode'
+                    ? `The answer for ${first} restated the intent as its reason and dispatched to ${gamedAnswer.menuCode}.`
+                    : `The clarification for ${first} restated the intent as its reason and named no menu item to choose between.`,
+                confidence: 1,
+                observationIds: [`${first}-run`],
+                evidenceArtifacts: [],
+                quotedEvidence: [
+                  {
+                    quote: gamedField === 'menuCode' ? String(gamedAnswer.menuCode) : gamedAnswer.question,
+                    channel: 'stdout',
+                    artifactId: null,
+                  },
+                ],
+              },
+            ];
+
+      const violated = new Set(findings.map((finding) => finding.oracleId));
+      return {
+        observations,
+        findings,
+        oracleDispositions: contract.oracles.map((oracle) => ({
+          oracleId: oracle.id,
+          disposition: violated.has(oracle.id) ? 'violated' : 'held',
+          observationIds: [`${oracle.direction.evidenceTargets[0].split('/')[2]}-run`],
+          note: null,
+        })),
+        evaluatorRecommendation: findings.length > 0 ? 'CONCERNS' : 'PASS',
+        conditionArm: probe.probeClass === 'gameability' ? 'degenerate-answer' : 'expected-answer',
+        naiveOracleId: naive.id,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // the suites
 // ---------------------------------------------------------------------------
 
 /** Every contract that has a probe corpus, with the evidence source that answers for it. */
 function suites() {
   const entries = [
+    ...ROUTING_CONTRACTS.map((spec) => ({
+      id: spec.relativePath.replace('.contract.json', ''),
+      contractPath: path.join(CONTRACT_ROOT, spec.relativePath),
+      probesPath: path.join(PROBE_ROOT, spec.relativePath.replace('.contract.json', '.probes.json')),
+      evidenceFor: routingEvidence,
+    })),
     {
       id: 'test-review',
       contractPath: path.join(CONTRACT_ROOT, 'test-review.contract.json'),

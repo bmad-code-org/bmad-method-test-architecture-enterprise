@@ -1,0 +1,137 @@
+{
+  "$comment": [
+    "A refusal with nothing behind it. The action is right and the user is left with no next step, which is why",
+    "declineOk reads the missing field and not the action alone.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "decline-without-saying-what-is-missing",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
+      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
+      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: penetration-test-staging",
+    "frozenOn": "2026-09-10",
+    "expected": {
+      "expectedAction": "decline",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["penetration"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "The NFR audit assesses security evidence that already exists. Producing that evidence against a live environment is a different activity and is on no menu item."
+    },
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The action is decline, so actionCorrect is true.",
+    "",
+    "decidingTokens is [penetration] and the reason carries it, so tokensFound is 1 of 1.",
+    "",
+    "The missing field is absent, so parseRouting normalizes it to null, it fails the non-space pattern, and",
+    "declineOk is false. Together with decline-correct this pins declineOk to the field rather than to the action:",
+    "the two cases differ in nothing else."
+  ],
+  "result": {
+    "answer": {
+      "action": "decline",
+      "menuCode": null,
+      "workflow": null,
+      "scope": null,
+      "reason": "a live penetration test is not something this menu offers",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "decline",
+      "menuCode": null,
+      "workflow": null,
+      "actionCorrect": true,
+      "menuCorrect": false,
+      "routeCorrect": false,
+      "tokens": 1,
+      "tokensFound": 1,
+      "tokensMissed": [],
+      "scopeTokens": 0,
+      "scopeFound": 0,
+      "scopeOk": false,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "hedgedClearIntent": false
+    }
+  }
+}

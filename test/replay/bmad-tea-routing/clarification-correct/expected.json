@@ -1,0 +1,141 @@
+{
+  "$comment": [
+    "The clarification ceiling: the right action, a reason that names the ambiguity, a question naming all three",
+    "close items, and the feature the user asked about carried through the question. It is the pair to",
+    "clarification-names-one-side, and the only difference between them is the question.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "clarification-correct",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
+      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
+      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: better-coverage-for-payments",
+    "frozenOn": "2026-09-10",
+    "expected": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["coverage"],
+      "scopeTokens": ["payments"],
+      "candidateCodes": ["TD", "TA", "TR"],
+      "rationale": "'Better coverage' is planning it, writing it, or measuring it, and three menu items each own one of those. The scope is named and has to survive the question."
+    },
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The action is clarify, as the oracle expects.",
+    "",
+    "decidingTokens is [coverage] and the reason carries \"coverage\", so tokensFound is 1 of 1.",
+    "",
+    "candidateCodes is [TD, TA, TR] and the question names each of them twice over, by menu label and by code in",
+    "parentheses, so candidatesNamed is 3 and clarifyOk is true.",
+    "",
+    "scopeTokens is [payments] and the scope reads \"the payments feature\", so scopeOk is true. Scope is scored",
+    "wherever the fixture names one, and not only on a route: a clarification that drops the feature makes the user",
+    "say it again."
+  ],
+  "result": {
+    "answer": {
+      "action": "clarify",
+      "menuCode": null,
+      "workflow": null,
+      "scope": "the payments feature",
+      "reason": "better coverage could mean planning it, writing it, or measuring what is already there",
+      "question": "For payments, do you want Test Design (TD) to plan it, Test Automation (TA) to write it, or Trace Coverage (TR) to measure it?",
+      "missing": null
+    },
+    "score": {
+      "action": "clarify",
+      "menuCode": null,
+      "workflow": null,
+      "actionCorrect": true,
+      "menuCorrect": false,
+      "routeCorrect": false,
+      "tokens": 1,
+      "tokensFound": 1,
+      "tokensMissed": [],
+      "scopeTokens": 1,
+      "scopeFound": 1,
+      "scopeOk": true,
+      "candidates": 3,
+      "candidatesNamed": 3,
+      "clarifyOk": true,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "hedgedClearIntent": false
+    }
+  }
+}

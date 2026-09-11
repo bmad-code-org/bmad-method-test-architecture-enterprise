@@ -2541,11 +2541,18 @@ async function runTests() {
       // One invocation per live suite in the manifest, so adding a suite moves this
       // number rather than leaving a new harness silently unrun.
       const liveSuiteCount = evalSuiteManifest.suites.length;
+      // Looked up by suite id rather than by position. The two overrides belong to
+      // two named suites, and indexing assumed those two sat at the front of the
+      // manifest, which nothing held: the order was an accident of the order the
+      // three suites happened to be added in, and the first suite whose id sorted
+      // ahead of `fragment-selection` broke an assertion that is not about order
+      // at all.
+      const invocationFor = (suiteId) => allInvocations.find((invocation) => invocation.suite.id === suiteId);
       assert(
         allInvocations.length === liveSuiteCount &&
           allInvocations.every((invocation) => invocation.args.includes('codex')) &&
-          allInvocations[0].args.includes('2') &&
-          allInvocations[1].args.includes('3'),
+          invocationFor('fragment-selection')?.args.includes('2') &&
+          invocationFor('test-review')?.args.includes('3'),
         `eval:all forwards one selected agent to every live harness (${liveSuiteCount}) with their own repetition counts`,
         JSON.stringify(allInvocations),
       );
@@ -2568,7 +2575,7 @@ async function runTests() {
             invocation.args.includes('-p') &&
             invocation.args.includes('GEMINI_API_KEY'),
         ),
-        'eval:all forwards the same portable runner contract to both live harnesses',
+        'eval:all forwards the same portable runner contract to every live harness',
         JSON.stringify(customInvocations),
       );
       for (const script of ['eval-all.js', 'eval-fragment-selection.js', 'eval-test-review.js']) {

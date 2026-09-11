@@ -26,7 +26,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 
 Two of the ten skills, `bmad-tea` and `bmad-teach-me-testing`, have no suite of any kind. They carry deferred entries in the manifest naming their owner, their missing evidence, and the condition that retires the entry, because a suite list with a skill quietly missing from it reads as coverage.
 
-All three suites were measured live for the first time on 2026-09-08 and all three were green. No result artifact is committed, so the numbers live in `docs/explanation/eval-quality-roadmap.md` and any claim about them needs a fresh measurement.
+The three suites that existed then were measured live for the first time on 2026-09-08 and all three were green. No result artifact is committed, so the numbers live in `docs/explanation/eval-quality-roadmap.md` and any claim about them needs a fresh measurement. The `bmad-tea-routing` suite was added afterwards and has never been run live, so it has a declared threshold and no measurement behind it.
 
 ## 1. What you need before you start
 

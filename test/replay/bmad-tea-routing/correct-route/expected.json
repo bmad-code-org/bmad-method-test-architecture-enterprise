@@ -1,0 +1,142 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the ceiling. One intent with a single right menu item, answered with",
+    "that item, with a reason naming every deciding token and the scope restated. Every metric this suite has sits",
+    "at its best value here, so any change to the scorer moves this case first.",
+    "",
+    "The reply is CONSTRUCTED. No live bmad-tea routing run has been recorded in this repository, so there is no",
+    "capture to reuse."
+  ],
+  "id": "correct-route",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
+      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
+      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: epic-risk-before-tests",
+    "frozenOn": "2026-09-10",
+    "expected": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TD",
+      "expectedWorkflow": "bmad-testarch-test-design",
+      "decidingTokens": ["risk", "coverage", "epic"],
+      "scopeTokens": ["epic 4"],
+      "candidateCodes": [],
+      "rationale": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence."
+    },
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The stdout is a single JSON object, so parseRouting takes the braced candidate and returns all seven keys.",
+    "",
+    "The oracle expects route/TD/bmad-testarch-test-design. The action matches, the menu code matches, and the",
+    "workflow matches, so routeCorrect is true.",
+    "",
+    "decidingTokens is [risk, coverage, epic]. The reason carries \"risk sits\", \"coverage\" and \"the epic\", and each",
+    "token is matched with a word boundary and a prefix, so all three are found and tokensMissed is empty.",
+    "",
+    "scopeTokens is [epic 4] and the scope reads \"epic 4, the tenant data export work\", so scopeFound is 1 of 1 and",
+    "scopeOk is true. There are no candidate codes, so candidates and candidatesNamed are both 0."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "TD",
+      "workflow": "bmad-testarch-test-design",
+      "scope": "epic 4, the tenant data export work",
+      "reason": "the epic is finished, no tests exist yet, and the ask is where the risk sits and how much coverage each area deserves",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "TD",
+      "workflow": "bmad-testarch-test-design",
+      "actionCorrect": true,
+      "menuCorrect": true,
+      "routeCorrect": true,
+      "tokens": 3,
+      "tokensFound": 3,
+      "tokensMissed": [],
+      "scopeTokens": 1,
+      "scopeFound": 1,
+      "scopeOk": true,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "hedgedClearIntent": false
+    }
+  }
+}

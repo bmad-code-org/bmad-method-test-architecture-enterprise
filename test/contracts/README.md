@@ -91,11 +91,12 @@ without the located issue list the table below breaks down. The list comes from 
 the renderer. The issues themselves are the same either way; only whether the tool prints them
 differs.
 
-## Ten of ten compile
+## Twelve of twelve compile
 
 `package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08. All 58
 parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
-`0.2.0` findings, and `0.3.0` closed the gap they describe. Every contract compiles now. `npm run
+`0.2.0` findings, and `0.3.0` closed the gap they describe. Every contract compiles now, including the
+two `tea-routing-*` contracts added since the table was written. `npm run
 test:contracts` and `test/contracts/expected-status.json` carry the current baseline; regenerate it
 with `--write` whenever the compiler version changes.
 
@@ -131,6 +132,33 @@ artifact-writing command. The contract itself states this reasoning in `testData
 `SensitivityWitness` is a strict object with no prose field of its own; do not look for it on the
 witness. The section "A plan cannot declare that two steps must receive different inputs" below
 records what those literals cost and what they bought.
+
+## The routing suite is two contracts, and the bound is why
+
+`tea-routing-intents.contract.json` and `tea-routing-controls.contract.json` express one suite between
+them, which is what the suite manifest's `contracts` array is an array for.
+
+The reason is a published bound rather than a preference. `eval-quality`'s AD-39 scripting bound caps
+an interaction plan at sixteen steps, in `core/compile/scripting-bound.js`, and it is exclusive: a
+plan of exactly sixteen is legal and seventeen is `plan-exceeds-scripting-bound`. The routing corpus
+is eighteen intents and each one is its own agent call with its own oracles, so one plan step per
+intent is the only binding under which a case's oracles read that case's answer. Eighteen steps is
+past the ceiling.
+
+The split falls on the corpus's own line rather than at sixteen. One contract carries the ten intents
+with a right answer and asks whether the right answer came back; the other carries the eight controls,
+the four where asking is correct and the four nothing on the menu serves, and asks whether the skill
+declined to guess. The sensitivity witness each one needs differs with it: the intents contract
+differs its two legs on the menu code, because both of its legs route, and the controls contract on
+the action.
+
+Both contracts bind standard input as a literal prompt on every step, which is what the trace contract
+does and for the same reason recorded there. Every step declares the same operation, so under a
+`{ matcher: 'any' }` binding one observation is selected by all of them at once and each case's oracles
+quantify over evidence that is not theirs. The literal is what tells eighteen steps apart, and it is
+also what the two contracts cost: each step carries the whole assembled prompt, which is the skill and
+its menu read off disk, so the pair is about 420 kilobytes of mostly repeated bytes. That is the price
+of the binding being correct, and it is paid by a generated file rather than by a reader.
 
 ## What the operator vocabulary cannot say
 
@@ -227,7 +255,7 @@ absent, so the deterministic gate stays credential-free and runs with no network
 silently: a skip says it skipped.
 
 When the compiler is available, the check compares each contract against the status
-`expected-status.json` records for it. All ten contracts `compile` today. A baseline is what keeps a
+`expected-status.json` records for it. All twelve contracts `compile` today. A baseline is what keeps a
 known failure from reading as a passing check, and what makes the day a contract's status moves
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.

@@ -73,6 +73,10 @@ const { parseRegistryRows } = require('./validate-criteria-fragments');
 // is scheduled by pre-flight and then measures nothing.
 const { buildPrompt: buildTracePrompt } = require('../test/eval-trace');
 const { DEFAULT_AGENT: TRACE_DEFAULT_AGENT } = require('../cli/trace-runner');
+// The routing probes name the oracle they game by the pointer it reads, which is
+// how they stay attached to the right oracle when a case is added to the corpus
+// and every id after it shifts.
+const { ROUTING_CONTRACTS } = require('./generate-contracts');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -80,6 +84,7 @@ const PROBE_ROOT = path.join(PROJECT_ROOT, 'test', 'probes');
 const EVAL_ROOT = path.join(PROJECT_ROOT, 'test', 'evals');
 const REVIEW_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval');
 const TRACE_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval');
+const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
 const REVIEW_FIXTURE_PREFIX = 'test/fixtures/test-review-eval/';
 const TRACE_FIXTURE_PREFIX = 'test/fixtures/trace-eval/';
 
@@ -634,6 +639,118 @@ function buildFragmentSelectionProbes(workflow) {
 // rendering
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// tea-routing-*.probes.json
+// ---------------------------------------------------------------------------
+
+/**
+ * The oracle of one contract that reads one field of one case's answer.
+ *
+ * Found by its evidence pointer rather than by its id. Ids are positional, so
+ * adding a case to the corpus renumbers every oracle after it, and a probe
+ * holding an id would silently move to a different oracle.
+ */
+function routingOracleFor(contract, caseId, field) {
+  const pointer = `/interactions/${caseId}/stdout/${field}`;
+  const found = contract.oracles.filter((oracle) => oracle.direction.evidenceTargets[0] === pointer);
+  assert(found.length === 1, `${contract.contractId}: ${found.length} oracle(s) read ${pointer}, and a probe needs exactly one`);
+  return found[0];
+}
+
+/**
+ * Two probes per routing contract, and both are about the same weakness.
+ *
+ * Token containment is a cheap oracle and a gameable one: a reply that quotes the
+ * user's message back as its reason satisfies every token the fixture names,
+ * whatever it then did with the message. The gameability probe is that reply, and
+ * the oracle that catches it is the one reading the decision rather than the
+ * prose. For the intents contract that is the menu code; for the controls
+ * contract it is the question, where a clarification that names nothing to choose
+ * between passes the reason oracle and asks the user nothing.
+ *
+ * There are no defect probes. A defect probe needs a controlled mutation of the
+ * system under test with baseline and mutated evidence, and the system here is
+ * `src/agents/bmad-tea/SKILL.md`, which this suite must not edit: a mutation of
+ * the skill to prove the eval catches it is an edit to the thing being measured.
+ * The fragment-selection corpora ship the same two classes for the same reason.
+ */
+function buildRoutingProbes(spec) {
+  const contract = loadContract(spec.relativePath);
+  const corpus = JSON.parse(fs.readFileSync(path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
+  const intentsPath = repositoryPath('test', 'fixtures', 'tea-routing-eval', 'intents.json');
+  const groundTruthPath = repositoryPath('test', 'fixtures', 'tea-routing-eval', 'ground-truth.json');
+  const skillPath = repositoryPath('src', 'agents', 'bmad-tea', 'SKILL.md');
+  const menuPath = repositoryPath('src', 'agents', 'bmad-tea', 'customize.toml');
+  const corpusDigest = digestOf([skillPath, menuPath, intentsPath, groundTruthPath]);
+
+  const first = contract.interactionPlan[0].stepId;
+  const expected = corpus.cases[first];
+  assert(expected, `${spec.contractId}: ground-truth.json carries no answer for ${first}`);
+  const naive = routingOracleFor(contract, first, 'reason');
+  const disciplined = routingOracleFor(contract, first, spec.gamedField);
+
+  return [
+    {
+      schemaVersion: PROBE_SCHEMA_VERSION,
+      parentDigest: null,
+      revisionCount: 0,
+      probeId: 'P-001',
+      probeClass: 'gameability',
+      behaviorId: soleBehaviorFor(contract, disciplined.id),
+      systemId: spec.contractId,
+      implementationDigest: corpusDigest,
+      artifactDigest: digestOf([groundTruthPath]),
+      commitDigest: corpusDigest,
+      rationale:
+        `A reply that quotes the user's own message back as its reason satisfies ${naive.id} for ${first}, because the deciding tokens ` +
+        `are words from that message, and violates ${disciplined.id}, because ${spec.gamedSentence} The reason oracle alone cannot tell ` +
+        'that reply from one that actually read the message, and the decision oracle can.',
+      qualification: {
+        route: 'gameability',
+        degenerateResponse: spec.degenerateResponse,
+        naiveOracleSatisfiedEvidence: fileReference(groundTruthPath),
+        disciplinedOracleRejectedEvidence: fileReference(groundTruthPath),
+      },
+      expectedClean: false,
+      defects: [],
+      defectSignature: {
+        interfaceKind: 'cli',
+        invocation: { executable: 'tea-routing-runner', subcommandPath: [] },
+        observableChannel: 'stdout',
+        condition: {
+          selector: selector({ option: { agent: { matcher: 'any' } }, stdin: { prompt: { matcher: 'any' } } }),
+          predicate: spec.defectPredicate(expected),
+        },
+      },
+    },
+    {
+      schemaVersion: PROBE_SCHEMA_VERSION,
+      parentDigest: null,
+      revisionCount: 0,
+      probeId: 'P-002',
+      probeClass: 'zero-action',
+      behaviorId: soleBehaviorFor(contract, naive.id),
+      systemId: spec.contractId,
+      implementationDigest: corpusDigest,
+      artifactDigest: digestOf([groundTruthPath]),
+      commitDigest: corpusDigest,
+      rationale:
+        `${first} declares the action, the deciding tokens and the scope the skill's own Step 8 implies for it, so an answer carrying ` +
+        'all three is the run this contract exists to confirm rather than a defect to catch.',
+      qualification: {
+        route: 'clean-control',
+        baselinePassEvidence: fileReference(groundTruthPath),
+        revisionCommitDigest: corpusDigest,
+        noKnownDefectStatement:
+          `${first}'s expected answer is derived from src/agents/bmad-tea/SKILL.md and its menu, and ` +
+          'node test/eval-bmad-tea-routing.js --validate-only fails when a menu code the corpus names has left customize.toml.',
+      },
+      expectedClean: true,
+      defects: [],
+    },
+  ];
+}
+
 /** Every fragment-selection workflow that has a generated contract. */
 function fragmentSelectionWorkflows() {
   const dir = path.join(CONTRACT_ROOT, 'fragment-selection');
@@ -647,6 +764,10 @@ function fragmentSelectionWorkflows() {
 
 function targets() {
   return [
+    ...ROUTING_CONTRACTS.map((spec) => ({
+      relativePath: spec.relativePath.replace('.contract.json', '.probes.json'),
+      build: () => buildRoutingProbes(spec),
+    })),
     { relativePath: 'test-review.probes.json', build: buildTestReviewProbes },
     { relativePath: 'trace.probes.json', build: buildTraceProbes },
     ...fragmentSelectionWorkflows().map((workflow) => ({

@@ -1,0 +1,1 @@
+{"action":"route","menuCode":"CI","workflow":"bmad-testarch-ci","scope":null,"reason":"your pipeline is red, so the continuous integration workflow is the place to start","question":null,"missing":null}

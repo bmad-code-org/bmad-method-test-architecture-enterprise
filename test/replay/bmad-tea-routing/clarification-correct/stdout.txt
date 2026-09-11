@@ -1,0 +1,1 @@
+{"action":"clarify","menuCode":null,"workflow":null,"scope":"the payments feature","reason":"better coverage could mean planning it, writing it, or measuring what is already there","question":"For payments, do you want Test Design (TD) to plan it, Test Automation (TA) to write it, or Trace Coverage (TR) to measure it?","missing":null}

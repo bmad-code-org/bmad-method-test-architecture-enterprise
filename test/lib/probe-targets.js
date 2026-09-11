@@ -191,6 +191,17 @@ const EXECUTION_TARGETS = [
     maxElapsedMs: 6 * 60_000,
   },
   {
+    interfaceId: 'tea-routing-runner',
+    executable: 'tea-routing-runner',
+    script: path.join('cli', 'routing-runner.js'),
+    subcommandPaths: [[]],
+    // The routing answer is a stdout payload, the same as a selection. The
+    // operation declares no artifact, so authorizing one would let a run be
+    // scored off a file the contract never said it would read.
+    artifacts: {},
+    maxElapsedMs: 6 * 60_000,
+  },
+  {
     interfaceId: 'tea-trace-runner',
     executable: 'tea-trace-runner',
     script: path.join('cli', 'trace-runner.js'),

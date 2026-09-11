@@ -1,0 +1,141 @@
+{
+  "$comment": [
+    "The defect the story names outright: an intent nothing on the menu serves, answered with a confident dispatch.",
+    "The CI workflow scaffolds a pipeline and no menu item runs a suite or repairs a failing test, so the user is",
+    "sent somewhere that cannot answer and is told nothing about it.",
+    "",
+    "This is one of the two control cases, and its threshold is zero rather than a rate.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "confident-route-on-unservable",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
+      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
+      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: run-and-fix-ci-failures",
+    "frozenOn": "2026-09-10",
+    "expected": {
+      "expectedAction": "decline",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["run", "fix"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "No menu item executes a suite or repairs failing tests. CI scaffolds a pipeline and review judges tests; neither runs or fixes anything, and dispatching either sends the user somewhere that cannot answer."
+    },
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The oracle expects decline and the action is route, so actionCorrect is false and confidentRouteOnUnservable is",
+    "true. routeCorrect is false as well, and for a second reason: it is only ever true on a case whose oracle",
+    "expects a route, and this one does not.",
+    "",
+    "decidingTokens is [run, fix]. The reason carries neither, so tokensFound is 0.",
+    "",
+    "declineOk is false because the action is not a decline. hedgedClearIntent is false: that control counts the",
+    "opposite mistake, and it is only ever counted on a case with one right answer."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "CI",
+      "workflow": "bmad-testarch-ci",
+      "scope": null,
+      "reason": "your pipeline is red, so the continuous integration workflow is the place to start",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "CI",
+      "workflow": "bmad-testarch-ci",
+      "actionCorrect": false,
+      "menuCorrect": false,
+      "routeCorrect": false,
+      "tokens": 2,
+      "tokensFound": 0,
+      "tokensMissed": ["run", "fix"],
+      "scopeTokens": 0,
+      "scopeFound": 0,
+      "scopeOk": false,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": true,
+      "hedgedClearIntent": false
+    }
+  }
+}

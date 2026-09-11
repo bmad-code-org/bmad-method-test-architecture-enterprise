@@ -1,0 +1,1 @@
+{"action":"route","menuCode":"TR","workflow":"bmad-testarch-trace","scope":null,"reason":"the acceptance criteria are written and the ask is which of them are covered and whether the gate passes","question":null,"missing":null}

@@ -1,0 +1,105 @@
+[
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-001",
+    "probeClass": "gameability",
+    "behaviorId": "B-002",
+    "systemId": "tea-routing-intents-behavioral",
+    "implementationDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+    "artifactDigest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1",
+    "commitDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+    "rationale": "A reply that quotes the user's own message back as its reason satisfies O-003 for epic-risk-before-tests, because the deciding tokens are words from that message, and violates O-002, because the menu code it names is not the one the intent points at. The reason oracle alone cannot tell that reply from one that actually read the message, and the decision oracle can.",
+    "qualification": {
+      "route": "gameability",
+      "degenerateResponse": "A reply whose reason restates the user's own message and whose menu code is whichever item came to hand.",
+      "naiveOracleSatisfiedEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1"
+      },
+      "disciplinedOracleRejectedEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1"
+      }
+    },
+    "expectedClean": false,
+    "defects": [],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-routing-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": {
+              "prompt": {
+                "matcher": "any"
+              }
+            }
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/stdout/menuCode"
+                },
+                {
+                  "literal": "TD"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-002",
+    "probeClass": "zero-action",
+    "behaviorId": "B-003",
+    "systemId": "tea-routing-intents-behavioral",
+    "implementationDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+    "artifactDigest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1",
+    "commitDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+    "rationale": "epic-risk-before-tests declares the action, the deciding tokens and the scope the skill's own Step 8 implies for it, so an answer carrying all three is the run this contract exists to confirm rather than a defect to catch.",
+    "qualification": {
+      "route": "clean-control",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1"
+      },
+      "revisionCommitDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+      "noKnownDefectStatement": "epic-risk-before-tests's expected answer is derived from src/agents/bmad-tea/SKILL.md and its menu, and node test/eval-bmad-tea-routing.js --validate-only fails when a menu code the corpus names has left customize.toml."
+    },
+    "expectedClean": true,
+    "defects": []
+  }
+]

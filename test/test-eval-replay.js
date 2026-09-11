@@ -144,6 +144,8 @@ const { parseReport } = require('../cli/lib/parse-report');
 const { scoreVerdict } = require('./eval-test-review');
 const { parseSelection, scoreCase } = require('./eval-fragment-selection');
 const { readSummary, readMatrix, scoreRun, signatureOf } = require('./eval-trace');
+const { parseRouting } = require('../cli/lib/parse-routing');
+const { scoreCase: scoreRoutingCase } = require('./eval-bmad-tea-routing');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -182,6 +184,11 @@ const TRACE_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'trace-eval', 'groun
  * also became boundary-aware at the same version: a path ends in `/name` or is
  * `name`, where a bare suffix match had admitted `notcheckout.spec.ts`. No stored
  * case carries such a path, so no other number moved.
+ *
+ * 4 also carries the bmad-tea routing scorers, which entered the corpus without
+ * moving a number: `scoreCase` and `signatureOf` from test/eval-bmad-tea-routing.js
+ * are new code with new cases, and no test-review, fragment-selection or trace
+ * case moved when they landed, so there was nothing for a bump to record.
  *
  * 4 is the trace scorers entering the corpus, with two changes made while the
  * first cases were being derived by hand. readMatrix closes a criterion section
@@ -560,6 +567,29 @@ function replayTraceCase(item, set, groundTruth) {
   return { result: projectTraceResult(scored), scored };
 }
 
+/**
+ * Parse and score one stored bmad-tea routing case.
+ *
+ * The oracle entry and the menu are both frozen into the stored case rather than
+ * read live, for the reason the selection corpus freezes its `expect` block: a
+ * replay has to keep scoring the scenario it was derived against after the live
+ * corpus moves on, and `npm run test:eval-routing-data` already holds the live
+ * corpus against the shipped menu. The menu is frozen because it decides the
+ * spellings a clarifying question may name a candidate by, so an edit to a menu
+ * label would otherwise move a stored number for a reason that has nothing to do
+ * with the scorer.
+ */
+function replayRoutingCase(item, expected) {
+  const stdoutPath = path.join(item.directory, 'stdout.txt');
+  if (!fs.existsSync(stdoutPath)) unreadable(`${item.id}: no stdout.txt beside expected.json`);
+  const oracle = expected.inputs?.expected;
+  if (!oracle) unreadable(`${item.id}: expected.json has no inputs.expected to score against`);
+  const menu = expected.inputs?.menu;
+  if (!Array.isArray(menu)) unreadable(`${item.id}: expected.json has no inputs.menu, so candidate spellings cannot be resolved`);
+  const answer = parseRouting(fs.readFileSync(stdoutPath, 'utf8'));
+  return { answer, score: scoreRoutingCase(oracle, answer, menu) };
+}
+
 /** Parse and score one stored fragment-selection case. */
 function replaySelectionCase(item, expected) {
   const stdoutPath = path.join(item.directory, 'stdout.txt');
@@ -717,6 +747,9 @@ function replayCase(item, expected, context) {
       }
       return { observed: projectReviewResult(scoreVerdict(verdict, context.groundTruth)) };
     }
+    case 'bmad-tea-routing': {
+      return { observed: replayRoutingCase(item, expected) };
+    }
     case 'fragment-selection': {
       return { observed: replaySelectionCase(item, expected) };
     }
@@ -744,7 +777,7 @@ function replayCase(item, expected, context) {
       return { observed: replayed.result };
     }
     default: {
-      return { failure: `unknown suite directory "${item.suite}"; expected test-review, fragment-selection or trace` };
+      return { failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection or trace` };
     }
   }
 }

@@ -1,0 +1,138 @@
+{
+  "$comment": [
+    "The right workflow, a fully grounded reason, and the epic the user named dropped on the way in. The agent",
+    "passes no scope structurally, so a dispatch that forgets which epic it is about runs the workflow against",
+    "whatever the next turn decides, and nothing downstream says so.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "scope-dropped",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
+      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
+      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: trace-criteria-to-tests",
+    "frozenOn": "2026-09-10",
+    "expected": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TR",
+      "expectedWorkflow": "bmad-testarch-trace",
+      "decidingTokens": ["acceptance criteria", "cover", "gate"],
+      "scopeTokens": ["epic 5"],
+      "candidateCodes": [],
+      "rationale": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding the gate is trace's two phases."
+    },
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "route/TR/bmad-testarch-trace matches the oracle, so routeCorrect is true.",
+    "",
+    "decidingTokens is [acceptance criteria, cover, gate]. The reason carries \"acceptance criteria\", \"covered\" under",
+    "the prefix rule, and \"gate\", so all three are found.",
+    "",
+    "scopeTokens is [epic 5] and the scope is null, so scopeFound is 0 and scopeOk is false. It is the only metric",
+    "this case fails, which is what makes it the scope control."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "TR",
+      "workflow": "bmad-testarch-trace",
+      "scope": null,
+      "reason": "the acceptance criteria are written and the ask is which of them are covered and whether the gate passes",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "TR",
+      "workflow": "bmad-testarch-trace",
+      "actionCorrect": true,
+      "menuCorrect": true,
+      "routeCorrect": true,
+      "tokens": 3,
+      "tokensFound": 3,
+      "tokensMissed": [],
+      "scopeTokens": 1,
+      "scopeFound": 0,
+      "scopeOk": false,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "hedgedClearIntent": false
+    }
+  }
+}

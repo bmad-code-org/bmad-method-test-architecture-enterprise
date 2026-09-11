@@ -1,4 +1,120 @@
 {
+  "tea-routing-intents": {
+    "contractId": "tea-routing-intents-behavioral",
+    "probeCount": 2,
+    "strength": {
+      "defect": null,
+      "gameability": {
+        "exercised": 1,
+        "caught": 1,
+        "rate": 1
+      },
+      "zero-action": null
+    },
+    "unsatisfiedCoverageRules": ["malformed-input", "success-indicator-separation", "whole-body"],
+    "probes": {
+      "P-001": {
+        "probeClass": "gameability",
+        "expectedClean": false,
+        "behaviorId": "B-002",
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": null,
+          "gameability": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "zero-action": null
+        }
+      },
+      "P-002": {
+        "probeClass": "zero-action",
+        "expectedClean": true,
+        "behaviorId": "B-003",
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": null,
+          "gameability": null,
+          "zero-action": null
+        }
+      }
+    }
+  },
+  "tea-routing-controls": {
+    "contractId": "tea-routing-controls-behavioral",
+    "probeCount": 2,
+    "strength": {
+      "defect": null,
+      "gameability": {
+        "exercised": 1,
+        "caught": 1,
+        "rate": 1
+      },
+      "zero-action": null
+    },
+    "unsatisfiedCoverageRules": ["malformed-input", "success-indicator-separation", "whole-body"],
+    "probes": {
+      "P-001": {
+        "probeClass": "gameability",
+        "expectedClean": false,
+        "behaviorId": "B-003",
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": null,
+          "gameability": {
+            "caught": 1,
+            "exercised": 1,
+            "rate": 1
+          },
+          "zero-action": null
+        }
+      },
+      "P-002": {
+        "probeClass": "zero-action",
+        "expectedClean": true,
+        "behaviorId": "B-002",
+        "preflight": "passed",
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap success-indicator-separation unsatisfied at or above the severity floor",
+          "coverage gap whole-body unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": null,
+          "gameability": null,
+          "zero-action": null
+        }
+      }
+    }
+  },
   "test-review": {
     "contractId": "tea-test-review-behavioral",
     "probeCount": 11,

@@ -1,0 +1,138 @@
+{
+  "$comment": [
+    "GATE is the one menu item whose target is a prompt rather than a skill, and its prompt text says in so many",
+    "words not to merge the workflows it routes between. A reply that names GATE and then names a workflow behind it",
+    "has done the merge the item forbids, so the menu code alone cannot decide this one.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "gate-routed-as-a-workflow",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus and of the menu it is scored against. The pair (expected, menu)",
+      "is the whole input to scoreCase beside the reply, so both are stored here rather than read live: a replay has",
+      "to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: release-gate-sequence",
+    "frozenOn": "2026-09-10",
+    "expected": {
+      "expectedAction": "route",
+      "expectedMenuCode": "GATE",
+      "expectedWorkflow": null,
+      "decidingTokens": ["release gate", "evidence"],
+      "scopeTokens": ["epic 7"],
+      "candidateCodes": [],
+      "rationale": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null."
+    },
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The action is route and the menu code is GATE, both as the oracle expects. The oracle expects a null workflow,",
+    "because the menu maps GATE to a prompt and not to a skill, and the reply names bmad-testarch-trace, so",
+    "routeCorrect is false while actionCorrect stays true.",
+    "",
+    "decidingTokens is [release gate, evidence] and the reason carries both. scopeTokens is [epic 7] and the scope",
+    "reads \"epic 7\", so scopeOk is true. Everything except the workflow is right, which is what makes this case a",
+    "test of that one rule rather than of the routing in general."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "GATE",
+      "workflow": "bmad-testarch-trace",
+      "scope": "epic 7",
+      "reason": "this is the release gate path and the order depends on which evidence you already have",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "GATE",
+      "workflow": "bmad-testarch-trace",
+      "actionCorrect": true,
+      "menuCorrect": true,
+      "routeCorrect": false,
+      "tokens": 2,
+      "tokensFound": 2,
+      "tokensMissed": [],
+      "scopeTokens": 1,
+      "scopeFound": 1,
+      "scopeOk": true,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "hedgedClearIntent": false
+    }
+  }
+}

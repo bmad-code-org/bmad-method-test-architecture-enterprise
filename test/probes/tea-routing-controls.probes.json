@@ -1,0 +1,117 @@
+[
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-001",
+    "probeClass": "gameability",
+    "behaviorId": "B-003",
+    "systemId": "tea-routing-controls-behavioral",
+    "implementationDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+    "artifactDigest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1",
+    "commitDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+    "rationale": "A reply that quotes the user's own message back as its reason satisfies O-002 for look-at-our-tests, because the deciding tokens are words from that message, and violates O-003, because the question it asks names nothing to choose between. The reason oracle alone cannot tell that reply from one that actually read the message, and the decision oracle can.",
+    "qualification": {
+      "route": "gameability",
+      "degenerateResponse": "A clarification whose reason restates the user's own message and whose question asks for more detail without naming a single menu item.",
+      "naiveOracleSatisfiedEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1"
+      },
+      "disciplinedOracleRejectedEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1"
+      }
+    },
+    "expectedClean": false,
+    "defects": [],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-routing-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": {
+              "prompt": {
+                "matcher": "any"
+              }
+            }
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/question"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:\\bRV\\b|[Bb][Mm][Aa][Dd]-[Tt][Ee][Ss][Tt][Aa][Rr][Cc][Hh]-[Tt][Ee][Ss][Tt]-[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ii][Ee][Ww] [Tt][Ee][Ss][Tt][Ss])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/question"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:\\bTR\\b|[Bb][Mm][Aa][Dd]-[Tt][Ee][Ss][Tt][Aa][Rr][Cc][Hh]-[Tt][Rr][Aa][Cc][Ee]|[Tt][Rr][Aa][Cc][Ee] [Cc][Oo][Vv][Ee][Rr][Aa][Gg][Ee])[\\s\\S]*$"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 3,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-002",
+    "probeClass": "zero-action",
+    "behaviorId": "B-002",
+    "systemId": "tea-routing-controls-behavioral",
+    "implementationDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+    "artifactDigest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1",
+    "commitDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+    "rationale": "look-at-our-tests declares the action, the deciding tokens and the scope the skill's own Step 8 implies for it, so an answer carrying all three is the run this contract exists to confirm rather than a defect to catch.",
+    "qualification": {
+      "route": "clean-control",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:3377bceb9e6bd72467740b1871b1a80dd9c581668e193782480e6b66b7ca31c1"
+      },
+      "revisionCommitDigest": "sha256:a0e720d59b9b506b56b7a1b01ccb90be35402710e6f163b4c72126d9d50b48b2",
+      "noKnownDefectStatement": "look-at-our-tests's expected answer is derived from src/agents/bmad-tea/SKILL.md and its menu, and node test/eval-bmad-tea-routing.js --validate-only fails when a menu code the corpus names has left customize.toml."
+    },
+    "expectedClean": true,
+    "defects": []
+  }
+]

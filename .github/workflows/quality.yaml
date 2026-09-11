@@ -148,6 +148,9 @@ jobs:
       - name: Validate trace eval corpus
         run: npm run test:eval-trace-data
 
+      - name: Validate the bmad-tea routing eval corpus
+        run: npm run test:eval-routing-data
+
       - name: Validate the eval suite manifest and result schema
         run: npm run test:eval-schemas
 
