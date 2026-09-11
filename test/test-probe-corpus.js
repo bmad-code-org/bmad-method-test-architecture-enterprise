@@ -38,6 +38,8 @@ const prettier = require('prettier');
 
 const { validateArtifact } = require('./lib/eval-quality-inputs');
 const { runSuite, storedProbePort, suites } = require('./lib/probe-scoring');
+const { stagedWorkspaceFor } = require('./eval-contract-strength');
+const { digestTree, stageWorkspace } = require('./eval-trace');
 
 const BASELINE_PATH = path.join(__dirname, 'probes', 'expected-strength.json');
 
@@ -90,6 +92,11 @@ function suiteSummary(outcome) {
     .flatMap((artifact) => artifact.coverageGaps.filter((gap) => !gap.satisfied).map((gap) => gap.rule));
   return {
     contractId: outcome.suite.contract.contractId,
+    // The digest that pins which corpus these scores were computed over. It is
+    // recorded here because nothing else attested it: a change to what `suites`
+    // puts on `probes`, a sort or a stripped comment, would move every suite's
+    // digest with the whole gate green.
+    corpusDigest: outcome.corpusDigest,
     probeCount: outcome.scored.length,
     strength: outcome.strength,
     unsatisfiedCoverageRules: [...new Set(gaps)].sort(),
@@ -105,7 +112,7 @@ async function main() {
 
   console.log('\nprobe corpora scored through eval-quality, against stored evidence\n');
 
-  for (const suite of suites()) {
+  for (const suite of await suites()) {
     for (const probe of suite.probes) {
       for (const message of validateArtifact('probe', probe)) {
         problems.push(`${suite.id} ${probe.probeId}: Probe${message}`);
@@ -125,6 +132,46 @@ async function main() {
     console.log(
       `  ${suite.id.padEnd(42)} ${outcome.scored.length} probe(s)  defect ${rate(vector.defect)}  gameability ${rate(vector.gameability)}  zero-action ${rate(vector['zero-action'])}`,
     );
+  }
+
+  // The live harness's staging, which nothing else in the chain reaches.
+  //
+  // `test/eval-contract-strength.js` is exposed only as `eval:contract-strength`
+  // and `eval:preflight`, neither of which is in `npm test`, so its plumbing had
+  // no gate at all. It stages a workspace for every trace leg, and a staging
+  // call that returns a promise nobody awaits hands the port `cwd: undefined`,
+  // which a spawn reads as "inherit": every leg would then run against this
+  // checkout instead of the staged fixture, and the first signal would be a paid
+  // live run measuring the wrong tree. Staging is pure plumbing with no model
+  // call in it, so it belongs in this check rather than behind a credential.
+  const traceGroundTruth = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'trace-eval', 'ground-truth.json'), 'utf8'));
+  for (const set of traceGroundTruth.fixtureSets) {
+    const staged = await stagedWorkspaceFor('trace', { channels: { stdin: { value: `\`{project-root}\`: \`${set.projectRoot}\`` } } });
+    try {
+      if (typeof staged?.cwd !== 'string' || !fs.existsSync(staged.cwd)) {
+        problems.push(`${set.id}: the contract-strength harness staged no working directory (${JSON.stringify(staged?.cwd ?? null)})`);
+      }
+    } finally {
+      if (typeof staged?.root === 'string') fs.rmSync(staged.root, { recursive: true, force: true });
+    }
+  }
+
+  // A run that deletes a corpus member is reported as a mutation rather than
+  // taking the harness down. The digest is over members the port resolves, so a
+  // member that stopped resolving comes back null, and the caller counts null as
+  // a mutation whatever the baseline holds.
+  const mutationSet = traceGroundTruth.fixtureSets[0];
+  const mutated = await stageWorkspace(mutationSet);
+  try {
+    fs.rmSync(path.join(mutated.projectDir, mutated.corpusFiles[0]));
+    const afterDeletion = await digestTree(mutated.projectDir, mutated.corpusFiles);
+    if (afterDeletion !== null) {
+      problems.push(
+        `deleting ${mutated.corpusFiles[0]} from a staged workspace left the corpus digest readable, so a destroyed benchmark reads as unmutated`,
+      );
+    }
+  } finally {
+    fs.rmSync(mutated.dir, { recursive: true, force: true });
   }
 
   // Through Prettier with this repository's own config, because test/probes/ is

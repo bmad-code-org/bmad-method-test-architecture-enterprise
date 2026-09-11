@@ -41,6 +41,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { digest } = require('./eval-record');
+const { loadCorpus } = require('./corpus-port');
 // The prompt a trace observation carries is the prompt the harness assembles, and
 // tools/generate-contracts.js binds the same function's output as each trace plan
 // step's stdin literal. One function on both sides is the whole guard; `legs` in
@@ -774,8 +775,17 @@ function routingEvidence(contract) {
 // the suites
 // ---------------------------------------------------------------------------
 
-/** Every contract that has a probe corpus, with the evidence source that answers for it. */
-function suites() {
+/**
+ * Every contract that has a probe corpus, with the evidence source that answers
+ * for it.
+ *
+ * Asynchronous because the probe corpora are resolved through `eval-quality`'s
+ * corpus port rather than read here: the digest that pins which corpus a score
+ * was computed over is taken from what the port returned, so the bytes behind
+ * it come from the certified resolver. The digest input is unchanged, so the
+ * value it produces is the value it has always produced.
+ */
+async function suites() {
   const entries = [
     ...ROUTING_CONTRACTS.map((spec) => ({
       id: spec.relativePath.replace('.contract.json', ''),
@@ -813,9 +823,19 @@ function suites() {
       evidenceFor: (contract) => fragmentSelectionEvidence(contract, workflow),
     });
   }
+  const corpus = await loadCorpus(
+    PROJECT_ROOT,
+    entries.map((entry) => path.relative(PROJECT_ROOT, entry.probesPath)),
+  );
   return entries.map((entry) => {
     const contract = readJson(entry.contractPath);
-    return { ...entry, contract, probes: readJson(entry.probesPath), evidence: entry.evidenceFor(contract) };
+    const reference = path.relative(PROJECT_ROOT, entry.probesPath);
+    return {
+      ...entry,
+      contract,
+      probes: JSON.parse(corpus.bytes(reference).toString('utf8')),
+      evidence: entry.evidenceFor(contract),
+    };
   });
 }
 
@@ -930,7 +950,15 @@ async function scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot
   return { probe, record, manifest, configuration, result, schemaProblems };
 }
 
-/** The digest that pins which corpus a score was computed over. */
+/**
+ * The digest that pins which corpus a score was computed over.
+ *
+ * The probes it digests were resolved through the corpus port by `suites`, so
+ * this no longer reads a file of its own. The input is the contract identifier
+ * and the corpus as parsed, which is what the scorer actually consumes, and it
+ * is unchanged: moving this to the file's raw bytes would pin whitespace a score
+ * does not depend on, and would be a re-attestation rather than an adoption.
+ */
 function corpusDigestOf(suite) {
   return digest([suite.contract.contractId, JSON.stringify(suite.probes)]);
 }
@@ -994,7 +1022,7 @@ async function runSuite(suite, { port, runId, modelSnapshot, signal, sink }) {
   }
   const sealed = await sealContract(suite.contract);
 
-  return { suite, scored, strength: strengthVector(scored), sealed };
+  return { suite, scored, strength: strengthVector(scored), sealed, corpusDigest };
 }
 
 module.exports = {

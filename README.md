@@ -392,7 +392,7 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains twenty-five checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Five of the twenty-five keep the rules, guidance, hook, eval data, and eval contracts aligned:
+`npm test` chains thirty checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Five of the twenty-five keep the rules, guidance, hook, eval data, and eval contracts aligned:
 
 - `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:enforce-hook` fails when a new Absolute registry row appears in neither the hook's enforced list nor its deferred list. This prevents a rule from being added without an explicit write-time enforcement decision.

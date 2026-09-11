@@ -55,14 +55,21 @@ const REDACTED = '[redacted]';
  * file as binary and print "Binary files differ" where a reviewer needed a diff.
  * The escape hashes to the same byte, so no recorded digest moves.
  *
- * @param {string|Buffer|Array<string|Buffer>} parts
+ * Any typed-array view is hashed as the bytes it holds. That is not a detail:
+ * `eval-quality`'s corpus port returns `bytes` as a plain `Uint8Array`, and a
+ * `Uint8Array` reaching the branch below unconverted would be stringified to its
+ * decimal spelling and hashed as the text "1,2,3". Every digest taken that way
+ * would be wrong and none of them would look wrong, so the conversion is here
+ * rather than left to each caller to remember.
+ *
+ * @param {string|Buffer|Uint8Array|Array<string|Buffer|Uint8Array>} parts
  * @returns {string} `sha256:<hex>`
  */
 function digest(parts) {
   const list = Array.isArray(parts) ? parts : [parts];
   const hash = createHash('sha256');
   for (const part of list) {
-    const bytes = Buffer.isBuffer(part) ? part : Buffer.from(String(part), 'utf8');
+    const bytes = ArrayBuffer.isView(part) ? Buffer.from(part.buffer, part.byteOffset, part.byteLength) : Buffer.from(String(part), 'utf8');
     hash.update(`${bytes.length}\u0000`);
     hash.update(bytes);
   }

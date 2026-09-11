@@ -1,6 +1,7 @@
 {
   "tea-routing-intents": {
     "contractId": "tea-routing-intents-behavioral",
+    "corpusDigest": "sha256:d635cfdf72fcd249df5c3d6827ff2c2cad49116b483143a9c9c9573262259c5f",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -59,6 +60,7 @@
   },
   "tea-routing-controls": {
     "contractId": "tea-routing-controls-behavioral",
+    "corpusDigest": "sha256:08421dcc4d8616f2f0be6fe7003f3820b86f425bf46838771f196467553eb120",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -117,6 +119,7 @@
   },
   "test-review": {
     "contractId": "tea-test-review-behavioral",
+    "corpusDigest": "sha256:e1f6872515a4cd977b9193f999febda6b2100148ca08de4ae4618c8846d6702a",
     "probeCount": 11,
     "strength": {
       "defect": {
@@ -374,6 +377,7 @@
   },
   "test-design": {
     "contractId": "tea-test-design-behavioral",
+    "corpusDigest": "sha256:62961a2f92f67480b232dfd6cce6221d1a1c6e5a24c42d5e65bc52ea562d88ed",
     "probeCount": 16,
     "strength": {
       "defect": {
@@ -596,6 +600,7 @@
   },
   "trace": {
     "contractId": "tea-trace-behavioral",
+    "corpusDigest": "sha256:8d1784cad59bb32ca44b931835484ddc65dc9e89e7c2f8098d69c47cd959f5b5",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -665,6 +670,7 @@
   },
   "fragment-selection/bmad-testarch-atdd": {
     "contractId": "tea-fragment-selection-atdd",
+    "corpusDigest": "sha256:9595131ec0e9cde7458a4e38e4baa2232524b02c014501eca0073463ed23788f",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -715,6 +721,7 @@
   },
   "fragment-selection/bmad-testarch-automate": {
     "contractId": "tea-fragment-selection-automate",
+    "corpusDigest": "sha256:89d71c25ae651e92c6c74cc56a5dc80eed599296514b73ec9e53f41709a81575",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -765,6 +772,7 @@
   },
   "fragment-selection/bmad-testarch-ci": {
     "contractId": "tea-fragment-selection-ci",
+    "corpusDigest": "sha256:43215ad3892b982cbc14dadc8cc3919b8d321059d31cfcc6e6587cc6cb357fd6",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -815,6 +823,7 @@
   },
   "fragment-selection/bmad-testarch-framework": {
     "contractId": "tea-fragment-selection-framework",
+    "corpusDigest": "sha256:143204fc6216c64b43ee4614e0618de793fcc37e889a4ff3a9f7d23adc0043a9",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -865,6 +874,7 @@
   },
   "fragment-selection/bmad-testarch-nfr": {
     "contractId": "tea-fragment-selection-nfr",
+    "corpusDigest": "sha256:751c58ab710d5ee730a5eb74689d5408beac318ffc640b51b6dd3e6abbe4d4fb",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -915,6 +925,7 @@
   },
   "fragment-selection/bmad-testarch-test-design": {
     "contractId": "tea-fragment-selection-test-design",
+    "corpusDigest": "sha256:7bd049ceec96e5592460bed8223cd4d379c20a039ae223d5fb1a6ae37f98661d",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -965,6 +976,7 @@
   },
   "fragment-selection/bmad-testarch-test-review": {
     "contractId": "tea-fragment-selection-test-review",
+    "corpusDigest": "sha256:fe9cf37cab4ee4c40da4413e3821753ce1a9751a08fafece6985f56d28ffe661",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -1015,6 +1027,7 @@
   },
   "fragment-selection/bmad-testarch-trace": {
     "contractId": "tea-fragment-selection-trace",
+    "corpusDigest": "sha256:d99edc90f7f19e94a91145edf47cfde2bf2b051307f63742561fc777b8e016f2",
     "probeCount": 2,
     "strength": {
       "defect": null,

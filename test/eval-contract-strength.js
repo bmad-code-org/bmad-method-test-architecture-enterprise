@@ -181,7 +181,7 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * A selection leg gets an empty directory, which is what its `read-only`
  * declaration is for.
  */
-function stagedWorkspaceFor(suiteId, request) {
+async function stagedWorkspaceFor(suiteId, request) {
   if (suiteId === 'trace') {
     const groundTruth = JSON.parse(fs.readFileSync(TRACE_GROUND_TRUTH, 'utf8'));
     const prompt = String(request?.channels?.stdin?.value ?? '');
@@ -189,7 +189,7 @@ function stagedWorkspaceFor(suiteId, request) {
     if (set === undefined) {
       throw new Error('a trace leg sent a prompt naming no fixture set project root, so there is no set to stage for it');
     }
-    const staged = stageWorkspace(set);
+    const staged = await stageWorkspace(set);
     return {
       root: staged.dir,
       cwd: staged.dir,
@@ -357,9 +357,17 @@ async function runOneSuite(suite, options, stats) {
   } else {
     port = cachingPort({
       makePort: async (request) => {
-        const staged = stagedWorkspaceFor(suite.id, request);
-        const { port: realPort } = await createProbePort({ cwd: staged.cwd, interfaceIds, artifacts: staged.artifacts });
-        return { port: realPort, workspace: staged };
+        const staged = await stagedWorkspaceFor(suite.id, request);
+        try {
+          const { port: realPort } = await createProbePort({ cwd: staged.cwd, interfaceIds, artifacts: staged.artifacts });
+          return { port: realPort, workspace: staged };
+        } catch (error) {
+          // The caller cleans up the workspace it was handed, and a throw here
+          // hands it none, so every refused authorization would leave a staged
+          // fixture tree behind.
+          fs.rmSync(staged.root, { recursive: true, force: true });
+          throw error;
+        }
       },
       contract: suite.contract,
       cacheDir,
@@ -507,7 +515,7 @@ function baselineDifferences(results, baseline) {
 
 async function main(argv) {
   const options = parseArgs(argv);
-  const selected = suites().filter((suite) => options.suiteIds.length === 0 || options.suiteIds.includes(suite.id));
+  const selected = (await suites()).filter((suite) => options.suiteIds.length === 0 || options.suiteIds.includes(suite.id));
   if (selected.length === 0) throw new Error(`no suite matches ${options.suiteIds.join(', ')}`);
 
   const stats = { spawns: 0, hits: 0, elapsedMs: 0, legs: [] };
