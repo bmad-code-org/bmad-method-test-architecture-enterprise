@@ -118,6 +118,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check for unresolved conflict markers
+        run: npm run test:conflict-markers
+
       - name: Validate YAML schemas
         run: npm run validate:schemas
 
