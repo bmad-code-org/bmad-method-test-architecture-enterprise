@@ -729,6 +729,7 @@ So that the largest harness is converted on its own and reviewable on its own.
 **Given** a harness reads an artifact that is absent, empty or over its cap
 **When** the read goes through the port
 **Then** the outcome is the port's declared shape rather than an exception TEA interprets
+**And** absent and empty are satisfied by the port, while over its cap is satisfied by there being no cap to exceed: `FileReadRequest` is `{path}` and `FileReadResponse` is `{path, bytes}`, so the port declares no maximum and no truncation, and the capped read is the command-line adapter's `maxOutputBytes` over an artifact read back from a spawned run, which already goes through that port
 
 ### Story 3.6: Cut the remaining harnesses over to the file-system port
 
@@ -742,6 +743,17 @@ So that no eval harness reaches the file system directly.
 **When** `test/eval-test-review.js`, `test/eval-fragment-selection.js`, `test/lib/probe-scoring.js` and `test/lib/probe-targets.js` are converted
 **Then** each is a separate commit with its own reported diff size
 **And** no direct `fs` call remains in the eval harnesses
+
+**Given** two shared readers sit under `test/lib/` and belong to no harness, so Story 3.5 found them and assigned them here rather than converting them
+**When** this story runs
+**Then** `writeSuiteResult` at `test/lib/eval-record.js:299` and `loadSuiteManifest` at `test/lib/suite-manifest.js:32` read and write through the port
+**And** they are converted here rather than in Story 3.5 because every harness that calls them becomes asynchronous with them, and those call sites are this story's
+
+**Given** the file-system port declares `readFile` and `writeFile` and nothing else
+**When** a call site this story reaches is an existence check, a directory walk, or a directory lifecycle operation
+**Then** it stays on `fs` and the record says which calls those are and that the port cannot express them
+**And** `workingTreeState` at `test/lib/runner-capabilities.js:38` is one of them, a repository walk that is the largest file-access surface these harnesses touch and is invisible at its call site
+**And** `missingCredential` at `test/eval-test-review.js:241` is declined rather than converted, because it reads outside the repository in the user's home and AD-18 keeps credential material out of a declaration, so routing a credential probe through a port whose requests are logged is the wrong direction
 
 **Given** Epic 3 is otherwise complete
 **When** `npm test` and every `quality.yaml` job run

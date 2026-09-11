@@ -138,6 +138,28 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * `eval-quality`'s file-system port declares two methods, `readFile` and
+ * `writeFile`, each a byte-level operation at a path. Eighteen calls below stay
+ * on `node:fs` because the port cannot express them, and that is a statement
+ * about the port's surface rather than a decision to leave work undone:
+ *
+ * - Six existence checks that answer a question rather than guard a read: a
+ *   declared fixture file, a declared artifact directory, the ground truth and
+ *   the workflow directory. The port has no `exists`, and answering "is this
+ *   there" by reading every byte of it is a different operation with a
+ *   different cost.
+ * - One directory walk and its guard, which enumerate a staged tree.
+ * - Ten lifecycle calls: one `mkdtemp`, four `mkdir`, two `copyFile` and three
+ *   `rm` that create and remove the staged workspace.
+ *
+ * Every read of a file's contents and the one write of one go through
+ * `test/lib/file-system-port.js`. An existence check that used to guard such a
+ * read is gone rather than converted, because the port answers absence and
+ * asking first was the same question twice with a window in between.
+ */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -147,6 +169,7 @@ const { failureClassForExit } = require('../cli/trace-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const { UNRESOLVABLE_MEMBER, loadCorpus } = require('./lib/corpus-port');
+const { readJson, readText, writeText } = require('./lib/file-system-port');
 const {
   digest,
   digestFiles,
@@ -508,13 +531,17 @@ function parseArgs(argv) {
 /**
  * Parse ground-truth.json.
  *
- * @returns {object|null} Null when the file is missing or unparseable, so the caller
- *   can report that as an environment failure rather than crash inside a reporter.
+ * The existence check this used to open with is gone rather than converted: the
+ * port answers absence, so asking first was a second reading of the same
+ * question with a window between them.
+ *
+ * @returns {Promise<object|null>} Null when the file is missing or unparseable, so the
+ *   caller can report that as an environment failure rather than crash inside a reporter.
  */
-function loadGroundTruth() {
-  if (!fs.existsSync(GROUND_TRUTH)) return null;
+async function loadGroundTruth() {
   try {
-    return JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
+    const read = await readJson(GROUND_TRUTH);
+    return read.present ? read.value : null;
   } catch {
     return null;
   }
@@ -667,10 +694,9 @@ function expectedRejectedEvidence(set) {
 /* -------------------------------------------------------------------------- */
 
 /** Line count of a corpus-relative fixture file, or null when it does not exist. */
-function fixtureLineCount(relative) {
-  const absolute = path.join(FIXTURE_ROOT, relative);
-  if (!fs.existsSync(absolute)) return null;
-  return fs.readFileSync(absolute, 'utf8').split('\n').length;
+async function fixtureLineCount(relative) {
+  const read = await readText(path.join(FIXTURE_ROOT, relative));
+  return read.present ? read.text.split('\n').length : null;
 }
 
 /** The heading text of one markdown line, or null when the line is not a heading. */
@@ -679,10 +705,16 @@ function headingText(line) {
   return match ? match[1].replaceAll(/[#*`]/g, '').trim() : null;
 }
 
-/** Every markdown heading text in a file, for checking a citation's named section. */
-function headingsOf(absolute) {
+/**
+ * Every markdown heading text in a file, for checking a citation's named section.
+ *
+ * An absent file yields no headings rather than throwing, because every caller
+ * has already reported the absence and is now asking what the file contains.
+ */
+async function headingsOf(absolute) {
   const headings = new Set();
-  for (const line of fs.readFileSync(absolute, 'utf8').split('\n')) {
+  const read = await readText(absolute);
+  for (const line of (read.text ?? '').split('\n')) {
     const text = headingText(line);
     if (text) headings.add(text);
   }
@@ -719,7 +751,7 @@ function sectionRange(lines, section) {
  * @param {object} groundTruth
  * @returns {{problems: string[], notices: string[]}}
  */
-function validateCorpus(groundTruth) {
+async function validateCorpus(groundTruth) {
   const problems = [];
   const notices = [];
   const tolerance = groundTruth.evidenceLineTolerance;
@@ -737,12 +769,13 @@ function validateCorpus(groundTruth) {
   // and drifts whenever a step file is edited, which is a notice rather than a failure.
   for (const [key, citation] of Object.entries(groundTruth.skillRuleCitations ?? {})) {
     const absolute = path.join(PROJECT_ROOT, citation.file);
-    if (!fs.existsSync(absolute)) {
+    const cited = await readText(absolute);
+    if (!cited.present) {
       problems.push(`skillRuleCitations.${key}: ${citation.file} does not exist`);
       continue;
     }
-    const lines = fs.readFileSync(absolute, 'utf8').split('\n');
-    if (citation.section && !headingsOf(absolute).has(citation.section)) {
+    const lines = cited.text.split('\n');
+    if (citation.section && !(await headingsOf(absolute)).has(citation.section)) {
       problems.push(`skillRuleCitations.${key}: ${citation.file} has no section titled "${citation.section}"`);
       continue;
     }
@@ -841,17 +874,18 @@ function validateCorpus(groundTruth) {
           // A live entry names a record id instead of a span, so it is checked against
           // the results file the set declares.
           const liveFile = set.liveResultsFile ? path.join(FIXTURE_ROOT, set.liveResultsFile) : null;
-          if (!liveFile || !fs.existsSync(liveFile)) {
+          const live = liveFile === null ? { present: false, value: null } : await readJson(liveFile);
+          if (!live.present) {
             problems.push(`${criterionLabel}: names live record ${entry.recordId} but the set declares no readable live results file`);
             continue;
           }
-          const parsed = JSON.parse(fs.readFileSync(liveFile, 'utf8'));
+          const parsed = live.value;
           if (!(parsed.results ?? []).some((record) => record.id === entry.recordId)) {
             problems.push(`${criterionLabel}: live record ${entry.recordId} is not in ${set.liveResultsFile}`);
           }
           continue;
         }
-        const lineCount = fixtureLineCount(entry.file);
+        const lineCount = await fixtureLineCount(entry.file);
         if (lineCount === null) {
           problems.push(`${criterionLabel}: cites ${entry.file}, which does not exist`);
           continue;
@@ -964,7 +998,9 @@ function validateCorpus(groundTruth) {
 
     // Waiver expectations are field reads against the register the set declares.
     if (set.waiverRegister) {
-      const register = fs.readFileSync(path.join(FIXTURE_ROOT, set.waiverRegister), 'utf8');
+      const registerRead = await readText(path.join(FIXTURE_ROOT, set.waiverRegister));
+      if (!registerRead.present) problems.push(`${label}: declares waiverRegister ${set.waiverRegister}, which does not exist`);
+      const register = registerRead.text ?? '';
       for (const waiver of [...(set.expectedWaiverHandling?.valid ?? []), ...(set.expectedWaiverHandling?.invalid ?? [])]) {
         if (!new RegExp(`^##\\s+${waiver.id}:`, 'm').test(register)) {
           problems.push(`${label}: expectedWaiverHandling names ${waiver.id}, which is not a heading in ${set.waiverRegister}`);
@@ -994,7 +1030,12 @@ function validateCorpus(groundTruth) {
 
     // Live expectations are counts over the records the results file carries.
     if (set.liveResultsFile) {
-      const parsed = JSON.parse(fs.readFileSync(path.join(FIXTURE_ROOT, set.liveResultsFile), 'utf8'));
+      const liveRead = await readJson(path.join(FIXTURE_ROOT, set.liveResultsFile));
+      // An absent file is reported as itself. Before the port answered absence,
+      // this read threw `ENOENT` out of a validator whose whole job is to report
+      // what is wrong with the corpus.
+      const parsed = liveRead.present ? liveRead.value : { results: [] };
+      if (!liveRead.present) problems.push(`${label}: declares liveResultsFile ${set.liveResultsFile}, which does not exist`);
       const declaredBlockers = set.expectedLiveEvidence?.expectedBlockers ?? [];
       if (declaredBlockers.length !== (parsed.results ?? []).length) {
         problems.push(
@@ -1157,7 +1198,7 @@ async function stageWorkspace(set) {
   // with it; the clean set gets the directory empty, which is what it must have.
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
   fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  fs.writeFileSync(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml(), 'utf8');
+  await writeText(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml());
 
   for (const relative of filesUnder(SKILL_ROOT)) {
     const target = path.join(dir, 'skill', relative);
@@ -1200,18 +1241,23 @@ async function stageWorkspace(set) {
  * path is named for the ground truth, no staged file carries its bytes, and no staged
  * file carries a key that appears only in it.
  *
+ * A staged file that vanished between the walk and the read contributes no text
+ * rather than throwing: this runs on the way into a measurement and on the way
+ * out of a failed one, and a validity check that crashes reports nothing about
+ * validity.
+ *
  * @param {string} dir Workspace root.
- * @returns {string[]} Problems, empty when the workspace is clean.
+ * @returns {Promise<string[]>} Problems, empty when the workspace is clean.
  */
-function assertGroundTruthAbsent(dir) {
+async function assertGroundTruthAbsent(dir) {
   const problems = [];
-  const groundTruthBytes = fs.existsSync(GROUND_TRUTH) ? fs.readFileSync(GROUND_TRUTH, 'utf8') : null;
+  const groundTruthBytes = (await readText(GROUND_TRUTH)).text;
   for (const relative of filesUnder(dir)) {
     if (path.basename(relative) === 'ground-truth.json') {
       problems.push(`staged workspace contains ${relative}`);
       continue;
     }
-    const text = fs.readFileSync(path.join(dir, relative), 'utf8');
+    const text = (await readText(path.join(dir, relative))).text ?? '';
     if (groundTruthBytes && text === groundTruthBytes) {
       problems.push(`staged file ${relative} carries the ground truth verbatim`);
       continue;
@@ -1311,10 +1357,10 @@ function caseIndex(sets) {
  * `caseCount` against the length of this, the same way it checks its thresholds
  * against THRESHOLDS.
  *
- * @returns {string[]}
+ * @returns {Promise<string[]>}
  */
-function caseIds() {
-  return (loadGroundTruth()?.fixtureSets ?? []).map((set) => set.id);
+async function caseIds() {
+  return ((await loadGroundTruth())?.fixtureSets ?? []).map((set) => set.id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1358,17 +1404,20 @@ function summaryFromArtifact(artifact) {
  * read through summaryFromArtifact, so a stored replay case and a live observation
  * go through one reader.
  *
+ * Absent, empty and malformed are three outcomes rather than one. The port
+ * answers absence, an empty file parses as no JSON and reads back as text, and
+ * the artifact reader decides what each means.
+ *
  * @param {string} projectDir
- * @returns {{ok: true, summary: object}|{ok: false, failureClass: string, reason: string}}
+ * @returns {Promise<{ok: true, summary: object}|{ok: false, failureClass: string, reason: string}>}
  */
-function readSummary(projectDir) {
-  const summaryPath = path.join(projectDir, 'test-artifacts', 'e2e-trace-summary.json');
-  if (!fs.existsSync(summaryPath)) return summaryFromArtifact({ kind: 'absent' });
-  const text = fs.readFileSync(summaryPath, 'utf8');
+async function readSummary(projectDir) {
+  const read = await readText(path.join(projectDir, 'test-artifacts', 'e2e-trace-summary.json'));
+  if (!read.present) return summaryFromArtifact({ kind: 'absent' });
   try {
-    return summaryFromArtifact({ kind: 'json', value: JSON.parse(text) });
+    return summaryFromArtifact({ kind: 'json', value: JSON.parse(read.text) });
   } catch {
-    return summaryFromArtifact({ kind: 'text', value: text });
+    return summaryFromArtifact({ kind: 'text', value: read.text });
   }
 }
 
@@ -1489,10 +1538,9 @@ function parseMatrix(text, set) {
 }
 
 /** The matrix as a file on disk, for a stored replay case; a live run reads it off the observation. */
-function readMatrix(projectDir, set) {
-  const matrixPath = path.join(projectDir, 'test-artifacts', 'traceability-matrix.md');
-  if (!fs.existsSync(matrixPath)) return null;
-  return parseMatrix(fs.readFileSync(matrixPath, 'utf8'), set);
+async function readMatrix(projectDir, set) {
+  const read = await readText(path.join(projectDir, 'test-artifacts', 'traceability-matrix.md'));
+  return read.present ? parseMatrix(read.text, set) : null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1952,7 +2000,7 @@ function runnerOptions(options) {
 async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
   const workspace = await stageWorkspace(set);
   try {
-    const leaked = assertGroundTruthAbsent(workspace.dir);
+    const leaked = await assertGroundTruthAbsent(workspace.dir);
     if (leaked.length > 0) {
       return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
     }
@@ -2167,7 +2215,7 @@ async function main() {
   console.log('tea trace eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const groundTruth = loadGroundTruth();
+  const groundTruth = await loadGroundTruth();
   if (!groundTruth) {
     console.error(`${colors.red}eval: ground truth at ${GROUND_TRUTH} is missing or not valid JSON${colors.reset}`);
     await finish({
@@ -2186,7 +2234,7 @@ async function main() {
     await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
   }
 
-  const { problems, notices } = validateCorpus(groundTruth);
+  const { problems, notices } = await validateCorpus(groundTruth);
   for (const notice of notices) console.log(`  ${colors.yellow}drift${colors.reset} ${notice}`);
   if (problems.length > 0) {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
@@ -2212,7 +2260,7 @@ async function main() {
       const workspace = await stageWorkspace(set);
       try {
         const leaked = [
-          ...assertGroundTruthAbsent(workspace.dir),
+          ...(await assertGroundTruthAbsent(workspace.dir)),
           ...GROUND_TRUTH_ONLY_TOKENS.filter((token) => buildPrompt(set).includes(token)).map(
             (token) => `prompt carries the ground-truth-only key "${token}"`,
           ),
