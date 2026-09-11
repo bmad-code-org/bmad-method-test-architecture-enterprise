@@ -104,7 +104,7 @@ FR17: `eval-quality`'s `VERSION` export tells the truth. `dist/index.d.ts` decla
 
 **Ports**
 
-FR18: TEA resolves its corpus through `CorpusPort`, using the shipped `createLocalCorpusAdapter`, and certifies it with `runCorpusPortConformance`. TEA digests corpora by hand at `test/eval-trace.js:1146`, `test/lib/probe-scoring.js:663` and `tools/generate-probes.js:217`.
+FR18: TEA resolves its corpus through `CorpusPort`, using the shipped `createLocalCorpusAdapter`, and certifies it with `runCorpusPortConformance`. TEA had four corpus readers, and three of them, `test/eval-trace.js`, `test/lib/probe-scoring.js` and `tools/generate-probes.js`, now load through `test/lib/corpus-port`. The fourth, `digestFiles` in `test/lib/eval-record.js`, computes the `fixtureDigest` every eval harness records and is still a direct read. It was found while Story 3.2 was being implemented and is carried by Story 3.6. Its remaining work is the `<missing>` marker translation; every caller is already inside an `async function`, so there is no async cascade.
 
 FR19: TEA reads and writes files through `FileSystemPort`, using the shipped `createNodeFileSystemAdapter`, and certifies it with `runFileSystemPortConformance`.
 
@@ -332,13 +332,25 @@ Drift between two runs is measurable, the suite has been run live with its resul
 
 ### Epic 6: Every TEA skill is covered by a behavioral suite
 
-Eight skills are declared deferred in `test/evals/suite-manifest.json`, each with an owner and a statement of missing evidence, and `test/eval-all.js` exits `2` when a skill is in neither a suite nor that list. The declaration is honest and it is still deferred work. This epic closes it.
+Five skills are still declared deferred in `test/evals/suite-manifest.json`, each with an owner and a statement of missing evidence, and `test/eval-all.js` exits `2` when a skill is in neither a suite nor that list. The declaration is honest and it is still deferred work. This epic closes it.
 
 **FRs covered:** FR47 through FR55
 
+### Epic 7: The output contracts the behavioral suites exposed
+
+A skill's machine-readable artifact carries the judgment the skill made, so a suite measuring it scores a result rather than a rendering. Every story here is discovered by an Epic 6 suite and names it.
+
+**FRs covered:** none, and none is owed. The inventory above was written before any suite ran. Every requirement in this epic was discovered by running one, so each story's first Given names the suite and the case that found it, which is the evidence the FR number would otherwise stand in for.
+
+### Epic 8: What the suites proved they do not measure
+
+Running a suite shows where it admits an answer it should reject, or carries ground-truth data it never reads. Every story here is found by execution rather than by review.
+
+**FRs covered:** none, and none is owed. The inventory above was written before any suite ran. Every requirement in this epic was discovered by running one, so each story's first Given names the suite and the case that found it, which is the evidence the FR number would otherwise stand in for.
+
 ## Epic Dependencies
 
-Epic 1 depends on nothing and unblocks Epics 3 and 4. Epic 2 depends on Epic 1 only for the pin. Epic 3 depends on Epic 1. Epic 4's Stories 4.1 through 4.3 depend on Epic 2's release, and its remaining stories depend on nothing. Epic 5 depends on Epic 2 for `compareDominance` and on Epics 1, 3 and 4 for what it documents. Epic 6's suite stories depend on nothing in Epics 1 through 5; only its closing story does.
+Epic 1 depends on nothing and unblocks Epics 3 and 4. Epic 2 depends on Epic 1 only for the pin. Epic 3 depends on Epic 1. Epic 4's Stories 4.1 through 4.3 depend on Epic 2's release, Stories 4.6 and 4.7 depend on Story 2.5 and on a release carrying it, and Stories 4.4, 4.5 and 4.8 depend on nothing. Epic 5 depends on Epic 2 for `compareDominance` and on Epics 1, 3 and 4 for what it documents. Epic 6's suite stories depend on nothing in Epics 1 through 5; only its closing story does. Epic 7 depends on Epic 6: each of its stories is discovered by an Epic 6 suite and cannot be written before that suite exists. Epic 8 depends on Epic 6 the same way, and for the sharper reason that its stories are found by running a suite rather than by reading one.
 
 Epic 2 was deliberately moved off the critical path. An earlier draft put the upstream work first and serialized everything behind an npm release. Only the derivation stories genuinely need it, so Epic 1 now lands against the already-published 3.0.0 and the release leaves the critical path of everything else.
 
@@ -356,6 +368,8 @@ Sizing was measured where it could be. The largest item in an earlier draft, han
 | Epic 4 | Largest of Epics 1 to 5 | Sixteen requirements, each a gate. Several are small; FR37 and FR38 have unknowable size until their first run reports, so both are split into report-then-fix. |
 | Epic 5 | Medium | Documentation, one live run, one release, and wiring the dominance comparison. |
 | Epic 6 | Largest overall | Eight behavioral suites, each needing fixtures, seeded defects and clean controls. |
+| Epic 7 | Small per story | Each story extends one workflow's declared artifact and repoints the suite that found the gap. The cost is the agreement gate between the artifact and the document it summarizes. |
+| Epic 8 | Unknown until run | Each story closes something a suite admits and should reject. Sizing is not knowable in advance, because the threshold needs a live run to calibrate before it can be declared. |
 
 The story count is high because each gate, adapter and suite is its own story. That keeps every story reviewable in one session and every failure attributable to one change.
 
@@ -755,6 +769,16 @@ So that no eval harness reaches the file system directly.
 **And** `workingTreeState` in `test/lib/runner-capabilities.js` is one of them, a repository walk that is the largest file-access surface these harnesses touch and is invisible at its call site
 **And** `missingCredential` in `test/eval-test-review.js` is declined rather than converted, because it reads outside the repository in the user's home and AD-18 keeps credential material out of a declaration, so routing a credential probe through a port whose requests are logged is the wrong direction
 
+**Given** `digestFiles` in `test/lib/eval-record.js` is FR18's fourth corpus reader, the one computing the `fixtureDigest` every eval harness records, and every one of its seven callers is already inside an `async function`: six harness `finish` functions and `placeholderRecord` in `test/eval-all.js`, checked rather than assumed
+**When** it is converted with the others
+**Then** it is `await` at each of those seven sites and no call site changes its own signature
+**And** no corpus digest in the repository is computed from a direct file read
+
+**Given** `digestFiles` returns a `<missing>` marker so a reporting path does not crash on the condition it is reporting, and the port raises a fault where the marker was returned
+**When** the conversion lands
+**Then** the fault is translated back into that marker, because otherwise a record that should say a fixture file is gone becomes an exception in the code that writes records
+**And** a fixture proves a missing corpus file still produces a record
+
 **Given** Epic 3 is otherwise complete
 **When** `npm test` and every `quality.yaml` job run
 **Then** all pass, five conformance arms are reported where one was reported before, and every new script has its own workflow step
@@ -1069,7 +1093,7 @@ So that the dependency change is visible to anyone installing TEA.
 
 ## Epic 6: Every TEA skill is covered by a behavioral suite
 
-Eight skills are declared deferred in `test/evals/suite-manifest.json`, each with an owner and a statement of missing evidence, and `test/eval-all.js` exits `2` when a skill is in neither a suite nor that list.
+Five skills are still declared deferred in `test/evals/suite-manifest.json`, each with an owner and a statement of missing evidence, and `test/eval-all.js` exits `2` when a skill is in neither a suite nor that list. Eight were declared when this epic was written; three have since been discharged by their own suites.
 
 Each skill's `exitCondition` was written when the deferral was declared, and each story turns one into an executable suite.
 
@@ -1312,6 +1336,92 @@ So that every skill is covered by a suite rather than by a declaration that it i
 **When** `npm test` and every `quality.yaml` job run
 **Then** all pass, and every new script has its own workflow step
 
+## Epic 7: The output contracts the behavioral suites exposed
+
+Epic 6 measures each skill's behavior.
+Where a suite can only reach a skill's real output through prose, because the machine-readable artifact that workflow declares does not carry it, the suite is scoring a rendering rather than a result.
+A rendering is the wrong thing to gate on: it moves when the template is edited, and it says nothing about whether the workflow's own contract carries the judgment the workflow made.
+
+This epic closes those gaps in the workflows themselves.
+Every story here is discovered by a suite in Epic 6 and names the suite that found it, so a reader can see which measurement the gap was found by and which measurement stops depending on prose when it is closed.
+
+Each story depends on the Epic 6 story that found it and on nothing else.
+
+**FRs covered:** none, and none is owed. The inventory above was written before any suite ran. Every requirement in this epic was discovered by running one, so each story's first Given names the suite and the case that found it, which is the evidence the FR number would otherwise stand in for.
+
+### Story 7.1: The NFR gate artifact carries the four domain statuses
+
+As someone consuming an NFR evidence audit from a machine,
+I want the gate artifact to carry a status for each of the four domains the workflow evaluated,
+So that reading a domain status does not mean parsing the report's prose.
+
+**Acceptance Criteria:**
+
+**Given** the Gate YAML snippet in `nfr-report-template.md` carries `overall_status` and the eight ADR Quality Readiness Checklist categories, and carries no block for the four domains `steps-c/step-04-evaluate-and-score.md` evaluates
+**When** the gate artifact is extended
+**Then** it declares a domain block naming security, performance, reliability and maintainability, each with one of PASS, CONCERNS, FAIL or N/A
+**And** the eight ADR category rows are unchanged, because they answer a different question and something already reads them
+
+**Given** a domain status now appears in two places, the gate artifact and that domain's `## <Domain> Assessment` section
+**When** an audit is produced
+**Then** the two agree, held by a gate rather than by review
+**And** a run whose gate artifact contradicts its own assessment document fails that gate
+
+**Given** the Story 6.3 suite reads the four domain statuses out of the assessment sections because nothing else carries them
+**When** the gate artifact declares them
+**Then** the suite reads the declared artifact instead of the prose
+**And** its thresholds are unchanged, so a score before and after is comparable on this input
+
+**Given** that suite's ground truth grounds every expected domain status in a rule the workflow states, and one of them, `domainStatusIsWorstFinding`, rests on step-04e's compliance rollup applied to domain findings by analogy because no rule is stated for a domain's own status
+**When** the gate artifact declares the domain block and the rule that produces each status
+**Then** the suite's expectation reads that rule and no longer rests on the analogy
+**And** the ground truth's citation names the rule that then exists, so `npm run test:eval-nfr-data` fails if it moves
+
+**Given** `test/eval-trace.js` records the same split for its own deliverable, reading per-criterion statuses out of `traceability-matrix.md` because `e2e-trace-summary.json` carries no per-criterion block
+**When** this change lands
+**Then** every existing reader of the NFR gate YAML still parses it
+**And** whether the trace summary owes the same block is answered in this epic or recorded as answered no, with the reason
+
+**Given** the change is otherwise complete
+**When** `npm test` and every `quality.yaml` job run
+**Then** all pass
+
+## Epic 8: What the suites proved they do not measure
+
+Epic 6 builds a behavioral suite per skill.
+Running those suites shows where a suite admits an answer it should reject, or carries ground-truth data it never reads.
+
+Each story here names the suite that found it and the case that demonstrates it.
+Every story is discovered by execution rather than by review, which is why none of them could have been written before Epic 6.
+
+**FRs covered:** none, and none is owed. The inventory above was written before any suite ran. Every requirement in this epic was discovered by running one, so each story's first Given names the suite and the case that found it, which is the evidence the FR number would otherwise stand in for.
+
+### Story 8.1: The nfr suite scores whether evidence supports the status, not only whether it exists
+
+As someone relying on an NFR audit's grounding,
+I want a status to be judged against evidence that speaks to it,
+So that a citation of a real but irrelevant file cannot read as grounding.
+
+**Acceptance Criteria:**
+
+**Given** `scoreRun` in `test/eval-nfr.js` counts a citation as fabricated only when the file it names is absent from the bundle, and the ground truth already declares per domain which files establish which criteria
+**When** the scorer is extended
+**Then** it reads that declared evidence and scores whether each domain's citations speak to the status it reported
+**And** `test/replay/nfr/gapped-fault-tolerance-grounded-on-spec/` fails the new measurement, where today it scores clean with Fault Tolerance grounded on the retry policy in the tech spec instead of on the failover drill
+
+**Given** a strict subset check would fail a correct run, because the gapped bundle's maintainability domain legitimately cites `docs/tech-spec.md` to state the coverage threshold and to record that no report exists
+**When** the threshold is set
+**Then** it is set from a live run of both bundles rather than declared blind
+**And** the run that calibrated it is named with its measured value, because a bar nobody can clear teaches nothing and a bar everyone clears teaches nothing
+
+**Given** the suite's other thresholds are unchanged by this work
+**When** the new measurement lands
+**Then** the record states which of them a score before and after is comparable on, and which it is not
+
+**Given** the change is otherwise complete
+**When** `npm test` and every `quality.yaml` job run
+**Then** all pass
+
 ## Validation Record
 
 Checked mechanically where possible.
@@ -1322,19 +1432,19 @@ Checked mechanically where possible.
 | Covered in the FR coverage map | 56 |
 | Assigned to an epic | 56 |
 | Withdrawn, struck in place with the evidence | 1 (FR21) |
-| Stories carrying acceptance criteria | 43 of 43 |
-| Stories in the As a / I want / So that form | 43 of 43 |
-| Stories carrying Given / When / Then criteria | 43 of 43 |
+| Stories carrying acceptance criteria | 45 of 45 |
+| Stories in the As a / I want / So that form | 45 of 45 |
+| Stories carrying Given / When / Then criteria | 45 of 45 |
 | Stories referencing a later story or epic | 0 |
 | Unreplaced template placeholders | 0 |
 
-**Epic independence.** Epic 1 depends on nothing. Epic 2 depends on Epic 1 only for the pin. Epic 3 depends on Epic 1. Epic 4's first three stories depend on Epic 2's release; the rest depend on nothing. Epic 5 depends on Epic 2 for `compareDominance` and on Epics 1, 3 and 4 for what it documents. Epic 6's stories depend on nothing outside the epic; inside it, 6.7 needs 6.6, 6.9 needs 6.8, 6.11 needs 6.10, and 6.12 needs all eleven. Every dependency points backwards.
+**Epic independence.** Epic 1 depends on nothing. Epic 2 depends on Epic 1 only for the pin. Epic 3 depends on Epic 1. Epic 4's first three stories depend on Epic 2's release, 4.6 and 4.7 depend on Story 2.5 and on a release carrying it, and 4.4, 4.5 and 4.8 depend on nothing. Epic 5 depends on Epic 2 for `compareDominance` and on Epics 1, 3 and 4 for what it documents. Epic 6's stories depend on nothing outside the epic; inside it, 6.7 needs 6.6, 6.9 needs 6.8, 6.11 needs 6.10, and 6.12 needs all eleven. Epic 7's stories each depend on the Epic 6 story that discovered them: 7.1 on 6.3. Epic 8's do the same: 8.1 on 6.3. Every dependency points backwards.
 
 **File overlap.** Epics 1 and 3 both touch `test/test-probe-conformance.js` and `tools/generate-probes.js`. Consolidation was considered and rejected: on `test-probe-conformance.js` the touches are three localized sequential edits in one file, and on `generate-probes.js` they fall in different regions of a 720-line file. Merging would give a ten-story epic that cannot be green until all of it lands.
 
 **Not applicable.** No architecture document specifies a starter template, and TEA has no database or entities.
 
-**Deferred work, checked 2026-09-10.** Three registries were read rather than assumed. `_bmad-output/implementation-artifacts/deferred-work.md` holds seven entries, all verified resolved against current code. `test/evals/suite-manifest.json` holds eight declared deferrals, which Epic 6 closes. `tea-enforce.cjs`'s `DEFERRED` map holds ten Absolute registry rows, each deferred because a regex hook cannot decide it, and these stay out of scope as a stated limit. A fourth surface of the same family, `test/test-contracts.js:174`'s skip-reads-as-pass, is recorded in Additional Requirements.
+**Deferred work, checked 2026-09-10.** Three registries were read rather than assumed. `_bmad-output/implementation-artifacts/deferred-work.md` holds seven entries, all verified resolved against current code. `test/evals/suite-manifest.json` held eight declared deferrals when this was checked and holds five now, which Epic 6 closes. `tea-enforce.cjs`'s `DEFERRED` map holds ten Absolute registry rows, each deferred because a regex hook cannot decide it, and these stay out of scope as a stated limit. A fourth surface of the same family, `test/test-contracts.js:174`'s skip-reads-as-pass, is recorded in Additional Requirements.
 
 ## Review Record
 
