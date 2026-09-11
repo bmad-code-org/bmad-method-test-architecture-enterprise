@@ -1,0 +1,204 @@
+{
+  "$comment": [
+    "The oracle for the routing corpus. The agent never sees this file, and the harness proves it: every key named",
+    "in GROUND_TRUTH_ONLY_KEYS is searched for in the assembled prompt before a model call is spent, and the whole",
+    "file's bytes are searched for too, the way test/eval-trace.js guards its own ground truth.",
+    "",
+    "Where the three actions come from. `route` and `clarify` are Step 8 of src/agents/bmad-tea/SKILL.md verbatim:",
+    "dispatch a clear match directly, and pause to clarify only when two or more items are genuinely close. `decline`",
+    "is not. Step 8's third clause says that when nothing on the menu fits the agent should just continue the",
+    "conversation, and it names chat, clarifying questions and bmad-help as fair game. It forbids a dispatch and it",
+    "asks for no refusal. The requirement that an unservable intent be declined and that the answer name what is",
+    "missing comes from this suite's own exit condition in test/evals/suite-manifest.json, and the prompt states it",
+    "outright, so the agent is scored against a rule it was given rather than one inferred from a skill that does not",
+    "carry it. The prompt is the whole of what makes that fair, and if the skill is ever taught to decline in its own",
+    "words, this paragraph is where that should be recorded.",
+    "",
+    "`expectedMenuCode` is the primary key because the menu is what the agent dispatches from. Nine of the ten items",
+    "name a skill and one, GATE, names a prompt, so `expectedWorkflow` is null there and is scored only where the menu",
+    "names a workflow. The harness checks every code and every workflow here against the live",
+    "src/agents/bmad-tea/customize.toml, so an edit to the menu fails this corpus rather than silently invalidating it.",
+    "",
+    "`decidingTokens` is the deciding feature of the intent, written as words the user's own message carries. The",
+    "harness refuses a token that is not in the intent, and that rule is the whole reason the number means anything:",
+    "a token reachable only from the menu row the agent is being scored for choosing can be satisfied without reading",
+    "the message at all, which turns a grounding metric into a vocabulary metric. Containment is the score:",
+    "lowercase, a word boundary at the start of the token, and a prefix match after it, so `plan` counts `planned`.",
+    "That is deliberately mechanical. A stated reason judged by a model is a second eval with its own error rate",
+    "sitting inside this one.",
+    "",
+    "`scopeTokens` is what the user named and what the dispatch has to still be about. The agent passes no scope",
+    "structurally, so the only observable is whether the answer restates it, and restating the whole message would",
+    "satisfy any token set, so the harness also bounds the length of an answer's scope against the message's.",
+    "",
+    "`candidateCodes` is the set a clarifying question has to name. Asking 'which did you mean?' without saying between",
+    "what is not a clarification, it is a stall."
+  ],
+  "groundTruthVersion": 2,
+  "menuSource": "src/agents/bmad-tea/customize.toml",
+  "skillSource": "src/agents/bmad-tea/SKILL.md",
+  "cases": {
+    "epic-risk-before-tests": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TD",
+      "expectedWorkflow": "bmad-testarch-test-design",
+      "decidingTokens": ["risk", "coverage"],
+      "scopeTokens": ["epic 4"],
+      "candidateCodes": [],
+      "rationale": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so."
+    },
+    "no-framework-yet": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TF",
+      "expectedWorkflow": "bmad-testarch-framework",
+      "decidingTokens": ["playwright", "cypress"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test."
+    },
+    "pipeline-quality-gates": {
+      "expectedAction": "route",
+      "expectedMenuCode": "CI",
+      "expectedWorkflow": "bmad-testarch-ci",
+      "decidingTokens": ["pipeline", "quality gate"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI."
+    },
+    "acceptance-tests-before-code": {
+      "expectedAction": "route",
+      "expectedMenuCode": "AT",
+      "expectedWorkflow": "bmad-testarch-atdd",
+      "decidingTokens": ["acceptance criteria", "failing"],
+      "scopeTokens": ["12.3"],
+      "candidateCodes": [],
+      "rationale": "Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite."
+    },
+    "implemented-feature-no-tests": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TA",
+      "expectedWorkflow": "bmad-testarch-automate",
+      "decidingTokens": ["api test", "already built"],
+      "scopeTokens": ["checkout"],
+      "candidateCodes": [],
+      "rationale": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them."
+    },
+    "review-existing-tests": {
+      "expectedAction": "route",
+      "expectedMenuCode": "RV",
+      "expectedWorkflow": "bmad-testarch-test-review",
+      "decidingTokens": ["spec files", "badly written"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats."
+    },
+    "nfr-evidence-on-hand": {
+      "expectedAction": "route",
+      "expectedMenuCode": "NR",
+      "expectedWorkflow": "bmad-testarch-nfr",
+      "decidingTokens": ["k6", "uptime", "non-functional"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered."
+    },
+    "trace-criteria-to-tests": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TR",
+      "expectedWorkflow": "bmad-testarch-trace",
+      "decidingTokens": ["covered", "ship"],
+      "scopeTokens": ["epic 5"],
+      "candidateCodes": [],
+      "rationale": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which."
+    },
+    "learn-testing-properly": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TMT",
+      "expectedWorkflow": "bmad-teach-me-testing",
+      "decidingTokens": ["learn", "fundamentals"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of."
+    },
+    "release-gate-sequence": {
+      "expectedAction": "route",
+      "expectedMenuCode": "GATE",
+      "expectedWorkflow": null,
+      "decidingTokens": ["release gate", "order"],
+      "scopeTokens": ["epic 7"],
+      "candidateCodes": [],
+      "rationale": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids."
+    },
+    "good-or-covering-what-matters": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["good", "cover"],
+      "scopeTokens": [],
+      "candidateCodes": ["RV", "TR"],
+      "rationale": "The message asks two different questions in one breath and says both worry the user. Whether the tests are any good is the review item's sentence and whether they cover what matters is the trace item's, both readable off the menu, and nothing in the message says which to do first."
+    },
+    "measured-some-nfrs-planned-none": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["measured", "planned"],
+      "scopeTokens": ["checkout"],
+      "candidateCodes": ["NR", "TD"],
+      "rationale": "One half of the message is measured evidence, which is the NFR audit's row, and the other half is nothing planned for the next epic, which is test design's NFR planning. The user asks outright which to take first, so answering either without asking picks for them."
+    },
+    "thin-coverage-on-payments": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["coverage", "thin"],
+      "scopeTokens": ["payments"],
+      "candidateCodes": ["TD", "TA", "TR"],
+      "rationale": "Thin coverage is planning it, writing it, or measuring how thin it actually is, and three menu items each own one of those. The feature is named and has to survive the question."
+    },
+    "story-half-done": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["half", "UI"],
+      "scopeTokens": ["12.3"],
+      "candidateCodes": ["AT", "TA"],
+      "rationale": "Half the story is built and half is not, and the menu has one item for tests written ahead of an implementation and one for tests written against it. The message supports both at once, which is the definition of two items being genuinely close."
+    },
+    "run-and-fix-ci-failures": {
+      "expectedAction": "decline",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["run", "fix"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "No menu item executes a suite or repairs failing tests. CI scaffolds a pipeline and review judges tests; neither runs nor fixes anything, and dispatching either sends the user somewhere that cannot answer."
+    },
+    "write-production-code": {
+      "expectedAction": "decline",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["production code"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "Writing production code is outside every item on the menu, and the item that comes closest, ATDD, is defined by not doing it."
+    },
+    "penetration-test-staging": {
+      "expectedAction": "decline",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["penetration"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "The NFR audit assesses security evidence that already exists. Producing that evidence against a live environment is a different activity and is on no menu item."
+    },
+    "hire-a-qa-lead": {
+      "expectedAction": "decline",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["hiring", "job description"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "A plausible request to a test architect that no workflow serves. It is here because the other three declines are all about code, and a corpus whose whole negative class shares one shape measures that shape."
+    }
+  }
+}

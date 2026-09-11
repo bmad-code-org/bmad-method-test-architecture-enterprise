@@ -12,6 +12,12 @@
     "Regenerate with: node test/test-contracts.js --cli <path to eval-quality dist/cli/main.js> --write"
   ],
   "contracts": {
+    "tea-routing-controls.contract.json": {
+      "status": "compiles"
+    },
+    "tea-routing-intents.contract.json": {
+      "status": "compiles"
+    },
     "fragment-selection/bmad-testarch-atdd.contract.json": {
       "status": "compiles"
     },

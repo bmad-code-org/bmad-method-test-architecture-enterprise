@@ -1,0 +1,144 @@
+{
+  "$comment": [
+    "A clarification that names its two candidates by menu label and never by code. It is here because a question",
+    "reading \"NR or TD?\" has not asked a user anything, so the scorer accepts the label and the workflow name as",
+    "well as the code, and that leniency needs a case holding it to account.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "clarification-names-both-by-label",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: measured-some-nfrs-planned-none",
+    "frozenOn": "2026-09-11",
+    "expected": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["measured", "planned"],
+      "scopeTokens": ["checkout"],
+      "candidateCodes": ["NR", "TD"],
+      "rationale": "One half of the message is measured evidence, which is the NFR audit's row, and the other half is nothing planned for the next epic, which is test design's NFR planning. The user asks outright which to take first, so answering either without asking picks for them."
+    },
+    "intent": "We already measured latency and error rates on the checkout service, and we have planned nothing at all for the next epic on that front. Which of those should we take first?",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The action is clarify, as the oracle expects.",
+    "",
+    "decidingTokens is [measured, planned] and the reason carries both, so tokensFound is 2 of 2.",
+    "",
+    "candidateCodes is [NR, TD]. The question carries neither code, and carries both menu labels, \"NFR Evidence",
+    "Audit\" and \"Test Design\". Both are accepted spellings, so candidatesNamed is 2 and clarifyOk is true.",
+    "",
+    "scopeTokens is [checkout] and the scope reads \"the checkout service\", inside the bound, so scopeOk is true."
+  ],
+  "result": {
+    "answer": {
+      "action": "clarify",
+      "menuCode": null,
+      "workflow": null,
+      "scope": "the checkout service",
+      "reason": "you have already measured one side and planned nothing on the other, and those are two different pieces of work",
+      "question": "Do you want the NFR Evidence Audit on what you measured, or Test Design to plan the next epic?",
+      "missing": null
+    },
+    "score": {
+      "action": "clarify",
+      "menuCode": null,
+      "workflow": null,
+      "actionCorrect": true,
+      "menuCorrect": false,
+      "workflowCorrect": false,
+      "routeCorrect": false,
+      "tokens": 2,
+      "tokensFound": 2,
+      "tokensMissed": [],
+      "scopeTokens": 1,
+      "scopeFound": 1,
+      "scopeWithinBound": true,
+      "scopeOk": true,
+      "candidates": 2,
+      "candidatesNamed": 2,
+      "candidateCodesNamed": ["NR", "TD"],
+      "clarifyOk": true,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
+    }
+  }
+}

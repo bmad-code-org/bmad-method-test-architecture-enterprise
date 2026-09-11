@@ -2,7 +2,7 @@
  * Replay the stored eval outputs through the live parsers and scorers, with no
  * model call and no network.
  *
- * The three eval harnesses can only produce a number by spending a vendor run, so
+ * The four eval harnesses can only produce a number by spending a vendor run, so
  * every change to how they parse a reply or score it has shipped unverified. A
  * scorer is ordinary code and it can be regression-tested like ordinary code:
  * keep the outputs a run produced, keep the result scoring them produced, and
@@ -65,11 +65,11 @@
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
  * produces a number was written by hand to be parsed. Twenty-three of the
- * twenty-seven cases produce a number and twenty-one of those are constructed. Two
+ * forty-four cases produce a number and all but two of those are constructed. Two
  * carry real captured bytes borrowed from the CLI parser fixtures, and both now
  * score as a measured miss rather than as unmeasurable: their reports document
  * no finding at all, and a verdict whose findings array is empty is a reviewer
- * that named nothing. The live runs of 2026-09-08 measured all three suites and
+ * that named nothing. The live runs of 2026-09-08 measured the three suites that existed then and
  * none of their output was committed, so this repository still holds no captured
  * output that this suite can turn into a number a vendor actually earned, and
  * the trace suite in particular has no real capture at all.
@@ -78,7 +78,7 @@
  *
  *   Aggregation and thresholds. recall, criticalRecall, nonFalsePositiveRate,
  *   scoreStdev, requiredRecall, forbiddenRate and the trace ratios are all
- *   computed inside main() in the three harnesses and none of them is exported.
+ *   computed inside main() in the harnesses and none of them is exported.
  *   Pinning them here would pin this file's reimplementation of the formula
  *   rather than theirs, which is worse than not pinning them, so the per-case
  *   counts are versioned and the aggregation over them is not. Change the
@@ -144,6 +144,8 @@ const { parseReport } = require('../cli/lib/parse-report');
 const { scoreVerdict } = require('./eval-test-review');
 const { parseSelection, scoreCase } = require('./eval-fragment-selection');
 const { readSummary, readMatrix, scoreRun, signatureOf } = require('./eval-trace');
+const { parseRouting } = require('../cli/lib/parse-routing');
+const { scoreCase: scoreRoutingCase, signatureOf: routingSignatureOf } = require('./eval-bmad-tea-routing');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -182,6 +184,11 @@ const TRACE_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'trace-eval', 'groun
  * also became boundary-aware at the same version: a path ends in `/name` or is
  * `name`, where a bare suffix match had admitted `notcheckout.spec.ts`. No stored
  * case carries such a path, so no other number moved.
+ *
+ * 4 also carries the bmad-tea routing scorers, which entered the corpus without
+ * moving a number: `scoreCase` and `signatureOf` from test/eval-bmad-tea-routing.js
+ * are new code with new cases, and no test-review, fragment-selection or trace
+ * case moved when they landed, so there was nothing for a bump to record.
  *
  * 4 is the trace scorers entering the corpus, with two changes made while the
  * first cases were being derived by hand. readMatrix closes a criterion section
@@ -560,6 +567,31 @@ function replayTraceCase(item, set, groundTruth) {
   return { result: projectTraceResult(scored), scored };
 }
 
+/**
+ * Parse and score one stored bmad-tea routing case.
+ *
+ * The oracle entry, the menu and the user's message are all frozen into the
+ * stored case rather than read live, for the reason the selection corpus freezes its `expect` block: a
+ * replay has to keep scoring the scenario it was derived against after the live
+ * corpus moves on, and `npm run test:eval-routing-data` already holds the live
+ * corpus against the shipped menu. The menu is frozen because it decides the
+ * spellings a clarifying question may name a candidate by, so an edit to a menu
+ * label would otherwise move a stored number for a reason that has nothing to do
+ * with the scorer.
+ */
+function replayRoutingCase(item, expected) {
+  const stdoutPath = path.join(item.directory, 'stdout.txt');
+  if (!fs.existsSync(stdoutPath)) unreadable(`${item.id}: no stdout.txt beside expected.json`);
+  const oracle = expected.inputs?.expected;
+  if (!oracle) unreadable(`${item.id}: expected.json has no inputs.expected to score against`);
+  const menu = expected.inputs?.menu;
+  if (!Array.isArray(menu)) unreadable(`${item.id}: expected.json has no inputs.menu, so candidate spellings cannot be resolved`);
+  const intent = expected.inputs?.intent;
+  if (typeof intent !== 'string') unreadable(`${item.id}: expected.json has no inputs.intent, so the scope bound cannot be applied`);
+  const answer = parseRouting(fs.readFileSync(stdoutPath, 'utf8'));
+  return { answer, score: scoreRoutingCase(oracle, answer, menu, intent) };
+}
+
 /** Parse and score one stored fragment-selection case. */
 function replaySelectionCase(item, expected) {
   const stdoutPath = path.join(item.directory, 'stdout.txt');
@@ -677,6 +709,49 @@ function checkTraceSignatures(replayed) {
 }
 
 /**
+ * What `maxUnstableCases` is actually computed from, held to its contract.
+ *
+ * Stability is the one threshold no single stored reply can fail, because it is a
+ * property of a pair of repetitions and a replay case is one reply. What can be
+ * pinned here is the function the live run measures it with: two replies to the
+ * same intent sign identically exactly when they decided the same thing. Without
+ * this the signature could quietly stop reading a field and every stability
+ * number would go on looking fine.
+ *
+ * The clarify pair is the one that matters. A clarify answer carries a null menu
+ * code and a null workflow, so a signature built from those alone would sign
+ * every clarification the same however different the question it asked.
+ */
+function checkRoutingSignatures(replayed) {
+  if (replayed.length === 0) return;
+  const disagreements = [];
+  for (const [index, left] of replayed.entries()) {
+    for (const right of replayed.slice(index + 1)) {
+      if (left.source !== right.source) continue;
+      const decidedTheSame =
+        left.score !== null &&
+        right.score !== null &&
+        left.score.action === right.score.action &&
+        left.score.menuCode === right.score.menuCode &&
+        left.score.workflow === right.score.workflow &&
+        JSON.stringify([...left.score.candidateCodesNamed].sort()) === JSON.stringify([...right.score.candidateCodesNamed].sort());
+      const sameSignature = routingSignatureOf(left.score) === routingSignatureOf(right.score);
+      if (decidedTheSame === sameSignature) continue;
+      disagreements.push(
+        decidedTheSame
+          ? `${left.id} and ${right.id} decided the same thing and sign differently`
+          : `${left.id} and ${right.id} decided different things and sign identically, so a decision the run makes is outside the signature`,
+      );
+    }
+  }
+  assert(
+    disagreements.length === 0,
+    'routing signatures agree exactly when two replies to one intent decided the same thing',
+    disagreements.join('\n  '),
+  );
+}
+
+/**
  * Score one stored case the way its suite scores it.
  *
  * A failure here is a reason the case cannot be compared at all, as opposed to a
@@ -717,6 +792,15 @@ function replayCase(item, expected, context) {
       }
       return { observed: projectReviewResult(scoreVerdict(verdict, context.groundTruth)) };
     }
+    case 'bmad-tea-routing': {
+      const replayed = replayRoutingCase(item, expected);
+      context.routingReplayed.push({
+        id: item.id,
+        source: String(expected.inputs?.sourceCase ?? ''),
+        score: replayed.score,
+      });
+      return { observed: replayed };
+    }
     case 'fragment-selection': {
       return { observed: replaySelectionCase(item, expected) };
     }
@@ -744,7 +828,7 @@ function replayCase(item, expected, context) {
       return { observed: replayed.result };
     }
     default: {
-      return { failure: `unknown suite directory "${item.suite}"; expected test-review, fragment-selection or trace` };
+      return { failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection or trace` };
     }
   }
 }
@@ -763,6 +847,7 @@ function main(argv) {
   const traceGroundTruth = readJson(TRACE_GROUND_TRUTH, 'trace ground truth');
   const traceSets = new Map((traceGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
   const traceReplayed = [];
+  const routingReplayed = [];
   const cases = findCases();
 
   // A mistyped case id used to be a silent no-op that exited 0, which reads as
@@ -794,7 +879,14 @@ function main(argv) {
       continue;
     }
 
-    const replayed = replayCase(item, expected, { groundTruth, groundTruthDigest, traceGroundTruth, traceSets, traceReplayed });
+    const replayed = replayCase(item, expected, {
+      groundTruth,
+      groundTruthDigest,
+      traceGroundTruth,
+      traceSets,
+      traceReplayed,
+      routingReplayed,
+    });
     if ('failure' in replayed) {
       assert(false, item.id, replayed.failure);
       continue;
@@ -848,6 +940,7 @@ function main(argv) {
   }
 
   checkTraceSignatures(traceReplayed);
+  checkRoutingSignatures(routingReplayed);
   checkRecordHygiene();
 
   console.log(`\n${colors.cyan}========================================${colors.reset}`);

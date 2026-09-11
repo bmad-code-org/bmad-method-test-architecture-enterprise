@@ -1,0 +1,118 @@
+[
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-001",
+    "probeClass": "gameability",
+    "behaviorId": "B-003",
+    "systemId": "tea-routing-controls-behavioral",
+    "implementationDigest": "sha256:43450769f05a8020cf8fa70dab6e88eb8dce9933568c21057b21b4ac32873da8",
+    "artifactDigest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899",
+    "commitDigest": "sha256:43450769f05a8020cf8fa70dab6e88eb8dce9933568c21057b21b4ac32873da8",
+    "rationale": "A reply that quotes the user's own message back as its reason satisfies O-002 for good-or-covering-what-matters, because the deciding tokens are words from that message, and violates O-003, because the question it asks names nothing to choose between. The reason oracle alone cannot tell that reply from one that actually read the message, and the decision oracle can.",
+    "qualification": {
+      "route": "gameability",
+      "degenerateResponse": "A clarification whose reason restates the user's own message and whose question asks for more detail without naming a single menu item.",
+      "naiveOracleSatisfiedEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899"
+      },
+      "disciplinedOracleRejectedEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899"
+      }
+    },
+    "expectedClean": false,
+    "defects": [],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-routing-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "stdout",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": {
+              "prompt": {
+                "matcher": "any"
+              }
+            },
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/question"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:\\bRV\\b|[Bb][Mm][Aa][Dd]-[Tt][Ee][Ss][Tt][Aa][Rr][Cc][Hh]-[Tt][Ee][Ss][Tt]-[Rr][Ee][Vv][Ii][Ee][Ww]|[Rr][Ee][Vv][Ii][Ee][Ww] [Tt][Ee][Ss][Tt][Ss])[\\s\\S]*$"
+                },
+                {
+                  "op": "regex",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/observed/stdout/question"
+                    }
+                  ],
+                  "pattern": "^[\\s\\S]*(?:\\bTR\\b|[Bb][Mm][Aa][Dd]-[Tt][Ee][Ss][Tt][Aa][Rr][Cc][Hh]-[Tt][Rr][Aa][Cc][Ee]|[Tt][Rr][Aa][Cc][Ee] [Cc][Oo][Vv][Ee][Rr][Aa][Gg][Ee])[\\s\\S]*$"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-002",
+    "probeClass": "zero-action",
+    "behaviorId": "B-002",
+    "systemId": "tea-routing-controls-behavioral",
+    "implementationDigest": "sha256:43450769f05a8020cf8fa70dab6e88eb8dce9933568c21057b21b4ac32873da8",
+    "artifactDigest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899",
+    "commitDigest": "sha256:43450769f05a8020cf8fa70dab6e88eb8dce9933568c21057b21b4ac32873da8",
+    "rationale": "good-or-covering-what-matters declares the action, the deciding tokens and the scope the skill's own Step 8 implies for it, so an answer carrying all three is the run this contract exists to confirm rather than a defect to catch.",
+    "qualification": {
+      "route": "clean-control",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/fixtures/tea-routing-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899"
+      },
+      "revisionCommitDigest": "sha256:43450769f05a8020cf8fa70dab6e88eb8dce9933568c21057b21b4ac32873da8",
+      "noKnownDefectStatement": "good-or-covering-what-matters's expected answer is derived from src/agents/bmad-tea/SKILL.md and its menu, and node test/eval-bmad-tea-routing.js --validate-only fails when a menu code the corpus names has left customize.toml."
+    },
+    "expectedClean": true,
+    "defects": []
+  }
+]

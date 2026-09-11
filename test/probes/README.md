@@ -9,12 +9,15 @@ package exists for: did this contract's oracles catch the defect that was actual
 | `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe |
 | `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                        |
 | `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow             |
+| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                          |
+| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                          |
 
-**Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all ten
+**Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all twelve
 files from the sources this repository already keeps: `test/fixtures/test-review-eval/ground-truth.json`
 and `criteria-registry.md` for the planted rows and their severities,
-`test/fixtures/trace-eval/ground-truth.json` for the seeded set's coverage gaps, and each
-`test/evals/<workflow>/evals.json` for the required and forbidden fragment sets. Regenerate with
+`test/fixtures/trace-eval/ground-truth.json` for the seeded set's coverage gaps, each
+`test/evals/<workflow>/evals.json` for the required and forbidden fragment sets, and
+`test/fixtures/tea-routing-eval/ground-truth.json` for the routing answers. Regenerate with
 `node tools/generate-probes.js`; `npm run test:probe-sources` fails when a file on disk differs from
 what its sources generate.
 
@@ -23,6 +26,23 @@ Each probe names the oracle that catches it, through the behavior it declares. `
 oracle, so `behaviorId` is read out of the generated contract rather than chosen, and the generator
 refuses a probe whose behavior discharges more than one. A probe that restates a plant nobody can
 detect is worthless, and that check is what keeps one out.
+
+## The routing corpora carry no defect probe
+
+`tea-routing-intents.probes.json` and `tea-routing-controls.probes.json` ship a gameability probe and
+a clean control each, and nothing else. A defect probe needs a controlled mutation of the system under
+test with baseline and mutated evidence, and the system here is `src/agents/bmad-tea/SKILL.md`.
+Mutating the skill to prove that the eval catches the mutation is an edit to the thing being measured,
+so the route is closed rather than unused. The fragment-selection corpora carry the same two classes
+for the same reason.
+
+The gameability probe is worth reading, because it is about the scoring the routing suite chose.
+A stated reason is scored by token containment, which is cheap and deterministic and gameable: a reply
+that quotes the user's own message back as its reason satisfies every deciding token the fixture
+names, whatever it then did with the message. That reply is the probe. The oracle that catches it is
+the one reading the decision rather than the prose: the menu code for the intents contract, and the
+question for the controls contract, where a clarification that names nothing to choose between passes
+the reason oracle and asks the user nothing.
 
 ## Running them
 

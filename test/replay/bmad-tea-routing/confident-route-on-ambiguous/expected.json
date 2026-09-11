@@ -1,0 +1,152 @@
+{
+  "$comment": [
+    "An intent whose two menu items are genuinely close, answered with a confident dispatch to one of them.",
+    "",
+    "This is the control the suite was missing until it was added. A confident route here fails no recall metric on",
+    "its own: the case is not a route case, so route accuracy never sees it, and clarification recall only counts",
+    "the clarifications that happened. Without maxConfidentRoutesOnAmbiguous a skill that guesses on every close",
+    "call raises nothing at all.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "confident-route-on-ambiguous",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: story-half-done",
+    "frozenOn": "2026-09-11",
+    "expected": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["half", "UI"],
+      "scopeTokens": ["12.3"],
+      "candidateCodes": ["AT", "TA"],
+      "rationale": "Half the story is built and half is not, and the menu has one item for tests written ahead of an implementation and one for tests written against it. The message supports both at once, which is the definition of two items being genuinely close."
+    },
+    "intent": "Story 12.3 is half done. The API is built and the UI has not been started. I want tests for it.",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The oracle expects clarify and the action is route, so actionCorrect is false and confidentRouteOnAmbiguous is",
+    "true. menuCorrect and workflowCorrect are both false for a second reason as well: they are only ever true on a",
+    "case whose oracle expects a route, and this one does not.",
+    "",
+    "decidingTokens is [half, UI]. The reason carries \"half\" and not \"UI\", so tokensFound is 1 of 2. Naming half the",
+    "ambiguity and then resolving it unilaterally is the characteristic shape of this failure.",
+    "",
+    "scopeTokens is [12.3] and the scope is null, so scopeOk is false.",
+    "",
+    "candidates is 2 because the oracle declares two close menu items, and it counts what the case asked for rather",
+    "than what the reply did: a route answer carries no question, so candidatesNamed is 0 and clarifyOk is false.",
+    "",
+    "confidentRouteOnUnservable is false, because the menu does serve this intent; the question is only which item."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "AT",
+      "workflow": "bmad-testarch-atdd",
+      "scope": null,
+      "reason": "the story is half done, so acceptance tests come first",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "AT",
+      "workflow": "bmad-testarch-atdd",
+      "actionCorrect": false,
+      "menuCorrect": false,
+      "workflowCorrect": false,
+      "routeCorrect": false,
+      "tokens": 2,
+      "tokensFound": 1,
+      "tokensMissed": ["UI"],
+      "scopeTokens": 1,
+      "scopeFound": 0,
+      "scopeWithinBound": true,
+      "scopeOk": false,
+      "candidates": 2,
+      "candidatesNamed": 0,
+      "candidateCodesNamed": [],
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": true,
+      "unroutedClearIntent": false
+    }
+  }
+}

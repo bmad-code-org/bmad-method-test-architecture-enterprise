@@ -24,10 +24,57 @@
     "",
     "`contracts` names the eval contracts under test/contracts/ that express a suite. The same check fails when a",
     "listed path is missing and when a generated contract is claimed by no suite, so the link cannot rot in either",
-    "direction."
+    "direction. It is an array because a suite can need more than one: `bmad-tea-routing` is eighteen intents and",
+    "eval-quality's AD-39 scripting bound caps an interaction plan at sixteen steps, so its corpus is expressed as",
+    "an intents contract and a controls contract. test/contracts/README.md records the split."
   ],
   "manifestVersion": 1,
   "suites": [
+    {
+      "$comment": [
+        "18 intents put to `bmad-tea`, one agent call each: ten with one right menu item, four where two or more",
+        "items are genuinely close and the right answer is to ask, and four nothing on the menu serves.",
+        "",
+        "`fixtures` is the intent corpus, which is the only file the agent is shown. `groundTruth` is the oracle,",
+        "and the harness searches every assembled prompt for its keys and its bytes before it spends a call, so the",
+        "separation is asserted rather than assumed.",
+        "",
+        "Three of the nine thresholds are the controls and they close the cells recall leaves open. Recall alone rewards",
+        "a system that routes everything, and the two `maxConfidentRoutesOn...` counts refuse that on both the",
+        "unservable and the genuinely close intents; a system that asks about everything never routes wrong, and",
+        "`maxUnroutedClearIntents` refuses that.",
+        "",
+        "Two repetitions. Each case is one short reply rather than a whole workflow, so the cost is low, and two is",
+        "the smallest number that can say whether a routing decision is reproducible."
+      ],
+      "id": "bmad-tea-routing",
+      "skill": "bmad-tea",
+      "evalType": "behavioral",
+      "harness": "test/eval-bmad-tea-routing.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": ["test/fixtures/tea-routing-eval/intents.json"],
+      "groundTruth": ["test/fixtures/tea-routing-eval/ground-truth.json"],
+      "contracts": ["test/contracts/tea-routing-controls.contract.json", "test/contracts/tea-routing-intents.contract.json"],
+      "thresholds": {
+        "routeAccuracy": 0.9,
+        "reasonTokenRecall": 0.8,
+        "scopeFidelity": 0.875,
+        "clarifyRecall": 0.75,
+        "declineRecall": 0.75,
+        "maxConfidentRoutesOnUnservable": 0,
+        "maxConfidentRoutesOnAmbiguous": 0,
+        "maxUnroutedClearIntents": 0,
+        "maxUnstableCases": 2
+      },
+      "repetitions": 2,
+      "caseCount": 18,
+      "ciTier": "full-matrix",
+      "runnerCapabilities": ["read-only"]
+    },
     {
       "$comment": [
         "24 cases across the eight workflow skills that ship a knowledge index. The case data and the expectation",
@@ -191,12 +238,6 @@
     }
   ],
   "deferred": [
-    {
-      "skill": "bmad-tea",
-      "owner": "TEA maintainers",
-      "missingEvidence": "No suite of any kind. Nothing measures how the agent routes a user's intent to a workflow, and no fixture of realistic or ambiguous intents exists.",
-      "exitCondition": "A behavioral suite proves the agent routes realistic and ambiguous user intents to the correct workflow, explains the choice, preserves the requested scope, and declines unsupported claims."
-    },
     {
       "skill": "bmad-teach-me-testing",
       "owner": "TEA maintainers",

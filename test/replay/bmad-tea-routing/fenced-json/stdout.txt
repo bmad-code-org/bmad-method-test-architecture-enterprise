@@ -1,0 +1,13 @@
+Happy to help. Here is where I would send this:
+
+```json
+{
+  "action": "route",
+  "menuCode": "TMT",
+  "workflow": "bmad-teach-me-testing",
+  "scope": null,
+  "reason": "the deliverable is that you learn testing from the fundamentals up rather than any artifact",
+  "question": null,
+  "missing": null
+}
+```

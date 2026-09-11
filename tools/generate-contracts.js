@@ -85,6 +85,25 @@ const {
 // well: a leg carrying a description of a prompt parses, compiles, schedules,
 // and then measures nothing when it is finally run.
 const { buildPrompt: buildSelectionPrompt } = require('../test/eval-fragment-selection');
+// And for the routing command the bmad-tea suite names: its request and response
+// shapes and its default agent are its own, and the prompt, the menu reading and
+// the three pattern sources are the harness's. The patterns matter most. An
+// oracle asking whether a stated reason names a token and a scorer asking the
+// same question have to be one rule, or `test/test-contract-oracles.js` is
+// comparing two spellings of nearly the same thing and reporting the difference
+// as a defect in the skill.
+const { ROUTING_REQUEST_KEYS, ROUTING_RESPONSE_KEYS, DEFAULT_AGENT: ROUTING_DEFAULT_AGENT } = require('../cli/routing-runner');
+const {
+  buildPrompt: buildRoutingPrompt,
+  candidatePatternSource,
+  loadCorpus: loadRoutingCorpus,
+  menuItems: routingMenuItems,
+  scopeBoundPatternSource,
+  tokenPatternSource,
+  MISSING_PATTERN_SOURCE,
+  ROUTING_INTERFACE,
+  ROUTING_OPERATION,
+} = require('../test/eval-bmad-tea-routing');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -2360,6 +2379,454 @@ function buildTraceContract() {
 }
 
 // ---------------------------------------------------------------------------
+// tea-routing-intents.contract.json and tea-routing-controls.contract.json
+// ---------------------------------------------------------------------------
+
+const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
+const ROUTING_INTENTS_PATH = path.join(ROUTING_FIXTURE_ROOT, 'intents.json');
+const ROUTING_GROUND_TRUTH_PATH = path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json');
+const TEA_AGENT_ROOT = path.join(PROJECT_ROOT, 'src', 'agents', 'bmad-tea');
+const TEA_SKILL_PATH = path.join(TEA_AGENT_ROOT, 'SKILL.md');
+const TEA_MENU_PATH = path.join(TEA_AGENT_ROOT, 'customize.toml');
+
+const ROUTING_REQUEST_SHAPE = Object.fromEntries(
+  Object.entries(ROUTING_REQUEST_KEYS).map(([channel, keys]) => [channel, stringShape(keys.required, keys.permitted)]),
+);
+
+/**
+ * The routing answer's descriptor.
+ *
+ * The key sets come from the command, the way every other descriptor here does.
+ * `action` and `reason` are typed `string` because a reply carrying neither is
+ * not a routing answer; the five optional keys are declared with no type, which
+ * is this vocabulary's spelling for "present, and its type is not the claim",
+ * because each of them is a string on the action that owns it and null on the
+ * other two.
+ *
+ * `successIndicator` is `/action` and there is no collection. A routing decision
+ * is one answer rather than a list, so declaring a collection location would name
+ * a pointer no reply ever carries.
+ */
+function routingDescriptor(keys) {
+  const typed = new Set(['action', 'reason']);
+  return {
+    requiredKeys: [...keys.required],
+    permittedKeys: [...keys.permitted],
+    types: Object.fromEntries(keys.permitted.map((key) => [key, typed.has(key) ? 'string' : null])),
+    successIndicator: '/action',
+    channelRoles: Object.fromEntries(keys.permitted.map((key) => [`/${key}`, key === 'action' ? 'success-indicator' : 'payload'])),
+    collectionLocations: [],
+  };
+}
+
+/** What each oracle kind reads, what it risks, and how hard it is. */
+const ROUTING_ORACLE_KINDS = {
+  action: {
+    field: 'expectedAction',
+    pointer: 'action',
+    severity: 'critical',
+    risk: 'intent-answered-with-the-wrong-kind-of-answer',
+  },
+  menu: {
+    field: 'expectedMenuCode',
+    pointer: 'menuCode',
+    severity: 'critical',
+    risk: 'wrong-workflow-dispatched',
+  },
+  workflow: {
+    field: 'expectedWorkflow',
+    pointer: 'workflow',
+    severity: 'critical',
+    risk: 'menu-item-dispatched-to-the-wrong-target',
+  },
+  reason: {
+    field: 'decidingTokens',
+    pointer: 'reason',
+    severity: 'material',
+    risk: 'reason-not-grounded-in-the-intent',
+  },
+  scope: {
+    field: 'scopeTokens',
+    pointer: 'scope',
+    severity: 'material',
+    risk: 'scope-dropped-on-dispatch',
+  },
+  candidates: {
+    field: 'candidateCodes',
+    pointer: 'question',
+    severity: 'material',
+    risk: 'ambiguity-answered-without-naming-what-it-is-between',
+  },
+  missing: {
+    field: 'expectedAction',
+    pointer: 'missing',
+    severity: 'material',
+    risk: 'unservable-intent-declined-without-saying-what-is-missing',
+  },
+};
+
+function routingPointer(caseId, key) {
+  return `/interactions/${caseId}/stdout/${key}`;
+}
+
+function routingRegex(caseId, key, pattern) {
+  return { op: 'regex', operands: [{ pointer: routingPointer(caseId, key) }], pattern };
+}
+
+/** One `all` for several patterns, the bare check for one, because `all` over a single operand states nothing extra. */
+function allPatterns(checks) {
+  return checks.length === 1 ? checks[0] : { op: 'all', operands: checks };
+}
+
+/**
+ * Every oracle this contract carries, in case order and then in the fixed kind
+ * order below, so the ids are stable across a fixture edit that adds a case.
+ */
+function routingOracleSpecs(cases, menu) {
+  const specs = [];
+  for (const item of cases) {
+    const expected = item.expected;
+    const push = (kind, check, scope, negativeDomain, success) =>
+      specs.push({ caseId: item.id, kind, check, scope, negativeDomain, success, rationale: expected.rationale });
+
+    push(
+      'action',
+      { op: 'equality', operands: [{ pointer: routingPointer(item.id, 'action') }, { literal: expected.expectedAction }] },
+      `The action returned for ${item.id}.`,
+      `Any action other than ${expected.expectedAction}.`,
+      `The answer for ${item.id} is a ${expected.expectedAction}.`,
+    );
+
+    if (expected.expectedAction === 'route') {
+      push(
+        'menu',
+        { op: 'equality', operands: [{ pointer: routingPointer(item.id, 'menuCode') }, { literal: expected.expectedMenuCode }] },
+        `The menu code returned for ${item.id}, against the one item the intent names.`,
+        `Any menu code other than ${expected.expectedMenuCode}, including none.`,
+        `The dispatch for ${item.id} names menu code ${expected.expectedMenuCode}.`,
+      );
+      // The workflow behind the menu item, which the scorer reads and no oracle
+      // did until this was added. GATE is the case that needs it: the menu maps
+      // it to a prompt rather than a skill, and a reply naming a workflow behind
+      // it has done the merge GATE's own prompt text forbids, while its menu code
+      // is still right.
+      const expectsNoWorkflow = (expected.expectedWorkflow ?? null) === null;
+      push(
+        'workflow',
+        expectsNoWorkflow
+          ? {
+              op: 'not',
+              operands: [{ op: 'regex', operands: [{ pointer: routingPointer(item.id, 'workflow') }], pattern: MISSING_PATTERN_SOURCE }],
+            }
+          : { op: 'equality', operands: [{ pointer: routingPointer(item.id, 'workflow') }, { literal: expected.expectedWorkflow }] },
+        `The workflow named behind the menu item for ${item.id}.`,
+        expectsNoWorkflow
+          ? 'Any workflow at all, on a menu item whose target is a prompt rather than a skill.'
+          : `Any workflow other than ${expected.expectedWorkflow}, including none.`,
+        expectsNoWorkflow
+          ? `The dispatch for ${item.id} names no workflow, because its menu item carries a prompt rather than a skill.`
+          : `The dispatch for ${item.id} names workflow ${expected.expectedWorkflow}.`,
+      );
+    }
+
+    const tokens = expected.decidingTokens ?? [];
+    assert(tokens.length > 0, `${item.id}: declares no decidingTokens, so its reason oracle would be vacuous`);
+    push(
+      'reason',
+      allPatterns(tokens.map((token) => routingRegex(item.id, 'reason', tokenPatternSource(token)))),
+      `The stated reason for ${item.id}, against the ${numberWord(tokens.length)} token(s) the fixture names as the deciding feature.`,
+      'A reason that names none of them, which is a reason that did not use the intent.',
+      `The reason for ${item.id} names ${tokens.join(', ')}.`,
+    );
+
+    const scopeTokens = expected.scopeTokens ?? [];
+    if (scopeTokens.length > 0) {
+      // Containment and the length bound together, because the scorer's scopeOk
+      // is both and an oracle that checked only containment would hold on a
+      // scope that repeated the whole message back.
+      push(
+        'scope',
+        allPatterns([
+          ...scopeTokens.map((token) => routingRegex(item.id, 'scope', tokenPatternSource(token))),
+          routingRegex(item.id, 'scope', scopeBoundPatternSource(item.intent)),
+        ]),
+        `The scope carried out of ${item.id}, against what the intent named and against the length of the message it came from.`,
+        'A scope that drops what the user asked about, or one that repeats the whole message, so the workflow runs against something wider or narrower than the request.',
+        `The scope for ${item.id} still names ${scopeTokens.join(', ')} and is no longer than half the message.`,
+      );
+    }
+
+    const candidates = expected.candidateCodes ?? [];
+    if (expected.expectedAction === 'clarify') {
+      assert(candidates.length >= 2, `${item.id}: a clarify case needs at least two candidateCodes`);
+      push(
+        'candidates',
+        allPatterns(candidates.map((code) => routingRegex(item.id, 'question', candidatePatternSource(code, menu)))),
+        `The question asked for ${item.id}, against the ${numberWord(candidates.length)} menu items it has to be asking between.`,
+        'A question that asks which the user meant without saying between what, which is a stall rather than a clarification.',
+        `The question for ${item.id} names ${candidates.join(', ')}, by code, by workflow name, or by menu label.`,
+      );
+    }
+
+    if (expected.expectedAction === 'decline') {
+      push(
+        'missing',
+        routingRegex(item.id, 'missing', MISSING_PATTERN_SOURCE),
+        `The decline for ${item.id}, read for whether it says what is missing.`,
+        'A decline that names nothing, which leaves the user with a refusal and no next step.',
+        `The decline for ${item.id} names what is missing.`,
+      );
+    }
+  }
+  return specs.map((spec, index) => ({ ...spec, id: `O-${String(index + 1).padStart(3, '0')}` }));
+}
+
+/**
+ * The witness legs and what they claim.
+ *
+ * Two intents from the same contract whose correct answers differ, and the
+ * relation says the two replies must not agree on the field the contract is
+ * about. A runner that returned one answer whatever it was asked would satisfy
+ * every oracle it happened to line up with and fail this.
+ *
+ * The prompts are `test/eval-bmad-tea-routing.js`'s own `buildPrompt`, for the
+ * reason the trace and selection witnesses read theirs from their harnesses: a
+ * leg carrying a description of a prompt parses, compiles, is scheduled, and then
+ * measures nothing when it is finally run.
+ */
+function buildRoutingWitness(spec, cases) {
+  const [firstId, secondId] = spec.witnessCases;
+  const legs = [firstId, secondId].map((caseId) => {
+    const item = cases.find((candidate) => candidate.id === caseId);
+    assert(item, `${spec.contractId}: the witness names case ${caseId}, which this contract does not carry`);
+    return { legId: `witness-${caseId}`, prompt: buildRoutingPrompt(item) };
+  });
+  return {
+    witnessId: spec.witnessId,
+    channel: 'stdin',
+    legs: legs.map(({ legId, prompt }) => ({
+      legId,
+      // The one option the shape requires is held fixed across both legs: the
+      // differential this witness asserts is over the intent, and a leg that also
+      // changed the agent would let the difference come from the vendor.
+      inputs: witnessInputs(ROUTING_REQUEST_SHAPE, { option: { agent: ROUTING_DEFAULT_AGENT } }, { kind: 'text', value: prompt }),
+    })),
+    relation: {
+      op: 'not',
+      operands: [
+        {
+          op: 'deep-equality',
+          operands: legs.map(({ legId }) => ({ pointer: `/interactions/${legId}/stdout/${spec.witnessField}` })),
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * The routing corpus is carried by two contracts rather than one, and the reason
+ * is a published bound rather than taste.
+ *
+ * `eval-quality`'s AD-39 scripting bound caps an interaction plan at sixteen
+ * steps, and the corpus is eighteen intents. Each intent is one agent call with
+ * its own oracles, so one step per intent is the only binding that lets a case's
+ * oracles read that case's answer, and eighteen of them is past the ceiling. The
+ * suite manifest's `contracts` field is an array for this: a suite may be
+ * expressed as more than one contract.
+ *
+ * The split is the corpus's own line rather than an arbitrary cut at sixteen. One
+ * contract carries the intents with a right answer and asks whether the right
+ * answer came back. The other carries the controls, the intents where asking is
+ * correct and the intents nothing on the menu serves, and asks whether the skill
+ * declined to guess. Those are two different claims about the same skill, and the
+ * witness each needs is different too: the first differs its legs on the menu
+ * code, because both its legs route, and the second on the action.
+ */
+const ROUTING_CONTRACTS = [
+  {
+    relativePath: 'tea-routing-intents.contract.json',
+    contractId: 'tea-routing-intents-behavioral',
+    actions: ['route'],
+    witnessId: 'the-dispatch-follows-the-intent',
+    witnessField: 'menuCode',
+    witnessCases: ['epic-risk-before-tests', 'no-framework-yet'],
+    setupLead: 'Each plan step sends one intent that has a single right menu item.',
+    // Read by tools/generate-probes.js. The field a degenerate reply gets wrong
+    // while satisfying the reason oracle, and how to recognize it.
+    gamedField: 'menuCode',
+    gamedSentence: 'the menu code it names is not the one the intent points at.',
+    degenerateResponse: "A reply whose reason restates the user's own message and whose menu code is whichever item came to hand.",
+    defectPredicate: (expected) => ({
+      op: 'not',
+      operands: [
+        {
+          op: 'equality',
+          operands: [{ pointer: '/interactions/observed/stdout/menuCode' }, { literal: expected.expectedMenuCode }],
+        },
+      ],
+    }),
+  },
+  {
+    relativePath: 'tea-routing-controls.contract.json',
+    contractId: 'tea-routing-controls-behavioral',
+    actions: ['clarify', 'decline'],
+    witnessId: 'the-refusal-follows-the-intent',
+    witnessField: 'action',
+    witnessCases: ['good-or-covering-what-matters', 'run-and-fix-ci-failures'],
+    setupLead:
+      'Each plan step sends one control intent: one where two or more menu items are genuinely close, or one nothing on the menu serves.',
+    gamedField: 'question',
+    gamedSentence: 'the question it asks names nothing to choose between.',
+    degenerateResponse:
+      "A clarification whose reason restates the user's own message and whose question asks for more detail without naming a single menu item.",
+    defectPredicate: (expected) => {
+      const menu = routingMenuItems();
+      const patterns = (expected.candidateCodes ?? []).map((code) => ({
+        op: 'regex',
+        operands: [{ pointer: '/interactions/observed/stdout/question' }],
+        pattern: candidatePatternSource(code, menu),
+      }));
+      assert(patterns.length > 0, "the controls contract's first case declares no candidateCodes to ask between");
+      return { op: 'not', operands: [patterns.length === 1 ? patterns[0] : { op: 'all', operands: patterns }] };
+    },
+  },
+];
+
+function buildRoutingContract(spec) {
+  const corpus = loadRoutingCorpus();
+  for (const item of corpus.cases) assert(item.expected !== undefined, `${item.id}: ground-truth.json carries no answer for it`);
+  const cases = corpus.cases.filter((item) => spec.actions.includes(item.expected.expectedAction));
+  assert(cases.length > 0, `${spec.contractId}: the corpus carries no ${spec.actions.join(' or ')} case`);
+  const menu = routingMenuItems();
+  assert(menu.length > 0, 'src/agents/bmad-tea/customize.toml declares no [[agent.menu]] item');
+
+  const specs = routingOracleSpecs(cases, menu);
+  const oracles = specs.map((oracleSpec) => ({
+    id: oracleSpec.id,
+    polarity: 'expects-hold',
+    commentary: oracleSpec.rationale,
+    direction: {
+      polarity: 'expects-hold',
+      relation: oracleSpec.check.op,
+      scope: oracleSpec.scope,
+      negativeDomain: oracleSpec.negativeDomain,
+      evidenceTargets: [routingPointer(oracleSpec.caseId, ROUTING_ORACLE_KINDS[oracleSpec.kind].pointer)],
+    },
+    check: oracleSpec.check,
+  }));
+
+  // One behavior per oracle, for the reason the fragment-selection builder
+  // records: eval-quality resolves AD-40's designated oracle only for a behavior
+  // declaring exactly one, and with none resolved a probe's trial is voted with
+  // the first oracle in the file instead of the one its own behavior names.
+  const behaviors = specs.map((oracleSpec, index) => ({
+    id: `B-${String(index + 1).padStart(3, '0')}`,
+    description: `${oracleSpec.scope} ${oracleSpec.rationale}`,
+    severity: ROUTING_ORACLE_KINDS[oracleSpec.kind].severity,
+    observableSuccessCriterion: oracleSpec.success,
+    requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${oracleSpec.caseId}/${ROUTING_ORACLE_KINDS[oracleSpec.kind].field}` }],
+    riskLinks: [{ scheme: 'tea-eval-risk', id: ROUTING_ORACLE_KINDS[oracleSpec.kind].risk }],
+    oracles: [oracleSpec.id],
+  }));
+
+  return {
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    contractId: spec.contractId,
+    // The skill and its menu are what the answers are derived from, and the
+    // corpus is what states them, so a change to any of the four moves this. Both
+    // routing contracts carry the same digest because both are claims about the
+    // same skill read against the same corpus.
+    sourceSpecDigest: digestOf([TEA_SKILL_PATH, TEA_MENU_PATH, ROUTING_INTENTS_PATH, ROUTING_GROUND_TRUTH_PATH]),
+    behaviors,
+    oracles,
+    rubrics: [],
+    waivers: [],
+    permittedInterfaces: [
+      {
+        logicalId: ROUTING_INTERFACE,
+        kind: 'cli',
+        operations: [
+          {
+            operationId: ROUTING_OPERATION,
+            invocation: { executable: ROUTING_INTERFACE, subcommandPath: [] },
+            // A routing decision reads and decides. Nothing it does outlives the run.
+            stateChangeMarker: false,
+            requestShape: ROUTING_REQUEST_SHAPE,
+            artifacts: [],
+            descriptorChannel: { kind: 'stream', channel: 'stdout' },
+            responseDescriptor: routingDescriptor(ROUTING_RESPONSE_KEYS),
+            volatilePointers: [],
+            sensitivityWitness: buildRoutingWitness(spec, cases),
+          },
+        ],
+      },
+    ],
+    referenceSets: {},
+    siblingGroups: { operations: [], parameters: [] },
+    interactionPlan: cases.map((item) => ({
+      stepId: item.id,
+      operationId: ROUTING_OPERATION,
+      after: null,
+      cardinality: 'exactly-one',
+      // The agent is bound as `any`: which vendor answered is the runner record's
+      // to state, and a literal here would make every step a claim about one vendor.
+      //
+      // Standard input is bound as the literal prompt this case sends, for the
+      // reason test/eval-trace.js's two steps bind theirs: every step declares the
+      // same operation, so under a matcher binding one observation satisfies all
+      // of them and each case's oracles quantify over evidence that is not theirs.
+      // The prompt is the only part of the request that tells the steps apart, and
+      // buildRoutingPrompt is the same function the live run and
+      // test/lib/probe-scoring.js use, so a prompt restated here in any other form
+      // would select nothing and every oracle would resolve unreached.
+      inputBinding: {
+        argument: null,
+        option: { agent: { matcher: 'any' } },
+        environment: null,
+        stdin: { prompt: { literal: buildRoutingPrompt(item) } },
+      },
+    })),
+    scopedResources: null,
+    forbiddenInputs: FORBIDDEN_INPUTS,
+    testData: {
+      setup:
+        `${spec.setupLead} The intent comes from test/fixtures/tea-routing-eval/intents.json and is wrapped in the bmad-tea skill as it ships: ` +
+        `src/agents/bmad-tea/SKILL.md and src/agents/bmad-tea/customize.toml, read off disk and placed in the prompt whole. Nothing is staged and ` +
+        `nothing is installed, because a routing decision needs no workspace. The run happens in an empty disposable directory that is also the ` +
+        `authorization's working directory. test/fixtures/tea-routing-eval/ground-truth.json is never shown: the harness searches every assembled ` +
+        `prompt for each of its ground-truth-only keys and for its own bytes before a call is spent, and that check runs in --validate-only too. ` +
+        `The witness differs its two legs on the intent, which is the only thing the prompt varies, and reads the difference at /${spec.witnessField}, ` +
+        `because that is the field this contract's own oracles are about.`,
+      cleanup:
+        'Delete the working directory. The corpus is read-only, and a run that wrote anything at all is an environment failure rather than a score.',
+      principals: null,
+      resources: null,
+    },
+    // One short reply per intent. The bounds are generous ceilings rather than
+    // measurements: the harness's own five-minute clock is what actually fires.
+    budgets: {
+      maxToolCalls: 2 * cases.length,
+      maxWallClockMinutes: 5 * cases.length,
+      maxCostUsd: (0.1 * cases.length).toFixed(2),
+    },
+    safetyLimits: [
+      'The runner reads and writes nothing outside the disposable working directory, and a routing answer needs no file at all; the harness fails a run that wrote one or that changed the repository.',
+      'No credential value appears in a prompt, an artifact, a log, or a result file.',
+    ],
+    requiredEvidence: [
+      'The routing answer each run printed on standard output, in full.',
+      'The exit code of each invocation.',
+      'The digest of the prompt each run was given, so an edit that changed the intent or the menu is visible in the record.',
+    ],
+    // One step per intent, plus room for the two probe steps the compiler may add.
+    probeStepBound: cases.length + 2,
+    fixtureReset: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Rendering and the two modes
 // ---------------------------------------------------------------------------
 
@@ -2387,6 +2854,7 @@ function firstDifference(expected, actual) {
 
 function targets() {
   return [
+    ...ROUTING_CONTRACTS.map((spec) => ({ relativePath: spec.relativePath, build: () => buildRoutingContract(spec) })),
     { relativePath: 'test-review.contract.json', build: buildTestReviewContract },
     { relativePath: 'trace.contract.json', build: buildTraceContract },
     ...FRAGMENT_SELECTION.map((spec) => ({
@@ -2457,4 +2925,6 @@ module.exports = {
   traceStepId,
   render,
   FRAGMENT_SELECTION,
+  ROUTING_CONTRACTS,
+  routingOracleSpecs,
 };

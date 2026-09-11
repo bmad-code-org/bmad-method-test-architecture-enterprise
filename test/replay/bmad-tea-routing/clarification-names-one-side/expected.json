@@ -1,0 +1,144 @@
+{
+  "$comment": [
+    "A clarification that asks which the user meant without saying between what. Step 8 of the skill allows a pause",
+    "when two or more items are genuinely close, and an answer that names neither of them has not asked a question",
+    "the user can answer.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "clarification-names-one-side",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: good-or-covering-what-matters",
+    "frozenOn": "2026-09-11",
+    "expected": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["good", "cover"],
+      "scopeTokens": [],
+      "candidateCodes": ["RV", "TR"],
+      "rationale": "The message asks two different questions in one breath and says both worry the user. Whether the tests are any good is the review item's sentence and whether they cover what matters is the trace item's, both readable off the menu, and nothing in the message says which to do first."
+    },
+    "intent": "We have a lot of tests and I honestly do not know whether they are any good, or whether they cover the things that matter. Both worry me.",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The action is clarify and the oracle expects clarify, so actionCorrect is true.",
+    "",
+    "decidingTokens is [good, cover] and the reason carries both, so the reason names the ambiguity correctly and it",
+    "is the question that fails.",
+    "",
+    "candidateCodes is [RV, TR]. Each is matched by its code as a whole word, by its workflow name, or by its menu",
+    "label. The question carries none of the six spellings, so candidatesNamed is 0 and clarifyOk is false. A",
+    "clarification is only a clarification when it names what it is between."
+  ],
+  "result": {
+    "answer": {
+      "action": "clarify",
+      "menuCode": null,
+      "workflow": null,
+      "scope": null,
+      "reason": "this could be about whether the tests are any good or about what they cover",
+      "question": "Could you tell me a bit more about what you want?",
+      "missing": null
+    },
+    "score": {
+      "action": "clarify",
+      "menuCode": null,
+      "workflow": null,
+      "actionCorrect": true,
+      "menuCorrect": false,
+      "workflowCorrect": false,
+      "routeCorrect": false,
+      "tokens": 2,
+      "tokensFound": 2,
+      "tokensMissed": [],
+      "scopeTokens": 0,
+      "scopeFound": 0,
+      "scopeWithinBound": true,
+      "scopeOk": false,
+      "candidates": 2,
+      "candidatesNamed": 0,
+      "candidateCodesNamed": [],
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
+    }
+  }
+}

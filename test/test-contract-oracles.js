@@ -108,10 +108,18 @@ const {
   summaryFromArtifact,
   TRACE_OPERATION,
 } = require('./eval-trace');
+const { parseRouting } = require('../cli/lib/parse-routing');
+const {
+  correctRoutingAnswer,
+  loadCorpus: loadRoutingCorpus,
+  menuItems: routingMenuItems,
+  scoreCase: scoreRoutingCase,
+  ROUTING_OPERATION,
+} = require('./eval-bmad-tea-routing');
 const { findCases } = require('./test-eval-replay');
 // The correspondence between each trace oracle and the scoreRun check it
 // restates is written once, in the generator beside the oracle itself.
-const { traceOracleSpecs, traceStepId } = require('../tools/generate-contracts');
+const { traceOracleSpecs, traceStepId, routingOracleSpecs, ROUTING_CONTRACTS } = require('../tools/generate-contracts');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(__dirname, 'contracts');
@@ -564,6 +572,200 @@ function checkTraceOracles(evaluator) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// bmad-tea routing
+// ---------------------------------------------------------------------------
+
+/**
+ * What each routing oracle kind asks, restated as a question about the harness
+ * scorer's own output.
+ *
+ * Every one of these reads a single field, and each of those fields exists on the
+ * score for this reason: `menuCorrect` is separate from `routeCorrect` and
+ * `missingStated` from `declineOk` so that the oracle and the scorer are compared
+ * on exactly one question at a time. An oracle that reads the menu code and a
+ * scorer field that also reads the workflow would disagree on a reply that got
+ * one right and the other wrong, and the disagreement would say nothing about
+ * either.
+ */
+const ROUTING_SCORER_QUESTION = {
+  action: (score) => score.actionCorrect,
+  menu: (score) => score.menuCorrect,
+  workflow: (score) => score.workflowCorrect,
+  reason: (score) => score.tokensFound === score.tokens,
+  scope: (score) => score.scopeOk,
+  candidates: (score) => score.candidatesNamed === score.candidates,
+  missing: (score) => score.missingStated,
+};
+
+/**
+ * Two constructed answers per case: the one the oracles are written for, and one
+ * that fails every one of them.
+ *
+ * Both are needed. An oracle only ever seen resolving true is an oracle nothing
+ * has shown can resolve false, and the stored replies cover eleven of the
+ * eighteen intents, so the constructed pair is what exercises the rest in both
+ * directions.
+ *
+ * The correct half is `correctRoutingAnswer` from the harness, whose reason is
+ * the case's own deciding tokens joined. That makes it evidence about the oracle
+ * and no evidence at all about the token set: a token set of nonsense would pass
+ * here. `node test/eval-bmad-tea-routing.js --validate-only` is what holds a
+ * token set to the user's message, and the stored replies are what test realistic
+ * phrasing.
+ */
+function constructedRoutingAnswers(expected) {
+  const correct = correctRoutingAnswer(expected);
+  const otherAction = expected.expectedAction === 'route' ? 'decline' : 'route';
+  const wrong = {
+    action: otherAction,
+    menuCode: otherAction === 'route' ? 'TMT' : null,
+    workflow: otherAction === 'route' ? 'bmad-teach-me-testing' : null,
+    scope: null,
+    reason: 'no particular feature of the message decided it',
+    question: null,
+    missing: null,
+  };
+  // A route case's wrong answer has to be wrong where the menu and workflow
+  // oracles are concerned, so it names a target that is never this case's own.
+  if (expected.expectedAction === 'route' && expected.expectedMenuCode === 'TMT') {
+    wrong.menuCode = 'TR';
+    wrong.workflow = 'bmad-testarch-trace';
+  }
+  const answers = [
+    { label: 'the answer the oracles are written for', answer: correct, expectHold: true },
+    { label: 'an answer of the wrong kind', answer: wrong, expectHold: false },
+  ];
+  if (expected.expectedAction === 'route') {
+    // A third answer, because one wrong answer cannot fail every oracle of a
+    // route case. The wrong-kind answer above is a decline, which carries a null
+    // workflow, and a null workflow is the correct state for GATE, whose menu
+    // item targets a prompt rather than a skill. So the oracle that exists to
+    // catch a workflow named behind GATE is satisfied by the answer meant to fail
+    // it. This one is a route to the wrong target, which is what fails the menu
+    // and workflow oracles on every route case including that one.
+    answers.push({
+      label: 'a route to the wrong target',
+      answer: {
+        ...correct,
+        menuCode: expected.expectedMenuCode === 'TMT' ? 'TR' : 'TMT',
+        workflow: expected.expectedMenuCode === 'TMT' ? 'bmad-testarch-trace' : 'bmad-teach-me-testing',
+      },
+      expectHold: false,
+    });
+  }
+  return answers;
+}
+
+function checkOneRoutingAnswer(evaluator, contract, specsForCase, caseId, expected, menu, intent, answer, label) {
+  const score = scoreRoutingCase(expected, answer, menu, intent);
+  const stdout = answer === null ? { kind: 'absent' } : { kind: 'json', value: answer };
+  const results = evaluateOracles(evaluator, contract, {
+    [caseId]: observation({ operationId: ROUTING_OPERATION, exitCode: answer === null ? 6 : 0, stdout }),
+  });
+  let evaluated = 0;
+  for (const spec of specsForCase) {
+    const question = ROUTING_SCORER_QUESTION[spec.kind];
+    const result = results.get(spec.id);
+    assert(
+      agrees(result, verdictOf(score, question)),
+      `${caseId}: ${spec.id} (${spec.kind}) agrees with scoreCase on ${label}`,
+      `scoreCase ${score === null ? 'has no answer to score' : `says ${question(score)}`}, oracle ${describe(result)}`,
+    );
+    evaluated += 1;
+  }
+  return { evaluated, results };
+}
+
+function checkRoutingOracles(evaluator) {
+  console.log('\ntea-routing-*.contract.json over constructed and stored routing answers');
+  const corpus = loadRoutingCorpus();
+  const menu = routingMenuItems();
+  const stored = findCases().filter((item) => item.suite === 'bmad-tea-routing');
+  assert(stored.length > 0, 'test/replay/bmad-tea-routing holds at least one stored routing answer');
+  let evaluated = 0;
+
+  for (const contractSpec of ROUTING_CONTRACTS) {
+    const contract = readJson(path.join(CONTRACT_ROOT, contractSpec.relativePath), `the ${contractSpec.contractId} contract`);
+    const cases = corpus.cases.filter((item) => contractSpec.actions.includes(item.expected.expectedAction));
+    const specs = routingOracleSpecs(cases, menu);
+    assert(
+      specs.length === contract.oracles.length,
+      `${contractSpec.relativePath}: the generator's oracle list is the one on disk`,
+      `${specs.length} generated, ${contract.oracles.length} on disk`,
+    );
+    const byCase = new Map();
+    for (const spec of specs) byCase.set(spec.caseId, [...(byCase.get(spec.caseId) ?? []), spec]);
+    const seenFalse = new Set();
+
+    for (const item of cases) {
+      for (const constructed of constructedRoutingAnswers(item.expected)) {
+        const { evaluated: count, results } = checkOneRoutingAnswer(
+          evaluator,
+          contract,
+          byCase.get(item.id) ?? [],
+          item.id,
+          item.expected,
+          menu,
+          item.intent,
+          constructed.answer,
+          constructed.label,
+        );
+        evaluated += count;
+        if (!constructed.expectHold) {
+          for (const spec of byCase.get(item.id) ?? []) {
+            if (results.get(spec.id)?.resolution === 'false') seenFalse.add(spec.id);
+          }
+        }
+      }
+    }
+
+    // The stored replies, through the same parser the runner applies to a live
+    // one. Each names the corpus case it was frozen from, and it is scored
+    // against that case's current oracle, so this compares the contract and the
+    // scorer on one input; the stored result is history and stays out of it.
+    for (const replayed of stored) {
+      const expected = readJson(path.join(replayed.directory, 'expected.json'), `${replayed.id} expected result`);
+      const match = /^test\/fixtures\/tea-routing-eval\/intents\.json :: (.+)$/.exec(String(expected.inputs?.sourceCase ?? ''));
+      if (!match) {
+        assert(false, `${replayed.id}: expected.json names the intents.json case it was frozen from`, String(expected.inputs?.sourceCase));
+        continue;
+      }
+      const caseId = match[1];
+      const specsForCase = byCase.get(caseId);
+      // A stored reply to an intent this contract does not carry belongs to the
+      // other one, which sees it on its own pass.
+      if (specsForCase === undefined) continue;
+      const item = cases.find((candidate) => candidate.id === caseId);
+      if (!item) {
+        assert(false, `${replayed.id}: its source case ${caseId} still exists in the corpus`);
+        continue;
+      }
+      const answer = parseRouting(fs.readFileSync(path.join(replayed.directory, 'stdout.txt'), 'utf8'));
+      const { evaluated: count } = checkOneRoutingAnswer(
+        evaluator,
+        contract,
+        specsForCase,
+        caseId,
+        item.expected,
+        menu,
+        item.intent,
+        answer,
+        `stored reply ${replayed.id}`,
+      );
+      evaluated += count;
+    }
+
+    for (const spec of specs) {
+      assert(seenFalse.has(spec.id), `${spec.id} (${spec.kind} on ${spec.caseId}) was seen resolving false on some answer`);
+    }
+  }
+
+  console.log(
+    `  ${colors.dim}${evaluated} oracle evaluation(s) across ${ROUTING_CONTRACTS.length} contract(s) and ${stored.length} stored reply(ies)${colors.reset}`,
+  );
+}
+
 async function main() {
   console.log('contract oracles, evaluated with eval-quality and compared with the harness scorers');
   const evaluator = await loadEvaluator();
@@ -571,6 +773,7 @@ async function main() {
 
   checkTestReviewOracles(evaluator, groundTruth);
   checkFragmentSelectionOracles(evaluator);
+  checkRoutingOracles(evaluator);
   checkTraceOracles(evaluator);
 
   console.log('');

@@ -1,0 +1,144 @@
+{
+  "$comment": [
+    "A correct answer wrapped in prose and a fenced block, which is the shape a chatty vendor returns however",
+    "plainly the prompt asks for JSON only. The parser has to find it, because an unparseable reply is an",
+    "environment failure and a correct answer reported as one would hide a run that worked.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "fenced-json",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: learn-testing-properly",
+    "frozenOn": "2026-09-11",
+    "expected": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TMT",
+      "expectedWorkflow": "bmad-teach-me-testing",
+      "decidingTokens": ["learn", "fundamentals"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of."
+    },
+    "intent": "I am three months into my first QA job. I want to learn testing properly from the fundamentals up instead of copying what the team already does.",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "parseRouting tries the fenced candidates before the bare text, so the block between the fences parses and the",
+    "surrounding prose is ignored.",
+    "",
+    "route/TMT/bmad-teach-me-testing matches the oracle, so routeCorrect is true.",
+    "",
+    "decidingTokens is [learn, fundamentals] and the reason carries both, so tokensFound is 2 of 2. The oracle names",
+    "no scope, so scopeTokens is 0 and scopeOk stays false without counting against anything: the harness only takes",
+    "a scope opportunity where the fixture declares one."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "TMT",
+      "workflow": "bmad-teach-me-testing",
+      "scope": null,
+      "reason": "the deliverable is that you learn testing from the fundamentals up rather than any artifact",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "TMT",
+      "workflow": "bmad-teach-me-testing",
+      "actionCorrect": true,
+      "menuCorrect": true,
+      "workflowCorrect": true,
+      "routeCorrect": true,
+      "tokens": 2,
+      "tokensFound": 2,
+      "tokensMissed": [],
+      "scopeTokens": 0,
+      "scopeFound": 0,
+      "scopeWithinBound": true,
+      "scopeOk": false,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "candidateCodesNamed": [],
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
+    }
+  }
+}

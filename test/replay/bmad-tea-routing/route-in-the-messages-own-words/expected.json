@@ -1,0 +1,142 @@
+{
+  "$comment": [
+    "A correct route whose reason is written the way a person writes, rather than as a list of the tokens the",
+    "fixture names. It is here because the constructed answers the contract oracles are checked against build their",
+    "reason out of the fixture's own tokens, which proves an oracle can resolve and proves nothing about whether a",
+    "real sentence clears it. This one is that sentence.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "route-in-the-messages-own-words",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: review-existing-tests",
+    "frozenOn": "2026-09-11",
+    "expected": {
+      "expectedAction": "route",
+      "expectedMenuCode": "RV",
+      "expectedWorkflow": "bmad-testarch-test-review",
+      "decidingTokens": ["spec files", "badly written"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats."
+    },
+    "intent": "Here are thirty spec files the team wrote last quarter. Tell me which ones are badly written and what to fix.",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "route/RV/bmad-testarch-test-review matches the oracle, so routeCorrect is true.",
+    "",
+    "decidingTokens is [spec files, badly written]. Both are multi-word tokens and the reason carries each of them",
+    "as a phrase, so tokensFound is 2 of 2. The oracle names no scope, so scopeTokens is 0 and no scope opportunity",
+    "is taken."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "RV",
+      "workflow": "bmad-testarch-test-review",
+      "scope": null,
+      "reason": "the spec files already exist and the ask is which of them are badly written, which is a judgment on how they are written rather than on what they cover",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "RV",
+      "workflow": "bmad-testarch-test-review",
+      "actionCorrect": true,
+      "menuCorrect": true,
+      "workflowCorrect": true,
+      "routeCorrect": true,
+      "tokens": 2,
+      "tokensFound": 2,
+      "tokensMissed": [],
+      "scopeTokens": 0,
+      "scopeFound": 0,
+      "scopeWithinBound": true,
+      "scopeOk": false,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "candidateCodesNamed": [],
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
+    }
+  }
+}

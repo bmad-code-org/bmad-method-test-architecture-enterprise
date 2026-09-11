@@ -1,0 +1,1 @@
+{"action":"route","menuCode":"RV","workflow":"bmad-testarch-test-review","scope":null,"reason":"the spec files already exist and the ask is which of them are badly written, which is a judgment on how they are written rather than on what they cover","question":null,"missing":null}

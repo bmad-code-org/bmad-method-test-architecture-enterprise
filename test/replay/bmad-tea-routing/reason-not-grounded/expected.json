@@ -1,0 +1,144 @@
+{
+  "$comment": [
+    "The right workflow with a reason that would fit any intent at all. This is the case that says route accuracy",
+    "on its own is not enough: a router that happens to be right and cannot say why is indistinguishable, on the",
+    "menu code alone, from one that read the message.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "reason-not-grounded",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: implemented-feature-no-tests",
+    "frozenOn": "2026-09-11",
+    "expected": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TA",
+      "expectedWorkflow": "bmad-testarch-automate",
+      "decidingTokens": ["api test", "already built"],
+      "scopeTokens": ["checkout"],
+      "candidateCodes": [],
+      "rationale": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them."
+    },
+    "intent": "The checkout service is already built and shipped behind a flag. It has no API tests at all. Generate a prioritized set for it.",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "route/TA/bmad-testarch-automate is what the oracle expects, so actionCorrect, menuCorrect, workflowCorrect and",
+    "routeCorrect are all true.",
+    "",
+    "decidingTokens is [api test, already built]. The reason carries neither, so tokensFound is 0 and tokensMissed",
+    "names both. That is the whole point of the case: the score for the decision and the score for the stated reason",
+    "move independently.",
+    "",
+    "scopeTokens is [checkout] and the scope reads \"the checkout service\", well inside the bound, so scopeOk is true."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "TA",
+      "workflow": "bmad-testarch-automate",
+      "scope": "the checkout service",
+      "reason": "this is the right workflow for what you are asking about",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "TA",
+      "workflow": "bmad-testarch-automate",
+      "actionCorrect": true,
+      "menuCorrect": true,
+      "workflowCorrect": true,
+      "routeCorrect": true,
+      "tokens": 2,
+      "tokensFound": 0,
+      "tokensMissed": ["api test", "already built"],
+      "scopeTokens": 1,
+      "scopeFound": 1,
+      "scopeWithinBound": true,
+      "scopeOk": true,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "candidateCodesNamed": [],
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
+    }
+  }
+}

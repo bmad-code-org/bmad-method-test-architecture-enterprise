@@ -1,0 +1,143 @@
+{
+  "$comment": [
+    "The right workflow, a fully grounded reason, and the epic the user named dropped on the way in. The agent",
+    "passes no scope structurally, so a dispatch that forgets which epic it is about runs the workflow against",
+    "whatever the next turn decides, and nothing downstream says so.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "scope-dropped",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 4,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of one case of the live corpus, of the menu it is scored against, and of the user's message.",
+      "Those three plus the reply are the whole input to scoreCase, so all three are stored here rather than read",
+      "live: a replay has to keep scoring the scenario it was derived against after the corpus moves on, and",
+      "npm run test:eval-routing-data already holds the live corpus against the shipped menu."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: trace-criteria-to-tests",
+    "frozenOn": "2026-09-11",
+    "expected": {
+      "expectedAction": "route",
+      "expectedMenuCode": "TR",
+      "expectedWorkflow": "bmad-testarch-trace",
+      "decidingTokens": ["covered", "ship"],
+      "scopeTokens": ["epic 5"],
+      "candidateCodes": [],
+      "rationale": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which."
+    },
+    "intent": "Epic 5's acceptance criteria are written and we have a decent suite. Map which criteria are actually covered and tell me whether we can ship.",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "route/TR/bmad-testarch-trace matches the oracle, so routeCorrect is true.",
+    "",
+    "decidingTokens is [covered, ship] and the reason carries both.",
+    "",
+    "scopeTokens is [epic 5] and the scope is null, so scopeFound is 0 and scopeOk is false. scopeWithinBound is",
+    "true, because an absent scope is trivially within the bound; the two conditions are separate and this case",
+    "fails only the containment one, which is what makes it the pair to scope-echoes-the-message."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "TR",
+      "workflow": "bmad-testarch-trace",
+      "scope": null,
+      "reason": "the ask is which criteria are actually covered and whether you can ship",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "TR",
+      "workflow": "bmad-testarch-trace",
+      "actionCorrect": true,
+      "menuCorrect": true,
+      "workflowCorrect": true,
+      "routeCorrect": true,
+      "tokens": 2,
+      "tokensFound": 2,
+      "tokensMissed": [],
+      "scopeTokens": 1,
+      "scopeFound": 0,
+      "scopeWithinBound": true,
+      "scopeOk": false,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "candidateCodesNamed": [],
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
+    }
+  }
+}

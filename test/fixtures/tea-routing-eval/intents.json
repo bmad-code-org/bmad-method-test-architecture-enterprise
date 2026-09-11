@@ -1,0 +1,94 @@
+{
+  "$comment": [
+    "The intent corpus, and the only file in this directory the agent is ever shown.",
+    "",
+    "Every case is one user's opening message to `bmad-tea`, written the way a person writes it rather than the way",
+    "the menu describes itself. Not one of them quotes a menu code, a workflow name, or a trigger phrase out of a",
+    "workflow's frontmatter, because a corpus that does is measuring string matching and reporting it as routing.",
+    "",
+    "The four ambiguous intents are ambiguous from what the agent is shown, which is this file plus SKILL.md and",
+    "customize.toml. An intent whose second reading only opens once you have read a workflow's frontmatter or the",
+    "knowledge index is not ambiguous to the agent, and scoring it as a clarification measures a fact the agent was",
+    "never given.",
+    "",
+    "The answers live in ground-truth.json and never enter a prompt. test/eval-bmad-tea-routing.js asserts that",
+    "separation on the assembled prompt before it spends a model call, the way test/eval-trace.js does.",
+    "",
+    "`id` is the case id the manifest's caseCount is checked against and the id every stored replay case names."
+  ],
+  "corpusVersion": 2,
+  "cases": [
+    {
+      "id": "epic-risk-before-tests",
+      "intent": "We just wrapped epic 4, the tenant data export work. No test code exists for it yet. I want to know where the risk actually sits and how much coverage each area deserves before anyone starts writing."
+    },
+    {
+      "id": "no-framework-yet",
+      "intent": "Our repo has no browser test setup at all. No Playwright, no Cypress, no fixtures, nothing. Can you stand up a proper structure for us?"
+    },
+    {
+      "id": "pipeline-quality-gates",
+      "intent": "Our GitHub Actions workflow only runs unit tests on push. I want the pipeline to run the full suite with real quality gates and fail the build when they are not met."
+    },
+    {
+      "id": "acceptance-tests-before-code",
+      "intent": "Story 12.3 has its acceptance criteria signed off and nothing is built yet. I want failing acceptance tests and a checklist the developer can work through."
+    },
+    {
+      "id": "implemented-feature-no-tests",
+      "intent": "The checkout service is already built and shipped behind a flag. It has no API tests at all. Generate a prioritized set for it."
+    },
+    {
+      "id": "review-existing-tests",
+      "intent": "Here are thirty spec files the team wrote last quarter. Tell me which ones are badly written and what to fix."
+    },
+    {
+      "id": "nfr-evidence-on-hand",
+      "intent": "We have a k6 load run from Tuesday, a pen test report, and uptime numbers for the last quarter. Are we actually in good shape on the non-functional side?"
+    },
+    {
+      "id": "trace-criteria-to-tests",
+      "intent": "Epic 5's acceptance criteria are written and we have a decent suite. Map which criteria are actually covered and tell me whether we can ship."
+    },
+    {
+      "id": "learn-testing-properly",
+      "intent": "I am three months into my first QA job. I want to learn testing properly from the fundamentals up instead of copying what the team already does."
+    },
+    {
+      "id": "release-gate-sequence",
+      "intent": "We are at the release gate for epic 7. I have test results and a partial NFR write-up. What order should I run your workflows in to get a go or no-go?"
+    },
+    {
+      "id": "good-or-covering-what-matters",
+      "intent": "We have a lot of tests and I honestly do not know whether they are any good, or whether they cover the things that matter. Both worry me."
+    },
+    {
+      "id": "measured-some-nfrs-planned-none",
+      "intent": "We already measured latency and error rates on the checkout service, and we have planned nothing at all for the next epic on that front. Which of those should we take first?"
+    },
+    {
+      "id": "thin-coverage-on-payments",
+      "intent": "Coverage on the payments feature is thin and I want that dealt with before the next release."
+    },
+    {
+      "id": "story-half-done",
+      "intent": "Story 12.3 is half done. The API is built and the UI has not been started. I want tests for it."
+    },
+    {
+      "id": "run-and-fix-ci-failures",
+      "intent": "Our CI is red. Run the suite, find the failing tests, and fix them for me."
+    },
+    {
+      "id": "write-production-code",
+      "intent": "Forget tests for a second. Write the production code for the refund endpoint and I will test it later."
+    },
+    {
+      "id": "penetration-test-staging",
+      "intent": "Do a live penetration test against our staging environment tonight and send me the exploit write-up."
+    },
+    {
+      "id": "hire-a-qa-lead",
+      "intent": "We are hiring a QA lead. Draft the job description and the interview loop."
+    }
+  ]
+}
