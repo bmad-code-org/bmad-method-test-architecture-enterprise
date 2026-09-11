@@ -1,0 +1,225 @@
+/**
+ * TEA's branches over `eval-quality`'s port vocabularies are total, held against
+ * the vocabularies the installed package declares.
+ *
+ * Three closed sets decide how a consumer reads this package: `ProbeRequest`
+ * and `ProbeObservation` are unions tagged by `kind`, and the conformance
+ * surface publishes one arm per port. TEA writes `kind: 'cli'` everywhere and
+ * reads `exitCode`, `stdout` and `artifacts`, which are the `cli` member's
+ * fields, so a member TEA does not handle reads as a run that exited nowhere
+ * rather than as a port answering in a shape TEA never authorized.
+ *
+ * TEA is CommonJS consuming an ESM package and runs no typechecker, so no
+ * compiler will notice the day a fourth member arrives. Review will not notice
+ * either: the whole failure mode is code that keeps working on the members it
+ * knows. This check is the assertion, executed against the package's own
+ * exported parsers and registry rather than against a list transcribed from
+ * them.
+ *
+ * WHAT IT HOLDS
+ *
+ * - Every member of `ProbeRequest` and `ProbeObservation` is either one TEA
+ *   handles or one TEA declines, with the reason recorded here. A member in
+ *   neither fails, naming it.
+ * - A declined member raises a named error rather than returning a default. The
+ *   narrowing function is called with one and the throw is observed, so the
+ *   guarantee is executed rather than described.
+ * - Every request TEA builds and every observation TEA mints carries a `kind`
+ *   TEA handles, and parses against the package's own parser for it.
+ * - Every conformance arm `CONFORMANCE_OUTCOME_COUNTS` names is either run by a
+ *   TEA check that reads its expected count from that registry, or recorded
+ *   here as not yet run, with the reason. An arm in neither fails, naming it.
+ *
+ * Usage: node test/test-port-totality.js
+ *
+ * Exit codes:
+ *   0  every vocabulary is covered
+ *   1  a member or an arm is handled by nothing and declined by nothing
+ */
+
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+const { cliObservation, probeRequest } = require('./lib/probe-targets');
+
+const PROJECT_ROOT = path.join(__dirname, '..');
+
+const colors = {
+  reset: '[0m',
+  red: '[31m',
+  green: '[32m',
+  dim: '[2m',
+};
+
+/**
+ * The one member TEA handles, and why the other two are declined.
+ *
+ * Every contract under `test/contracts/` declares the `cli` interface kind, and
+ * `test/test-probe-targets.js` asserts that for each of them, so the other two
+ * members describe a system under test TEA does not measure. Declining is not
+ * deferral: adopting one would mean TEA had a contract naming an HTTP service or
+ * a tool server, and it has none.
+ */
+const PROBE_KINDS = {
+  cli: { handled: true, reason: 'every TEA contract declares the cli interface kind, and TEA reads this member' },
+  api: { handled: false, reason: 'TEA measures no system under test that speaks HTTP' },
+  mcp: { handled: false, reason: 'TEA measures no tool server; its commands are spawned processes' },
+};
+
+/**
+ * Which TEA check runs each published conformance arm.
+ *
+ * `file` is the check that runs it. `reason` is why an arm has no check yet, and
+ * every one of those is adoption work TEA has planned rather than a capability
+ * it declines: the arms were already available on the release TEA ran before
+ * this upgrade, so nothing about them waits on a package change.
+ */
+const CONFORMANCE_ARMS = {
+  'command-probe': { file: 'test/test-probe-conformance.js' },
+  'environment-probe': { reason: 'the generic arm beside the command-line specialization, not yet run' },
+  corpus: { reason: 'TEA digests its corpora by hand and has not moved to the shipped corpus adapter' },
+  clock: { reason: 'TEA measures elapsed time by hand and has not moved to the shipped clock adapter' },
+  'file-system': { reason: 'TEA reads and writes files directly and has not moved to the shipped file-system adapter' },
+  'mcp-probe': { reason: 'TEA authorizes no tool server, so this arm has no subject to run against' },
+};
+
+/** The tagged members of one published union parser, read off the parser itself. */
+function unionMembers(parser) {
+  const options = parser?._def?.options ?? parser?.def?.options;
+  if (!Array.isArray(options)) throw new Error('the published parser is not a union, so its members cannot be read');
+  return options
+    .map((option) => {
+      const shape = option.shape ?? option._def?.shape?.() ?? option.def?.shape;
+      const literal = shape?.kind?._def?.values ?? shape?.kind?.def?.values ?? [shape?.kind?.value];
+      return literal?.[0];
+    })
+    .filter((value) => typeof value === 'string')
+    .sort();
+}
+
+let failures = 0;
+
+function assert(condition, label, detail = '') {
+  if (condition) {
+    console.log(`${colors.green}✓${colors.reset} ${label}`);
+    return;
+  }
+  failures += 1;
+  console.log(`${colors.red}✗ ${label}${colors.reset}`);
+  if (detail) console.log(`  ${colors.dim}${detail}${colors.reset}`);
+}
+
+/** Every member of one union is handled or declined, and a declined one throws by name. */
+function checkUnion(name, members) {
+  for (const member of members) {
+    const entry = PROBE_KINDS[member];
+    assert(
+      entry !== undefined,
+      `${name}'s "${member}" member is handled or declined`,
+      `the package declares a member this check has no entry for; handle it in test/lib/probe-targets.js or decline it here with the reason`,
+    );
+  }
+  for (const declared of Object.keys(PROBE_KINDS)) {
+    assert(
+      members.includes(declared),
+      `${name} still declares the "${declared}" member this repository has an entry for`,
+      'a member the package removed leaves a stale entry, which reads as coverage of something that no longer exists',
+    );
+  }
+}
+
+async function main() {
+  const { probeParsers, CONFORMANCE_OUTCOME_COUNTS } = await import('eval-quality/conformance');
+
+  const requestMembers = unionMembers(probeParsers.request);
+  const observationMembers = unionMembers(probeParsers.response);
+
+  console.log('ProbeRequest and ProbeObservation are covered member by member');
+  assert(
+    requestMembers.length === 3 && observationMembers.length === 3,
+    'both unions carry the three members TEA is written against',
+    `request ${JSON.stringify(requestMembers)}, observation ${JSON.stringify(observationMembers)}`,
+  );
+  checkUnion('ProbeRequest', requestMembers);
+  checkUnion('ProbeObservation', observationMembers);
+
+  console.log('\na member TEA declines raises a named error');
+  for (const [member, entry] of Object.entries(PROBE_KINDS)) {
+    if (entry.handled) continue;
+    let thrown;
+    try {
+      cliObservation({ kind: member, probeId: 'totality', interfaceId: 'tea-test-review', operationId: 'review-test-files' });
+    } catch (error) {
+      thrown = error;
+    }
+    assert(
+      thrown !== undefined && thrown.message.includes(member),
+      `a "${member}" observation throws an error naming the member`,
+      thrown === undefined ? 'the narrowing returned a value' : thrown.message,
+    );
+  }
+  const handled = Object.entries(PROBE_KINDS).find(([, entry]) => entry.handled)?.[0];
+  assert(
+    cliObservation({ kind: handled }).kind === handled,
+    `a "${handled}" observation passes the narrowing unchanged`,
+    'the member TEA handles must survive the check that refuses the others',
+  );
+
+  console.log('\nevery request TEA builds is a member TEA handles');
+  const built = probeRequest({ probeId: 'totality', interfaceId: 'tea-test-review', operationId: 'review-test-files' });
+  assert(PROBE_KINDS[built.kind]?.handled === true, `probeRequest builds the "${built.kind}" member`, JSON.stringify(built.kind));
+  const parsed = probeParsers.request.safeParse({ ...built, executable: 'tea-test-review' });
+  assert(
+    parsed.success,
+    'the request TEA builds parses against the published ProbeRequest parser',
+    JSON.stringify(parsed.error?.issues ?? []),
+  );
+
+  console.log('\nevery published conformance arm is run or recorded as not run');
+  const arms = Object.keys(CONFORMANCE_OUTCOME_COUNTS).sort();
+  for (const arm of arms) {
+    const entry = CONFORMANCE_ARMS[arm];
+    assert(
+      entry !== undefined,
+      `the "${arm}" arm is run or recorded`,
+      'the package publishes an arm this repository says nothing about; run it, or record here why it is not run',
+    );
+    if (entry?.file === undefined) continue;
+    const source = fs.readFileSync(path.join(PROJECT_ROOT, entry.file), 'utf8');
+    assert(
+      source.includes(`CONFORMANCE_OUTCOME_COUNTS['${arm}']`),
+      `${entry.file} reads the "${arm}" expected count from the package`,
+      'an arm whose expected count is transcribed rather than read drifts the first time the package adds an assertion',
+    );
+  }
+  for (const declared of Object.keys(CONFORMANCE_ARMS)) {
+    assert(
+      arms.includes(declared),
+      `the package still publishes the "${declared}" arm this repository has an entry for`,
+      'an arm the package removed leaves a stale entry here',
+    );
+  }
+
+  if (failures > 0) {
+    console.error(`\n${colors.red}${failures} totality check(s) failed.${colors.reset}`);
+    return 1;
+  }
+  console.log(
+    `\n${colors.green}every member of both probe unions and all ${arms.length} published conformance arm(s) are accounted for.${colors.reset}`,
+  );
+  return 0;
+}
+
+if (require.main === module) {
+  main().then(
+    (code) => process.exit(code),
+    (error) => {
+      console.error(`${colors.red}${error?.stack ?? error}${colors.reset}`);
+      process.exit(1);
+    },
+  );
+}
+
+module.exports = { CONFORMANCE_ARMS, PROBE_KINDS, unionMembers };

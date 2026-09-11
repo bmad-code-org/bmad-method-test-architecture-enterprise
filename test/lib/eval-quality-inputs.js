@@ -46,8 +46,8 @@ const POLICY_PATH = path.join(PROJECT_ROOT, 'test', 'probes', 'scoring-policy.js
  * is where a table like this is supposed to fail.
  */
 const SCHEMA_VERSIONS = {
-  probe: 3,
-  sealedRunRecord: 3,
+  probe: 5,
+  sealedRunRecord: 6,
   scoringPolicy: 2,
   isolationManifest: 1,
   evaluatorConfiguration: 1,
@@ -207,8 +207,11 @@ function isolationManifest({
 /**
  * One observation inside a sealed run record.
  *
- * The ten channels are total in the schema, so a caller naming only what it saw
- * would fail to parse. `stdout`, `stderr` and each artifact are tagged bodies,
+ * The eleven channels are total in the schema, so a caller naming only what it
+ * saw would fail to parse. `arguments` is the ninth call-input channel, added by
+ * the record's version 5 bump so what a tool call supplied has somewhere to
+ * live. TEA observes spawned commands and never a tool call, so it is stated as
+ * null the way the four HTTP channels are. `stdout`, `stderr` and each artifact are tagged bodies,
  * the same three tags `createCommandLineAdapter` returns, so an observation built
  * here and one read off the port have one shape.
  *
@@ -244,6 +247,7 @@ function recordObservation({
       option: callInputs.option ?? null,
       environment: callInputs.environment ?? null,
       stdin: callInputs.stdin ?? null,
+      arguments: callInputs.arguments ?? null,
     },
     responseBody: null,
     responseHeaders: null,
@@ -294,7 +298,6 @@ function sealedRunRecord({
   resourceUse,
   truncationBound = null,
   reportedIncomplete = false,
-  invalidReason = null,
 }) {
   return {
     schemaVersion: SCHEMA_VERSIONS.sealedRunRecord,
@@ -319,7 +322,6 @@ function sealedRunRecord({
     isolationManifestArtifact,
     resourceUse,
     evidenceDisclosure: { truncationBound, reportedIncomplete },
-    invalidReason,
   };
 }
 

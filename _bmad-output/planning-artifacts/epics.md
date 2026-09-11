@@ -154,7 +154,7 @@ FR39: Every new npm script is covered by CI. `tools/validate-ci-coverage.js` enf
 
 **Proving it**
 
-FR40: TEA proves the pin move against the package's own published corpus before migrating a single TEA artifact, by compiling all 26 dev contracts on 3.0.0 and diffing the sealed brief against the shipped bytes. `eval-quality/corpus/*` is a published subpath with a `sha256:` digest per entry and zero TEA references.
+FR40: TEA proves the pin move against the package's own published corpus before migrating a single TEA artifact, by compiling all 25 published contracts on 3.0.0 and diffing the sealed brief against the shipped bytes. `eval-quality/corpus/*` is a published subpath with a `sha256:` digest per entry and zero TEA references.
 
 FR41: `npm run eval:all` runs live against the new feature set for at least one runner, and the measured result is recorded with its exit class.
 
@@ -364,7 +364,7 @@ So that a failure during migration is attributable to TEA rather than to the upg
 
 **Acceptance Criteria:**
 
-**Given** `eval-quality/corpus/*` is a published subpath carrying 26 dev contracts, a compile-and-seal example with its own brief, and `corpus/dev/index.json` with a `sha256:` digest per entry
+**Given** `eval-quality/corpus/*` is a published subpath whose `corpus/dev/index.json` carries 27 entries with a `sha256:` digest each: 25 contracts, of which 24 sit under `contracts/` and the twenty-fifth is the compile-and-seal example, that example's sealed brief, and the corpus README
 **When** a smoke check compiles every published contract against 3.0.0
 **Then** each contract's compile status matches what the corpus declares
 **And** the sealed brief produced by the example matches the shipped bytes

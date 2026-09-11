@@ -36,42 +36,85 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { AGENT_ADAPTERS } = require('../../cli/lib/agent-adapters');
+const { reviewEnvironmentNames, vendorEnvironmentNames } = require('../../cli/lib/runner-exit-codes');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
 /**
- * The host environment variables a measured run is allowed to see.
+ * Every environment key one target's authorization permits, including the names
+ * a caller passes through on top of the target's own.
  *
- * The adapter closes the child environment to `PATH` plus what the request
- * declares, which is the guarantee that makes one probe reproducible. A TEA
- * command still has to authenticate and still has to behave the way an operator
- * running it by hand would, so three groups of names are declared:
+ * `CommandTargetPolicy.permittedEnvironmentKeys` is required on 3.0.0 with no
+ * default, and the adapter refuses any key a request declares that the
+ * authorization does not name, before a process starts. So this is the
+ * operator's half of the environment channel, and it is stated per target rather
+ * than once for every command TEA ships: a key a command never reads has no
+ * business reaching it.
  *
- * - Every vendor variable the shipped adapters read, taken from `AGENT_ADAPTERS`
- *   rather than transcribed, so a new vendor's variable arrives here with it.
- * - `HOME` and `USER`, because both shipped vendors resolve a stored login
- *   through `HOME`, and `cli/test-review.js` reads `~/.claude/.credentials.json`
- *   and the macOS keychain through the same variable.
- * - `CI`, because `cli/test-review.js` turns filesystem isolation on when it is
- *   set. Dropping it would quietly change how a measured run executes rather
- *   than failing.
+ * Each target's own list is the one its contract declares, read from the same
+ * source the contract generator reads rather than transcribed:
+ *
+ * - `vendorEnvironmentNames()` carries every variable a shipped vendor adapter
+ *   consumes, plus `HOME` and `USER`, because both shipped vendors resolve a
+ *   stored login through `HOME` and the adapter passes the child nothing else
+ *   that could reach one.
+ * - `CI` is `tea-test-review`'s alone. `cli/test-review.js:864` turns filesystem
+ *   isolation on when it is set, so dropping it would quietly change how a
+ *   measured run executes rather than failing, and the other two commands never
+ *   read it.
+ *
+ * The extra names are an operator's `--env-pass`, and a test harness's stub
+ * variables. They widen one authorization deliberately and one call at a time,
+ * which is what keeps the default deny.
+ *
+ * `PATH` appears on no list. The schema refuses it by refine and the adapter
+ * refuses it again, because `target` may name a bare command and a declared
+ * `PATH` would then choose which binary runs. The adapter supplies its own.
+ *
+ * @param {string} interfaceId
+ * @param {string[]} [extraNames]
+ * @returns {string[]}
+ */
+function permittedEnvironmentKeys(interfaceId, extraNames = []) {
+  const target = EXECUTION_TARGETS.find((entry) => entry.interfaceId === interfaceId);
+  if (target === undefined) {
+    throw new Error(`no execution target is registered for interface ${interfaceId}; TEA ships no such command`);
+  }
+  return [...new Set([...target.environmentKeys, ...extraNames])].sort();
+}
+
+/**
+ * The values this host has for the keys one target's authorization permits.
+ *
+ * A request built from this can never carry a key the policy denies, which is
+ * the pairing that keeps the adapter's refusal a real check on an operator's
+ * mistake rather than a routine occurrence.
  *
  * A name absent from `process.env` is absent from the request. An empty string
  * is a declared value and passes through, since some variables are meaningful
  * when set to nothing.
- */
-const HOST_ENVIRONMENT_NAMES = [
-  ...new Set([...Object.values(AGENT_ADAPTERS).flatMap((adapter) => adapter.envNames), 'HOME', 'USER', 'CI']),
-].sort();
-
-/**
+ *
+ * @param {string} interfaceId
  * @param {string[]} [extraNames] Names the caller also passes through, typically an operator's own `--env-pass`.
  * @returns {Record<string, string>}
  */
-function hostEnvironment(extraNames = []) {
+function hostEnvironment(interfaceId, extraNames = []) {
+  return readEnvironment(permittedEnvironmentKeys(interfaceId, extraNames));
+}
+
+/**
+ * The values this host has for a named list of keys.
+ *
+ * The list is the caller's, so a caller reading an authority of its own, such as
+ * a contract's declared `permittedKeys`, reads the host through this rather than
+ * intersecting two lists and hoping they agree.
+ *
+ * @param {string[]} names
+ * @returns {Record<string, string>}
+ */
+function readEnvironment(names) {
   const environment = {};
-  for (const name of [...HOST_ENVIRONMENT_NAMES, ...extraNames]) {
+  for (const name of names) {
     const value = process.env[name];
     if (typeof value === 'string') environment[name] = value;
   }
@@ -112,6 +155,8 @@ const EXECUTION_TARGETS = [
     // interaction plan passes on --json and --output, resolved against the run
     // directory the caller supplies as `cwd`.
     artifacts: { verdict: 'verdict.json', report: 'test-review.md' },
+    // The only target that reads CI, and the only one permitted it.
+    environmentKeys: reviewEnvironmentNames(),
     maxElapsedMs: 16 * 60_000,
   },
   {
@@ -123,6 +168,7 @@ const EXECUTION_TARGETS = [
     // authorizing one would let a run be scored off a file the contract never
     // said it would read.
     artifacts: {},
+    environmentKeys: vendorEnvironmentNames(),
     maxElapsedMs: 6 * 60_000,
   },
   {
@@ -136,6 +182,7 @@ const EXECUTION_TARGETS = [
     // supplies its own paths through `commandTargetPolicy`'s artifact override;
     // these are what a run gets when it supplies none.
     artifacts: { summary: 'test-artifacts/e2e-trace-summary.json', matrix: 'test-artifacts/traceability-matrix.md' },
+    environmentKeys: vendorEnvironmentNames(),
     // One minute above RUN_TIMEOUT_MS in test/eval-trace.js, for the reason the
     // comment above EXECUTION_TARGETS gives: the inner clock classifies, and this
     // one only backstops.
@@ -168,10 +215,11 @@ function scriptPath(target, projectRoot = PROJECT_ROOT) {
  * @param {string[]} [options.interfaceIds] - Which targets to authorize; every one by default.
  * @param {object} [options.artifacts] - Per-interface artifact path overrides, merged over the registry's own names.
  * @param {object} [options.budgets] - Per-interface `{maxElapsedMs, maxOutputBytes}` overrides. A caller with a shorter deadline than the registry's backstop may lower either; nothing here raises one for it.
+ * @param {object} [options.environmentKeys] - Per-interface environment names permitted on top of the target's own, typically an operator's `--env-pass`.
  * @param {string} [options.projectRoot]
  * @returns {{authorizations: object[]}}
  */
-function commandTargetPolicy({ cwd, interfaceIds, artifacts = {}, budgets = {}, projectRoot = PROJECT_ROOT }) {
+function commandTargetPolicy({ cwd, interfaceIds, artifacts = {}, budgets = {}, environmentKeys = {}, projectRoot = PROJECT_ROOT }) {
   if (typeof cwd !== 'string' || cwd.length === 0) {
     throw new Error(
       'commandTargetPolicy requires a cwd; an authorization with no working directory resolves every relative path somewhere else',
@@ -191,6 +239,7 @@ function commandTargetPolicy({ cwd, interfaceIds, artifacts = {}, budgets = {}, 
         executable: target.executable,
         target: scriptPath(target, projectRoot),
         permittedSubcommandPaths: target.subcommandPaths,
+        permittedEnvironmentKeys: permittedEnvironmentKeys(target.interfaceId, environmentKeys[target.interfaceId]),
         cwd,
         artifacts: { ...target.artifacts, ...artifacts[target.interfaceId] },
         maxElapsedMs: Math.min(target.maxElapsedMs, budget.maxElapsedMs ?? target.maxElapsedMs),
@@ -303,8 +352,9 @@ function observedText(channel) {
  * @returns {Promise<{ok: true, observation: object}|{ok: false, failureClass: string, reason: string}>}
  */
 async function probeCommand(port, request, signal) {
+  let observation;
   try {
-    return { ok: true, observation: await port.probe(request, signal) };
+    observation = await port.probe(request, signal);
   } catch (error) {
     return {
       ok: false,
@@ -312,6 +362,37 @@ async function probeCommand(port, request, signal) {
       reason: `${error?.code ?? 'error'}: ${error?.detail ?? error?.message ?? String(error)}`,
     };
   }
+  // Outside the catch on purpose. A member TEA cannot read is a defect in TEA,
+  // and classifying it as an environment failure would file that defect as a
+  // lost run.
+  return { ok: true, observation: cliObservation(observation) };
+}
+
+/**
+ * One observation, narrowed to the member TEA reads.
+ *
+ * `ProbeObservation` is a three-member union tagged by `kind`, and every reader
+ * in this repository goes on to read `exitCode`, `stdout` and `artifacts`, which
+ * are the `cli` member's fields. On an `api` or `mcp` observation each of those
+ * reads is `undefined`, so a harness would report a run that exited nowhere
+ * rather than a port answering in a shape it does not read.
+ *
+ * TEA declares the `cli` interface kind in every contract it ships, so the other
+ * two members are unreachable today. This is what keeps that true rather than
+ * assumed, and what turns a fourth member added upstream into a named error at
+ * the one place every harness gets an observation.
+ * `test/test-port-totality.js` holds this function against the union the
+ * installed package declares.
+ *
+ * @param {{kind?: string}} observation
+ * @returns {object} The same observation, when it is the `cli` member.
+ */
+function cliObservation(observation) {
+  if (observation?.kind === 'cli') return observation;
+  throw new Error(
+    `the port answered a ${JSON.stringify(observation?.kind ?? null)} observation and TEA reads the cli member of ProbeObservation alone; ` +
+      'every TEA contract declares the cli interface kind, so a member outside it is a port TEA never authorized',
+  );
 }
 
 /**
@@ -349,12 +430,14 @@ function targetProblems(projectRoot = PROJECT_ROOT, interfaceIds) {
 
 module.exports = {
   EXECUTION_TARGETS,
-  HOST_ENVIRONMENT_NAMES,
   MAX_OUTPUT_BYTES,
+  cliObservation,
   commandTargetPolicy,
   createProbePort,
   failureClassForFault,
   hostEnvironment,
+  permittedEnvironmentKeys,
+  readEnvironment,
   observedText,
   probeCommand,
   probeRequest,

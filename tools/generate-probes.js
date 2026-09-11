@@ -84,7 +84,7 @@ const REVIEW_FIXTURE_PREFIX = 'test/fixtures/test-review-eval/';
 const TRACE_FIXTURE_PREFIX = 'test/fixtures/trace-eval/';
 
 /** The Probe schema version this generator writes. A bump arrives as a parse failure on the first run after an upgrade. */
-const PROBE_SCHEMA_VERSION = 3;
+const PROBE_SCHEMA_VERSION = 5;
 
 /** The agent a witness leg names. The same value the contract's own witness legs carry, so a leg differs from them only in what it reviews. */
 const DEFAULT_REVIEW_AGENT = 'claude';
@@ -156,7 +156,16 @@ function soleBehaviorFor(contract, oracleId) {
   return found[0].id;
 }
 
-/** The eight input channels a defect signature's selector declares, with only the ones named bound. */
+/**
+ * The nine input channels a defect signature's selector declares, with only the
+ * ones named bound.
+ *
+ * `arguments` is the ninth, added by the Probe schema's version 5 bump so a
+ * signature against a tool call can filter on what the call supplied. TEA
+ * declares the `cli` interface kind only and binds none of it, and the channel
+ * is required with no default, so every selector states it as null the same way
+ * it states the seven other channels it does not bind.
+ */
 function selector(bound) {
   return {
     inputBinding: {
@@ -168,6 +177,7 @@ function selector(bound) {
       option: null,
       environment: null,
       stdin: null,
+      arguments: null,
       ...bound,
     },
   };

@@ -36,7 +36,7 @@ A contract names a logical executable and `ProbeRequest` enforces it: `executabl
 Two couplings the seam does not remove, both found by running it:
 
 - **`--json` and `--output` resolve against `--project-root`; the artifact map resolves against the policy `cwd`.** `test-review.contract.json`'s witness legs pass a bare `verdict.json` and name no project root, so its live pre-flight writes into whichever directory also has to satisfy its repository-relative `--files`. Those legs need an explicit project root and run-scoped artifact paths.
-- **The child environment is closed** to `PATH` plus what the request declares. Both vendors resolve a stored login through `HOME`, so the selection runner permits `HOME` and `USER`. `tea-test-review` does not, so its live pre-flight must use an API key.
+- **The child environment is closed** to `PATH` plus what the request declares, and from `eval-quality` 3.0.0 the authorization declares which of those keys a request may carry at all. All three commands permit the vendor names plus `HOME` and `USER`, because both vendors resolve a stored login through `HOME`; `tea-test-review` permits `CI` on top of them, which it reads to decide filesystem isolation. A key outside a command's list is refused before a process spawns, and `PATH` is on no list: `target` may name a bare command, so a declared `PATH` would choose which binary runs. The adapter supplies its own.
 
 ## Reaching more than one skill
 

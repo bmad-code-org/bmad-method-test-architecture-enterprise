@@ -73,7 +73,7 @@ const { SELECTION_REQUEST_KEYS, DEFAULT_AGENT: SELECTION_DEFAULT_AGENT } = requi
 // the prompt its witness legs send and the literal each of its plan steps binds
 // are the harness's, because the harness is the only thing that assembles one.
 const { TRACE_REQUEST_KEYS, DEFAULT_AGENT: TRACE_DEFAULT_AGENT, EXIT_CODES: TRACE_EXIT_CODES } = require('../cli/trace-runner');
-const { vendorEnvironmentNames } = require('../cli/lib/runner-exit-codes');
+const { reviewEnvironmentNames } = require('../cli/lib/runner-exit-codes');
 const {
   buildPrompt: buildTracePrompt,
   SUMMARY_SCHEMA_MAJOR_MINOR: TRACE_SUMMARY_SCHEMA,
@@ -96,6 +96,13 @@ const FIXTURE_PREFIX = 'test/fixtures/test-review-eval/';
 const TRACE_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval');
 const TRACE_GROUND_TRUTH_PATH = path.join(TRACE_FIXTURE_ROOT, 'ground-truth.json');
 const TRACE_STEP_05 = path.join(WORKFLOW_ROOT, 'bmad-testarch-trace', 'steps-c', 'step-05-gate-decision.md');
+
+/**
+ * The Eval Contract schema version this generator writes. A bump arrives as a
+ * `schema-version-mismatch` fault on the first compile after an upgrade, which
+ * is what version 3.0.0 of the package did to every contract stamped 4.
+ */
+const EVAL_CONTRACT_SCHEMA_VERSION = 5;
 
 /** The forbidden-input list is fixed by the contract schema and is the same for every contract here. */
 const FORBIDDEN_INPUTS = [
@@ -501,7 +508,7 @@ function buildTestReviewContract() {
   const criticalRows = sortRows(plants.filter((plant) => severityOfRow.get(plant.row) === 'CRITICAL').map((plant) => plant.row));
 
   return {
-    schemaVersion: 4,
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
     contractId: 'tea-test-review-behavioral',
@@ -696,7 +703,12 @@ const REVIEW_REQUEST_SHAPE = {
   // environment to PATH plus what the request declares, so a leg run against
   // that shape could authenticate only from an API key and a machine with a
   // keychain login could not run its own pre-flight at all.
-  environment: stringShape([], vendorEnvironmentNames()),
+  //
+  // This command's list carries CI on top of the vendor names, because
+  // cli/test-review.js reads it to decide filesystem isolation. The harness has
+  // always sent it and this shape did not permit it, so a contract-strength leg
+  // measured the command with isolation off where an eval run measured it on.
+  environment: stringShape([], reviewEnvironmentNames()),
   stdin: stringShape([], []),
 };
 
@@ -1206,7 +1218,7 @@ function buildFragmentSelectionContract(spec) {
   }
 
   return {
-    schemaVersion: 4,
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
     contractId: `tea-fragment-selection-${workflow.replace('bmad-testarch-', '')}`,
@@ -2191,7 +2203,7 @@ function buildTraceContract() {
   const witnessSet = clean[0];
 
   return {
-    schemaVersion: 4,
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
     parentDigest: null,
     revisionCount: 0,
     contractId: 'tea-trace-behavioral',

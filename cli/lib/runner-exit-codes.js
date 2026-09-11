@@ -68,4 +68,21 @@ function vendorEnvironmentNames() {
   return [...new Set([...Object.values(AGENT_ADAPTERS).flatMap((adapter) => adapter.envNames), 'HOME', 'USER'])].sort();
 }
 
-module.exports = { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNames };
+/**
+ * The environment names `tea-test-review` permits, which is every vendor name
+ * plus `CI`.
+ *
+ * `cli/test-review.js` turns filesystem isolation on when `CI` is set, so a
+ * measured run that cannot see it runs differently from the same command run by
+ * hand, silently. It is this command's alone: nothing in
+ * `cli/fragment-selection-runner.js` or `cli/trace-runner.js` reads it.
+ *
+ * Declared here beside the vendor names because both the contract generator and
+ * the probe policy read this module, and an environment allowlist stated twice
+ * is an allowlist that drifts.
+ */
+function reviewEnvironmentNames() {
+  return [...vendorEnvironmentNames(), 'CI'].sort();
+}
+
+module.exports = { EXIT_CODES, classOfAgentError, failureClassForExit, reviewEnvironmentNames, vendorEnvironmentNames };

@@ -143,6 +143,12 @@ async function main() {
         executable: INTERFACE_ID,
         target: FIXTURE,
         permittedSubcommandPaths: [[]],
+        // The fixture command reads no environment variable, so the honest
+        // allowlist is empty, which is also AD-35's default-deny base case: any
+        // key a request declares is one this authorization does not permit.
+        // PATH is absent from every allowlist by rule and reaches the child from
+        // the adapter's own process.
+        permittedEnvironmentKeys: [],
         cwd: workspace,
         artifacts: { [ARTIFACT_ID]: 'artifact.txt' },
         maxElapsedMs: MAX_ELAPSED_MS,
@@ -159,6 +165,14 @@ async function main() {
     unmappedInterfaceRequest: request({ interfaceId: 'no-such-interface', executable: 'no-such-interface' }),
     unmappedExecutableRequest: request({ executable: 'no-such-executable' }),
     unauthorizedSubcommandRequest: request({ subcommandPath: ['forbidden'] }),
+    // Authorized in every other respect: the interface, the executable and the
+    // subcommand path are the sample request's, and the one thing that makes it
+    // refusable is the single environment key, which the authorization above
+    // permits none of. The suite checks exactly that, and checks that the
+    // refusal costs zero calls into the underlying mechanism.
+    unauthorizedEnvironmentKeyRequest: request({
+      channels: channels({ environment: { TEA_UNAUTHORIZED_KEY: 'never reaches a process' } }),
+    }),
     nonZeroExitRequest: request({ channels: channels({ option: { 'exit-code': '3' } }) }),
     injectionRequest: request({ channels: channels({ argument: { payload: INJECTION_VALUE } }) }),
     injectionArgumentValue: INJECTION_VALUE,

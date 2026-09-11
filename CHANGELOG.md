@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `npm run test:eval-quality-corpus` compiles `eval-quality`'s own published corpus against the pinned release, before any TEA artifact is asked to run on it.
+  TEA's every other check feeds the package TEA's own bytes, so a package regression and a bad migration read identically, and this upgrade moved 31 probes, 10 contracts and both command policies at once.
+  This check feeds the package nothing of TEA's: the `./corpus/*` subpath ships 25 contracts, a compile-and-seal example, and `corpus/dev/index.json` with a `sha256:` digest per entry and the failure code each of the three deliberately-refused contracts raises.
+  So the corpus states the expected result and the package computes the observed one. Measured against 3.0.0: 27 entry digests match the shipped bytes, 22 contracts compile, 3 are refused with the code the index records, and the sealed brief the example produces is byte for byte the shipped `brief.json`.
+  It also holds the resolved version against the exact pin in `package.json`, so a tree that is not the tree the repository declares fails here rather than somewhere downstream.
+  Exit 1 is a moved status, a moved digest or a moved brief; exit 2 is a package that could not be read, so an unresolvable install is never a silent pass.
+- `npm run test:port-totality` holds TEA's branches against the port vocabularies the installed package declares.
+  `ProbeRequest` and `ProbeObservation` are three-member unions tagged by `kind` and the conformance surface publishes six arms, and TEA is CommonJS with no typechecker, so no compiler and no reviewer will notice the day a fourth member arrives: the failure mode is code that keeps working on the members it knows.
+  Every member is now handled or declined with the reason recorded, every arm is run or recorded as not yet run, and a member or arm in neither fails the check by name.
+  `probeCommand` narrows every observation to the `cli` member at the one place every harness gets one, and raises a named error otherwise, which the check proves by calling it with the two members TEA declines.
+  The narrowing throws outside the fault handler on purpose: a member TEA cannot read is a defect in TEA, and classifying it as an environment failure would file that defect as a lost run.
+
+### Changed
+
+- `eval-quality` moves from 1.4.0 to 3.0.0.
+  The pin alone left four checks red, which is why every migration below lands with it.
+- Every `CommandTargetPolicy` TEA builds declares `permittedEnvironmentKeys`, required on 3.0.0 with no default.
+  The environment channel was the one command channel with no operator bound: the contract author declared it and everything declared reached the process.
+  The list is stated per target rather than once for every command TEA ships, because a key a command never reads has no business reaching it: all three permit the vendor names plus `HOME` and `USER`, and `tea-test-review` permits `CI` on top, which `cli/test-review.js` reads to decide filesystem isolation.
+  `PATH` is on no list, refused by the schema and again by the adapter, because `target` may name a bare command and a declared `PATH` would then choose which binary runs.
+  A caller widens an authorization one call at a time through `environmentKeys`, which is how an operator's `--env-pass` names and this repository's three stub variables reach a process.
+- `tea-test-review`'s contract declares `CI` among its permitted environment keys, read from `reviewEnvironmentNames()` in `cli/lib/runner-exit-codes.js` so the contract and the policy cannot disagree.
+  The harness had always sent `CI` and the contract had never permitted it, so a contract-strength leg measured the command with filesystem isolation off where an eval run measured it on.
+  `test/test-probe-targets.js` now holds each contract's declared keys equal to its authorization's permitted keys, in both directions.
+- All 31 probes carry `schemaVersion: 5` and all 10 contracts carry `5`, written by their generators rather than by hand.
+  On 3.0.0 a stale stamp is a `schema-version-mismatch` runtime fault at exit 5 in both `preflight` and `score`, so every probe corpus and every contract compile was failing on the version alone.
+  The load-bearing edit is the ninth input channel: each of the 21 `inputBinding` selectors gains `"arguments": null`, which version 5 added so a signature against a tool call can filter on what the call supplied.
+  `tools/generate-contracts.js` now names its stamp `EVAL_CONTRACT_SCHEMA_VERSION` instead of repeating the literal in three places.
+- TEA's sealed run records carry `schemaVersion: 6` and no `invalidReason`, and their observations carry the ninth `arguments` call-input channel.
+  Version 6 drops `invalidReason` because nothing in the package ever read it, so a caller attesting that a run was invalid was ignored by every stage while the field looked like a supported channel.
+  `SCHEMA_VERSIONS` in `test/lib/eval-quality-inputs.js` read 3 for both the probe and the record; the record entry is the one with a reader, and it was emitting version-3 records against a version-6 parser.
+- `runCommandLineProbeConformance` reports 16 outcomes where it reported 15, because TEA's subject now supplies `unauthorizedEnvironmentKeyRequest`.
+  That request is authorized in every other respect and declares exactly one environment key its authorization omits, and the suite checks that the refusal costs zero calls into the underlying mechanism, so no process is spawned.
+  The conformance policy permits no environment key at all, which is both the honest allowlist for a fixture command that reads none and AD-35's default-deny base case.
+
+### Fixed
+
+- Two statements in `docs/explanation/eval-quality-roadmap.md` and `docs/explanation/eval-quality-command-adapter.md` that this upgrade falsified or that were already false.
+  The roadmap counted the published conformance suite at fifteen assertions, which is sixteen now.
+  The adapter page said `tea-test-review` permits neither `HOME` nor `USER` so its live pre-flight must use an API key, which stopped being true one release earlier when its request shape moved to `vendorEnvironmentNames()`, and the same page said so two hundred lines further down.
+
 ## [1.26.0] - 2026-09-09
 
 ### Changed

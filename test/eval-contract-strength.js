@@ -62,7 +62,7 @@ const path = require('node:path');
 
 const { digest } = require('./lib/eval-record');
 const { validateArtifact } = require('./lib/eval-quality-inputs');
-const { createProbePort, hostEnvironment } = require('./lib/probe-targets');
+const { createProbePort, readEnvironment } = require('./lib/probe-targets');
 const { runSuite, sealContract, suites } = require('./lib/probe-scoring');
 const { stageWorkspace, traceArtifactPaths } = require('./eval-trace');
 
@@ -204,11 +204,18 @@ function stagedWorkspaceFor(suiteId, request) {
   return { root: dir, cwd: dir, artifacts: {} };
 }
 
-/** The environment names this operation declares it accepts, intersected with what this machine has. */
+/**
+ * The environment names this operation declares it accepts, with the values this
+ * machine has for them.
+ *
+ * Read straight off the contract's own declaration. The authorization permits
+ * the same names, because both derive from the command's one allowlist in
+ * `cli/lib/runner-exit-codes.js`, so a leg built here carries no key the adapter
+ * refuses.
+ */
 function permittedEnvironment(contract, operationId) {
   const operation = contract.permittedInterfaces.flatMap((iface) => iface.operations).find((entry) => entry.operationId === operationId);
-  const permitted = new Set(operation?.requestShape?.environment?.permittedKeys ?? []);
-  return Object.fromEntries(Object.entries(hostEnvironment()).filter(([name]) => permitted.has(name)));
+  return readEnvironment(operation?.requestShape?.environment?.permittedKeys ?? []);
 }
 
 /** The cache key for one probe request: everything about it except which leg asked. */

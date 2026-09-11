@@ -425,6 +425,9 @@ async function runReview(agent, runIndex, runner = {}) {
       cwd: runDir,
       interfaceIds: ['tea-test-review'],
       artifacts: { 'tea-test-review': { verdict: jsonPath, report: reportPath } },
+      // The operator's own pass-through names, so the authorization permits
+      // exactly what the request below declares.
+      environmentKeys: { 'tea-test-review': runner.envPass ?? [] },
     });
 
     // No --fail-on override: the enum is request-changes|block, so there is no "never".
@@ -458,7 +461,7 @@ async function runReview(agent, runIndex, runner = {}) {
         interfaceId: 'tea-test-review',
         operationId: 'review-test-files',
         option,
-        environment: hostEnvironment(runner.envPass ?? []),
+        environment: hostEnvironment('tea-test-review', runner.envPass ?? []),
       }),
       new AbortController().signal,
     );
@@ -690,7 +693,7 @@ async function promptDigestFromCli() {
           'project-root': PROJECT_ROOT,
           output: path.join(probeDir, 'test-review.md'),
         },
-        environment: hostEnvironment(),
+        environment: hostEnvironment('tea-test-review'),
       }),
       new AbortController().signal,
     );
