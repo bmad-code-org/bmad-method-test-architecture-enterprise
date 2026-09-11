@@ -99,7 +99,7 @@ const CONFORMANCE_ARMS = {
   },
   corpus: { file: 'test/test-corpus-conformance.js' },
   clock: { file: 'test/test-probe-conformance.js' },
-  'file-system': { reason: 'TEA reads and writes files directly and has not moved to the shipped file-system adapter' },
+  'file-system': { file: 'test/test-file-system-conformance.js' },
   'mcp-probe': { reason: 'TEA authorizes no tool server, so this arm has no subject to run against' },
 };
 

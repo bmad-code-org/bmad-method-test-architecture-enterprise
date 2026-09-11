@@ -190,6 +190,9 @@ jobs:
       - name: Run the published corpus port conformance suite against the shipped adapter
         run: npm run test:corpus-conformance
 
+      - name: Run the published port conformance suite against the file-system adapter
+        run: npm run test:file-system-conformance
+
       - name: Probe every TEA command target through the eval-quality adapter
         run: npm run test:probe-targets
 
