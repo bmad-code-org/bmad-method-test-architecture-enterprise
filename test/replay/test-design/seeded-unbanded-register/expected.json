@@ -1,0 +1,127 @@
+{
+  "$comment": [
+    "One flat register under `### Medium/Low-Priority Risks`, which is the literal heading",
+    "test-design-qa-template.md ships, over a table carrying both a Risk ID and a Score column. Every risk",
+    "is correct: right category, right scale, right arithmetic, right coverage, right priority order.",
+    "",
+    "It is here because the band check used to count only the rows that sat under a heading declaring a",
+    "range. One rangeless heading therefore took the denominator to zero and a score-9 risk filed beneath",
+    "it scored a clean 100%, which is the flagship defect this suite exists to catch passing as a",
+    "well-formed document. The check now holds every row, so this case fails five times over.",
+    "",
+    "The document is CONSTRUCTED: seeded-correct-run's five risks, merged into one table under the",
+    "rangeless heading, with nothing else changed."
+  ],
+  "id": "seeded-unbanded-register",
+  "suite": "test-design",
+  "scorerVersion": 5,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "Five rows, all well formed, all in scale, all arithmetically correct, so wellFormedIds,",
+    "validCategories, inScale and arithmeticOk are 5 each.",
+    "",
+    "Bands: neither `### Medium/Low-Priority Risks` nor its parent `## Risk Assessment` declares a range,",
+    "so no enclosing heading places any row. banded is 5 because every row is held to the check, and",
+    "bandOk is 0. Each of the five failures records a null heading and the reason that no enclosing",
+    "heading declares a score range.",
+    "",
+    "Everything else is seeded-correct-run's. Grounding is 5 of 5 with no top-severity miss, risk links",
+    "resolve 5 of 5, coverage satisfies 5 of 5, and all nine ordering pairs resolve and pass. That is the",
+    "point of the case: one structural omission, and nothing else wrong."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": false,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 5,
+      "wellFormedIds": 5,
+      "validCategories": 5,
+      "inScale": 5,
+      "arithmeticOk": 5,
+      "banded": 5,
+      "bandOk": 0,
+      "arithmeticTotal": 5
+    },
+    "shapeFailures": [
+      {
+        "id": "R-001",
+        "check": "band",
+        "score": 6,
+        "heading": null,
+        "reason": "no enclosing heading declares a score range"
+      },
+      {
+        "id": "R-002",
+        "check": "band",
+        "score": 9,
+        "heading": null,
+        "reason": "no enclosing heading declares a score range"
+      },
+      {
+        "id": "R-003",
+        "check": "band",
+        "score": 6,
+        "heading": null,
+        "reason": "no enclosing heading declares a score range"
+      },
+      {
+        "id": "R-004",
+        "check": "band",
+        "score": 4,
+        "heading": null,
+        "reason": "no enclosing heading declares a score range"
+      },
+      {
+        "id": "R-005",
+        "check": "band",
+        "score": 2,
+        "heading": null,
+        "reason": "no enclosing heading declares a score range"
+      }
+    ],
+    "links": {
+      "total": 5,
+      "resolved": 5,
+      "dangling": []
+    },
+    "grounding": {
+      "declared": 5,
+      "matched": 5,
+      "missed": [],
+      "topSeverityMissed": 0
+    },
+    "ungrounded": [],
+    "ceiling": {
+      "maxRisks": 8,
+      "excess": 0
+    },
+    "coverage": {
+      "evaluated": 5,
+      "satisfied": 5,
+      "failures": []
+    },
+    "ordering": {
+      "pairs": 9,
+      "resolvable": 9,
+      "satisfied": 9,
+      "failures": []
+    }
+  }
+}

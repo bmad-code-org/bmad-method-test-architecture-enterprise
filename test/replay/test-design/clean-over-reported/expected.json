@@ -11,7 +11,7 @@
   ],
   "id": "clean-over-reported",
   "suite": "test-design",
-  "scorerVersion": 4,
+  "scorerVersion": 5,
   "storedOutput": {
     "origin": "constructed",
     "design": "design.md"
@@ -40,7 +40,15 @@
     "match nothing, which is correct: the drifted clock, the absent value and the unreviewed wording are real",
     "questions about this feature and the epic rules out none of them.",
     "",
-    "Clean control: seven rows against a ceiling of three, so the excess is 4."
+    "Clean control: seven rows against a ceiling of three, so the excess is 4.",
+    "",
+    "WHAT MOVED AT SCORER VERSION 5",
+    "",
+    "`banded` is now `rows` on every case, because a row under a heading that declares no score range is a",
+    "band failure rather than an exemption. `cleanControl` is `ceiling` and both sets declare one, so the",
+    "seeded corpus is bounded too. `grounding` carries `topSeverityMissed`, the count of the set's",
+    "lowest-ranked risks that went unreported. Material risks are assigned by maximum matching rather than",
+    "first-come, and every row is tested against the exclusions whether or not it matched a material risk."
   ],
   "result": {
     "mentions": {
@@ -68,7 +76,8 @@
     "grounding": {
       "declared": 0,
       "matched": 0,
-      "missed": []
+      "missed": [],
+      "topSeverityMissed": 0
     },
     "ungrounded": [
       {
@@ -88,7 +97,7 @@
         "rowId": "R-004"
       }
     ],
-    "cleanControl": {
+    "ceiling": {
       "maxRisks": 3,
       "excess": 4
     },

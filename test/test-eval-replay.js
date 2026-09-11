@@ -16,6 +16,9 @@
  *                       scoreVerdict against the eval's real ground truth
  *   fragment-selection  stdout.txt, parsed by parseSelection and scored by
  *                       scoreCase against a frozen copy of one eval case
+ *   test-design         design.md, the document a test-design run leaves on disk,
+ *                       read by readDesign and scored by scoreRun against one
+ *                       fixture set of the eval's real ground truth
  *   trace               test-artifacts/e2e-trace-summary.json and
  *                       test-artifacts/traceability-matrix.md, the two files a
  *                       trace run leaves in a staged workspace, read by
@@ -162,10 +165,11 @@ const TEST_DESIGN_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-design-e
 /**
  * The version of the parsing and scoring behaviour this corpus was recorded
  * against. It covers admittedLinesFor and scoreVerdict in eval-test-review.js,
- * parseSelection and scoreCase in eval-fragment-selection.js, and readSummary,
+ * parseSelection and scoreCase in eval-fragment-selection.js, readSummary,
  * readMatrix, scoreRun with the eight scorers it calls, and signatureOf in
- * eval-trace.js. It does not cover the aggregation those feed or the thresholds
- * it is compared against; see the header for why.
+ * eval-trace.js, and readDesign with scoreRun in eval-test-design.js. It does not
+ * cover the aggregation those feed or the thresholds it is compared against; see
+ * the header for why.
  *
  * Bump it in the same commit as a deliberate change to any of those, then
  * re-record with --accept. Leaving it alone is what makes an accidental change
@@ -205,7 +209,7 @@ const TEST_DESIGN_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-design-e
  * recommendations name, all recomputed from the accepted evidence. No
  * test-review or fragment-selection case moved.
  */
-const SCORER_VERSION = 4;
+const SCORER_VERSION = 5;
 
 const colors = {
   reset: '[0m',
@@ -811,9 +815,14 @@ function replayTestDesignCase(item, expected, set, categories) {
     shape: scored.shape,
     shapeFailures: scored.shapeFailures,
     links: { total: scored.links.total, resolved: scored.links.resolved, dangling: scored.links.dangling },
-    grounding: { declared: scored.grounding.declared, matched: scored.grounding.matched, missed: scored.grounding.missed },
+    grounding: {
+      declared: scored.grounding.declared,
+      matched: scored.grounding.matched,
+      missed: scored.grounding.missed,
+      topSeverityMissed: scored.grounding.topSeverityMissed,
+    },
     ungrounded: scored.ungrounded,
-    cleanControl: scored.cleanControl,
+    ceiling: scored.ceiling,
     coverage: {
       evaluated: scored.coverageChecks.length,
       satisfied: scored.coverageChecks.filter((check) => check.ok).length,

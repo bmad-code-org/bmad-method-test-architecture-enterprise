@@ -221,9 +221,9 @@ test('example test @p0', async ({ apiRequest }) => {
 
 **Criteria:** Rare, cosmetic, or experimental behavior with minimal impact and an easy workaround. Risk score is supporting evidence and is not a required condition.
 
-| Test ID    | Requirement   | Test Level | Notes   |
-| ---------- | ------------- | ---------- | ------- |
-| **P3-001** | {Requirement} | {Level}    | {Notes} |
+| Test ID    | Requirement   | Test Level | Risk Link | Notes   |
+| ---------- | ------------- | ---------- | --------- | ------- |
+| **P3-001** | {Requirement} | {Level}    | {R-ID}    | {Notes} |
 
 **Total P3:** ~{N} tests
 

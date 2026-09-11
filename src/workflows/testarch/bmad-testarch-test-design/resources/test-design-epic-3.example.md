@@ -64,9 +64,9 @@ Risk score determines the required governance action. Test priority is assigned 
 
 ### Low Risks: Score 1 to 2
 
-| Risk ID | Category | Description                                                       | Probability | Impact | Score | Action                                       |
-| ------- | -------- | ----------------------------------------------------------------- | ----------: | -----: | ----: | -------------------------------------------- |
-| R-006   | BUS      | A long display name wraps poorly in the pending-invitations table |           1 |      2 |     2 | Monitor and cover with a component edge case |
+| Risk ID | Category | Description                                                       | Probability | Impact | Score | Action                                        |
+| ------- | -------- | ----------------------------------------------------------------- | ----------: | -----: | ----: | --------------------------------------------- |
+| R-006   | BUS      | A long display name wraps poorly in the pending-invitations table |           1 |      2 |     2 | Document and cover with a component edge case |
 
 ### Risk Category Legend
 

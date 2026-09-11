@@ -6,8 +6,8 @@
     "probeId": "P-001",
     "behaviorId": "B-001",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:03e7ccbff9f7deaede352514e78819f9ab4285a0f272ca61fd34a022b251ac18",
     "rationale": "seeded-register-absent is a stored run that wrote a document with no risk register at all, and a document the harness cannot read is refused as environment-parser rather than scored as a register with nothing wrong in it. O-001 catches the same thing from the body alone, by finding no R-NNN in any table cell, and B-001 is the behavior it discharges.",
@@ -26,13 +26,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-register-absent/expected.json",
         "privateRef": null,
-        "digest": "sha256:0fab0b39a9004a65d671e82dd77d9689602c41200833295138cb15b69af09b94"
+        "digest": "sha256:83cfc11f44de478f819b7242d79f2d75bc272217f04f9b45dc1462f61dccba6a"
       },
       "rollbackVerified": true
     },
@@ -54,7 +54,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -152,8 +152,8 @@
     "probeId": "P-002",
     "behaviorId": "B-002",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "sec-unencrypted-offline-queue is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-002 is the oracle that catches it through B-002. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
@@ -172,13 +172,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -200,7 +200,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -326,8 +326,8 @@
     "probeId": "P-003",
     "behaviorId": "B-003",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "data-sync-conflict-overwrite is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-003 is the oracle that catches it through B-003. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
@@ -346,13 +346,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -374,7 +374,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -500,8 +500,8 @@
     "probeId": "P-004",
     "behaviorId": "B-004",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "tech-uncapped-retry-loop is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-004 is the oracle that catches it through B-004. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
@@ -520,13 +520,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -548,7 +548,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -674,8 +674,8 @@
     "probeId": "P-005",
     "behaviorId": "B-005",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "perf-backlog-sync-budget is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-005 is the oracle that catches it through B-005. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
@@ -694,13 +694,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -722,7 +722,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -848,8 +848,8 @@
     "probeId": "P-006",
     "behaviorId": "B-006",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "ops-no-release-kill-switch is material to seeded-offline-order-capture: the epic supports it in as many words, and a document that never reaches its deciding vocabulary has not analysed the feature it was given. seeded-generic-register is the stored run that does exactly that, and O-006 is the oracle that catches it through B-006. The oracle reads the whole document, so what it establishes is that the vocabulary is present somewhere; whether a risk row in an admitted category carries it is for test/eval-test-design.js to say.",
@@ -868,13 +868,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -896,7 +896,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -1022,8 +1022,8 @@
     "probeId": "P-007",
     "behaviorId": "B-007",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "payment-gateway-failure is ruled out by seeded-offline-order-capture's epic in as many words, so a document that reports it has invented a risk that would fit any feature. seeded-generic-register is the stored run that reports it, and O-007 is the oracle that catches it through B-007. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
@@ -1042,13 +1042,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -1070,7 +1070,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -1186,8 +1186,8 @@
     "probeId": "P-008",
     "behaviorId": "B-008",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "cross-tenant-data-leak is ruled out by seeded-offline-order-capture's epic in as many words, so a document that reports it has invented a risk that would fit any feature. seeded-generic-register is the stored run that reports it, and O-008 is the oracle that catches it through B-008. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
@@ -1206,13 +1206,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -1234,7 +1234,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -1350,8 +1350,8 @@
     "probeId": "P-009",
     "behaviorId": "B-009",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "browser-and-accessibility-regression is ruled out by seeded-offline-order-capture's epic in as many words, so a document that reports it has invented a risk that would fit any feature. seeded-generic-register is the stored run that reports it, and O-009 is the oracle that catches it through B-009. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
@@ -1370,13 +1370,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -1398,7 +1398,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -1486,8 +1486,8 @@
     "probeId": "P-010",
     "behaviorId": "B-010",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:061743b410e25ed4ddc0f2a1bfceaf1a8b4f18f013c3f27b87c8ed6422a1a4e8",
     "rationale": "data-residency-compliance is ruled out by seeded-offline-order-capture's epic in as many words, so a document that reports it has invented a risk that would fit any feature. seeded-generic-register is the stored run that reports it, and O-010 is the oracle that catches it through B-010. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
@@ -1506,13 +1506,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       },
       "rollbackVerified": true
     },
@@ -1534,7 +1534,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -1650,8 +1650,8 @@
     "probeId": "P-011",
     "behaviorId": "B-011",
     "systemId": "tea-test-design-clean-last-sync-indicator",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "zero-action",
     "artifactDigest": "sha256:72772123c507e0bb6334a29475086e4cccc5cf08b7af1030bb3bf6b76a69221a",
     "rationale": "clean-last-sync-indicator is the corpus's control: its epic describes a feature whose genuine risk set is small, and ground-truth.json caps a correct run at 3 reported risks. clean-correct-run is that run, and all 5 oracles this contract states for the set hold on it. AD-7 keeps a clean control out of the strength vector; what it establishes is that the contract does not fire where there is nothing to find.",
@@ -1661,9 +1661,9 @@
         "storage": "public",
         "path": "test/replay/test-design/clean-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+        "digest": "sha256:3142e37df50615e9cdef159d8ba53b0495eb9f8abfd40ebbd259cbad516d58bf"
       },
-      "revisionCommitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+      "revisionCommitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
       "noKnownDefectStatement": "clean-last-sync-indicator declares no material risk. ground-truth.json gives it 4 risks the epic rules out in as many words and a ceiling of 3 reported risks, and npm run test:eval-test-design-data fails when a declared quote has left the epic it names."
     },
     "expectedClean": true,
@@ -1676,8 +1676,8 @@
     "probeId": "P-012",
     "behaviorId": "B-012",
     "systemId": "tea-test-design-clean-last-sync-indicator",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848",
     "rationale": "data-loss-or-corruption is ruled out by clean-last-sync-indicator's epic in as many words, so a document that reports it has invented a risk that would fit any feature. clean-over-reported is the stored run that reports it, and O-012 is the oracle that catches it through B-012. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
@@ -1696,13 +1696,13 @@
         "storage": "public",
         "path": "test/replay/test-design/clean-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+        "digest": "sha256:3142e37df50615e9cdef159d8ba53b0495eb9f8abfd40ebbd259cbad516d58bf"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/clean-over-reported/expected.json",
         "privateRef": null,
-        "digest": "sha256:9bcf16ea7a0edfc60d6fea51e0364cd9f9c46cabf822d3bafa1acb4caeb6d6f1"
+        "digest": "sha256:4f2afa93765ab074f06a257625486f1c88c9ae5b25f1ce89268b557f2baa26b7"
       },
       "rollbackVerified": true
     },
@@ -1724,7 +1724,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -1840,8 +1840,8 @@
     "probeId": "P-013",
     "behaviorId": "B-013",
     "systemId": "tea-test-design-clean-last-sync-indicator",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848",
     "rationale": "unauthorized-exposure is ruled out by clean-last-sync-indicator's epic in as many words, so a document that reports it has invented a risk that would fit any feature. clean-over-reported is the stored run that reports it, and O-013 is the oracle that catches it through B-013. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
@@ -1860,13 +1860,13 @@
         "storage": "public",
         "path": "test/replay/test-design/clean-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+        "digest": "sha256:3142e37df50615e9cdef159d8ba53b0495eb9f8abfd40ebbd259cbad516d58bf"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/clean-over-reported/expected.json",
         "privateRef": null,
-        "digest": "sha256:9bcf16ea7a0edfc60d6fea51e0364cd9f9c46cabf822d3bafa1acb4caeb6d6f1"
+        "digest": "sha256:4f2afa93765ab074f06a257625486f1c88c9ae5b25f1ce89268b557f2baa26b7"
       },
       "rollbackVerified": true
     },
@@ -1888,7 +1888,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -2004,8 +2004,8 @@
     "probeId": "P-014",
     "behaviorId": "B-014",
     "systemId": "tea-test-design-clean-last-sync-indicator",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848",
     "rationale": "render-performance-degradation is ruled out by clean-last-sync-indicator's epic in as many words, so a document that reports it has invented a risk that would fit any feature. clean-over-reported is the stored run that reports it, and O-014 is the oracle that catches it through B-014. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
@@ -2024,13 +2024,13 @@
         "storage": "public",
         "path": "test/replay/test-design/clean-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+        "digest": "sha256:3142e37df50615e9cdef159d8ba53b0495eb9f8abfd40ebbd259cbad516d58bf"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/clean-over-reported/expected.json",
         "privateRef": null,
-        "digest": "sha256:9bcf16ea7a0edfc60d6fea51e0364cd9f9c46cabf822d3bafa1acb4caeb6d6f1"
+        "digest": "sha256:4f2afa93765ab074f06a257625486f1c88c9ae5b25f1ce89268b557f2baa26b7"
       },
       "rollbackVerified": true
     },
@@ -2052,7 +2052,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -2168,8 +2168,8 @@
     "probeId": "P-015",
     "behaviorId": "B-015",
     "systemId": "tea-test-design-clean-last-sync-indicator",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "probeClass": "defect",
     "artifactDigest": "sha256:4c567d5a319b1a80c2e3444c384f97add3876d000e41215e33283976d8fdf848",
     "rationale": "rollout-without-kill-switch is ruled out by clean-last-sync-indicator's epic in as many words, so a document that reports it has invented a risk that would fit any feature. clean-over-reported is the stored run that reports it, and O-015 is the oracle that catches it through B-015. The oracle reads the whole document, so it also fires on a document that names the vocabulary while explaining why the risk does not apply, which is the false positive a document-global reading buys.",
@@ -2188,13 +2188,13 @@
         "storage": "public",
         "path": "test/replay/test-design/clean-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:948ec550e41bbda23eccdde8f7968c0b771fe4e94ccb294de724adfc844048b2"
+        "digest": "sha256:3142e37df50615e9cdef159d8ba53b0495eb9f8abfd40ebbd259cbad516d58bf"
       },
       "mutatedFailEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/clean-over-reported/expected.json",
         "privateRef": null,
-        "digest": "sha256:9bcf16ea7a0edfc60d6fea51e0364cd9f9c46cabf822d3bafa1acb4caeb6d6f1"
+        "digest": "sha256:4f2afa93765ab074f06a257625486f1c88c9ae5b25f1ce89268b557f2baa26b7"
       },
       "rollbackVerified": true
     },
@@ -2216,7 +2216,7 @@
             "storage": "public",
             "path": "test/fixtures/test-design-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:d0c089ffff363529830589920a2b50c743b5f3766f312e0a4a88262a84980f89"
+            "digest": "sha256:217957d1aa46a5c39efdd492bdb08ac2e70a157151c7671648dd026cd8d644d7"
           }
         ],
         "source": "controlled-mutation",
@@ -2333,9 +2333,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-test-design-seeded-offline-order-capture",
-    "implementationDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "implementationDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "artifactDigest": "sha256:f0e475508a6601e6457bd3d037a10e283cf78a0eb7adfdd4298009560bd94e96",
-    "commitDigest": "sha256:04aa7d9435e530155fd0d65558b8ed78ff84a43264a1f65fcaea05b820c689e2",
+    "commitDigest": "sha256:27b3f2ab982c48e1210f72ebe500f66b60d2dfafcdc34f508d42685dbd25230d",
     "rationale": "A document with seeded-correct-run's mentions map and seeded-generic-register's grounding block satisfies every one of the 10 oracles this contract states for seeded-offline-order-capture and reports nothing the epic supports. Its register rows describe risks the epic neither supports nor rules out, and a mitigation section names every material risk's deciding vocabulary in prose, so O-001 finds R-NNN identifiers in a table, the 5 material-vocabulary oracles find their tokens somewhere in the body, and the 4 unsupported-vocabulary oracles find no ruled-out vocabulary. Nothing in this contract rejects that document. seeded-generic-register records what the row-scoped reading does with a register like it: 0 of 5 material risks matched a register row in an admitted category. This probe is the record that the contract scores the gamed document clean.",
     "qualification": {
       "route": "gameability",
@@ -2344,13 +2344,13 @@
         "storage": "public",
         "path": "test/replay/test-design/seeded-correct-run/expected.json",
         "privateRef": null,
-        "digest": "sha256:7263b93cfecc7664aa2ec1ef097e84918625377532ff2879db7dd0f23f10b153"
+        "digest": "sha256:d1c11b452ffcbb928db5ca3d65f62c7c7de1ee72112c00eff0e1c7e9344e8869"
       },
       "disciplinedOracleRejectedEvidence": {
         "storage": "public",
         "path": "test/replay/test-design/seeded-generic-register/expected.json",
         "privateRef": null,
-        "digest": "sha256:b4154068106e575cff3338fcc13ea9903e61a61ff1be627d9c6a64c834e5ca55"
+        "digest": "sha256:24a16d31b8c8f45371a9d35cfb5db099f84c5bc9a79906e9ed6aed9eb4f8a750"
       }
     },
     "expectedClean": false,

@@ -787,10 +787,13 @@ function checkTestDesignHarnessSmoke(runDir) {
     .map(([key]) => key);
   assert(unmet.length === 0, 'every declared threshold is measured as a number and met in the record', unmet.join(', '));
   assert(
-    measurements.cleanControlExcess === 0 && measurements.ungroundedRisks === 0 && measurements.fixtureMutations === 0,
-    'the clean control carries no excess risk, no row reads as one the epic rules out, and the staged corpus is unchanged',
+    measurements.riskCeilingExcess === 0 &&
+      measurements.ungroundedRisks === 0 &&
+      measurements.topSeverityMissed === 0 &&
+      measurements.fixtureMutations === 0,
+    'neither set exceeds its ceiling, no row reads as one the epic rules out, the most severe risks are reported, and the staged corpus is unchanged',
     JSON.stringify({
-      cleanControlExcess: measurements.cleanControlExcess,
+      riskCeilingExcess: measurements.riskCeilingExcess,
       ungroundedRisks: measurements.ungroundedRisks,
       fixtureMutations: measurements.fixtureMutations,
     }),
@@ -860,8 +863,10 @@ function checkTestDesignHarnessSmoke(runDir) {
           'riskPrecision',
           'priorityOrderingAccuracy (unmeasurable)',
           'coverageMappingAccuracy (unmeasurable)',
+          '4 risk(s) the epic rules out in as many words',
+          '1 of the most severe risk(s) went unreported',
         ]),
-    'the record names recall, precision, and the two metrics a matched risk would have made measurable',
+    'the record names recall, precision, the two metrics a matched risk would have made measurable, the four invented risks, and the top-severity miss',
     JSON.stringify(recordedFailures(generic)),
   );
   assert(

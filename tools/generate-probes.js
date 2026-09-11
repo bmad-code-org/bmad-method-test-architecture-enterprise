@@ -58,14 +58,16 @@
  *   which cleared the five review plants, and `trace`'s witness legs now stage the
  *   clean set, which cleared its three. Every probe the deterministic gate scores
  *   pre-flights.
- * - `test-design` is the corpus the deterministic gate does not score yet.
- *   `test/lib/probe-scoring.js` declares one evidence source per suite and has
- *   none for it, so `npm run test:probe-corpus` never reaches these probes and
- *   `expected-strength.json` carries no line for them. The evidence a source
- *   would answer from is already on disk under `test/replay/test-design/`, and
- *   every probe below cites it, so what is left is the wiring rather than the
- *   corpus. Until it lands, `node tools/generate-probes.js --check` is the only
- *   thing that reads these probes.
+ * - `test-design` is scored by the deterministic gate. `test/lib/probe-scoring.js`
+ *   declares one evidence source per suite; `testDesignEvidence` answers each leg
+ *   from the documents already stored under `test/replay/test-design/`, which
+ *   every probe below cites, and the `test-design` entry in `suites()` puts the
+ *   corpus in front of `npm run test:probe-corpus`. `expected-strength.json`
+ *   carries its sixteen probes. All sixteen record null strength: the
+ *   qualification gate refuses every one with
+ *   `condition-artifact-channel-contract-local`, and fourteen of them also fail
+ *   pre-flight with `seeded-fault-fired` at exit 3. P-011 and P-016 are the two
+ *   that clear pre-flight.
  *
  * Usage: node tools/generate-probes.js [--check]
  * Exit codes: 0 = written or up to date, 1 = a corpus is stale, 2 = the generator could not run
@@ -677,7 +679,9 @@ function testDesignRunPassed(result) {
     result.ordering.failures.length === 0 &&
     result.ordering.satisfied === result.ordering.resolvable &&
     result.ordering.resolvable === result.ordering.pairs &&
-    (result.cleanControl === null || result.cleanControl.excess === 0)
+    (result.ceiling === null || result.ceiling.excess === 0) &&
+    result.grounding.topSeverityMissed === 0 &&
+    result.shape.bandOk === result.shape.banded
   );
 }
 

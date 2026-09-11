@@ -130,7 +130,7 @@ const {
   scoreRun: scoreTestDesignRun,
   loadGroundTruth: loadTestDesignGroundTruth,
   TEST_DESIGN_OPERATION,
-} = require('../test/eval-test-design');
+} = require('./eval-test-design');
 
 const { scoringPolicy } = require('./lib/eval-quality-inputs');
 

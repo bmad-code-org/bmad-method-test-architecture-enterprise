@@ -10,7 +10,7 @@
   ],
   "id": "seeded-coverage-level-unadmitted",
   "suite": "test-design",
-  "scorerVersion": 4,
+  "scorerVersion": 5,
   "storedOutput": {
     "origin": "constructed",
     "design": "design.md"
@@ -18,7 +18,7 @@
   "inputs": {
     "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
     "fixtureSet": "seeded-offline-order-capture",
-    "scoringInputsDigest": "sha256:c9d52801aeb14e1aa7bcc9c69f737ea3e07007b3e0d98371c0d25a068ba74d4f"
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
   },
   "derivation": [
     "Everything seeded-correct-run derives holds except one coverage check.",
@@ -31,7 +31,15 @@
     "5 of 5. Grounding stays 5 of 5 for the same reason as before.",
     "",
     "Ordering is unchanged at 9 of 9. R-001 is still linked from a P0 row, so its priority is still P0 and every",
-    "pair it takes part in still holds."
+    "pair it takes part in still holds.",
+    "",
+    "WHAT MOVED AT SCORER VERSION 5",
+    "",
+    "`banded` is now `rows` on every case, because a row under a heading that declares no score range is a",
+    "band failure rather than an exemption. `cleanControl` is `ceiling` and both sets declare one, so the",
+    "seeded corpus is bounded too. `grounding` carries `topSeverityMissed`, the count of the set's",
+    "lowest-ranked risks that went unreported. Material risks are assigned by maximum matching rather than",
+    "first-come, and every row is tested against the exclusions whether or not it matched a material risk."
   ],
   "result": {
     "mentions": {
@@ -64,10 +72,14 @@
     "grounding": {
       "declared": 5,
       "matched": 5,
-      "missed": []
+      "missed": [],
+      "topSeverityMissed": 0
     },
     "ungrounded": [],
-    "cleanControl": null,
+    "ceiling": {
+      "maxRisks": 8,
+      "excess": 0
+    },
     "coverage": {
       "evaluated": 5,
       "satisfied": 4,

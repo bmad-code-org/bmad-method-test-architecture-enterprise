@@ -162,10 +162,10 @@ is supporting evidence and is not a required condition.
 **Criteria**: Rare, cosmetic, or experimental behavior with minimal impact and an easy workaround.
 Risk score is supporting evidence and is not a required condition.
 
-| Requirement   | Test Level | Test Count | Owner | Notes   |
-| ------------- | ---------- | ---------- | ----- | ------- |
-| {requirement} | E2E        | 2          | QA    | {notes} |
-| {requirement} | Unit       | 8          | DEV   | {notes} |
+| Requirement   | Test Level | Risk Link | Test Count | Owner | Notes   |
+| ------------- | ---------- | --------- | ---------- | ----- | ------- |
+| {requirement} | E2E        | R-005     | 2          | QA    | {notes} |
+| {requirement} | Unit       | -         | 8          | DEV   | {notes} |
 
 **Total P3**: {p3_count} tests, {p3_hours} hours
 

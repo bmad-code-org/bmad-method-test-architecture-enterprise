@@ -130,6 +130,12 @@ function main(argv) {
   if (!Object.hasOwn(AGENT_ADAPTERS, options.agent)) {
     fail('environment-configuration', `unknown agent "${options.agent}"; expected one of ${Object.keys(AGENT_ADAPTERS).join(', ')}`);
   }
+  // Tested on the raw string before the parse. Number.parseInt truncates, so
+  // `--timeout-ms 20abc` became 20 and every run then timed out at twenty
+  // milliseconds, and `--timeout-ms 1e9` became 1.
+  if (!/^[0-9]+$/.test(String(options.timeoutMs).trim())) {
+    fail('usage', `--timeout-ms must be a positive integer; got ${JSON.stringify(options.timeoutMs)}`);
+  }
   const timeout = Number.parseInt(options.timeoutMs, 10);
   if (!Number.isInteger(timeout) || timeout <= 0) {
     fail('usage', `--timeout-ms must be a positive integer; got ${JSON.stringify(options.timeoutMs)}`);

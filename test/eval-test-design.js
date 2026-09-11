@@ -13,9 +13,12 @@
  * So this suite asks four questions of the document, and each one is answered by a
  * parser rather than by a judge:
  *
- *   grounded      does each reported risk trace back to a sentence of the epic,
- *                 and does a risk the epic rules out in as many words score as the
- *                 false positive it is
+ *   grounded      is every risk the epic supports reported, does a risk the epic
+ *                 rules out in as many words score as the false positive it is, and
+ *                 does the register stay under the ceiling its set declares. What is
+ *                 not claimed: a reported row is never tested against the epic text,
+ *                 so a risk this fixture did not anticipate is bounded by the
+ *                 ceiling and is not otherwise detected
  *   consistent    is every probability and impact on the workflow's own 1-3 scale,
  *                 and is every score the product of the two
  *   ordered       where the fixture ranks one risk above another, do the assigned
@@ -77,7 +80,7 @@
  *   node test/eval-test-design.js --validate-only
  *   node test/eval-test-design.js --preflight-only --agent codex
  *   node test/eval-test-design.js --agent claude --runs 2
- *   node test/eval-test-design.js --agent codex --set clean-last-sync-indicator
+ *   node test/eval-test-design.js --agent codex --set seeded-offline-order-capture
  *   node test/eval-test-design.js --agent custom --agent-cmd my-runner --agent-arg --headless
  *   node test/eval-test-design.js --agent claude --json results/test-design.json
  *
@@ -145,14 +148,14 @@ const TEST_DESIGN_INTERFACE = 'tea-test-design-runner';
 const TEST_DESIGN_OPERATION = 'design-fixture-set';
 
 /**
- * The six categories, the four priorities and the levels a risk may be covered at.
+/**
+ * The four priorities, strongest first, so a pair's ordering constraint is a
+ * numeric comparison.
  *
- * The categories and the scale are the workflow's own, from
- * `steps-c/step-03-risk-and-testability.md` section 2 and the two knowledge
- * fragments it names. The levels are the four `steps-c/step-04-coverage-plan.md`
- * section 1 declares plus Integration, which `resources/knowledge/test-levels-framework.md`
- * treats as a first-class level throughout. They are read off the ground truth so
- * the fixture and the scorer cannot hold two different lists.
+ * This one list is hardcoded because it is the priority vocabulary itself rather
+ * than a fixture claim. The six risk categories and the coverage levels are read
+ * off the ground truth, so the fixture and the scorer cannot hold two different
+ * lists of either.
  */
 const PRIORITY_RANK = { P0: 0, P1: 1, P2: 2, P3: 3 };
 
@@ -178,6 +181,11 @@ const GROUND_TRUTH_ONLY_TOKENS = [
   'groundingQuote',
   'exclusionQuote',
   'maxRisks',
+  // The two keys that carry the matcher vocabulary itself. Neither string occurs in
+  // the staged skill tree or in either epic, so naming them costs nothing and closes
+  // the one channel through which the matchers could reach the agent.
+  'anyOf',
+  'exampleDescription',
 ];
 
 /**
@@ -196,8 +204,11 @@ const GROUND_TRUTH_ONLY_TOKENS = [
  * miss the fixture caused, and four of five is the honest bar for a token matcher
  * over prose. `riskPrecision` is 0.8 for the mirror reason.
  *
- * `maxCleanControlExcess` is 0. The clean control exists to catch over-reporting,
- * and a control that tolerates one extra risk is not a control.
+ * The three counters are 0 because none of them has a defensible non-zero reading.
+ * A risk the epic rules out in as many words is invention whatever the precision
+ * ratio comes to; the most severe risk in a set is reported or the analysis missed
+ * the thing that mattered most, which a recall floor of 0.8 over five risks cannot
+ * see; and a ceiling that tolerates one extra risk is not a ceiling.
  */
 const THRESHOLDS = {
   groundedRiskRecall: 0.8,
@@ -210,7 +221,9 @@ const THRESHOLDS = {
   riskLinkResolutionAccuracy: 1,
   priorityOrderingAccuracy: 1,
   coverageMappingAccuracy: 0.8,
-  maxCleanControlExcess: 0,
+  maxUngroundedRisks: 0,
+  maxTopSeverityMissed: 0,
+  maxRiskCeilingExcess: 0,
   maxUnstableCases: 0,
   maxFixtureMutations: 0,
 };
@@ -363,6 +376,14 @@ function loadGroundTruth() {
 function selectSets(groundTruth, requested) {
   const sets = groundTruth.fixtureSets ?? [];
   if (requested.length === 0) return sets;
+  // An id that matches nothing is refused rather than dropped. A typo in the clean
+  // control's id used to skip the control silently, and the run then reported a
+  // ceiling excess of zero, which is true and means nothing.
+  const known = new Set(sets.map((set) => set.id));
+  const unmatched = requested.filter((id) => !known.has(id));
+  if (unmatched.length > 0) {
+    fatal(2, `--set names no fixture set: ${unmatched.join(', ')}; the corpus holds ${[...known].join(', ')}`);
+  }
   return sets.filter((set) => requested.includes(set.id));
 }
 
@@ -491,11 +512,15 @@ function validateCorpus(groundTruth) {
     const unsupported = set.unsupportedRisks ?? [];
     if (material.length > 0) seededSets += 1;
     if (typeof set.maxRisks === 'number') cleanSets += 1;
-    if (material.length === 0 && typeof set.maxRisks !== 'number') {
-      problems.push(`${where}: declares neither materialRisks nor maxRisks, so nothing about it can be scored`);
-    }
-    if (material.length > 0 && typeof set.maxRisks === 'number') {
-      problems.push(`${where}: declares both materialRisks and maxRisks; a set is either the seeded corpus or the clean control`);
+    // Every set declares a ceiling, so over-reporting is bounded on both. A set
+    // with no material risk is the clean control; the seeded corpus is the one that
+    // declares them.
+    if (typeof set.maxRisks !== 'number' || set.maxRisks < 1) {
+      problems.push(`${where}: declares no maxRisks, so the number of risks a run may report is unbounded`);
+    } else if (set.maxRisks < material.length) {
+      problems.push(
+        `${where}: maxRisks is ${set.maxRisks} and the set declares ${material.length} material risk(s), so a correct run exceeds its own ceiling`,
+      );
     }
     if (unsupported.length === 0) {
       problems.push(`${where}: declares no unsupportedRisks, so no reported risk on it can ever score as a false positive`);
@@ -590,7 +615,7 @@ function filesUnder(root) {
 
 /** One digest over a named set of files, so a later run can say whether the corpus moved. */
 function digestTree(root, relativePaths) {
-  return digest(relativePaths.map((relative) => `${relative} ${fs.readFileSync(path.join(root, relative), 'utf8')}`).join(''));
+  return digest(relativePaths.map((relative) => `${relative}\0${fs.readFileSync(path.join(root, relative), 'utf8')}`).join('\u0001'));
 }
 
 /**
@@ -822,7 +847,18 @@ function parseTables(text) {
   const lines = text.split(/\r?\n/);
   const tables = [];
   const headings = [];
+  let fenced = false;
   for (let index = 0; index < lines.length; index += 1) {
+    // A fenced block is illustration, never the register. The workflow's own
+    // knowledge fragments and its worked example are full of them, and
+    // resources/test-design-epic-3.example.md is a register the agent is invited
+    // to imitate, so a run that quoted one into its own document scored the
+    // example's rows as its own and hard-failed three checks for quoting.
+    if (/^\s*(?:```|~~~)/.test(lines[index])) {
+      fenced = !fenced;
+      continue;
+    }
+    if (fenced) continue;
     const heading = /^(#{1,6})\s+(.*)$/.exec(lines[index]);
     if (heading) {
       const level = heading[1].length;
@@ -847,7 +883,13 @@ function parseTables(text) {
 
 /** The index of the first header cell whose text contains one of these names, or -1. */
 function columnIndex(header, names) {
-  return header.findIndex((cell) => names.some((name) => cell.toLowerCase() === name.toLowerCase()));
+  const exact = header.findIndex((cell) => names.some((name) => cell.toLowerCase() === name.toLowerCase()));
+  if (exact !== -1) return exact;
+  // Exact equality alone lost a whole register to a decorated header: `| Score (P×I) |`
+  // matched neither `Score` nor `Risk Score`, readRisks skipped the table, and the
+  // run was reported as an environment failure rather than scored. Exact wins where
+  // it applies, so `Risk Link` is never captured by a search for `Risk`.
+  return header.findIndex((cell) => names.some((name) => cell.toLowerCase().includes(name.toLowerCase())));
 }
 
 /**
@@ -870,13 +912,26 @@ function scoreBandOf(heading) {
   const text = String(heading ?? '').toLowerCase();
   const after = text.indexOf('score');
   if (after === -1) return null;
-  const tail = text.slice(after);
-  const atLeast = /^[^0-9]*(?:>=|≥|at least|of)\s*(\d+)/.exec(tail) ?? /(\d+)\s*(?:or\s*(?:greater|more|above|higher)|\+)/.exec(tail);
-  const between = /(\d+)\s*(?:-|–|—|to|through)\s*(\d+)/.exec(tail);
-  // A range wins over an open bound, because "Score 3-4" also contains a bare number
-  // an open-bound pattern could read as a floor.
-  if (between) return { min: Number.parseInt(between[1], 10), max: Number.parseInt(between[2], 10) };
+  // Only the run of text immediately after the word `score` is read. Scanning the
+  // whole heading let any later pair of numbers outrank the declared bound, so
+  // "High-Priority Risks (Score >=6) - Sprint 3-4" parsed as the range 3 to 4 and
+  // reported three correctly filed risks as misfiled on a threshold of 1.
+  const window = text.slice(after + 'score'.length, after + 'score'.length + 28);
+  const range = /^[^0-9]{0,6}(\d+)\s*(?:-|–|—|to|through)\s*(\d+)/.exec(window);
+  if (range) return { min: Number.parseInt(range[1], 10), max: Number.parseInt(range[2], 10) };
+  const atLeast = /^[^0-9]{0,12}(?:>=|≥|at least|of|greater than or equal to)\s*(\d+)/.exec(window);
   if (atLeast) return { min: Number.parseInt(atLeast[1], 10), max: Number.POSITIVE_INFINITY };
+  const above = /^[^0-9]{0,6}(\d+)\s*(?:\+|or\s*(?:greater|more|above|higher)|and\s*(?:above|higher|up))/.exec(window);
+  if (above) return { min: Number.parseInt(above[1], 10), max: Number.POSITIVE_INFINITY };
+  const strictlyAbove = /^[^0-9]{0,6}>\s*(\d+)/.exec(window);
+  if (strictlyAbove) return { min: Number.parseInt(strictlyAbove[1], 10) + 1, max: Number.POSITIVE_INFINITY };
+  const atMost = /^[^0-9]{0,12}(?:<=|≤|at most|or\s*(?:less|lower|fewer)|and\s*below)\s*(\d+)/.exec(window);
+  if (atMost) return { min: 1, max: Number.parseInt(atMost[1], 10) };
+  // A bare number after the word is an exact band, which is how "Critical (Score 9)"
+  // states one. Without it that heading declared no range and every row under it
+  // left the denominator instead of being checked.
+  const exact = /^[^0-9]{0,6}(\d+)/.exec(window);
+  if (exact) return { min: Number.parseInt(exact[1], 10), max: Number.parseInt(exact[1], 10) };
   return null;
 }
 
@@ -1027,6 +1082,23 @@ function documentMentions(set, text) {
 }
 
 /**
+ * How many of a set's most severe material risks went unreported.
+ *
+ * Severity rank is an ordering, so the most severe risks are the ones sharing the
+ * lowest rank. A set with no material risk has none to miss.
+ *
+ * @param {object} set
+ * @param {string[]} missed Ids the run did not report.
+ * @returns {number}
+ */
+function topSeverityMissed(set, missed) {
+  const material = set.materialRisks ?? [];
+  if (material.length === 0) return 0;
+  const top = Math.min(...material.map((risk) => risk.severityRank));
+  return material.filter((risk) => risk.severityRank === top && missed.includes(risk.id)).length;
+}
+
+/**
  * Score one produced document against one fixture set.
  *
  * The result is the scored object reduced to what a reader can check by hand, which
@@ -1071,11 +1143,23 @@ function scoreRun(set, design, categories) {
     // leaves this denominator empty, which reports as unmeasurable rather than as a
     // pass: the template declares three bands and a document that dropped them has
     // dropped the structure the check reads.
+    // Every row is checked, and a row under a heading that declares no range is a
+    // band failure. Counting only the rows that sat under a declared range let a
+    // single rangeless heading exempt them: `### Medium/Low-Priority Risks`, the
+    // literal heading test-design-qa-template.md ships, took the denominator to
+    // zero and a score-9 risk filed beneath it scored a clean 100%. `banded` is
+    // therefore `rows` and the question is how many of them were placed correctly.
+    shape.banded += 1;
     const placed = bandFor(risk.headings);
-    if (placed) {
-      shape.banded += 1;
-      if (Number.isInteger(risk.score) && risk.score >= placed.band.min && risk.score <= placed.band.max) shape.bandOk += 1;
-      else shapeFailures.push({ id: risk.rawId, check: 'band', score: risk.score, heading: placed.heading });
+    if (placed && Number.isInteger(risk.score) && risk.score >= placed.band.min && risk.score <= placed.band.max) shape.bandOk += 1;
+    else {
+      shapeFailures.push({
+        id: risk.rawId,
+        check: 'band',
+        score: risk.score,
+        heading: placed ? placed.heading : null,
+        reason: placed ? 'the score falls outside the range its heading declares' : 'no enclosing heading declares a score range',
+      });
     }
   }
   // Rows the scale rejected are outside the arithmetic denominator, for the reason
@@ -1096,36 +1180,63 @@ function scoreRun(set, design, categories) {
   // -- grounding ------------------------------------------------------------
   // Material risks are matched first and a matched row is consumed, so a row that
   // names a real risk in words an exclusion also uses is never counted twice.
-  const consumed = new Set();
   const material = set.materialRisks ?? [];
+  // Maximum matching over the eligible pairs, by augmenting path, rather than
+  // first-come assignment in declaration order. One prose row can satisfy two
+  // declared risks: "uncapped retry storms during a large backlog sync blow the 30
+  // second budget" is eligible for both the retry risk and the backlog risk. Taking
+  // the first row per risk let the earlier declaration claim it and left the later
+  // one unmatched, so a run that reported both risks correctly scored one of them.
+  const eligible = material.map((declared) => {
+    const admitted = new Set(declared.categories ?? []);
+    return risks
+      .map((risk, index) => ({ risk, index }))
+      .filter(({ risk }) => admitted.has(risk.category) && matchesGroups(declared.anyOf, normalizeText(risk.description)))
+      .map(({ index }) => index);
+  });
+  const rowToRisk = new Map();
+  const augment = (declaredIndex, seen) => {
+    for (const rowIndex of eligible[declaredIndex]) {
+      if (seen.has(rowIndex)) continue;
+      seen.add(rowIndex);
+      const held = rowToRisk.get(rowIndex);
+      if (held === undefined || augment(held, seen)) {
+        rowToRisk.set(rowIndex, declaredIndex);
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const [declaredIndex] of material.entries()) augment(declaredIndex, new Set());
+
+  const riskToRow = new Map([...rowToRisk].map(([rowIndex, declaredIndex]) => [declaredIndex, rowIndex]));
   const matches = [];
   const missed = [];
-  for (const declared of material) {
-    const admitted = new Set(declared.categories ?? []);
-    const found = risks.findIndex((risk, index) => {
-      if (consumed.has(index)) return false;
-      if (!admitted.has(risk.category)) return false;
-      return matchesGroups(declared.anyOf, normalizeText(risk.description));
-    });
-    if (found === -1) missed.push(declared.id);
-    else {
-      consumed.add(found);
-      matches.push({ riskId: declared.id, rowId: risks[found].id });
-    }
+  for (const [declaredIndex, declared] of material.entries()) {
+    const rowIndex = riskToRow.get(declaredIndex);
+    if (rowIndex === undefined) missed.push(declared.id);
+    else matches.push({ riskId: declared.id, rowId: risks[rowIndex].id });
   }
 
+  // Every row is tested against the exclusions, including a row that matched a
+  // material risk. Skipping matched rows rewarded compounding: one row asserting
+  // the unencrypted queue and a cross-tenant leak in the same sentence was consumed
+  // by the material pass and never tested for the risk the epic rules out, while
+  // the same content split across two rows was caught.
   const ungrounded = [];
-  for (const [index, risk] of risks.entries()) {
-    if (consumed.has(index)) continue;
+  for (const risk of risks) {
     const invented = (set.unsupportedRisks ?? []).find((entry) => matchesGroups(entry.anyOf, normalizeText(risk.description)));
     if (invented) ungrounded.push({ unsupportedId: invented.id, rowId: risk.rawId });
   }
 
-  // -- the clean control ----------------------------------------------------
-  // A control that tolerates one extra risk is not a control, so the excess is the
-  // count above the declared ceiling and the threshold on it is zero.
-  const cleanControl =
-    typeof set.maxRisks === 'number' ? { maxRisks: set.maxRisks, excess: Math.max(0, risks.length - set.maxRisks) } : null;
+  // -- the risk ceiling -----------------------------------------------------
+  // Every set declares one, and the threshold on the excess is zero. It was on the
+  // clean control alone, which left over-reporting on the seeded set unbounded:
+  // four risks the fixture never anticipated could be appended to a correct run and
+  // every threshold still passed, because precision counts only the rows matching a
+  // risk the epic rules out in as many words and says nothing about invention the
+  // fixture did not foresee.
+  const ceiling = typeof set.maxRisks === 'number' ? { maxRisks: set.maxRisks, excess: Math.max(0, risks.length - set.maxRisks) } : null;
 
   // -- coverage mapping -----------------------------------------------------
   // Evaluated over the material risks that were actually reported. A risk the run
@@ -1183,9 +1294,19 @@ function scoreRun(set, design, categories) {
     shape: { ...shape, arithmeticTotal },
     shapeFailures,
     links,
-    grounding: { declared: material.length, matched: matches.length, matches, missed },
+    grounding: {
+      declared: material.length,
+      matched: matches.length,
+      matches,
+      missed,
+      // The recall floor is 0.8 and the seeded set declares five material risks, so
+      // "four of five" clears it and nothing distinguished a miss of the least
+      // severe risk from a miss of the most severe one. The highest-ranked risk in
+      // a set is reported or the run fails, whatever recall comes to.
+      topSeverityMissed: topSeverityMissed(set, missed),
+    },
     ungrounded,
-    cleanControl,
+    ceiling,
     coverageChecks,
     orderingChecks,
   };
@@ -1207,7 +1328,7 @@ function signatureOf(scored, mutations) {
     scored.links,
     scored.grounding,
     scored.ungrounded,
-    scored.cleanControl,
+    scored.ceiling,
     scored.coverageChecks,
     scored.orderingChecks,
     mutations,
@@ -1539,13 +1660,15 @@ async function main() {
       linkTotal: 0,
       linkResolved: 0,
       ungrounded: 0,
-      cleanExcess: 0,
+      ceilingExcess: 0,
+      topSeverityMissed: 0,
       mutations: 0,
     };
     const recallRatios = [];
     const precisionRatios = [];
     const coverageRatios = [];
     const orderingRatios = [];
+    const repeatedRuns = runs >= 2;
     let completedRuns = 0;
     let unstableCases = 0;
     let incompleteCases = 0;
@@ -1557,7 +1680,16 @@ async function main() {
       const signatures = new Set();
       const caseScores = [];
       for (let runIndex = 0; runIndex < runs; runIndex += 1) {
-        const outcome = await runCase(set, options, agent, runIndex, categories);
+        // A throw out of staging, the port or the scorer is one lost run rather than
+        // a lost invocation. It used to reach main().catch, which exits 2 with a
+        // stack trace, writes no result record even when --json asked for one, and
+        // skips every remaining set and agent.
+        let outcome;
+        try {
+          outcome = await runCase(set, options, agent, runIndex, categories);
+        } catch (error) {
+          outcome = { ok: false, failureClass: 'environment-configuration', reason: `the run threw: ${error?.message ?? error}` };
+        }
         if (!outcome.ok) {
           console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
           lostRunClasses.push(outcome.failureClass);
@@ -1587,7 +1719,8 @@ async function main() {
         totals.linkTotal += scored.links.total;
         totals.linkResolved += scored.links.resolved;
         totals.ungrounded += scored.ungrounded.length;
-        if (scored.cleanControl) totals.cleanExcess += scored.cleanControl.excess;
+        if (scored.ceiling) totals.ceilingExcess += scored.ceiling.excess;
+        totals.topSeverityMissed += scored.grounding.topSeverityMissed;
 
         // Recall, coverage and ordering are meaned over the runs that can answer
         // them. A set declaring no material risk has no opinion on any of the three,
@@ -1604,13 +1737,17 @@ async function main() {
 
       const first = caseScores[0];
       const complete = caseScores.length === runs;
-      const stable = signatures.size === 1 && complete;
-      const clean = first.ungrounded.length === 0 && (first.cleanControl?.excess ?? 0) === 0 && first.grounding.missed.length === 0;
+      // One run cannot be stable or unstable. parseArgs already warns on stderr and
+      // the per-case line used to print `stable` anyway, because one signature and a
+      // complete set both hold at a single repetition.
+      const repeated = runs >= 2;
+      const stable = repeated && signatures.size === 1 && complete;
+      const clean = first.ungrounded.length === 0 && (first.ceiling?.excess ?? 0) === 0 && first.grounding.missed.length === 0;
       const status = clean ? `${colors.green}✓${colors.reset}` : `${colors.yellow}•${colors.reset}`;
       console.log(
         `  ${status} ${set.id}: ${first.shape.rows} risk(s), ` +
           `${first.grounding.matched}/${first.grounding.declared} grounded, ${first.ungrounded.length} ungrounded, ` +
-          `${stable ? 'stable' : complete ? `${colors.red}${signatures.size} different answers on identical input${colors.reset}` : `${colors.red}only ${caseScores.length}/${runs} runs measured${colors.reset}`}`,
+          `${stable ? 'stable' : repeated ? (complete ? `${colors.red}${signatures.size} different answers on identical input${colors.reset}` : `${colors.red}only ${caseScores.length}/${runs} runs measured${colors.reset}`) : `${colors.yellow}unrepeated${colors.reset}`}`,
       );
       for (const id of first.grounding.missed) console.log(`        ${colors.yellow}missed:${colors.reset} ${id}`);
       for (const entry of first.ungrounded) {
@@ -1627,16 +1764,16 @@ async function main() {
         );
       }
       for (const failure of first.shapeFailures) console.log(`        ${colors.red}${failure.check}:${colors.reset} ${failure.id}`);
-      if (first.cleanControl && first.cleanControl.excess > 0) {
+      if (first.ceiling && first.ceiling.excess > 0) {
         console.log(
-          `        ${colors.red}over-reported:${colors.reset} ${first.shape.rows} risks against a ceiling of ${first.cleanControl.maxRisks}`,
+          `        ${colors.red}over-reported:${colors.reset} ${first.shape.rows} risks against a ceiling of ${first.ceiling.maxRisks}`,
         );
       }
       // An unstable answer on complete runs is a measured quality failure. A case short
       // of its runs is an environment failure, and the two must not report through the
       // same channel.
       if (!complete) incompleteCases += 1;
-      else if (!stable) unstableCases += 1;
+      else if (repeated && !stable) unstableCases += 1;
     }
 
     const measurements = {
@@ -1651,8 +1788,11 @@ async function main() {
       priorityOrderingAccuracy: measured(mean(orderingRatios)),
       coverageMappingAccuracy: measured(mean(coverageRatios)),
       ungroundedRisks: totals.ungrounded,
-      cleanControlExcess: totals.cleanExcess,
-      unstableCases,
+      topSeverityMissed: totals.topSeverityMissed,
+      riskCeilingExcess: totals.ceilingExcess,
+      // Null rather than 0 on a single repetition: a count of zero reads as measured
+      // and nothing was measured.
+      unstableCases: repeatedRuns ? unstableCases : null,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };
@@ -1673,7 +1813,9 @@ async function main() {
       const value = measurements[key] === null ? Number.NaN : measurements[key];
       console.log(`  ${label} ${pct(value)}   (threshold ${pct(THRESHOLDS[key])})`);
     }
-    console.log(`  clean control excess ${String(totals.cleanExcess).padStart(3)}   (max ${THRESHOLDS.maxCleanControlExcess})`);
+    console.log(`  ungrounded risks     ${String(totals.ungrounded).padStart(3)}   (max ${THRESHOLDS.maxUngroundedRisks})`);
+    console.log(`  top-severity missed  ${String(totals.topSeverityMissed).padStart(3)}   (max ${THRESHOLDS.maxTopSeverityMissed})`);
+    console.log(`  over the ceiling     ${String(totals.ceilingExcess).padStart(3)}   (max ${THRESHOLDS.maxRiskCeilingExcess})`);
     console.log(`  fixture mutations    ${String(totals.mutations).padStart(3)}   (max ${THRESHOLDS.maxFixtureMutations})`);
 
     const failures = [];
@@ -1695,8 +1837,13 @@ async function main() {
       if (value === null) failures.push(`${key} (unmeasurable)`);
       else if (value < THRESHOLDS[key]) failures.push(key);
     }
-    if (totals.cleanExcess > THRESHOLDS.maxCleanControlExcess)
-      failures.push(`${totals.cleanExcess} risk(s) over the clean control ceiling`);
+    if (totals.ungrounded > THRESHOLDS.maxUngroundedRisks) {
+      failures.push(`${totals.ungrounded} risk(s) the epic rules out in as many words`);
+    }
+    if (totals.topSeverityMissed > THRESHOLDS.maxTopSeverityMissed) {
+      failures.push(`${totals.topSeverityMissed} of the most severe risk(s) went unreported`);
+    }
+    if (totals.ceilingExcess > THRESHOLDS.maxRiskCeilingExcess) failures.push(`${totals.ceilingExcess} risk(s) over the declared ceiling`);
     if (totals.mutations > THRESHOLDS.maxFixtureMutations) failures.push('fixture mutations');
     if (unstableCases > THRESHOLDS.maxUnstableCases) failures.push(`${unstableCases} unstable case(s)`);
 

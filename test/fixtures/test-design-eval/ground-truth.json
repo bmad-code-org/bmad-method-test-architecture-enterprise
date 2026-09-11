@@ -37,7 +37,16 @@
     "own, read from steps-c/step-03-risk-and-testability.md section 2 and from the two knowledge",
     "fragments it names. The five test levels are the four steps-c/step-04-coverage-plan.md section 1",
     "declares plus Integration, which resources/knowledge/test-levels-framework.md treats as a first",
-    "class level throughout. Both epics were written for this corpus and describe no real system."
+    "class level throughout. Both epics were written for this corpus and describe no real system.",
+    "",
+    "EVERY SET DECLARES A CEILING",
+    "",
+    "`maxRisks` bounds how many risks a run may report, and it is on both sets. It was on the clean",
+    "control alone, which left over-reporting on the seeded set unbounded: four risks this fixture never",
+    "anticipated could be appended to an otherwise correct run and every threshold still passed, because",
+    "precision counts only the rows matching a risk the epic rules out in as many words. The seeded",
+    "ceiling is 8 against 5 material risks, which leaves room for a real risk this fixture did not",
+    "foresee and stops a register that lists everything."
   ],
   "riskCategories": [
     "TECH",
@@ -67,6 +76,7 @@
       "projectRoot": "field-order-capture",
       "epicNum": "7",
       "epicFile": "docs/epics/epic-7-offline-order-capture.md",
+      "maxRisks": 8,
       "materialRisks": [
         {
           "id": "sec-unencrypted-offline-queue",
