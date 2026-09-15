@@ -7,7 +7,7 @@
  * because the format belongs to eval-quality and its compiler is the only
  * authority on it.
  *
- * All thirteen contracts compile today. They did not when they were written: against
+ * All fourteen contracts compile today. They did not when they were written: against
  * eval-quality 0.2.0 the contract language could only describe a system under
  * test that speaks HTTP, and a TEA skill runs behind a command, so every one of
  * them failed to parse in the same handful of places. test/contracts/README.md
@@ -20,9 +20,24 @@
  * so adding a case to a suite does not churn the file while a new KIND of
  * failure still does.
  *
- * This check never passes silently. eval-quality is a declared devDependency, so
- * the compiler resolves in a normal install; a tree installed with --omit=dev
- * gets a skip that says it skipped.
+ * THIS CHECK FAILS CLOSED
+ *
+ * It used to skip. An unresolvable eval-quality returned null, printed a yellow
+ * "skipped" and exited 0, which is a green check over fourteen contracts nobody
+ * looked at. It was the only check in this repository that answered an absent
+ * package with a pass: every sibling takes exit 2 for an environment that
+ * measured nothing, and this one took exit 0 for the same condition. A skip is
+ * only honest where somebody reads the word, and nothing reads the word in a
+ * chain of thirty-odd checks whose whole output is the last line.
+ *
+ * So an unresolvable package exits 2 and says how many contracts went unchecked,
+ * and so does a tree resolving a version other than the one package.json pins,
+ * because fourteen contracts compiled against the wrong release are fourteen
+ * results about a package this repository does not declare. The pin is read
+ * through `pinnedVersion` in test/test-eval-quality-corpus.js, which is the one
+ * comparison of its kind in this repository rather than a second copy of it.
+ * `--package` is exempt from the pin, since naming a local build is the whole
+ * purpose of the flag.
  *
  * WHERE THE FAILURE SHAPE COMES FROM
  *
@@ -43,11 +58,16 @@
  *   node test/test-contracts.js --package <path> --write   # rewrite the baseline
  *
  * Exit codes:
- *   0  every contract matched its recorded status, or the compiler is absent
- *   1  a contract's status or failure shape moved away from the baseline, or a
- *      seeded fault stopped reporting the shape recorded for it
- *   2  the compiler was named and could not be loaded, or it failed in a way
- *      that is neither of its two declared error classes
+ *   0  every contract matched its recorded status
+ *   1  a contract's status or failure shape moved away from the baseline; a
+ *      seeded fault stopped reporting the shape recorded for it; package.json
+ *      declares no eval-quality pin this check can compare against; or one of
+ *      this file's own fail-closed refusals stopped refusing
+ *   2  the compiler could not be loaded, whether it was named, unresolvable
+ *      from the tree, or resolved to a manifest that would not read; the
+ *      installed version is not the one package.json pins; the compiler
+ *      failed in a way that is neither of its two declared error classes; or
+ *      it reported a code no published registry carries
  */
 
 'use strict';
@@ -57,6 +77,11 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
 const { loadEvalQuality } = require('./lib/eval-quality-inputs');
+const { publishedMember } = require('./lib/vocabularies');
+// The one pin comparison in this repository. `test/test-eval-quality-corpus.js`
+// already owns it and already exports it, and a second copy here would be a
+// second thing to keep in step with package.json's spelling.
+const { pinnedVersion } = require('./test-eval-quality-corpus');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const CONTRACT_ROOT = path.join(__dirname, 'contracts');
@@ -66,7 +91,6 @@ const colors = {
   reset: '\u001B[0m',
   red: '\u001B[31m',
   green: '\u001B[32m',
-  yellow: '\u001B[33m',
   dim: '\u001B[2m',
 };
 
@@ -84,7 +108,7 @@ function findContracts(directory) {
 }
 
 /**
- * The compiler's module, or null when the package is not installed.
+ * The compiler's module, or the reason nothing can be compiled.
  *
  * The whole namespace rather than the one function, because the error classes
  * this check tests against have to come from the same module instance as the
@@ -93,34 +117,252 @@ function findContracts(directory) {
  * one would report every fault as outside the compiler's declared classes.
  *
  * An explicit --package wins, so the check can run against a local build before
- * a release reaches npm. require.resolve settles the installed case, because it
- * answers from this repository's own resolution rather than from whatever
- * happens to be on PATH, and `loadEvalQuality` is the same accessor the rest of
- * the test tree imports the package through.
+ * a release reaches npm, and that arm is deliberately exempt from the version
+ * comparison below: naming an unreleased build is what the flag is for.
+ * require.resolve settles the installed case, because it answers from this
+ * repository's own resolution rather than from whatever happens to be on PATH,
+ * and `loadEvalQuality` is the same accessor the rest of the test tree imports
+ * the package through.
+ *
+ * Every arm that cannot produce a compiler returns a code and the lines to print
+ * rather than exiting here, so one place decides what this check's exit codes
+ * mean. Not one of them returns null: a null used to reach the caller as a skip
+ * that exits 0, which is the failure mode the header now describes.
+ *
+ * The three reads of the installed tree - the manifest path, this repository's
+ * own pin, and the version that path resolves to - arrive as an injectable
+ * `reads` object, each defaulting to the real read. `checkFailClosed` overrides
+ * one at a time so it drives this function itself through every refusal rather
+ * than reconstructing the refusal from a second copy of the logic: a wiring
+ * bug in the calls below (the wrong value passed to `offThePin`, a swapped
+ * argument) then fails the same way a real broken tree would.
+ *
+ * @param {string[]} argv
+ * @param {number} contractCount How many contracts go unchecked when this fails, which is what makes the message worth reading.
+ * @param {{resolveManifestPath?: () => string, readTeaManifest?: () => object, readInstalledVersion?: (manifestPath: string) => string}} [reads]
+ * @returns {Promise<{ok: true, module: object}|{ok: false, exitCode: 1|2, lines: string[]}>}
  */
-async function resolveCompiler(argv) {
+async function resolveCompiler(argv, contractCount, reads = {}) {
+  const unchecked = `${contractCount} contract(s) went unchecked.`;
   const flagIndex = argv.indexOf('--package');
   if (flagIndex !== -1) {
     const value = argv[flagIndex + 1];
     if (!value) {
-      console.error(`${colors.red}--package requires a path to eval-quality's built entry point${colors.reset}`);
-      process.exit(2);
+      return { ok: false, exitCode: 2, lines: [`--package requires a path to eval-quality's built entry point; ${unchecked}`] };
     }
     if (!fs.existsSync(value)) {
-      console.error(`${colors.red}--package names a path that does not exist: ${value}${colors.reset}`);
-      process.exit(2);
+      return { ok: false, exitCode: 2, lines: [`--package names a path that does not exist: ${value}; ${unchecked}`] };
     }
-    return await import(pathToFileURL(path.resolve(value)).href);
+    return { ok: true, module: await import(pathToFileURL(path.resolve(value)).href) };
   }
-  try {
+
+  const {
     // eval-quality is a declared devDependency, so this resolves in a normal
-    // install. The catch below is for a tree installed with --omit=dev, where
-    // the honest answer is a skip that says it skipped.
-    require.resolve('eval-quality/package.json', { paths: [PROJECT_ROOT] });
-  } catch {
-    return null;
+    // install. A tree installed with --omit=dev throws here, and the honest
+    // answer to that is an environment that measured nothing rather than a
+    // pass over contracts nobody compiled.
+    resolveManifestPath = () => require.resolve('eval-quality/package.json', { paths: [PROJECT_ROOT] }),
+    readTeaManifest = () => JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')),
+    readInstalledVersion = (manifestPath) => JSON.parse(fs.readFileSync(manifestPath, 'utf8')).version,
+  } = reads;
+
+  let manifestPath;
+  try {
+    manifestPath = resolveManifestPath();
+  } catch (error) {
+    return unresolvable(error.message, contractCount);
   }
-  return loadEvalQuality();
+
+  let pinned;
+  try {
+    pinned = pinnedVersion(readTeaManifest());
+  } catch (error) {
+    // Exit 1 rather than 2, which is the class test/test-eval-quality-corpus.js
+    // gives the same condition: a pin this repository declares and nothing can
+    // compare is a defect here rather than an environment that could not answer.
+    return { ok: false, exitCode: 1, lines: [error.message] };
+  }
+
+  let resolved;
+  try {
+    resolved = readInstalledVersion(manifestPath);
+  } catch (error) {
+    // A manifest that resolved and then could not be read is the same finding
+    // as one that never resolved: nothing about the installed package could be
+    // answered either way, so it takes the same refusal and names the same
+    // unchecked count rather than reaching the file's top-level catch with a
+    // generic message that does not.
+    return unresolvable(`eval-quality's manifest at ${manifestPath} could not be read: ${error.message}`, contractCount);
+  }
+  const mismatch = offThePin(pinned, resolved, contractCount);
+  if (mismatch !== null) return mismatch;
+  return { ok: true, module: await loadEvalQuality() };
+}
+
+/**
+ * The two refusals a normal install can produce, as pure functions of what the
+ * tree answered.
+ *
+ * Split out of `resolveCompiler` so both are one-line calls inside it rather
+ * than inline object literals repeated at every call site. `checkFailClosed`
+ * drives each by injecting one of `resolveCompiler`'s reads rather than
+ * calling either of these directly, so a wiring bug between `resolveCompiler`
+ * and these two functions fails the same way a real broken tree would.
+ *
+ * @param {string} detail What `require.resolve` said.
+ * @param {number} contractCount
+ */
+function unresolvable(detail, contractCount) {
+  return {
+    ok: false,
+    exitCode: 2,
+    lines: [
+      `eval-quality could not be resolved, so ${contractCount} contract(s) went unchecked.`,
+      detail,
+      'Run npm ci, or pass --package <path to dist/index.js>. See test/contracts/README.md.',
+    ],
+  };
+}
+
+/**
+ * @param {string} pinned What package.json declares.
+ * @param {string} resolved What the installed tree answers.
+ * @param {number} contractCount
+ * @returns {null|{ok: false, exitCode: 2, lines: string[]}} Null when the tree is the tree this repository declares.
+ */
+function offThePin(pinned, resolved, contractCount) {
+  if (resolved === pinned) return null;
+  return {
+    ok: false,
+    exitCode: 2,
+    lines: [
+      `package.json pins eval-quality ${pinned} and the installed tree resolves ${resolved}, so ${contractCount} contract(s) went unchecked.`,
+      'Run npm ci. A contract compiled against a release this repository does not declare is a result about some other package.',
+    ],
+  };
+}
+
+/**
+ * Every way this check refuses to compile anything, driven through
+ * `resolveCompiler` itself rather than described.
+ *
+ * All of them used to be one `catch { return null }` that printed a skip and
+ * exited 0, so there was nothing to drive. They exist for days nobody will be
+ * looking for them, which is the argument for running them on every gate: a
+ * refusal nobody has watched is a refusal nobody has tested, and this one was
+ * wrong for the whole life of the check.
+ *
+ * The two `--package` cases call `resolveCompiler` with real arguments, which
+ * exercises that branch as written. Every other case injects one of
+ * `resolveCompiler`'s three reads to fail the way a real tree would - an
+ * unresolvable manifest, a manifest that resolves and will not parse, a
+ * `package.json` with no comparable pin, or an installed version other than
+ * the one declared - and lets the real function's own calls to `unresolvable`
+ * and `offThePin` produce the refusal. A wiring bug inside `resolveCompiler`
+ * (the wrong value threaded to `offThePin`, a swapped argument to
+ * `unresolvable`) fails here the same way an actually broken tree would,
+ * which a case built from `unresolvable(...)` or `offThePin(...)` called
+ * directly cannot catch.
+ *
+ * Each asserts the exit class and the unchecked count, because the count is what
+ * makes the message worth reading: "eval-quality could not be resolved" beside a
+ * red line is a broken install, and the same sentence carrying "14 contract(s)
+ * went unchecked" is what a reader needs to know went unmeasured.
+ *
+ * The driven count comes back with the problems rather than being transcribed by
+ * the caller. A literal there is the same defect this story exists to remove one
+ * size down: a sixth refusal added here would leave the line below reporting
+ * five, and the reader would have no way to tell.
+ *
+ * @param {number} contractCount
+ * @returns {Promise<{problems: string[], driven: number}>} `problems` is empty when every refusal is intact.
+ */
+async function checkFailClosed(contractCount) {
+  const problems = [];
+  const count = `${contractCount} contract(s) went unchecked`;
+  const unresolvableMessage = "Cannot find module 'eval-quality/package.json'";
+  const cases = [
+    { id: 'a --package flag with no path after it', result: await resolveCompiler(['--package'], contractCount) },
+    {
+      id: 'a --package path that does not exist',
+      result: await resolveCompiler(['--package', '/nonexistent/eval-quality/dist/index.js'], contractCount),
+    },
+    {
+      id: 'an eval-quality that will not resolve',
+      result: await resolveCompiler([], contractCount, {
+        resolveManifestPath: () => {
+          throw new Error(unresolvableMessage);
+        },
+      }),
+    },
+    {
+      id: 'an eval-quality manifest that resolves and will not read',
+      result: await resolveCompiler([], contractCount, {
+        readInstalledVersion: () => {
+          throw new SyntaxError('Unexpected end of JSON input');
+        },
+      }),
+    },
+    {
+      id: 'a package.json with no eval-quality pin to compare',
+      result: await resolveCompiler([], contractCount, { readTeaManifest: () => ({}) }),
+    },
+    {
+      id: 'an installed version other than the pin',
+      result: await resolveCompiler([], contractCount, { readInstalledVersion: () => '1.4.0' }),
+    },
+  ];
+  for (const { id, result } of cases) {
+    if (result === null || result.ok !== false) {
+      problems.push(`${id} produced a compiler rather than a refusal, so this check would compile against it or skip`);
+      continue;
+    }
+    // The malformed-pin case is exit 1, the class test/test-eval-quality-corpus.js
+    // gives the same condition, and it names no unchecked count because a pin
+    // this repository cannot compare is a defect here rather than an
+    // environment that measured nothing. Every other refusal is exit 2 and
+    // names the count.
+    if (id === 'a package.json with no eval-quality pin to compare') {
+      if (result.exitCode !== 1) problems.push(`${id} refuses with exit ${result.exitCode}, and a pin this repository declares exits 1`);
+      if (!result.lines.some((line) => line.includes('eval-quality devDependency'))) {
+        problems.push(`${id} refuses without naming the missing pin: ${JSON.stringify(result.lines)}`);
+      }
+      continue;
+    }
+    if (result.exitCode !== 2)
+      problems.push(`${id} refuses with exit ${result.exitCode}, and an environment that measured nothing exits 2`);
+    if (!result.lines.some((line) => line.includes(count))) {
+      problems.push(`${id} refuses without naming how many contracts went unchecked: ${JSON.stringify(result.lines)}`);
+    }
+  }
+  const unreadableManifest = cases.find((c) => c.id === 'an eval-quality manifest that resolves and will not read').result;
+  if (!unreadableManifest?.lines.some((line) => line.includes('could not be read'))) {
+    problems.push(
+      `an eval-quality manifest that resolves and will not read is not distinguished from one that never resolved: ${JSON.stringify(unreadableManifest?.lines ?? null)}`,
+    );
+  }
+  // `pinned` here comes from the real package.json this repository ships,
+  // read through the real (non-injected) `readTeaManifest`, so the message is
+  // checked against both the real pin and the injected installed version
+  // rather than against a literal transcribed here. Each is checked in its
+  // own attributed phrase, not merely present anywhere in the message: a call
+  // that swapped `pinned` and `resolved` would still mention both versions,
+  // and a check for bare presence would not notice they had traded places.
+  const realPin = pinnedVersion(JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')));
+  const mismatch = cases.find((c) => c.id === 'an installed version other than the pin').result;
+  if (!mismatch?.lines.some((line) => line.includes(`pins eval-quality ${realPin}`) && line.includes('resolves 1.4.0'))) {
+    problems.push(
+      `an installed version other than the pin refuses without correctly attributing the pin and the installed version: ${JSON.stringify(mismatch?.lines ?? null)}`,
+    );
+  }
+  // The other half of the same guarantee: the tree this repository actually
+  // declares must still produce a compiler, or the refusals above would be
+  // satisfied by a function that refuses everything.
+  const intact = await resolveCompiler([], contractCount);
+  if (!intact.ok) {
+    problems.push(`the installed tree this repository declares is refused rather than producing a compiler: ${JSON.stringify(intact)}`);
+  }
+  return { problems, driven: cases.length };
 }
 
 /**
@@ -144,15 +386,66 @@ function issueShape(issuePath) {
 /**
  * One refused compile reduced to the distinct kinds of failure it carried.
  *
- * `code` is the error's own field. The issue locations come from the Zod error
- * a schema failure carries as its `cause`; a fault that carries no issues, which
- * is every fault raised after the parse succeeded, records an empty list rather
- * than a guess.
+ * `code` is the error's own field, held against the two registries the compiler
+ * throws codes from before it is recorded. It was `error.code ?? 'unknown'`, and
+ * `unknown` is a string no registry publishes: a fault whose code moved upstream
+ * recorded `unknown` into the baseline, matched `unknown` on the next run, and
+ * the check stayed green over a compiler that had stopped saying what it
+ * refused. A `RuntimeFault` carries a `RUNTIME_FAULT_CODES` member and a
+ * `StructuralFailure` a `FAILURE_CODES` one, and the caller does not always know
+ * which it is holding, so both registries are passed and the code is held
+ * against their union.
+ *
+ * The issue locations come from the Zod error a schema failure carries as its
+ * `cause`; a fault that carries no issues, which is every fault raised after the
+ * parse succeeded, records an empty list rather than a guess.
+ *
+ * @param {{code?: unknown, cause?: {issues?: unknown}}} error
+ * @param {{RUNTIME_FAULT_CODES: string[], FAILURE_CODES: string[]}} registries From the same resolution as the compiler that threw.
+ * @throws {Error} When the code is a member of neither registry, which the caller reports as an environment that measured nothing.
  */
-function failureShape(error) {
+function failureShape(error, registries) {
   const issues = Array.isArray(error.cause?.issues) ? error.cause.issues : [];
   const shapes = new Set(issues.map((issue) => issueShape(issue.path)));
-  return { code: error.code ?? 'unknown', issueShapes: [...shapes].sort() };
+  const code = publishedMember(registries, error.code, `the code the ${error.constructor?.name ?? 'fault'} the compiler threw carries`);
+  return { code, issueShapes: [...shapes].sort() };
+}
+
+/**
+ * `failureShape`'s registry hold, driven with a fabricated code rather than
+ * assumed from the compile loop that calls it for real.
+ *
+ * Every contract under test/contracts/ compiles today, which is the fact the
+ * header explains at length, and the seeded faults below are refused with
+ * codes the real compiler still publishes: `SEEDED_FAULTS` proves the issue
+ * locations, not a moved vocabulary. So nothing in this file's normal run ever
+ * hands `failureShape` a code outside `RUNTIME_FAULT_CODES` or `FAILURE_CODES`,
+ * and the `?? 'unknown'` fallback this function replaced could be restored
+ * here without one seeded fault or one compiled contract noticing. This check
+ * is what notices: it calls `failureShape` directly with a code no registry
+ * publishes and asserts the throw, the same way `checkFailClosed` drives the
+ * resolution refusals rather than describing them.
+ *
+ * @param {{RUNTIME_FAULT_CODES: string[], FAILURE_CODES: string[]}} registries
+ * @returns {string[]} Empty when the hold is intact.
+ */
+function checkFailureShapeHoldsRegistry(registries) {
+  const problems = [];
+  const fabricated = { code: 'forbidden-destination', constructor: { name: 'RuntimeFault' } };
+  let thrown;
+  try {
+    failureShape(fabricated, registries);
+  } catch (error) {
+    thrown = error;
+  }
+  if (thrown === undefined) {
+    problems.push(
+      'failureShape returns a shape for a code no registry publishes rather than throwing, which is how the string "unknown" used to enter the baseline',
+    );
+  } else if (!thrown.message.includes('"forbidden-destination"') || !thrown.message.includes('RUNTIME_FAULT_CODES')) {
+    problems.push(`failureShape's throw does not name the unpublished code and the registry it is missing from: ${thrown.message}`);
+  }
+  return problems;
 }
 
 /**
@@ -160,7 +453,7 @@ function failureShape(error) {
  *
  * Every contract under test/contracts/ compiles, so without these the blocked
  * arm of this check never runs: `failureShape` would be reached by nothing, and
- * a structured channel that stopped carrying the reason would read as thirteen
+ * a structured channel that stopped carrying the reason would read as fourteen
  * passes. That is the failure mode this whole file exists to prevent, arriving
  * through the check rather than through the contracts.
  *
@@ -171,7 +464,7 @@ function failureShape(error) {
  * holding both characters RFC 6901 escapes), the array-index collapse the
  * baseline depends on, and the faults that carry no issue list at all.
  *
- * Every case runs against every contract, because all thirteen answer each one
+ * Every case runs against every contract, because all fourteen answer each one
  * identically today and a contract that stops doing so is worth hearing about.
  */
 const SEEDED_FAULTS = [
@@ -240,7 +533,7 @@ const SEEDED_FAULTS = [
  * A seed the compiler accepts is the loudest failure here: it means the mutation
  * stopped being a fault, so the case proves nothing about the channel any more.
  */
-function seededFaultProblems(compile, contracts, faultClasses) {
+function seededFaultProblems(compile, contracts, faultClasses, registries) {
   const problems = [];
   for (const contract of contracts) {
     const key = path.relative(CONTRACT_ROOT, contract);
@@ -270,7 +563,14 @@ function seededFaultProblems(compile, contracts, faultClasses) {
             fatal: `the compiler threw outside its declared classes on seeded fault "${id}" over ${key}: ${error.stack ?? error}`,
           };
         }
-        observed = failureShape(error);
+        try {
+          observed = failureShape(error, registries);
+        } catch (error_) {
+          // A code the package publishes in neither registry is the same class
+          // of finding as a throw outside the declared classes: the compiler's
+          // vocabulary moved, so nothing here can say what it refused.
+          return { problems, fatal: `seeded fault "${id}" over ${key}: ${error_.message}` };
+        }
       }
       if (!sameShape({ status: 'blocked', ...observed }, { status: 'blocked', ...expect })) {
         problems.push(`${key}: seeded fault "${id}" reported ${JSON.stringify(observed)}, expected ${JSON.stringify(expect)}`);
@@ -297,6 +597,12 @@ function writeBaseline(observed) {
       'A contract whose status moves in either direction fails test/test-contracts.js. Moving to',
       '`compiles` is the good direction and still fails, on purpose: a baseline nobody has to update is',
       'a baseline nobody reads.',
+      '',
+      'Every contract here records `compiles`, so this fixture carries no failure code to check: the',
+      'comparison short-circuits on that status and never reaches a `code` field. The check that holds',
+      'every recovered code against the RUNTIME_FAULT_CODES and FAILURE_CODES eval-quality publishes',
+      'applies to codes recovered at runtime, from the seeded faults this check compiles on every run,',
+      'and it would apply to an entry here the day one of these contracts stops compiling.',
       '',
       'Regenerate with: node test/test-contracts.js --package <path to eval-quality dist/index.js> --write',
     ],
@@ -327,15 +633,28 @@ async function main(argv) {
   }
 
   const write = argv.includes('--write');
-  const evalQuality = await resolveCompiler(argv);
-  if (evalQuality === null) {
-    console.log(
-      `${colors.yellow}skipped${colors.reset}: eval-quality is not installed, so ${contracts.length} contract(s) went unchecked.`,
-    );
-    console.log(`${colors.dim}Install it, or pass --package <path to dist/index.js>. See test/contracts/README.md.${colors.reset}`);
-    return 0;
+  // Before the resolution, so the refusals are driven on every run including the
+  // one that regenerates the baseline. Exit 1: a refusal that stopped refusing
+  // is a defect in this file, which is a measured failure rather than an
+  // environment that could not answer.
+  const { problems: failClosed, driven } = await checkFailClosed(contracts.length);
+  if (failClosed.length > 0) {
+    for (const problem of failClosed) console.error(`${colors.red}CLOSED${colors.reset} ${problem}`);
+    console.error(`\n${colors.red}${failClosed.length} fail-closed path(s) no longer refuse the way this check records.${colors.reset}`);
+    return 1;
   }
-  const { compile, RuntimeFault, StructuralFailure } = evalQuality;
+  console.log(
+    `${colors.green}OK${colors.reset}   ${driven} refusal(s) drive the fail-closed path ${colors.dim}(a package this repository cannot compare exits 1; every other refusal exits 2 and names ${contracts.length} contract(s) unchecked)${colors.reset}`,
+  );
+
+  const resolution = await resolveCompiler(argv, contracts.length);
+  if (!resolution.ok) {
+    const [first, ...rest] = resolution.lines;
+    console.error(`${colors.red}${first}${colors.reset}`);
+    for (const line of rest) console.error(`${colors.dim}${line}${colors.reset}`);
+    return resolution.exitCode;
+  }
+  const { compile, RuntimeFault, StructuralFailure, RUNTIME_FAULT_CODES, FAILURE_CODES } = resolution.module;
   // A module that resolved and is missing any of the three is a path naming
   // something that is not this package, which is this check invoked wrongly.
   if ([compile, RuntimeFault, StructuralFailure].some((value) => typeof value !== 'function')) {
@@ -343,6 +662,22 @@ async function main(argv) {
     return 2;
   }
   const faultClasses = [RuntimeFault, StructuralFailure];
+  // Destructured beside the classes, from the one resolution, for the same
+  // reason the classes are: a code recovered from a fault thrown by this
+  // compiler is held against the registries this compiler publishes, and a local
+  // build whose registries have moved is exactly the case `--package` exists to
+  // find out about.
+  const registries = { RUNTIME_FAULT_CODES, FAILURE_CODES };
+
+  // Driven immediately, before anything real compiles: nothing below ever
+  // hands failureShape a code outside these registries, so this is the only
+  // place the "never becomes unknown" guarantee is actually exercised rather
+  // than assumed from a compile loop that can't produce the case.
+  const registryHold = checkFailureShapeHoldsRegistry(registries);
+  if (registryHold.length > 0) {
+    for (const problem of registryHold) console.error(`${colors.red}CLOSED${colors.reset} ${problem}`);
+    return 1;
+  }
 
   const expected = readBaseline();
   const observed = {};
@@ -380,7 +715,18 @@ async function main(argv) {
         console.error(`${colors.dim}${error.stack ?? error}${colors.reset}`);
         return 2;
       }
-      actual = { status: 'blocked', ...failureShape(error) };
+      try {
+        actual = { status: 'blocked', ...failureShape(error, registries) };
+      } catch (error_) {
+        // Exit 2 with the two lines above it. A code the compiler's own
+        // registries do not carry says nothing about this contract: the
+        // vocabulary moved, so the refusal cannot be recorded as a shape and
+        // recording it anyway is how the string `unknown` used to enter the
+        // baseline.
+        console.error(`${colors.red}the compiler refused ${key} with a code no published registry carries${colors.reset}`);
+        console.error(`${colors.dim}${error_.message}${colors.reset}`);
+        return 2;
+      }
     }
     observed[key] = actual;
 
@@ -396,7 +742,7 @@ async function main(argv) {
   // Before the write, because regenerating is what a reader does on the day
   // something moved, and a channel that stopped carrying the reason would
   // otherwise be recorded into the baseline by the same command.
-  const { problems: seeded, fatal } = seededFaultProblems(compile, contracts, faultClasses);
+  const { problems: seeded, fatal } = seededFaultProblems(compile, contracts, faultClasses, registries);
   if (fatal !== null) {
     console.error(`${colors.red}${fatal}${colors.reset}`);
     return 2;
@@ -447,4 +793,13 @@ if (require.main === module) {
     });
 }
 
-module.exports = { findContracts, resolveCompiler, failureShape, issueShape };
+module.exports = {
+  checkFailClosed,
+  checkFailureShapeHoldsRegistry,
+  findContracts,
+  offThePin,
+  resolveCompiler,
+  failureShape,
+  issueShape,
+  unresolvable,
+};

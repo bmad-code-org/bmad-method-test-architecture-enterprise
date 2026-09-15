@@ -81,6 +81,7 @@ const {
   sealedRunRecord,
   validateArtifact,
 } = require('./eval-quality-inputs');
+const { publishedMember } = require('./vocabularies');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
@@ -1161,7 +1162,7 @@ function collectingSink() {
  *
  * The leg count is worth holding because the sink is the only channel that
  * reports it. `PreflightVerdict` carries checks, and a check is not a leg: of
- * the 51 probes the stored corpus scores, 26 plan a number of legs that differs
+ * the 55 probes the stored corpus scores, 29 plan a number of legs that differs
  * from the number of checks their verdict reports.
  */
 function preflightDiagnostics(diagnostics, runId) {
@@ -1186,7 +1187,7 @@ function preflightDiagnostics(diagnostics, runId) {
  * quality failure and exit `2` as an environment that could not measure
  * anything, and a TEA check decides the first by baseline movement. Promoting
  * would give exit `1` a second meaning inside one repository, and it would take
- * `npm test` red today on the 32 CONCERNS the stored corpus scores, every one of
+ * `npm test` red today on the 33 CONCERNS the stored corpus scores, every one of
  * which the baseline already records as expected.
  *
  * The decision is declined rather than absent, and the field it turns on is read
@@ -1197,6 +1198,40 @@ function preflightDiagnostics(diagnostics, runId) {
 const STRICT_CONCERNS_PROMOTION = false;
 
 /**
+ * The verdict `--strict` promotes, as TEA spells it.
+ *
+ * A literal, and held against `VERDICTS` every time it is used. The spelling
+ * crosses the package boundary in both directions at once: it is TEA's word for
+ * a rung the package names, compared against a value the package produced. A
+ * transcribed literal that stops matching is silent in the worst possible way
+ * here, because the comparison simply goes false and every probe takes the
+ * ladder's own exit code, which is what the constant below already decides
+ * today. The promotion would be off with nothing saying so.
+ */
+const STRICT_PROMOTION_VERDICT = 'CONCERNS';
+
+/**
+ * One ladder resolution's verdict, held against the vocabulary the package
+ * publishes, with the one value that is deliberately outside it passed through.
+ *
+ * `null` is AD-21's Invalid rung and is not a `Verdict` member on purpose:
+ * `core/score/ladder.ts` records that a failed run "never becomes a contract
+ * verdict", and its exit code sits outside the verdict range the package's own
+ * CLI defines. 22 of the 55 probes this repository scores resolve there. So the
+ * check is a membership check over the four published rungs plus that one
+ * documented absence, and stating the absence here is what keeps it a decision
+ * rather than a hole the accessor was widened to fit.
+ *
+ * @param {{verdict: string|null}} ladder
+ * @param {string[]} verdicts `eval-quality`'s own `VERDICTS`.
+ * @returns {string|null}
+ */
+function ladderVerdict(ladder, verdicts) {
+  if (ladder.verdict === null) return null;
+  return publishedMember({ VERDICTS: verdicts }, ladder.verdict, "the ladder resolution's verdict");
+}
+
+/**
  * The exit code one ladder resolution carries for TEA.
  *
  * `LadderResolution.exitCode` is the rung's own code and CONCERNS's is `0`, so
@@ -1205,9 +1240,24 @@ const STRICT_CONCERNS_PROMOTION = false;
  * is carried through from the ladder rather than re-derived here, because the
  * package states that the ladder's field is the authority and that a locally
  * invented `evidenceConditionsOnly` is the wrong shape to hold.
+ *
+ * `VERDICTS` is the caller's, from the barrel the caller already loaded, for the
+ * reason `test/lib/vocabularies.js` gives: the registry has to come from the
+ * resolution that produced the value, and making this function asynchronous to
+ * fetch one itself would push an `await` into every row of two baselines.
+ *
+ * Both sides of the comparison are held. `ladder.verdict` is a value the package
+ * minted, so a rung outside the published set is a vocabulary that grew and a
+ * resolution TEA cannot place. `STRICT_PROMOTION_VERDICT` is TEA's own
+ * transcription, so a rename upstream fails here rather than turning the
+ * comparison permanently false.
+ *
+ * @param {{verdict: string, exitCode: number, strictPromotable: boolean}} ladder
+ * @param {string[]} verdicts `eval-quality`'s own `VERDICTS`.
  */
-function ladderExitCode(ladder) {
-  if (ladder.verdict === 'CONCERNS' && STRICT_CONCERNS_PROMOTION && ladder.strictPromotable) return 1;
+function ladderExitCode(ladder, verdicts) {
+  const promoted = publishedMember({ VERDICTS: verdicts }, STRICT_PROMOTION_VERDICT, 'the verdict TEA would promote under --strict');
+  if (ladderVerdict(ladder, verdicts) === promoted && STRICT_CONCERNS_PROMOTION && ladder.strictPromotable) return 1;
   return ladder.exitCode;
 }
 
@@ -1374,6 +1424,7 @@ module.exports = {
   collectingSink,
   corpusDigestOf,
   ladderExitCode,
+  ladderVerdict,
   preflightDiagnostics,
   preflightSuite,
   runSuite,

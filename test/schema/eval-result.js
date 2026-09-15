@@ -12,7 +12,9 @@
  * code is derived from it rather than chosen separately. An authentication
  * error, a timeout, a transport error, an unparseable reply, and a missing
  * artifact are environment failures: nothing was measured, so they exit 2 and
- * must never be reported as a lower score.
+ * must never be reported as a lower score. `unexpected-error` exits 2 for the
+ * same reason and says something different: the run was lost to a throw TEA
+ * cannot attribute to the environment at all.
  *
  * test/schema/eval-result.schema.json is generated from this file by
  * tools/validate-eval-schemas.js and checked for drift on every `npm test`.
@@ -33,6 +35,17 @@ const SCHEMA_VERSION = '1.1.0';
  * index, so the order is the policy: an environment failure always outranks a
  * measured quality failure, because a run that could not measure has nothing to
  * say about quality.
+ *
+ * `unexpected-error` is last, and it is the one class that is not a statement
+ * about the environment. It is what `failureClassForFault` answers for a throw
+ * that is neither of `eval-quality`'s two declared fault classes: an ordinary
+ * Node error, a `TypeError` from TEA's own code, anything the port was never
+ * supposed to raise. Every `environment-*` class names a way a run can honestly
+ * be lost, and filing a defect in TEA under one of them is how a broken
+ * environment came to read as a package transport fault for as long as
+ * `failureClassForFault` narrowed on `error?.code`. It outranks the environment
+ * classes because a failure nobody can attribute is the one a reader has to look
+ * at first, and it exits 2 with them because nothing was measured either way.
  */
 const FAILURE_CLASSES = [
   'none',
@@ -44,6 +57,7 @@ const FAILURE_CLASSES = [
   'environment-transport',
   'environment-authentication',
   'environment-configuration',
+  'unexpected-error',
 ];
 
 // live spends model calls; the other two validate data or readiness and measure
@@ -182,7 +196,9 @@ const evalRunSchema = z
 
 /**
  * The exit code a failure class carries: 0 thresholds met, 1 measured quality
- * failure, 2 the environment could not measure.
+ * failure, 2 nothing was measured. The third covers both the `environment-*`
+ * classes and `unexpected-error`, which differ in what a reader should go and
+ * look at rather than in whether a score exists.
  *
  * @param {string} failureClass One of FAILURE_CLASSES.
  * @returns {0|1|2}

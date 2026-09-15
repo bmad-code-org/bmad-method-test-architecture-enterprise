@@ -30,12 +30,19 @@
  *   TEA check that reads its expected count from that registry, or recorded
  *   here with the reason no check runs it, which is either planned adoption or a
  *   decline. An arm in neither fails, naming it.
+ * - Every member of the five published code vocabularies TEA recognises is held
+ *   against the registry that publishes it, and the three registries TEA reads
+ *   exhaustively are held in the other direction too: a member the package adds
+ *   fails here rather than falling quietly to a default branch.
  *
  * Usage: node test/test-port-totality.js
  *
  * Exit codes:
  *   0  every vocabulary is covered
- *   1  a member or an arm is handled by nothing and declined by nothing
+ *   1  a member, an arm or a published code is handled by nothing and declined
+ *      by nothing, or a ledger entry here has gone stale
+ *   2  the package could not be imported, or it publishes a registry in a shape
+ *      this check cannot read, so nothing about TEA's branches was measured
  */
 
 'use strict';
@@ -43,10 +50,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const { probeObservation } = require('./lib/eval-quality-inputs');
+const { loadEvalQuality, probeObservation } = require('./lib/eval-quality-inputs');
 const { cliObservation, probeRequest } = require('./lib/probe-targets');
 
 const { expectedOutcomeCount } = require('./lib/conformance-counts');
+const { publishedMember } = require('./lib/vocabularies');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -109,6 +117,131 @@ const CONFORMANCE_ARMS = {
 };
 
 /**
+ * The five code vocabularies `eval-quality` publishes off its root barrel, and
+ * how TEA reads each one.
+ *
+ * TEA recognised members of all five by transcription. No file in this
+ * repository referenced `FAILURE_CODES`, `RUNTIME_FAULT_CODES`,
+ * `QUALIFICATION_FAILURES`, `VERDICTS` or `EVALUATOR_RECOMMENDATIONS`, so every
+ * one of these strings was a literal somebody had copied, and a code renamed
+ * upstream stopped matching in silence: a fault classification fell to its
+ * default branch, a recorded code became the string `unknown`, and each check
+ * stayed green over a vocabulary that had moved.
+ *
+ * `reading` is the difference between the two halves of this ledger, and it is a
+ * statement about TEA rather than about the package.
+ *
+ * `exhaustive` means TEA's reading of the registry is a decision over the whole
+ * vocabulary, so every published member is listed here with what TEA does about
+ * it. Those are held in both directions: a member TEA lists that the package
+ * stopped publishing is a stale entry, and a member the package publishes that
+ * this ledger does not list fails, naming it. That second direction is the one
+ * worth having on `RUNTIME_FAULT_CODES` in particular, because a new fault code
+ * added upstream would otherwise land on `failureClassForFault`'s default class
+ * with nothing saying a new code had arrived.
+ *
+ * `recovered` means TEA names no member in advance: it reads whatever code the
+ * package hands back at runtime and records it. Listing all 26 `FAILURE_CODES`
+ * or all 20 `QUALIFICATION_FAILURES` here with a sentence each would be 46
+ * sentences nobody wrote for a reason, which is decoration rather than coverage.
+ * What is held instead is that the named check reads the registry off the
+ * package and puts every value through `publishedMember`, on a live source line,
+ * plus the forward direction over whatever members TEA does happen to name.
+ *
+ * Each member entry carries a `note` saying what TEA does with it, and a `file`
+ * when TEA names that member in its own source. A `file` is held against the
+ * source: a member this ledger says TEA names, that the named file no longer
+ * mentions, is an entry describing code that has gone.
+ */
+const PACKAGE_VOCABULARIES = {
+  RUNTIME_FAULT_CODES: {
+    reading: 'exhaustive',
+    note: 'test/lib/probe-targets.js classifies every fault the probe port throws, so the whole registry is a decision TEA has taken.',
+    members: {
+      'schema-parse-failure': {
+        file: 'test/lib/probe-targets.js',
+        note: 'environment-parser: the port was handed or produced something it could not read',
+      },
+      'schema-version-mismatch': {
+        file: 'test/test-contracts.js',
+        note: 'seeded into every contract, where the compiler must answer it with no issue list; out of the probe port it falls to the default transport class',
+      },
+      'non-canonicalizable-value': {
+        note: 'falls to the default transport class. Nothing TEA sends through the probe port asks the package to canonicalize a value, so no branch would have a reader',
+      },
+      'digest-mismatch': {
+        note: 'falls to the default transport class. TEA digests through digestArtifact and digestBytes and compares the results itself, so a mismatch is a finding in the check that compared them',
+      },
+      'budget-exhausted': {
+        file: 'test/lib/probe-targets.js',
+        note: 'splits on its own detail: a wall clock is environment-timeout and an output cap is environment-transport, because a run killed for printing too much is not a slow run',
+      },
+      'port-failure': {
+        file: 'test/test-probe-targets.js',
+        note: 'the default class, environment-transport, driven by name in the classification table so the default is asserted rather than assumed',
+      },
+      'port-contract-violation': {
+        file: 'test/lib/probe-targets.js',
+        note: 'environment-parser: the port answered outside its own contract',
+      },
+      'forbidden-target': {
+        file: 'test/lib/probe-targets.js',
+        note: 'environment-configuration: the policy denied the target before a process started',
+      },
+      aborted: { file: 'test/lib/probe-targets.js', note: 'environment-timeout: the caller abandoned the call' },
+      'operator-cannot-accept-operand': {
+        note: 'falls to the default transport class. It is raised by the evaluator over an oracle operand rather than by the probe port, and test/test-contract-oracles.js reads what the evaluator reports rather than catching a fault',
+      },
+    },
+  },
+  FAILURE_CODES: {
+    reading: 'recovered',
+    heldBy: ['test/test-contracts.js', 'test/lib/probe-targets.js'],
+    note: 'The compile-time registry. test/test-contracts.js recovers a code from whatever the compiler refuses; test/lib/probe-targets.js recovers one off a StructuralFailure the probe port throws. Both record a recovered value rather than branch on a list, so the check is over recovered values in either file.',
+    members: {
+      'unreachable-check-evidence': {
+        file: 'test/test-contracts.js',
+        note: 'the one code TEA names in advance: the seeded duplicated interface declaration must be refused with it',
+      },
+    },
+  },
+  QUALIFICATION_FAILURES: {
+    reading: 'recovered',
+    heldBy: 'test/test-probe-corpus.js',
+    note: "AD-9's gate reasons. TEA records whichever ones fired into test/probes/expected-strength.json and branches on none of them, because a rejected probe reads the same whichever reason fired.",
+    members: {},
+  },
+  VERDICTS: {
+    reading: 'exhaustive',
+    note: "The ladder's four rungs. TEA compares against one of them and takes the ladder's own exit code for the rest, so the whole set is a decision.",
+    members: {
+      PASS: {
+        note: "no TEA literal: a resolution at this rung takes the ladder's own exit code. The PASS that test/eval-trace.js derives and cli/test-review.js prints is TEA's own gate vocabulary and is deliberately not bound here",
+      },
+      WAIVED: {
+        note: "no TEA literal, and deriveGate never produces one. The WAIVED: that cli/test-review.js prints is TEA's own word for a waived finding and is never this rung",
+      },
+      CONCERNS: {
+        file: 'test/lib/probe-scoring.js',
+        note: 'the one rung --strict would promote to exit 1. STRICT_PROMOTION_VERDICT holds the literal and ladderExitCode holds the resolution against it',
+      },
+      FAIL: { note: "no TEA literal: a resolution at this rung takes the ladder's own exit code, the same as PASS" },
+    },
+  },
+  EVALUATOR_RECOMMENDATIONS: {
+    reading: 'exhaustive',
+    note: "The three values a sealed run record may carry. sealed-run-record.schema.json enums the field and validateArtifact runs over every record TEA builds, so the values are already held by the package's own published schema and are not routed through publishedMember a second time.",
+    members: {
+      PASS: { file: 'test/lib/probe-scoring.js', note: "authored on the record for a leg TEA's scorer found clean" },
+      CONCERNS: { file: 'test/lib/probe-scoring.js', note: "authored when TEA's scorer reported findings against the leg" },
+      FAIL: {
+        note: "TEA's scorer never recommends FAIL. It reports findings and leaves the rung to the ladder, which is what mode 'contract-scoring' means on the record",
+      },
+    },
+  },
+};
+
+/**
  * The tagged members of one published union parser, read off the parser itself.
  *
  * Every option has to decode. An option whose `kind` tag this cannot read is
@@ -139,6 +272,38 @@ function unionMembers(parser) {
     );
   }
   return [...members].sort();
+}
+
+/**
+ * One TEA source file's lines with the comment-only ones dropped.
+ *
+ * Live source only, because a commented-out read satisfies a grep while the
+ * thing beside it is a transcribed literal. This is the same filter the
+ * conformance-arm check has always applied, lifted out so the vocabulary ledger
+ * below reads the tree the same way rather than growing a second spelling of it.
+ *
+ * @param {string} file Repository-relative.
+ * @returns {string[]}
+ */
+function liveSourceLines(file) {
+  return fs
+    .readFileSync(path.join(PROJECT_ROOT, file), 'utf8')
+    .split('\n')
+    .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line));
+}
+
+/**
+ * A regular expression matching one vocabulary member written as a string
+ * literal, in any of the three quotes JavaScript has.
+ *
+ * The member is escaped because it comes from the package: every published code
+ * is metacharacter-free today and a future one carrying a dot would otherwise
+ * match more than itself. That is the same care the conformance-arm regex takes,
+ * for the same reason.
+ */
+function quotedLiteral(member) {
+  const escaped = member.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+  return new RegExp(String.raw`['"` + '`' + String.raw`]` + escaped + String.raw`['"` + '`' + String.raw`]`);
 }
 
 let failures = 0;
@@ -180,18 +345,130 @@ function checkUnion(name, members) {
   }
 }
 
+/**
+ * Every code vocabulary, held against the package in whichever directions its
+ * `reading` makes meaningful.
+ *
+ * The forward direction runs through `publishedMember` rather than a bare
+ * `includes`, deliberately. It is the same function every membership check in
+ * this repository now calls, so this section is also the one place its behaviour
+ * over the real registries is executed: a `publishedMember` that stopped
+ * throwing would pass every `includes`-shaped test written against it and fail
+ * here, where the ledger's own members are the input.
+ *
+ * @param {Record<string, string[]>} registries The five registries off the root barrel.
+ */
+function checkVocabularies(registries) {
+  for (const [name, ledger] of Object.entries(PACKAGE_VOCABULARIES)) {
+    const published = registries[name];
+    console.log(`\n${name}: ${published.length} published, ${Object.keys(ledger.members).length} recognised by TEA (${ledger.reading})`);
+
+    for (const [member, entry] of Object.entries(ledger.members)) {
+      let thrown = null;
+      try {
+        publishedMember({ [name]: published }, member, `${name}'s "${member}", which this repository records TEA as recognising`);
+      } catch (error) {
+        thrown = error.message;
+      }
+      assert(thrown === null, `${name} still publishes the "${member}" member TEA recognises`, thrown ?? '');
+      // The note is the value of the ledger. An entry carrying none records that
+      // somebody noticed the code, which is not the same as deciding it.
+      assert(
+        typeof entry.note === 'string' && entry.note.length > 0,
+        `${name}'s "${member}" entry records what TEA does with it`,
+        'an entry with no note is a code nobody decided about',
+      );
+      if (entry.file === undefined) continue;
+      assert(
+        liveSourceLines(entry.file).some((line) => quotedLiteral(member).test(line)),
+        `${entry.file} still names ${name}'s "${member}" member`,
+        'this entry says TEA names the member in that file; a file that no longer does leaves an entry describing code that has gone',
+      );
+    }
+
+    // Two readings and no third. A `reading` this does not recognise would
+    // otherwise fall to the recovered branch below and read `heldBy` as a file
+    // path, which is an EISDIR on the repository root rather than a finding.
+    assert(
+      ledger.reading === 'exhaustive' || ledger.reading === 'recovered',
+      `${name} records how TEA reads it`,
+      `reading is ${JSON.stringify(ledger.reading)}, and a registry is either read exhaustively or recovered at runtime`,
+    );
+
+    if (ledger.reading === 'exhaustive') {
+      for (const member of published) {
+        assert(
+          Object.hasOwn(ledger.members, member),
+          `${name}'s "${member}" member is recorded`,
+          'the package publishes a code this ledger says nothing about; branch on it in the file that reads the registry, or record here what TEA does with it instead',
+        );
+      }
+      continue;
+    }
+
+    // A recovered vocabulary has no member list to hold, so what is held is that
+    // every file this ledger names as a reader actually reads the registry off
+    // the package and puts what it recovers through the accessor. `heldBy` is a
+    // file path or an array of them, because `FAILURE_CODES` crosses the
+    // package boundary at two independent sites now: `test/test-contracts.js`
+    // recovers a code off a refused compile, and `test/lib/probe-targets.js`
+    // recovers one off a thrown `StructuralFailure`. A ledger naming only the
+    // first would leave the second's `publishedMember` call unheld, which is
+    // the same gap as not listing the registry at all, one reader short of it.
+    if (ledger.reading !== 'recovered') continue;
+    for (const file of [ledger.heldBy].flat()) {
+      const lines = liveSourceLines(file);
+      assert(
+        lines.some((line) => line.includes(name)),
+        `${file} reads ${name} off the package`,
+        'a check over recovered codes that never names the registry is holding them against nothing',
+      );
+      assert(
+        lines.some((line) => line.includes('publishedMember')),
+        `${file} puts what it recovers through publishedMember`,
+        'recording a recovered code without holding it is how the string "unknown" entered a baseline and stayed there',
+      );
+    }
+  }
+}
+
 async function main() {
   let probeParsers;
   let CONFORMANCE_OUTCOME_COUNTS;
+  let barrel;
   try {
     ({ probeParsers, CONFORMANCE_OUTCOME_COUNTS } = await import('eval-quality/conformance'));
+    // The root barrel, where the five code vocabularies live. A second subpath
+    // rather than a second copy: the ESM loader caches one namespace per
+    // resolved URL, so this is the same module every other reader in the tree
+    // holds.
+    barrel = await loadEvalQuality();
   } catch (error) {
     // Exit 2, the class every sibling check uses: a package that cannot be
     // imported measured nothing, and reporting that as "TEA's branches are not
     // total" files an environment fault as a quality failure.
-    console.error(`${colors.red}eval-quality/conformance could not be imported: ${error.message}${colors.reset}`);
+    console.error(`${colors.red}eval-quality could not be imported: ${error.message}${colors.reset}`);
     console.error(`${colors.dim}Run npm ci. Nothing about TEA's branches was measured.${colors.reset}`);
     return 2;
+  }
+
+  // Exit 2 rather than 1, for the reason the import arm takes it. A registry the
+  // package no longer publishes as a non-empty list of strings is a package
+  // whose shape moved, and every membership answer below would then be a
+  // statement about that rather than about TEA's coverage. `publishedMember`
+  // says the same thing per call; this says it once, before a hundred calls each
+  // report it.
+  const registries = {};
+  for (const name of Object.keys(PACKAGE_VOCABULARIES)) {
+    const published = barrel[name];
+    if (!Array.isArray(published) || published.length === 0 || published.some((member) => typeof member !== 'string')) {
+      console.error(`${colors.red}eval-quality publishes ${name} as ${JSON.stringify(published) ?? String(published)}${colors.reset}`);
+      console.error(
+        `${colors.dim}A registry that is not a non-empty list of codes cannot hold anything. Nothing about TEA's vocabularies was measured.${colors.reset}`,
+      );
+      return 2;
+    }
+    registries[name] = published;
   }
 
   const requestMembers = unionMembers(probeParsers.request);
@@ -306,11 +583,7 @@ async function main() {
     const escapedArm = arm.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
     const quoted = String.raw`['"` + '`' + String.raw`]` + escapedArm + String.raw`['"` + '`' + String.raw`]`;
     const readsThroughAccessor = new RegExp(String.raw`expectedOutcomeCount\(\s*CONFORMANCE_OUTCOME_COUNTS\s*,\s*` + quoted);
-    const reads = fs
-      .readFileSync(path.join(PROJECT_ROOT, entry.file), 'utf8')
-      .split('\n')
-      .filter((line) => !/^\s*(?:\/\/|\*|\/\*)/.test(line))
-      .some((line) => readsThroughAccessor.test(line));
+    const reads = liveSourceLines(entry.file).some((line) => readsThroughAccessor.test(line));
     assert(
       reads,
       `${entry.file} reads the "${arm}" expected count from the package through expectedOutcomeCount`,
@@ -373,12 +646,75 @@ async function main() {
     );
   }
 
+  checkVocabularies(registries);
+
+  // `publishedMember`'s four failures, driven rather than described, for the
+  // reason the four above are: a gate nobody has seen fire is a gate nobody has
+  // tested, and each of these exists for a day nobody will be looking for it.
+  //
+  // Each is a registry built here rather than a published one, because every
+  // published one is correct and cannot be made to produce any of them. There is
+  // deliberately no "the accessor returns the member" assertion beside them: the
+  // ledger above already calls it over every member TEA recognises, and a
+  // success path that returned the wrong string would fail there.
+  console.log('\nthe vocabulary accessor fails in four distinguishable ways');
+  const heldAgainst = (vocabularies, value) => {
+    try {
+      publishedMember(vocabularies, value, 'the value under test');
+      return null;
+    } catch (error) {
+      return error.message;
+    }
+  };
+
+  const unpublished = heldAgainst({ VERDICTS: registries.VERDICTS }, 'MOVED');
+  assert(
+    unpublished !== null &&
+      unpublished.includes('"MOVED"') &&
+      unpublished.includes('VERDICTS') &&
+      registries.VERDICTS.every((member) => unpublished.includes(member)),
+    'a value the registry does not publish fails with the vocabulary named, the value quoted and the published members listed',
+    unpublished ?? 'it returned instead of throwing',
+  );
+
+  const withdrawn = heldAgainst({ VERDICTS: undefined }, 'CONCERNS');
+  assert(
+    withdrawn !== null && withdrawn.includes('published no VERDICTS') && !withdrawn.includes('"CONCERNS"'),
+    'a registry the package no longer publishes names the registry rather than blaming the value',
+    withdrawn ?? 'it returned instead of throwing',
+  );
+
+  // The vacuity case, which is the one an `includes` over a registry cannot
+  // report: an emptied registry makes every membership check false, so a check
+  // that reported "not published" would send a reader to look at values that are
+  // fine, and a check written as `registry.every(...)` over nothing would pass.
+  const emptied = heldAgainst({ VERDICTS: [] }, 'CONCERNS');
+  assert(
+    emptied !== null && emptied.includes('with no members at all') && emptied.includes('VERDICTS'),
+    'a registry published with no members says so rather than reporting the value as unpublished',
+    emptied ?? 'it returned instead of throwing',
+  );
+
+  // Read off an object that does not carry the key, because that is the shape
+  // the case actually arrives in: a field the package stopped carrying, rather
+  // than somebody passing the word `undefined`.
+  const movedResolution = {};
+  const wrongShape = heldAgainst({ VERDICTS: registries.VERDICTS }, movedResolution.verdict);
+  assert(
+    wrongShape !== null && wrongShape.includes('not a string') && wrongShape.includes('VERDICTS'),
+    'a value that is not a string is the field having changed shape rather than the vocabulary having moved',
+    wrongShape ?? 'it returned instead of throwing',
+  );
+
+  const recognised = Object.values(PACKAGE_VOCABULARIES).reduce((total, ledger) => total + Object.keys(ledger.members).length, 0);
+
   if (failures > 0) {
     console.error(`\n${colors.red}${failures} totality check(s) failed.${colors.reset}`);
     return 1;
   }
   console.log(
-    `\n${colors.green}every member of both probe unions and all ${arms.length} published conformance arm(s) are accounted for.${colors.reset}`,
+    `\n${colors.green}every member of both probe unions, all ${arms.length} published conformance arm(s)` +
+      ` and all ${recognised} published code(s) TEA recognises across ${Object.keys(PACKAGE_VOCABULARIES).length} vocabularies are accounted for.${colors.reset}`,
   );
   return 0;
 }
@@ -393,4 +729,4 @@ if (require.main === module) {
   );
 }
 
-module.exports = { CONFORMANCE_ARMS, PROBE_KINDS, unionMembers };
+module.exports = { CONFORMANCE_ARMS, PACKAGE_VOCABULARIES, PROBE_KINDS, unionMembers };

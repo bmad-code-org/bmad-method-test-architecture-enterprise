@@ -38,8 +38,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const prettier = require('prettier');
 
-const { validateArtifact } = require('./lib/eval-quality-inputs');
-const { ladderExitCode, runSuite, storedProbePort, suites } = require('./lib/probe-scoring');
+const { loadEvalQuality, validateArtifact } = require('./lib/eval-quality-inputs');
+const { publishedMember } = require('./lib/vocabularies');
+const { ladderExitCode, ladderVerdict, runSuite, storedProbePort, suites } = require('./lib/probe-scoring');
 const { baselineDifferences, stagedWorkspaceFor } = require('./eval-contract-strength');
 const { digestTree, stageWorkspace } = require('./eval-trace');
 
@@ -65,14 +66,28 @@ function basisShapes(basis) {
  * whichever of the twenty reasons fired. `runScore` carries the closed set out
  * on `qualification`, so the baseline records which one it was and a rejection
  * that changes its reason shows up as a diff.
+ *
+ * Every code is held against `QUALIFICATION_FAILURES` before it reaches the
+ * baseline. The package publishes no JSON Schema over the qualification result,
+ * so nothing else in the chain reads these against the vocabulary they come
+ * from, and a code renamed upstream would be recorded here as a moved baseline
+ * entry: a reader would go looking for a rejection that changed its reason and
+ * find a rename. The throw says which it is.
+ *
+ * @param {{failures: {code: string}[]}} qualification
+ * @param {string[]} published `eval-quality`'s own `QUALIFICATION_FAILURES`.
  */
-function qualificationCodes(qualification) {
-  const codes = qualification.failures.map((failure) => failure.code).sort();
+function qualificationCodes(qualification, published) {
+  const codes = qualification.failures
+    .map((failure) =>
+      publishedMember({ QUALIFICATION_FAILURES: published }, failure.code, "a code the qualification gate's rejection carries"),
+    )
+    .sort();
   return codes.length === 0 ? null : codes;
 }
 
 /** One probe's result, small enough to read in a diff and complete enough to notice a change. */
-function probeSummary(entry) {
+function probeSummary(entry, registries) {
   const failedChecks = entry.preflight.checks.filter((check) => check.outcome === 'failed').map((check) => check.kind);
   return {
     probeClass: entry.probe.probeClass,
@@ -80,18 +95,18 @@ function probeSummary(entry) {
     behaviorId: entry.probe.behaviorId,
     preflight: entry.preflight.passed ? 'passed' : `failed: ${[...new Set(failedChecks)].sort().join(', ')}`,
     // Read from the diagnostic sink, which is the only channel that reports how
-    // many legs a pre-flight planned. It is not the check count: 26 of these 51
+    // many legs a pre-flight planned. It is not the check count: 29 of these 55
     // probes plan a number of legs that differs from the number of checks their
     // verdict carries.
     preflightLegs: entry.diagnostics.legs,
-    verdict: entry.result.ladder.verdict,
-    exitCode: ladderExitCode(entry.result.ladder),
+    verdict: ladderVerdict(entry.result.ladder, registries.VERDICTS),
+    exitCode: ladderExitCode(entry.result.ladder, registries.VERDICTS),
     // The ladder's own answer to whether `--strict` would promote this CONCERNS,
     // recorded whatever TEA decides to do with it, so the day a CONCERNS fires
     // only on AD-21's evidence conditions is the day this file moves.
     strictPromotable: entry.result.ladder.strictPromotable,
     basis: basisShapes(entry.result.ladder.basis),
-    qualification: qualificationCodes(entry.result.qualification),
+    qualification: qualificationCodes(entry.result.qualification, registries.QUALIFICATION_FAILURES),
     strength: entry.result.artifact?.strength?.vector ?? null,
   };
 }
@@ -133,13 +148,13 @@ function diagnosticProblems(suiteId, entry) {
  * credential and no model call. That is the same argument the staging check
  * below makes for the same file.
  */
-function liveShapedVerdicts(outcome) {
+function liveShapedVerdicts(outcome, registries) {
   return outcome.scored.map((entry) => ({
     probeId: entry.probe.probeId,
     passed: entry.preflight.passed,
-    preflight: entry.preflight.passed ? 'passed' : probeSummary(entry).preflight,
+    preflight: entry.preflight.passed ? 'passed' : probeSummary(entry, registries).preflight,
     preflightLegs: entry.diagnostics.legs,
-    verdict: entry.result.ladder.verdict,
+    verdict: ladderVerdict(entry.result.ladder, registries.VERDICTS),
   }));
 }
 
@@ -178,7 +193,7 @@ function comparatorProblems(results, baseline) {
   return problems;
 }
 
-function suiteSummary(outcome) {
+function suiteSummary(outcome, registries) {
   const gaps = outcome.scored
     .map((entry) => entry.result.artifact)
     .filter(Boolean)
@@ -193,13 +208,19 @@ function suiteSummary(outcome) {
     probeCount: outcome.scored.length,
     strength: outcome.strength,
     unsatisfiedCoverageRules: [...new Set(gaps)].sort(),
-    probes: Object.fromEntries(outcome.scored.map((entry) => [entry.probe.probeId, probeSummary(entry)])),
+    probes: Object.fromEntries(outcome.scored.map((entry) => [entry.probe.probeId, probeSummary(entry, registries)])),
   };
 }
 
 async function main() {
   const write = process.argv.slice(2).includes('--write');
   const signal = AbortSignal.timeout(600_000);
+  // The two vocabularies this file writes into the baseline, from the barrel the
+  // scoring run itself resolves. Neither is enumerated by a published JSON
+  // Schema over anything `runScore` returns, so this is the only place they are
+  // held against what the package publishes.
+  const { VERDICTS, QUALIFICATION_FAILURES } = await loadEvalQuality();
+  const registries = { VERDICTS, QUALIFICATION_FAILURES };
   const problems = [];
   const summary = {};
   const liveShaped = [];
@@ -221,8 +242,8 @@ async function main() {
     }
     for (const message of outcome.sealed.schemaProblems) problems.push(`${suite.id}: SealedEvaluatorBrief${message}`);
 
-    summary[suite.id] = suiteSummary(outcome);
-    liveShaped.push({ suiteId: suite.id, verdicts: liveShapedVerdicts(outcome) });
+    summary[suite.id] = suiteSummary(outcome, registries);
+    liveShaped.push({ suiteId: suite.id, verdicts: liveShapedVerdicts(outcome, registries) });
     const vector = outcome.strength;
     const rate = (entry) => (entry === null || entry.rate === null ? '  -  ' : `${(entry.rate * 100).toFixed(0).padStart(3)}%`);
     console.log(
