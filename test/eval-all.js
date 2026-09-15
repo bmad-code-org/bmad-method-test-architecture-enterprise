@@ -289,8 +289,11 @@ async function readChildRecord(invocation, options, exitStatus, durationMs) {
   if (invocation.jsonPath) {
     // The existence check that used to guard this read is gone: the read answers
     // absence, and a child that wrote no record falls through to the placeholder
-    // on that answer. Only the parse is caught, so a permission error is no
-    // longer reported as an unreadable record.
+    // on that answer. Everything else is reported rather than rethrown, because
+    // this is the path that folds a child's result into the run summary and a
+    // throw here would lose every other child's. `existsSync` answered false for
+    // a permission error too, so that case used to reach the placeholder in
+    // silence and is named now.
     const read = await readJson(invocation.jsonPath).catch((error) => {
       console.error(`eval:all: ${invocation.label} wrote an unreadable result record: ${error.message}`);
       return { present: false };

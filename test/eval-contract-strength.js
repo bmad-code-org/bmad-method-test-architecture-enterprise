@@ -213,7 +213,9 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  */
 async function stagedWorkspaceFor(suiteId, request) {
   if (suiteId === 'trace') {
-    const groundTruth = (await readJson(TRACE_GROUND_TRUTH)).value;
+    const read = await readJson(TRACE_GROUND_TRUTH);
+    if (!read.present) throw new Error(`${path.relative(PROJECT_ROOT, TRACE_GROUND_TRUTH)} is missing, so no trace leg can be staged`);
+    const groundTruth = read.value;
     const prompt = String(request?.channels?.stdin?.value ?? '');
     const set = groundTruth.fixtureSets.find((entry) => prompt.includes(`\`{project-root}\`: \`${entry.projectRoot}\``));
     if (set === undefined) {

@@ -679,7 +679,17 @@ function filesUnder(root) {
  */
 async function digestTree(root, relativePaths) {
   const parts = [];
-  for (const relative of relativePaths) parts.push(`${relative}\0${(await readText(path.join(root, relative))).text}`);
+  for (const relative of relativePaths) {
+    const read = await readText(path.join(root, relative));
+    // `fs.readFileSync` threw here and the behaviour is kept, named. Absence has
+    // to be loud: the alternative is decoding a null into the digest, so a file
+    // the walk found and the read did not would produce a digest that compares
+    // equal to nothing and reads as a mutation nobody can locate.
+    if (!read.present) {
+      throw new Error(`${relative} was listed under ${root} and could not be read, so the corpus digest cannot be taken`);
+    }
+    parts.push(`${relative}\0${read.text}`);
+  }
   return digest(parts.join('\u0001'));
 }
 

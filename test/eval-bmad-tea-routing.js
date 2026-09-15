@@ -854,7 +854,12 @@ async function caseIds() {
  */
 async function assertGroundTruthAbsent(prompts) {
   const problems = [];
-  const bytes = (await readText(GROUND_TRUTH)).text?.trim();
+  const read = await readText(GROUND_TRUTH);
+  // Absence is a problem rather than a skipped comparison. `fs.readFileSync`
+  // threw here, and the alternative under the port is searching every prompt for
+  // the string "undefined", which finds nothing and reports every prompt clean.
+  if (!read.present) return [`${path.relative(PROJECT_ROOT, GROUND_TRUTH)} is missing, so no prompt was checked against it`];
+  const bytes = read.text.trim();
   for (const { id, prompt } of prompts) {
     for (const key of GROUND_TRUTH_ONLY_KEYS) {
       if (prompt.includes(key)) problems.push(`${id}: its prompt carries the ground-truth-only key "${key}"`);
