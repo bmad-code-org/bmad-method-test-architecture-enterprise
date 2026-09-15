@@ -27,7 +27,15 @@
  * Nothing. Both files this module reads, the published schema behind `validator`
  * and the scoring policy behind `scoringPolicy`, go through
  * `test/lib/file-system-port.js`, which is why both and `validateArtifact` above
- * them are asynchronous.
+ * them are asynchronous. The six schema-version constants below are the one
+ * exception: they come from the installed npm package through `require`, never
+ * from a file this module reads itself, so they stay synchronous and the port
+ * plays no part in them.
+ *
+ * Every `schemaVersion` written here is the installed package's own, read from
+ * the constant it exports for that kind. `SCHEMA_VERSIONS` is the one table of
+ * the versions TEA writes, and `npm run test:schema-versions` holds every stamp
+ * TEA commits, in source and on disk, to it.
  */
 
 'use strict';
@@ -38,6 +46,28 @@ const AjvModule = require('ajv/dist/2020');
 
 const { readJson } = require('./file-system-port');
 
+// The version constants come in through `require`. `require(esm)` is stable on
+// every Node the engines field admits (>= 22.20.0), and the loader hands back the
+// same module instance `loadEvalQuality` imports, so the two readings cannot
+// disagree. This is a synchronous read of the installed package, never of a file
+// this module owns, so it takes no part in the file-system port above.
+//
+// The require is wrapped rather than left to throw, because this module is
+// required by callers that do not touch a schema version at all, among them
+// `test/test-contracts.js`, which resolves `eval-quality` itself and prints a
+// named skip for a tree installed with `--omit=dev`. An unguarded require here
+// reached `eval-quality` before that skip ever ran, turning a documented,
+// exit-0 skip into an uncaught `MODULE_NOT_FOUND` crash; reproduced by removing
+// `node_modules/eval-quality` and running `node test/test-contracts.js`. A
+// missing or broken package is instead reported the moment a caller actually
+// asks `expectedSchemaVersion` for a number, in `packageVersions` below.
+let packageVersions;
+try {
+  packageVersions = require('eval-quality');
+} catch {
+  packageVersions = null;
+}
+
 const Ajv = AjvModule.default ?? AjvModule;
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
@@ -45,26 +75,99 @@ const SCHEMA_ROOT = path.join(PROJECT_ROOT, 'node_modules', 'eval-quality', 'sch
 const POLICY_PATH = path.join(PROJECT_ROOT, 'test', 'probes', 'scoring-policy.json');
 
 /**
- * The `schemaVersion` each artifact this file builds carries.
+ * The `schemaVersion` of each artifact TEA writes, keyed by the basename of the
+ * schema `eval-quality` publishes for it, which is the key `validateArtifact`
+ * takes. Every value is the constant the installed package exports for that
+ * kind. Nothing here is stated.
  *
- * Stated rather than derived, because the published JSON Schemas declare
- * `schemaVersion` as a plain integer and name no accepted value; the package's
- * own readers throw `schema-version-mismatch` on a number they do not read. A
- * bump therefore arrives as a loud fault on the first run after an upgrade, which
- * is where a table like this is supposed to fail.
+ * Six kinds eval-quality publishes a schema for and TEA writes, and each has a
+ * reader. The three this file builds stamp through `expectedSchemaVersion`.
+ * `tools/generate-probes.js` and `tools/generate-contracts.js` read the probe
+ * and contract versions the same way, so the bytes they commit carry the
+ * package's number. The scoring policy at `test/probes/scoring-policy.json` is
+ * hand-authored, so `schemaVersionProblems` is what holds it. A kind TEA only
+ * receives has no entry until something reads one, which is Story 2.7's wiring
+ * beside the Ajv pass; an entry with no reader is a number nothing holds. TEA
+ * also stamps `suite-result` and `run-summary`, against its own
+ * `test/schema/eval-result.schema.json`; those are not eval-quality's to
+ * publish and carry no entry here.
  *
- * Three entries, one per artifact built below. It carried two more, `probe` and
- * `scoringPolicy`, which nothing read: the probe stamp that lands in bytes is
- * `tools/generate-probes.js`'s, and TEA's scoring policy is a file on disk. A
- * version stated in a second place is a version that drifts, and this table
- * drifted exactly that way on the upgrade to 3.0.0, where its record entry read
- * 3 against a parser that reads 6.
+ * It was a literal table, and it drifted the way a copied number does: on the
+ * upgrade to 3.0.0 its record entry read 3 against a parser that reads 6, and
+ * nothing said so until a `schema-version-mismatch` fault surfaced inside a
+ * scoring stage. `npm run test:schema-versions` now holds every stamp TEA
+ * writes to this table, and this table to the package.
+ *
+ * A value is `undefined` when `packageVersions` is `null` (the package could
+ * not be loaded) or when the installed package renamed the constant; either
+ * way `expectedSchemaVersion` refuses to hand the value back uninspected.
  */
-const SCHEMA_VERSIONS = {
-  sealedRunRecord: 6,
-  isolationManifest: 1,
-  evaluatorConfiguration: 1,
-};
+const SCHEMA_VERSIONS = Object.freeze({
+  'sealed-run-record': packageVersions?.SEALED_RUN_RECORD_SCHEMA_VERSION,
+  'isolation-manifest': packageVersions?.ISOLATION_MANIFEST_SCHEMA_VERSION,
+  'evaluator-configuration': packageVersions?.EVALUATOR_CONFIGURATION_SCHEMA_VERSION,
+  probe: packageVersions?.PROBE_SCHEMA_VERSION,
+  'eval-contract': packageVersions?.EVAL_CONTRACT_SCHEMA_VERSION,
+  'scoring-policy': packageVersions?.SCORING_POLICY_SCHEMA_VERSION,
+});
+
+/**
+ * The published kinds that carry no `schemaVersion` by design, each with the
+ * reason, so a caller asking for one is told why there is none.
+ */
+const UNSTAMPED_KINDS = Object.freeze({
+  'artifact-reference':
+    'it is a reference shape embedded inside other artifacts and never crosses the package boundary alone, so the package publishes it with no schemaVersion and no lineage',
+});
+
+/**
+ * The `schemaVersion` the installed package reads for one kind TEA writes.
+ *
+ * Throws on a kind with no stamp by design and on a kind TEA does not write,
+ * because both are caller bugs: the first would stamp a field the schema
+ * rejects, and the second would read `undefined` and stamp that. Also throws
+ * when the package could not be loaded or renamed the constant, rather than
+ * handing back `undefined`: a caller stamping with `undefined` writes valid
+ * JSON with the field missing, since `JSON.stringify` drops an `undefined`
+ * value, which is a worse failure than this one and a silent one.
+ *
+ * @param {string} kind The published schema basename, for example `probe`.
+ * @returns {number}
+ */
+function expectedSchemaVersion(kind) {
+  if (Object.hasOwn(UNSTAMPED_KINDS, kind)) throw new TypeError(`${kind} carries no schemaVersion by design: ${UNSTAMPED_KINDS[kind]}`);
+  if (!Object.hasOwn(SCHEMA_VERSIONS, kind)) {
+    throw new TypeError(`no schemaVersion is recorded for ${kind}; TEA writes ${Object.keys(SCHEMA_VERSIONS).join(', ')}`);
+  }
+  const value = SCHEMA_VERSIONS[kind];
+  if (!Number.isInteger(value) || value <= 0) {
+    if (packageVersions === null) throw new TypeError(`eval-quality could not be loaded, so no schemaVersion is available for ${kind}`);
+    throw new TypeError(`eval-quality exports no positive integer schemaVersion constant for ${kind}; read ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/**
+ * One artifact's stamp against the version the installed package reads for its
+ * kind.
+ *
+ * The message mirrors the package's own `schema-version-mismatch` fault, which
+ * reads `carries "schemaVersion" X where this build reads Y`, so a reader who has
+ * seen one has seen both. A wrong stamp is reported, because it is a finding
+ * about the artifact and the caller decides what a finding costs. A kind the
+ * table does not cover still throws, because that is a bug in the caller.
+ *
+ * @param {string} kind The published schema basename.
+ * @param {unknown} value
+ * @returns {string[]} Empty when the stamp agrees.
+ */
+function schemaVersionProblems(kind, value) {
+  const expected = expectedSchemaVersion(kind);
+  const found = value !== null && typeof value === 'object' ? value.schemaVersion : undefined;
+  if (found === expected) return [];
+  if (found === undefined) return [`${kind} carries no "schemaVersion" where this build reads ${expected}`];
+  return [`${kind} carries "schemaVersion" ${JSON.stringify(found)} where this build reads ${expected}`];
+}
 
 /** The seven forbidden inputs AD-16 makes an isolation manifest account for by name. */
 const FORBIDDEN_INPUTS = [
@@ -176,7 +279,7 @@ function evaluatorConfiguration({
   seed = null,
 }) {
   return {
-    schemaVersion: SCHEMA_VERSIONS.evaluatorConfiguration,
+    schemaVersion: expectedSchemaVersion('evaluator-configuration'),
     parentDigest: null,
     revisionCount: 0,
     sealedBriefDigest,
@@ -225,7 +328,7 @@ function isolationManifest({
   violation = null,
 }) {
   return {
-    schemaVersion: SCHEMA_VERSIONS.isolationManifest,
+    schemaVersion: expectedSchemaVersion('isolation-manifest'),
     parentDigest: null,
     revisionCount: 0,
     runId,
@@ -359,7 +462,7 @@ function sealedRunRecord({
   reportedIncomplete = false,
 }) {
   return {
-    schemaVersion: SCHEMA_VERSIONS.sealedRunRecord,
+    schemaVersion: expectedSchemaVersion('sealed-run-record'),
     parentDigest: null,
     revisionCount: 0,
     runId,
@@ -388,10 +491,12 @@ module.exports = {
   FORBIDDEN_INPUTS,
   SCHEMA_VERSIONS,
   evaluatorConfiguration,
+  expectedSchemaVersion,
   isolationManifest,
   loadEvalQuality,
   probeObservation,
   recordObservation,
+  schemaVersionProblems,
   scoringPolicy,
   sealedRunRecord,
   validateArtifact,

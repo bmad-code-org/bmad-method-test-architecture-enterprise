@@ -169,6 +169,9 @@ jobs:
       - name: Compile eval-quality's own published corpus against the pinned release
         run: npm run test:eval-quality-corpus
 
+      - name: Hold every schemaVersion TEA writes to the constant the installed eval-quality exports
+        run: npm run test:schema-versions
+
       - name: Check the eval contracts against the sources they are generated from
         run: npm run test:contract-sources
 
