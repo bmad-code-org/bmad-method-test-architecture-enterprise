@@ -29,6 +29,24 @@
  * the check `test/test-probe-targets.js` runs against the contracts: an
  * interface the contracts declare and this registry does not carry is an
  * executable nobody ships, and a contract naming one is fiction that compiles.
+ *
+ * NOTHING HERE MOVES TO THE FILE-SYSTEM PORT
+ *
+ * Story 3.6 converted every read of a file's contents in the eval harnesses to
+ * `test/lib/file-system-port.js`, and it converted nothing in this file, which is
+ * a decision rather than an omission.
+ *
+ * This module reads no file's contents at all. Its two `fs` calls sit together in
+ * `targetProblems`: an `existsSync` over a registered script, and a `statSync`
+ * whose mode bits decide whether the file carries its executable bit. The port
+ * declares `readFile` and `writeFile` and answers with bytes, so it cannot report
+ * a mode at all, and the `existsSync` is what lets the `statSync` be skipped for
+ * a script that is not there rather than throwing on it. Routing the first
+ * through the port would mean reading every byte of a CLI to learn a boolean and
+ * would still leave the second where it is.
+ *
+ * `targetProblems` therefore stays synchronous, which is what keeps its five
+ * callers unchanged.
  */
 
 'use strict';
