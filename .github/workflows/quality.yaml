@@ -273,6 +273,10 @@ jobs:
   # here rather than inside validate.
   supply-chain:
     runs-on: ubuntu-latest
+    # lockfile-age fetches publish metadata for every locked entry from the
+    # public npm registry; bound the worst case rather than letting a stalled
+    # request hold the runner until GitHub's own maximum job duration.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v5

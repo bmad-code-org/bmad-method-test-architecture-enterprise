@@ -79,6 +79,15 @@ const GATE_SCRIPTS = {
   'test:licences': 'licences',
 };
 
+/**
+ * `lockfile-age` is CI-only: it queries the public npm registry once per
+ * unique locked package name, and `npm test` runs on every local commit
+ * through the pre-commit hook, where a registry stall or outage has nothing to
+ * do with the change being committed. `licences` reads both lockfiles
+ * directly, makes no network call, and stays in the default chain.
+ */
+const CI_ONLY_SCRIPTS = new Set(['test:lockfile-age']);
+
 const colors = {
   reset: '[0m',
   red: '[31m',
@@ -164,7 +173,14 @@ function checkWiring(config) {
   for (const [script, gate] of Object.entries(GATE_SCRIPTS)) {
     const command = manifest.scripts?.[script];
     check(command === `${BINARY_NAME} ${gate}`, `scripts.${script} is ${JSON.stringify(command)}; expected "${BINARY_NAME} ${gate}"`);
-    check(isChainedIntoTest(manifest, script), `scripts.test does not chain npm run ${script}`);
+    if (CI_ONLY_SCRIPTS.has(script)) {
+      check(
+        !isChainedIntoTest(manifest, script),
+        `scripts.test chains npm run ${script}, which is meant to stay CI-only (see CI_ONLY_SCRIPTS)`,
+      );
+    } else {
+      check(isChainedIntoTest(manifest, script), `scripts.test does not chain npm run ${script}`);
+    }
     const section = config[gate];
     check(section !== undefined, `eval-quality.config.json has no "${gate}" section, so ${script} would refuse at exit ${EXIT_USAGE}`);
     const covered = Array.isArray(section?.lockfiles) ? section.lockfiles : [];
