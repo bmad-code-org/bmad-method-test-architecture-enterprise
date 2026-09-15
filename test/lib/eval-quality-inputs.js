@@ -328,6 +328,18 @@ function probeObservation({ legId, interfaceId, operationId, exitCode, stdout, s
  * `infrastructure-error` and invalidates the run. So a record paired with a probe
  * carries the findings attributed to that probe, and the observations it carries
  * are the ones the contract's oracles read.
+ *
+ * `evaluatorRecommendation` is a member of the package's own
+ * `EVALUATOR_RECOMMENDATIONS`, and it is deliberately not routed through
+ * `test/lib/vocabularies.js` the way the verdicts and the qualification codes
+ * are. `sealed-run-record.schema.json` declares the field as
+ * `$defs/EvaluatorRecommendation`, an enum of PASS, CONCERNS and FAIL, and
+ * `validateArtifact('sealed-run-record', ...)` runs over every record this
+ * repository builds on every `npm run test:probe-corpus`. The value is already
+ * held against the package's own published statement of the vocabulary, by the
+ * package's own schema, so a second membership check over it would report
+ * nothing the first does not. `test/test-port-totality.js` records the same
+ * decision beside the registry it belongs to.
  */
 function sealedRunRecord({
   runId,

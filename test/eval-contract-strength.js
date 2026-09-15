@@ -49,7 +49,7 @@
  * Exit codes are read against `test/probes/expected-strength.json`, the same
  * baseline the deterministic gate compares to: 0 when every probe reached the
  * outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome
- * or a pre-flight leg count moved. Fourteen of the 51 probes cannot be
+ * or a pre-flight leg count moved. Fourteen of the 55 probes cannot be
  * pre-flighted, all of them `test-design`'s, and the baseline says so, so a
  * failure here is news and the baseline is what says so.
  */
@@ -90,9 +90,17 @@ const path = require('node:path');
 
 const { digest, refuseScriptedRecord } = require('./lib/eval-record');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
-const { validateArtifact } = require('./lib/eval-quality-inputs');
+const { loadEvalQuality, validateArtifact } = require('./lib/eval-quality-inputs');
 const { cliObservation, createProbePort, readEnvironment } = require('./lib/probe-targets');
-const { collectingSink, ladderExitCode, preflightDiagnostics, runSuite, sealContract, suites } = require('./lib/probe-scoring');
+const {
+  collectingSink,
+  ladderExitCode,
+  ladderVerdict,
+  preflightDiagnostics,
+  runSuite,
+  sealContract,
+  suites,
+} = require('./lib/probe-scoring');
 const { readJson, writeText } = require('./lib/file-system-port');
 const { stageWorkspace, traceArtifactPaths } = require('./eval-trace');
 
@@ -469,6 +477,9 @@ async function runOneSuite(suite, options, stats) {
     modelSnapshot: 'stored-replay',
     signal: AbortSignal.timeout(60 * 60_000),
   });
+  // The published verdict vocabulary, from the barrel this run already resolved,
+  // because `ladderExitCode` holds both sides of its comparison against it.
+  const { VERDICTS } = await loadEvalQuality();
 
   const problems = [];
   for (const entry of outcome.scored) {
@@ -476,7 +487,7 @@ async function runOneSuite(suite, options, stats) {
     await writeArtifact(outDir, `preflight-${entry.probe.probeId}.json`, entry.preflight);
     if (entry.result.artifact !== null) await writeArtifact(outDir, `evidence-${entry.probe.probeId}.json`, entry.result.artifact);
     console.log(
-      `  ${entry.probe.probeId} ${entry.probe.probeClass.padEnd(11)} ${entry.diagnostics.legs ?? '?'} leg(s)  pre-flight ${entry.preflight.passed ? 'passed' : 'failed'}  verdict ${String(entry.result.ladder.verdict)} (exit ${ladderExitCode(entry.result.ladder)})`,
+      `  ${entry.probe.probeId} ${entry.probe.probeClass.padEnd(11)} ${entry.diagnostics.legs ?? '?'} leg(s)  pre-flight ${entry.preflight.passed ? 'passed' : 'failed'}  verdict ${String(ladderVerdict(entry.result.ladder, VERDICTS))} (exit ${ladderExitCode(entry.result.ladder, VERDICTS)})`,
     );
   }
   if (suiteStats.spawns > 0)
@@ -496,8 +507,8 @@ async function runOneSuite(suite, options, stats) {
       probeClass: entry.probe.probeClass,
       preflightPassed: entry.preflight.passed,
       preflightLegs: entry.diagnostics.legs,
-      verdict: entry.result.ladder.verdict,
-      exitCode: ladderExitCode(entry.result.ladder),
+      verdict: ladderVerdict(entry.result.ladder, VERDICTS),
+      exitCode: ladderExitCode(entry.result.ladder, VERDICTS),
       basis: entry.result.ladder.basis,
     })),
   });
@@ -516,8 +527,8 @@ async function runOneSuite(suite, options, stats) {
       passed: entry.preflight.passed,
       preflight: preflightOutcome(entry.preflight),
       preflightLegs: entry.diagnostics.legs,
-      verdict: entry.result.ladder.verdict,
-      exitCode: ladderExitCode(entry.result.ladder),
+      verdict: ladderVerdict(entry.result.ladder, VERDICTS),
+      exitCode: ladderExitCode(entry.result.ladder, VERDICTS),
     })),
   };
 }
@@ -536,7 +547,7 @@ function preflightOutcome(verdict) {
  * What this run measured, against what the corpus records it measures.
  *
  * The alternative was to exit 2 whenever any probe's pre-flight failed, which is
- * true of this corpus every time it runs: fourteen of its 51 probes cannot be
+ * true of this corpus every time it runs: fourteen of its 55 probes cannot be
  * pre-flighted, for reasons `docs/explanation/eval-quality-command-adapter.md`
  * records and no leg TEA can author repairs. A script that is red on every run
  * stops being read within a week, and then the day it means something is the day

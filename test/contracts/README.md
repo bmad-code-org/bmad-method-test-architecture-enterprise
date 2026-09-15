@@ -325,9 +325,24 @@ refuse it too, and its other oracles are left uncompared. An oracle that faults,
 contradicts the scorer, fails `npm test`. Nothing read an oracle before it, and the section above
 records what its first run found.
 
-The compile check resolves `eval-quality` from `node_modules` and skips with an explicit message when it is
-absent, so the deterministic gate stays credential-free and runs with no network. It never passes
-silently: a skip says it skipped.
+The compile check resolves `eval-quality` from `node_modules` and fails closed when it cannot, so the
+deterministic gate stays credential-free and runs with no network. It used to skip: an unresolvable
+package printed a yellow "skipped" and exited 0, which is a green check over fourteen contracts
+nobody looked at, and it was the only check in this repository that answered an absent package with
+a pass. An unresolvable package now exits 2 and says how many contracts went unchecked, and so does
+a tree resolving an `eval-quality` other than the version `package.json` pins, since fourteen
+contracts compiled against the wrong release are fourteen results about a package this repository
+does not declare. `--package` is exempt from the version comparison, because naming an unreleased
+local build is what the flag is for.
+
+Every contract here records `compiles`, so `expected-status.json` carries no failure code to check:
+the comparison short-circuits on that status and never reaches a `code` field. The check that holds
+every code against `eval-quality`'s `RUNTIME_FAULT_CODES` and `FAILURE_CODES` therefore applies to
+codes recovered at runtime, which is what the six seeded faults produce on every run, and it would
+apply to a recorded entry the day one of these contracts stops compiling. What it replaces is a
+`?? 'unknown'` fallback: a code the package stopped publishing was recorded as the string `unknown`,
+matched `unknown` on the next run, and the check stayed green over a compiler that had stopped
+saying what it refused.
 
 When the compiler is available, the check compares each contract against the status
 `expected-status.json` records for it. All fourteen contracts `compile` today. A baseline is what keeps a

@@ -32,7 +32,12 @@
  *    vendor is a stub, and the only assertions are about the plumbing.
  *
  * 4. **A killed run is classified, not scored.** A budget exhaustion comes back
- *    as an environment failure with a class, never as a measurement.
+ *    as an environment failure with a class, never as a measurement. The
+ *    classification table is driven with faults built from the package's own
+ *    exported classes, because the narrowing is `instanceof` and a plain object
+ *    carrying a `code` field would prove only that it reads a field. A Node
+ *    error carrying `ENOENT` is driven through the same narrowing and must come
+ *    back `unexpected-error`, which is the case the whole rewrite exists for.
  *
  * 5. **The behavioral harnesses run end to end against the stub.**
  *    `test/eval-trace.js` and `test/eval-test-design.js` are spawned the way an
@@ -66,6 +71,8 @@ const {
   commandTargetPolicy,
   createProbePort,
   failureClassForFault,
+  faultReason,
+  loadEvalQuality,
   observedText,
   permittedEnvironmentKeys,
   probeCommand,
@@ -1122,22 +1129,136 @@ async function checkBudgets(runDir) {
   );
   assert(elapsed < 30_000, 'the process is actually killed rather than waited out', `${elapsed}ms`);
 
-  // The classification table itself, over the four codes the port may throw.
-  assert(failureClassForFault({ code: 'forbidden-target' }) === 'environment-configuration', 'forbidden-target is a configuration failure');
+  // The classification table itself, over real faults.
+  //
+  // These were plain `{ code, detail }` literals, which is the whole defect this
+  // section now guards against: an object with a `code` field is not a package
+  // fault, and a table built from one asserts that the narrowing reads a field
+  // rather than that it recognises a class. Every fault below is constructed
+  // through the package's own exported class, from the root barrel this file
+  // imports, which is the same resolution `test/lib/probe-targets.js` narrows
+  // against. If it were not, every one of these would classify as
+  // `unexpected-error` and this section would fail rather than pass quietly.
+  const { RuntimeFault, StructuralFailure, RUNTIME_FAULT_CODES, FAILURE_CODES } = await loadEvalQuality();
+  const fault = (code, detail) => new RuntimeFault(code, 'CommandProbeRequest', detail);
   assert(
-    failureClassForFault({ code: 'budget-exhausted', detail: 'exceeded maxElapsedMs (10ms) and was killed' }) === 'environment-timeout',
+    (await failureClassForFault(fault('forbidden-target', 'no authorization names it'))) === 'environment-configuration',
+    'forbidden-target is a configuration failure',
+  );
+  assert(
+    (await failureClassForFault(fault('budget-exhausted', 'exceeded maxElapsedMs (10ms) and was killed'))) === 'environment-timeout',
     'a wall-clock budget exhaustion is a timeout',
   );
   assert(
-    failureClassForFault({ code: 'budget-exhausted', detail: 'stdout or stderr exceeded maxOutputBytes (10)' }) === 'environment-transport',
+    (await failureClassForFault(fault('budget-exhausted', 'stdout or stderr exceeded maxOutputBytes (10)'))) === 'environment-transport',
     'an output-cap exhaustion is a transport failure and not a slow run',
   );
-  assert(failureClassForFault({ code: 'aborted' }) === 'environment-timeout', 'an abort is a timeout');
-  assert(failureClassForFault({ code: 'port-failure' }) === 'environment-transport', 'a transport failure is a transport failure');
+  assert((await failureClassForFault(fault('aborted', 'the caller aborted'))) === 'environment-timeout', 'an abort is a timeout');
+  assert(
+    (await failureClassForFault(fault('port-failure', 'the mechanism threw'))) === 'environment-transport',
+    'a transport failure is a transport failure',
+  );
+  assert(
+    (await failureClassForFault(new StructuralFailure('unreachable-check-evidence', 'EvalContract', 'no observation reaches it'))) ===
+      'environment-configuration',
+    'a structural refusal of what TEA declared is a configuration failure',
+  );
+
+  // The case the rewrite exists for. A spawn that cannot find its executable
+  // throws a plain Node `Error` carrying `code: 'ENOENT'`, and the old narrowing
+  // read that code, matched none of its branches and answered
+  // `environment-transport`, which files a broken environment or a defect in TEA
+  // as a package transport fault. `EACCES` is the same shape through a different
+  // door: a target present and not executable.
+  for (const code of ['ENOENT', 'EACCES']) {
+    const nodeError = Object.assign(new Error(`spawn ${code}`), { code, syscall: 'spawn' });
+    const classified = await failureClassForFault(nodeError);
+    assert(
+      classified === 'unexpected-error',
+      `a Node error carrying code ${code} classifies as unexpected rather than as a package fault`,
+      classified,
+    );
+    assert(classified !== 'environment-transport', `a Node error carrying code ${code} is never a transport fault`, classified);
+    assert(
+      faultReason(nodeError, classified).includes("neither of eval-quality's declared fault classes"),
+      `the reason beside a ${code} says why it was not classified`,
+      faultReason(nodeError, classified),
+    );
+  }
+  // A code the package does not publish fails rather than falling to the default
+  // class. The fault is real and its code is not, which is the shape a rename
+  // upstream arrives in.
+  let renamed;
+  try {
+    await failureClassForFault(fault('forbidden-destination', 'a code from no registry'));
+  } catch (error) {
+    renamed = error;
+  }
+  assert(
+    renamed !== undefined &&
+      renamed.message.includes('"forbidden-destination"') &&
+      renamed.message.includes('RUNTIME_FAULT_CODES') &&
+      RUNTIME_FAULT_CODES.every((code) => renamed.message.includes(code)),
+    'a RuntimeFault code in no registry fails, naming the code and the registry it is missing from',
+    renamed?.message ?? 'it returned a class instead of throwing',
+  );
+  // The other declared class, held against its own registry rather than
+  // RuntimeFault's. failureClassForFault branches on FAILURE_CODES only in the
+  // StructuralFailure arm, and that arm was untested against a code in no
+  // registry until this case: the RuntimeFault case above proves nothing about
+  // it, since the two branches call publishedMember with two different
+  // registries.
+  let renamedStructural;
+  try {
+    await failureClassForFault(new StructuralFailure('excluded-content-in-declaration-typo', 'EvalContract', 'a code from no registry'));
+  } catch (error) {
+    renamedStructural = error;
+  }
+  assert(
+    renamedStructural !== undefined &&
+      renamedStructural.message.includes('"excluded-content-in-declaration-typo"') &&
+      renamedStructural.message.includes('FAILURE_CODES') &&
+      FAILURE_CODES.every((code) => renamedStructural.message.includes(code)),
+    'a StructuralFailure code in no registry fails, naming the code and the registry it is missing from',
+    renamedStructural?.message ?? 'it returned a class instead of throwing',
+  );
+
+  // The same fault through the live entry point rather than through
+  // `failureClassForFault` directly. Every harness above `probeCommand` loops
+  // over runs and fixture sets with no `catch` around a probe call, so a
+  // vocabulary-drift throw reaching this point would abort every run still
+  // queued and discard every result a paid live invocation had already
+  // collected. `probeCommand` is the one seam that catches it and reports a
+  // lost run instead, which is the same invariant every other fault in this
+  // section already satisfies.
+  const unpublishedCodePort = {
+    probe: async () => {
+      throw fault('forbidden-destination', 'a code from no registry');
+    },
+  };
+  const throughProbeCommand = await probeCommand(
+    unpublishedCodePort,
+    probeRequest({ probeId: 'vocabulary-drift', interfaceId: 'tea-fragment-selection-runner', operationId: 'select-fragments' }),
+    new AbortController().signal,
+  );
+  assert(
+    !throughProbeCommand.ok && throughProbeCommand.failureClass === 'unexpected-error',
+    'probeCommand reports a code in no registry as a lost run rather than throwing',
+    JSON.stringify(throughProbeCommand),
+  );
+  assert(
+    typeof throughProbeCommand.reason === 'string' &&
+      throughProbeCommand.reason.includes('"forbidden-destination"') &&
+      throughProbeCommand.reason.includes('RUNTIME_FAULT_CODES'),
+    "probeCommand's reason still names the code and the registry it is missing from",
+    throughProbeCommand.reason,
+  );
+
   for (const failureClass of Object.keys(EXIT_CODES)) {
     if (failureClass === 'usage') continue;
     assert(FAILURE_CLASSES.includes(failureClass), `${failureClass} is a declared TEA failure class`);
   }
+  assert(FAILURE_CLASSES.includes('unexpected-error'), 'unexpected-error is a declared TEA failure class');
 }
 
 // ---------------------------------------------------------------------------

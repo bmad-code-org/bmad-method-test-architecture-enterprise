@@ -9,6 +9,12 @@
     "`compiles` is the good direction and still fails, on purpose: a baseline nobody has to update is",
     "a baseline nobody reads.",
     "",
+    "Every contract here records `compiles`, so this fixture carries no failure code to check: the",
+    "comparison short-circuits on that status and never reaches a `code` field. The check that holds",
+    "every recovered code against the RUNTIME_FAULT_CODES and FAILURE_CODES eval-quality publishes",
+    "applies to codes recovered at runtime, from the seeded faults this check compiles on every run,",
+    "and it would apply to an entry here the day one of these contracts stops compiling.",
+    "",
     "Regenerate with: node test/test-contracts.js --package <path to eval-quality dist/index.js> --write"
   ],
   "contracts": {

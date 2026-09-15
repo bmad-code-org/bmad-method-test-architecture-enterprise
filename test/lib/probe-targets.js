@@ -55,6 +55,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { vendorEnvironmentNames } = require('../../cli/lib/runner-exit-codes');
+const { loadEvalQuality } = require('./eval-quality-inputs');
+const { publishedMember } = require('./vocabularies');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
@@ -367,6 +369,28 @@ async function loadAdapters() {
   return import('eval-quality/adapters');
 }
 
+// `loadEvalQuality`, imported above from `./eval-quality-inputs`, is the root
+// barrel that is where the fault classes and the code registries live: a
+// second load beside `loadAdapters` because they are two subpaths, and
+// `eval-quality/adapters` publishes `createCommandLineAdapter` and does not
+// publish `RuntimeFault`, `StructuralFailure` or `RUNTIME_FAULT_CODES`.
+//
+// It was a second definition here, byte-identical to the one every other
+// caller of the root barrel already imports, until this comment replaced it:
+// two functions of the same name and the same one-line body are one function
+// that has not been noticed yet.
+//
+// The identity discipline matters more than which file the loader lives in.
+// `instanceof` is false across two copies of a package, so the classes a
+// narrowing tests against and the error it tests have to come from one
+// resolution. Every root-barrel reach in this repository is this same
+// `import('eval-quality')` specifier resolved from this same tree, and the
+// ESM loader caches a module namespace per resolved URL, so the class this
+// import hands back is the class the adapter threw with.
+// `test/test-probe-targets.js` holds that rather than assuming it: it
+// constructs a fault from its own import and drives it through
+// `failureClassForFault`.
+
 /**
  * The environment-probe port over TEA's commands.
  *
@@ -381,23 +405,96 @@ async function createProbePort(options) {
 /**
  * One thrown probe fault, as a TEA failure class.
  *
- * The codes branched on here are a policy denial, a cap, an abort, and the two
- * that mean the port itself was handed or produced something it could not read;
- * every other code in the package's registry, and every fault carrying none,
- * falls to a transport failure. None of them is a measured quality result, which
+ * NARROWED BY CLASS, NOT BY SHAPE
+ *
+ * This read `error?.code` and branched on the string it found, which made every
+ * error carrying a `code` field a package fault. Node puts a `code` on almost
+ * everything it throws: a spawn that cannot find its executable is `ENOENT`, a
+ * script without the execute bit is `EACCES`, a socket that goes away is
+ * `EPIPE`. Each of those walked the whole table, matched nothing, and landed on
+ * the default, so a broken environment and a defect in TEA were both filed as a
+ * package transport fault. Nothing downstream could tell them apart, and the
+ * transport class is the one that reads as "the port had a bad day", which is
+ * the most forgivable thing any of them could have been.
+ *
+ * `RuntimeFault` and `StructuralFailure` are exported classes, so the question
+ * has an exact answer and `instanceof` asks it. Both extend `Error` directly and
+ * neither extends the other, so the two are named individually: `instanceof
+ * Error` separates neither of them from a Node error. Anything that is neither
+ * is `unexpected-error`, which is a class of its own precisely so it cannot be
+ * mistaken for a run the environment lost.
+ *
+ * WHAT THE CODE IS THEN HELD AGAINST
+ *
+ * A `RuntimeFault`'s code is a member of `RUNTIME_FAULT_CODES` and a
+ * `StructuralFailure`'s is a member of `FAILURE_CODES`, and each is held against
+ * its own registry before it is branched on. Membership is what makes a rename
+ * loud: without it a code that moved upstream falls quietly to the default class
+ * below, which is the same silence `error?.code` produced, one layer in.
+ *
+ * The codes branched on are a policy denial, a cap, an abort, and the two that
+ * mean the port itself was handed or produced something it could not read. Every
+ * other published runtime fault code falls to a transport failure, which
+ * `test/test-port-totality.js` records code by code so the fall-through is a
+ * decision rather than a gap. None of these is a measured quality result, which
  * is the distinction every harness here already draws: a failed call must never
- * report as a low score. `budget-exhausted` splits on its own detail because the same
- * code covers a wall clock and an output cap, and a run killed for printing too
- * much is not a slow run.
+ * report as a low score. `budget-exhausted` splits on its own detail because the
+ * same code covers a wall clock and an output cap, and a run killed for printing
+ * too much is not a slow run.
+ *
+ * A `StructuralFailure` out of the port is TEA having declared something the
+ * package refuses structurally, which is the same finding as `forbidden-target`
+ * one layer up, so it carries the same class.
+ *
+ * @param {unknown} error
+ * @returns {Promise<string>} A member of `FAILURE_CLASSES` in `test/schema/eval-result.js`.
  */
-function failureClassForFault(error) {
-  const code = error?.code;
-  const detail = String(error?.detail ?? error?.message ?? '');
+async function failureClassForFault(error) {
+  const { RuntimeFault, StructuralFailure, RUNTIME_FAULT_CODES, FAILURE_CODES } = await loadEvalQuality();
+  if (error instanceof StructuralFailure) {
+    // Held for the throw rather than for the value: every structural refusal
+    // carries the same class, and what this catches is the day one arrives
+    // carrying a code the compile-time registry no longer publishes.
+    publishedMember({ FAILURE_CODES }, error.code, 'the code the StructuralFailure the port threw carries');
+    return 'environment-configuration';
+  }
+  if (!(error instanceof RuntimeFault)) return 'unexpected-error';
+  const code = publishedMember({ RUNTIME_FAULT_CODES }, error.code, 'the code the RuntimeFault the port threw carries');
+  // `RuntimeFault` exposes no `detail` field: its constructor takes one and
+  // folds it into `message` as `${code} in ${artifactPath}: ${detail}` and
+  // nothing else, confirmed against the installed package's own class, so
+  // `error.detail` is always undefined here and `message` is what every
+  // branch below actually reads. The `?? error.message` half is load-bearing;
+  // the `error.detail ??` half is a defensive read for a shape this package
+  // does not produce today.
+  const detail = String(error.detail ?? error.message ?? '');
   if (code === 'forbidden-target') return 'environment-configuration';
   if (code === 'aborted') return 'environment-timeout';
   if (code === 'budget-exhausted') return /maxElapsedMs/.test(detail) ? 'environment-timeout' : 'environment-transport';
   if (code === 'schema-parse-failure' || code === 'port-contract-violation') return 'environment-parser';
   return 'environment-transport';
+}
+
+/**
+ * The one-line reason beside the class, in the vocabulary the class was decided
+ * in.
+ *
+ * Split from the classification because the two used to disagree. `reason` was
+ * built from `error?.code` whatever the error was, so an `ENOENT` printed as
+ * `ENOENT: spawn ...` beside a package failure class, which reads as a package
+ * fault code nobody can find in the registry. An `unexpected-error` names the
+ * constructor instead, because the constructor is the finding: this is not one
+ * of the two classes the port declares.
+ *
+ * @param {unknown} error
+ * @param {string} failureClass The class `failureClassForFault` answered.
+ * @returns {string}
+ */
+function faultReason(error, failureClass) {
+  const message = error?.detail ?? error?.message ?? String(error);
+  if (failureClass !== 'unexpected-error') return `${error?.code}: ${message}`;
+  const code = error?.code === undefined ? '' : ` carrying code ${JSON.stringify(error.code)}`;
+  return `${error?.constructor?.name ?? 'Error'}${code}, which is neither of eval-quality's declared fault classes: ${message}`;
 }
 
 /**
@@ -474,11 +571,32 @@ async function probeCommand(port, request, signal) {
   try {
     observation = await port.probe(request, signal);
   } catch (error) {
-    return {
-      ok: false,
-      failureClass: failureClassForFault(error),
-      reason: `${error?.code ?? 'error'}: ${error?.detail ?? error?.message ?? String(error)}`,
-    };
+    let failureClass;
+    let reason;
+    try {
+      failureClass = await failureClassForFault(error);
+      reason = faultReason(error, failureClass);
+    } catch (vocabularyError) {
+      // `failureClassForFault` refuses to classify a code its own registry
+      // does not publish, by throwing rather than by falling to a default
+      // class: that is the loud failure this whole rewrite exists to produce.
+      // Letting the throw reach here and propagate further would be loud in
+      // the wrong place. Every live harness above this function loops over
+      // runs and fixture sets with no `catch` around a probe call, on the
+      // documented invariant that a lost run comes back as `{ok: false, ...}`
+      // and never as an exception: `probeCommand` is the one seam that
+      // invariant is enforced at. A vocabulary that moved upstream mid-batch
+      // would otherwise abort every run still queued and discard every result
+      // a paid live invocation had already collected, which is the same
+      // batch-destroying failure mode the `instanceof` rewrite exists to
+      // remove from every other fault this function classifies. Reporting it
+      // as `unexpected-error`, the most severe class, keeps the finding just
+      // as loud: it exits 2, sorts above every environment class, and the
+      // message below still names the code and the registry.
+      failureClass = 'unexpected-error';
+      reason = vocabularyError.message;
+    }
+    return { ok: false, failureClass, reason };
   }
   // Outside the catch on purpose. A member TEA cannot read is a defect in TEA,
   // and classifying it as an environment failure would file that defect as a
@@ -553,7 +671,9 @@ module.exports = {
   commandTargetPolicy,
   createProbePort,
   failureClassForFault,
+  faultReason,
   hostEnvironment,
+  loadEvalQuality,
   observedText,
   permittedEnvironmentKeys,
   probeCommand,
