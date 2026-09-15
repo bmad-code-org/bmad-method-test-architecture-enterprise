@@ -76,6 +76,28 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * Six calls, none of them a read of a file's contents.
+ *
+ * - One directory walk over test/evals and its guard, which enumerate the eval
+ *   suites. The file-system port reads one caller-owned path and cannot read a
+ *   directory at all.
+ * - One more directory question, whether a workflow ships at all.
+ * - Two file existence questions, over a declared context file and over each
+ *   fragment a case names. The port could answer those only by reading every byte
+ *   to learn a boolean, which is a different operation with a different cost, and
+ *   the fragments are asked about once per case.
+ * - One `rm` that removes the scratch directory each run is confined to.
+ *
+ * Every read of a file's contents goes through `test/lib/file-system-port.js`:
+ * each suite's evals.json, each workflow's fragment index, and the context files
+ * a prompt is assembled from. That is why `loadSuites`, `validateSuites` and
+ * `buildPrompt` are asynchronous, and why the asynchrony reaches
+ * tools/generate-contracts.js, which binds `buildPrompt`'s output as each
+ * selection plan step's stdin literal.
+ */
 const fs = require('node:fs');
 const path = require('node:path');
 const { parse } = require('csv-parse/sync');
@@ -105,6 +127,7 @@ const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-re
 const { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
+const { readText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVAL_ROOT = path.join(__dirname, 'evals');
@@ -239,15 +262,32 @@ function parseArgs(argv) {
 }
 
 /** Every evals.json under test/evals, or only the requested workflows. */
-function loadSuites(requested) {
+async function loadSuites(requested) {
+  // The directory and its walk stay on `fs`: the port reads one path and has no
+  // method for either.
   if (!fs.existsSync(EVAL_ROOT)) fatal(2, `no eval directory at ${EVAL_ROOT}`);
   const suites = [];
-  for (const name of fs.readdirSync(EVAL_ROOT).sort()) {
+  // The walk names directories only. It used to name everything under test/evals
+  // and let the existence check below filter the rest out, which meant
+  // suite-manifest.json was silently answered for by a `<dir>/evals.json` that
+  // could not exist. That is a question about a directory entry's kind, so it
+  // belongs to the walk, and it has to be asked here now: the port raises ENOTDIR
+  // for a path under a regular file, and ENOTDIR is not absence.
+  for (const name of fs
+    .readdirSync(EVAL_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort()) {
     if (requested.length > 0 && !requested.includes(name)) continue;
     const file = path.join(EVAL_ROOT, name, 'evals.json');
-    if (!fs.existsSync(file)) continue;
+    // The existence check that used to guard this read is gone: the read answers
+    // absence, and a directory under test/evals with no evals.json is skipped on
+    // that answer. Only the parse is caught, so a permission error is no longer
+    // reported as invalid JSON.
+    const read = await readText(file);
+    if (!read.present) continue;
     try {
-      suites.push({ dir: name, file, data: JSON.parse(fs.readFileSync(file, 'utf8')) });
+      suites.push({ dir: name, file, data: JSON.parse(read.text) });
     } catch (error) {
       fatal(2, `${path.relative(PROJECT_ROOT, file)} is not valid JSON: ${error.message}`);
     }
@@ -263,7 +303,7 @@ function loadSuites(requested) {
  * AND its index, because a fragment on disk with no index row can never be
  * selected and asserting that it must be is asserting a thing that cannot happen.
  */
-function validateSuites(suites) {
+async function validateSuites(suites) {
   const problems = [];
 
   for (const suite of suites) {
@@ -290,9 +330,12 @@ function validateSuites(suites) {
     const knowledgeDir = path.join(workflowDir, 'resources', 'knowledge');
     const indexPath = path.join(workflowDir, 'resources', 'tea-index.csv');
     let indexed = new Set();
-    if (fs.existsSync(indexPath)) {
+    // The existence check that used to guard this read is gone; the read answers
+    // absence, and the "ships no index" problem is raised off that answer.
+    const indexRead = await readText(indexPath);
+    if (indexRead.present) {
       try {
-        const records = parse(fs.readFileSync(indexPath, 'utf8'), { columns: true, skip_empty_lines: true });
+        const records = parse(indexRead.text, { columns: true, skip_empty_lines: true });
         indexed = new Set(records.map((record) => String(record.fragment_file || '').replace(/^knowledge\//, '')));
       } catch (error) {
         problems.push(`${label}: ${path.relative(workflowDir, indexPath)} does not parse: ${error.message}`);
@@ -345,13 +388,31 @@ function validateSuites(suites) {
   return problems;
 }
 
+/**
+ * One file the prompt is assembled from.
+ *
+ * Absence throws rather than reading as an empty section. `fs.readFileSync` threw
+ * here before and the behaviour is kept, with a message that names the file: a
+ * prompt missing its own routing rules is a prompt that measures nothing, and
+ * tools/generate-contracts.js binds these bytes as a plan step's stdin literal.
+ */
+async function promptPart(file) {
+  const read = await readText(file);
+  if (!read.present) {
+    throw new Error(`${path.relative(PROJECT_ROOT, file)} is missing, and a selection prompt cannot be assembled without it`);
+  }
+  return read.text;
+}
+
 /** The prompt one case gets: the workflow's own routing rules, its index, and the scenario. */
-function buildPrompt(suite, item) {
+async function buildPrompt(suite, item) {
   const workflowDir = path.join(WORKFLOW_ROOT, suite.dir);
-  const context = (suite.data.contextFiles ?? [])
-    .map((relative) => `----- ${relative} -----\n${fs.readFileSync(path.join(workflowDir, relative), 'utf8')}`)
-    .join('\n\n');
-  const index = fs.readFileSync(path.join(workflowDir, 'resources', 'tea-index.csv'), 'utf8');
+  const sections = [];
+  for (const relative of suite.data.contextFiles ?? []) {
+    sections.push(`----- ${relative} -----\n${await promptPart(path.join(workflowDir, relative))}`);
+  }
+  const context = sections.join('\n\n');
+  const index = await promptPart(path.join(workflowDir, 'resources', 'tea-index.csv'));
 
   return [
     `You are running the TEA workflow \`${suite.data.workflow}\`. Below are the workflow's own knowledge-loading rules and its fragment index.`,
@@ -434,11 +495,19 @@ function preflight({ agents, agentCmd }) {
  * Every case with the exact prompt it is sent, keyed so two workflows cannot
  * collide on a shared case id.
  *
+ * A `for...of` rather than a `flatMap` of a `map`, because the prompt is
+ * assembled through the file-system port and an object-literal initialiser inside
+ * a map callback has nowhere to put an `await`.
+ *
  * @param {Array<object>} suites
- * @returns {Array<{id: string, prompt: string}>}
+ * @returns {Promise<Array<{id: string, prompt: string}>>}
  */
-function caseIndex(suites) {
-  return suites.flatMap((suite) => suite.data.cases.map((item) => ({ id: `${suite.dir}:${item.id}`, prompt: buildPrompt(suite, item) })));
+async function caseIndex(suites) {
+  const index = [];
+  for (const suite of suites) {
+    for (const item of suite.data.cases) index.push({ id: `${suite.dir}:${item.id}`, prompt: await buildPrompt(suite, item) });
+  }
+  return index;
 }
 
 /**
@@ -447,10 +516,10 @@ function caseIndex(suites) {
  * tools/validate-eval-schemas.js checks the manifest's `caseCount` against the
  * length of this, the same way it checks its thresholds against THRESHOLDS.
  *
- * @returns {string[]}
+ * @returns {Promise<string[]>}
  */
-function caseIds() {
-  return caseIndex(loadSuites([])).map((item) => item.id);
+async function caseIds() {
+  return (await caseIndex(await loadSuites([]))).map((item) => item.id);
 }
 
 /**
@@ -464,21 +533,24 @@ async function finish({ options, startedAt, mode, suites, runners, suiteFailureC
   if (options.jsonPath) {
     let suite;
     try {
-      suite = suiteById(loadSuiteManifest(PROJECT_ROOT).manifest, SUITE_ID);
+      suite = suiteById((await loadSuiteManifest(PROJECT_ROOT)).manifest, SUITE_ID);
     } catch (error) {
       console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
       process.exit(2);
     }
-    const cases = caseIndex(suites).map((item) => ({ id: item.id, promptDigest: digest(item.prompt) }));
-    writeSuiteResult(
+    // Assembled once and used twice. It was built twice, which read every context
+    // file and every fragment index of every suite a second time for one digest.
+    const index = await caseIndex(suites);
+    const cases = index.map((item) => ({ id: item.id, promptDigest: digest(item.prompt) }));
+    await writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
         generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
-        fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
-        promptDigest: digestPrompts(caseIndex(suites)),
+        fixtureDigest: await digestFiles(PROJECT_ROOT, suite.fixtures),
+        promptDigest: digestPrompts(index),
         cases,
         runners,
         durationMs: await elapsedMsSince(startedAt),
@@ -524,8 +596,8 @@ async function main() {
   console.log('tea fragment-selection eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const suites = loadSuites(workflows);
-  const problems = validateSuites(suites);
+  const suites = await loadSuites(workflows);
+  const problems = await validateSuites(suites);
   const caseCount = suites.reduce((sum, suite) => sum + (suite.data.cases?.length ?? 0), 0);
 
   if (problems.length > 0) {
@@ -613,7 +685,7 @@ async function main() {
     for (const suite of suites) {
       console.log(`  ${colors.dim}${suite.data.workflow}${colors.reset}`);
       for (const item of suite.data.cases) {
-        const prompt = buildPrompt(suite, item);
+        const prompt = await buildPrompt(suite, item);
         const signatures = new Set();
         const caseScores = [];
 
