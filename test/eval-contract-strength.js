@@ -621,7 +621,17 @@ async function main(argv) {
     for (const problem of schemaProblems) console.error(`   ${problem}`);
     return 2;
   }
-  const { environment, measured } = baselineDifferences(results, (await readJson(BASELINE_PATH)).value);
+  // Named rather than dereferenced blind: baselineDifferences indexes the
+  // baseline by suite id, and null[suiteId] throws a TypeError that says
+  // nothing about which file was missing.
+  const baselineRead = await readJson(BASELINE_PATH);
+  if (!baselineRead.present) {
+    console.error(
+      `${colors.red}${path.relative(PROJECT_ROOT, BASELINE_PATH)} is missing, so no baseline comparison can run${colors.reset}`,
+    );
+    return 2;
+  }
+  const { environment, measured } = baselineDifferences(results, baselineRead.value);
   if (environment.length > 0) {
     console.error(`\n${colors.red}${environment.length} pre-flight outcome(s) moved:${colors.reset}`);
     for (const line of environment) console.error(`   ${line}`);
