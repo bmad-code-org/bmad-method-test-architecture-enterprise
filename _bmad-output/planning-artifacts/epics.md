@@ -124,7 +124,7 @@ Last reconciled with GitHub on 2026-09-15 across `bmad-method-test-architecture-
 
 ### Epic 7 progress: The output contracts the behavioral suites exposed
 
-- [ ] [Story 7.1: The NFR gate artifact carries the four domain statuses](#story-71-the-nfr-gate-artifact-carries-the-four-domain-statuses). **Active:** implemented and under review; not yet in a pull request.
+- [ ] [Story 7.1: The NFR gate artifact carries the four domain statuses](#story-71-the-nfr-gate-artifact-carries-the-four-domain-statuses). **Active:** open in [#179](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/179)
 
 ### Epic 8 progress: What the suites proved they do not measure
 
