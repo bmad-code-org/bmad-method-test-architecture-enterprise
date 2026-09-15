@@ -47,12 +47,12 @@ This document is the epic and story breakdown for upgrading TEA from `eval-quali
 
 ## Delivery Progress
 
-Last reconciled with GitHub on 2026-09-11 across `bmad-method-test-architecture-enterprise` and `bmad-eval-quality`. A checked story has all of its work merged to the relevant repository's `main`. An unchecked story marked **Active** has work in merged or open pull requests and still has acceptance criteria left. Every other unchecked story has no pull request recorded here.
+Last reconciled with GitHub on 2026-09-15 across `bmad-method-test-architecture-enterprise` and `bmad-eval-quality`. A checked story has all of its work merged to the relevant repository's `main`. An unchecked story marked **Active** has work in merged or open pull requests and still has acceptance criteria left. Every other unchecked story has no pull request recorded here.
 
 | Epic | Merged | Active | Remaining | State |
 | --- | ---: | ---: | ---: | --- |
 | Epic 1 | 5 / 5 | 0 | 0 | Complete |
-| Epic 2 | 3 / 7 | 1 | 3 | In progress |
+| Epic 2 | 4 / 7 | 1 | 2 | In progress |
 | Epic 3 | 5 / 6 | 0 | 1 | In progress |
 | Epic 4 | 1 / 8 | 0 | 7 | In progress |
 | Epic 5 | 0 / 5 | 0 | 5 | Queued |
@@ -72,7 +72,7 @@ Last reconciled with GitHub on 2026-09-11 across `bmad-method-test-architecture-
 - [x] [Story 2.1: Export the schema-version constants and the dominance comparison](#story-21-export-the-schema-version-constants-and-the-dominance-comparison) ([eval-quality #128](https://github.com/bmad-code-org/bmad-eval-quality/pull/128))
 - [x] [Story 2.2: Name the three versions the package stamps](#story-22-name-the-three-versions-the-package-stamps) ([eval-quality #129](https://github.com/bmad-code-org/bmad-eval-quality/pull/129))
 - [x] [Story 2.3: Make `VERSION` tell the truth](#story-23-make-version-tell-the-truth) ([eval-quality #128](https://github.com/bmad-code-org/bmad-eval-quality/pull/128))
-- [ ] [Story 2.4: Release the package and verify it on npm](#story-24-release-the-package-and-verify-it-on-npm)
+- [x] [Story 2.4: Release the package and verify it on npm](#story-24-release-the-package-and-verify-it-on-npm) ([eval-quality 3.1.0](https://www.npmjs.com/package/eval-quality/v/3.1.0), [publish run](https://github.com/bmad-code-org/bmad-eval-quality/actions/runs/35024268448))
 - [ ] [Story 2.5: Publish the eight repo-local gates as a consumable surface](#story-25-publish-the-eight-repo-local-gates-as-a-consumable-surface). **Active:** first two of three PRs merged in [eval-quality #130](https://github.com/bmad-code-org/bmad-eval-quality/pull/130) and [eval-quality #132](https://github.com/bmad-code-org/bmad-eval-quality/pull/132); third is pending
 - [ ] [Story 2.6: Derive TEA's artifact versions from the package](#story-26-derive-teas-artifact-versions-from-the-package)
 - [ ] [Story 2.7: Validate the stamp and the two unchecked artifact kinds](#story-27-validate-the-stamp-and-the-two-unchecked-artifact-kinds)
