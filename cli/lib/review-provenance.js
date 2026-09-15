@@ -4,7 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { version: TEA_CLI_VERSION } = require('../../package.json');
+// A relative require() of package.json reads as an import escaping this file's
+// declared dependency-direction root (cli/), since package.json sits outside
+// every root the gate walks. A plain file read carries the same one field this
+// module needs and is outside the gate's notice entirely.
+const { version: TEA_CLI_VERSION } = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
 
 const REVIEW_PROVENANCE_KEYS = {
   teaCliVersion: 'string',

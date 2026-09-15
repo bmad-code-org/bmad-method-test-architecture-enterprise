@@ -41,6 +41,13 @@
     "tea-test-review": "cli/test-review.js",
     "tea-trace-runner": "cli/trace-runner.js"
   },
+  "files": [
+    "src",
+    "cli",
+    ".claude-plugin",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "docs:build": "node tools/build-docs.js",
     "docs:dev": "npm --prefix website run dev",
@@ -179,6 +186,7 @@
     "prettier": "^3.7.4",
     "prettier-plugin-packagejson": "^2.5.19",
     "sharp": "^0.33.5",
+    "typescript": "^7.0.2",
     "yaml-eslint-parser": "^1.2.3",
     "yaml-lint": "^1.7.0",
     "zod": "3.25.76",
