@@ -778,11 +778,11 @@ function replayRoutingCase(item, expected) {
  *
  * @returns {{result: object, scored?: object}}
  */
-function replayNfrCase(item, set) {
+async function replayNfrCase(item, set) {
   if (!fs.existsSync(path.join(item.directory, 'test-artifacts', 'nfr-assessment.md'))) {
     unreadable(`${item.id}: no test-artifacts/nfr-assessment.md beside expected.json`);
   }
-  const report = readNfrReport(item.directory);
+  const report = await readNfrReport(item.directory);
   if (!report.ok) return { result: { unmeasurable: report.failureClass } };
   const scored = scoreNfrRun(set, report.report);
   return { result: projectNfrResult(scored), scored };
@@ -1196,7 +1196,7 @@ async function replayCase(item, expected, context) {
             'with it. --accept will not do this one.',
         };
       }
-      const replayed = replayNfrCase(item, set);
+      const replayed = await replayNfrCase(item, set);
       if (replayed.scored) context.nfrReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
       return { observed: replayed.result };
     }

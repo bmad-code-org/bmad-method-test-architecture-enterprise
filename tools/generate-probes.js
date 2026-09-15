@@ -1469,7 +1469,7 @@ function routingOracleFor(contract, caseId, field) {
  * the skill to prove the eval catches it is an edit to the thing being measured.
  * The fragment-selection corpora ship the same two classes for the same reason.
  */
-function buildRoutingProbes(spec) {
+async function buildRoutingProbes(spec) {
   const contract = loadContract(spec.relativePath);
   const corpus = JSON.parse(fs.readFileSync(path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
   const intentsPath = repositoryPath('test', 'fixtures', 'tea-routing-eval', 'intents.json');
@@ -1514,7 +1514,7 @@ function buildRoutingProbes(spec) {
         observableChannel: 'stdout',
         condition: {
           selector: selector({ option: { agent: { matcher: 'any' } }, stdin: { prompt: { matcher: 'any' } } }),
-          predicate: spec.defectPredicate(expected),
+          predicate: await spec.defectPredicate(expected),
         },
       },
     },
@@ -1599,7 +1599,7 @@ async function main() {
   const stale = [];
   for (const target of targets()) {
     const filePath = path.join(PROBE_ROOT, target.relativePath);
-    const generated = await render(target.build(), filePath, prettierConfig);
+    const generated = await render(await target.build(), filePath, prettierConfig);
 
     if (!check) {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });

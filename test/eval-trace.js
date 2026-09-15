@@ -2245,20 +2245,20 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
   if (options.jsonPath) {
     let suite;
     try {
-      suite = suiteById(loadSuiteManifest(PROJECT_ROOT).manifest, SUITE_ID);
+      suite = suiteById((await loadSuiteManifest(PROJECT_ROOT)).manifest, SUITE_ID);
     } catch (error) {
       console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
       process.exit(2);
     }
     const cases = caseIndex(sets).map((item) => ({ id: item.id, promptDigest: digest(item.prompt) }));
-    writeSuiteResult(
+    await writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
         generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
-        fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
+        fixtureDigest: await digestFiles(PROJECT_ROOT, suite.fixtures),
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,

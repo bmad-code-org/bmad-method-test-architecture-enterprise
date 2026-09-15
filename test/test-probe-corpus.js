@@ -208,7 +208,7 @@ async function main() {
 
   for (const suite of await suites()) {
     for (const probe of suite.probes) {
-      for (const message of validateArtifact('probe', probe)) {
+      for (const message of await validateArtifact('probe', probe)) {
         problems.push(`${suite.id} ${probe.probeId}: Probe${message}`);
       }
     }

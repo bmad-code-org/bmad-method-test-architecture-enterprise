@@ -265,7 +265,7 @@ async function main() {
 
   let manifest;
   try {
-    ({ manifest } = loadSuiteManifest(PROJECT_ROOT));
+    ({ manifest } = await loadSuiteManifest(PROJECT_ROOT));
   } catch (error) {
     console.error(`❌ ${error.message}`);
     process.exit(error.code === 'EVAL_MANIFEST_INVALID' ? 1 : 2);
