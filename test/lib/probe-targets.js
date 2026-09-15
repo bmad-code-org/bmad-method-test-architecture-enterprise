@@ -249,6 +249,27 @@ const EXECUTION_TARGETS = [
     maxElapsedMs: 6 * 60_000,
   },
   {
+    interfaceId: 'tea-ci-runner',
+    executable: 'tea-ci-runner',
+    script: path.join('cli', 'ci-runner.js'),
+    subcommandPaths: [[]],
+    // The one deliverable this harness reads back: the platform's own workflow
+    // file, at the path GitHub Actions requires. A caller whose project root is
+    // not the run directory, which is every staged eval workspace, supplies its
+    // own path through `commandTargetPolicy`'s artifact override; this is what a
+    // run gets when it supplies none. The workflow also writes helper scripts,
+    // documentation and a progress file this harness never reads.
+    artifacts: { workflow: path.join('.github', 'workflows', 'test.yml') },
+    // The vendor variables and nothing else, which is the list cli/ci-runner.js
+    // declares through CI_REQUEST_KEYS and the list ci.contract.json carries. A
+    // scaffold reads the staged project off disk and needs no other key.
+    environmentKeys: vendorEnvironmentNames(),
+    // One minute above RUN_TIMEOUT_MS in test/eval-ci.js, for the reason the
+    // comment above EXECUTION_TARGETS gives: the inner clock classifies, and this
+    // one only backstops.
+    maxElapsedMs: 21 * 60_000,
+  },
+  {
     interfaceId: 'tea-nfr-runner',
     executable: 'tea-nfr-runner',
     script: path.join('cli', 'nfr-runner.js'),

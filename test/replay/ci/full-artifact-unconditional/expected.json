@@ -1,0 +1,53 @@
+{
+  "$comment": [
+    "full-correct-pipeline with if: failure() removed from both upload-artifact steps, so both run unconditionally.",
+    "Both artifact elements fail, because checkElement requires onFailureOnly to hold and neither step's if now contains failure(). Nothing else moves."
+  ],
+  "id": "full-artifact-unconditional",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "full-correct-pipeline with if: failure() removed from both upload-artifact steps, so both run unconditionally.",
+    "Both artifact elements fail, because checkElement requires onFailureOnly to hold and neither step's if now contains failure(). Nothing else moves."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-push-main": true,
+      "trigger-pull-request-main": true,
+      "trigger-weekly-schedule": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-e2e-tests": true,
+      "gate-lint-precedes-tests": true,
+      "gate-matrix-shards": true,
+      "gate-burn-in": true,
+      "artifact-playwright-report": false,
+      "artifact-test-results": false
+    },
+    "elementMisses": [
+      "artifact-playwright-report: the upload of playwright-report is not conditioned on failure() or is not kept for 14 days",
+      "artifact-test-results: the upload of test-results is not conditioned on failure() or is not kept for 14 days"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

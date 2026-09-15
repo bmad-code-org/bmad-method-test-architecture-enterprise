@@ -129,6 +129,12 @@ const {
   scoreRun: scoreNfrRun,
   NFR_OPERATION,
 } = require('./eval-nfr');
+const {
+  loadGroundTruth: loadCiGroundTruth,
+  workflowFromArtifact: ciWorkflowFromArtifact,
+  workflowMentions,
+  CI_OPERATION,
+} = require('./eval-ci');
 const { parseRouting } = require('../cli/lib/parse-routing');
 const {
   correctRoutingAnswer,
@@ -143,6 +149,8 @@ const { findCases } = require('./test-eval-replay');
 const {
   nfrOracleSpecs,
   nfrStepId,
+  ciOracleSpecs,
+  ciStepId,
   traceOracleSpecs,
   traceStepId,
   routingOracleSpecs,
@@ -1015,6 +1023,92 @@ async function checkNfrOracles(evaluator) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// ci
+// ---------------------------------------------------------------------------
+
+/** One stored ci run as the artifact a probe observation would carry: the workflow file as text. */
+function ciArtifactsOf(directory, expected) {
+  const workflowPath = path.join(directory, expected.storedOutput?.workflow ?? path.join('.github', 'workflows', 'test.yml'));
+  if (!fs.existsSync(workflowPath)) return { workflow: { kind: 'absent' } };
+  return { workflow: { kind: 'text', value: fs.readFileSync(workflowPath, 'utf8') } };
+}
+
+/**
+ * `checkCiOracles`'s oracles are paired with `workflowMentions`, the harness's
+ * document-global predicate, rather than with the row-scored `checkElement`
+ * result: see the correspondence comment beside `ciOracleSpecs` in
+ * `tools/generate-contracts.js` for why. This reads the workflow text off the
+ * tagged artifact the same way `workflowFromArtifact` does, or names the reason
+ * it could not.
+ */
+function ciTextOf(artifacts) {
+  const read = ciWorkflowFromArtifact(artifacts.workflow);
+  return read.ok ? read.text : null;
+}
+
+async function checkCiOracles(evaluator) {
+  console.log('\nci.contract.json over every stored CI run');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'ci.contract.json'), 'the ci contract');
+  const groundTruth = await loadCiGroundTruth();
+  if (!groundTruth) unreadable('the ci ground truth is missing or not valid JSON');
+  const specs = ciOracleSpecs(groundTruth);
+  assert(
+    contract.oracles.length === specs.length && contract.oracles.every((oracle, index) => oracle.id === specs[index].id),
+    'the contract declares exactly the oracles the generator specifies, in order',
+    `${contract.oracles.length} on disk, ${specs.length} specified`,
+  );
+
+  let evaluated = 0;
+  let skippedUnscored = 0;
+  const seenFalse = new Set();
+  const cases = findCases().filter((item) => item.suite === 'ci');
+  assert(cases.length > 0, 'test/replay/ci holds at least one stored CI run');
+  for (const item of cases) {
+    const expected = readJson(path.join(item.directory, 'expected.json'), `${item.id} expected result`);
+    const artifacts = ciArtifactsOf(item.directory, expected);
+    const text = ciTextOf(artifacts);
+    // Every project's oracles over this run. The project the run was frozen from
+    // is the agreement check proper; the other project is the run seen as a
+    // wrong answer to a different question, which is what makes an oracle
+    // resolve false.
+    for (const set of groundTruth.fixtureSets) {
+      const results = evaluateOracles(evaluator, contract, {
+        [ciStepId(set)]: observation({ operationId: CI_OPERATION, exitCode: 0, artifacts }),
+      });
+      const label = `${item.id} as ${set.id === expected.inputs?.fixtureSet ? 'its own project' : set.id}`;
+      const own = specs.filter((spec) => spec.setId === set.id);
+      // A workflow the harness will not read at all: the artifact never came
+      // back as text. Nothing is compared and the skip is printed, the same
+      // shape nfr and trace use for a report or summary the harness refuses.
+      if (text === null) {
+        skippedUnscored += own.length;
+        continue;
+      }
+      for (const spec of own) {
+        const result = results.get(spec.id);
+        const scorer = spec.kind === 'run-measured' ? true : spec.scorer(text);
+        if (scorer === false) seenFalse.add(spec.id);
+        assert(
+          agrees(result, scorer),
+          `${label}: ${spec.id} (${spec.kind}) agrees with workflowMentions`,
+          `workflowMentions says ${scorer ? 'pass' : 'fail'}, oracle ${describe(result)}`,
+        );
+        evaluated += 1;
+      }
+    }
+  }
+  // Every oracle but the run-shape one has to have been seen failing somewhere, or
+  // this check has only ever confirmed that a correct run passes.
+  for (const spec of specs) {
+    if (spec.kind === 'run-measured') continue;
+    assert(seenFalse.has(spec.id), `${spec.id} (${spec.kind} on ${spec.setId}) was seen resolving false on some stored run`);
+  }
+  console.log(
+    `  ${colors.dim}${evaluated} oracle evaluation(s) across ${cases.length} stored run(s) and ${groundTruth.fixtureSets.length} project(s); ${skippedUnscored} on a workflow the harness refused${colors.reset}`,
+  );
+}
+
 async function main() {
   console.log('contract oracles, evaluated with eval-quality and compared with the harness scorers');
   REGEX_STEP_BUDGET = (await scoringPolicy()).regexMatchStepBudget;
@@ -1027,6 +1121,7 @@ async function main() {
   await checkTestDesignOracles(evaluator);
   await checkTraceOracles(evaluator);
   await checkNfrOracles(evaluator);
+  await checkCiOracles(evaluator);
 
   console.log('');
   if (failed > 0) {

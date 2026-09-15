@@ -1,0 +1,4 @@
+# A list where GitHub expects a mapping
+- name: Test Pipeline
+- on: push
+- jobs: none

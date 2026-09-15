@@ -96,6 +96,22 @@ const runnerParametersSchema = z
     envPassNames: z.array(z.string()),
     timeoutMs: z.number().int().positive(),
     promptTransport: z.enum(['stdin', 'argv']),
+    // The external tools a harness ran beside the vendor, each with the version
+    // that answered and the flags it was given. A suite that lints its
+    // deliverable is measuring the linter's opinion as much as the vendor's, so
+    // two records are comparable only when both name the same tool at the same
+    // version under the same flags. Optional: most suites run none.
+    tools: z
+      .array(
+        z
+          .object({
+            name: nonEmptyString,
+            version: z.string().nullable(),
+            args: z.array(z.string()),
+          })
+          .strict(),
+      )
+      .optional(),
   })
   .strict();
 

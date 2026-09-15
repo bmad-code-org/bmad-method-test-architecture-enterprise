@@ -1,6 +1,11 @@
 # Test fixtures with intentionally broken/malformed files
 test/fixtures/**
 
+# Stored GitHub Actions workflow files the ci eval replay corpus scores.
+# Several are deliberately malformed YAML that a real run could produce, and
+# reformatting them would fail the check they exist to be scored against.
+test/replay/ci/**
+
 # Generated from test/schema/eval-result.js by tools/validate-eval-schemas.js,
 # which compares it byte for byte to catch drift. Reformatting it here would
 # make that comparison fail on formatting rather than on content.

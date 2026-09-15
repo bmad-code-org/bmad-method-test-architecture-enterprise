@@ -1,0 +1,58 @@
+{
+  "$comment": [
+    "full-correct-pipeline with the unit job's needs: lint retargeted to a job id, linting, that does not exist in the workflow.",
+    "actionlint reports one job-needs finding, the exact defect this suite exists to catch: a pipeline that fails on its first push. gate-lint-precedes-tests also fails, because needsClosure over the unit job never reaches the real lint job through a needs chain naming a job that is not there."
+  ],
+  "id": "full-lint-needs-undefined",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "full-correct-pipeline with the unit job's needs: lint retargeted to a job id, linting, that does not exist in the workflow.",
+    "actionlint reports one job-needs finding, the exact defect this suite exists to catch: a pipeline that fails on its first push. gate-lint-precedes-tests also fails, because needsClosure over the unit job never reaches the real lint job through a needs chain naming a job that is not there."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": [
+        {
+          "kind": "job-needs",
+          "message": "job \"unit\" needs job \"linting\" which does not exist in this workflow",
+          "line": 40
+        }
+      ]
+    },
+    "elements": {
+      "trigger-push-main": true,
+      "trigger-pull-request-main": true,
+      "trigger-weekly-schedule": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-e2e-tests": true,
+      "gate-lint-precedes-tests": false,
+      "gate-matrix-shards": true,
+      "gate-burn-in": true,
+      "artifact-playwright-report": true,
+      "artifact-test-results": true
+    },
+    "elementMisses": [
+      "gate-lint-precedes-tests: job unit runs tests without waiting for the lint job"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the minimal request scaffolded correctly, and it is the control every other minimal-request case is a single deviation from.",
+    "The file parses, actionlint reports nothing, and all five requested elements are present: the pull_request trigger scoped to main, contents:read, the Node version from .nvmrc, npm ci, and npm test. Zero unrequested elements, because nothing beyond the five was emitted."
+  ],
+  "id": "minimal-correct-pipeline",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "minimal-lantern-audit-log",
+    "scoringInputsDigest": "sha256:2f7f5271cf9c348bcb4c63137fb58f8722a344c34fc7fd808ac4e9f5773ff193"
+  },
+  "derivation": [
+    "Why this case is in the corpus: it is the minimal request scaffolded correctly, and it is the control every other minimal-request case is a single deviation from.",
+    "The file parses, actionlint reports nothing, and all five requested elements are present: the pull_request trigger scoped to main, contents:read, the Node version from .nvmrc, npm ci, and npm test. Zero unrequested elements, because nothing beyond the five was emitted."
+  ],
+  "result": {
+    "isMinimalRequest": true,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

@@ -127,6 +127,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Floating to latest rather than pinned: test/eval-ci.js's own pre-flight
+      # enforces the minimum version its flags were written against, so a newer
+      # release only ever adds coverage. actionlint publishes this installer
+      # script for exactly this use.
+      - name: Install actionlint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash
+          sudo mv ./actionlint /usr/local/bin/
+
       - name: Check for unresolved conflict markers
         run: npm run test:conflict-markers
 
@@ -159,6 +168,9 @@ jobs:
 
       - name: Validate NFR eval corpus
         run: npm run test:eval-nfr-data
+
+      - name: Validate CI eval corpus
+        run: npm run test:eval-ci-data
 
       - name: Validate test-design eval corpus
         run: npm run test:eval-test-design-data

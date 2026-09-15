@@ -105,6 +105,11 @@ const {
   NFR_INTERFACE,
   NFR_OPERATION,
 } = require('../test/eval-nfr');
+// And for the ci command, on the same two rules: the runner owns its request
+// shape and its default agent, and the harness owns every prompt and the
+// document-global predicate an oracle over one workflow file is paired with.
+const { CI_REQUEST_KEYS, DEFAULT_AGENT: CI_DEFAULT_AGENT } = require('../cli/ci-runner');
+const { buildPrompt: buildCiPrompt, workflowMentions, PLATFORM: CI_PLATFORM, CI_INTERFACE, CI_OPERATION } = require('../test/eval-ci');
 // And for the routing command the bmad-tea suite names: its request and response
 // shapes and its default agent are its own, and the prompt, the menu reading and
 // the three pattern sources are the harness's. The patterns matter most. An
@@ -146,6 +151,8 @@ const TEST_DESIGN_SPEC_FILES = [
 ];
 const NFR_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval');
 const NFR_GROUND_TRUTH_PATH = path.join(NFR_FIXTURE_ROOT, 'ground-truth.json');
+const CI_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'ci-eval');
+const CI_GROUND_TRUTH_PATH = path.join(CI_FIXTURE_ROOT, 'ground-truth.json');
 
 /**
  * The Eval Contract schema version this generator writes, read from the
@@ -2922,6 +2929,384 @@ function buildNfrContract() {
 }
 
 // ---------------------------------------------------------------------------
+// ci.contract.json
+// ---------------------------------------------------------------------------
+
+// The interface and operation ids are the harness's, imported above, so the
+// request the harness issues and the operation the contract declares cannot
+// spell them differently.
+
+/** The plan step one project is scaffolded under, and the root of every pointer into what that step wrote. */
+function ciStepId(set) {
+  return `ci-${set.id}`;
+}
+
+/** The workflow file one plan step wrote, which is the only pointer this contract has into a run. */
+function ciWorkflowPointer(stepId) {
+  return `/interactions/${stepId}/artifact/workflow`;
+}
+
+const CI_REQUEST_SHAPE = Object.fromEntries(
+  Object.entries(CI_REQUEST_KEYS).map(([channel, keys]) => [channel, stringShape(keys.required, keys.permitted)]),
+);
+
+function ciContains(pointer, literal) {
+  return { op: 'containment', operands: [{ pointer }, { literal }] };
+}
+
+/**
+ * Every oracle the ci contract states, one spec per claim, in the order they are
+ * numbered.
+ *
+ * The workflow file is one string to this vocabulary, the same limit
+ * test/contracts/README.md records for the nfr and trace deliverables, so every
+ * claim here is what a substring test can reach: does the document contain the
+ * literal a requested element states (`contractToken`), does it omit the literal
+ * a forbidden element states (`mustNotEmit`), and did the run leave the file
+ * behind and exit clean. Whether a token sits inside the right job, whether a
+ * shard count is four, whether a needs: chain actually reaches the lint job, and
+ * every question actionlint answers are the harness's to read structurally; the
+ * contract cannot ask them because none of them is "does this string appear in
+ * that document".
+ *
+ * `scorer` is not the harness's real per-element check, `checkElement`, because
+ * that check is structural and this contract's claim is a plain substring test.
+ * It is `test/eval-ci.js`'s own `workflowMentions`, the document-global predicate
+ * this generator pairs the oracle with, applied to the same literal the oracle
+ * checks, over the raw workflow text. That is the same idiom
+ * `tools/generate-contracts.js` already uses for `test-design`'s oracles, and for
+ * the reason recorded there: pairing an oracle with the row-scoped harness result
+ * would make the two agree by coincidence on whatever the replay corpus happens
+ * to hold, and pairing it with the same document-global function the oracle
+ * itself restates makes the agreement true by construction.
+ *
+ * @param {object} groundTruth
+ * @returns {Array<{id: string, kind: string, setId: string, elementId: string|null, oracle: object, scorer: Function}>}
+ */
+function ciOracleSpecs(groundTruth) {
+  const specs = [];
+  const push = (setId, kind, elementId, oracle, scorer) =>
+    specs.push({ id: `O-${String(specs.length + 1).padStart(3, '0')}`, kind, setId, elementId, oracle, scorer });
+
+  for (const set of groundTruth.fixtureSets) {
+    const label = set.id;
+    const stepId = ciStepId(set);
+    const workflow = ciWorkflowPointer(stepId);
+
+    for (const element of set.expectedElements ?? []) {
+      if (element.contractToken === null) continue;
+      push(
+        set.id,
+        'requested',
+        element.id,
+        {
+          polarity: 'expects-hold',
+          commentary: `${label}: ${element.id} is requested. ${element.requestQuote}`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: 'containment',
+            scope: `The workflow file written for ${label}, read as one document.`,
+            negativeDomain: `A run whose workflow does not contain ${JSON.stringify(element.contractToken)}.`,
+            evidenceTargets: [workflow],
+          },
+          check: ciContains(workflow, element.contractToken),
+        },
+        (text) => workflowMentions(text, element.contractToken),
+      );
+    }
+
+    for (const forbidden of set.mustNotEmit ?? []) {
+      push(
+        set.id,
+        'forbidden',
+        null,
+        {
+          polarity: 'expects-hold',
+          commentary: `${label}: the request forbids this. ${forbidden.why}`,
+          direction: {
+            polarity: 'expects-hold',
+            relation: 'not',
+            scope: `The workflow file written for ${label}, read as one document.`,
+            negativeDomain: `A run whose workflow contains ${JSON.stringify(forbidden.token)}.`,
+            evidenceTargets: [workflow],
+          },
+          check: { op: 'not', operands: [ciContains(workflow, forbidden.token)] },
+        },
+        (text) => !workflowMentions(text, forbidden.token),
+      );
+    }
+
+    push(
+      set.id,
+      'run-measured',
+      null,
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'all',
+          scope: `The exit code and the workflow artifact of the run for ${label}.`,
+          negativeDomain: 'A run that left no workflow file behind, or whose command reported a failure class through its exit code.',
+          evidenceTargets: [workflow, `/interactions/${stepId}/exit-code`],
+        },
+        check: {
+          op: 'all',
+          operands: [
+            { op: 'equality', operands: [{ pointer: `/interactions/${stepId}/exit-code` }, { literal: 0 }] },
+            { op: 'existence', operands: [{ pointer: workflow }] },
+          ],
+        },
+      },
+      () => true,
+    );
+  }
+  return specs;
+}
+
+/**
+ * The authored half of the ci contract: how hard each group of claims grades,
+ * which risk it names, and the sentence that says what the group is about. The
+ * claims themselves come from ground-truth.json.
+ */
+const CI_BEHAVIORS = [
+  {
+    id: 'A-001',
+    role: 'full',
+    kinds: ['requested'],
+    severity: 'critical',
+    risk: 'requested-element-dropped',
+    success: 'The workflow written for the full request carries every element the request names.',
+    requirement: 'expectedElements',
+  },
+  {
+    id: 'A-002',
+    role: 'minimal',
+    kinds: ['requested'],
+    severity: 'critical',
+    risk: 'requested-element-dropped',
+    success: 'The workflow written for the minimal request carries every element the request names.',
+    requirement: 'expectedElements',
+  },
+  {
+    id: 'A-003',
+    role: 'minimal',
+    kinds: ['forbidden'],
+    severity: 'critical',
+    risk: 'template-copied-onto-a-minimal-request',
+    success: 'The workflow written for the minimal request carries none of the elements its request forbids by name.',
+    requirement: 'mustNotEmit',
+  },
+  {
+    id: 'A-004',
+    role: 'both',
+    kinds: ['run-measured'],
+    severity: 'critical',
+    risk: 'unmeasurable-run-scored-as-a-miss',
+    success: 'Each run left the workflow file the platform requires on disk and exited 0.',
+    requirement: 'projectFiles',
+  },
+];
+
+function buildCiContract() {
+  const groundTruth = JSON.parse(fs.readFileSync(CI_GROUND_TRUTH_PATH, 'utf8'));
+  const sets = groundTruth.fixtureSets ?? [];
+  assert(
+    sets.length >= 2,
+    'ci ground-truth.json declares fewer than two projects, so there is no minimal-request control to hold the full request against',
+  );
+  const full = sets.filter((set) => set.isMinimalRequest === false);
+  const minimal = sets.filter((set) => set.isMinimalRequest === true);
+  assert(
+    full.length === 1 && minimal.length === 1,
+    `expected one full and one minimal project; found ${full.length} and ${minimal.length}`,
+  );
+
+  const specs = ciOracleSpecs(groundTruth);
+  const oracles = specs.map((spec) => ({ id: spec.id, ...spec.oracle }));
+
+  const roleOf = (set) => (minimal.includes(set) ? 'minimal' : 'full');
+  const oracleById = new Map(oracles.map((oracle) => [oracle.id, oracle]));
+  const behaviors = [];
+  for (const authored of CI_BEHAVIORS) {
+    const targetSets = authored.role === 'both' ? sets : sets.filter((set) => roleOf(set) === authored.role);
+    const matched = specs
+      .filter((spec) => targetSets.some((set) => set.id === spec.setId))
+      .filter((spec) => authored.kinds.includes(spec.kind));
+    assert(matched.length > 0, `${authored.id}: no oracle matches kinds [${authored.kinds.join(', ')}] on the ${authored.role} project(s)`);
+    for (const spec of matched) {
+      behaviors.push({
+        id: spec.id,
+        description: oracleById.get(spec.id).commentary,
+        severity: authored.severity,
+        observableSuccessCriterion: authored.success,
+        requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: `${spec.setId}/${authored.requirement}` }],
+        riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
+        oracles: [spec.id],
+      });
+    }
+  }
+  behaviors.sort((left, right) => (left.id < right.id ? -1 : 1));
+  for (const behavior of behaviors) behavior.id = behavior.id.replace('O-', 'B-');
+  const claimed = new Set(behaviors.flatMap((behavior) => behavior.oracles));
+  for (const spec of specs) {
+    assert(claimed.has(spec.id), `${spec.id} (${spec.kind} on ${spec.setId}) is stated by no behavior, so nothing would demand it`);
+  }
+
+  const citedFiles = [...new Set(Object.values(groundTruth.skillRuleCitations ?? {}).map((citation) => citation.file))].sort();
+  assert(citedFiles.length > 0, 'ci ground-truth.json cites no skill file, so there is no specification to digest');
+  for (const file of citedFiles) {
+    assert(fs.existsSync(path.join(PROJECT_ROOT, file)), `ci ground-truth.json cites ${file}, which does not exist`);
+  }
+
+  // The witness runs the full project on both legs, because AD-10 treats every
+  // other leg of an operation as a clean leg and this operation has only the two
+  // witness legs beside its two plan steps.
+  const witnessSet = full[0];
+  const alternatePlatform = 'gitlab-ci';
+
+  return {
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    contractId: 'tea-ci-behavioral',
+    sourceSpecDigest: digestOf(citedFiles.map((file) => path.join(PROJECT_ROOT, file))),
+    behaviors,
+    oracles,
+    rubrics: [],
+    waivers: [],
+    permittedInterfaces: [
+      {
+        logicalId: CI_INTERFACE,
+        kind: 'cli',
+        operations: [
+          {
+            operationId: CI_OPERATION,
+            invocation: { executable: CI_INTERFACE, subcommandPath: [] },
+            stateChangeMarker: true,
+            requestShape: CI_REQUEST_SHAPE,
+            artifacts: ['workflow'],
+            // The workflow file is the only thing this contract addresses, and it
+            // is not machine-readable YAML to this vocabulary: it is one string.
+            // No key set to declare, and a transcribed one nobody could address
+            // would be a claim about a structure the deliverable does not carry
+            // here. Every structural question is the harness's to read.
+            descriptorChannel: { kind: 'artifact', artifactId: 'workflow' },
+            responseDescriptor: {
+              requiredKeys: [],
+              permittedKeys: [],
+              types: {},
+              successIndicator: null,
+              channelRoles: null,
+              collectionLocations: null,
+            },
+            volatilePointers: [],
+            sensitivityWitness: {
+              // ci_platform decides where step 2 writes the pipeline. A leg naming
+              // github-actions gets a file at this operation's declared artifact
+              // path, and a leg naming a different platform writes somewhere else
+              // entirely, so the declared path comes back absent. That is a true
+              // and checkable claim that the command reads its standard input,
+              // and it costs inventing no value the corpus does not already need:
+              // ci_platform is the one configuration key this harness varies.
+              witnessId: 'workflow-path-follows-the-platform',
+              channel: 'stdin',
+              legs: [
+                {
+                  legId: 'witness-github-actions',
+                  inputs: witnessInputs(
+                    CI_REQUEST_SHAPE,
+                    { option: { agent: CI_DEFAULT_AGENT } },
+                    { kind: 'text', value: buildCiPrompt(witnessSet, { ciPlatform: CI_PLATFORM }) },
+                  ),
+                },
+                {
+                  legId: 'witness-alternate-platform',
+                  inputs: witnessInputs(
+                    CI_REQUEST_SHAPE,
+                    { option: { agent: CI_DEFAULT_AGENT } },
+                    { kind: 'text', value: buildCiPrompt(witnessSet, { ciPlatform: alternatePlatform }) },
+                  ),
+                },
+              ],
+              relation: {
+                op: 'all',
+                operands: [
+                  { op: 'existence', operands: [{ pointer: ciWorkflowPointer('witness-github-actions') }] },
+                  { op: 'not', operands: [{ op: 'existence', operands: [{ pointer: ciWorkflowPointer('witness-alternate-platform') }] }] },
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ],
+    referenceSets: {},
+    siblingGroups: { operations: [], parameters: [] },
+    interactionPlan: sets.map((set) => ({
+      stepId: ciStepId(set),
+      operationId: CI_OPERATION,
+      after: null,
+      cardinality: 'exactly-one',
+      inputBinding: {
+        argument: null,
+        option: { agent: { matcher: 'any' } },
+        environment: null,
+        // Standard input is bound as a literal, and the literal is the prompt the
+        // harness assembles for this project. Both plan steps declare the same
+        // operation, so under a matcher binding every observation satisfies both
+        // steps and one project's oracles quantify over evidence that is not
+        // theirs; buildCiPrompt is test/eval-ci.js's own buildPrompt, for the
+        // reason the nfr and trace contracts record: a literal is compared with
+        // deepEquals, so a prompt restated here in any other form would select
+        // nothing and every oracle would resolve unreached.
+        stdin: { prompt: { literal: buildCiPrompt(set) } },
+      },
+    })),
+    scopedResources: null,
+    forbiddenInputs: FORBIDDEN_INPUTS,
+    testData: {
+      setup:
+        `Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root ` +
+        `(${sets.map((set) => `${set.projectRoot}/ for ${set.id}`).join(', ')}), a resolved _bmad/tea/config.yaml, a minimal .git/ directory, and ` +
+        `the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its ` +
+        `bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the ` +
+        `project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt ` +
+        `carries, and it names the service rather than the project's role. ` +
+        `The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of ` +
+        `the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both ` +
+        `witness legs stage the full project, because AD-10 reads every other leg of an operation as a clean leg and this operation has none besides them.`,
+      cleanup:
+        'Delete the workspace. The corpus under test/fixtures/ci-eval/ is read-only and the harness digests it before and after every run.',
+      principals: null,
+      resources: null,
+    },
+    // A full CI scaffold reads four step files, a template and several knowledge
+    // fragments, and writes a workflow plus helper scripts and documentation, so
+    // the bounds are the harness's own twenty-minute clock per project and a
+    // generous tool and cost allowance beside it, scaled with the project count.
+    budgets: {
+      maxToolCalls: 300 * sets.length,
+      maxWallClockMinutes: 20 * sets.length,
+      maxCostUsd: (4 * sets.length).toFixed(2),
+    },
+    safetyLimits: [
+      'The runner writes only inside the staged workspace, and only what the workflow scaffolds; the harness fails a run that changed the repository or a pre-existing project file.',
+      'This workflow adds a pipeline to a project and changes nothing the project already had.',
+      'No credential value appears in a prompt, an artifact, a log, or a result file.',
+    ],
+    requiredEvidence: [
+      'The workflow file each run wrote, in full.',
+      'The exit code of each invocation.',
+      'The digest of the prompt each run was given, so an edit that changed the question is visible in the record.',
+    ],
+    // One step per project, plus room for the two probe steps the compiler may add.
+    probeStepBound: sets.length + 2,
+    fixtureReset: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // tea-routing-intents.contract.json and tea-routing-controls.contract.json
 // ---------------------------------------------------------------------------
 
@@ -3805,6 +4190,7 @@ function firstDifference(expected, actual) {
 function targets() {
   return [
     { relativePath: 'nfr.contract.json', build: buildNfrContract },
+    { relativePath: 'ci.contract.json', build: buildCiContract },
     ...ROUTING_CONTRACTS.map((spec) => ({ relativePath: spec.relativePath, build: () => buildRoutingContract(spec) })),
     { relativePath: 'test-review.contract.json', build: buildTestReviewContract },
     { relativePath: 'test-design.contract.json', build: buildTestDesignContract },
@@ -3879,6 +4265,9 @@ module.exports = {
   buildTraceContract,
   nfrOracleSpecs,
   nfrStepId,
+  buildCiContract,
+  ciOracleSpecs,
+  ciStepId,
   traceOracleSpecs,
   traceStepId,
   render,

@@ -1,0 +1,58 @@
+{
+  "$comment": [
+    "full-correct-pipeline with the e2e job's test-running run: line extended to interpolate ${{ github.event.pull_request.title }} directly into a --grep flag.",
+    "actionlint reports one expression finding naming the untrusted context, and workflowRuleViolations independently catches the same line through UNSAFE_CONTEXT: both are counted, because they are two different rules the workflow states about its own output and a run can violate one without the other."
+  ],
+  "id": "full-injection-in-run",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "full-correct-pipeline with the e2e job's test-running run: line extended to interpolate ${{ github.event.pull_request.title }} directly into a --grep flag.",
+    "actionlint reports one expression finding naming the untrusted context, and workflowRuleViolations independently catches the same line through UNSAFE_CONTEXT: both are counted, because they are two different rules the workflow states about its own output and a run can violate one without the other."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": [
+        {
+          "kind": "expression",
+          "message": "\"github.event.pull_request.title\" is potentially untrusted. avoid using it directly in inline scripts. instead, pass it through an environment variable. see https://docs.github.com/en/actions/reference/security/secure-use#good-practices-for-mitigating-script-injection-attacks for more details",
+          "line": 85
+        }
+      ]
+    },
+    "elements": {
+      "trigger-push-main": true,
+      "trigger-pull-request-main": true,
+      "trigger-weekly-schedule": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-e2e-tests": true,
+      "gate-lint-precedes-tests": true,
+      "gate-matrix-shards": true,
+      "gate-burn-in": true,
+      "artifact-playwright-report": true,
+      "artifact-test-results": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": [
+      "unsafe-interpolation: ${{ github.event.pull_request.title }} in job e2e step 6"
+    ]
+  }
+}

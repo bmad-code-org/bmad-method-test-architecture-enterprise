@@ -13,6 +13,12 @@ export default [
       '**/*.min.js',
       'test/fixtures/**',
       'test/fixtures/**/*.yaml',
+      // Stored GitHub Actions workflow files the ci eval replay corpus scores.
+      // Their extension is `.yml` because GitHub requires it at
+      // `.github/workflows/*.yml`, which this repository's own yml/file-extension
+      // rule would otherwise flag, and several are deliberately malformed YAML
+      // that a real run could produce, which no linter here should try to fix.
+      'test/replay/ci/**',
       '_bmad/**',
       '_bmad*/**',
       // Build output

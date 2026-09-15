@@ -1,0 +1,54 @@
+{
+  "$comment": [
+    "full-correct-pipeline with the three-key on: block replaced by on: [push, pull_request], which drops branch scoping from both events and drops the schedule entirely.",
+    "trigger-push-main and trigger-pull-request-main fail because triggersOf returns null configuration for a list-form trigger, so no branches array exists to check against; trigger-weekly-schedule fails because the schedule key is gone. All three trigger elements miss, so triggerAccuracy reads 0/4 on this run."
+  ],
+  "id": "full-triggers-unscoped",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "full-correct-pipeline with the three-key on: block replaced by on: [push, pull_request], which drops branch scoping from both events and drops the schedule entirely.",
+    "trigger-push-main and trigger-pull-request-main fail because triggersOf returns null configuration for a list-form trigger, so no branches array exists to check against; trigger-weekly-schedule fails because the schedule key is gone. All three trigger elements miss, so triggerAccuracy reads 0/4 on this run."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-push-main": false,
+      "trigger-pull-request-main": false,
+      "trigger-weekly-schedule": false,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-e2e-tests": true,
+      "gate-lint-precedes-tests": true,
+      "gate-matrix-shards": true,
+      "gate-burn-in": true,
+      "artifact-playwright-report": true,
+      "artifact-test-results": true
+    },
+    "elementMisses": [
+      "trigger-push-main: push does not name branch main",
+      "trigger-pull-request-main: pull_request does not name branch main",
+      "trigger-weekly-schedule: no schedule trigger"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

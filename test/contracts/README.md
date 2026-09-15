@@ -9,6 +9,7 @@ against it.
 
 | Contract                                      | Suite                                                    | Cases                                               |
 | --------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
+| `ci.contract.json`                            | The full behavioral eval for `bmad-testarch-ci`          | 1 full request, 1 minimal request                   |
 | `nfr.contract.json`                           | The full behavioral eval for `bmad-testarch-nfr`         | 1 bundle with known gaps, 1 clean control           |
 | `test-review.contract.json`                   | The full behavioral eval for `bmad-testarch-test-review` | 9 planted defects, 1 clean control, 1 scope control |
 | `test-design.contract.json`                   | The full behavioral eval for `bmad-testarch-test-design` | 1 seeded set of 5 material risks, 1 clean control   |
@@ -16,12 +17,14 @@ against it.
 | `fragment-selection/<workflow>.contract.json` | Fragment routing for eight workflows                     | 24 cases                                            |
 
 **Every contract here is generated. Do not hand-edit one.** `tools/generate-contracts.js` writes all
-fourteen from their sources: `test-review.contract.json` from
+fifteen from their sources: `test-review.contract.json` from
 `test/fixtures/test-review-eval/ground-truth.json` and `criteria-registry.md`; `trace.contract.json`
 from `test/fixtures/trace-eval/ground-truth.json`, the request shape `cli/trace-runner.js` declares,
 the prompt `test/eval-trace.js` assembles, and the summary literal in the trace workflow's step-05;
 `nfr.contract.json` from `test/fixtures/nfr-eval/ground-truth.json`, the request shape
 `cli/nfr-runner.js` declares, and the prompt `test/eval-nfr.js` assembles;
+`ci.contract.json` from `test/fixtures/ci-eval/ground-truth.json`, the request shape
+`cli/ci-runner.js` declares, and the prompt `test/eval-ci.js` assembles;
 `test-design.contract.json` from `test/fixtures/test-design-eval/ground-truth.json`, the request shape
 `cli/test-design-runner.js` declares, the prompt `test/eval-test-design.js` assembles, and a digest
 over the test-design workflow's step-03, step-04, step-05 and `test-design-template.md`; and
@@ -98,7 +101,7 @@ without the located issue list the table below breaks down. The list comes from 
 the renderer. The issues themselves are the same either way; only whether the tool prints them
 differs.
 
-## Fourteen of fourteen compile
+## Fifteen of fifteen compile
 
 `package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08. All 58
 parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
@@ -264,6 +267,18 @@ document's length against a budget an ordinary report exceeds. Which status sits
 thresholds and every evidence citation are the harness's to read, because `containment` cannot bind a
 value to the key above it and `security` is a key in the ADR `categories` block as well.
 
+`ci.contract.json` hits the same limit from the other side: its one deliverable, the platform's own
+pipeline file, is machine-parseable YAML and the harness reads it structurally, but the contract's
+vocabulary still cannot bind a literal to the job or step that carries it, so its oracles state plain
+substring claims rather than the harness's real per-element check. Each is paired with
+`workflowMentions`, `test/eval-ci.js`'s own document-global predicate, the same idiom `test-design`'s
+oracles use and for the same reason: pairing an oracle with the row-scored `checkElement` result would
+make the two agree by coincidence on whatever the replay corpus happens to hold, and pairing it with
+the same document-global function the oracle itself restates makes the agreement true by construction.
+Whether a shard count is four, whether a `needs:` chain actually reaches the lint job, and everything
+`actionlint` reports are the harness's alone; the contract can only say whether a token requested or
+forbidden by the project's own request appears in the document at all.
+
 **A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator
 refuses a quantifier nested inside a quantified group before matching anything, as a
 catastrophic-backtracking risk, and reports it as a `budget-exhausted` fault. Every regex oracle in
@@ -345,7 +360,7 @@ matched `unknown` on the next run, and the check stayed green over a compiler th
 saying what it refused.
 
 When the compiler is available, the check compares each contract against the status
-`expected-status.json` records for it. All fourteen contracts `compile` today. A baseline is what keeps a
+`expected-status.json` records for it. All fifteen contracts `compile` today. A baseline is what keeps a
 known failure from reading as a passing check, and what makes the day a contract's status moves
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.
@@ -356,7 +371,7 @@ status changing.
 
 ## What the generator enforces
 
-`node tools/generate-contracts.js --check` regenerates all fourteen in memory and fails when the bytes on
+`node tools/generate-contracts.js --check` regenerates all fifteen in memory and fails when the bytes on
 disk differ, naming the contract and the first line that moved. It runs in `npm test`, so a fixture
 edit that leaves a contract stale fails the deterministic gate.
 

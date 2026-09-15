@@ -1,0 +1,44 @@
+{
+  "$comment": [
+    "minimal-correct-pipeline with one upload-artifact step appended to the test job, uploading test-results/ on failure with a 14-day retention, exactly the shape the full request asks for and the minimal request forbids.",
+    "Every requested element still passes, because the addition touches nothing the five elements check. One unrequested element is counted for the artifact upload the minimal request's closing sentence names as unwanted."
+  ],
+  "id": "minimal-artifact-added",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "minimal-lantern-audit-log",
+    "scoringInputsDigest": "sha256:2f7f5271cf9c348bcb4c63137fb58f8722a344c34fc7fd808ac4e9f5773ff193"
+  },
+  "derivation": [
+    "minimal-correct-pipeline with one upload-artifact step appended to the test job, uploading test-results/ on failure with a 14-day retention, exactly the shape the full request asks for and the minimal request forbids.",
+    "Every requested element still passes, because the addition touches nothing the five elements check. One unrequested element is counted for the artifact upload the minimal request's closing sentence names as unwanted."
+  ],
+  "result": {
+    "isMinimalRequest": true,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true
+    },
+    "elementMisses": [],
+    "unrequested": [
+      "artifact: test-results/ in job test"
+    ],
+    "ruleViolations": []
+  }
+}

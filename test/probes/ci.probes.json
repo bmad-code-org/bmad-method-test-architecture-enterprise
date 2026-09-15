@@ -1,0 +1,411 @@
+[
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-001",
+    "probeClass": "defect",
+    "behaviorId": "B-003",
+    "systemId": "tea-ci-full-meridian-storefront",
+    "implementationDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "artifactDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "commitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "rationale": "full-meridian-storefront: the weekly schedule trigger is missing, under triggersConfigured. A Playwright storefront whose request names every element a production pipeline carries asked for it in as many words. O-003 is the oracle that has to see its consequence in the workflow the run wrote.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/ci-eval/ground-truth.json",
+      "mutationOperator": "plant-trigger-weekly-schedule-missing",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/ci-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+      },
+      "expectedObservableFailure": "The workflow written for full-meridian-storefront does not contain \"0 2 * * 0\".",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/ci/full-correct-pipeline/.github/workflows/test.yml",
+        "privateRef": null,
+        "digest": "sha256:4e24e7de2173a3b2d416a7f2dd454760f190fe53450a4f823d7940986738d861"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/ci/full-trigger-schedule-missing/.github/workflows/test.yml",
+        "privateRef": null,
+        "digest": "sha256:9f3590f44d96d5bd509edef35dcadc0c24831742ec5989d79eea2827d00e8b2d"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-001",
+        "behaviorId": "B-003",
+        "summary": "trigger-weekly-schedule is requested by docs/ci-requirements.md and has to appear in the workflow full-meridian-storefront writes.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/ci-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-trigger-weekly-schedule",
+          "interfaceId": "tea-ci-runner",
+          "operationId": "generate-pipeline",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-ci` against the project in `meridian-storefront/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `meridian-storefront`\n- `{config_source}`: `meridian-storefront/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `meridian-storefront/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `meridian-storefront/tests`\n\nThe pipeline this project needs is stated in `meridian-storefront/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `meridian-storefront/`, and write\n`meridian-storefront/test-artifacts/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `meridian-storefront/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "not",
+            "operands": [
+              {
+                "op": "containment",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-trigger-weekly-schedule/artifact/workflow"
+                  },
+                  {
+                    "literal": "0 2 * * 0"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-ci-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "containment",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/workflow"
+                },
+                {
+                  "literal": "0 2 * * 0"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-002",
+    "probeClass": "defect",
+    "behaviorId": "B-004",
+    "systemId": "tea-ci-full-meridian-storefront",
+    "implementationDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "artifactDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "commitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "rationale": "full-meridian-storefront: the contents: read permission grant is missing entirely, which githubActionsOutputPath's own request states. O-004 is the oracle that has to see its consequence in the workflow the run wrote.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/ci-eval/ground-truth.json",
+      "mutationOperator": "plant-permission-contents-read-missing",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/ci-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+      },
+      "expectedObservableFailure": "The workflow written for full-meridian-storefront does not contain \"contents: read\".",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/ci/full-correct-pipeline/.github/workflows/test.yml",
+        "privateRef": null,
+        "digest": "sha256:4e24e7de2173a3b2d416a7f2dd454760f190fe53450a4f823d7940986738d861"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/ci/full-permissions-missing/.github/workflows/test.yml",
+        "privateRef": null,
+        "digest": "sha256:3f67e8e3611fe2655aa77845eace9ddf705e0052ad243878ace118ce05377334"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-002",
+        "behaviorId": "B-004",
+        "summary": "permission-contents-read is requested by docs/ci-requirements.md and has to appear in the workflow full-meridian-storefront writes.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/ci-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-permission-contents-read",
+          "interfaceId": "tea-ci-runner",
+          "operationId": "generate-pipeline",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-ci` against the project in `meridian-storefront/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `meridian-storefront`\n- `{config_source}`: `meridian-storefront/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `meridian-storefront/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `meridian-storefront/tests`\n\nThe pipeline this project needs is stated in `meridian-storefront/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `meridian-storefront/`, and write\n`meridian-storefront/test-artifacts/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `meridian-storefront/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "not",
+            "operands": [
+              {
+                "op": "containment",
+                "operands": [
+                  {
+                    "pointer": "/interactions/manifest-permission-contents-read/artifact/workflow"
+                  },
+                  {
+                    "literal": "contents: read"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-ci-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "containment",
+              "operands": [
+                {
+                  "pointer": "/interactions/observed/artifact/workflow"
+                },
+                {
+                  "literal": "contents: read"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-003",
+    "probeClass": "defect",
+    "behaviorId": "B-022",
+    "systemId": "tea-ci-minimal-lantern-audit-log",
+    "implementationDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "artifactDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "commitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "rationale": "minimal-lantern-audit-log's request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. O-022 is the oracle that has to see the template's burn-in job in the workflow the run wrote.",
+    "qualification": {
+      "route": "controlled-mutation",
+      "mutationSource": "test/fixtures/ci-eval/ground-truth.json",
+      "mutationOperator": "plant-template-copied-onto-minimal",
+      "targetArtifact": {
+        "storage": "public",
+        "path": "test/fixtures/ci-eval/ground-truth.json",
+        "privateRef": null,
+        "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+      },
+      "expectedObservableFailure": "The workflow written for minimal-lantern-audit-log contains \"burn-in\".",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/ci/minimal-correct-pipeline/.github/workflows/test.yml",
+        "privateRef": null,
+        "digest": "sha256:e58c6b78968c4f13d474ae060c6e390ccb6ebff5e4b2047c89b23bbe97edf4ed"
+      },
+      "mutatedFailEvidence": {
+        "storage": "public",
+        "path": "test/replay/ci/minimal-template-copied/.github/workflows/test.yml",
+        "privateRef": null,
+        "digest": "sha256:97c56b9079d4f0d72000b27c3d7d3611184491910296b599a6eaaff68db1f34a"
+      },
+      "rollbackVerified": true
+    },
+    "expectedClean": false,
+    "defects": [
+      {
+        "defectId": "D-003",
+        "behaviorId": "B-022",
+        "summary": "minimal-lantern-audit-log's request forbids a burn-in loop, and the full-request template carries one.",
+        "severity": "critical",
+        "oracleEvidence": [
+          {
+            "storage": "public",
+            "path": "test/fixtures/ci-eval/ground-truth.json",
+            "privateRef": null,
+            "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+          }
+        ],
+        "source": "controlled-mutation",
+        "manifestationWitness": {
+          "legId": "manifest-template-copied",
+          "interfaceId": "tea-ci-runner",
+          "operationId": "generate-pipeline",
+          "inputs": {
+            "argument": {},
+            "option": {
+              "agent": "claude"
+            },
+            "environment": {},
+            "stdin": {
+              "kind": "text",
+              "value": "You are running the TEA workflow `bmad-testarch-ci` against the project in `lantern-audit-log/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `lantern-audit-log`\n- `{config_source}`: `lantern-audit-log/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `lantern-audit-log/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `lantern-audit-log/tests`\n\nThe pipeline this project needs is stated in `lantern-audit-log/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `lantern-audit-log/`, and write\n`lantern-audit-log/test-artifacts/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `lantern-audit-log/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+            }
+          },
+          "relation": {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/manifest-template-copied/artifact/workflow"
+              },
+              {
+                "literal": "burn-in"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "defectSignature": {
+      "interfaceKind": "cli",
+      "invocation": {
+        "executable": "tea-ci-runner",
+        "subcommandPath": []
+      },
+      "observableChannel": "artifact",
+      "condition": {
+        "selector": {
+          "inputBinding": {
+            "path": null,
+            "query": null,
+            "header": null,
+            "body": null,
+            "argument": null,
+            "option": {
+              "agent": {
+                "matcher": "any"
+              }
+            },
+            "environment": null,
+            "stdin": null,
+            "arguments": null
+          }
+        },
+        "predicate": {
+          "op": "containment",
+          "operands": [
+            {
+              "pointer": "/interactions/observed/artifact/workflow"
+            },
+            {
+              "literal": "burn-in"
+            }
+          ]
+        }
+      }
+    }
+  },
+  {
+    "schemaVersion": 5,
+    "parentDigest": null,
+    "revisionCount": 0,
+    "probeId": "P-004",
+    "probeClass": "zero-action",
+    "behaviorId": "B-017",
+    "systemId": "tea-ci-minimal-lantern-audit-log",
+    "implementationDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "artifactDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "commitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "rationale": "minimal-lantern-audit-log states five elements and the workflow carries exactly them, so any gap or addition the run reports against it is a false positive. It is the control that stops the suite scoring well by only ever catching an over-generous pipeline.",
+    "qualification": {
+      "route": "clean-control",
+      "baselinePassEvidence": {
+        "storage": "public",
+        "path": "test/replay/ci/minimal-correct-pipeline/.github/workflows/test.yml",
+        "privateRef": null,
+        "digest": "sha256:e58c6b78968c4f13d474ae060c6e390ccb6ebff5e4b2047c89b23bbe97edf4ed"
+      },
+      "revisionCommitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+      "noKnownDefectStatement": "A backend service whose request is one job and a sentence forbidding everything else"
+    },
+    "expectedClean": true,
+    "defects": []
+  }
+]

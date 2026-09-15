@@ -1,0 +1,52 @@
+{
+  "$comment": [
+    "The full-request template (four jobs: lint, unit-style test, sharded e2e, burn-in) written for the backend service that asked for one job and nothing else. This is the case negativeControls' 'no-element-the-request-did-not-ask-for' exists to catch, and it is a shape step-02's own template produces when adaptation is skipped.",
+    "The five requested elements are unaffected, because a superset of them is still present: the pull_request trigger, contents:read, the Node version, npm ci and npm test all appear somewhere in the four-job pipeline. Nine elements the request never named are counted: the push trigger, the schedule trigger, the npm run test:e2e invocation, the lint gate, the shard matrix, the burn-in job, and the artifact uploads in both the e2e and burn-in jobs (each upload step names both playwright-report/ and test-results/ in one path list, so it is counted once per job rather than once per path). mustNotEmit's seven tokens (schedule:, push:, workflow_dispatch, upload-artifact, burn-in, shard, npm run lint) each resolve against this document for the contract's own oracle, which is the corpus's second, independent statement of the same finding."
+  ],
+  "id": "minimal-template-copied",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "minimal-lantern-audit-log",
+    "scoringInputsDigest": "sha256:2f7f5271cf9c348bcb4c63137fb58f8722a344c34fc7fd808ac4e9f5773ff193"
+  },
+  "derivation": [
+    "The full-request template (four jobs: lint, unit-style test, sharded e2e, burn-in) written for the backend service that asked for one job and nothing else. This is the case negativeControls' 'no-element-the-request-did-not-ask-for' exists to catch, and it is a shape step-02's own template produces when adaptation is skipped.",
+    "The five requested elements are unaffected, because a superset of them is still present: the pull_request trigger, contents:read, the Node version, npm ci and npm test all appear somewhere in the four-job pipeline. Nine elements the request never named are counted: the push trigger, the schedule trigger, the npm run test:e2e invocation, the lint gate, the shard matrix, the burn-in job, and the artifact uploads in both the e2e and burn-in jobs (each upload step names both playwright-report/ and test-results/ in one path list, so it is counted once per job rather than once per path). mustNotEmit's seven tokens (schedule:, push:, workflow_dispatch, upload-artifact, burn-in, shard, npm run lint) each resolve against this document for the contract's own oracle, which is the corpus's second, independent statement of the same finding."
+  ],
+  "result": {
+    "isMinimalRequest": true,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true
+    },
+    "elementMisses": [],
+    "unrequested": [
+      "trigger: push",
+      "trigger: schedule",
+      "command: npm run test:e2e in job e2e step 6",
+      "command: npm run test:e2e in job burn-in step 5",
+      "gate: lint job lint",
+      "gate: shard matrix in job e2e",
+      "gate: burn-in job burn-in",
+      "artifact: playwright-report/ test-results/ in job e2e",
+      "artifact: playwright-report/ test-results/ in job burn-in"
+    ],
+    "ruleViolations": []
+  }
+}

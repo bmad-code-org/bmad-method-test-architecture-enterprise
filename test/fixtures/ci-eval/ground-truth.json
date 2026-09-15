@@ -1,0 +1,421 @@
+{
+  "$comment": [
+    "Ground truth for the bmad-testarch-ci behavioral eval. It was authored from the fixture design and",
+    "from the skill's own step files. No CI run produced any value in this file.",
+    "",
+    "Each fixture set is one project staged into its own workspace, and each project carries the pipeline",
+    "request its team wrote at docs/ci-requirements.md. That request is the only statement of what the",
+    "run is asked for, and the agent reads it; this file restates each requested element beside a",
+    "verbatim `requestQuote` that test/eval-ci.js resolves in the request file, so nothing here scores a",
+    "run on something it was never asked. An element is one thing a reader can point at in the generated",
+    "workflow: a trigger, a permission, a command, a gate, an artifact, the Node version source.",
+    "",
+    "The set with the full request asks for everything a production pipeline carries, so the template",
+    "the workflow ships is close to the answer and the measurement is whether each element survives",
+    "adaptation. The set with the minimal request asks for one job and says in as many words that nothing",
+    "else is wanted, so a run that copies the template onto it has accumulated a schedule, a lint job,",
+    "sharding, a burn-in loop and artifact uploads the request never mentioned. That set is the control:",
+    "a suite that only rewarded requested elements would be cleared by a workflow that emits everything.",
+    "",
+    "Every expected element names the rule in the workflow that produces it, under skillRuleCitations,",
+    "and test/eval-ci.js fails the corpus when a cited section is gone from the file it names or no longer",
+    "states the rule.",
+    "",
+    "The harness must not put this file into the agent's context, and it asserts that rather than",
+    "assuming it: no staged file carries these bytes, no staged path is named for it, and the assembled",
+    "prompt carries none of the keys that appear only here.",
+    "",
+    "projectRoot is the directory each project is staged under, and it is the one fact about a set the",
+    "prompt carries. It names the service and never the set's role, because a run that reads `minimal`",
+    "in its own working directory has been told the answer."
+  ],
+  "platform": "github-actions",
+  "outputPath": ".github/workflows/test.yml",
+  "skillRuleCitations": {
+    "githubActionsOutputPath": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
+      "section": "1. Resolve Output Path and Select Template",
+      "lines": "106-122",
+      "rule": "For GitHub Actions the pipeline is written to {project-root}/.github/workflows/test.yml, adapted from the shipped template to the project's stack and framework.",
+      "requiredPhrase": "{project-root}/.github/workflows/test.yml"
+    },
+    "ciPlatformFromConfig": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-01-preflight.md",
+      "section": "5. Detect CI Platform",
+      "lines": "98-108",
+      "rule": "When ci_platform is set explicitly to something other than auto, the run uses that value and skips detection.",
+      "requiredPhrase": "use that value"
+    },
+    "fileIsSyntacticallyValid": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "section": "Step 2: CI Pipeline Configuration",
+      "lines": "40-54",
+      "rule": "The generated file must be syntactically valid, with no YAML errors. A file that does not parse is a defect in the deliverable, whatever it was meant to say.",
+      "requiredPhrase": "File is syntactically valid (no YAML/Groovy errors)"
+    },
+    "adaptTheTemplate": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
+      "section": "1. Resolve Output Path and Select Template",
+      "lines": "119",
+      "rule": "The shipped template is a starting point to adapt, so a pipeline that carries the template's stages regardless of what the project asked for has skipped the adaptation the step requires.",
+      "requiredPhrase": "Adapt the template"
+    },
+    "triggersConfigured": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "section": "Configuration Validation",
+      "lines": "114-121",
+      "rule": "The pipeline's triggers are configured: push, pull_request and schedule as the project needs them.",
+      "requiredPhrase": "Triggers configured (push, pull_request, schedule)"
+    },
+    "noDirectInterpolation": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
+      "section": "Security: Script Injection Prevention",
+      "lines": "123-134",
+      "rule": "Unsafe contexts are never interpolated directly into a run: block; they pass through env: and are referenced as a quoted shell variable.",
+      "requiredPhrase": "No direct interpolation"
+    },
+    "unsafePatternsInRun": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-v/step-01-validate.md",
+      "section": "3a. Script Injection Scan",
+      "lines": "62-75",
+      "rule": "${{ inputs.* }}, ${{ github.event.* }} and ${{ github.head_ref }} inside a run: block are flagged as FAIL by the workflow's own validation pass.",
+      "requiredPhrase": "Unsafe patterns to flag (FAIL):"
+    },
+    "gateMustBeAbleToFail": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03-configure-quality-gates.md",
+      "section": "1. Burn-In Configuration",
+      "lines": "68",
+      "rule": "continue-on-error belongs on artifact collection and never on a step that runs tests, so a test step that cannot fail the job is a defect in the gate.",
+      "requiredPhrase": "never on a step that runs tests"
+    },
+    "nodeVersionFromNvmrc": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-01-preflight.md",
+      "section": "6. Read Environment Context",
+      "lines": "116-127",
+      "rule": "The Node version comes from .nvmrc when the project has one, and the pipeline uses that version rather than a hardcoded one.",
+      "requiredPhrase": "Read `.nvmrc` if present"
+    },
+    "pipelineStages": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-02-generate-pipeline.md",
+      "section": "2. Pipeline Stages",
+      "lines": "161-172",
+      "rule": "The pipeline carries a lint stage, a test stage with parallel shards, a burn-in stage and a report stage, as the project's request calls for them.",
+      "requiredPhrase": "test (parallel shards)"
+    },
+    "failFastFalse": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "section": "Step 3: Parallel Sharding",
+      "lines": "55-61",
+      "rule": "A sharded matrix sets fail-fast to false, so one failing shard does not cancel the others and every shard reports.",
+      "requiredPhrase": "fail-fast set to false"
+    },
+    "burnInIterations": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "section": "Step 4: Burn-In Loop",
+      "lines": "62-70",
+      "rule": "An enabled burn-in loop runs 10 iterations and exits on the first failure.",
+      "requiredPhrase": "10 iterations configured (when enabled)"
+    },
+    "burnInSkippedForBackend": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/steps-c/step-03-configure-quality-gates.md",
+      "section": "1. Burn-In Configuration",
+      "lines": "63-66",
+      "rule": "A backend-only stack skips burn-in by default, and a run honors an explicit request either way.",
+      "requiredPhrase": "Skip burn-in by default"
+    },
+    "artifactsOnFailureOnly": {
+      "file": "src/workflows/testarch/bmad-testarch-ci/checklist.md",
+      "section": "Step 6: Artifact Collection",
+      "lines": "79-86",
+      "rule": "Artifacts are uploaded on failure only, at the paths the framework writes, with a retention period set.",
+      "requiredPhrase": "Artifacts upload on failure only"
+    }
+  },
+  "negativeControls": [
+    {
+      "id": "configuration-must-parse",
+      "what": "The generated file has to be YAML a parser accepts. A workflow that does not parse never runs, whatever it was meant to say.",
+      "howToExercise": "Every generated workflow is parsed with the yaml package in strict mode; a parse error counts as a parse failure, and the ceiling is zero."
+    },
+    {
+      "id": "configuration-must-lint-clean",
+      "what": "The generated file has to pass actionlint under the flags the harness pins. A job that needs an undefined job, an unknown action input, a type error in an expression or an untrusted input in a run block is a workflow that fails on the first push.",
+      "howToExercise": "actionlint is run on every generated workflow with shellcheck and pyflakes disabled, and every reported error counts as a lint finding, with a ceiling of zero."
+    },
+    {
+      "id": "no-element-the-request-did-not-ask-for",
+      "what": "A run must not accumulate triggers, permissions, test commands, gates or artifact uploads the request never mentioned. The template is a starting point to adapt, and the minimal request says outright that nothing beyond its list is wanted.",
+      "howToExercise": "Every trigger, permission scope, test-runner invocation, gate job and upload step in the generated workflow is matched against the requested elements, and each one that matches nothing is counted, with a ceiling of zero."
+    },
+    {
+      "id": "no-unsafe-interpolation-in-run",
+      "what": "A run: block must not interpolate inputs.*, github.event.* or github.head_ref directly, and a step that runs tests must not carry continue-on-error. Both are rules the workflow states about its own output.",
+      "howToExercise": "Every run: script is scanned for the three unsafe contexts and every test-running step for continue-on-error; each hit is a workflow rule violation, with a ceiling of zero."
+    },
+    {
+      "id": "project-files-are-read-only",
+      "what": "The workflow scaffolds a pipeline and does not edit the project it was handed. A run that rewrote package.json or a test file has changed the benchmark the next run is measured against.",
+      "howToExercise": "The harness digests every declared project file before and after every run; a changed or deleted one is a fixture mutation. Added files are not counted, because a scaffolder adds files."
+    }
+  ],
+  "rejectedCases": [
+    {
+      "id": "platform-other-than-github-actions",
+      "why": "The story pins actionlint, which lints GitHub Actions and nothing else, so every set here targets GitHub Actions and writes .github/workflows/test.yml. A GitLab, Jenkins, Azure or Harness set would have no linter to hold it to and would score parsing alone."
+    },
+    {
+      "id": "request-stated-only-in-the-prompt",
+      "why": "The request is a file in the project, docs/ci-requirements.md, which the agent discovers the way it discovers everything else about the project. A request carried only in the prompt would be scored on text the workflow's own steps never read from disk, and the corpus could not check that a quoted element was ever asked for."
+    },
+    {
+      "id": "request-with-fewer-than-three-elements",
+      "why": "A request asking for one or two things cannot tell a pipeline that honored it from a pipeline that happened to carry them. Every request here names a trigger, a permission and a command at the least, and the minimal one names five elements and forbids the rest."
+    }
+  ],
+  "fixtureSets": [
+    {
+      "id": "full-meridian-storefront",
+      "root": "full",
+      "projectRoot": "meridian-storefront",
+      "remoteOwner": "meridian-labs",
+      "title": "A Playwright storefront whose request names every element a production pipeline carries",
+      "requestSource": "docs/ci-requirements.md",
+      "nvmrcVersion": "24",
+      "isMinimalRequest": false,
+      "projectFiles": [
+        ".nvmrc",
+        "docs/ci-requirements.md",
+        "eslint.config.mjs",
+        "package-lock.json",
+        "package.json",
+        "playwright.config.ts",
+        "src/cart.js",
+        "tests/e2e/checkout.spec.ts",
+        "tests/unit/cart-total.test.js"
+      ],
+      "expectedElements": [
+        {
+          "id": "trigger-push-main",
+          "kind": "trigger",
+          "event": "push",
+          "branches": [
+            "main"
+          ],
+          "rule": "triggersConfigured",
+          "requestQuote": "Run on every push to `main`.",
+          "contractToken": "push:"
+        },
+        {
+          "id": "trigger-pull-request-main",
+          "kind": "trigger",
+          "event": "pull_request",
+          "branches": [
+            "main"
+          ],
+          "rule": "triggersConfigured",
+          "requestQuote": "Run on every pull request targeting `main`.",
+          "contractToken": "pull_request:"
+        },
+        {
+          "id": "trigger-weekly-schedule",
+          "kind": "trigger",
+          "event": "schedule",
+          "cron": "0 2 * * 0",
+          "rule": "triggersConfigured",
+          "requestQuote": "Run on a weekly schedule, Sundays at 02:00 UTC (`0 2 * * 0`), for the burn-in job.",
+          "contractToken": "0 2 * * 0"
+        },
+        {
+          "id": "permission-contents-read",
+          "kind": "permission",
+          "scope": "contents",
+          "level": "read",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "Grant the workflow `contents: read` and no other permission.",
+          "contractToken": "contents: read"
+        },
+        {
+          "id": "node-version-from-nvmrc",
+          "kind": "node-version",
+          "rule": "nodeVersionFromNvmrc",
+          "requestQuote": "Use the Node version pinned in `.nvmrc`.",
+          "contractToken": null
+        },
+        {
+          "id": "command-install",
+          "kind": "command",
+          "command": "npm ci",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "Install with `npm ci`.",
+          "contractToken": "npm ci"
+        },
+        {
+          "id": "command-unit-tests",
+          "kind": "command",
+          "command": "npm test",
+          "rule": "pipelineStages",
+          "requestQuote": "Unit tests: `npm test`.",
+          "contractToken": "npm test"
+        },
+        {
+          "id": "command-e2e-tests",
+          "kind": "command",
+          "command": "npm run test:e2e",
+          "rule": "pipelineStages",
+          "requestQuote": "End-to-end tests: `npm run test:e2e`, sharded four ways with `fail-fast` off so every shard reports.",
+          "contractToken": "npm run test:e2e"
+        },
+        {
+          "id": "gate-lint-precedes-tests",
+          "kind": "gate",
+          "gate": "lint-precedes-tests",
+          "command": "npm run lint",
+          "testCommands": [
+            "npm test",
+            "npm run test:e2e"
+          ],
+          "rule": "pipelineStages",
+          "requestQuote": "Lint: `npm run lint`, and the test jobs wait for it.",
+          "contractToken": "npm run lint"
+        },
+        {
+          "id": "gate-matrix-shards",
+          "kind": "gate",
+          "gate": "matrix-shards",
+          "command": "npm run test:e2e",
+          "shards": 4,
+          "failFast": false,
+          "rule": "failFastFalse",
+          "requestQuote": "End-to-end tests: `npm run test:e2e`, sharded four ways with `fail-fast` off so every shard reports.",
+          "contractToken": "fail-fast: false"
+        },
+        {
+          "id": "gate-burn-in",
+          "kind": "gate",
+          "gate": "burn-in",
+          "command": "npm run test:e2e",
+          "iterations": 10,
+          "rule": "burnInIterations",
+          "requestQuote": "The end-to-end suite runs a burn-in of 10 iterations on pull requests and on the weekly schedule, and the job fails on the first failing iteration.",
+          "contractToken": "burn-in"
+        },
+        {
+          "id": "artifact-playwright-report",
+          "kind": "artifact",
+          "pathToken": "playwright-report",
+          "onFailureOnly": true,
+          "retentionDays": 14,
+          "rule": "artifactsOnFailureOnly",
+          "requestQuote": "Upload `playwright-report/` and `test-results/` when a job fails, and only then, kept for 14 days.",
+          "contractToken": "playwright-report"
+        },
+        {
+          "id": "artifact-test-results",
+          "kind": "artifact",
+          "pathToken": "test-results",
+          "onFailureOnly": true,
+          "retentionDays": 14,
+          "rule": "artifactsOnFailureOnly",
+          "requestQuote": "Upload `playwright-report/` and `test-results/` when a job fails, and only then, kept for 14 days.",
+          "contractToken": "test-results"
+        }
+      ],
+      "mustNotEmit": [],
+      "why": "Thirteen elements, every one stated in docs/ci-requirements.md in as many words. The shipped template already carries most of them for a Playwright stack, so this set measures whether the run keeps each one while adapting the template: the weekly cron and the 14-day retention differ from the template's defaults, the request names the unit and lint commands the template leaves as placeholders, and the permissions block is nowhere in the template at all."
+    },
+    {
+      "id": "minimal-lantern-audit-log",
+      "root": "minimal",
+      "projectRoot": "lantern-audit-log",
+      "remoteOwner": "lantern-platform",
+      "title": "A backend service whose request is one job and a sentence forbidding everything else",
+      "requestSource": "docs/ci-requirements.md",
+      "nvmrcVersion": "24",
+      "isMinimalRequest": true,
+      "projectFiles": [
+        ".nvmrc",
+        "docs/ci-requirements.md",
+        "package-lock.json",
+        "package.json",
+        "src/audit-log.js",
+        "tests/audit-log.test.js"
+      ],
+      "expectedElements": [
+        {
+          "id": "trigger-pull-request-main",
+          "kind": "trigger",
+          "event": "pull_request",
+          "branches": [
+            "main"
+          ],
+          "rule": "triggersConfigured",
+          "requestQuote": "Trigger: pull requests targeting `main`.",
+          "contractToken": "pull_request:"
+        },
+        {
+          "id": "permission-contents-read",
+          "kind": "permission",
+          "scope": "contents",
+          "level": "read",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "Permissions: `contents: read` only.",
+          "contractToken": "contents: read"
+        },
+        {
+          "id": "node-version-from-nvmrc",
+          "kind": "node-version",
+          "rule": "nodeVersionFromNvmrc",
+          "requestQuote": "use the Node version pinned in `.nvmrc`",
+          "contractToken": null
+        },
+        {
+          "id": "command-install",
+          "kind": "command",
+          "command": "npm ci",
+          "rule": "githubActionsOutputPath",
+          "requestQuote": "install with `npm ci`",
+          "contractToken": "npm ci"
+        },
+        {
+          "id": "command-unit-tests",
+          "kind": "command",
+          "command": "npm test",
+          "rule": "pipelineStages",
+          "requestQuote": "then run `npm test`.",
+          "contractToken": "npm test"
+        }
+      ],
+      "mustNotEmit": [
+        {
+          "token": "schedule:",
+          "why": "The request says no schedule."
+        },
+        {
+          "token": "push:",
+          "why": "The request says no push trigger."
+        },
+        {
+          "token": "workflow_dispatch",
+          "why": "The request says no manual dispatch."
+        },
+        {
+          "token": "upload-artifact",
+          "why": "The request forbids artifact uploads."
+        },
+        {
+          "token": "burn-in",
+          "why": "The request forbids a burn-in loop, and step-03 skips burn-in for a backend stack by default."
+        },
+        {
+          "token": "shard",
+          "why": "The request forbids sharding."
+        },
+        {
+          "token": "npm run lint",
+          "why": "The request forbids a lint job, and the project declares no lint script."
+        }
+      ],
+      "why": "Five elements and a closing sentence that forbids the rest. The stack is backend, so step-03's own default is to skip burn-in, and the request adds that nothing beyond one job is wanted. A run that copies the shipped template onto this project carries a schedule trigger, a lint job, a four-way shard matrix, a burn-in loop and two upload steps the request never mentioned, and every one of them is counted as an unrequested element. This set is the control that stops a suite scoring well by emitting everything."
+    }
+  ]
+}

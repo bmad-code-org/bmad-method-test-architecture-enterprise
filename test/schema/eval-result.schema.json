@@ -227,6 +227,35 @@
                       "stdin",
                       "argv"
                     ]
+                  },
+                  "tools": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+                        },
+                        "version": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "args": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "version",
+                        "args"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [

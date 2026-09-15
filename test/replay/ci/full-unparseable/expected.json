@@ -1,0 +1,72 @@
+{
+  "$comment": [
+    "full-correct-pipeline with the push trigger's branches: [main] left as branches: [main, an unclosed flow sequence.",
+    "The yaml package refuses the document in strict mode with a BAD_INDENT fault, parseFailures is 1, and every one of the thirteen requested elements is scored missing because checkElement is never reached; the harness's own scoreRun records 'the workflow did not parse' for each. actionlint independently reports the same file as unparseable YAML, which is the corroboration this corpus exists to demand: a file that does not parse fails both readers, not just one."
+  ],
+  "id": "full-unparseable",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "full-correct-pipeline with the push trigger's branches: [main] left as branches: [main, an unclosed flow sequence.",
+    "The yaml package refuses the document in strict mode with a BAD_INDENT fault, parseFailures is 1, and every one of the thirteen requested elements is scored missing because checkElement is never reached; the harness's own scoreRun records 'the workflow did not parse' for each. actionlint independently reports the same file as unparseable YAML, which is the corroboration this corpus exists to demand: a file that does not parse fails both readers, not just one."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": false,
+      "errors": [
+        "BAD_INDENT: Flow sequence in block collection must be sufficiently indented and end with a ] at line 10, column 3:"
+      ]
+    },
+    "lint": {
+      "findings": [
+        {
+          "kind": "syntax-check",
+          "message": "could not parse as YAML: did not find expected ',' or ']'",
+          "line": 8
+        }
+      ]
+    },
+    "elements": {
+      "trigger-push-main": false,
+      "trigger-pull-request-main": false,
+      "trigger-weekly-schedule": false,
+      "permission-contents-read": false,
+      "node-version-from-nvmrc": false,
+      "command-install": false,
+      "command-unit-tests": false,
+      "command-e2e-tests": false,
+      "gate-lint-precedes-tests": false,
+      "gate-matrix-shards": false,
+      "gate-burn-in": false,
+      "artifact-playwright-report": false,
+      "artifact-test-results": false
+    },
+    "elementMisses": [
+      "trigger-push-main: the workflow did not parse",
+      "trigger-pull-request-main: the workflow did not parse",
+      "trigger-weekly-schedule: the workflow did not parse",
+      "permission-contents-read: the workflow did not parse",
+      "node-version-from-nvmrc: the workflow did not parse",
+      "command-install: the workflow did not parse",
+      "command-unit-tests: the workflow did not parse",
+      "command-e2e-tests: the workflow did not parse",
+      "gate-lint-precedes-tests: the workflow did not parse",
+      "gate-matrix-shards: the workflow did not parse",
+      "gate-burn-in: the workflow did not parse",
+      "artifact-playwright-report: the workflow did not parse",
+      "artifact-test-results: the workflow did not parse"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

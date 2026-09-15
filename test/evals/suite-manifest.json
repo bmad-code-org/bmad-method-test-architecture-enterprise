@@ -7,9 +7,9 @@
     "way is the most expensive possible mistake to make about your own quality gate.",
     "",
     "Only `evalType: behavioral` discharges a skill's coverage obligation. Fragment selection measures which",
-    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so four of the",
-    "eight skills it spans are still listed under `deferred`. The other four, `nfr`, `test-design`, `test-review`",
-    "and `trace`, each carry a behavioral suite of their own, and that is what discharges them.",
+    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so three of the",
+    "eight skills it spans are still listed under `deferred`. The other five, `ci`, `nfr`, `test-design`,",
+    "`test-review` and `trace`, each carry a behavioral suite of their own, and that is what discharges them.",
     "",
     "`ciTier` is the tier at which a suite runs in full. `npm run eval:all -- --preflight-only` runs each suite's",
     "`harnessOptions.preflightArgs` instead, which validates the data and then probes the runner: the executable",
@@ -137,6 +137,69 @@
       "caseCount": 24,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["read-only"]
+    },
+    {
+      "$comment": [
+        "Two projects, two written requests, each its own service and each its own thresholds.",
+        "",
+        "`fixtures` is the two projects plus their request files. `groundTruth` is the oracle, which the",
+        "harness searches every assembled prompt and every staged file for before it spends a call, the",
+        "same guard every sibling suite applies.",
+        "",
+        "Two thresholds are the point of the suite and both are zero: a generated workflow must parse and",
+        "must lint clean under actionlint, pinned flags recorded in every result record. The recall over",
+        "requested elements and the accuracy over triggers alone carry the judgment about whether the run",
+        "read the request; the unrequested-element ceiling and the two workflow-rule ceilings close the",
+        "cells recall leaves open, the way bmad-tea-routing's three counts close cells its own recall leaves",
+        "open: a run that copies the shipped template regardless of what was asked would still keep every",
+        "requested element and score well on recall alone.",
+        "",
+        "Two repetitions. A full CI scaffold reads four step files, a template and several knowledge",
+        "fragments, and writes a workflow plus helper scripts and documentation, so it costs more than a",
+        "fragment selection, and two is the smallest number that can say whether the answer is reproducible."
+      ],
+      "id": "ci",
+      "skill": "bmad-testarch-ci",
+      "evalType": "behavioral",
+      "harness": "test/eval-ci.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": [
+        "test/fixtures/ci-eval/full/.nvmrc",
+        "test/fixtures/ci-eval/full/docs/ci-requirements.md",
+        "test/fixtures/ci-eval/full/eslint.config.mjs",
+        "test/fixtures/ci-eval/full/package-lock.json",
+        "test/fixtures/ci-eval/full/package.json",
+        "test/fixtures/ci-eval/full/playwright.config.ts",
+        "test/fixtures/ci-eval/full/src/cart.js",
+        "test/fixtures/ci-eval/full/tests/e2e/checkout.spec.ts",
+        "test/fixtures/ci-eval/full/tests/unit/cart-total.test.js",
+        "test/fixtures/ci-eval/minimal/.nvmrc",
+        "test/fixtures/ci-eval/minimal/docs/ci-requirements.md",
+        "test/fixtures/ci-eval/minimal/package-lock.json",
+        "test/fixtures/ci-eval/minimal/package.json",
+        "test/fixtures/ci-eval/minimal/src/audit-log.js",
+        "test/fixtures/ci-eval/minimal/tests/audit-log.test.js"
+      ],
+      "groundTruth": ["test/fixtures/ci-eval/ground-truth.json"],
+      "contracts": ["test/contracts/ci.contract.json"],
+      "thresholds": {
+        "maxParseFailures": 0,
+        "maxLintFindings": 0,
+        "requestedElementRecall": 0.9,
+        "triggerAccuracy": 1,
+        "maxUnrequestedElements": 0,
+        "maxWorkflowRuleViolations": 0,
+        "maxUnstableCases": 0,
+        "maxFixtureMutations": 0
+      },
+      "repetitions": 2,
+      "caseCount": 2,
+      "ciTier": "full-matrix",
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -391,12 +454,6 @@
       "owner": "TEA maintainers",
       "missingEvidence": "Fragment selection only. No fixed implementation and no qualified seeded regression exist to run the generated tests against.",
       "exitCondition": "A behavioral suite proves the workflow generates tests that pass on the fixed implementation, fail on a qualified seeded regression, and avoid vacuous or duplicate coverage."
-    },
-    {
-      "skill": "bmad-testarch-ci",
-      "owner": "TEA maintainers",
-      "missingEvidence": "Fragment selection only. The generated pipeline configuration is never parsed or linted, so a syntactically invalid workflow would pass unnoticed.",
-      "exitCondition": "A behavioral suite proves the workflow produces syntactically valid pipeline configuration with the requested triggers, permissions, test commands, quality gates, and artifacts."
     },
     {
       "skill": "bmad-testarch-framework",

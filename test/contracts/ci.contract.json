@@ -1,0 +1,1338 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-ci-behavioral",
+  "sourceSpecDigest": "sha256:f26614c4fd0c3c93696461a2bfc71f65988fcda0c2be25fee46db6c498c4fffd",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "full-meridian-storefront: trigger-push-main is requested. Run on every push to `main`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-001"]
+    },
+    {
+      "id": "B-002",
+      "description": "full-meridian-storefront: trigger-pull-request-main is requested. Run on every pull request targeting `main`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-002"]
+    },
+    {
+      "id": "B-003",
+      "description": "full-meridian-storefront: trigger-weekly-schedule is requested. Run on a weekly schedule, Sundays at 02:00 UTC (`0 2 * * 0`), for the burn-in job.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-003"]
+    },
+    {
+      "id": "B-004",
+      "description": "full-meridian-storefront: permission-contents-read is requested. Grant the workflow `contents: read` and no other permission.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-004"]
+    },
+    {
+      "id": "B-005",
+      "description": "full-meridian-storefront: command-install is requested. Install with `npm ci`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-005"]
+    },
+    {
+      "id": "B-006",
+      "description": "full-meridian-storefront: command-unit-tests is requested. Unit tests: `npm test`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-006"]
+    },
+    {
+      "id": "B-007",
+      "description": "full-meridian-storefront: command-e2e-tests is requested. End-to-end tests: `npm run test:e2e`, sharded four ways with `fail-fast` off so every shard reports.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-007"]
+    },
+    {
+      "id": "B-008",
+      "description": "full-meridian-storefront: gate-lint-precedes-tests is requested. Lint: `npm run lint`, and the test jobs wait for it.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-008"]
+    },
+    {
+      "id": "B-009",
+      "description": "full-meridian-storefront: gate-matrix-shards is requested. End-to-end tests: `npm run test:e2e`, sharded four ways with `fail-fast` off so every shard reports.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-009"]
+    },
+    {
+      "id": "B-010",
+      "description": "full-meridian-storefront: gate-burn-in is requested. The end-to-end suite runs a burn-in of 10 iterations on pull requests and on the weekly schedule, and the job fails on the first failing iteration.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-010"]
+    },
+    {
+      "id": "B-011",
+      "description": "full-meridian-storefront: artifact-playwright-report is requested. Upload `playwright-report/` and `test-results/` when a job fails, and only then, kept for 14 days.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-011"]
+    },
+    {
+      "id": "B-012",
+      "description": "full-meridian-storefront: artifact-test-results is requested. Upload `playwright-report/` and `test-results/` when a job fails, and only then, kept for 14 days.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the full request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-012"]
+    },
+    {
+      "id": "B-013",
+      "description": "full-meridian-storefront: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each run left the workflow file the platform requires on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "full-meridian-storefront/projectFiles"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-013"]
+    },
+    {
+      "id": "B-014",
+      "description": "minimal-lantern-audit-log: trigger-pull-request-main is requested. Trigger: pull requests targeting `main`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-014"]
+    },
+    {
+      "id": "B-015",
+      "description": "minimal-lantern-audit-log: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-015"]
+    },
+    {
+      "id": "B-016",
+      "description": "minimal-lantern-audit-log: command-install is requested. install with `npm ci`",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-016"]
+    },
+    {
+      "id": "B-017",
+      "description": "minimal-lantern-audit-log: command-unit-tests is requested. then run `npm test`.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries every element the request names.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/expectedElements"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "requested-element-dropped"
+        }
+      ],
+      "oracles": ["O-017"]
+    },
+    {
+      "id": "B-018",
+      "description": "minimal-lantern-audit-log: the request forbids this. The request says no schedule.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries none of the elements its request forbids by name.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/mustNotEmit"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "template-copied-onto-a-minimal-request"
+        }
+      ],
+      "oracles": ["O-018"]
+    },
+    {
+      "id": "B-019",
+      "description": "minimal-lantern-audit-log: the request forbids this. The request says no push trigger.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries none of the elements its request forbids by name.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/mustNotEmit"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "template-copied-onto-a-minimal-request"
+        }
+      ],
+      "oracles": ["O-019"]
+    },
+    {
+      "id": "B-020",
+      "description": "minimal-lantern-audit-log: the request forbids this. The request says no manual dispatch.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries none of the elements its request forbids by name.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/mustNotEmit"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "template-copied-onto-a-minimal-request"
+        }
+      ],
+      "oracles": ["O-020"]
+    },
+    {
+      "id": "B-021",
+      "description": "minimal-lantern-audit-log: the request forbids this. The request forbids artifact uploads.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries none of the elements its request forbids by name.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/mustNotEmit"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "template-copied-onto-a-minimal-request"
+        }
+      ],
+      "oracles": ["O-021"]
+    },
+    {
+      "id": "B-022",
+      "description": "minimal-lantern-audit-log: the request forbids this. The request forbids a burn-in loop, and step-03 skips burn-in for a backend stack by default.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries none of the elements its request forbids by name.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/mustNotEmit"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "template-copied-onto-a-minimal-request"
+        }
+      ],
+      "oracles": ["O-022"]
+    },
+    {
+      "id": "B-023",
+      "description": "minimal-lantern-audit-log: the request forbids this. The request forbids sharding.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries none of the elements its request forbids by name.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/mustNotEmit"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "template-copied-onto-a-minimal-request"
+        }
+      ],
+      "oracles": ["O-023"]
+    },
+    {
+      "id": "B-024",
+      "description": "minimal-lantern-audit-log: the request forbids this. The request forbids a lint job, and the project declares no lint script.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries none of the elements its request forbids by name.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/mustNotEmit"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "template-copied-onto-a-minimal-request"
+        }
+      ],
+      "oracles": ["O-024"]
+    },
+    {
+      "id": "B-025",
+      "description": "minimal-lantern-audit-log: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "severity": "critical",
+      "observableSuccessCriterion": "Each run left the workflow file the platform requires on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/projectFiles"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": ["O-025"]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: trigger-push-main is requested. Run on every push to `main`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"push:\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "push:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: trigger-pull-request-main is requested. Run on every pull request targeting `main`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"pull_request:\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "pull_request:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-003",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: trigger-weekly-schedule is requested. Run on a weekly schedule, Sundays at 02:00 UTC (`0 2 * * 0`), for the burn-in job.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"0 2 * * 0\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "0 2 * * 0"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-004",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: permission-contents-read is requested. Grant the workflow `contents: read` and no other permission.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"contents: read\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "contents: read"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-005",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: command-install is requested. Install with `npm ci`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm ci\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "npm ci"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-006",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: command-unit-tests is requested. Unit tests: `npm test`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm test\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "npm test"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-007",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: command-e2e-tests is requested. End-to-end tests: `npm run test:e2e`, sharded four ways with `fail-fast` off so every shard reports.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm run test:e2e\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "npm run test:e2e"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-008",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: gate-lint-precedes-tests is requested. Lint: `npm run lint`, and the test jobs wait for it.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm run lint\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "npm run lint"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-009",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: gate-matrix-shards is requested. End-to-end tests: `npm run test:e2e`, sharded four ways with `fail-fast` off so every shard reports.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"fail-fast: false\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "fail-fast: false"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-010",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: gate-burn-in is requested. The end-to-end suite runs a burn-in of 10 iterations on pull requests and on the weekly schedule, and the job fails on the first failing iteration.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"burn-in\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "burn-in"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-011",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: artifact-playwright-report is requested. Upload `playwright-report/` and `test-results/` when a job fails, and only then, kept for 14 days.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"playwright-report\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "playwright-report"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-012",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: artifact-test-results is requested. Upload `playwright-report/` and `test-results/` when a job fails, and only then, kept for 14 days.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for full-meridian-storefront, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"test-results\".",
+        "evidenceTargets": ["/interactions/ci-full-meridian-storefront/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+          },
+          {
+            "literal": "test-results"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-013",
+      "polarity": "expects-hold",
+      "commentary": "full-meridian-storefront: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the workflow artifact of the run for full-meridian-storefront.",
+        "negativeDomain": "A run that left no workflow file behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/ci-full-meridian-storefront/artifact/workflow",
+          "/interactions/ci-full-meridian-storefront/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-full-meridian-storefront/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-full-meridian-storefront/artifact/workflow"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-014",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: trigger-pull-request-main is requested. Trigger: pull requests targeting `main`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"pull_request:\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+          },
+          {
+            "literal": "pull_request:"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-015",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: permission-contents-read is requested. Permissions: `contents: read` only.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"contents: read\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+          },
+          {
+            "literal": "contents: read"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-016",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: command-install is requested. install with `npm ci`",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm ci\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+          },
+          {
+            "literal": "npm ci"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-017",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: command-unit-tests is requested. then run `npm test`.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow does not contain \"npm test\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+          },
+          {
+            "literal": "npm test"
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-018",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the request forbids this. The request says no schedule.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow contains \"schedule:\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              },
+              {
+                "literal": "schedule:"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-019",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the request forbids this. The request says no push trigger.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow contains \"push:\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              },
+              {
+                "literal": "push:"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-020",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the request forbids this. The request says no manual dispatch.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow contains \"workflow_dispatch\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              },
+              {
+                "literal": "workflow_dispatch"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-021",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the request forbids this. The request forbids artifact uploads.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow contains \"upload-artifact\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              },
+              {
+                "literal": "upload-artifact"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-022",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the request forbids this. The request forbids a burn-in loop, and step-03 skips burn-in for a backend stack by default.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow contains \"burn-in\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              },
+              {
+                "literal": "burn-in"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-023",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the request forbids this. The request forbids sharding.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow contains \"shard\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              },
+              {
+                "literal": "shard"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-024",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the request forbids this. The request forbids a lint job, and the project declares no lint script.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow contains \"npm run lint\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              },
+              {
+                "literal": "npm run lint"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-025",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the workflow artifact of the run for minimal-lantern-audit-log.",
+        "negativeDomain": "A run that left no workflow file behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/ci-minimal-lantern-audit-log/artifact/workflow",
+          "/interactions/ci-minimal-lantern-audit-log/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-ci-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "generate-pipeline",
+          "invocation": {
+            "executable": "tea-ci-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": true,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": ["agent"],
+              "permittedKeys": ["agent", "agent-cmd", "agent-arg", "env-pass", "model", "timeout-ms"],
+              "types": {
+                "agent": "string",
+                "agent-cmd": "string",
+                "agent-arg": "string",
+                "env-pass": "string",
+                "model": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": ["ANTHROPIC_API_KEY", "ANTHROPIC_BASE_URL", "CLAUDE_CODE_OAUTH_TOKEN", "HOME", "OPENAI_API_KEY", "USER"],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "HOME": "string",
+                "OPENAI_API_KEY": "string",
+                "USER": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": ["prompt"],
+              "permittedKeys": ["prompt"],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": ["workflow"],
+          "descriptorChannel": {
+            "kind": "artifact",
+            "artifactId": "workflow"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [],
+            "permittedKeys": [],
+            "types": {},
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "workflow-path-follows-the-platform",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-github-actions",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-ci` against the project in `meridian-storefront/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `meridian-storefront`\n- `{config_source}`: `meridian-storefront/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `meridian-storefront/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `meridian-storefront/tests`\n\nThe pipeline this project needs is stated in `meridian-storefront/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `meridian-storefront/`, and write\n`meridian-storefront/test-artifacts/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `meridian-storefront/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+                  }
+                }
+              },
+              {
+                "legId": "witness-alternate-platform",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-ci` against the project in `meridian-storefront/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `meridian-storefront`\n- `{config_source}`: `meridian-storefront/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `meridian-storefront/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `gitlab-ci`\n- `test_dir`: `meridian-storefront/tests`\n\nThe pipeline this project needs is stated in `meridian-storefront/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `meridian-storefront/`, and write\n`meridian-storefront/test-artifacts/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `meridian-storefront/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "existence",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-github-actions/artifact/workflow"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "existence",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-alternate-platform/artifact/workflow"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "ci-full-meridian-storefront",
+      "operationId": "generate-pipeline",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-ci` against the project in `meridian-storefront/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `meridian-storefront`\n- `{config_source}`: `meridian-storefront/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `meridian-storefront/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `meridian-storefront/tests`\n\nThe pipeline this project needs is stated in `meridian-storefront/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `meridian-storefront/`, and write\n`meridian-storefront/test-artifacts/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `meridian-storefront/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+          }
+        }
+      }
+    },
+    {
+      "stepId": "ci-minimal-lantern-audit-log",
+      "operationId": "generate-pipeline",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-ci` against the project in `lantern-audit-log/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders and variables to these values:\n\n- `{project-root}`: `lantern-audit-log`\n- `{config_source}`: `lantern-audit-log/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `lantern-audit-log/test-artifacts`\n- `{skill-root}`: `skill`\n- `ci_platform`: `github-actions`\n- `test_dir`: `lantern-audit-log/tests`\n\nThe pipeline this project needs is stated in `lantern-audit-log/docs/ci-requirements.md`, which its team wrote. Treat it as\nthe decisions the pipeline has to carry, and read the rest of the project the way step 1 says to.\n\nThis workspace has no shell, so the checks in step 1 that run a command, such as running the test suite\nlocally or confirming that dependencies are installed, cannot be executed here. Record each of those as\nnot run and continue; do not halt on them. Everything else step 1 asks about is readable from the tree.\n\n----- what to produce -----\nWrite the pipeline configuration to the path step 2 resolves for `ci_platform` under `lantern-audit-log/`, and write\n`lantern-audit-log/test-artifacts/ci-pipeline-progress.md` as the steps direct.\n\nDo not edit or delete any file that was under `lantern-audit-log/` when you started. This workflow adds a pipeline to a\nproject and changes nothing the project already had.\n\nWhen you are done, print one line naming the pipeline file you wrote. Nothing else you print is read."
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "Each plan step stages one project from test/fixtures/ci-eval/ into a disposable workspace: the project's files under its own root (meridian-storefront/ for full-meridian-storefront, lantern-audit-log/ for minimal-lantern-audit-log), a resolved _bmad/tea/config.yaml, a minimal .git/ directory, and the bmad-testarch-ci workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The workspace is the authorization's working directory, and the prompt on standard input names the project root and skill/ and resolves every placeholder against them. The project root is the one fact about the project the prompt carries, and it names the service rather than the project's role. The sensitivity witness differs its two legs on ci_platform rather than between the two projects: the two workflows differ because of the staged project, so a differential between the projects would attribute to the prompt a difference the project produced. Both witness legs stage the full project, because AD-10 reads every other leg of an operation as a clean leg and this operation has none besides them.",
+    "cleanup": "Delete the workspace. The corpus under test/fixtures/ci-eval/ is read-only and the harness digests it before and after every run.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 600,
+    "maxWallClockMinutes": 40,
+    "maxCostUsd": "8.00"
+  },
+  "safetyLimits": [
+    "The runner writes only inside the staged workspace, and only what the workflow scaffolds; the harness fails a run that changed the repository or a pre-existing project file.",
+    "This workflow adds a pipeline to a project and changes nothing the project already had.",
+    "No credential value appears in a prompt, an artifact, a log, or a result file."
+  ],
+  "requiredEvidence": [
+    "The workflow file each run wrote, in full.",
+    "The exit code of each invocation.",
+    "The digest of the prompt each run was given, so an edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 4,
+  "fixtureReset": null
+}
