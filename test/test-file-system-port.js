@@ -57,10 +57,14 @@
  *                                 without the suite identity, so the harness
  *                                 refuses with the manifest named.
  *
- *   test/lib/eval-record.js       Nothing scripted. Every fixture the manifest
- *                                 names must appear in the log as a read, which
- *                                 is `digestFiles`, and the `--json` path must
- *                                 appear as a write, which is `writeRecord`.
+ *   test/lib/eval-record.js       Nothing scripted, for every behavioural
+ *                                 harness in turn. The `--json` path must
+ *                                 appear as a write, which is `writeRecord`, and
+ *                                 each fixture the manifest names must be read
+ *                                 one more time than the same command without
+ *                                 `--json` reads it, which is `digestFiles`: the
+ *                                 path alone proves nothing, since pre-flight
+ *                                 has usually read it once already.
  *
  *   test/eval-fragment-selection.js
  *                                 One workflow's evals.json is scripted as text
@@ -73,9 +77,12 @@
  *                                 must fail. A direct read scores all 55 probes.
  *
  *   test/lib/eval-quality-inputs.js
- *                                 The scoring policy is scripted as text that is
- *                                 not JSON under the same run, which is the
- *                                 other file that module reads.
+ *                                 The scoring policy and, separately, the
+ *                                 isolation-manifest schema `eval-quality`
+ *                                 publishes are each scripted as text that is
+ *                                 not JSON under the same run; through
+ *                                 `fs.readFileSync` either would read the real
+ *                                 file and score every probe.
  *
  *   test/eval-nfr.js              Each of the three remaining behavioural
  *   test/eval-test-design.js      harnesses has its own corpus scripted as text
@@ -129,24 +136,106 @@ const SCORING_HARNESS = path.join(PROJECT_ROOT, 'test', 'test-probe-corpus.js');
  */
 const CORPUS_HARNESSES = [
   {
+    name: 'nfr',
+    suiteId: 'nfr',
     harness: path.join(PROJECT_ROOT, 'test', 'eval-nfr.js'),
     label: 'the nfr harness',
     scripted: path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval', 'ground-truth.json'),
     reports: /ground truth at .* is missing or not valid JSON/,
   },
   {
+    name: 'test-design',
+    suiteId: 'test-design',
     harness: path.join(PROJECT_ROOT, 'test', 'eval-test-design.js'),
     label: 'the test-design harness',
     scripted: path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval', 'ground-truth.json'),
     reports: /ground truth at .* is missing or not valid JSON/,
   },
   {
+    name: 'routing',
+    suiteId: 'bmad-tea-routing',
     harness: path.join(PROJECT_ROOT, 'test', 'eval-bmad-tea-routing.js'),
     label: 'the routing harness',
     scripted: path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval', 'intents.json'),
     reports: /intents\.json is not valid JSON/,
   },
 ];
+
+/** One entry of CORPUS_HARNESSES, found by name rather than by a position nothing pins. */
+function corpusHarness(name) {
+  const found = CORPUS_HARNESSES.find((entry) => entry.name === name);
+  if (found === undefined) throw new Error(`no entry named ${JSON.stringify(name)} in CORPUS_HARNESSES`);
+  return found;
+}
+
+/**
+ * A suite's declared fixture paths, read off the manifest itself rather than
+ * transcribed, so a fixture added to one suite does not silently make this
+ * stale, resolved against the repository root the way `digestFiles` resolves
+ * them.
+ *
+ * @param {string} suiteId
+ * @returns {string[]}
+ */
+function manifestFixturePaths(suiteId) {
+  const manifest = JSON.parse(fs.readFileSync(SUITE_MANIFEST, 'utf8'));
+  const suite = manifest.suites.find((entry) => entry.id === suiteId);
+  if (suite === undefined) throw new Error(`the manifest names no suite ${JSON.stringify(suiteId)}`);
+  return suite.fixtures.map((relative) => path.join(PROJECT_ROOT, relative));
+}
+
+/**
+ * The proof `test/eval-test-review.js`'s own case already gave itself:
+ * `digestFiles` and `writeSuiteResult` are in the harness's actual path, not
+ * just reachable from a function called directly.
+ *
+ * A fixture path appearing in the log at all proves nothing here: every
+ * fixture this checks is also a corpus or ground-truth file pre-flight has
+ * already read once for an unrelated reason, so the path is in the log
+ * whether `digestFiles` runs or not. What `digestFiles` adds is a second read
+ * of the same path, so this runs the harness twice, once with `--json` and
+ * once without, and each fixture's read count must be exactly one higher in
+ * the run that reaches `finish`'s `if (options.jsonPath)` branch. With
+ * `fs.readFileSync` in `digestFiles` the count would not move, and with
+ * `fs.writeFileSync` in `writeRecord` the write itself is absent from the log.
+ *
+ * @param {string} harness
+ * @param {string} label
+ * @param {string} suiteId
+ */
+function recordWriteCase(harness, label, suiteId) {
+  return inWorkspace('tea-file-system-record-', (workspace) => {
+    console.log(`\n${label}'s record write and fixture digest go through the port\n`);
+
+    const fixtures = manifestFixturePaths(suiteId);
+    const readCount = (calls, target) => calls.filter((line) => line === `read ${target}`).length;
+
+    // Nothing scripted: the corpus is real, and the point is what the run
+    // itself logs on its way to a real write. `finish` runs regardless of
+    // `--json`, so the baseline is the same command without it.
+    const baseline = runUnderFixture(workspace, { harness, argv: ['--preflight-only'] });
+
+    const jsonPath = path.join(workspace, 'result.json');
+    const run = runUnderFixture(workspace, { harness, argv: ['--preflight-only', '--json', jsonPath] });
+    assert(
+      run.calls.includes(`write ${jsonPath}`),
+      `${label} writes its result record through the port`,
+      `${run.calls.length} call(s) logged`,
+    );
+
+    const short = fixtures.filter((fixture) => readCount(run.calls, fixture) !== readCount(baseline.calls, fixture) + 1);
+    assert(
+      short.length === 0,
+      `${label}'s fixture digest reads its ${fixtures.length} fixture(s) as port calls, one more than pre-flight alone`,
+      short
+        .map(
+          (fixture) =>
+            `${path.relative(PROJECT_ROOT, fixture)}: ${readCount(baseline.calls, fixture)} without --json, ${readCount(run.calls, fixture)} with it`,
+        )
+        .join('; '),
+    );
+  });
+}
 
 /** The files scripted below, each one a file a converted call site reads. */
 const GROUND_TRUTH = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json');
@@ -168,6 +257,9 @@ const STORED_TRACE_SUMMARY = path.join(
 );
 const STORED_DESIGN = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design', 'seeded-correct-run', 'design.md');
 const STORED_NFR_REPORT = path.join(PROJECT_ROOT, 'test', 'replay', 'nfr', 'gapped-correct-audit', 'test-artifacts', 'nfr-assessment.md');
+// eval-quality's own published schema, read once per kind and cached: scoring
+// any probe at all validates an isolation manifest against it.
+const ISOLATION_MANIFEST_SCHEMA = path.join(PROJECT_ROOT, 'node_modules', 'eval-quality', 'schemas', 'isolation-manifest.schema.json');
 const SELECTION_CONTEXT = path.join(
   PROJECT_ROOT,
   'src',
@@ -192,6 +284,7 @@ const colors = {
   reset: '[0m',
   red: '[31m',
   green: '[32m',
+  yellow: '[33m',
   dim: '[2m',
 };
 
@@ -250,6 +343,21 @@ function unreadable(directory) {
   return target;
 }
 
+/**
+ * Root bypasses its own `chmod 0o000`, so a check built on `unreadable()` would
+ * read the file and report a pass that proves nothing. That is an environment
+ * fact rather than a defect in the port, predates this file, and CI does not
+ * run as root, so this names the condition loudly instead of asserting through
+ * it.
+ *
+ * @param {string} label What the skipped assertion was checking.
+ */
+function skipIfRoot(label) {
+  if (process.getuid?.() !== 0) return false;
+  console.log(`${colors.yellow}⚠ skipped: ${label} (running as root, chmod 0o000 is not enforced against its own process)${colors.reset}`);
+  return true;
+}
+
 /** One disposable workspace per case, removed on both the passing and the throwing path. */
 async function inWorkspace(prefix, body) {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -298,6 +406,11 @@ async function traceHarnessCases() {
     const reads = staged.calls.filter((line) => line.startsWith('read '));
     assert(reads.length > 0, 'the run reads through the port at all', 'no read was logged, so every read in the run bypassed the port');
   });
+
+  // Both cases above run `--validate-only`, which never reaches `finish`'s
+  // `if (options.jsonPath)` branch, so neither holds `digestFiles` or
+  // `writeSuiteResult` for this harness.
+  await recordWriteCase(TRACE_HARNESS, 'the trace harness', 'trace');
 }
 
 async function reviewHarnessCases() {
@@ -424,10 +537,16 @@ async function selectionHarnessCases() {
       `${rewritten.run.calls.filter((line) => line.startsWith('read ')).length} read(s) logged`,
     );
   });
+
+  // `real` above passes `--json` and produces a record, but its assertion is
+  // about the prompt digest, not about `digestFiles` or `writeSuiteResult`
+  // themselves: neither the write nor the fixture reads are checked against the
+  // log there.
+  await recordWriteCase(SELECTION_HARNESS, 'the fragment-selection harness', 'fragment-selection');
 }
 
 async function corpusHarnessCases() {
-  for (const { harness, label, scripted, reports } of CORPUS_HARNESSES) {
+  for (const { harness, label, scripted, reports, suiteId } of CORPUS_HARNESSES) {
     await inWorkspace('tea-file-system-corpus-', (workspace) => {
       console.log(`\n${label} reads its corpus through the port\n`);
 
@@ -440,6 +559,10 @@ async function corpusHarnessCases() {
       );
       assert(run.calls.includes(`read ${scripted}`), `${label} logs its corpus read as a port call`, `${run.calls.length} call(s) logged`);
     });
+    // `--validate-only` never reaches `finish`'s `if (options.jsonPath)` branch,
+    // so nothing above holds `digestFiles` or `writeSuiteResult` for this
+    // harness. `--preflight-only --json` does.
+    await recordWriteCase(harness, label, suiteId);
   }
 
   await inWorkspace('tea-file-system-menu-', (workspace) => {
@@ -451,7 +574,7 @@ async function corpusHarnessCases() {
     // run reports it; through `fs.readFileSync` the real ten-item menu comes back
     // and the corpus validates.
     const run = runUnderFixture(workspace, {
-      harness: CORPUS_HARNESSES[2].harness,
+      harness: corpusHarness('routing').harness,
       argv: ['--validate-only'],
       reads: { [TEA_MENU]: '# scripted, and it declares no menu\n' },
     });
@@ -542,6 +665,24 @@ async function scoringCases() {
       `${policy.calls.length} call(s) logged`,
     );
 
+    console.log("\neval-quality's own published schemas are read through the port\n");
+
+    // compileValidator in test/lib/eval-quality-inputs.js compiles a schema the
+    // first time its kind is validated and caches the result, so nothing here
+    // asserts about a second scoring run: the run itself only needs one probe to
+    // reach it, and every probe validates an isolation manifest.
+    const schema = runUnderFixture(workspace, { harness: SCORING_HARNESS, reads: { [ISOLATION_MANIFEST_SCHEMA]: NOT_JSON } });
+    assert(
+      schema.status !== 0,
+      'a scripted schema that is not JSON fails the scoring run',
+      `exit ${schema.status}; a direct fs.readFileSync would have read the real schema and scored every probe`,
+    );
+    assert(
+      schema.calls.includes(`read ${ISOLATION_MANIFEST_SCHEMA}`),
+      "the isolation manifest schema's read is logged as a port call",
+      `${schema.calls.length} call(s) logged`,
+    );
+
     console.log('\nthe trace, test-design and nfr suites read their stored evidence through the port too\n');
 
     // The trace summary is JSON, so a script that is not JSON fails the run the
@@ -601,17 +742,19 @@ async function digestMarkerCase() {
       `${withMissing} vs ${expected}`,
     );
 
-    let thrown;
-    try {
-      await digestFiles(corpus, [path.basename(unreadable(corpus))]);
-    } catch (error) {
-      thrown = error;
+    if (!skipIfRoot('a file the process cannot read throws rather than digesting as the marker')) {
+      let thrown;
+      try {
+        await digestFiles(corpus, [path.basename(unreadable(corpus))]);
+      } catch (error) {
+        thrown = error;
+      }
+      assert(
+        thrown !== undefined,
+        'a file the process cannot read throws rather than digesting as the marker',
+        thrown === undefined ? 'it returned a digest' : '',
+      );
     }
-    assert(
-      thrown !== undefined,
-      'a file the process cannot read throws rather than digesting as the marker',
-      thrown === undefined ? 'it returned a digest' : '',
-    );
     fs.chmodSync(corpus, 0o700);
   });
 }
@@ -648,10 +791,10 @@ async function wrapperCases() {
     // The decision the module exists for. A directory and a permission error are
     // not absence, and a caller told "absent" about either records a clean
     // reading of a file it never read.
-    for (const [target, what] of [
-      [wrapper, 'a directory where a file was expected'],
-      [unreadable(wrapper), 'a file the process cannot read'],
-    ]) {
+    const permissionCase = skipIfRoot('a file the process cannot read throws rather than reading as absent')
+      ? []
+      : [[unreadable(wrapper), 'a file the process cannot read']];
+    for (const [target, what] of [[wrapper, 'a directory where a file was expected'], ...permissionCase]) {
       let thrown;
       try {
         await readText(target);
