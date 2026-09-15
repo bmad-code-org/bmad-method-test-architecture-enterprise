@@ -95,7 +95,7 @@ Last reconciled with GitHub on 2026-09-15 across `bmad-method-test-architecture-
 - [ ] [Story 4.3: Execute the fenced commands in the documentation](#story-43-execute-the-fenced-commands-in-the-documentation)
 - [x] [Story 4.4: Narrow faults by type and assert every vocabulary](#story-44-narrow-faults-by-type-and-assert-every-vocabulary) ([#182](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/182))
 - [x] [Story 4.5: Read diagnostics from the sink and decide the strict rung](#story-45-read-diagnostics-from-the-sink-and-decide-the-strict-rung) ([#175](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/175))
-- [ ] [Story 4.6: Hold the supply chain](#story-46-hold-the-supply-chain)
+- [x] [Story 4.6: Hold the supply chain](#story-46-hold-the-supply-chain) ([#180](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/180))
 - [ ] [Story 4.7: Hold layering, boundary and lineage](#story-47-hold-layering-boundary-and-lineage)
 - [ ] [Story 4.8: Gate the ungated trees, allowlists, coverage and CI](#story-48-gate-the-ungated-trees-allowlists-coverage-and-ci)
 
