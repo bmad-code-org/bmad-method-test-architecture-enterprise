@@ -155,6 +155,19 @@ const SUITE_MANIFEST = path.join(PROJECT_ROOT, 'test', 'evals', 'suite-manifest.
 const SELECTION_EVALS = path.join(PROJECT_ROOT, 'test', 'evals', 'bmad-testarch-atdd', 'evals.json');
 const STORED_VERDICT = path.join(PROJECT_ROOT, 'test', 'replay', 'test-review', 'full-recall', 'verdict.json');
 const SCORING_POLICY = path.join(PROJECT_ROOT, 'test', 'probes', 'scoring-policy.json');
+// The fixed caseIds traceEvidence, storedDesign and storedNfrReport bind, not the
+// fixture set ids the ground truth names: read those functions before renaming.
+const STORED_TRACE_SUMMARY = path.join(
+  PROJECT_ROOT,
+  'test',
+  'replay',
+  'trace',
+  'seeded-correct-run',
+  'test-artifacts',
+  'e2e-trace-summary.json',
+);
+const STORED_DESIGN = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design', 'seeded-correct-run', 'design.md');
+const STORED_NFR_REPORT = path.join(PROJECT_ROOT, 'test', 'replay', 'nfr', 'gapped-correct-audit', 'test-artifacts', 'nfr-assessment.md');
 const SELECTION_CONTEXT = path.join(
   PROJECT_ROOT,
   'src',
@@ -527,6 +540,40 @@ async function scoringCases() {
       policy.calls.includes(`read ${SCORING_POLICY}`),
       "the scoring policy's read is logged as a port call",
       `${policy.calls.length} call(s) logged`,
+    );
+
+    console.log('\nthe trace, test-design and nfr suites read their stored evidence through the port too\n');
+
+    // The trace summary is JSON, so a script that is not JSON fails the run the
+    // same way the stored verdict does above.
+    const summary = runUnderFixture(workspace, { harness: SCORING_HARNESS, reads: { [STORED_TRACE_SUMMARY]: NOT_JSON } });
+    assert(
+      summary.status !== 0,
+      'a scripted trace summary that is not JSON fails the scoring run',
+      `exit ${summary.status}; a direct fs.readFileSync would have read the real summary and scored every probe`,
+    );
+    assert(
+      summary.calls.includes(`read ${STORED_TRACE_SUMMARY}`),
+      "the trace suite's stored summary read is logged as a port call",
+      `${summary.calls.length} call(s) logged`,
+    );
+
+    // The design and the nfr report are prose, not JSON, so scripting other text
+    // there does not fail the run the way malformed JSON does: the oracles score
+    // whatever text arrives. What a direct fs.readFileSync would bypass entirely
+    // is the log, so that is what each case holds.
+    const design = runUnderFixture(workspace, { harness: SCORING_HARNESS, reads: { [STORED_DESIGN]: NOT_JSON } });
+    assert(
+      design.calls.includes(`read ${STORED_DESIGN}`),
+      "the test-design suite's stored design read is logged as a port call",
+      `${design.calls.length} call(s) logged`,
+    );
+
+    const report = runUnderFixture(workspace, { harness: SCORING_HARNESS, reads: { [STORED_NFR_REPORT]: NOT_JSON } });
+    assert(
+      report.calls.includes(`read ${STORED_NFR_REPORT}`),
+      "the nfr suite's stored report read is logged as a port call",
+      `${report.calls.length} call(s) logged`,
     );
   });
 }
