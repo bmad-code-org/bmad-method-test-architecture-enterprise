@@ -69,6 +69,37 @@ domains.forEach((domain) => {
 
 ---
 
+### 1b. Roll Each Domain's Findings Into Its Domain Status
+
+A worker reports findings. The domain has one status of its own, and this is
+where it is computed, by the rule stated in
+`{skill-root}/steps-c/nfr-status-definitions.md` (see "Domain Status"): the worst
+status among the domain's findings, with N/A deciding nothing.
+
+This runs after 1a, so a PASS the undefined-threshold default downgraded is
+already CONCERNS here and cannot roll a domain up to PASS.
+
+```javascript
+const DOMAIN_STATUS_ORDER = ['FAIL', 'CONCERNS', 'PASS'];
+
+const worstStatus = (statuses) => {
+  const judged = statuses.filter((status) => DOMAIN_STATUS_ORDER.includes(status));
+  // Every finding N/A is the one case where the domain is N/A: no finding
+  // carried a judgment, so there is no worst one.
+  if (judged.length === 0) return 'N/A';
+  return DOMAIN_STATUS_ORDER.find((candidate) => judged.includes(candidate));
+};
+
+const domainStatuses = Object.fromEntries(
+  domains.map((domain) => [domain, worstStatus(assessments[domain].findings.map((finding) => finding.status))]),
+);
+```
+
+Step 5 writes these four values into the gate artifact's `audited_domains` block
+and into each `## <Domain> Assessment` section, and the two have to agree.
+
+---
+
 ### 2. Calculate Overall Risk Level
 
 **Risk hierarchy:** HIGH > MEDIUM > LOW > NONE
@@ -190,6 +221,11 @@ const executiveSummary = {
 
   domain_assessments: assessments,
 
+  // The four values step 5 writes into the gate artifact's `audited_domains`
+  // block. They are carried here rather than recomputed there, so the artifact
+  // and the report sections cannot drift apart between the two steps.
+  domain_statuses: domainStatuses,
+
   compliance_summary: complianceSummary,
 
   cross_domain_risks: crossDomainRisks,
@@ -271,6 +307,7 @@ fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(execu
 Proceed to Step 5 when:
 
 - ✅ All subagent outputs read
+- ✅ A domain status rolled up for each of the four domains
 - ✅ Overall risk calculated
 - ✅ Compliance aggregated
 - ✅ Summary saved

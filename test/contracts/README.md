@@ -253,16 +253,16 @@ matrix declares no criterion section is refused by the harness and unseen by the
 `test/test-contract-oracles.js` prints as a skip rather than counting as agreement.
 
 `nfr.contract.json` is the case where that limit binds hardest, because the NFR workflow declares one
-deliverable and it is markdown. There is no summary to state a consequence in, so the contract's eight
-oracles say the four things a substring test can reach about a whole document: the four
-`## <Domain> Assessment` sections exist, the Gate YAML publishes the expected `overall_status`, a
+deliverable and it is markdown. There is no summary to state a consequence in, so the contract's ten
+oracles say the five things a substring test can reach about a whole document: the four
+`## <Domain> Assessment` sections exist, the Gate YAML publishes the `audited_domains` block the four
+domain statuses are declared in, it publishes the expected `overall_status`, a
 threshold no source states is recorded as `UNKNOWN` and one every source states is not, and the run
 wrote a report and exited 0. `containment` rather than `regex` throughout, because `regex`'s step
 estimate is `(1 + quantifiers) * length` and a "contains X anywhere" pattern costs three times the
-document's length against a budget an ordinary report exceeds. The four domain statuses, the per-domain
-thresholds and every evidence citation are the harness's to read. The alternative was to invent a
-machine-readable artifact for the workflow to write, which would score a contract the workflow does not
-declare, so the gap is recorded here and in `test/fixtures/nfr-eval/README.md` instead.
+document's length against a budget an ordinary report exceeds. Which status sits on which line of that block, the per-domain
+thresholds and every evidence citation are the harness's to read, because `containment` cannot bind a
+value to the key above it and `security` is a key in the ADR `categories` block as well.
 
 **A regex is checked for shape at evaluation time, and `compile` never runs it.** The evaluator
 refuses a quantifier nested inside a quantified group before matching anything, as a

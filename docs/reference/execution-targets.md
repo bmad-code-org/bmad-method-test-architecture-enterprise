@@ -60,7 +60,7 @@ TEA plans these, sets thresholds, requires the evidence, and audits what you pro
 | Reliability          | Your telemetry and chaos tooling         | Same.                                                                                                                                       |
 | Maintainability      | CI coverage report, jscpd, `npm audit`   | Same. Reads coverage, duplication, and vulnerability reports your CI already produces; does not run them.                                   |
 
-The NFR gate defaults to CONCERNS when a threshold or its evidence is undefined, so an unmeasured category does not silently pass.
+The NFR gate defaults to CONCERNS when a threshold or its evidence is undefined, so an unmeasured category does not silently pass. Each category's status is declared in the audit's gate artifact, under `audited_domains`, so a pipeline reads it without parsing the report.
 
 ## Core only
 

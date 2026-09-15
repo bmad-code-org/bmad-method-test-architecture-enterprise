@@ -174,7 +174,13 @@ const {
   signatureOf: testDesignSignatureOf,
   loadGroundTruth: loadTestDesignGroundTruth,
 } = require('./eval-test-design');
-const { readReport: readNfrReport, scoreRun: scoreNfrRun, signatureOf: nfrSignatureOf, DOMAINS: NFR_DOMAINS } = require('./eval-nfr');
+const {
+  readReport: readNfrReport,
+  scoreRun: scoreNfrRun,
+  signatureOf: nfrSignatureOf,
+  parseReport: parseNfrReport,
+  DOMAINS: NFR_DOMAINS,
+} = require('./eval-nfr');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -283,8 +289,42 @@ const NFR_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'nfr-eval', 'ground-tr
  * this version: what moved is what the corpus records of them, and a stored result
  * that grows a field has to be re-recorded exactly as a moved number does. No
  * test-review, fragment-selection, test-design or trace case moved.
+ *
+ * 9 is the nfr domain status moving from the report's prose to the artifact the
+ * workflow declares. `nfr-report-template.md` now carries an `audited_domains`
+ * block, the spelling `resources/nfr-assessment.example.md` had always published
+ * and the template never declared, so scoreRun reads a domain's status from the
+ * gate artifact and reads the `## <Domain> Assessment` section beside it to hold
+ * the two to agreeing. Every stored result grew three fields: `gateDisagreements`,
+ * `gateBlockDeclared` and `sectionStatuses`, the last so that a signature covering
+ * the gate half alone cannot call two runs stable whose prose answers differ.
+ * `coverage.present` is now the domains the gate declares and the document
+ * assesses, so a report carrying only one half no longer clears it, and the
+ * unsupported-PASS ceiling counts a PASS published in either half.
+ *
+ * Fourteen stored reports grew the block, each keeping the one deviation it was
+ * constructed to encode. gapped-domain-omitted omits the domain from the gate as
+ * well as from the document, gapped-maintainability-status-unreadable spells it
+ * `PARTIAL` in both, gapped-security-assessed-twice publishes the first section's
+ * answer, and gapped-example-quoted-in-fence keeps the contradicting
+ * `audited_domains` map inside the quoted example, which is what proves the reader
+ * takes the run's own block rather than the first one in the document.
+ * gapped-report-without-sections is unchanged and still unmeasurable: four gate
+ * lines with no assessment behind them are an answer with no audit under it.
+ *
+ * Five new cases hold the readings the corpus could not otherwise see:
+ * gapped-gate-contradicts-sections publishes `security: 'CONCERNS'` over a section
+ * that rolls up PASS and is the only case that breaches maxGateDisagreements;
+ * gapped-domain-statuses-only-in-prose is the pre-7.1 artifact shape, correct in
+ * every section and declaring nothing, and is what makes the contract's
+ * domain-block oracle resolve false somewhere; gapped-gate-declares-an-unassessed-domain
+ * holds the other half of the coverage rule; gapped-gate-without-assessment-sections
+ * holds that a block does not make a sectionless report measurable; and
+ * gapped-block-only-in-the-quoted-example separates the document-wide reading the
+ * contract's oracle can state from the run's own block the harness scores. No
+ * test-review, fragment-selection, test-design or trace case moved.
  */
-const SCORER_VERSION = 8;
+const SCORER_VERSION = 9;
 
 const colors = {
   reset: '[0m',
@@ -586,6 +626,9 @@ function projectNfrResult(scored) {
       ),
     coverage: scored.coverage,
     duplicateDomainSections: scored.duplicateDomainSections,
+    sectionStatuses: Object.fromEntries(scored.domainResults.map((item) => [item.domain, item.sectionStatus])),
+    gateBlockDeclared: scored.gateBlockDeclared,
+    gateDisagreements: scored.gateDisagreements,
     unsupportedPass: scored.unsupportedPass,
     citations: scored.citations,
     fabricated: scored.fabricated,
@@ -859,6 +902,91 @@ function checkRecordHygiene() {
   const innocuous = ['--model=risk-based-v2', '--profile=task-runner', '--tag=disk-cache', '--agent-arg=--dangerously-skip-permissions'];
   const kept = redactArgs(innocuous);
   assert(same(kept, innocuous), 'redactArgs keeps a value that merely contains a token prefix inside a word', JSON.stringify(kept));
+}
+
+/**
+ * The gate block readings that need no stored case.
+ *
+ * A stored case is one report with one deviation, and the shapes below are not
+ * deviations in an audit: they are spellings of one YAML block that a run writing
+ * the snippet produces. Each is a reading `gateDomainsIn` promises in its own
+ * comments, and each was checkable here without a model or a fixture.
+ *
+ * Every one of them fails in the direction that turns a correct audit into a zero,
+ * which is why they are held rather than left to the corpus: a block the reader
+ * abandons early reports four declared statuses as none, and the run reads as
+ * having left every dispatched domain unreported.
+ */
+function checkNfrGateBlockReadings() {
+  const report = (block) =>
+    [
+      '## Performance Assessment',
+      '',
+      '- **Status:** CONCERNS',
+      '',
+      '## Gate YAML Snippet',
+      '',
+      '```yaml',
+      'nfr_assessment:',
+      ...block,
+      "  overall_status: 'FAIL'",
+      '```',
+      '',
+    ].join('\n');
+  const read = (block) => {
+    const parsed = parseNfrReport(report(block));
+    return { domains: Object.fromEntries(parsed.gateDomains), contradictions: parsed.gateSelfContradictions };
+  };
+
+  const full = [
+    '  audited_domains: # the four domains Step 4 dispatches a worker for',
+    "    security: 'PASS'",
+    '',
+    '    # the load test has no target to be judged against',
+    "    performance: 'CONCERNS'",
+    "    reliability: 'N/A'",
+    "    maintainability: 'CONCERNS'",
+  ];
+  const parsed = read(full);
+  assert(
+    same(parsed.domains, { security: 'PASS', performance: 'CONCERNS', reliability: 'N/A', maintainability: 'CONCERNS' }),
+    'the gate block survives a trailing comment on its key, a blank line and a comment line inside it, and reads N/A as declared',
+    JSON.stringify(parsed.domains),
+  );
+
+  const unrecognised = read([
+    '  audited_domains:',
+    "    security: 'PARTIAL'",
+    "    performance: 'CONCERNS'",
+    "    reliability: 'FAIL'",
+    "    maintainability: 'CONCERNS'",
+  ]);
+  assert(
+    same(unrecognised.domains, { performance: 'CONCERNS', reliability: 'FAIL', maintainability: 'CONCERNS' }),
+    'a value outside the four-value enum leaves its own domain undeclared and hides none of the domains after it',
+    JSON.stringify(unrecognised.domains),
+  );
+
+  const repeated = read(['  audited_domains:', "    security: 'PASS'", "    security: 'FAIL'"]);
+  assert(
+    same(repeated.domains, { security: 'PASS' }) && repeated.contradictions.length === 1,
+    'a domain declared twice keeps the first value and counts the second as the artifact contradicting itself',
+    JSON.stringify(repeated),
+  );
+
+  const agreeing = read(['  audited_domains:', "    security: 'PASS'", "    security: 'PASS'"]);
+  assert(
+    agreeing.contradictions.length === 0,
+    'a domain declared twice with one answer is not counted as a contradiction',
+    JSON.stringify(agreeing.contradictions),
+  );
+
+  const ended = read(['  audited_domains:', "    security: 'PASS'", '  categories:', "    security: 'FAIL'"]);
+  assert(
+    same(ended.domains, { security: 'PASS' }) && ended.contradictions.length === 0,
+    'the block ends at the next key, so the ADR categories sharing the name security are not read as a domain',
+    JSON.stringify(ended),
+  );
 }
 
 /**
@@ -1388,6 +1516,7 @@ async function main(argv) {
   checkRoutingSignatures(routingReplayed);
   checkNfrSignatures(nfrReplayed);
   checkRecordHygiene();
+  checkNfrGateBlockReadings();
 
   console.log(`\n${colors.cyan}========================================${colors.reset}`);
   if (accepted.length > 0) {

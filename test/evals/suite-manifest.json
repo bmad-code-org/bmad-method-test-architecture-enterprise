@@ -192,6 +192,7 @@
         "maxFabricatedEvidence": 0,
         "maxCleanFalsePositives": 0,
         "maxDuplicateDomainSections": 0,
+        "maxGateDisagreements": 0,
         "maxUnstableCases": 0,
         "maxFixtureMutations": 0
       },

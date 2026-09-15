@@ -100,6 +100,7 @@ const { NFR_REQUEST_KEYS, DEFAULT_AGENT: NFR_DEFAULT_AGENT } = require('../cli/n
 const {
   buildPrompt: buildNfrPrompt,
   DOMAINS: NFR_DOMAINS,
+  DOMAIN_BLOCK_KEY: NFR_DOMAIN_BLOCK_KEY,
   UNKNOWN_TOKEN: NFR_UNKNOWN_TOKEN,
   NFR_INTERFACE,
   NFR_OPERATION,
@@ -2494,16 +2495,17 @@ function overallStatusCheck(pointer, status) {
  * contradict `scoreRun` on the same report, and this is the one place the
  * correspondence between an oracle and the check it restates is written.
  *
- * There are four claims per bundle and no more, and the reason is the one
+ * There are five claims per bundle and no more, and the reason is the one
  * test/contracts/README.md already records for the traceability matrix: a
  * markdown deliverable is one string to this vocabulary, so a claim it can make
  * is a claim about the document as a whole. The per-domain statuses, the
  * threshold of each domain, and every evidence citation are read by the harness
- * out of the sections that carry them, and the contract states the four
- * consequences a substring test can reach: that the four domain sections exist,
- * that the Gate YAML publishes the expected overall status, that a threshold the
- * bundle never states is recorded as UNKNOWN and one it does state is not, and
- * that the run wrote a report and exited clean.
+ * out of the report itself, and the contract states the five consequences a
+ * substring test can reach: that the four domain sections exist, that the Gate
+ * YAML publishes the audited_domains block the domain statuses are declared in,
+ * that it publishes the expected overall status, that a threshold the bundle
+ * never states is recorded as UNKNOWN and one it does state is not, and that the
+ * run wrote a report and exited clean.
  *
  * @returns {Array<{id: string, kind: string, setId: string, oracle: object, scorer: Function}>}
  */
@@ -2541,6 +2543,35 @@ function nfrOracleSpecs(groundTruth) {
       // domainCoverage; test/replay/nfr/gapped-maintainability-status-unreadable is
       // the case where the two numbers differ.
       (scored) => scored.coverage.sections === scored.coverage.total,
+    );
+
+    push(
+      set.id,
+      'domain-block',
+      {
+        polarity: 'expects-hold',
+        commentary: `${label}: the Gate YAML publishes an audited_domains block, which is where the ${numberWord(NFR_DOMAINS.length)} domain statuses the workflow judged are declared for a machine. A report without it leaves them in prose, where reading one means parsing the template's rendering of it.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'containment',
+          scope: `The report written for ${label}, read as one document.`,
+          negativeDomain:
+            'A run whose gate artifact carries only the overall status and the ADR checklist categories, as the template did before the block was declared.',
+          evidenceTargets: [report],
+        },
+        check: contains(report, `${NFR_DOMAIN_BLOCK_KEY}:`),
+      },
+      // The key appearing in the document, not the statuses inside the block and
+      // not the section it sits in. `containment` reads the report as one string:
+      // it cannot bind a value to the key above it, and `security` is a key in the
+      // ADR `categories` block as well, so a claim about a status line would be one
+      // the vocabulary cannot keep; and it cannot tell the run's own gate section
+      // from a quoted example carrying the same key, which is why `gateBlockDeclared`
+      // is recorded at that same weak strength instead of at the strength the harness
+      // grades. The harness grades the strict reading: `domainCoverage` over the
+      // domains the run's own block declares and `maxGateDisagreements` over whether
+      // they agree with the sections.
+      (scored) => scored.gateBlockDeclared,
     );
 
     push(
@@ -2648,6 +2679,15 @@ const NFR_BEHAVIORS = [
   },
   {
     id: 'A-004',
+    role: 'both',
+    kinds: ['domain-block'],
+    severity: 'critical',
+    risk: 'domain-status-published-only-as-prose',
+    success: 'Each report publishes the audited_domains block the four domain statuses are declared in.',
+    requirement: 'domains',
+  },
+  {
+    id: 'A-005',
     role: 'both',
     kinds: ['run-measured'],
     severity: 'critical',

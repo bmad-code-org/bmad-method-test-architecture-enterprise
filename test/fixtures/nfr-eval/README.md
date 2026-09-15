@@ -51,14 +51,15 @@ Every top-level key is read by `test/eval-nfr.js`. `fixtureSets` is the corpus i
 Each of these is a function of a run's report and the corpus:
 
 - A `## <Domain> Assessment` section exists for each of the four domains.
-- A domain's status is the worst status inside its section, and it equals the expected one.
+- A domain's status, as the gate block declares it, equals the expected one, and the `## <Domain> Assessment` section it summarizes rolls up to the same value.
 - Neither undecidable domain is reported PASS.
 - A stated threshold is named in the domain's threshold lines, and a threshold no source states is recorded as `UNKNOWN`.
-- The Gate YAML's `overall_status` is what the four domain statuses roll up to.
+- The Gate YAML's `audited_domains` block declares a status for each of the four domains, and `overall_status` is what those four roll up to.
+- The block and the domain's assessment section agree, on every domain both of them answer.
 - Every file-shaped evidence citation resolves to a file the bundle carries.
 - Nothing is reported against the clean bundle: no domain below PASS, no evidence gap, no threshold recorded as unknown.
 - The bundle is byte-identical before and after the run.
 
-## Where the deliverable falls short of a contract
+## Where the domain statuses come from
 
-The workflow's Gate YAML snippet carries `overall_status` and the eight ADR checklist categories. It carries no per-domain block for the four domains Step 4 evaluates, so the four domain statuses have to be read out of the markdown sections rather than off a machine-readable field. Inventing a JSON artifact for the eval's convenience would score a contract the workflow does not declare, so the gap is recorded here rather than papered over.
+The workflow's Gate YAML snippet carries `overall_status`, the eight ADR checklist categories, and the `audited_domains` block that declares a status for each of the four domains Step 4 evaluates. That block is what this corpus scores. Until Story 7.1 it did not exist and the statuses were read out of the markdown sections, which scored the template's rendering of the judgment where the artifact should have carried the judgment itself. The section is still read, so the two can be held to agreeing.

@@ -470,6 +470,21 @@ If business decides to deploy with current performance:
 - Requirements status (target vs actual)
 - Evidence for each requirement
 - Issues identified with root cause analysis
+- A Gate YAML snippet carrying the overall status, the eight ADR checklist categories, and an `audited_domains` block with one status per domain
+
+The `audited_domains` block is what a pipeline reads. It carries the same status the domain's `## <Domain> Assessment` section states, because the two are one judgment written twice: one for a machine, one for a person.
+
+```yaml
+nfr_assessment:
+  audited_domains:
+    security: 'PASS'
+    performance: 'CONCERNS'
+    reliability: 'FAIL'
+    maintainability: 'CONCERNS'
+  overall_status: 'FAIL'
+```
+
+A domain is PASS, CONCERNS or FAIL, and N/A only when nothing in it carried a judgment.
 
 ### Gate Decision
 

@@ -386,6 +386,11 @@ nfr_assessment:
     monitorability: '{MON_STATUS}'
     qos_qoe: '{QOS_STATUS}'
     deployability: '{DEP_STATUS}'
+  audited_domains: # the four domains Step 4 dispatches a worker for, plus any custom category; PASS, CONCERNS, FAIL or N/A
+    security: '{SECURITY_DOMAIN_STATUS}'
+    performance: '{PERFORMANCE_DOMAIN_STATUS}'
+    reliability: '{RELIABILITY_DOMAIN_STATUS}'
+    maintainability: '{MAINTAINABILITY_DOMAIN_STATUS}'
   overall_status: '{OVERALL_STATUS}'
   critical_issues: { CRITICAL_COUNT }
   high_priority_issues: { HIGH_COUNT }

@@ -223,6 +223,11 @@ nfr_assessment:
   date: '2026-09-03'
   feature_name: 'Harbor Billing Ledger'
   adr_checklist_score: '21/29'
+  audited_domains:
+    security: 'FAIL'
+    performance: 'CONCERNS'
+    reliability: 'CONCERNS'
+    maintainability: 'CONCERNS'
   overall_status: 'FAIL'
   critical_issues: 1
   high_priority_issues: 1

@@ -223,23 +223,28 @@ scoring inputs, so an edit to one set fails no case of the other. Its result is
 the scored object reduced to what can be checked by hand: the reported status per
 criterion, the gate, the citation tally, and for each check group its size, the
 number that passed, and the field, expected and actual of each check that did
-not. An `nfr` case is the same shape over one evidence bundle: the reported status per
-domain, the heading count beside the count of domains it states a status for, the
-evidence each domain cited in report order, the two
+not. An `nfr` case is the same shape over one evidence bundle: the status the gate
+artifact declares per domain beside the status that domain's section rolls up to, whether the
+block was published at all, the heading count beside the count of domains the report both
+declares and assesses, the evidence each domain cited in report order, the three
 ceilings, the threshold checks, and the two single-check groups.
 Fourteen trace cases cover both sets: a correct run of each, the two discriminating
 false positives with the gate flipping, a wrong percentage, a missing oracle
 source, an omitted `rejected_evidence` array, a waiver turned down for the wrong
 reasons, a matrix full of lines the parser must ignore, an invented and a
 duplicated criterion section, an empty `waivers` block on the set that has no
-register, and two artifacts the harness must refuse to score at all. Fifteen `nfr` cases
+register, and two artifacts the harness must refuse to score at all. Twenty `nfr` cases
 cover both bundles: a correct audit of each, the two unsupported PASS results, an omitted
 domain section, a domain assessed twice, a domain section stating no status the four-value
-enum recognises, a fabricated evidence citation, the workflow's own worked example quoted
-inside a fence ahead of the run's own sections, two domain statuses judged wrong at once, a
-set of findings invented against the clean bundle, the correct gapped audit grounded on a
-different file of the same bundle, and a report the harness must refuse to
-score at all.
+enum recognises, a fabricated evidence citation and the same citation hidden under another
+label, the workflow's own worked example quoted inside a fence ahead of the run's own
+sections, two domain statuses judged wrong at once, a set of findings invented against the
+clean bundle and the same invention under an off-template heading, the correct gapped audit
+grounded on a different file of the same bundle, a gate artifact contradicting its own
+assessment section, a gate block declaring a domain the document never assesses, the same
+audit with no `audited_domains` block at all, a block that appears only inside the quoted
+example, a report whose gate declares four statuses under headings no domain section
+recognises, and a report the harness must refuse to score at all.
 Both suites hold
 `signatureOf` to its contract: two cases of one set or bundle sign identically exactly
 when their results are identical, and a counted fixture mutation always changes the
@@ -291,11 +296,15 @@ cleared by a workflow that never passes anything.
 
 The harness stages each bundle the way the trace harness stages a fixture set and
 probes `tea-nfr-runner` through the adapter. The workflow declares one deliverable,
-`nfr-assessment.md`, and its Gate YAML snippet carries `overall_status` and the eight ADR
-checklist categories but no per-domain block for the four domains Step 4 evaluates, so a
-domain's status is read as the worst status inside its `## <Domain> Assessment` section.
-Every expected status in `ground-truth.json` names the rule in the workflow that produces
-it, and `--validate-only` fails when a cited section is gone from the file it names.
+`nfr-assessment.md`, and its Gate YAML snippet carries `overall_status`, the eight ADR
+checklist categories, and the `audited_domains` block that declares a status for each of the
+four domains Step 4 evaluates. That block is the status this suite scores. The
+`## <Domain> Assessment` section is read beside it and the two are held to agreeing by
+`maxGateDisagreements`, whose ceiling is zero: they are one judgment written twice, one for a
+machine and one for a person, and a report answering differently in the two places has
+published two answers. Every expected status in `ground-truth.json` names the rule in the
+workflow that produces it, and `--validate-only` fails when a cited section is gone from the
+file it names.
 
 A second section for a domain that already has one keeps the first, which is the answer the
 report leads with, and counts against `maxDuplicateDomainSections`, whose ceiling is zero.
@@ -310,9 +319,11 @@ because the workflow ships a complete worked assessment in
 `resources/nfr-assessment.example.md` and a run that quotes the example it was shown was
 otherwise scored on the example. The `overall_status` scan is the exception and says so
 where it reads: the Gate YAML snippet is itself a fenced block, so it is read from the
-whole document. And a domain counts toward `domainCoverage` only when the report states a
-status the four-value enum recognises, since a heading with no readable answer leaves the
-domain Step 4 dispatched a worker for just as unreported as no heading does. The scored
+whole document. And a domain counts toward `domainCoverage` only when the gate block declares a
+status the four-value enum recognises and the document assesses that domain in a section
+stating one, since a heading with no readable answer leaves the domain Step 4 dispatched a
+worker for just as unreported as no heading does, and four gate lines with no assessment
+behind them are an answer with no audit under it. The scored
 result carries the heading count beside it, because that weaker number is the one the
 contract's coverage oracle can see.
 

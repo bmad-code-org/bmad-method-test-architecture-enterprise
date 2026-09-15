@@ -1,7 +1,7 @@
 {
   "nfr": {
     "contractId": "tea-nfr-behavioral",
-    "corpusDigest": "sha256:5f7d0661aa8a5e6331f029b9b0e0a58ac70818f8e134344c8ce9b1c7ca98f39a",
+    "corpusDigest": "sha256:bc2246745bda43b8e0a2f19daab1e310102d1256330a6614285a801a1612b5c1",
     "probeCount": 4,
     "strength": {
       "defect": {
@@ -23,7 +23,7 @@
       "P-001": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-003",
+        "behaviorId": "B-004",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
@@ -40,7 +40,7 @@
       "P-002": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-002",
+        "behaviorId": "B-003",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
@@ -57,7 +57,7 @@
       "P-003": {
         "probeClass": "defect",
         "expectedClean": false,
-        "behaviorId": "B-002",
+        "behaviorId": "B-003",
         "preflight": "passed",
         "preflightLegs": 3,
         "verdict": null,
@@ -74,7 +74,7 @@
       "P-004": {
         "probeClass": "zero-action",
         "expectedClean": true,
-        "behaviorId": "B-006",
+        "behaviorId": "B-008",
         "preflight": "passed",
         "preflightLegs": 2,
         "verdict": "CONCERNS",
