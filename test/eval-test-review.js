@@ -74,6 +74,25 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * Six calls, in two groups.
+ *
+ * - Four lifecycle calls: two `mkdtemp` and two `rm` that create and remove the
+ *   disposable run directories. The file-system port declares `readFile` and
+ *   `writeFile` over one caller-owned path and has no method for a directory.
+ * - The two existence questions in `missingCredential`, which ask whether the
+ *   vendor left a stored login under `$HOME`. They stay on `fs` for a reason that
+ *   is not about the port's shape: they read no file's contents, and AD-18 keeps
+ *   credential material out of anything the port logs. A port call would put a
+ *   path under the user's home directory into the scripted filesystem's log for
+ *   no answer the boolean does not already give.
+ *
+ * Every read of a file's contents goes through `test/lib/file-system-port.js`,
+ * and `npm run test:file-system-port` is what makes that falsifiable rather than
+ * asserted.
+ */
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -95,6 +114,7 @@ const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
+const { readText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
@@ -234,6 +254,15 @@ function fatal(code, message) {
  * and USER. Claude also accepts its documented environment variables. Codex
  * 0.146.0 does not consume OPENAI_API_KEY directly; CI must first write
  * ~/.codex/auth.json with `codex login --with-api-key`. See agent-adapters.js.
+ *
+ * The two `existsSync` calls below stay on `fs` while every other read in this
+ * file moved to the port. They ask whether a stored login exists and read neither
+ * file, and AD-18 keeps credential material out of anything the port logs: the
+ * scripted filesystem `test/test-file-system-port.js` drives writes one line per
+ * call, so routing these through it would put a path under the user's home
+ * directory into a log for an answer the boolean already gives. This function
+ * also stays synchronous as a result, which keeps its callers in
+ * test/eval-fragment-selection.js and test/eval-trace.js unchanged.
  */
 function missingCredential(agent) {
   const home = process.env.HOME || os.homedir();
@@ -257,7 +286,7 @@ function missingCredential(agent) {
  * and reads as "the reviewer found nothing", which is the most expensive possible
  * way to be wrong about your own tool.
  */
-function preflight({ agents, agentCmd }) {
+async function preflight({ agents, agentCmd }) {
   const problems = [];
   const versions = {};
   // Every problem carries the failure class it belongs to, so a missing
@@ -269,7 +298,15 @@ function preflight({ agents, agentCmd }) {
   // present, and with its executable bit, which the registry checks because the
   // eval-quality adapter spawns the file itself.
   for (const problem of targetProblems(PROJECT_ROOT, ['tea-test-review'])) report('environment-missing-artifact', problem);
-  if (!fs.existsSync(GROUND_TRUTH)) report('environment-missing-artifact', `ground truth not found at ${GROUND_TRUTH}`);
+
+  // The ground truth, read once through the port. The two existence checks that
+  // used to ask about it are gone: the read answers absence itself, and the
+  // missing-artifact report here and the parse further down are both decided from
+  // that one answer. `.present` rather than truthiness, because a zero-byte
+  // ground truth is present and would be reported as unparseable rather than as
+  // absent, which is what it is.
+  const groundTruthRead = await readText(GROUND_TRUTH);
+  if (!groundTruthRead.present) report('environment-missing-artifact', `ground truth not found at ${GROUND_TRUTH}`);
 
   // Every run passes --isolate, and the CLI exits 2 without a backend. Finding
   // that out here costs nothing; finding it out in the matrix costs the run.
@@ -285,9 +322,9 @@ function preflight({ agents, agentCmd }) {
   }
 
   let groundTruth = null;
-  if (fs.existsSync(GROUND_TRUTH)) {
+  if (groundTruthRead.present) {
     try {
-      groundTruth = JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
+      groundTruth = JSON.parse(groundTruthRead.text);
     } catch (error) {
       report('environment-configuration', `ground truth is not valid JSON: ${error.message}`);
     }
@@ -297,12 +334,12 @@ function preflight({ agents, agentCmd }) {
   // inside the file. A manifest pointing past the end of a fixture scores recall
   // against nothing and always reports a miss.
   for (const entry of groundTruth?.files ?? []) {
-    const absolute = path.join(FIXTURE_ROOT, entry.path);
-    if (!fs.existsSync(absolute)) {
+    const fixture = await readText(path.join(FIXTURE_ROOT, entry.path));
+    if (!fixture.present) {
       report('environment-missing-artifact', `fixture missing: ${entry.path}`);
       continue;
     }
-    const lineCount = fs.readFileSync(absolute, 'utf8').split('\n').length;
+    const lineCount = fixture.text.split('\n').length;
     for (const planted of entry.planted ?? []) {
       if (planted.line > lineCount) {
         report('environment-configuration', `${entry.path}: ground truth cites line ${planted.line}, file has ${lineCount}`);
@@ -727,7 +764,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
     // failure, never a silent skip of the file the caller asked for.
     let suite;
     try {
-      suite = suiteById(loadSuiteManifest(PROJECT_ROOT).manifest, SUITE_ID);
+      suite = suiteById((await loadSuiteManifest(PROJECT_ROOT)).manifest, SUITE_ID);
     } catch (error) {
       console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
       process.exit(2);
@@ -735,14 +772,14 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
     // One review call covers the whole corpus, so every case shares the bundle's
     // prompt digest.
     const promptDigest = mode === 'live' ? await promptDigestFromCli() : null;
-    writeSuiteResult(
+    await writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
         generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
-        fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
+        fixtureDigest: await digestFiles(PROJECT_ROOT, suite.fixtures),
         promptDigest,
         cases: caseIds().map((id) => ({ id, promptDigest })),
         runners,
@@ -788,7 +825,7 @@ async function main() {
   console.log('tea-test-review eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const { problems, groundTruth, versions } = preflight(options);
+  const { problems, groundTruth, versions } = await preflight(options);
   if (problems.length > 0) {
     console.error(`${colors.red}eval pre-flight failed; nothing was measured:${colors.reset}`);
     for (const problem of problems) console.error(`  - ${problem.message}`);
