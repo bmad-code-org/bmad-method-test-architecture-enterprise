@@ -20,12 +20,23 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * Two lifecycle calls, the `mkdtemp` and the `rm` around the directory each
+ * child's result record is collected in. The file-system port has no method for
+ * a directory. The records themselves are read through
+ * `test/lib/file-system-port.js`, and the run summary is written through it by
+ * `test/lib/eval-record.js`.
+ */
+
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const { loadSuiteManifest, unaccountedSkills } = require('./lib/suite-manifest');
+const { readJson } = require('./lib/file-system-port');
 const { teaSkills } = require('./lib/tea-skills');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { digestFiles, repositoryState, suiteResultRecord, runSummaryRecord, writeRunSummary } = require('./lib/eval-record');
@@ -265,7 +276,7 @@ async function placeholderRecord(suite, options, exitStatus, durationMs) {
     mode: options.preflightOnly ? 'preflight-only' : 'live',
     suite,
     repository: repositoryState(PROJECT_ROOT),
-    fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
+    fixtureDigest: await digestFiles(PROJECT_ROOT, suite.fixtures),
     promptDigest: null,
     cases: [],
     runners: [],
@@ -275,12 +286,16 @@ async function placeholderRecord(suite, options, exitStatus, durationMs) {
 }
 
 async function readChildRecord(invocation, options, exitStatus, durationMs) {
-  if (invocation.jsonPath && fs.existsSync(invocation.jsonPath)) {
-    try {
-      return JSON.parse(fs.readFileSync(invocation.jsonPath, 'utf8'));
-    } catch (error) {
+  if (invocation.jsonPath) {
+    // The existence check that used to guard this read is gone: the read answers
+    // absence, and a child that wrote no record falls through to the placeholder
+    // on that answer. Only the parse is caught, so a permission error is no
+    // longer reported as an unreadable record.
+    const read = await readJson(invocation.jsonPath).catch((error) => {
       console.error(`eval:all: ${invocation.label} wrote an unreadable result record: ${error.message}`);
-    }
+      return { present: false };
+    });
+    if (read.present) return read.value;
   }
   return await placeholderRecord(invocation.suite, options, exitStatus, durationMs);
 }
@@ -303,7 +318,7 @@ async function main() {
 
   let manifest;
   try {
-    ({ manifest } = loadSuiteManifest(PROJECT_ROOT));
+    ({ manifest } = await loadSuiteManifest(PROJECT_ROOT));
   } catch (error) {
     console.error(`eval:all: ${error.message}`);
     process.exit(2);
@@ -323,7 +338,7 @@ async function main() {
     }
     console.error('\nAdd a behavioral suite, or a deferred entry naming its owner, missing evidence, and exit condition.');
     if (options.jsonPath) {
-      writeRunSummary(
+      await writeRunSummary(
         options.jsonPath,
         runSummaryRecord({
           generatedAt: await nowIso(),
@@ -387,7 +402,7 @@ async function main() {
     aggregate = summary.exitCode;
 
     if (options.jsonPath) {
-      writeRunSummary(options.jsonPath, summary);
+      await writeRunSummary(options.jsonPath, summary);
       console.log(`\nrun summary written to ${options.jsonPath}`);
     }
   } finally {
