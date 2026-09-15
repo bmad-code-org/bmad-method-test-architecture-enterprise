@@ -120,6 +120,20 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * One call: the `rm` that removes the empty scratch directory each run is
+ * confined to. The file-system port reads and writes one caller-owned path and
+ * has no method for a directory.
+ *
+ * Every read of a file's contents goes through `test/lib/file-system-port.js`:
+ * the intents, the oracle, and the skill and menu a prompt is assembled from.
+ * That is why `buildPrompt` is asynchronous, and why the asynchrony reaches both
+ * generators and the probe evidence, which bind the same bytes as a plan step's
+ * stdin literal.
+ */
+
 const fs = require('node:fs');
 const path = require('node:path');
 
@@ -148,6 +162,7 @@ const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-re
 const { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
+const { readText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'tea-routing-eval');
@@ -362,10 +377,10 @@ function parseArgs(argv) {
  * checked against this, so an edit to the menu fails the corpus instead of
  * leaving it asserting an answer that no longer exists.
  *
- * @returns {Array<{code: string, description: string, label: string, skill: string|null}>}
+ * @returns {Promise<Array<{code: string, description: string, label: string, skill: string|null}>>}
  */
-function menuItems() {
-  const source = skillSources().menu;
+async function menuItems() {
+  const source = (await skillSources()).menu;
   const items = [];
   for (const block of source.split('[[agent.menu]]').slice(1)) {
     const body = block.split(/^\[/m)[0];
@@ -390,19 +405,29 @@ function menuItems() {
   return items;
 }
 
-/** The intents and the oracle, as one list of cases in corpus order. */
-function loadCorpus() {
-  const read = (file) => {
-    if (!fs.existsSync(file)) fatal(2, `no fixture at ${path.relative(PROJECT_ROOT, file)}`);
+/**
+ * The intents and the oracle, as one list of cases in corpus order.
+ *
+ * The existence check that used to guard each read is gone: the read answers
+ * absence itself, and the same message is raised off that answer. Only the parse
+ * is caught, so a permission error is no longer reported as invalid JSON.
+ */
+async function loadCorpus() {
+  const read = async (file) => {
+    const found = await readText(file);
+    if (!found.present) {
+      fatal(2, `no fixture at ${path.relative(PROJECT_ROOT, file)}`);
+      return null;
+    }
     try {
-      return JSON.parse(fs.readFileSync(file, 'utf8'));
+      return JSON.parse(found.text);
     } catch (error) {
       fatal(2, `${path.relative(PROJECT_ROOT, file)} is not valid JSON: ${error.message}`);
       return null;
     }
   };
-  const intents = read(INTENTS);
-  const groundTruth = read(GROUND_TRUTH);
+  const intents = await read(INTENTS);
+  const groundTruth = await read(GROUND_TRUTH);
   return { intents, groundTruth, cases: (intents.cases ?? []).map((item) => ({ ...item, expected: groundTruth.cases?.[item.id] })) };
 }
 
@@ -414,9 +439,9 @@ function loadCorpus() {
  * workflow against the menu item that names it, so a renamed skill or a dropped
  * menu row fails here rather than as a mysterious routing miss later.
  */
-function validateCorpus({ intents, groundTruth, cases }) {
+async function validateCorpus({ intents, groundTruth, cases }) {
   const problems = [];
-  const menu = menuItems();
+  const menu = await menuItems();
   const byCode = new Map(menu.map((item) => [item.code, item]));
   if (menu.length === 0) problems.push('src/agents/bmad-tea/customize.toml declares no [[agent.menu]] item; there is nothing to route to');
 
@@ -738,18 +763,38 @@ function signatureOf(score) {
  * builder and by the probe evidence, and because every one of those assemblies
  * has to produce byte-identical output: the contracts bind standard input as a
  * literal, so two reads that disagreed would stop the plan selecting anything.
+ *
+ * Read through the file-system port, so this and `buildPrompt` above it are
+ * asynchronous, and the asynchrony reaches the two generators and the probe
+ * evidence that bind the same bytes.
  */
 const skillText = { skill: null, menu: null };
 
-function skillSources() {
-  skillText.skill ??= fs.readFileSync(SKILL_FILE, 'utf8');
-  skillText.menu ??= fs.readFileSync(MENU_FILE, 'utf8');
+/**
+ * One file the prompt is assembled from.
+ *
+ * Absence throws rather than reading as an empty section. `fs.readFileSync` threw
+ * here before and the behaviour is kept, with a message naming the file: a prompt
+ * missing the skill it is about measures nothing, and both generators bind these
+ * bytes as a plan step's stdin literal.
+ */
+async function promptPart(file) {
+  const read = await readText(file);
+  if (!read.present) {
+    throw new Error(`${path.relative(PROJECT_ROOT, file)} is missing, and a routing prompt cannot be assembled without it`);
+  }
+  return read.text;
+}
+
+async function skillSources() {
+  skillText.skill ??= await promptPart(SKILL_FILE);
+  skillText.menu ??= await promptPart(MENU_FILE);
   return skillText;
 }
 
 /** The prompt one case gets: the skill as it ships, its menu as it ships, and one user message. */
-function buildPrompt(item) {
-  const { skill, menu } = skillSources();
+async function buildPrompt(item) {
+  const { skill, menu } = await skillSources();
   return [
     'You are the TEA agent `bmad-tea`. Below are the skill definition you run under and the capabilities menu it dispatches from.',
     '',
@@ -780,8 +825,10 @@ function buildPrompt(item) {
  * @param {Array<object>} cases
  * @returns {Array<{id: string, prompt: string}>}
  */
-function caseIndex(cases) {
-  return cases.map((item) => ({ id: item.id, prompt: buildPrompt(item) }));
+async function caseIndex(cases) {
+  const index = [];
+  for (const item of cases) index.push({ id: item.id, prompt: await buildPrompt(item) });
+  return index;
 }
 
 /**
@@ -792,8 +839,8 @@ function caseIndex(cases) {
  *
  * @returns {string[]}
  */
-function caseIds() {
-  return (loadCorpus().intents.cases ?? []).map((item) => item.id);
+async function caseIds() {
+  return ((await loadCorpus()).intents.cases ?? []).map((item) => item.id);
 }
 
 /**
@@ -805,9 +852,9 @@ function caseIds() {
  * hypothetical: every prompt here is built from files under `src/`, and one wrong
  * path away is the file next door.
  */
-function assertGroundTruthAbsent(prompts) {
+async function assertGroundTruthAbsent(prompts) {
   const problems = [];
-  const bytes = fs.readFileSync(GROUND_TRUTH, 'utf8').trim();
+  const bytes = (await readText(GROUND_TRUTH)).text?.trim();
   for (const { id, prompt } of prompts) {
     for (const key of GROUND_TRUTH_ONLY_KEYS) {
       if (prompt.includes(key)) problems.push(`${id}: its prompt carries the ground-truth-only key "${key}"`);
@@ -860,20 +907,20 @@ async function finish({ options, startedAt, mode, cases, runners, suiteFailureCl
   if (options.jsonPath) {
     let suite;
     try {
-      suite = suiteById(loadSuiteManifest(PROJECT_ROOT).manifest, SUITE_ID);
+      suite = suiteById((await loadSuiteManifest(PROJECT_ROOT)).manifest, SUITE_ID);
     } catch (error) {
       console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
       process.exit(2);
     }
-    const index = caseIndex(cases);
-    writeSuiteResult(
+    const index = await caseIndex(cases);
+    await writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
         generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
-        fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
+        fixtureDigest: await digestFiles(PROJECT_ROOT, suite.fixtures),
         promptDigest: digestPrompts(index),
         cases: index.map((item) => ({ id: item.id, promptDigest: digest(item.prompt) })),
         runners,
@@ -925,8 +972,8 @@ async function main() {
   console.log('tea bmad-tea routing eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const corpus = loadCorpus();
-  const problems = [...validateCorpus(corpus), ...assertGroundTruthAbsent(caseIndex(corpus.cases))];
+  const corpus = await loadCorpus();
+  const problems = [...(await validateCorpus(corpus)), ...(await assertGroundTruthAbsent(await caseIndex(corpus.cases)))];
 
   if (problems.length > 0) {
     console.error(`${colors.red}the routing corpus is inconsistent:${colors.reset}`);
@@ -939,7 +986,7 @@ async function main() {
     await finish({ options, startedAt, mode: staticMode, cases: [], runners: [], suiteFailureClasses: ['quality'] });
   }
 
-  const menu = menuItems();
+  const menu = await menuItems();
   const counts = Object.fromEntries(
     ROUTING_ACTIONS.map((action) => [action, corpus.cases.filter((item) => item.expected.expectedAction === action).length]),
   );
@@ -1011,7 +1058,7 @@ async function main() {
     const lostRunClasses = [];
 
     for (const item of corpus.cases) {
-      const prompt = buildPrompt(item);
+      const prompt = await buildPrompt(item);
       const signatures = new Set();
       const caseScores = [];
 
