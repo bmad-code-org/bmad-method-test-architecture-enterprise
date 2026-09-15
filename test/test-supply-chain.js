@@ -276,7 +276,7 @@ function checkResolutionFloor(config) {
     .map((name) => name.trim())
     .filter(Boolean)
     .sort();
-  const audited = [...(config['lockfile-age']?.exclude ?? [])].sort();
+  const audited = (config['lockfile-age']?.exclude ?? []).map((entry) => entry.name).sort();
   check(
     JSON.stringify(excluded) === JSON.stringify(audited),
     `.npmrc excludes ${JSON.stringify(excluded)} from the floor and eval-quality.config.json excludes ${JSON.stringify(audited)} from the window; the two lists must be equal`,

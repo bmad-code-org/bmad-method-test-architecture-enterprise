@@ -2,7 +2,13 @@
   "lockfile-age": {
     "lockfiles": ["package-lock.json", "website/package-lock.json"],
     "windowDays": 7,
-    "exclude": ["eval-quality"]
+    "exclude": [
+      {
+        "name": "eval-quality",
+        "reason": "TEA pins it exactly and a human drives that release; the resolution floor's own min-release-age-exclude names it for the same reason.",
+        "lockfiles": ["package-lock.json"]
+      }
+    ]
   },
   "licences": {
     "lockfiles": ["package-lock.json", "website/package-lock.json"],
