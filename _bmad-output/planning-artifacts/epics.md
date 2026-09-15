@@ -84,7 +84,7 @@ Last reconciled with GitHub on 2026-09-11 across `bmad-method-test-architecture-
 - [x] [Story 3.3: Read the clock through the shipped adapter](#story-33-read-the-clock-through-the-shipped-adapter) ([#171](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/171))
 - [x] [Story 3.4: Certify the file-system adapter](#story-34-certify-the-file-system-adapter) ([#170](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/170))
 - [x] [Story 3.5: Cut the trace harness over to the file-system port](#story-35-cut-the-trace-harness-over-to-the-file-system-port) ([#173](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/173))
-- [ ] [Story 3.6: Cut the remaining harnesses over to the file-system port](#story-36-cut-the-remaining-harnesses-over-to-the-file-system-port)
+- [x] [Story 3.6: Cut the remaining harnesses over to the file-system port](#story-36-cut-the-remaining-harnesses-over-to-the-file-system-port) ([#178](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/178))
 
 ### Epic 4 progress: TEA's claims, codes and supply chain are machine-held
 
