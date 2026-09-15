@@ -6,6 +6,17 @@
  * digest implementations produce two answers for the same bytes, and the whole
  * point of carrying a digest is that a later run can decide whether it looked
  * at the same input.
+ *
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * One call: the `mkdirSync` in `writeRecord`. The file-system port declares
+ * `readFile` and `writeFile` over a caller-owned path and creates no directories,
+ * which is the package's boundary rather than an omission, so the directory a
+ * record is written into is made here and the bytes go through the port.
+ *
+ * Every read of a file's contents goes through `test/lib/file-system-port.js`:
+ * `digestFiles` reads bytes, because a digest over decoded text is a digest over
+ * something the file does not contain.
  */
 
 'use strict';
@@ -17,6 +28,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 
 const { boundedProbe } = require('./bounded-probe');
+const { readBytes, writeText } = require('./file-system-port');
 
 const {
   validateEvalResult,
@@ -87,15 +99,22 @@ function digest(parts) {
  * and a reporting path that crashes on the condition it is reporting is worse
  * than a digest that says the file was not there.
  *
+ * The existence check that used to ask has gone: `readBytes` answers absence as a
+ * value and raises everything else, so the marker is written where the port says
+ * the file was not there and a permission error or a directory in place of a file
+ * still reaches the caller. `.present` is tested rather than the bytes, because a
+ * zero-byte fixture is present and empty and has always contributed its own empty
+ * bytes to the digest.
+ *
  * @param {string} projectRoot
  * @param {string[]} relativePaths
- * @returns {string}
+ * @returns {Promise<string>}
  */
-function digestFiles(projectRoot, relativePaths) {
+async function digestFiles(projectRoot, relativePaths) {
   const parts = [];
   for (const relative of [...relativePaths].sort()) {
-    const absolute = path.join(projectRoot, relative);
-    parts.push(relative, fs.existsSync(absolute) ? fs.readFileSync(absolute) : '<missing>');
+    const read = await readBytes(path.join(projectRoot, relative));
+    parts.push(relative, read.present ? read.bytes : '<missing>');
   }
   return digest(parts);
 }
@@ -298,13 +317,14 @@ function formatIssues(issues) {
  * @param {object} record
  * @param {(record: unknown) => {success: boolean, error?: {issues: Array<object>}}} validator
  */
-function writeRecord(jsonPath, record, validator) {
+async function writeRecord(jsonPath, record, validator) {
   const result = validator(record);
   if (!result.success) {
     throw new Error(`eval result record does not match its schema (harness bug):\n${formatIssues(result.error.issues)}`);
   }
+  // Stays on `fs`: the port writes bytes at a path and makes no directories.
   fs.mkdirSync(path.dirname(path.resolve(jsonPath)), { recursive: true });
-  fs.writeFileSync(jsonPath, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+  await writeText(jsonPath, `${JSON.stringify(record, null, 2)}\n`);
 }
 
 /**
@@ -332,19 +352,21 @@ function refuseScriptedRecord(filePath) {
 /**
  * @param {string} jsonPath
  * @param {object} record
+ * @returns {Promise<void>}
  */
-function writeSuiteResult(jsonPath, record) {
+async function writeSuiteResult(jsonPath, record) {
   refuseScriptedRecord(jsonPath);
-  writeRecord(jsonPath, record, validateEvalResult);
+  await writeRecord(jsonPath, record, validateEvalResult);
 }
 
 /**
  * @param {string} jsonPath
  * @param {object} record
+ * @returns {Promise<void>}
  */
-function writeRunSummary(jsonPath, record) {
+async function writeRunSummary(jsonPath, record) {
   refuseScriptedRecord(jsonPath);
-  writeRecord(jsonPath, record, validateEvalRun);
+  await writeRecord(jsonPath, record, validateEvalRun);
 }
 
 module.exports = {

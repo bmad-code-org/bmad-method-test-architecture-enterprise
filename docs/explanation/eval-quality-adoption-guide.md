@@ -222,14 +222,14 @@ Every harness supports the same three:
 
 ### Replay the scorers without a model
 
-A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 57 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
+A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 70 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
 
 - **Derive each expected result by hand from the ground truth**, before running the code under test. A result generated from the scorer proves the scorer agrees with itself.
 - **Carry a scorer version.** A parser or scorer change either reproduces every stored result or bumps `SCORER_VERSION` in an edit somebody has to review. `--accept` refuses to re-record until that bump happens.
 
 Deriving by hand is not ceremony. Writing the `trace` parser-rejection case by hand found a defect: `readMatrix` closed a criterion section only at the next criterion-shaped heading, so a `### Gap Analysis` heading left the last section open and a test cited beneath it was recorded as that criterion's evidence. The derivation gave 10 citations and the code gave 11.
 
-Two of the 57 stored outputs are real captures. The other 55 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
+Two of the 70 stored outputs are real captures. The other 68 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
 
 ## 5. Express the skill as a contract
 
@@ -283,7 +283,7 @@ The `npm test` chain is credential-free, makes no network call and no model call
 npm run test:eval-data          # fragment-selection corpus, static
 npm run test:eval-trace-data    # trace corpus, static
 npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # 57 stored outputs against the scorers
+npm run test:eval-replay        # 70 stored outputs against the scorers
 npm run test:contract-sources   # are the contracts what their sources generate?
 npm run test:contracts          # does the compiler still say what the baseline records?
 npm run test:contract-oracles   # does every oracle resolve, and agree with the scorer?

@@ -1189,7 +1189,7 @@ function exclusionOracle(id, caseId, expectations, commentary) {
   };
 }
 
-function buildFragmentSelectionContract(spec) {
+async function buildFragmentSelectionContract(spec) {
   const { workflow } = spec;
   const workflowDir = path.join(WORKFLOW_ROOT, workflow);
   const evals = JSON.parse(fs.readFileSync(path.join(EVAL_ROOT, workflow, 'evals.json'), 'utf8'));
@@ -1292,7 +1292,7 @@ function buildFragmentSelectionContract(spec) {
               ],
             },
             volatilePointers: [],
-            sensitivityWitness: buildSelectionWitness(spec, evals),
+            sensitivityWitness: await buildSelectionWitness(spec, evals),
           },
         ],
       },
@@ -1365,7 +1365,7 @@ function buildFragmentSelectionContract(spec) {
  * leg ids are built once here and used for both the legs and the relation, so the
  * two cannot drift apart again.
  */
-function buildSelectionWitness(spec, evals) {
+async function buildSelectionWitness(spec, evals) {
   const mustLoadOf = new Map(evals.cases.map((entry) => [entry.id, JSON.stringify(entry.expect.mustLoad)]));
   let first;
   let second;
@@ -1388,11 +1388,15 @@ function buildSelectionWitness(spec, evals) {
     );
     invariant = false;
   }
-  const legs = [first, second].map((caseId) => {
+  // A `for...of` rather than a `map`: buildSelectionPrompt reads the workflow's
+  // context files through the file-system port, so the prompt is awaited and an
+  // object-literal initialiser inside a map callback has nowhere to put the await.
+  const legs = [];
+  for (const caseId of [first, second]) {
     const entry = evals.cases.find((candidate) => candidate.id === caseId);
     assert(entry, `${spec.workflow}: the witness names case ${caseId}, which evals.json does not carry`);
-    return { caseId, legId: `witness-${caseId}`, prompt: buildSelectionPrompt({ dir: spec.workflow, data: evals }, entry) };
-  });
+    legs.push({ caseId, legId: `witness-${caseId}`, prompt: await buildSelectionPrompt({ dir: spec.workflow, data: evals }, entry) });
+  }
   const equality = {
     op: 'deep-equality',
     operands: legs.map(({ legId }) => ({ pointer: `/interactions/${legId}/stdout/fragments` })),
@@ -3083,13 +3087,17 @@ function routingOracleSpecs(cases, menu) {
  * leg carrying a description of a prompt parses, compiles, is scheduled, and then
  * measures nothing when it is finally run.
  */
-function buildRoutingWitness(spec, cases) {
+async function buildRoutingWitness(spec, cases) {
   const [firstId, secondId] = spec.witnessCases;
-  const legs = [firstId, secondId].map((caseId) => {
+  // A `for...of` rather than a `map`: buildRoutingPrompt reads the skill and its
+  // menu through the file-system port, so the prompt is awaited and an
+  // object-literal initialiser inside a map callback has nowhere to put the await.
+  const legs = [];
+  for (const caseId of [firstId, secondId]) {
     const item = cases.find((candidate) => candidate.id === caseId);
     assert(item, `${spec.contractId}: the witness names case ${caseId}, which this contract does not carry`);
-    return { legId: `witness-${caseId}`, prompt: buildRoutingPrompt(item) };
-  });
+    legs.push({ legId: `witness-${caseId}`, prompt: await buildRoutingPrompt(item) });
+  }
   return {
     witnessId: spec.witnessId,
     channel: 'stdin',
@@ -3168,8 +3176,8 @@ const ROUTING_CONTRACTS = [
     gamedSentence: 'the question it asks names nothing to choose between.',
     degenerateResponse:
       "A clarification whose reason restates the user's own message and whose question asks for more detail without naming a single menu item.",
-    defectPredicate: (expected) => {
-      const menu = routingMenuItems();
+    defectPredicate: async (expected) => {
+      const menu = await routingMenuItems();
       const patterns = (expected.candidateCodes ?? []).map((code) => ({
         op: 'regex',
         operands: [{ pointer: '/interactions/observed/stdout/question' }],
@@ -3181,12 +3189,42 @@ const ROUTING_CONTRACTS = [
   },
 ];
 
-function buildRoutingContract(spec) {
-  const corpus = loadRoutingCorpus();
+/**
+ * One plan step, one intent.
+ *
+ * The agent is bound as `any`: which vendor answered is the runner record's to
+ * state, and a literal here would make every step a claim about one vendor.
+ *
+ * Standard input is bound as the literal prompt this case sends, for the reason
+ * test/eval-trace.js's two steps bind theirs: every step declares the same
+ * operation, so under a matcher binding one observation satisfies all of them and
+ * each case's oracles quantify over evidence that is not theirs. The prompt is the
+ * only part of the request that tells the steps apart, and buildRoutingPrompt is
+ * the same function the live run and test/lib/probe-scoring.js use, so a prompt
+ * restated here in any other form would select nothing and every oracle would
+ * resolve unreached.
+ */
+async function routingPlanStep(item) {
+  return {
+    stepId: item.id,
+    operationId: ROUTING_OPERATION,
+    after: null,
+    cardinality: 'exactly-one',
+    inputBinding: {
+      argument: null,
+      option: { agent: { matcher: 'any' } },
+      environment: null,
+      stdin: { prompt: { literal: await buildRoutingPrompt(item) } },
+    },
+  };
+}
+
+async function buildRoutingContract(spec) {
+  const corpus = await loadRoutingCorpus();
   for (const item of corpus.cases) assert(item.expected !== undefined, `${item.id}: ground-truth.json carries no answer for it`);
   const cases = corpus.cases.filter((item) => spec.actions.includes(item.expected.expectedAction));
   assert(cases.length > 0, `${spec.contractId}: the corpus carries no ${spec.actions.join(' or ')} case`);
-  const menu = routingMenuItems();
+  const menu = await routingMenuItems();
   assert(menu.length > 0, 'src/agents/bmad-tea/customize.toml declares no [[agent.menu]] item');
 
   const specs = routingOracleSpecs(cases, menu);
@@ -3218,6 +3256,13 @@ function buildRoutingContract(spec) {
     oracles: [oracleSpec.id],
   }));
 
+  // Built above the object literal, because the witness assembles two prompts
+  // through the file-system port and an awaited call has nowhere to sit in a
+  // property initialiser nested three levels down.
+  const witness = await buildRoutingWitness(spec, cases);
+  const interactionPlan = [];
+  for (const item of cases) interactionPlan.push(await routingPlanStep(item));
+
   return {
     schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
     parentDigest: null,
@@ -3247,36 +3292,14 @@ function buildRoutingContract(spec) {
             descriptorChannel: { kind: 'stream', channel: 'stdout' },
             responseDescriptor: routingDescriptor(ROUTING_RESPONSE_KEYS),
             volatilePointers: [],
-            sensitivityWitness: buildRoutingWitness(spec, cases),
+            sensitivityWitness: witness,
           },
         ],
       },
     ],
     referenceSets: {},
     siblingGroups: { operations: [], parameters: [] },
-    interactionPlan: cases.map((item) => ({
-      stepId: item.id,
-      operationId: ROUTING_OPERATION,
-      after: null,
-      cardinality: 'exactly-one',
-      // The agent is bound as `any`: which vendor answered is the runner record's
-      // to state, and a literal here would make every step a claim about one vendor.
-      //
-      // Standard input is bound as the literal prompt this case sends, for the
-      // reason test/eval-trace.js's two steps bind theirs: every step declares the
-      // same operation, so under a matcher binding one observation satisfies all
-      // of them and each case's oracles quantify over evidence that is not theirs.
-      // The prompt is the only part of the request that tells the steps apart, and
-      // buildRoutingPrompt is the same function the live run and
-      // test/lib/probe-scoring.js use, so a prompt restated here in any other form
-      // would select nothing and every oracle would resolve unreached.
-      inputBinding: {
-        argument: null,
-        option: { agent: { matcher: 'any' } },
-        environment: null,
-        stdin: { prompt: { literal: buildRoutingPrompt(item) } },
-      },
-    })),
+    interactionPlan,
     scopedResources: null,
     forbiddenInputs: FORBIDDEN_INPUTS,
     testData: {
@@ -3750,7 +3773,7 @@ async function main() {
   const stale = [];
   for (const target of targets()) {
     const filePath = path.join(CONTRACT_ROOT, target.relativePath);
-    const generated = await render(target.build(), filePath, prettierConfig);
+    const generated = await render(await target.build(), filePath, prettierConfig);
 
     if (!check) {
       fs.mkdirSync(path.dirname(filePath), { recursive: true });

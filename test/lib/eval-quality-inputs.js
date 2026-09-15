@@ -21,14 +21,22 @@
  * for it, which is the interchange guarantee rather than the package's own
  * internal parse. Both run: the package parses on the way in and on the way out,
  * and this is the independent reading of the same shape.
+ *
+ * WHAT REACHES `fs` DIRECTLY, AND WHY
+ *
+ * Nothing. Both files this module reads, the published schema behind `validator`
+ * and the scoring policy behind `scoringPolicy`, go through
+ * `test/lib/file-system-port.js`, which is why both and `validateArtifact` above
+ * them are asynchronous.
  */
 
 'use strict';
 
-const fs = require('node:fs');
 const path = require('node:path');
 
 const AjvModule = require('ajv/dist/2020');
+
+const { readJson } = require('./file-system-port');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -75,9 +83,10 @@ async function loadEvalQuality() {
 }
 
 let ajv;
+const validators = new Map();
 
-/** One Ajv instance, built on first use, with each published schema compiled once. */
-function validator(kind) {
+/** One compiled check per schema, read and compiled once. */
+async function compileValidator(kind) {
   if (ajv === undefined) {
     // `strict: false` because the published schemas use `propertyNames` and a
     // `date-time` format Ajv does not carry by default, and neither is a defect
@@ -85,12 +94,32 @@ function validator(kind) {
     // wants every field named at once.
     ajv = new Ajv({ strict: false, allErrors: true });
   }
-  const key = `urn:tea:${kind}`;
-  const existing = ajv.getSchema(key);
-  if (existing) return existing;
-  const file = path.join(SCHEMA_ROOT, `${kind}.schema.json`);
-  if (!fs.existsSync(file)) throw new Error(`eval-quality publishes no schema named ${kind}.schema.json`);
-  return ajv.compile({ ...JSON.parse(fs.readFileSync(file, 'utf8')), $id: key });
+  // The existence check that used to guard this read is gone: the read answers
+  // absence itself, and the message it raises is the same one.
+  const read = await readJson(path.join(SCHEMA_ROOT, `${kind}.schema.json`));
+  if (!read.present) throw new Error(`eval-quality publishes no schema named ${kind}.schema.json`);
+  return ajv.compile({ ...read.value, $id: `urn:tea:${kind}` });
+}
+
+/**
+ * One Ajv instance, built on first use, with each published schema compiled once.
+ *
+ * The promise is memoized rather than the compiled check, for the reason
+ * `test/lib/file-system-port.js` memoizes the adapter's: `ajv.getSchema` used to
+ * be the memo, and once a read sits between that lookup and the `compile`, two
+ * concurrent first calls for one kind both miss it and the second `compile`
+ * throws on a `$id` that already exists.
+ *
+ * @param {string} kind
+ * @returns {Promise<(value: unknown) => boolean>}
+ */
+function validator(kind) {
+  let pending = validators.get(kind);
+  if (pending === undefined) {
+    pending = compileValidator(kind);
+    validators.set(kind, pending);
+  }
+  return pending;
 }
 
 /**
@@ -98,17 +127,28 @@ function validator(kind) {
  *
  * @param {string} kind The schema basename, for example `probe` or `evidence-artifact`.
  * @param {unknown} value
- * @returns {string[]} Empty when the value conforms.
+ * @returns {Promise<string[]>} Empty when the value conforms.
  */
-function validateArtifact(kind, value) {
-  const check = validator(kind);
+async function validateArtifact(kind, value) {
+  const check = await validator(kind);
   if (check(value)) return [];
   return (check.errors ?? []).map((error) => `${error.instancePath || '/'} ${error.message}`);
 }
 
-/** TEA's scoring policy, the artifact whose digest enters every scoring version this repository computes. */
-function scoringPolicy() {
-  return JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8'));
+/**
+ * TEA's scoring policy, the artifact whose digest enters every scoring version
+ * this repository computes.
+ *
+ * Absence is named rather than left to surface as a null the caller dereferences:
+ * a repository with no scoring policy cannot score anything, and the message says
+ * which file is missing.
+ *
+ * @returns {Promise<object>}
+ */
+async function scoringPolicy() {
+  const read = await readJson(POLICY_PATH);
+  if (!read.present) throw new Error(`no scoring policy at ${path.relative(PROJECT_ROOT, POLICY_PATH)}`);
+  return read.value;
 }
 
 /**

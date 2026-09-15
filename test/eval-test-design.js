@@ -96,6 +96,31 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * Fourteen calls, in three groups, none of them a read or a write of a file's
+ * contents.
+ *
+ * - Two directory walks and one guard, which enumerate a staged tree and the
+ *   fixture corpus. The file-system port reads one caller-owned path and cannot
+ *   read a directory at all.
+ * - Two pre-flight existence questions, over the ground truth and over the
+ *   test-design workflow directory. The second is a directory; the first is a
+ *   file the port could answer for only by reading every byte to learn a boolean,
+ *   which is a different operation with a different cost.
+ * - Nine lifecycle calls: one `mkdtemp`, four `mkdir`, two `copyFile` and two
+ *   `rm` that create and remove the staged workspace. Seven are directory
+ *   operations the port has no method for. The two `copyFile` calls are not: a
+ *   copy is a byte read followed by a byte write, and what stops them is
+ *   `test/lib/file-system-port.js` publishing `readBytes` with no `writeBytes`
+ *   beside it, which is a wrapper omission rather than a port limit.
+ *
+ * Every read of a file's contents and the one write of one go through
+ * `test/lib/file-system-port.js`, and `npm run test:file-system-port` is what
+ * makes that falsifiable rather than asserted.
+ */
+
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -120,6 +145,7 @@ const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-re
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
+const { readJson, readText, writeText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-design-eval');
@@ -356,15 +382,24 @@ function parseArgs(argv) {
 /**
  * Parse ground-truth.json.
  *
- * @returns {object|null} Null when the file is missing or unparseable, so the caller
- *   can report that as an environment failure rather than crash inside a reporter.
+ * The existence check this used to open with is gone rather than converted: the
+ * port answers absence, so asking first was a second reading of the same
+ * question with a window between them.
+ *
+ * @returns {Promise<object|null>} Null when the file is missing or unparseable, so the
+ *   caller can report that as an environment failure rather than crash inside a reporter.
  */
-function loadGroundTruth() {
-  if (!fs.existsSync(GROUND_TRUTH)) return null;
+async function loadGroundTruth() {
   try {
-    return JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
-  } catch {
-    return null;
+    const read = await readJson(GROUND_TRUTH);
+    return read.present ? read.value : null;
+  } catch (error) {
+    // A parse failure only. The bare catch used to swallow every class the read
+    // can raise, so a permission error, a directory in place of the file or an
+    // aborted signal all reported as "missing or not valid JSON": the caller was
+    // told about the corpus when the fault was the tree or the install.
+    if (error instanceof SyntaxError) return null;
+    throw error;
   }
 }
 
@@ -477,7 +512,7 @@ function orderedPairsFor(set) {
  * @param {object} groundTruth
  * @returns {{problems: string[]}}
  */
-function validateCorpus(groundTruth) {
+async function validateCorpus(groundTruth) {
   const problems = [];
   const categories = new Set(groundTruth.riskCategories ?? []);
   const levels = new Set(groundTruth.testLevels ?? []);
@@ -503,12 +538,14 @@ function validateCorpus(groundTruth) {
     if (seenProjectRoots.has(set.projectRoot)) problems.push(`${where}: projectRoot "${set.projectRoot}" is already used by another set`);
     seenProjectRoots.add(set.projectRoot);
 
-    const epicPath = path.join(FIXTURE_ROOT, set.root, set.epicFile);
-    if (!fs.existsSync(epicPath)) {
+    // The existence check that used to guard this read is gone: the read answers
+    // absence itself, and the same problem is reported off that answer.
+    const epicRead = await readText(path.join(FIXTURE_ROOT, set.root, set.epicFile));
+    if (!epicRead.present) {
       problems.push(`${where}: epic ${set.root}/${set.epicFile} does not exist`);
       continue;
     }
-    const epic = normalizeText(fs.readFileSync(epicPath, 'utf8'));
+    const epic = normalizeText(epicRead.text);
 
     const material = set.materialRisks ?? [];
     const unsupported = set.unsupportedRisks ?? [];
@@ -632,9 +669,28 @@ function filesUnder(root) {
   return found;
 }
 
-/** One digest over a named set of files, so a later run can say whether the corpus moved. */
-function digestTree(root, relativePaths) {
-  return digest(relativePaths.map((relative) => `${relative}\0${fs.readFileSync(path.join(root, relative), 'utf8')}`).join('\u0001'));
+/**
+ * One digest over a named set of files, so a later run can say whether the corpus
+ * moved.
+ *
+ * A `for...of` rather than a `map`, because each file is read through the port
+ * and an awaited call has nowhere to sit inside a map callback. The digest input
+ * is unchanged, so the value it produces is the value it has always produced.
+ */
+async function digestTree(root, relativePaths) {
+  const parts = [];
+  for (const relative of relativePaths) {
+    const read = await readText(path.join(root, relative));
+    // `fs.readFileSync` threw here and the behaviour is kept, named. Absence has
+    // to be loud: the alternative is decoding a null into the digest, so a file
+    // the walk found and the read did not would produce a digest that compares
+    // equal to nothing and reads as a mutation nobody can locate.
+    if (!read.present) {
+      throw new Error(`${relative} was listed under ${root} and could not be read, so the corpus digest cannot be taken`);
+    }
+    parts.push(`${relative}\0${read.text}`);
+  }
+  return digest(parts.join('\u0001'));
 }
 
 /**
@@ -674,9 +730,9 @@ function configYaml() {
  * analysis of the epic.
  *
  * @param {object} set
- * @returns {{dir: string, projectDir: string, corpusFiles: string[], corpusDigest: string}}
+ * @returns {Promise<{dir: string, projectDir: string, corpusFiles: string[], corpusDigest: string}>}
  */
-function stageWorkspace(set) {
+async function stageWorkspace(set) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-test-design-eval-'));
   const projectDir = path.join(dir, projectRootOf(set));
   const setRoot = path.join(FIXTURE_ROOT, set.root);
@@ -690,7 +746,7 @@ function stageWorkspace(set) {
   // brings anything into this directory, so a run cannot inherit a checkpoint.
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
   fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  fs.writeFileSync(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml(), 'utf8');
+  await writeText(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml());
 
   for (const relative of filesUnder(SKILL_ROOT)) {
     const target = path.join(dir, 'skill', relative);
@@ -703,7 +759,7 @@ function stageWorkspace(set) {
   const corpusFiles = filesUnder(projectDir).filter(
     (relative) => !relative.startsWith(`test-artifacts${path.sep}`) && !relative.startsWith(`_bmad${path.sep}`),
   );
-  return { dir, projectDir, corpusFiles, corpusDigest: digestTree(projectDir, corpusFiles) };
+  return { dir, projectDir, corpusFiles, corpusDigest: await digestTree(projectDir, corpusFiles) };
 }
 
 /**
@@ -714,17 +770,25 @@ function stageWorkspace(set) {
  * no staged file carries a key that appears only in it.
  *
  * @param {string} dir Workspace root.
- * @returns {string[]} Problems, empty when the workspace is clean.
+ * @returns {Promise<string[]>} Problems, empty when the workspace is clean.
  */
-function assertGroundTruthAbsent(dir) {
+async function assertGroundTruthAbsent(dir) {
   const problems = [];
-  const groundTruthBytes = fs.existsSync(GROUND_TRUTH) ? fs.readFileSync(GROUND_TRUTH, 'utf8') : null;
+  // Both existence checks are gone: each read answers absence itself. A staged
+  // file that vanished between the walk and the read used to contribute an empty
+  // string, which is the same silence one file at a time, and is reported now.
+  const groundTruthBytes = (await readText(GROUND_TRUTH)).text;
   for (const relative of filesUnder(dir)) {
     if (path.basename(relative) === 'ground-truth.json') {
       problems.push(`staged workspace contains ${relative}`);
       continue;
     }
-    const text = fs.readFileSync(path.join(dir, relative), 'utf8');
+    const staged = await readText(path.join(dir, relative));
+    if (!staged.present) {
+      problems.push(`staged file ${relative} disappeared between the walk and the read, so it was not checked`);
+      continue;
+    }
+    const text = staged.text;
     if (groundTruthBytes && text === groundTruthBytes) {
       problems.push(`staged file ${relative} carries the ground truth verbatim`);
       continue;
@@ -823,8 +887,8 @@ function caseIndex(sets) {
  * Read by tools/validate-eval-schemas.js and compared with the manifest's
  * `caseCount`, so a set added to the corpus and not to the manifest fails `npm test`.
  */
-function caseIds() {
-  return (loadGroundTruth()?.fixtureSets ?? []).map((set) => set.id);
+async function caseIds() {
+  return ((await loadGroundTruth())?.fixtureSets ?? []).map((set) => set.id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1423,9 +1487,9 @@ function runnerOptions(options) {
  * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
  */
 async function runCase(set, options, agent, runIndex, categories) {
-  const workspace = stageWorkspace(set);
+  const workspace = await stageWorkspace(set);
   try {
-    const leaked = assertGroundTruthAbsent(workspace.dir);
+    const leaked = await assertGroundTruthAbsent(workspace.dir);
     if (leaked.length > 0) {
       return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
     }
@@ -1486,7 +1550,7 @@ async function runCase(set, options, agent, runIndex, categories) {
     // The workflow states that it does not change its inputs. A run that edited the
     // epic has moved the benchmark, and the next run would be measured against a
     // corpus this one rewrote.
-    const mutations = digestTree(workspace.projectDir, workspace.corpusFiles) === workspace.corpusDigest ? 0 : 1;
+    const mutations = (await digestTree(workspace.projectDir, workspace.corpusFiles)) === workspace.corpusDigest ? 0 : 1;
     const added = filesUnder(workspace.projectDir).filter(
       (relative) =>
         !relative.startsWith(`test-artifacts${path.sep}`) &&
@@ -1559,20 +1623,20 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
   if (options.jsonPath) {
     let suite;
     try {
-      suite = suiteById(loadSuiteManifest(PROJECT_ROOT).manifest, SUITE_ID);
+      suite = suiteById((await loadSuiteManifest(PROJECT_ROOT)).manifest, SUITE_ID);
     } catch (error) {
       console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
       process.exit(2);
     }
     const cases = caseIndex(sets).map((item) => ({ id: item.id, promptDigest: digest(item.prompt) }));
-    writeSuiteResult(
+    await writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
         generatedAt: await nowIso(),
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
-        fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
+        fixtureDigest: await digestFiles(PROJECT_ROOT, suite.fixtures),
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,
@@ -1623,7 +1687,7 @@ async function main() {
   console.log('tea test-design eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const groundTruth = loadGroundTruth();
+  const groundTruth = await loadGroundTruth();
   if (!groundTruth) {
     console.error(`${colors.red}eval: ground truth at ${GROUND_TRUTH} is missing or not valid JSON${colors.reset}`);
     await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-missing-artifact'] });
@@ -1635,7 +1699,7 @@ async function main() {
     await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
   }
 
-  const { problems } = validateCorpus(groundTruth);
+  const { problems } = await validateCorpus(groundTruth);
   if (problems.length > 0) {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
     for (const problem of problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
@@ -1658,10 +1722,10 @@ async function main() {
     // workspace is the measurement's validity, and a check that only runs when a model
     // runs is a check nobody runs.
     for (const set of sets) {
-      const workspace = stageWorkspace(set);
+      const workspace = await stageWorkspace(set);
       try {
         const leaked = [
-          ...assertGroundTruthAbsent(workspace.dir),
+          ...(await assertGroundTruthAbsent(workspace.dir)),
           ...GROUND_TRUTH_ONLY_TOKENS.filter((token) => buildPrompt(set).includes(token)).map(
             (token) => `prompt carries the ground-truth-only key "${token}"`,
           ),

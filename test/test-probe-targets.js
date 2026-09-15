@@ -479,6 +479,36 @@ async function checkTestReviewProbe(runDir) {
     'an artifact the run never wrote comes back absent',
     JSON.stringify(missing.ok ? missing.observation.artifacts : missing),
   );
+
+  // The same guard nfrProbe's own decimal-timeout case holds cli/nfr-runner.js
+  // to: tested on the raw string before Number.parseInt truncates it.
+  const invalidTimeout = await probeCommand(
+    port,
+    probeRequest({
+      probeId: 'review-invalid-timeout',
+      interfaceId: 'tea-test-review',
+      operationId: 'review-test-files',
+      option: {
+        files: './tests/checkout.spec.ts',
+        'project-root': REVIEW_FIXTURE_PROJECT,
+        output: path.join(runDir, 'test-review.md'),
+        json: path.join(runDir, 'verdict.json'),
+        'agent-cmd': REVIEW_STUB_AGENT,
+        'no-isolate': true,
+        'env-pass': 'STUB_MODE',
+        'timeout-ms': '1.5',
+      },
+      environment: { STUB_MODE: 'approve' },
+    }),
+    new AbortController().signal,
+  );
+  assert(
+    invalidTimeout.ok &&
+      invalidTimeout.observation.exitCode === 2 &&
+      /--timeout-ms must be a positive integer; got "1\.5"/.test(observedText(invalidTimeout.observation.stderr)),
+    'a decimal timeout is rejected as a usage error before the runner starts',
+    JSON.stringify(invalidTimeout.ok ? invalidTimeout.observation : invalidTimeout).slice(0, 300),
+  );
 }
 
 async function checkFragmentSelectionProbe(runDir) {

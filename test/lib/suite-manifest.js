@@ -6,10 +6,10 @@
 
 'use strict';
 
-const fs = require('node:fs');
 const path = require('node:path');
 
 const { validateSuiteManifest } = require('../schema/suite-manifest');
+const { readText } = require('./file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 const MANIFEST_RELATIVE_PATH = path.join('test', 'evals', 'suite-manifest.json');
@@ -23,17 +23,27 @@ function manifestError(message) {
 /**
  * Load and validate test/evals/suite-manifest.json.
  *
+ * Read through `test/lib/file-system-port.js`, so this module makes no direct
+ * `fs` call at all. The existence check that used to guard the read is gone: the
+ * read answers absence itself, and the same EVAL_MANIFEST_INVALID is raised off
+ * that answer rather than off a separate question asked a moment earlier.
+ *
+ * Asynchronous because `eval-quality` is ESM and this repository is CommonJS, so
+ * every entry point through the port is. Every caller was already inside an async
+ * frame.
+ *
  * @param {string} [projectRoot]
- * @returns {{manifest: object, manifestPath: string}}
+ * @returns {Promise<{manifest: object, manifestPath: string}>}
  * @throws {Error} EVAL_MANIFEST_INVALID when the file is missing, unparseable, or off-schema.
  */
-function loadSuiteManifest(projectRoot = PROJECT_ROOT) {
+async function loadSuiteManifest(projectRoot = PROJECT_ROOT) {
   const manifestPath = path.join(projectRoot, MANIFEST_RELATIVE_PATH);
-  if (!fs.existsSync(manifestPath)) throw manifestError(`no suite manifest at ${MANIFEST_RELATIVE_PATH}`);
+  const read = await readText(manifestPath);
+  if (!read.present) throw manifestError(`no suite manifest at ${MANIFEST_RELATIVE_PATH}`);
 
   let parsed;
   try {
-    parsed = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    parsed = JSON.parse(read.text);
   } catch (error) {
     throw manifestError(`${MANIFEST_RELATIVE_PATH} is not valid JSON: ${error.message}`);
   }

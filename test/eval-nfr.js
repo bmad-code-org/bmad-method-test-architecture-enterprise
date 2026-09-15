@@ -124,6 +124,33 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * Fourteen calls, in four groups, none of them a read or a write of a file's
+ * contents.
+ *
+ * - One directory walk and its guard, which enumerate a staged tree. The
+ *   file-system port reads one caller-owned path and cannot read a directory at
+ *   all.
+ * - One directory question over a fixture set's root, asked by the validator so a
+ *   set naming a root nobody ships is reported rather than thrown on.
+ * - Two pre-flight existence questions, over the ground truth and over the nfr
+ *   workflow directory. The second is a directory; the first is a file the port
+ *   could answer for only by reading every byte to learn a boolean, which is a
+ *   different operation with a different cost.
+ * - Nine lifecycle calls: one `mkdtemp`, four `mkdir`, two `copyFile` and two
+ *   `rm` that create and remove the staged workspace. Seven are directory
+ *   operations the port has no method for. The two `copyFile` calls are not: a
+ *   copy is a byte read followed by a byte write, and what stops them is
+ *   `test/lib/file-system-port.js` publishing `readBytes` with no `writeBytes`
+ *   beside it, which is a wrapper omission rather than a port limit.
+ *
+ * Every read of a file's contents and the one write of one go through
+ * `test/lib/file-system-port.js`, and `npm run test:file-system-port` is what
+ * makes that falsifiable rather than asserted.
+ */
+
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -149,6 +176,7 @@ const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilit
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
+const { readBytes, readJson, readText, writeText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'nfr-eval');
@@ -456,15 +484,24 @@ function parseArgs(argv) {
 /**
  * Parse ground-truth.json.
  *
- * @returns {object|null} Null when the file is missing or unparseable, so the caller
- *   can report that as an environment failure rather than crash inside a reporter.
+ * The existence check this used to open with is gone rather than converted: the
+ * port answers absence, so asking first was a second reading of the same
+ * question with a window between them.
+ *
+ * @returns {Promise<object|null>} Null when the file is missing or unparseable, so the
+ *   caller can report that as an environment failure rather than crash inside a reporter.
  */
-function loadGroundTruth() {
-  if (!fs.existsSync(GROUND_TRUTH)) return null;
+async function loadGroundTruth() {
   try {
-    return JSON.parse(fs.readFileSync(GROUND_TRUTH, 'utf8'));
-  } catch {
-    return null;
+    const read = await readJson(GROUND_TRUTH);
+    return read.present ? read.value : null;
+  } catch (error) {
+    // A parse failure only. The bare catch used to swallow every class the read
+    // can raise, so a permission error, a directory in place of the file or an
+    // aborted signal all reported as "missing or not valid JSON": the caller was
+    // told about the corpus when the fault was the tree or the install.
+    if (error instanceof SyntaxError) return null;
+    throw error;
   }
 }
 
@@ -534,10 +571,16 @@ function headingText(line) {
   return match ? match[1].replaceAll(/[#*`]/g, '').trim() : null;
 }
 
-/** Every markdown heading text in a file, for checking a citation's named section. */
-function headingsOf(absolute) {
+/**
+ * Every markdown heading text in a file's contents.
+ *
+ * Takes the lines rather than the path, because the one caller has already read
+ * the file to split it: reading it a second time is the same question twice with
+ * a window in between, which is the argument this whole conversion is built on.
+ */
+function headingsOf(lines) {
   const headings = new Set();
-  for (const line of fs.readFileSync(absolute, 'utf8').split('\n')) {
+  for (const line of lines) {
     const text = headingText(line);
     if (text) headings.add(text);
   }
@@ -573,9 +616,9 @@ function sectionRange(lines, section) {
  * anchor and the line numbers drift whenever a step file is edited.
  *
  * @param {object} groundTruth
- * @returns {{problems: string[], notices: string[]}}
+ * @returns {Promise<{problems: string[], notices: string[]}>}
  */
-function validateCorpus(groundTruth) {
+async function validateCorpus(groundTruth) {
   const problems = [];
   const notices = [];
 
@@ -589,13 +632,15 @@ function validateCorpus(groundTruth) {
   // it names. A status whose rule has moved out of the file is an opinion, and
   // the whole discipline of this corpus is that no status is an opinion.
   for (const [key, citation] of Object.entries(citations)) {
-    const absolute = path.join(PROJECT_ROOT, citation.file);
-    if (!fs.existsSync(absolute)) {
+    // The existence check that used to guard this read is gone: the read answers
+    // absence itself, and the same problem is reported off that answer.
+    const cited = await readText(path.join(PROJECT_ROOT, citation.file));
+    if (!cited.present) {
       problems.push(`skillRuleCitations.${key}: ${citation.file} does not exist`);
       continue;
     }
-    const lines = fs.readFileSync(absolute, 'utf8').split('\n');
-    if (citation.section && !headingsOf(absolute).has(citation.section)) {
+    const lines = cited.text.split('\n');
+    if (citation.section && !headingsOf(lines).has(citation.section)) {
       problems.push(`skillRuleCitations.${key}: ${citation.file} has no section titled "${citation.section}"`);
       continue;
     }
@@ -843,16 +888,21 @@ function validateCorpus(groundTruth) {
 /* Workspace staging                                                           */
 /* -------------------------------------------------------------------------- */
 
-/** Digest of a file list, keyed by relative path so a rename shows up. */
-function digestTree(root, relativePaths) {
+/**
+ * Digest of a file list, keyed by relative path so a rename shows up.
+ *
+ * The `try`/`catch` that separated `ENOENT` from everything else is gone: the
+ * port makes absence a value and raises the rest, so the marker is written where
+ * the read says the file was not there and a permission error still reaches the
+ * caller. The digest input is unchanged, so the value it produces is the value it
+ * has always produced.
+ */
+async function digestTree(root, relativePaths) {
   const parts = [];
   for (const relative of [...relativePaths].sort()) {
-    try {
-      parts.push(relative, fs.readFileSync(path.join(root, relative)));
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw error;
-      parts.push(relative, '\0missing', relative);
-    }
+    const read = await readBytes(path.join(root, relative));
+    if (read.present) parts.push(relative, read.bytes);
+    else parts.push(relative, '\0missing', relative);
   }
   return digest(parts);
 }
@@ -911,9 +961,9 @@ function configYaml(set) {
  * are not the service's.
  *
  * @param {object} set
- * @returns {{dir: string, projectDir: string, bundleFiles: string[], bundleDigest: string}}
+ * @returns {Promise<{dir: string, projectDir: string, bundleFiles: string[], bundleDigest: string}>}
  */
-function stageWorkspace(set) {
+async function stageWorkspace(set) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-nfr-eval-'));
   const projectDir = path.join(dir, set.projectRoot);
   const setRoot = path.join(FIXTURE_ROOT, set.root);
@@ -926,7 +976,7 @@ function stageWorkspace(set) {
 
   fs.mkdirSync(path.join(projectDir, 'test-artifacts'), { recursive: true });
   fs.mkdirSync(path.join(projectDir, '_bmad', 'tea'), { recursive: true });
-  fs.writeFileSync(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml(set), 'utf8');
+  await writeText(path.join(projectDir, '_bmad', 'tea', 'config.yaml'), configYaml(set));
 
   for (const relative of filesUnder(SKILL_ROOT)) {
     const target = path.join(dir, 'skill', relative);
@@ -940,7 +990,7 @@ function stageWorkspace(set) {
   const bundleFiles = filesUnder(projectDir).filter(
     (relative) => !relative.startsWith(`test-artifacts${path.sep}`) && !relative.startsWith(`_bmad${path.sep}`),
   );
-  return { dir, projectDir, bundleFiles, bundleDigest: digestTree(projectDir, bundleFiles) };
+  return { dir, projectDir, bundleFiles, bundleDigest: await digestTree(projectDir, bundleFiles) };
 }
 
 /**
@@ -951,17 +1001,25 @@ function stageWorkspace(set) {
  * and no staged file carries a key that appears only in it.
  *
  * @param {string} dir Workspace root.
- * @returns {string[]} Problems, empty when the workspace is clean.
+ * @returns {Promise<string[]>} Problems, empty when the workspace is clean.
  */
-function assertGroundTruthAbsent(dir) {
+async function assertGroundTruthAbsent(dir) {
   const problems = [];
-  const groundTruthBytes = fs.existsSync(GROUND_TRUTH) ? fs.readFileSync(GROUND_TRUTH, 'utf8') : null;
+  // Both existence checks are gone: each read answers absence itself. A staged
+  // file that vanished between the walk and the read used to throw out of a
+  // validator whose whole job is to report, and is reported now.
+  const groundTruthBytes = (await readText(GROUND_TRUTH)).text;
   for (const relative of filesUnder(dir)) {
     if (path.basename(relative) === 'ground-truth.json') {
       problems.push(`staged workspace contains ${relative}`);
       continue;
     }
-    const text = fs.readFileSync(path.join(dir, relative), 'utf8');
+    const staged = await readText(path.join(dir, relative));
+    if (!staged.present) {
+      problems.push(`staged file ${relative} disappeared between the walk and the read, so it was not checked`);
+      continue;
+    }
+    const text = staged.text;
     if (groundTruthBytes && text === groundTruthBytes) {
       problems.push(`staged file ${relative} carries the ground truth verbatim`);
       continue;
@@ -1057,8 +1115,8 @@ function caseIndex(sets) {
  *
  * @returns {string[]}
  */
-function caseIds() {
-  return (loadGroundTruth()?.fixtureSets ?? []).map((set) => set.id);
+async function caseIds() {
+  return ((await loadGroundTruth())?.fixtureSets ?? []).map((set) => set.id);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1326,12 +1384,13 @@ function parseReport(text) {
  * through one reader.
  *
  * @param {string} directory Directory holding `test-artifacts/nfr-assessment.md`.
- * @returns {{ok: true, report: object}|{ok: false, failureClass: string, reason: string}}
+ * @returns {Promise<{ok: true, report: object}|{ok: false, failureClass: string, reason: string}>}
  */
-function readReport(directory) {
-  const reportPath = path.join(directory, 'test-artifacts', 'nfr-assessment.md');
-  if (!fs.existsSync(reportPath)) return reportFromArtifact({ kind: 'absent' });
-  return reportFromArtifact({ kind: 'text', value: fs.readFileSync(reportPath, 'utf8') });
+async function readReport(directory) {
+  // The existence check that used to guard this read is gone: the read answers
+  // absence, and `absent` is the tagged artifact a run that wrote nothing leaves.
+  const read = await readText(path.join(directory, 'test-artifacts', 'nfr-assessment.md'));
+  return reportFromArtifact(read.present ? { kind: 'text', value: read.text } : { kind: 'absent' });
 }
 
 /**
@@ -1576,9 +1635,9 @@ function runnerOptions(options) {
  * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
  */
 async function runCase(set, options, agent, runIndex) {
-  const workspace = stageWorkspace(set);
+  const workspace = await stageWorkspace(set);
   try {
-    const leaked = assertGroundTruthAbsent(workspace.dir);
+    const leaked = await assertGroundTruthAbsent(workspace.dir);
     if (leaked.length > 0) {
       return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
     }
@@ -1633,7 +1692,7 @@ async function runCase(set, options, agent, runIndex) {
     // The workflow audits evidence and generates none. A run that wrote into the
     // bundle has moved the benchmark, and the next run would be measured against
     // a bundle this one edited.
-    const mutations = digestTree(workspace.projectDir, workspace.bundleFiles) === workspace.bundleDigest ? 0 : 1;
+    const mutations = (await digestTree(workspace.projectDir, workspace.bundleFiles)) === workspace.bundleDigest ? 0 : 1;
     const added = filesUnder(workspace.projectDir).filter(
       (relative) =>
         !relative.startsWith(`test-artifacts${path.sep}`) &&
@@ -1702,13 +1761,13 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
   if (options.jsonPath) {
     let suite;
     try {
-      suite = suiteById(loadSuiteManifest(PROJECT_ROOT).manifest, SUITE_ID);
+      suite = suiteById((await loadSuiteManifest(PROJECT_ROOT)).manifest, SUITE_ID);
     } catch (error) {
       console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
       process.exit(2);
     }
     const cases = caseIndex(sets).map((item) => ({ id: item.id, promptDigest: digest(item.prompt) }));
-    writeSuiteResult(
+    await writeSuiteResult(
       options.jsonPath,
       suiteResultRecord({
         // Both stamps come from the clock port rather than from `Date` directly,
@@ -1719,7 +1778,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
         mode,
         suite,
         repository: repositoryState(PROJECT_ROOT),
-        fixtureDigest: digestFiles(PROJECT_ROOT, suite.fixtures),
+        fixtureDigest: await digestFiles(PROJECT_ROOT, suite.fixtures),
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,
@@ -1766,7 +1825,7 @@ async function main() {
   console.log('tea nfr eval harness');
   console.log(`========================================${colors.reset}\n`);
 
-  const groundTruth = loadGroundTruth();
+  const groundTruth = await loadGroundTruth();
   if (!groundTruth) {
     console.error(`${colors.red}eval: ground truth at ${GROUND_TRUTH} is missing or not valid JSON${colors.reset}`);
     await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-missing-artifact'] });
@@ -1778,7 +1837,7 @@ async function main() {
     await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['environment-configuration'] });
   }
 
-  const { problems, notices } = validateCorpus(groundTruth);
+  const { problems, notices } = await validateCorpus(groundTruth);
   for (const notice of notices) console.log(`  ${colors.yellow}drift${colors.reset} ${notice}`);
   if (problems.length > 0) {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
@@ -1802,10 +1861,10 @@ async function main() {
     // agent's workspace is the measurement's validity, and a check that only runs
     // when a model runs is a check nobody runs.
     for (const set of sets) {
-      const workspace = stageWorkspace(set);
+      const workspace = await stageWorkspace(set);
       try {
         const leaked = [
-          ...assertGroundTruthAbsent(workspace.dir),
+          ...(await assertGroundTruthAbsent(workspace.dir)),
           ...GROUND_TRUTH_ONLY_TOKENS.filter((token) => buildPrompt(set).includes(token)).map(
             (token) => `prompt carries the ground-truth-only key "${token}"`,
           ),

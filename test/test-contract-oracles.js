@@ -178,8 +178,14 @@ const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'groun
  * scales with the length of the value matched: test-design's oracles estimate up to
  * 29,436 steps against a three-kilobyte document and would have faulted here at
  * budget-exhausted while scoring cleanly under the policy every real run uses.
+ *
+ * A `let` assigned at the top of `main` rather than a module-scope `const`,
+ * because the policy is now read through the file-system port and every entry
+ * point through it is asynchronous. Nothing in this file reads the budget before
+ * `main` assigns it, which is what keeps `evaluateOracles` and the six check
+ * functions below synchronous.
  */
-const REGEX_STEP_BUDGET = scoringPolicy().regexMatchStepBudget;
+let REGEX_STEP_BUDGET;
 
 const colors = {
   reset: '[0m',
@@ -448,9 +454,9 @@ function checkSelectionCase(evaluator, contract, workflow, item, caseIndex, sele
   );
 }
 
-function checkFragmentSelectionOracles(evaluator) {
+async function checkFragmentSelectionOracles(evaluator) {
   console.log('\nfragment-selection/<workflow>.contract.json over constructed and stored selections');
-  const suites = loadSuites([]);
+  const suites = await loadSuites([]);
   const contracts = new Map();
   let evaluated = 0;
   for (const suite of suites) {
@@ -726,10 +732,10 @@ function checkOneRoutingAnswer(evaluator, contract, specsForCase, caseId, expect
   return { evaluated, results };
 }
 
-function checkRoutingOracles(evaluator) {
+async function checkRoutingOracles(evaluator) {
   console.log('\ntea-routing-*.contract.json over constructed and stored routing answers');
-  const corpus = loadRoutingCorpus();
-  const menu = routingMenuItems();
+  const corpus = await loadRoutingCorpus();
+  const menu = await routingMenuItems();
   const stored = findCases().filter((item) => item.suite === 'bmad-tea-routing');
   assert(stored.length > 0, 'test/replay/bmad-tea-routing holds at least one stored routing answer');
   let evaluated = 0;
@@ -847,10 +853,10 @@ function testDesignArtifactOf(directory, expected) {
  * nothing about the arithmetic, the band placement, the coverage mapping or the
  * priority ordering, all of which only the harness checks.
  */
-function checkTestDesignOracles(evaluator) {
+async function checkTestDesignOracles(evaluator) {
   console.log('\ntest-design.contract.json over every stored test design');
   const contract = readJson(path.join(CONTRACT_ROOT, 'test-design.contract.json'), 'the test-design contract');
-  const groundTruth = loadTestDesignGroundTruth();
+  const groundTruth = await loadTestDesignGroundTruth();
   if (!groundTruth) unreadable('the test-design ground truth is missing or not valid JSON');
   const specs = testDesignOracleSpecs(groundTruth);
   assert(
@@ -946,10 +952,10 @@ function scoreNfrArtifacts(set, artifacts) {
   return { scored: scoreNfrRun(set, report.report) };
 }
 
-function checkNfrOracles(evaluator) {
+async function checkNfrOracles(evaluator) {
   console.log('\nnfr.contract.json over every stored NFR run');
   const contract = readJson(path.join(CONTRACT_ROOT, 'nfr.contract.json'), 'the nfr contract');
-  const groundTruth = loadNfrGroundTruth();
+  const groundTruth = await loadNfrGroundTruth();
   if (!groundTruth) unreadable('the nfr ground truth is missing or not valid JSON');
   const specs = nfrOracleSpecs(groundTruth);
   assert(
@@ -1011,15 +1017,16 @@ function checkNfrOracles(evaluator) {
 
 async function main() {
   console.log('contract oracles, evaluated with eval-quality and compared with the harness scorers');
+  REGEX_STEP_BUDGET = (await scoringPolicy()).regexMatchStepBudget;
   const evaluator = await loadEvaluator();
   const groundTruth = readJson(GROUND_TRUTH, 'the test-review ground truth');
 
   checkTestReviewOracles(evaluator, groundTruth);
-  checkFragmentSelectionOracles(evaluator);
-  checkRoutingOracles(evaluator);
-  checkTestDesignOracles(evaluator);
+  await checkFragmentSelectionOracles(evaluator);
+  await checkRoutingOracles(evaluator);
+  await checkTestDesignOracles(evaluator);
   await checkTraceOracles(evaluator);
-  checkNfrOracles(evaluator);
+  await checkNfrOracles(evaluator);
 
   console.log('');
   if (failed > 0) {

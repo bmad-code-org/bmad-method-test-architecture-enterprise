@@ -56,6 +56,34 @@
 
 'use strict';
 
+/*
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * Eight calls, none of them a read of a file's contents.
+ *
+ * - A hand-written copy tree and its walk: one `readdir`, one `mkdir` and one
+ *   `copyFile`. The port cannot read a directory, and a copy is a byte read
+ *   followed by a byte write that `test/lib/file-system-port.js` cannot express
+ *   while it publishes `readBytes` with no `writeBytes` beside it.
+ * - Five lifecycle calls: one `mkdtemp`, two `mkdir` that create the cache and
+ *   artifact directories, and two `rm` that remove a staged workspace. The port
+ *   writes bytes at a path and creates no directories, which is the package's
+ *   boundary rather than an omission.
+ *
+ * Every read of a file's contents and every artifact write go through
+ * `test/lib/file-system-port.js`: the trace ground truth, each cached leg
+ * observation, the recorded baseline, and the cost report, the sealed brief and
+ * the verdict files this harness writes.
+ *
+ * What holds that is uneven, and the uneven half is worth stating. This file is
+ * exposed only as `eval:contract-strength` and `eval:preflight`, neither of which
+ * is in `npm test`, so `npm run test:file-system-port` cannot drive it the way it
+ * drives the other harnesses. `stagedWorkspaceFor` is reached, because
+ * `test/test-probe-corpus.js` calls it directly for every trace leg. The leg
+ * cache, the baseline read and `writeArtifact` are reached only by a run that
+ * spends model calls, so a substitution there would not be caught by the gate.
+ */
+
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -65,6 +93,7 @@ const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { validateArtifact } = require('./lib/eval-quality-inputs');
 const { cliObservation, createProbePort, readEnvironment } = require('./lib/probe-targets');
 const { collectingSink, ladderExitCode, preflightDiagnostics, runSuite, sealContract, suites } = require('./lib/probe-scoring');
+const { readJson, writeText } = require('./lib/file-system-port');
 const { stageWorkspace, traceArtifactPaths } = require('./eval-trace');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -184,7 +213,9 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  */
 async function stagedWorkspaceFor(suiteId, request) {
   if (suiteId === 'trace') {
-    const groundTruth = JSON.parse(fs.readFileSync(TRACE_GROUND_TRUTH, 'utf8'));
+    const read = await readJson(TRACE_GROUND_TRUTH);
+    if (!read.present) throw new Error(`${path.relative(PROJECT_ROOT, TRACE_GROUND_TRUTH)} is missing, so no trace leg can be staged`);
+    const groundTruth = read.value;
     const prompt = String(request?.channels?.stdin?.value ?? '');
     const set = groundTruth.fixtureSets.find((entry) => prompt.includes(`\`{project-root}\`: \`${entry.projectRoot}\``));
     if (set === undefined) {
@@ -250,16 +281,19 @@ function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log
     async probe(request, signal) {
       const key = requestKey(request);
       const file = path.join(cacheDir, `${key}.json`);
-      if (!force && fs.existsSync(file)) {
+      // The existence check that used to guard this read is gone: the read
+      // answers absence, and a leg with no cached observation falls through to
+      // the live one on that answer.
+      const cached = force ? { present: false } : await readJson(file);
+      if (cached.present) {
         for (const counter of counters) counter.hits += 1;
         log(`  ${colors.dim}cached${colors.reset} leg ${request.probeId} (${key})`);
-        const cached = JSON.parse(fs.readFileSync(file, 'utf8'));
         // Narrowed like a live one. A cache written by an older build, or by a
         // port that answered in another member, is a shape this harness cannot
         // read, and reading it as a cli observation would score `undefined` as
         // an exit code.
         return cliObservation({
-          ...cached.observation,
+          ...cached.value.observation,
           probeId: request.probeId,
           interfaceId: request.interfaceId,
           operationId: request.operationId,
@@ -292,10 +326,9 @@ function cachingPort({ makePort, contract, cacheDir, agent, force, counters, log
         counter.elapsedMs += elapsedMs;
         counter.legs.push(leg);
       }
-      fs.writeFileSync(
+      await writeText(
         file,
         `${JSON.stringify({ key, agent, at: await nowIso(), elapsedMs, request: { ...augmented, channels: { ...augmented.channels, environment: Object.keys(augmented.channels.environment) } }, observation }, null, 2)}\n`,
-        'utf8',
       );
       log(
         `  ${colors.dim}wrote${colors.reset} ${path.relative(PROJECT_ROOT, file)} in ${(elapsedMs / 1000).toFixed(1)}s, exit ${observation.exitCode}`,
@@ -311,12 +344,14 @@ function cacheOnlyPort(cacheDir, counters) {
     async probe(request) {
       const key = requestKey(request);
       const file = path.join(cacheDir, `${key}.json`);
-      if (!fs.existsSync(file)) {
+      // The existence check that used to guard this read is gone: the read
+      // answers absence and the refusal is raised off that answer.
+      const cached = await readJson(file);
+      if (!cached.present) {
         throw new Error(`--from-cache is set and leg ${request.probeId} (${key}) has no cached observation; run without it first`);
       }
-      const cached = JSON.parse(fs.readFileSync(file, 'utf8'));
       for (const counter of counters) counter.hits += 1;
-      return { ...cached.observation, probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
+      return { ...cached.value.observation, probeId: request.probeId, interfaceId: request.interfaceId, operationId: request.operationId };
     },
   };
 }
@@ -334,7 +369,7 @@ function costReport(agent, stats, startedAt, totalElapsedMs) {
   };
 }
 
-function writeArtifact(dir, name, value) {
+async function writeArtifact(dir, name, value) {
   // Every artifact this harness writes, which is the cost report, the sealed
   // evaluator brief and the verdict files. Under a fixture the cost report's
   // `startedAt` and `totalWallClockSeconds` are scripted, which is the artifact
@@ -342,8 +377,9 @@ function writeArtifact(dir, name, value) {
   // the same run. This harness writes through its own writer rather than through
   // eval-record.js, so the guard is applied here too.
   refuseScriptedRecord(path.join(dir, name));
+  // Stays on `fs`: the port writes bytes at a path and makes no directories.
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, name), `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  await writeText(path.join(dir, name), `${JSON.stringify(value, null, 2)}\n`);
 }
 
 async function runOneSuite(suite, options, stats) {
@@ -410,7 +446,7 @@ async function runOneSuite(suite, options, stats) {
       );
       const { legs } = preflightDiagnostics(diagnostics, runId);
       verdicts.push({ probeId: probe.probeId, passed: verdict.passed, preflightLegs: legs, preflight: preflightOutcome(verdict) });
-      writeArtifact(outDir, `preflight-${probe.probeId}.json`, verdict);
+      await writeArtifact(outDir, `preflight-${probe.probeId}.json`, verdict);
       console.log(
         `  ${probe.probeId} ${probe.probeClass.padEnd(11)} ${legs ?? '?'} leg(s)  pre-flight ${verdict.passed ? colors.green + 'passed' : colors.red + 'failed'}${colors.reset}`,
       );
@@ -419,7 +455,7 @@ async function runOneSuite(suite, options, stats) {
     // nothing, and overwriting the record of the run that did spend something
     // with a row of zeros loses the only thing this file is for.
     if (suiteStats.spawns > 0)
-      writeArtifact(
+      await writeArtifact(
         outDir,
         'preflight-cost.json',
         costReport(options.agent, suiteStats, suiteStartedAt, await elapsedMsSince(suiteStartedAt)),
@@ -437,22 +473,22 @@ async function runOneSuite(suite, options, stats) {
   const problems = [];
   for (const entry of outcome.scored) {
     problems.push(...entry.schemaProblems, ...entry.preflightProblems);
-    writeArtifact(outDir, `preflight-${entry.probe.probeId}.json`, entry.preflight);
-    if (entry.result.artifact !== null) writeArtifact(outDir, `evidence-${entry.probe.probeId}.json`, entry.result.artifact);
+    await writeArtifact(outDir, `preflight-${entry.probe.probeId}.json`, entry.preflight);
+    if (entry.result.artifact !== null) await writeArtifact(outDir, `evidence-${entry.probe.probeId}.json`, entry.result.artifact);
     console.log(
       `  ${entry.probe.probeId} ${entry.probe.probeClass.padEnd(11)} ${entry.diagnostics.legs ?? '?'} leg(s)  pre-flight ${entry.preflight.passed ? 'passed' : 'failed'}  verdict ${String(entry.result.ladder.verdict)} (exit ${ladderExitCode(entry.result.ladder)})`,
     );
   }
   if (suiteStats.spawns > 0)
-    writeArtifact(
+    await writeArtifact(
       outDir,
       'preflight-cost.json',
       costReport(options.agent, suiteStats, suiteStartedAt, await elapsedMsSince(suiteStartedAt)),
     );
   const sealed = await sealContract(suite.contract);
   problems.push(...sealed.schemaProblems);
-  writeArtifact(outDir, 'sealed-evaluator-brief.json', sealed.brief);
-  writeArtifact(outDir, 'contract-strength.json', {
+  await writeArtifact(outDir, 'sealed-evaluator-brief.json', sealed.brief);
+  await writeArtifact(outDir, 'contract-strength.json', {
     contractId: suite.contract.contractId,
     vector: outcome.strength,
     probes: outcome.scored.map((entry) => ({
@@ -571,7 +607,7 @@ async function main(argv) {
   }
 
   const cost = costReport(options.agent, stats, startedAt, await elapsedMsSince(startedAt));
-  if (cost.spawnedLegs > 0) writeArtifact(options.out, 'preflight-cost.json', cost);
+  if (cost.spawnedLegs > 0) await writeArtifact(options.out, 'preflight-cost.json', cost);
   console.log(
     `\n${cost.spawnedLegs} leg(s) run and ${cost.cachedLegs} answered from cache, ${cost.spawnedWallClockSeconds}s spent in the model, ${cost.totalWallClockSeconds}s total.`,
   );
@@ -585,7 +621,17 @@ async function main(argv) {
     for (const problem of schemaProblems) console.error(`   ${problem}`);
     return 2;
   }
-  const { environment, measured } = baselineDifferences(results, JSON.parse(fs.readFileSync(BASELINE_PATH, 'utf8')));
+  // Named rather than dereferenced blind: baselineDifferences indexes the
+  // baseline by suite id, and null[suiteId] throws a TypeError that says
+  // nothing about which file was missing.
+  const baselineRead = await readJson(BASELINE_PATH);
+  if (!baselineRead.present) {
+    console.error(
+      `${colors.red}${path.relative(PROJECT_ROOT, BASELINE_PATH)} is missing, so no baseline comparison can run${colors.reset}`,
+    );
+    return 2;
+  }
+  const { environment, measured } = baselineDifferences(results, baselineRead.value);
   if (environment.length > 0) {
     console.error(`\n${colors.red}${environment.length} pre-flight outcome(s) moved:${colors.reset}`);
     for (const line of environment) console.error(`   ${line}`);

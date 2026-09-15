@@ -518,8 +518,13 @@ function main() {
   // of the review set, which is not known until the review set is resolved below.
   let explicitTimeoutMs = null;
   if (options.timeoutMs !== undefined) {
+    // Tested on the raw string before the parse. Number.parseInt truncates, so
+    // values such as `20abc` and `1e9` otherwise become valid small timeouts.
+    if (!/^[0-9]+$/.test(String(options.timeoutMs).trim())) {
+      fail(EXIT.ENV_ERROR, `--timeout-ms must be a positive integer; got "${options.timeoutMs}".`);
+    }
     explicitTimeoutMs = Number.parseInt(options.timeoutMs, 10);
-    if (!Number.isFinite(explicitTimeoutMs) || explicitTimeoutMs <= 0) {
+    if (!Number.isInteger(explicitTimeoutMs) || explicitTimeoutMs <= 0) {
       fail(EXIT.ENV_ERROR, `--timeout-ms must be a positive integer; got "${options.timeoutMs}".`);
     }
   }

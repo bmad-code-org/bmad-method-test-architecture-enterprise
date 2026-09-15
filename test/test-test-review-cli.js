@@ -2618,7 +2618,7 @@ async function runTests() {
       );
       // eval-all discovers its suites from test/evals/suite-manifest.json, so its
       // invocation builder is handed the validated manifest rather than reading one.
-      const { manifest: evalSuiteManifest } = loadSuiteManifest(repoRoot);
+      const { manifest: evalSuiteManifest } = await loadSuiteManifest(repoRoot);
       const parsedAll = parseAllEvalArgs(['--agent', 'codex', '--fragment-runs', '2', '--review-runs', '3']);
       const allInvocations = buildInvocations(parsedAll, evalSuiteManifest);
       // One invocation per live suite in the manifest, so adding a suite moves this

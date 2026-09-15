@@ -84,7 +84,7 @@ Last reconciled with GitHub on 2026-09-15 across `bmad-method-test-architecture-
 - [x] [Story 3.3: Read the clock through the shipped adapter](#story-33-read-the-clock-through-the-shipped-adapter) ([#171](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/171))
 - [x] [Story 3.4: Certify the file-system adapter](#story-34-certify-the-file-system-adapter) ([#170](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/170))
 - [x] [Story 3.5: Cut the trace harness over to the file-system port](#story-35-cut-the-trace-harness-over-to-the-file-system-port) ([#173](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/173))
-- [ ] [Story 3.6: Cut the remaining harnesses over to the file-system port](#story-36-cut-the-remaining-harnesses-over-to-the-file-system-port)
+- [x] [Story 3.6: Cut the remaining harnesses over to the file-system port](#story-36-cut-the-remaining-harnesses-over-to-the-file-system-port) ([#178](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/178))
 
 ### Epic 4 progress: TEA's claims, codes and supply chain are machine-held
 
@@ -831,13 +831,15 @@ So that no eval harness reaches the file system directly.
 **Acceptance Criteria:**
 
 **Given** Story 3.5 converted the trace harness and established the call pattern
-**When** `test/eval-test-review.js`, `test/eval-fragment-selection.js`, `test/lib/probe-scoring.js` and `test/lib/probe-targets.js` are converted
+**When** `test/eval-test-review.js`, `test/eval-fragment-selection.js`, `test/lib/probe-scoring.js` and the nfr, test-design, routing, `eval:all` and contract-strength harnesses the story's own inventory missed are converted
 **Then** each is a separate commit with its own reported diff size
-**And** no direct `fs` call remains in the eval harnesses
+**And** no read of a file's contents in the eval harnesses reaches `fs` directly; every remaining `fs` call there is a directory, lifecycle or mode operation named in its own file's header
+**And** `test/lib/probe-targets.js` is struck from that list, because it reads no file's contents: its `existsSync` guards a `statSync` whose mode bit the port cannot answer, so it is declined with the reason recorded in the file
 
-**Given** two shared readers sit under `test/lib/` and belong to no harness, so Story 3.5 found them and assigned them here rather than converting them
+**Given** four shared readers sit under `test/lib/` and belong to no harness, so Story 3.5 found two of them and assigned them here rather than converting them
 **When** this story runs
-**Then** `writeSuiteResult` in `test/lib/eval-record.js` and `loadSuiteManifest` in `test/lib/suite-manifest.js` read and write through the port
+**Then** `writeSuiteResult` in `test/lib/eval-record.js`, `loadSuiteManifest` in `test/lib/suite-manifest.js`, and `validator` and `scoringPolicy` in `test/lib/eval-quality-inputs.js` read and write through the port
+**And** the last two are the pair this inventory and FR19 both missed: `validator` reads the schema every `validateArtifact` call checks against, and `scoringPolicy` reads the file whose digest enters every scoring version this repository computes
 **And** they are converted here rather than in Story 3.5 because every harness that calls them becomes asynchronous with them, and those call sites are this story's
 
 **Given** the file-system port declares `readFile` and `writeFile` and nothing else
@@ -858,7 +860,8 @@ So that no eval harness reaches the file system directly.
 
 **Given** Epic 3 is otherwise complete
 **When** `npm test` and every `quality.yaml` job run
-**Then** all pass, five conformance arms are reported where one was reported before, and every new script has its own workflow step
+**Then** all pass, four conformance arms are reported where one was reported before, and every new script has its own workflow step
+**And** four is the reachable number rather than five: the package publishes six arms, TEA runs `command-probe`, `clock`, `corpus` and `file-system`, and permanently declines `environment-probe` under withdrawn FR21 and `mcp-probe` for want of a subject
 
 ## Epic 4: TEA's claims, codes and supply chain are machine-held
 

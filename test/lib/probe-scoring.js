@@ -33,6 +33,20 @@
  * so `eval-quality`'s corroboration compares two independent readings of one
  * verdict. That is the same agreement `npm run test:contract-oracles` checks, read
  * through the scoring stage instead of the evaluator.
+ *
+ * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
+ *
+ * One call: the `readdirSync` in `suites()` that enumerates the fragment-selection
+ * probe files. The file-system port declares `readFile` and `writeFile` over a
+ * single caller-owned path and cannot read a directory at all, so a walk has no
+ * port method to move to and stays where it is.
+ *
+ * Every read of a file's contents goes through `test/lib/file-system-port.js`,
+ * which is why every evidence builder below and the two accessors each one is
+ * built from are asynchronous. Three of those reads used to sit inside a `.map`
+ * callback that ran once per leg over the same file; they are hoisted above their
+ * maps, so each stored run is now read once per record rather than once per
+ * observation.
  */
 
 'use strict';
@@ -42,6 +56,7 @@ const path = require('node:path');
 
 const { digest } = require('./eval-record');
 const { loadCorpus } = require('./corpus-port');
+const { readJson: portReadJson, readText: portReadText } = require('./file-system-port');
 // The prompt a trace observation carries is the prompt the harness assembles, and
 // tools/generate-contracts.js binds the same function's output as each trace plan
 // step's stdin literal. One function on both sides is the whole guard; `legs` in
@@ -74,7 +89,30 @@ const REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay');
 const EVAL_ROOT = path.join(PROJECT_ROOT, 'test', 'evals');
 const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
 
-const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+/**
+ * One file of the scoring corpus, as JSON or as text.
+ *
+ * Absence is named here rather than handed on. Every file these two read is a
+ * contract, a ground truth or a stored run this module cannot score without, so
+ * a `null` travelling downstream would surface as a TypeError naming no path. A
+ * parse failure and a permission error still propagate from the port untouched,
+ * because a file that is there and unreadable is a different finding from one
+ * that is not there.
+ */
+const missing = (file) => new Error(`${path.relative(PROJECT_ROOT, file)} is missing, so the scoring corpus cannot be assembled`);
+
+async function readJson(file) {
+  const read = await portReadJson(file);
+  if (!read.present) throw missing(file);
+  return read.value;
+}
+
+async function readText(file) {
+  const read = await portReadText(file);
+  if (!read.present) throw missing(file);
+  return read.text;
+}
+
 const stripComment = (value) => {
   const { $comment, ...rest } = value;
   return rest;
@@ -92,12 +130,12 @@ const FORBIDDEN_INPUT_NOTE =
 // evidence: test-review
 // ---------------------------------------------------------------------------
 
-function reviewVerdict(caseId) {
-  return stripComment(readJson(path.join(REPLAY_ROOT, 'test-review', caseId, 'verdict.json')));
+async function reviewVerdict(caseId) {
+  return stripComment(await readJson(path.join(REPLAY_ROOT, 'test-review', caseId, 'verdict.json')));
 }
 
-function reviewExpectation(caseId) {
-  return readJson(path.join(REPLAY_ROOT, 'test-review', caseId, 'expected.json')).result;
+async function reviewExpectation(caseId) {
+  return (await readJson(path.join(REPLAY_ROOT, 'test-review', caseId, 'expected.json'))).result;
 }
 
 /**
@@ -146,10 +184,10 @@ function oracleIdsByRequirement(contract) {
   return byRequirement;
 }
 
-function testReviewEvidence(contract) {
+async function testReviewEvidence(contract) {
   const step = contract.interactionPlan[0];
   const reviewedFiles = step.inputBinding.option.files.literal;
-  const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval', 'ground-truth.json'));
+  const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval', 'ground-truth.json'));
   const byRequirement = oracleIdsByRequirement(contract);
   const cleanFile = groundTruth.files.find((entry) => (entry.planted ?? []).length === 0);
   const cleanOracleId = byRequirement.get(`tea-eval-ground-truth/${cleanFile.path}`);
@@ -170,7 +208,7 @@ function testReviewEvidence(contract) {
      * reports every planted row, and a leg naming the clean control gets the
      * review that reports nothing gating.
      */
-    answer(request) {
+    async answer(request) {
       // A review reports what it read. The stored full-recall verdict covers the
       // whole corpus, so a leg naming one file gets that verdict narrowed to the
       // findings in it, which is what the live leg returned: the seeded checkout
@@ -179,15 +217,15 @@ function testReviewEvidence(contract) {
         .split(',')
         .map((entry) => entry.trim())
         .filter(Boolean);
-      return reviewBody(narrowVerdict(reviewVerdict('full-recall'), files));
+      return reviewBody(narrowVerdict(await reviewVerdict('full-recall'), files));
     },
-    recordInputs(probe) {
+    async recordInputs(probe) {
       // The gameability probe is scored against the run that games the suite:
       // every planted row reported, plus one finding against a file nobody asked
       // the reviewer to look at.
       const caseId = probe.probeClass === 'gameability' ? 'out-of-scope-finding' : 'full-recall';
-      const verdict = reviewVerdict(caseId);
-      const measured = reviewExpectation(caseId);
+      const verdict = await reviewVerdict(caseId);
+      const measured = await reviewExpectation(caseId);
       const observationId = 'review-corpus-run';
       const body = reviewBody(verdict);
       const observations = [
@@ -282,17 +320,17 @@ function testReviewEvidence(contract) {
 // evidence: trace
 // ---------------------------------------------------------------------------
 
-function traceArtifacts(caseId) {
+async function traceArtifacts(caseId) {
   const root = path.join(REPLAY_ROOT, 'trace', caseId, 'test-artifacts');
   return {
-    summary: { kind: 'json', value: stripComment(readJson(path.join(root, 'e2e-trace-summary.json'))) },
-    matrix: { kind: 'text', value: fs.readFileSync(path.join(root, 'traceability-matrix.md'), 'utf8') },
+    summary: { kind: 'json', value: stripComment(await readJson(path.join(root, 'e2e-trace-summary.json'))) },
+    matrix: { kind: 'text', value: await readText(path.join(root, 'traceability-matrix.md')) },
   };
 }
 
-function traceEvidence(contract) {
+async function traceEvidence(contract) {
   const [seededStep, cleanStep] = contract.interactionPlan;
-  const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json'));
+  const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval', 'ground-truth.json'));
 
   /**
    * One entry per fixture set: the plan step that selects it, the stored run its
@@ -340,13 +378,13 @@ function traceEvidence(contract) {
      * it gets a summary whose `gate_basis` is `none`, which is what step-05 writes
      * when the gate is not evaluated.
      */
-    answer(request) {
+    async answer(request) {
       const prompt = String(request.channels.stdin?.value ?? '');
       const matched = [...caseByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
       if (matched === undefined) {
         throw new Error('a trace leg sent a prompt naming no fixture set project root, so no staged run answers it');
       }
-      const artifacts = traceArtifacts(matched[1]);
+      const artifacts = await traceArtifacts(matched[1]);
       if (/allow_gate`?: `?false/.test(prompt)) {
         const withheld = { ...artifacts.summary.value, gate_basis: 'none', gate_status: 'NOT_EVALUATED' };
         return {
@@ -358,7 +396,7 @@ function traceEvidence(contract) {
       }
       return { exitCode: 0, stdout: { kind: 'text', value: '' }, stderr: { kind: 'text', value: '' }, artifacts };
     },
-    recordInputs(probe) {
+    async recordInputs(probe) {
       const clean = probe.expectedClean;
       // The clean control's record carries both runs. Each step binds its own set's
       // prompt as a literal, so the seeded step selects the seeded observation and
@@ -380,6 +418,12 @@ function traceEvidence(contract) {
       // runs, and P-004's `baselinePassEvidence` in test/probes/trace.probes.json
       // names the clean summary's digest alone.
       const selected = clean ? legs : legs.filter((leg) => leg.caseId === 'seeded-correct-run');
+      // Read above the map rather than inside it. The two legs of the clean
+      // control name at most two stored runs between them, and the read used to
+      // sit in the callback, so a record carrying both runs read each of them
+      // once per leg.
+      const artifactsByCase = new Map();
+      for (const caseId of new Set(selected.map((leg) => leg.caseId))) artifactsByCase.set(caseId, await traceArtifacts(caseId));
       const observations = selected.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -389,7 +433,7 @@ function traceEvidence(contract) {
           stdout: { kind: 'text', value: '' },
           stderr: { kind: 'text', value: '' },
           exitCode: 0,
-          artifacts: traceArtifacts(leg.caseId),
+          artifacts: artifactsByCase.get(leg.caseId),
         }),
       );
       // Every trace oracle reads one step's interaction, so its disposition cites
@@ -426,9 +470,18 @@ function traceEvidence(contract) {
 
 const TEST_DESIGN_REPLAY_ROOT = path.join(PROJECT_ROOT, 'test', 'replay', 'test-design');
 
-/** One stored test design, as the single text artifact this operation declares. */
-function testDesignArtifacts(caseId, designLevel, epicNum) {
-  const text = fs.readFileSync(path.join(TEST_DESIGN_REPLAY_ROOT, caseId, 'design.md'), 'utf8');
+/** The stored test design one case wrote, as the bytes on disk. */
+async function storedDesign(caseId) {
+  return readText(path.join(TEST_DESIGN_REPLAY_ROOT, caseId, 'design.md'));
+}
+
+/**
+ * One stored test design, as the single text artifact this operation declares.
+ *
+ * The document is passed in rather than read here, so a caller with several legs
+ * over one stored case reads it once. Everything below it is pure.
+ */
+function testDesignArtifacts(text, designLevel, epicNum) {
   // The template renders design_level into the document's Scope line, which is the
   // one effect the prompt has on the bytes and the whole basis of this contract's
   // sensitivity witness. The stored documents carry no Scope line, so it is applied
@@ -449,8 +502,8 @@ function testDesignArtifacts(caseId, designLevel, epicNum) {
  * both plan steps declare one operation, so a leg that could not be told apart
  * would let one set's oracles quantify over the other set's document.
  */
-function testDesignEvidence(contract) {
-  const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval', 'ground-truth.json'));
+async function testDesignEvidence(contract) {
+  const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval', 'ground-truth.json'));
 
   const legs = groundTruth.fixtureSets.map((set, index) => {
     const step = contract.interactionPlan[index];
@@ -478,7 +531,7 @@ function testDesignEvidence(contract) {
   const designLevelOf = (prompt) => /`design_level`: `([a-z]+)`/.exec(prompt)?.[1] ?? 'full';
 
   return {
-    answer(request) {
+    async answer(request) {
       const prompt = String(request.channels.stdin?.value ?? '');
       const matched = [...legByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
       if (matched === undefined) {
@@ -489,16 +542,22 @@ function testDesignEvidence(contract) {
         exitCode: 0,
         stdout: { kind: 'text', value: '' },
         stderr: { kind: 'text', value: '' },
-        artifacts: testDesignArtifacts(leg.caseId, designLevelOf(prompt), leg.epicNum),
+        artifacts: testDesignArtifacts(await storedDesign(leg.caseId), designLevelOf(prompt), leg.epicNum),
       };
     },
-    recordInputs() {
+    async recordInputs() {
       // Both runs, always. Each step binds its own set's prompt as a literal, so the
       // seeded step selects the seeded observation and the clean step selects the
       // clean one, and neither set's oracles ever quantify over the other's document.
       // Carrying one run would leave the other set's oracles with no evidence to
       // reach, and an oracle disposition citing nothing is scored as an unsupported
       // claim.
+      //
+      // The documents are read above the map rather than inside it, so a stored
+      // case two legs share is read once. The Scope line each leg renders stays
+      // per leg, because it is a function of that leg's own epic number.
+      const designByCase = new Map();
+      for (const caseId of new Set(legs.map((leg) => leg.caseId))) designByCase.set(caseId, await storedDesign(caseId));
       const observations = legs.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -508,7 +567,7 @@ function testDesignEvidence(contract) {
           stdout: { kind: 'text', value: '' },
           stderr: { kind: 'text', value: '' },
           exitCode: 0,
-          artifacts: testDesignArtifacts(leg.caseId, 'full', leg.epicNum),
+          artifacts: testDesignArtifacts(designByCase.get(leg.caseId), 'full', leg.epicNum),
         }),
       );
       const observationIdByStep = new Map(legs.map((leg) => [leg.step.stepId, leg.observationId]));
@@ -539,11 +598,14 @@ function testDesignEvidence(contract) {
 // evidence: nfr
 // ---------------------------------------------------------------------------
 
+/** The stored audit one evidence bundle produced, as the bytes on disk. */
+async function storedNfrReport(caseId) {
+  return readText(path.join(REPLAY_ROOT, 'nfr', caseId, 'test-artifacts', 'nfr-assessment.md'));
+}
+
 /** The one artifact an nfr run leaves behind, as the stored case for one evidence bundle holds it. */
-function nfrArtifacts(caseId) {
-  return {
-    report: { kind: 'text', value: fs.readFileSync(path.join(REPLAY_ROOT, 'nfr', caseId, 'test-artifacts', 'nfr-assessment.md'), 'utf8') },
-  };
+function nfrArtifacts(report) {
+  return { report: { kind: 'text', value: report } };
 }
 
 /** The `custom_nfr_categories` value one assembled prompt carries, which is empty on every leg but one. */
@@ -580,8 +642,8 @@ function withCustomCategories(report, categories) {
   ].join('\n');
 }
 
-function nfrEvidence(contract) {
-  const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval', 'ground-truth.json'));
+async function nfrEvidence(contract) {
+  const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval', 'ground-truth.json'));
 
   /**
    * One entry per evidence bundle: the plan step that audits it, the stored run
@@ -635,13 +697,13 @@ function nfrEvidence(contract) {
      * run given that category writes, and a leg naming none gets the report as it
      * is stored.
      */
-    answer(request) {
+    async answer(request) {
       const prompt = String(request.channels.stdin?.value ?? '');
       const matched = [...caseByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
       if (matched === undefined) {
         throw new Error('an nfr leg sent a prompt naming no evidence bundle project root, so no staged run answers it');
       }
-      const artifacts = nfrArtifacts(matched[1]);
+      const artifacts = nfrArtifacts(await storedNfrReport(matched[1]));
       const categories = (NFR_CUSTOM_CATEGORIES.exec(prompt)?.[1] ?? '')
         .split(',')
         .map((entry) => entry.trim())
@@ -651,7 +713,7 @@ function nfrEvidence(contract) {
       }
       return { exitCode: 0, stdout: { kind: 'text', value: '' }, stderr: { kind: 'text', value: '' }, artifacts };
     },
-    recordInputs(probe) {
+    async recordInputs(probe) {
       const clean = probe.expectedClean;
       // The clean control's record carries both audits, for the reason the trace
       // control does: each step binds its own bundle's prompt as a literal, so the
@@ -664,6 +726,10 @@ function nfrEvidence(contract) {
       // resolves every one of its oracles before a selection is read, so a second
       // observation would add evidence nothing reaches.
       const selected = clean ? legs : legs.filter((leg) => leg.caseId === gappedCaseId);
+      // Read above the map rather than inside it, so a stored audit two legs share
+      // is read once.
+      const reportByCase = new Map();
+      for (const caseId of new Set(selected.map((leg) => leg.caseId))) reportByCase.set(caseId, await storedNfrReport(caseId));
       const observations = selected.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -673,7 +739,7 @@ function nfrEvidence(contract) {
           stdout: { kind: 'text', value: '' },
           stderr: { kind: 'text', value: '' },
           exitCode: 0,
-          artifacts: nfrArtifacts(leg.caseId),
+          artifacts: nfrArtifacts(reportByCase.get(leg.caseId)),
         }),
       );
       // Every nfr oracle reads one step's interaction, so its disposition cites that
@@ -719,8 +785,8 @@ function selectionBody(fragments) {
   };
 }
 
-function fragmentSelectionEvidence(contract, workflow) {
-  const evals = readJson(path.join(EVAL_ROOT, workflow, 'evals.json'));
+async function fragmentSelectionEvidence(contract, workflow) {
+  const evals = await readJson(path.join(EVAL_ROOT, workflow, 'evals.json'));
   const caseOf = new Map(evals.cases.map((entry) => [entry.id, entry]));
   const first = evals.cases[0];
   const step = contract.interactionPlan.find((entry) => entry.stepId === first.id);
@@ -837,10 +903,13 @@ function routingOracleFor(contract, caseId, field) {
   return found;
 }
 
-function routingEvidence(contract) {
-  const corpus = readJson(path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json'));
-  const intents = readJson(path.join(ROUTING_FIXTURE_ROOT, 'intents.json'));
-  const promptOf = new Map(intents.cases.map((entry) => [entry.id, buildRoutingPrompt(entry)]));
+async function routingEvidence(contract) {
+  const corpus = await readJson(path.join(ROUTING_FIXTURE_ROOT, 'ground-truth.json'));
+  const intents = await readJson(path.join(ROUTING_FIXTURE_ROOT, 'intents.json'));
+  // A `for...of` rather than a `map`: the prompt is assembled through the
+  // file-system port, so each one is awaited.
+  const promptOf = new Map();
+  for (const entry of intents.cases) promptOf.set(entry.id, await buildRoutingPrompt(entry));
   const first = contract.interactionPlan[0].stepId;
   const expected = corpus.cases[first];
   const gamedField = contract.contractId === 'tea-routing-intents-behavioral' ? 'menuCode' : 'question';
@@ -1010,23 +1079,28 @@ async function suites() {
     PROJECT_ROOT,
     entries.map((entry) => path.relative(PROJECT_ROOT, entry.probesPath)),
   );
-  return entries.map((entry) => {
-    const contract = readJson(entry.contractPath);
+  // A `for...of` rather than a `map`, because both the contract read and the
+  // evidence source it builds are awaited and an object-literal initialiser
+  // inside a map callback has nowhere to put an `await`.
+  const built = [];
+  for (const entry of entries) {
+    const contract = await readJson(entry.contractPath);
     const reference = path.relative(PROJECT_ROOT, entry.probesPath);
-    return {
+    built.push({
       ...entry,
       contract,
       probes: JSON.parse(corpus.bytes(reference).toString('utf8')),
-      evidence: entry.evidenceFor(contract),
-    };
-  });
+      evidence: await entry.evidenceFor(contract),
+    });
+  }
+  return built;
 }
 
 /** An `EnvironmentProbePort` that answers every leg from the outputs `test/replay/` already stores. */
 function storedProbePort(suite) {
   return {
     async probe(request) {
-      const body = suite.evidence.answer(request);
+      const body = await suite.evidence.answer(request);
       return {
         probeId: request.probeId,
         interfaceId: request.interfaceId,
@@ -1146,7 +1220,7 @@ function ladderExitCode(ladder) {
  */
 async function scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot, signal, corpusDigest }) {
   const { runScore, digestArtifact } = await loadEvalQuality();
-  const inputs = suite.evidence.recordInputs(probe);
+  const inputs = await suite.evidence.recordInputs(probe);
   const contractDigest = digestArtifact(suite.contract);
 
   const configuration = evaluatorConfiguration({
@@ -1187,9 +1261,9 @@ async function scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot
   });
 
   const schemaProblems = [
-    ...validateArtifact('sealed-run-record', record).map((message) => `SealedRunRecord${message}`),
-    ...validateArtifact('isolation-manifest', manifest).map((message) => `IsolationManifest${message}`),
-    ...validateArtifact('evaluator-configuration', configuration).map((message) => `EvaluatorConfiguration${message}`),
+    ...(await validateArtifact('sealed-run-record', record)).map((message) => `SealedRunRecord${message}`),
+    ...(await validateArtifact('isolation-manifest', manifest)).map((message) => `IsolationManifest${message}`),
+    ...(await validateArtifact('evaluator-configuration', configuration)).map((message) => `EvaluatorConfiguration${message}`),
   ];
 
   const result = await runScore({
@@ -1199,14 +1273,14 @@ async function scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot
     contract: suite.contract,
     probe,
     preflightVerdict,
-    policy: scoringPolicy(),
+    policy: await scoringPolicy(),
     privateManifest: null,
     corpusDigest,
     signal,
   });
 
   if (result.artifact !== null) {
-    schemaProblems.push(...validateArtifact('evidence-artifact', result.artifact).map((message) => `EvidenceArtifact${message}`));
+    schemaProblems.push(...(await validateArtifact('evidence-artifact', result.artifact)).map((message) => `EvidenceArtifact${message}`));
   }
 
   return { probe, record, manifest, configuration, result, schemaProblems };
@@ -1261,7 +1335,7 @@ function strengthVector(scored) {
 async function sealContract(contract) {
   const { seal } = await loadEvalQuality();
   const brief = seal(contract);
-  return { brief, schemaProblems: validateArtifact('sealed-evaluator-brief', brief) };
+  return { brief, schemaProblems: await validateArtifact('sealed-evaluator-brief', brief) };
 }
 
 /**
@@ -1282,7 +1356,7 @@ async function runSuite(suite, { port, runId, modelSnapshot, signal }) {
   for (const probe of suite.probes) {
     const probeRunId = `${runId}-${probe.probeId}`;
     const preflightVerdict = await preflightSuite({ ...suite, probes: [probe] }, { port, runId: probeRunId, signal, sink });
-    const preflightProblems = validateArtifact('preflight-verdict', preflightVerdict);
+    const preflightProblems = await validateArtifact('preflight-verdict', preflightVerdict);
     const entry = await scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot, signal, corpusDigest });
     scored.push({
       ...entry,
