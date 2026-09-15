@@ -1234,7 +1234,7 @@ const AUDITED_DOMAIN_LINE =
  * it.
  *
  * @param {string[]} lines The raw lines of the gate section, fences included.
- * @returns {Map<string, string>}
+ * @returns {{declared: Map<string, string>, contradictions: string[]}}
  */
 function gateDomainsIn(lines) {
   const start = lines.findIndex((line) => AUDITED_DOMAINS_KEY.test(line));
@@ -1255,11 +1255,14 @@ function gateDomainsIn(lines) {
     const status = entry[3].toUpperCase();
     // The first line wins, the same way the first section for a domain does: a
     // block stating one domain twice has stated its answer twice, and the block
-    // leads with the one a reader reads first. A repeat naming a different status
-    // is the artifact contradicting itself, which is the same defect as the gate
-    // contradicting a section and is counted beside it rather than dropped here.
+    // leads with the one a reader reads first. Every repeat is a contradiction,
+    // the same domain answered more than once, whether or not the two lines
+    // agree: `duplicateDomainSections` counts a second section this way
+    // regardless of its status, and the gate block is held to the same rule
+    // rather than a looser one that only fires when the two answers differ.
     if (!declared.has(domain)) declared.set(domain, status);
-    else if (declared.get(domain) !== status) contradictions.push(`${domain}: gate declares ${declared.get(domain)} and ${status}`);
+    else if (declared.get(domain) === status) contradictions.push(`${domain}: gate declares ${status} twice`);
+    else contradictions.push(`${domain}: gate declares ${declared.get(domain)} and ${status}`);
   }
   return { declared, contradictions };
 }

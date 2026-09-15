@@ -386,7 +386,7 @@ nfr_assessment:
     monitorability: '{MON_STATUS}'
     qos_qoe: '{QOS_STATUS}'
     deployability: '{DEP_STATUS}'
-  audited_domains: # the four domains Step 4 dispatches a worker for, plus any custom category; PASS, CONCERNS, FAIL or N/A
+  audited_domains: # exactly the four domains Step 4 dispatches a worker for; PASS, CONCERNS, FAIL or N/A. A custom category (custom_nfr_categories) is not named here; its status lives only in its own report section.
     security: '{SECURITY_DOMAIN_STATUS}'
     performance: '{PERFORMANCE_DOMAIN_STATUS}'
     reliability: '{RELIABILITY_DOMAIN_STATUS}'

@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-nfr-behavioral",
-  "sourceSpecDigest": "sha256:b4794be729c7fe3ca1abd73b44db07c31775110830aab161581e4a435c637122",
+  "sourceSpecDigest": "sha256:eea491a742e4605d1d22799220b0361b7c6b3a8c15fc01a142e51ddbc78bd7cf",
   "behaviors": [
     {
       "id": "B-001",

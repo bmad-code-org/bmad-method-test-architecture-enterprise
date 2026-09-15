@@ -976,9 +976,9 @@ function checkNfrGateBlockReadings() {
 
   const agreeing = read(['  audited_domains:', "    security: 'PASS'", "    security: 'PASS'"]);
   assert(
-    agreeing.contradictions.length === 0,
-    'a domain declared twice with one answer is not counted as a contradiction',
-    JSON.stringify(agreeing.contradictions),
+    same(agreeing.domains, { security: 'PASS' }) && agreeing.contradictions.length === 1,
+    'a domain declared twice with the same value is still counted as a contradiction, the same way a second matching section is',
+    JSON.stringify(agreeing),
   );
 
   const ended = read(['  audited_domains:', "    security: 'PASS'", '  categories:', "    security: 'FAIL'"]);

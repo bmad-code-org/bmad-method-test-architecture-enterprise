@@ -33,7 +33,7 @@ The four statuses above are assigned to findings. A domain has one status of its
 
 That value is written in two places and it is one judgment: the `audited_domains` block of the Gate YAML snippet, which is what a machine reads, and the domain's `## <Domain> Assessment` section, which is what a person reads. They must agree. A run whose gate artifact contradicts its own assessment section has published two answers to one question, and which of them a reader acts on decides a release.
 
-The block always names the four domains above. A category supplied through `custom_nfr_categories` is assessed in its own section under Custom NFR Evidence Audits and declared in the same block, under its own key, by the same rule.
+The block always names the four domains above and no others. A category supplied through `custom_nfr_categories` is written into its own `## Custom NFR Evidence Audits` section, but no worker in Step 4 dispatches for it and no findings list exists to roll up, so it has no status to declare here. A custom category's status lives only in its own section's prose.
 
 ## Default Rule for Undefined Thresholds
 

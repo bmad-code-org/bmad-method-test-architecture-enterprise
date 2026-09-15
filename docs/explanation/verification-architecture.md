@@ -53,7 +53,7 @@ Core is the part an enterprise is actually buying, and it is stack-neutral in co
 - **Risk model.** Probability × impact on a 1-9 scale, with scores ≥6 requiring documented mitigation and 9 mandating gate failure. See [Risk-Based Testing](/docs/explanation/risk-based-testing.md).
 - **Priority assignment.** P0-P3 with coverage targets and execution ordering per band.
 - **Test level selection.** Unit, integration, and end-to-end chosen by what the risk actually demands, with a duplicate-coverage guard that pushes verification to the cheapest level that can carry it.
-- **NFR criteria and gate matrix.** Security, performance, reliability, and maintainability scored PASS / CONCERNS / FAIL, declared one per domain in the audit's gate artifact, defaulting to CONCERNS when targets or evidence are undefined.
+- **NFR criteria and gate matrix.** Security, performance, reliability, and maintainability scored PASS / CONCERNS / FAIL / N/A, declared one per domain in the audit's gate artifact, defaulting to CONCERNS when targets or evidence are undefined.
 - **Requirements-to-evidence traceability.** Every acceptance criterion maps to evidence; gaps require an explicit waiver with an owner and an expiry date.
 - **Release gate decision.** PASS / CONCERNS / FAIL / WAIVED, derived from the traceability matrix rather than from a person's confidence.
 - **Architecture testability review.** An 8-category, 29-criteria audit applied at design time, before any test exists.

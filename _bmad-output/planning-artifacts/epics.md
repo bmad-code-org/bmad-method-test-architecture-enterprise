@@ -59,7 +59,7 @@ Last reconciled with GitHub on 2026-09-15 across `bmad-method-test-architecture-
 | Epic 6 | 3 / 12 | 0 | 9 | In progress |
 | Epic 7 | 0 / 1 | 1 | 0 | In progress |
 | Epic 8 | 0 / 1 | 0 | 1 | Queued |
-| **Total** | **17 / 45** | **2** | **26** | **38% merged** |
+| **Total** | **18 / 45** | **2** | **25** | **40% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
