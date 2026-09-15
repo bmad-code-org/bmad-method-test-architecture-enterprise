@@ -1,0 +1,40 @@
+{
+  "lockfile-age": {
+    "lockfiles": ["package-lock.json", "website/package-lock.json"],
+    "windowDays": 7,
+    "exclude": ["eval-quality"]
+  },
+  "licences": {
+    "lockfiles": ["package-lock.json", "website/package-lock.json"],
+    "allowlist": ["MIT", "ISC", "Apache-2.0", "BSD-2-Clause", "BSD-3-Clause", "0BSD", "BlueOak-1.0.0", "CC0-1.0", "Python-2.0"],
+    "policies": {
+      "package-lock.json": {
+        "label": "root policy: allowlist + CC-BY-4.0",
+        "reason": "caniuse-lite is browser-support data under an attribution licence, reached only through eslint-plugin-unicorn > core-js-compat > browserslist, so it is a lint-time dependency that no published file carries.",
+        "also": ["CC-BY-4.0"]
+      }
+    },
+    "tolerances": [
+      {
+        "reason": "sharp's platform binaries are optional dependencies that only the documentation site build loads. The site is private and ships as static HTML, and LGPL-3.0-or-later binds a redistributor of the covered library, which TEA never is. The root graph carries them because docs:build runs astro from the root. Publishing the site as a package withdraws this and the gate fails.",
+        "lockfiles": ["package-lock.json", "website/package-lock.json"],
+        "prefix": "@img/sharp-",
+        "license": "LGPL-3.0-or-later",
+        "optional": true,
+        "marker": {
+          "file": "website/package.json",
+          "contains": "\"private\": true"
+        }
+      }
+    ],
+    "undeclared": [
+      {
+        "lockfiles": ["package-lock.json", "website/package-lock.json"],
+        "prefix": "zod-to-ts",
+        "readAs": "MIT",
+        "evidence": "zod-to-ts 1.2.0's own published package.json carries no license field, which is why npm records none in the lockfile entry; that version's manifest is silent rather than differently licensed. The registry's current top-level license field reads MIT (inherited from the 2.x line, published years later), and the repository at github.com/sachinraja/zod-to-ts carries an MIT LICENSE file whose copyright range (2021-2025) covers 1.2.0's 2023 publish date, which is the evidence that ties the reading to the locked version itself rather than to a later release.",
+        "reason": "A transitive dependency of astro 5 whose manifest declares no licence. The licence it is read as is held against the allowlist like every other entry."
+      }
+    ]
+  }
+}
