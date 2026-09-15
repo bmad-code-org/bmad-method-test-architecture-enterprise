@@ -388,3 +388,36 @@ jobs:
 
       - name: Seed one violation per gate and watch it fail
         run: npm run test:supply-chain
+
+  # dependency-direction holds cli/, tools/, test/ and src/**/*.cjs to a declared
+  # layer graph and stays report-only until two eval-quality limits are fixed
+  # upstream. package-boundary holds the published src/, cli/ and .claude-plugin/
+  # trees against dev-only path references. field-ownership holds schemaVersion
+  # to the two generators that stamp it. test:guard-publish seeds a token-present,
+  # workflow-absent environment and watches the publish guard refuse it.
+  layering-boundary-lineage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Report import-direction violations over cli/, tools/, test/ and src/**/*.cjs
+        run: npm run test:direction
+
+      - name: Hold the published tree to the package boundary
+        run: npm run test:boundary
+
+      - name: Hold schemaVersion to its two generators
+        run: npm run test:lineage
+
+      - name: Seed a token-present, workflow-absent environment and watch the publish guard refuse it
+        run: npm run test:guard-publish

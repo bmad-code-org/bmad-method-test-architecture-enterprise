@@ -14,9 +14,10 @@
  * cannot make (C5 mock-asserted-against-itself, C6 unreachable assertion, H3
  * conditional assertion, H4 unreset shared state, M3, M4, M6, M7, L6) stay with
  * `test-review`, and are listed in DEFERRED below with the reason. Severity is
- * read from the registry and never chosen here; `test/test-enforce-hook.js`
- * asserts that this file and the registry still agree, and fails when the
- * registry grows an Absolute row nobody has classified.
+ * read from the registry and never chosen here; a dev-only check in this
+ * repository's own test suite asserts that this file and the registry still
+ * agree, and fails when the registry grows an Absolute row nobody has
+ * classified.
  *
  * THREE PASSES, BECAUSE ONE IS NOT ENOUGH
  *
@@ -718,9 +719,10 @@ const RULES = [
  * Each needs a judgment a pattern cannot make, so blocking on a pattern would
  * either miss the real cases or block correct code. `test-review` scores them.
  *
- * This map is not documentation. `test/test-enforce-hook.js` asserts that every
- * Absolute row in the registry appears either in RULES or here, so a new Absolute
- * row fails the build until somebody decides which side it belongs on.
+ * This map is not documentation. A dev-only check in this repository's own
+ * test suite asserts that every Absolute row in the registry appears either in
+ * RULES or here, so a new Absolute row fails the build until somebody decides
+ * which side it belongs on.
  */
 const DEFERRED = {
   C5: 'Deciding that no call reached the system under test between configuring a mock and asserting on it requires following data flow.',

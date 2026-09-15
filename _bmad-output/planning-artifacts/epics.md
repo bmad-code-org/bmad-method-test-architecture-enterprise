@@ -236,7 +236,7 @@ FR31: TEA audits both lockfiles for age and licence, and sets a resolution-time 
 
 FR32: TEA holds the dependency direction between the trees that have an import graph: `cli/`, `tools/`, `test/` and `src/**/*.cjs`. `src/` holds 725 files of which one is JavaScript, so a gate over `src/` as a whole would be vacuous.
 
-FR33: TEA holds its package boundary, so nothing the published tarball carries references the repository it was built in. TEA publishes to npm with three `bin` entries and ships `src/workflows/`.
+FR33: TEA holds its package boundary, so nothing the published tarball carries references the repository it was built in. TEA publishes to npm with six `bin` entries and ships `src/workflows/`.
 
 FR34: TEA holds lineage ownership over the fields `tools/generate-probes.js` and `tools/generate-contracts.js` write and several readers consume.
 
@@ -1025,7 +1025,7 @@ So that a violation fails the build rather than surviving review.
 **When** the violations are fixed
 **Then** the gate is switched to failing, and the fix is its own commit with its diff size reported
 
-**Given** TEA publishes to npm with three `bin` entries and ships `src/workflows/`
+**Given** TEA publishes to npm with six `bin` entries and ships `src/workflows/`
 **When** the boundary gate runs
 **Then** nothing in the published tarball references `test/`, `_bmad-output/` or any dev-only path
 

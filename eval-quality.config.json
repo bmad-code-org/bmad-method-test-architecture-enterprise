@@ -196,5 +196,70 @@
         "rendering": "digits"
       }
     ]
+  },
+  "dependency-direction": {
+    "roots": [
+      { "path": "cli", "extensions": [".js"] },
+      { "path": "tools", "extensions": [".js"] },
+      { "path": "test", "extensions": [".js"] },
+      { "path": "src", "extensions": [".cjs"] }
+    ],
+    "layers": [
+      {
+        "name": "cli",
+        "match": "prefix",
+        "path": "cli/",
+        "label": "cli/",
+        "imports": ["cli"]
+      },
+      {
+        "name": "tools",
+        "match": "prefix",
+        "path": "tools/",
+        "label": "tools/",
+        "imports": ["tools", "cli", "test"]
+      },
+      {
+        "name": "test",
+        "match": "prefix",
+        "path": "test/",
+        "label": "test/",
+        "imports": ["test", "cli", "tools", "hooks-cjs"]
+      },
+      {
+        "name": "hooks-cjs",
+        "match": "prefix",
+        "path": "src/",
+        "label": "src/**/*.cjs",
+        "imports": ["hooks-cjs"]
+      }
+    ],
+    "commonjs": "check",
+    "reportOnly": true
+  },
+  "package-boundary": {
+    "paths": [{ "path": "src" }, { "path": "cli", "extensions": [".js"] }, { "path": ".claude-plugin", "extensions": [".json"] }],
+    "manifest": {
+      "file": "package.json",
+      "fields": ["description", "keywords"]
+    },
+    "patterns": [
+      {
+        "name": "tea-dev-test-file",
+        "match": "\\btest/test-[\\w-]+\\.js\\b",
+        "reason": "this repository's own dev test file, not part of the published tarball"
+      },
+      {
+        "name": "build-machine-path",
+        "match": "(?:/Users/|/home/|/root/)",
+        "reason": "an absolute path from the machine that built the package"
+      }
+    ]
+  },
+  "field-ownership": {
+    "paths": [{ "path": "tools", "extensions": [".js"] }],
+    "fields": ["schemaVersion"],
+    "declarations": [],
+    "writers": ["tools/generate-probes.js", "tools/generate-contracts.js"]
   }
 }
