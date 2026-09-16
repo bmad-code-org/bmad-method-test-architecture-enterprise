@@ -75,7 +75,7 @@ Last reconciled with GitHub on 2026-09-15 across `bmad-method-test-architecture-
 - [x] [Story 2.4: Release the package and verify it on npm](#story-24-release-the-package-and-verify-it-on-npm) ([eval-quality 3.1.0](https://www.npmjs.com/package/eval-quality/v/3.1.0), [publish run](https://github.com/bmad-code-org/bmad-eval-quality/actions/runs/35024268448))
 - [ ] [Story 2.5: Publish the eight repo-local gates as a consumable surface](#story-25-publish-the-eight-repo-local-gates-as-a-consumable-surface). **Active:** first two of three PRs merged in [eval-quality #130](https://github.com/bmad-code-org/bmad-eval-quality/pull/130) and [eval-quality #132](https://github.com/bmad-code-org/bmad-eval-quality/pull/132); third is pending
 - [x] [Story 2.6: Derive TEA's artifact versions from the package](#story-26-derive-teas-artifact-versions-from-the-package) ([#181](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/181))
-- [ ] [Story 2.7: Validate the stamp and the two unchecked artifact kinds](#story-27-validate-the-stamp-and-the-two-unchecked-artifact-kinds)
+- [x] [Story 2.7: Validate the stamp and the two unchecked artifact kinds](#story-27-validate-the-stamp-and-the-two-unchecked-artifact-kinds) ([#184](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/184))
 
 ### Epic 3 progress: Every port TEA hand-rolls runs on the shipped adapter
 
