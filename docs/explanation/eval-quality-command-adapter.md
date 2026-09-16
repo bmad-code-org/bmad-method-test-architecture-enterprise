@@ -33,10 +33,23 @@ That last one had no TEA equivalent at all. A harness could spawn anything.
 
 A contract names a logical executable and `ProbeRequest` enforces it: `executable` is constrained to `/^[a-z0-9]+(?:-[a-z0-9]+)*$/`, so a filesystem path cannot be written into a contract or smuggled through a request. `test/lib/probe-targets.js` holds the mapping to a real file, the working directory, the artifact map, and both budgets. One module decides all of it, absolute paths stay out of fifteen contracts, and a free gate binds differently from a live run without touching one.
 
-Two couplings the seam does not remove, both found by running it:
+One coupling the seam does not remove, found by running it:
 
 - **`--json` and `--output` resolve against `--project-root`; the artifact map resolves against the policy `cwd`.** `test-review.contract.json`'s witness legs pass a bare `verdict.json` and name no project root, so its live pre-flight writes into whichever directory also has to satisfy its repository-relative `--files`. Those legs need an explicit project root and run-scoped artifact paths.
-- **The child environment is closed** to `PATH` plus what the request declares, and from `eval-quality` 3.0.0 the authorization declares which of those keys a request may carry at all. All seven commands permit the vendor names plus `HOME` and `USER`, because both vendors resolve a stored login through `HOME`. `CI` is on no list, which is what makes a measured review reproducible: `cli/test-review.js` reads it to decide filesystem isolation, so permitting it would let the host decide how the measured run executed. A key outside a command's list is refused before a process spawns, and `PATH` is on no list: `target` may name a bare command, so a declared `PATH` would choose which binary runs. The adapter supplies its own.
+
+The environment field is the seam's fourth coupling, and it earns its own section below.
+
+## The environment channel
+
+`ProbeRequest` carries four channels: `argument`, `option`, `stdin`, and `environment`. The first three are what a command reads to know what to do; `environment` is what a command reads to know who it is, chiefly a vendor credential or a stored login.
+
+`CommandTargetPolicy.permittedEnvironmentKeys` is required from `eval-quality` 3.0.0 with no default, so a target with no explicit list authorizes nothing: the adapter refuses any key a request declares that is not on that target's own list, before a process spawns. Default-deny, never default-allow with an exclusion list.
+
+`vendorEnvironmentNames()` in `cli/lib/runner-exit-codes.js` is what each of TEA's runner commands actually authorizes: the union of every shipped vendor adapter's own `envNames`, plus `HOME` and `USER`, because both shipped vendors resolve a stored login through `HOME` and the adapter otherwise passes the child nothing else that could reach one. `test/lib/probe-targets.js` reads that same function rather than transcribing the list, and `test/test-probe-targets.js` holds every contract's declared environment keys equal to its authorization's permitted keys in both directions.
+
+`PATH` is on no target's list, and cannot be: a request names its `target` as a bare command rather than an absolute path, so a declared `PATH` would let the request choose which binary answers for a logical name like `tea-test-review`. The adapter supplies its own `PATH` instead, and the request cannot override it.
+
+`CI` is on no list either, for a different reason: `cli/test-review.js` reads it to decide filesystem isolation when `--isolate` is not stated. Permitting it would let the host decide how a measured run executed, isolation on in one environment and off in another with the two sealed records indistinguishable afterward, so `CI` stays off every command's list and `test/eval-test-review.js` states `--isolate` explicitly rather than depending on it.
 
 ## Reaching more than one skill
 
@@ -108,6 +121,22 @@ What the corpus scores, read off `test/probes/expected-strength.json` as it stan
 | `trace`                                | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
 | `nfr`                                  | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
 | `ci`                                   | refused       | none authored         | all three fail pre-flight on `seeded-fault-fired` before AD-9's gate is reached                         |
+
+The fragment-selection row is closed, not owed: routing has no defect to seed, so `none authored` is
+the correct final state of that cell, not a gap waiting on work.
+
+The four `refused` cells are a real, tracked gap, not a closed question, and each carries the same
+owner and exit condition `test/evals/suite-manifest.json`'s own deferred entries use elsewhere in this
+repository: **owner** TEA maintainers; **exit condition** a signature that addresses evidence the port
+already permits, `exit-code` or `stdout`, rather than the `artifact` pointer AD-9 refuses by
+construction. `test-review`'s own defect class is the proof this path exists: its exit code
+discriminates a plant from the clean control, so all nine defect probes carry an `exit-code` signature
+and score today where its own gameability probe, addressing the file the verdict names, still cannot.
+`tea-trace-runner`'s exit code is not that door: [What the probe vocabulary cannot say about a
+command](#what-the-probe-vocabulary-cannot-say-about-a-command) records it discriminating nothing,
+since every completed trace run exits 0 whatever it wrote, which is why `trace`'s defect class and
+`nfr`'s stay refused rather than closed the same way; each needs a signature this vocabulary does not
+have yet, not a copy of `test-review`'s fix.
 
 The two numbers that moved and what moved them: `test-review`'s defect class went from four exercised
 and four caught to nine and nine when `eval-quality` 1.4.0 dropped a clean leg that had issued the
@@ -415,12 +444,28 @@ The trace witness is a differential over standard input on one prompt value, `al
 
 Two more couplings, both found by running it. A relative `--agent-cmd` passed the harness pre-flight, which probes it from the harness's own directory, and then failed every run, because the runner executes in the staged workspace and a relative path resolves there; `parseArgs` resolves a path against the operator's directory now. And the trace witness legs are runnable only against a staged workspace, because the run's real input is the working directory; that is the same coupling `test-review`'s legs have with `--project-root`. Which set that workspace holds is in the request now: each fixture set declares its own `projectRoot`, the prompt is written against it, and `stagedWorkspaceFor` stages the set the leg names. Staging one set for every leg is what made the two witness legs seeded runs, which is the scoping failure `seeded-faults-scoped` reported against all three defect probes.
 
-One coupling worth naming, and it did not change with the scoring half: two of the entry points TEA
-reaches are addressed by file path into `dist/`, because neither the compiler CLI nor the evaluator is
-on the package's `exports` map. The devDependency is pinned exactly, so an upgrade is a deliberate
-edit here rather than something that arrives on its own. The reach still breaks on the upgrade that
-moves those files, and nothing declares it. A third reach was needed to read a rejected probe's
-qualification reasons and was not taken; that is recorded above under what the vocabulary cannot say.
+One coupling that did close, and how. Both the compiler and the evaluator were reached by file path
+into `dist/`, because neither was on the package's `exports` map. `eval-quality` 3.3.0 publishes
+`resolveCheck`, `makeResolveOperand`, `makePointerDenotesCollection`, `referenceSetKeysOf` and the
+`ABSENT` sentinel from the top-level entry point, reachable by `require('eval-quality')`; `compile`
+was already exported. `test/test-contracts.js` and `test/test-contract-oracles.js` both load the
+package through `require`/`import('eval-quality')` now, and neither names a `dist/` path anywhere.
+The `--package <path>` flag `test/test-contracts.js` used to carry for testing an unreleased build,
+an arbitrary runtime-computed `import()` the dependency-direction gate cannot admit a specifier for,
+is gone: `npm link` (or an equivalent local install) resolves `eval-quality` to the unreleased build
+instead, and the check's own `import('eval-quality')` needs no code change to pick it up. Reading a
+rejected probe's qualification reasons was a third reach that was queued and never taken, because
+`eval-quality` 1.4.0 published `QUALIFICATION_FAILURES` before it was needed; that is recorded above
+under what the vocabulary cannot say.
+
+`dependency-direction` covers this reach the same way it covers everything else in `cli/`, `tools/`
+and `test/`: it ran report-only while these three closed, because two dynamic imports into
+`eval-quality`'s unexported internals had no public equivalent yet, and a `require(name) { ... }`
+method shorthand elsewhere read as a false positive. Both are fixed now. The gate fails at zero
+violations, not reports, and one more of TEA's own reach-ins closed with it:
+`tools/generate-lockfile-age-cache.js` used to import `eval-quality`'s unpublished
+`dist/gates/audit-lockfile-age.mjs` directly; it queries the npm registry itself now, proven
+byte-identical against the cache the reach-in used to produce.
 
 Owed:
 

@@ -64,6 +64,7 @@ Before `eval-quality` 1.0.0, each TEA harness owned the mechanism it measured wi
 `createCommandLineAdapter` is that mechanism written once. `test/lib/probe-targets.js` is the TEA-owned half around it and is worth copying wholesale:
 
 - a `CommandTargetPolicy` that denies by default, so a logical name with no registry entry is refused before a process starts;
+- `permittedEnvironmentKeys` on every target, required from `eval-quality` 3.0.0 with no default: declare exactly the variable names the command actually reads, because a target with no list authorizes nothing and a request declaring a key the target's own list does not name is refused before a process spawns. `cli/lib/runner-exit-codes.js`'s `vendorEnvironmentNames()` is TEA's own pattern, read once and shared by every target rather than declared per command; see [The environment channel](./eval-quality-command-adapter.md#the-environment-channel) for what TEA authorizes and, as importantly, what it never does;
 - the one place a logical executable resolves to a real file, a working directory, an artifact map, and two budgets, which keeps machine-absolute paths out of every contract;
 - `maxOutputBytes` of eight megabytes per stream and per artifact, where nothing capped output before;
 - `maxElapsedMs` as an outer SIGKILL backstop, deliberately longer than the inner timeout each command applies to its own vendor call, because the inner clock classifies a timeout and the outer one only kills;
@@ -181,6 +182,12 @@ That check earns its keep. `test-review` failed any run whose verdict moved betw
 Set thresholds so that they can teach something. The `test-review` header states the rule directly: this harness exists to detect regression and vendor drift, so a bar nobody can clear teaches nothing and a bar everyone clears teaches nothing either. Its recall threshold is 0.7 against nine plants, its CRITICAL recall is 1.0, and its non-false-positive rate is 0.8.
 
 Name a metric for what it actually measures. TEA's review precision metric penalizes definite false positives, meaning findings against the clean fixture. An unmatched finding on a seeded fixture stays unattributed until a human adjudicates it, so it counts as neither correct nor incorrect, and the metric is named `nonFalsePositiveRate` rather than precision for that reason.
+
+### Stamp every artifact from the constant the package exports
+
+Every artifact kind `eval-quality` defines publishes its own `schemaVersion` constant, and `eval-quality`'s top-level entry point exports one per kind: `SEALED_RUN_RECORD_SCHEMA_VERSION`, `PROBE_SCHEMA_VERSION`, `EVAL_CONTRACT_SCHEMA_VERSION`, and the rest. A harness that writes a literal number instead has invented a second source for a value the package already owns, and the two can disagree with nothing to notice.
+
+`test/lib/eval-quality-inputs.js`'s `SCHEMA_VERSIONS` table reads each constant off `require('eval-quality')` once, keyed by kind, so a stamp this repository writes and a stamp it reads back are both held to the same source rather than to each other. `npm run test:schema-versions` holds every `schemaVersion` TEA commits, in source and on disk, to that same table, and names the artifact, the stamp found, and the stamp the installed package now exports when they differ. It runs before the generator's own `--check` diff, so a version bump is named as a version bump rather than reported as unexplained changed bytes.
 
 ### The rule this repository learned the hard way
 
