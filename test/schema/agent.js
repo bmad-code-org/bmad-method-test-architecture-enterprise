@@ -431,9 +431,11 @@ function buildMenuItemSchema() {
 }
 
 /**
- * Derive the expected module slug from a file path residing under src/<module>/agents/.
+ * Assert filePath has the shape validateAgentFile requires. No longer
+ * derives or returns a module slug: the path-vs-module validation that once
+ * consumed one was dead code and was removed, leaving only these assertions.
  * @param {string} filePath Absolute or relative agent path.
- * @returns {string|null} Module slug if identifiable, otherwise null.
+ * @returns {void}
  */
 function deriveModuleFromPath(filePath) {
   assert(filePath, 'validateAgentFile expects filePath to be provided');

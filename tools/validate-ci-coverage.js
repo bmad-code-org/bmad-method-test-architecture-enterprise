@@ -94,7 +94,6 @@ const DELIBERATELY_LOCAL = {
   'docs:preview': 'an interactive preview server; categorically cannot run unattended in CI',
   'docs:fix-links': '--write mode of the covered docs:validate-links; running fix-mode in CI would mutate the diff mid-job',
   'format:fix': '--write mode of the covered format:check; running fix-mode in CI would mutate the diff mid-job',
-  'format:fix:staged': 'the lint-staged pre-commit variant of format:fix, scoped to staged files; not a CI check',
   'lint:fix': '--fix mode of the covered lint; running fix-mode in CI would mutate the diff mid-job',
   'generate:lockfile-age-cache':
     'a write-mode cache regenerator; the covered test:lockfile-age reads the cache it writes specifically to avoid registry calls in CI, so running the generator there would be circular',
@@ -127,6 +126,18 @@ const DELIBERATELY_LOCAL = {
  */
 function uncoveredScripts(manifest, inCi) {
   return Object.keys(manifest.scripts).filter((name) => name !== 'test' && !inCi.has(name) && !(name in DELIBERATELY_LOCAL));
+}
+
+/**
+ * Every `DELIBERATELY_LOCAL` key that no longer names a `package.json` script.
+ *
+ * `uncoveredScripts` only checks the forward direction: a script the
+ * allowlist doesn't cover. A renamed or deleted script leaves its old entry
+ * here silently inert, which is the same blind spot this file exists to
+ * close, just facing the other way.
+ */
+function staleDeliberatelyLocalEntries(manifest) {
+  return Object.keys(DELIBERATELY_LOCAL).filter((name) => typeof manifest.scripts[name] !== 'string');
 }
 
 const CLI_SUITE_FILE = path.join(PROJECT_ROOT, 'test', 'test-test-review-cli.js');
@@ -242,6 +253,16 @@ function main() {
     return 1;
   }
 
+  const stale = staleDeliberatelyLocalEntries(manifest);
+  if (stale.length > 0) {
+    console.error(
+      `${colors.red}${stale.length} DELIBERATELY_LOCAL entry(ies) name a script package.json no longer defines:${colors.reset}`,
+    );
+    for (const script of stale) console.error(`  - ${script}`);
+    console.error(`\n${colors.dim}Remove the stale entry from DELIBERATELY_LOCAL in tools/validate-ci-coverage.js.${colors.reset}`);
+    return 1;
+  }
+
   const totalScripts = Object.keys(manifest.scripts).length;
   console.log(
     `${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) are defined and run in CI, every one of the ` +
@@ -259,5 +280,6 @@ module.exports = {
   scriptsRunInCi,
   shardProblems,
   shardedSuiteNumbers,
+  staleDeliberatelyLocalEntries,
   uncoveredScripts,
 };
