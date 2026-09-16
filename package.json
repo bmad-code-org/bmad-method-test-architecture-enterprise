@@ -157,6 +157,17 @@
   },
   "c8": {
     "all": true,
+    "include": [
+      "cli/**",
+      "tools/**",
+      "src/workflows/testarch/bmad-testarch-framework/resources/hooks/**"
+    ],
+    "exclude": [
+      "tools/build-docs.js",
+      "tools/fix-doc-links.js",
+      "tools/generate-lockfile-age-cache.js",
+      "tools/validate-doc-links.js"
+    ],
     "reporter": [
       "text",
       "html"
