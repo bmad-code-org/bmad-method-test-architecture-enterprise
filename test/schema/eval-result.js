@@ -28,7 +28,11 @@ const { EVAL_TYPES, CI_TIERS, RUNNER_CAPABILITIES } = require('./suite-manifest'
 // 1.1.0 replaced the suite record's single `contract` path and its lone
 // `contractVersion` with a `contracts` list, because a suite can be expressed as
 // more than one contract: fragment-selection is one suite across eight workflows.
-const SCHEMA_VERSION = '1.1.0';
+// 1.2.0 let `suite.skills` be empty for an `infrastructure` suite result, which
+// discharges no skill's coverage obligation and so names none; every other
+// evalType still must name at least one, held by the schema's own superRefine
+// rather than by `.min(1)` alone.
+const SCHEMA_VERSION = '1.2.0';
 
 /**
  * Failure classes in ascending severity. `worstFailureClass` picks the highest
@@ -144,7 +148,11 @@ const suiteResultSchema = z
   .object({
     id: nonEmptyString,
     evalType: z.enum(EVAL_TYPES),
-    skills: z.array(nonEmptyString).min(1),
+    // Empty only for an `infrastructure` suite, which discharges no skill's
+    // coverage obligation and so names none; held to at least one otherwise by
+    // the superRefine below, the record-side mirror of the manifest schema's
+    // own rule for a suite entry.
+    skills: z.array(nonEmptyString),
     contracts: z.array(suiteContractSchema),
     ciTier: z.enum(CI_TIERS),
     runnerCapabilities: z.array(z.enum(RUNNER_CAPABILITIES)).min(1),
@@ -157,7 +165,26 @@ const suiteResultSchema = z
     thresholds: z.record(z.number()),
     declaredRepetitions: nonNegativeInteger,
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    // Both directions, the same invariant `suiteEntrySchema`'s own superRefine
+    // in test/schema/suite-manifest.js holds the manifest entry to: an
+    // `infrastructure` result names no skill, and no other evalType may name
+    // zero. This is a zod-only rule; `zodToJsonSchema` cannot project a
+    // superRefine's cross-field logic into the generated JSON Schema, so
+    // test/schema/eval-result.schema.json carries no `minItems` for `skills`
+    // at all and this check is enforced only where `validateEvalResult` runs.
+    if (value.evalType !== 'infrastructure' && value.skills.length === 0) {
+      ctx.addIssue({ code: 'custom', path: ['skills'], message: `a "${value.evalType}" suite result must name at least one skill` });
+    }
+    if (value.evalType === 'infrastructure' && value.skills.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['skills'],
+        message: 'an "infrastructure" suite result discharges no skill\'s coverage obligation, so it must name none',
+      });
+    }
+  });
 
 const evalResultSchema = z
   .object({

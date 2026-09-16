@@ -263,7 +263,12 @@ function suiteResultRecord({
     suite: {
       id: suite.id,
       evalType: suite.evalType,
-      skills: suite.skills ?? [suite.skill],
+      // Empty for an `infrastructure` suite, which declares neither `skill` nor
+      // `skills`: `suite.skills ?? [suite.skill]` used to fall back to
+      // `[undefined]` for one, which fails the record's own schema rather than
+      // describing the suite honestly. The same check `skillsOf` in
+      // test/lib/suite-manifest.js applies to the manifest entry itself.
+      skills: suite.skills ?? (typeof suite.skill === 'string' ? [suite.skill] : []),
       // Every contract the manifest links for this suite, so a reader of the
       // result file can open what the run claims to have been measured against.
       contracts: (suite.contracts ?? []).map((contractPath) => ({ path: contractPath, version: contractVersions[contractPath] ?? null })),

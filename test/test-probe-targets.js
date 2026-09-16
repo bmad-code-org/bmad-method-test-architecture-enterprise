@@ -120,6 +120,11 @@ const {
 const { RUNNER_CAPABILITIES: CI_HARNESS_DECLARED_CAPABILITIES, ACTIONLINT } = require('./eval-ci');
 const { RUNNER_CAPABILITIES: ATDD_RUNNER_DECLARED_CAPABILITIES } = require('../cli/atdd-runner');
 const { RUNNER_CAPABILITIES: ATDD_HARNESS_DECLARED_CAPABILITIES } = require('./eval-atdd');
+const {
+  EXIT_CODES: TRANSCRIPT_EXIT_CODES,
+  RUNNER_CAPABILITIES: TRANSCRIPT_RUNNER_DECLARED_CAPABILITIES,
+} = require('../cli/transcript-runner');
+const { RUNNER_CAPABILITIES: TRANSCRIPT_HARNESS_DECLARED_CAPABILITIES } = require('./eval-transcript');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -138,16 +143,17 @@ const TEST_DESIGN_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-design-run
 const TEST_DESIGN_HARNESS = path.join(__dirname, 'eval-test-design.js');
 const ATDD_STUB_AGENT = path.join(__dirname, 'fixtures', 'atdd-runner', 'stub-agent.js');
 const ATDD_HARNESS = path.join(__dirname, 'eval-atdd.js');
+const TRANSCRIPT_STUB_AGENT = path.join(__dirname, 'fixtures', 'transcript-runner', 'stub-agent.js');
 
 /**
- * The environment names the three stub agents read, passed through `--env-pass`.
+ * The environment names the stub agents read, passed through `--env-pass`.
  *
  * They belong to no contract: they are how this file drives a stub instead of a
  * vendor. The authorization has to name them, because the adapter refuses any
  * key a request declares that the authorization does not permit, which is what
  * makes them the exact demonstration of the widening `environmentKeys` is for.
  */
-const STUB_ENVIRONMENT_KEYS = ['STUB_FRAGMENTS', 'STUB_MODE'];
+const STUB_ENVIRONMENT_KEYS = ['STUB_FRAGMENTS', 'STUB_MODE', 'STUB_TRANSCRIPT_MODE'];
 
 const colors = {
   reset: '[0m',
@@ -182,6 +188,18 @@ function findContracts(directory) {
 // ---------------------------------------------------------------------------
 // 1. every contract names a command TEA ships
 // ---------------------------------------------------------------------------
+
+/**
+ * Execution targets that carry no eval-quality contract, by design.
+ *
+ * tea-transcript-runner is the one member: test/contracts/README.md's
+ * discipline is for a suite that measures a skill's behavior through the
+ * contract vocabulary, and the transcript suite measures a harness mechanism
+ * instead, proven in plain assertions by test/test-transcript-harness.js. A
+ * contract naming it would claim a behavioral statement this suite does not
+ * make.
+ */
+const NO_CONTRACT_TARGETS = new Set(['tea-transcript-runner']);
 
 function checkContractsAgainstRegistry() {
   console.log('\ncontracts name a command TEA ships');
@@ -231,8 +249,10 @@ function checkContractsAgainstRegistry() {
 
   // The reverse direction too. A registered target no contract names is a
   // command with no behavioral statement about it, which is the state the
-  // registry exists to make visible rather than the state it exists to hide.
+  // registry exists to make visible rather than the state it exists to hide,
+  // except for NO_CONTRACT_TARGETS, whose absence is the declared design.
   for (const target of EXECUTION_TARGETS) {
+    if (NO_CONTRACT_TARGETS.has(target.interfaceId)) continue;
     assert(
       declared.has(`${target.interfaceId}\u0000${target.executable}`),
       `${target.executable} is named by at least one contract`,
@@ -900,6 +920,78 @@ async function checkCiProbe(runDir) {
       /--timeout-ms must be a positive integer; got "1\.5"/.test(observedText(invalidTimeout.observation.stderr)),
     'a decimal timeout is rejected as a usage error before the runner starts',
     JSON.stringify(invalidTimeout.ok ? invalidTimeout.observation : invalidTimeout).slice(0, 300),
+  );
+}
+
+/**
+ * One tea-transcript-runner probe against the stub, in a fresh working
+ * directory under `runDir`.
+ *
+ * Unlike the trace/nfr/ci probes above, this suite carries no eval-quality
+ * contract and its registered case never stages a workspace of its own, so
+ * there is no "the adapter really drives a command" round of artifact checks
+ * to give it here. What this exercises instead is `cli/transcript-runner.js`'s
+ * own request-validation branches, reached through the real probe port: an
+ * unknown `--agent`, a non-integer `--timeout-ms`, and an empty stdin prompt,
+ * the same three a caller could trip by constructing a request by hand
+ * (`test/lib/transcript-harness.js`'s own bug fixed alongside this check did
+ * exactly that for `--timeout-ms` and `--agent`).
+ */
+async function transcriptProbe(runDir, probeId, { option = {}, stdin, timeoutMs = '60000' } = {}) {
+  const cwd = fs.mkdtempSync(path.join(runDir, 'transcript-'));
+  const { port } = await createProbePort({
+    cwd,
+    interfaceIds: ['tea-transcript-runner'],
+    environmentKeys: { 'tea-transcript-runner': STUB_ENVIRONMENT_KEYS },
+  });
+  return probeCommand(
+    port,
+    probeRequest({
+      probeId,
+      interfaceId: 'tea-transcript-runner',
+      operationId: 'run-turn',
+      option: {
+        agent: 'custom',
+        'agent-cmd': TRANSCRIPT_STUB_AGENT,
+        'env-pass': 'STUB_TRANSCRIPT_MODE',
+        'timeout-ms': timeoutMs,
+        ...option,
+      },
+      environment: { STUB_TRANSCRIPT_MODE: 'consistent' },
+      stdin: stdin ?? { kind: 'text', value: 'Turn 1 of this session.' },
+    }),
+    new AbortController().signal,
+  );
+}
+
+async function checkTranscriptProbe(runDir) {
+  console.log('\ntea-transcript-runner through the adapter');
+
+  const invalidTimeout = await transcriptProbe(runDir, 'transcript-invalid-timeout', { option: { 'timeout-ms': '1.5' } });
+  assert(
+    invalidTimeout.ok &&
+      invalidTimeout.observation.exitCode === TRANSCRIPT_EXIT_CODES.usage &&
+      /--timeout-ms must be a positive integer; got "1\.5"/.test(observedText(invalidTimeout.observation.stderr)),
+    'a decimal timeout is rejected as a usage error before the runner starts',
+    JSON.stringify(invalidTimeout.ok ? invalidTimeout.observation : invalidTimeout).slice(0, 300),
+  );
+
+  const unknownAgent = await transcriptProbe(runDir, 'transcript-unknown-agent', { option: { agent: 'not-a-real-agent' } });
+  assert(
+    unknownAgent.ok &&
+      unknownAgent.observation.exitCode === TRANSCRIPT_EXIT_CODES['environment-configuration'] &&
+      /unknown agent "not-a-real-agent"/.test(observedText(unknownAgent.observation.stderr)),
+    'an unknown --agent name is rejected before the runner starts',
+    JSON.stringify(unknownAgent.ok ? unknownAgent.observation : unknownAgent).slice(0, 300),
+  );
+
+  const emptyPrompt = await transcriptProbe(runDir, 'transcript-empty-prompt', { stdin: { kind: 'text', value: '   ' } });
+  assert(
+    emptyPrompt.ok &&
+      emptyPrompt.observation.exitCode === TRANSCRIPT_EXIT_CODES.usage &&
+      /the prompt is empty/.test(observedText(emptyPrompt.observation.stderr)),
+    'an empty (whitespace-only) stdin prompt is rejected as a usage error before the runner starts',
+    JSON.stringify(emptyPrompt.ok ? emptyPrompt.observation : emptyPrompt).slice(0, 300),
   );
 }
 
@@ -1592,6 +1684,12 @@ function checkRunnerDeclarations() {
     `harness ${JSON.stringify(ATDD_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(ATDD_RUNNER_DECLARED_CAPABILITIES)}`,
   );
   assert(
+    JSON.stringify([...TRANSCRIPT_HARNESS_DECLARED_CAPABILITIES].sort()) ===
+      JSON.stringify([...TRANSCRIPT_RUNNER_DECLARED_CAPABILITIES].sort()),
+    'the transcript harness and tea-transcript-runner declare the same runner capabilities',
+    `harness ${JSON.stringify(TRANSCRIPT_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(TRANSCRIPT_RUNNER_DECLARED_CAPABILITIES)}`,
+  );
+  assert(
     TRACE_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       NFR_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       CI_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
@@ -1752,6 +1850,7 @@ async function main() {
     await checkTraceProbe(runDir);
     await checkNfrProbe(runDir);
     await checkCiProbe(runDir);
+    await checkTranscriptProbe(runDir);
     await checkBudgets(runDir);
     checkNfrHarnessSmoke(runDir);
     checkCiHarnessSmoke(runDir);

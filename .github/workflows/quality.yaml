@@ -225,6 +225,9 @@ jobs:
       - name: Run documented commands against the real repository
         run: npm run test:doc-invocations
 
+      - name: Prove the multi-turn transcript engine drives a session and catches a contradiction
+        run: npm run test:transcript-harness
+
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
 
@@ -245,6 +248,9 @@ jobs:
 
       - name: Validate the bmad-tea routing eval corpus
         run: npm run test:eval-routing-data
+
+      - name: Validate transcript eval corpus
+        run: npm run test:eval-transcript-data
 
       - name: Validate the eval suite manifest and result schema
         run: npm run test:eval-schemas
