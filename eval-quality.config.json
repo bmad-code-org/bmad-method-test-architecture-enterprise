@@ -43,5 +43,137 @@
         "reason": "A transitive dependency of astro 5 whose manifest declares no licence. The licence it is read as is held against the allowlist like every other entry."
       }
     ]
+  },
+  "doc-counts": {
+    "sources": {
+      "totalCalls": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "TOTAL_CALLS" }
+      },
+      "totalCallsThreeRunners": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "TOTAL_CALLS_THREE_RUNNERS" }
+      },
+      "fragmentSelectionCalls": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "FRAGMENT_SELECTION_CALLS" }
+      },
+      "routingIntentCalls": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "ROUTING_INTENT_CALLS" }
+      },
+      "testDesignCalls": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "TEST_DESIGN_CALLS" }
+      },
+      "testReviewCalls": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "TEST_REVIEW_CALLS" }
+      },
+      "nfrCalls": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "NFR_CALLS" }
+      },
+      "traceCalls": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "TRACE_CALLS" }
+      },
+      "fragmentSelectionCases": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "FRAGMENT_SELECTION_CASES" }
+      },
+      "npmTestChainLength": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "NPM_TEST_CHAIN_LENGTH" }
+      },
+      "knowledgeFragmentTotal": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_TOTAL" }
+      },
+      "knowledgeFragmentCore": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_CORE" }
+      },
+      "knowledgeFragmentExtended": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_EXTENDED" }
+      },
+      "knowledgeFragmentSpecialized": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_SPECIALIZED" }
+      }
+    },
+    "entries": [
+      {
+        "file": "docs/explanation/eval-quality-roadmap.md",
+        "claim": "the per-suite call counts one eval:all run makes",
+        "pattern": {
+          "match": "It runs (\\d+) fragment selections, (\\d+) routing intents, (\\d+) complete test designs, (\\d+) complete reviews, (\\d+) complete audits, and (\\d+) complete traces for one runner\\."
+        },
+        "counts": ["fragmentSelectionCalls", "routingIntentCalls", "testDesignCalls", "testReviewCalls", "nfrCalls", "traceCalls"],
+        "rendering": "digits"
+      },
+      {
+        "file": "README.md",
+        "claim": "the fragment-selection case count",
+        "pattern": {
+          "match": "`test:eval-data` checks that all (\\d+) fragment-selection cases are structurally usable"
+        },
+        "counts": ["fragmentSelectionCases"],
+        "rendering": "digits"
+      },
+      {
+        "file": "README.md",
+        "claim": "the npm test chain length",
+        "pattern": {
+          "match": "`npm test` chains ([a-z-]+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Six of the ([a-z-]+) keep the rules, guidance, hook, eval data, eval contracts, and documentation aligned:"
+        },
+        "counts": ["npmTestChainLength", "npmTestChainLength"]
+      },
+      {
+        "file": "README.md",
+        "claim": "the knowledge-fragment tier breakdown",
+        "pattern": {
+          "match": "`tea-index.csv` classifies all (\\d+) fragments into three tiers: \\*\\*core\\*\\* \\((\\d+), always loaded\\), \\*\\*extended\\*\\* \\((\\d+), loaded when deeper analysis is called for\\), and \\*\\*specialized\\*\\* \\((\\d+), loaded only when the case matches, such as contract testing on a real consumer-provider boundary\\)\\."
+        },
+        "counts": ["knowledgeFragmentTotal", "knowledgeFragmentCore", "knowledgeFragmentExtended", "knowledgeFragmentSpecialized"],
+        "rendering": "digits"
+      },
+      {
+        "file": "docs/explanation/eval-quality-adoption-guide.md",
+        "claim": "one eval:all run's total model calls and their per-suite breakdown",
+        "pattern": {
+          "match": "One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(18 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), and (\\d+) complete traces \\(two cases at two repetitions\\)\\."
+        },
+        "counts": [
+          "totalCalls",
+          "fragmentSelectionCalls",
+          "routingIntentCalls",
+          "testDesignCalls",
+          "testReviewCalls",
+          "nfrCalls",
+          "traceCalls"
+        ],
+        "rendering": "digits"
+      },
+      {
+        "file": "README.md",
+        "claim": "one eval:all run's total agent calls and all three built-in runners' total",
+        "pattern": {
+          "match": "`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `test-design` epic, and per `trace` fixture set\\. One runner makes (\\d+) agent calls: (\\d+) fragment selections, (\\d+) routing intents, (\\d+) reviews, (\\d+) audits, (\\d+) test designs, and (\\d+) traces\\. All three built-in runners make (\\d+) calls\\."
+        },
+        "counts": [
+          "totalCalls",
+          "fragmentSelectionCalls",
+          "routingIntentCalls",
+          "testReviewCalls",
+          "nfrCalls",
+          "testDesignCalls",
+          "traceCalls",
+          "totalCallsThreeRunners"
+        ],
+        "rendering": "digits"
+      }
+    ]
   }
 }

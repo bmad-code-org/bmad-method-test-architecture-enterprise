@@ -321,7 +321,7 @@ Run live against more than one vendor when you can. The confirming `trace` run w
 
 ### Model calls
 
-One `npm run eval:all` for one runner spends 95 calls: 48 fragment selections (24 cases at two repetitions), 36 routing intents (18 intents at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), 4 complete audits (two evidence bundles at two repetitions), and 4 complete traces (two cases at two repetitions).
+One `npm run eval:all` for one runner spends 99 calls: 48 fragment selections (24 cases at two repetitions), 36 routing intents (18 intents at two repetitions), 4 complete test designs (two cases at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), 4 complete audits (two evidence bundles at two repetitions), and 4 complete traces (two cases at two repetitions).
 
 Repetition counts are a real cost multiplier and are declared per suite. Two is the smallest number that can say whether an answer is reproducible. `test-review` uses three because it also measures score variance.
 

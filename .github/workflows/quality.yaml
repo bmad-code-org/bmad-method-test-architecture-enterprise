@@ -164,6 +164,12 @@ jobs:
       - name: Validate criteria-registry to fragment traceability
         run: npm run test:criteria-fragments
 
+      - name: Test the doc-counts gate's own source module
+        run: npm run test:doc-count-sources
+
+      - name: Hold published documentation counts against their source
+        run: npm run test:doc-counts
+
       - name: Test write-time enforcement hook
         run: npm run test:enforce-hook
 
