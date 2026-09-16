@@ -1096,8 +1096,8 @@ So that drift across a runner or model change is measured rather than eyeballed 
 **Then** the reported relation equals the fixture's declared relation
 **And** the fixture covers each relation the type declares, including neither-dominates
 
-**Given** the comparison is available
-**When** it runs over the replay corpus in `test:eval-replay`
+**Given** the comparison is available, and `test:eval-replay`'s eight suites carry no `EvidenceArtifact`-shaped data (their scorers are bespoke and never touch `eval-quality`'s `runScore`/`emit` pipeline, and reshaping all eight to produce `Outcome`/`Strength` output is a different story), while `test:probe-corpus` is where TEA already replays every probe corpus against a stored baseline on every run
+**When** it runs over that stored-vs-fresh comparison in `test:probe-corpus`
 **Then** a scorer change that alters a historical result is reported as a dominance change rather than only as a diff
 
 ### Story 5.2: Run the whole suite live and record the result
