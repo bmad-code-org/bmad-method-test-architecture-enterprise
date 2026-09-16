@@ -1723,5 +1723,6 @@ module.exports = {
   verifyFindingSeverityCounts,
   extractFindings,
   FINDING_KEYS,
+  RECOMMENDATION_ENUM,
   rawScoreForViolations,
 };

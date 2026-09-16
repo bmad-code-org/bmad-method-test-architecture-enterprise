@@ -302,5 +302,977 @@
     "paths": [{ "path": "tools", "extensions": [".js"] }],
     "fields": ["schemaVersion"],
     "writers": ["tools/generate-probes.js", "tools/generate-contracts.js"]
+  },
+  "doc-claims-omitted-classes": {
+    "$comment": "Not read by any gate; each gate reads only its own top-level key, so this is a place to record a deliberate non-adoption without it being validated as part of the doc-claims section itself.",
+    "citations": "Deliberately unadopted. Zero path:line style references exist anywhere in the scanned pages today, and this class's own refusal rule (a class examining zero sentences fails to load) means declaring it empty is not an option either. A citation added to a page later is invisible to this gate until someone notices and configures the class for real.",
+    "vocabulary": "Deliberately unadopted. Every candidate accept/refuse pair found needs either a custom verbs.accepts/refuses list or reworded prose to produce a real accept/refuse-governed sentence under the gate's verb-governance heuristic, and configuring one on a guess is exactly the false-green risk this gate exists to avoid.",
+    "transcriptions": "Deliberately unadopted. Every STRONG candidate found is either a bare number (doc-counts territory once that gate exists here) or a fenced bash-invocation block (doc-invocations territory, Story 4.3), not a byte-for-byte literal string block TEA's own code emits."
+  },
+  "doc-claims": {
+    "pages": ["docs", "README.md", "CONTRIBUTING.md", "AGENTS.md"],
+    "sources": [
+      {
+        "path": "cli",
+        "extensions": [".js"]
+      },
+      {
+        "path": "tools",
+        "extensions": [".js"]
+      },
+      {
+        "path": "test/lib",
+        "extensions": [".js"]
+      },
+      {
+        "path": "test/schema",
+        "extensions": [".js"]
+      },
+      {
+        "path": "test",
+        "recursive": false,
+        "extensions": [".js"]
+      }
+    ],
+    "symbols": {
+      "foreign": [
+        {
+          "token": "createCommandLineAdapter",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "CommandTargetPolicy",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "runScore",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "EnvironmentProbePort",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "nodeCommandMechanism",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "RuntimeFault",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "StructuralFailure",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "runPreflight",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "digestArtifact",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "preflightFromObservations",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "validateLineageChain",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "INTERCHANGE_ARTIFACT_KEYS",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "digestComposite",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "serializeArtifact",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "digestBytes",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "qualifyProbe",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "planPreflight",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "selectControl",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "verdictBasis",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "deepEquals",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "designatedOracleIdOf",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "ProbeRequest",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "validateSchema",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "interceptNetworkCall",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "apiRequest",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "mergeTests",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "networkRecorder",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "handleDownload",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "readCSV",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "readXLSX",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "runBurnIn",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "fullyParallel",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "withTimeout",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "withInterval",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "waitFor",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "waitForCount",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "responseJson",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "setAuthProvider",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "getToken",
+          "reason": "a @seontechnologies/playwright-utils export, not a TEA declaration"
+        },
+        {
+          "token": "createProviderState",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "setJsonBody",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "createRequestFilter",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "buildVerifierOptions",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "buildMessageVerifierOptions",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "setJsonContent",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "noOpRequestFilter",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "zodToPactMatchers",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "toJsonMap",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "JsonMap",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "VerifierOptions",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "consumerBranch",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "MatchersV3",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "singleFork",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "willRespondWith",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "withRequest",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "matchField",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "matchPartial",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "matchPredicate",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "getReceived",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "WebhookTimeoutError",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "templateName",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "totalReceived",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "receivedWebhooks",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "matcherDetails",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "deleteById",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "WebhookProvider",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "clearState",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "providerVersionNumber",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "providerVersionBranch",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "isBreakingChangeTolerantBranch",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "PACT_CONSUMER_BRANCH",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "PACT_BROKER_BASE_URL",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "PACT_BROKER_TOKEN",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "executeTest",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "baseUrl",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "pactUrls",
+          "reason": "a @seontechnologies/pactjs-utils export, not a TEA declaration"
+        },
+        {
+          "token": "waitForTimeout",
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "getByRole",
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "getByLabel",
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "getByTestId",
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "waitForSelector",
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "waitForResponse",
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "toBeTruthy",
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "toJSON",
+          "reason": "Playwright’s own built-in API, not a TEA declaration"
+        },
+        {
+          "token": "PATH",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "HOME",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "USER",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "ANTHROPIC_API_KEY",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "GITHUB_SHA",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "GITHUB_BRANCH",
+          "reason": "a user-supplied variable for pactjs-utils configuration (unlike GITHUB_SHA, which the platform sets), not a TEA declaration"
+        },
+        {
+          "token": "ADMIN_TOKEN",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "MEMBER_TOKEN",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "GEMINI_API_KEY",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "GOOGLE_API_KEY",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "PW_NET_MODE",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "TEST_USER_EMAIL",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "TEST_USER_PASSWORD",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "API_BASE_URL",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "DATABASE_URL",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "STAGING_API_URL",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "PROD_API_URL",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "TEST_API_URL",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "NPM_TOKEN",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "RELEASE_APP_ID",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "RELEASE_APP_PRIVATE_KEY",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "CLAUDE_CODE_OAUTH_TOKEN",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "OPENAI_API_KEY",
+          "reason": "a platform environment variable, not a TEA declaration"
+        },
+        {
+          "token": "authToken",
+          "reason": "a @seontechnologies/playwright-utils auth-session fixture parameter, not a TEA declaration"
+        },
+        {
+          "token": "spawnSync",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "existsSync",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "ENOENT",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "EACCES",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "SIGTERM",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "SIGKILL",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "TypeError",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "Date",
+          "reason": "a Node.js or POSIX platform name, not a TEA declaration"
+        },
+        {
+          "token": "VERSION",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
+          "token": "Task",
+          "reason": "a Claude Code tool name, not a TEA declaration"
+        },
+        {
+          "token": "Bash",
+          "reason": "a Claude Code tool name, not a TEA declaration"
+        },
+        {
+          "token": "Write",
+          "reason": "a Claude Code tool name, not a TEA declaration"
+        },
+        {
+          "token": "Edit",
+          "reason": "a Claude Code tool name, not a TEA declaration"
+        },
+        {
+          "token": "Added",
+          "reason": "a Keep a Changelog section heading, not a TEA declaration"
+        },
+        {
+          "token": "Changed",
+          "reason": "a Keep a Changelog section heading, not a TEA declaration"
+        },
+        {
+          "token": "Fixed",
+          "reason": "a Keep a Changelog section heading, not a TEA declaration"
+        },
+        {
+          "token": "Deprecated",
+          "reason": "a Keep a Changelog section heading, not a TEA declaration"
+        },
+        {
+          "token": "Removed",
+          "reason": "a Keep a Changelog section heading, not a TEA declaration"
+        },
+        {
+          "token": "outputFile",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "nextStepFile",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "resumeStepFile",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "lastStep",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "lastSaved",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "stepsCompleted",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "knowledgeIndex",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "runScope",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "runKey",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
+          "token": "Jenkinsfile",
+          "reason": "a third-party tool or config name TEA integrates with, not a TEA declaration"
+        },
+        {
+          "token": "mcpServers",
+          "reason": "a third-party tool or config name TEA integrates with, not a TEA declaration"
+        },
+        {
+          "token": "LICENSE",
+          "reason": "a third-party tool or config name TEA integrates with, not a TEA declaration"
+        },
+        {
+          "token": "STUB_FRAGMENTS",
+          "reason": "a third-party tool or config name TEA integrates with, not a TEA declaration"
+        },
+        {
+          "token": "GATE",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "LIVE",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "TODO",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "WARN",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "None",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "Tier",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "INACCESSIBLE",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "Block",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "Approve",
+          "reason": "a chat menu keyword or a table/status label, not a JS identifier"
+        },
+        {
+          "token": "isDiscriminatingCase",
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+        },
+        {
+          "token": "nonDeterministicReportedValues",
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+        },
+        {
+          "token": "expectedTestInventory",
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+        },
+        {
+          "token": "negativeControls",
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+        },
+        {
+          "token": "rejectedCases",
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+        },
+        {
+          "token": "mechanicalSignal",
+          "reason": "cli/lib/convention-baseline.js’s own field, declared inline in an object literal rather than as a standalone const or a property on its own source line, which the declaration scan does not reach"
+        }
+      ]
+    },
+    "lists": [
+      {
+        "file": "docs/reference/tea-test-review-cli.md",
+        "claim": "the four-member recommendation enum",
+        "pattern": {
+          "match": "\\(one of ([^)]+)\\)"
+        },
+        "tokenShape": {
+          "match": "^[A-Z][A-Za-z ]*$"
+        },
+        "expected": {
+          "module": "cli/lib/parse-report.js",
+          "export": "RECOMMENDATION_ENUM"
+        }
+      },
+      {
+        "file": "docs/reference/execution-targets.md",
+        "claim": "the mobile-specific criteria-registry row ids",
+        "pattern": {
+          "match": "Four are mobile-specific \\(([^)]+)\\)"
+        },
+        "tokenShape": {
+          "match": "^[A-Z]\\d+$"
+        },
+        "expected": {
+          "module": "test/lib/doc-claim-sources.js",
+          "export": "MOBILE_ROW_IDS"
+        }
+      },
+      {
+        "file": "docs/reference/execution-targets.md",
+        "claim": "the playwright-utils-adoption criteria-registry row ids",
+        "pattern": {
+          "match": "two are playwright-utils adoption rows gated on `tea_use_playwright_utils` plus the package being installed \\(([^)]+)\\)"
+        },
+        "tokenShape": {
+          "match": "^[A-Z]\\d+$"
+        },
+        "expected": {
+          "module": "test/lib/doc-claim-sources.js",
+          "export": "PLAYWRIGHT_UTILS_ROW_IDS"
+        }
+      }
+    ],
+    "codes": {
+      "pattern": {
+        "match": "[Ee]xits?\\s+`?(\\d+)`?"
+      },
+      "registries": [
+        {
+          "module": "test/lib/doc-claim-sources.js",
+          "export": "EXIT_CODE_STRINGS"
+        }
+      ]
+    },
+    "fences": [
+      {
+        "file": "docs/reference/tea-test-review-cli.md",
+        "claim": "the review verdict JSON",
+        "intro": {
+          "match": "A review verdict \\(also written to `--json <file>` when given\\):"
+        },
+        "schema": {
+          "module": "test/lib/doc-claim-sources.js",
+          "export": "VERDICT_SCHEMA"
+        }
+      },
+      {
+        "file": "docs/reference/tea-test-review-cli.md",
+        "claim": "the skip payload JSON",
+        "intro": {
+          "match": "A skipped review \\(no changed test files\\):"
+        },
+        "schema": {
+          "module": "test/lib/doc-claim-sources.js",
+          "export": "SKIP_SCHEMA"
+        }
+      }
+    ],
+    "dated": {
+      "triggers": [
+        {
+          "match": "stay visible in the manifest as deferred work"
+        },
+        {
+          "match": "still listed as deferred"
+        },
+        {
+          "match": "the \\d+ CONCERNS the stored corpus scores"
+        },
+        {
+          "match": "as of 1\\.4\\.0"
+        },
+        {
+          "match": "\\bcurrently mapped\\b"
+        },
+        {
+          "match": "\\bcurrently emits\\b"
+        },
+        {
+          "match": "no plugin API for execution targets today"
+        },
+        {
+          "match": "never been run live"
+        },
+        {
+          "match": "not yet read by any workflow"
+        },
+        {
+          "match": "nothing reads yet"
+        },
+        {
+          "match": "no workflow reads them yet"
+        },
+        {
+          "match": "\\bnot yet\\b",
+          "flags": "i"
+        },
+        {
+          "match": "\\bcurrently\\b",
+          "flags": "i"
+        },
+        {
+          "match": "\\bas of\\b",
+          "flags": "i"
+        },
+        {
+          "match": "\\btoday\\b",
+          "flags": "i"
+        }
+      ],
+      "claims": [
+        {
+          "file": "docs/explanation/eval-quality-roadmap.md",
+          "key": "stay visible in the manifest as deferred work",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "FIVE_SKILLS_DEFERRED"
+          },
+          "reason": "test/evals/suite-manifest.json's deferred array"
+        },
+        {
+          "file": "docs/explanation/eval-quality-adoption-guide.md",
+          "key": "still listed as deferred",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "FOUR_FRAGMENT_SELECTION_SKILLS_DEFERRED"
+          },
+          "reason": "the fragment-selection suite's skills list filtered by suite-manifest.json's deferred array"
+        },
+        {
+          "file": "docs/explanation/eval-quality-adoption-guide.md",
+          "key": "the 33 CONCERNS the stored corpus scores",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "THIRTY_THREE_CONCERNS"
+          },
+          "reason": "a count of verdict: \"CONCERNS\" entries in test/probes/expected-strength.json"
+        },
+        {
+          "file": "docs/explanation/eval-quality-command-adapter.md",
+          "key": "has a spelling, as of 1.4.0",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "EVAL_QUALITY_AT_LEAST_1_4_0"
+          },
+          "reason": "the eval-quality pin in package.json, compared >= 1.4.0"
+        },
+        {
+          "file": "docs/explanation/eval-quality-command-adapter.md",
+          "key": "names its reason, as of 1.4.0",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "EVAL_QUALITY_AT_LEAST_1_4_0"
+          },
+          "reason": "the eval-quality pin in package.json, compared >= 1.4.0"
+        },
+        {
+          "file": "README.md",
+          "key": "All 36 rows are currently mapped",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "THIRTY_SIX_ROWS_MAPPED"
+          },
+          "reason": "tools/validate-criteria-fragments.js's own row count and MANIFEST size"
+        },
+        {
+          "file": "docs/how-to/workflows/run-atdd.md",
+          "key": "currently emits these scaffolds with `test.skip()`",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "ATDD_EMITS_TEST_SKIP"
+          },
+          "reason": "a grep of the atdd workflow's own step files for test.skip("
+        },
+        {
+          "file": "docs/explanation/verification-architecture.md",
+          "key": "no plugin API for execution targets today",
+          "settles": "read",
+          "reason": "a claim about the absence of a feature; nothing in the tree can decide whether an extension surface was deliberately never built"
+        },
+        {
+          "file": "docs/explanation/eval-quality-adoption-guide.md",
+          "key": "have never been run live",
+          "settles": "read",
+          "reason": "a claim about history outside this repository (which suites have been run against a live model); the tree carries no evidence either way by design"
+        },
+        {
+          "file": "README.md",
+          "key": "have never been run live",
+          "settles": "read",
+          "reason": "a claim about history outside this repository (which suites have been run against a live model); the tree carries no evidence either way by design"
+        },
+        {
+          "file": "README.md",
+          "key": "`risk_threshold` — risk cutoff for mandatory testing",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "RISK_THRESHOLD_UNREAD"
+          },
+          "reason": "a grep of src/workflows/ for risk_threshold"
+        },
+        {
+          "file": "README.md",
+          "key": "`test_design_output`, `test_review_output`, `trace_output`",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "OUTPUT_FOLDER_KEYS_UNREAD"
+          },
+          "reason": "a grep of src/workflows/ for each of the three keys"
+        },
+        {
+          "file": "README.md",
+          "key": "Ten are wired into workflows today",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "TEN_WIRED_FOUR_FUTURE"
+          },
+          "reason": "src/module.yaml's FUTURE-marked key count and a grep of src/workflows/ for each one"
+        },
+        {
+          "file": "docs/reference/configuration.md",
+          "key": "no workflow reads them yet",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "FOUR_FUTURE_KEYS_UNREAD"
+          },
+          "reason": "a grep of src/workflows/ for each FUTURE-marked key"
+        },
+        {
+          "file": "docs/explanation/eval-quality-adoption-guide.md",
+          "key": "TEA's state today, as `test/evals/suite-manifest.json` registers it:",
+          "settles": "read",
+          "reason": "an intro label for the table that follows, not itself a decidable fact"
+        },
+        {
+          "file": "docs/explanation/eval-quality-command-adapter.md",
+          "key": "of the 55 cannot pre-flight today",
+          "settles": "read",
+          "reason": "a snapshot of how many of the 55 probes could not pre-flight when the rule was written; a historical measurement, not a live-rechecked invariant"
+        },
+        {
+          "file": "docs/explanation/eval-quality-roadmap.md",
+          "key": "does not yet prove the complete behavior of every TEA skill",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "NOT_EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE"
+          },
+          "reason": "test/evals/suite-manifest.json's deferred array is non-empty"
+        },
+        {
+          "file": "docs/explanation/eval-quality-roadmap.md",
+          "key": "TEA currently has three layers of self-validation",
+          "settles": "read",
+          "reason": "the row count of the table that follows; no single source enumerates the layers TEA has decided to keep as three"
+        },
+        {
+          "file": "docs/explanation/eval-quality-roadmap.md",
+          "key": "the pin is 3.2.0 now",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "EVAL_QUALITY_PIN_IS_3_2_0"
+          },
+          "reason": "package.json's eval-quality devDependency, compared for an exact match"
+        },
+        {
+          "file": "docs/explanation/verification-architecture.md",
+          "key": "which execution targets are covered today",
+          "settles": "read",
+          "reason": "frontmatter boilerplate, not itself a decidable fact"
+        },
+        {
+          "file": "docs/explanation/verification-architecture.md",
+          "key": "deepest coverage happens to sit today",
+          "settles": "read",
+          "reason": "a subjective judgment about where TEA's coverage is deepest, not derivable from a single artifact"
+        },
+        {
+          "file": "docs/explanation/verification-architecture.md",
+          "key": "The execution guidance behind it is not yet equivalent",
+          "settles": "read",
+          "reason": "a subjective depth-parity judgment across execution targets, not derivable from a single artifact"
+        },
+        {
+          "file": "docs/explanation/verification-architecture.md",
+          "key": "TEA's reasoning transfers to any stack today",
+          "settles": "read",
+          "reason": "a subjective judgment the page itself states is a judgment call, not derivable from a single artifact"
+        },
+        {
+          "file": "docs/reference/configuration.md",
+          "key": "Outputs currently land directly under",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "OUTPUT_FOLDER_KEYS_UNREAD"
+          },
+          "reason": "a grep of src/workflows/ for each of the three output-folder keys"
+        }
+      ]
+    }
   }
 }

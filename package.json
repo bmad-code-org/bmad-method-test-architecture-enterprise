@@ -100,6 +100,8 @@
     "test:coverage": "c8 npm test",
     "test:criteria-fragments": "node tools/validate-criteria-fragments.js",
     "test:direction": "eval-quality-gates dependency-direction",
+    "test:doc-claim-sources": "node test/test-doc-claim-sources.js",
+    "test:doc-claims": "eval-quality-gates doc-claims",
     "test:doc-count-sources": "node test/test-doc-count-sources.js",
     "test:doc-counts": "eval-quality-gates doc-counts",
     "test:doc-invocation-entry": "node test/test-doc-invocation-entry.js",
