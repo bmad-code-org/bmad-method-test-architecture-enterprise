@@ -24,7 +24,7 @@
   ],
   "id": "clean-gaps-invented-off-template",
   "suite": "nfr",
-  "scorerVersion": 8,
+  "scorerVersion": 9,
   "storedOutput": {
     "origin": "constructed",
     "report": "test-artifacts/nfr-assessment.md"
@@ -42,7 +42,7 @@
     "Statuses: four PASS, all four matching the ground truth, so no status miss and no unsupported PASS. The",
     "ground truth marks no domain of this bundle undecidable.",
     "",
-    "Coverage: four headings, four of them stating a readable status.",
+    "Coverage: four of four. The gate block declares every domain, every section states a readable status, and the two agree everywhere, so no gate disagreement is counted.",
     "",
     "Duplicate sections: none. Every domain this report assesses has exactly one section.",
     "",
@@ -82,6 +82,14 @@
       "total": 4
     },
     "duplicateDomainSections": [],
+    "sectionStatuses": {
+      "performance": "PASS",
+      "security": "PASS",
+      "reliability": "PASS",
+      "maintainability": "PASS"
+    },
+    "gateBlockDeclared": true,
+    "gateDisagreements": [],
     "unsupportedPass": [],
     "citations": {
       "performance": [

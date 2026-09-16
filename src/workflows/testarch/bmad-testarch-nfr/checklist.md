@@ -236,11 +236,15 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 - [ ] Recommended actions section included
 - [ ] Evidence gaps checklist included
 
-### Gate YAML Snippet (if enabled)
+### Gate YAML Snippet
+
+The template ends with this snippet and every audit writes it. It is the machine-readable half of the deliverable, so a consumer reading a domain status never parses the report's prose.
 
 - [ ] YAML snippet generated
 - [ ] Date included
-- [ ] Categories status included (performance, security, reliability, maintainability)
+- [ ] ADR checklist category status included under `categories` (the eight Quality Readiness categories)
+- [ ] Domain status included under `audited_domains` (security, performance, reliability, maintainability), each PASS/CONCERNS/FAIL/N/A
+- [ ] Each `audited_domains` value equals the status of that domain's `## <Domain> Assessment` section
 - [ ] Overall status included (PASS/CONCERNS/FAIL)
 - [ ] Issue counts included (critical, high, medium, concerns)
 - [ ] Blockers flag included (true/false)

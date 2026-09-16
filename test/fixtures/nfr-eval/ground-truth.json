@@ -62,7 +62,7 @@
     "undefinedThresholdIsConcerns": {
       "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/nfr-status-definitions.md",
       "section": "Default Rule for Undefined Thresholds",
-      "lines": "32-37",
+      "lines": "38-43",
       "rule": "A finding whose threshold was marked UNKNOWN in Step 2 must be CONCERNS, never PASS. An absent measurement is not evidence that the target was met.",
       "requiredPhrase": "the finding must be **CONCERNS**, never PASS"
     },
@@ -103,11 +103,11 @@
       "requiredPhrase": "No thresholds were guessed or inferred"
     },
     "domainStatusIsWorstFinding": {
-      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/step-04e-aggregate-nfr.md",
-      "section": "3. Aggregate Compliance Status",
-      "lines": "108-113",
-      "rule": "An aggregate status is FAIL when any contributing status is FAIL, PARTIAL when any is CONCERNS, and PASS otherwise. This corpus reads a domain's status as that same rollup over the findings inside the domain's section.",
-      "requiredPhrase": "hasFail ? 'FAIL' : hasPartial ? 'PARTIAL' : 'PASS'"
+      "file": "src/workflows/testarch/bmad-testarch-nfr/steps-c/nfr-status-definitions.md",
+      "section": "Domain Status",
+      "lines": "32-34",
+      "rule": "A domain's status is the worst status among its findings: FAIL when any finding is FAIL, CONCERNS when any is CONCERNS and none is FAIL, PASS otherwise, and N/A only when every finding is N/A. The gate artifact's audited_domains block and the domain's assessment section both carry that one value.",
+      "requiredPhrase": "the worst status among its findings: **FAIL** when any finding is FAIL, **CONCERNS** when any finding is CONCERNS and none is FAIL, **PASS** otherwise"
     },
     "releaseBlockerOnFail": {
       "file": "src/workflows/testarch/bmad-testarch-nfr/checklist.md",
@@ -151,6 +151,11 @@
       "id": "no-finding-against-a-clean-bundle",
       "what": "A run must report no gap, no CONCERNS, and no FAIL against a bundle whose every threshold is stated and met.",
       "howToExercise": "The clean bundle's four domains are all PASS. A domain below PASS, a listed evidence gap, or a threshold recorded as UNKNOWN counts as a clean false positive."
+    },
+    {
+      "id": "gate-artifact-agrees-with-its-own-report",
+      "what": "The gate artifact's audited_domains block and the domain's assessment section carry one judgment written twice, one for a machine and one for a person. A run whose two halves disagree about a domain has published two answers, and which one a reader acts on decides a release.",
+      "howToExercise": "Every domain a report both declares in its gate block and assesses in a section is compared across the two. A domain answered differently in the two places is counted, and the ceiling is zero."
     },
     {
       "id": "evidence-bundle-is-read-only",

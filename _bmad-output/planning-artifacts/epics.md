@@ -57,7 +57,9 @@ Last reconciled with GitHub on 2026-09-15 across `bmad-method-test-architecture-
 | Epic 4 | 1 / 8 | 0 | 7 | In progress |
 | Epic 5 | 0 / 5 | 0 | 5 | Queued |
 | Epic 6 | 3 / 12 | 0 | 9 | In progress |
-| **Total** | **17 / 43** | **1** | **25** | **40% merged** |
+| Epic 7 | 0 / 1 | 1 | 0 | In progress |
+| Epic 8 | 0 / 1 | 0 | 1 | Queued |
+| **Total** | **18 / 45** | **2** | **25** | **40% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -119,6 +121,14 @@ Last reconciled with GitHub on 2026-09-15 across `bmad-method-test-architecture-
 - [ ] [Story 6.10: Build the multi-turn transcript harness](#story-610-build-the-multi-turn-transcript-harness)
 - [ ] [Story 6.11: Prove `bmad-teach-me-testing` teaches rather than asserts](#story-611-prove-bmad-teach-me-testing-teaches-rather-than-asserts)
 - [ ] [Story 6.12: Empty the deferred array](#story-612-empty-the-deferred-array)
+
+### Epic 7 progress: The output contracts the behavioral suites exposed
+
+- [ ] [Story 7.1: The NFR gate artifact carries the four domain statuses](#story-71-the-nfr-gate-artifact-carries-the-four-domain-statuses). **Active:** open in [#179](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/179)
+
+### Epic 8 progress: What the suites proved they do not measure
+
+- [ ] [Story 8.1: The nfr suite scores whether evidence supports the status, not only whether it exists](#story-81-the-nfr-suite-scores-whether-evidence-supports-the-status-not-only-whether-it-exists)
 
 Supporting work merged during this sequence: [TEA #172](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/172) holds the `npm test` chain against missing script definitions. [eval-quality #131](https://github.com/bmad-code-org/bmad-eval-quality/pull/131) keeps the pending-release note current while upstream work continues. These strengthen delivery and close no story by themselves.
 
@@ -1471,6 +1481,14 @@ So that reading a domain status does not mean parsing the report's prose.
 **Given** the change is otherwise complete
 **When** `npm test` and every `quality.yaml` job run
 **Then** all pass
+
+**Recorded answer, Story 7.1's fifth Given: does `e2e-trace-summary.json` owe the same block? Yes.**
+
+The trace summary declares itself the artifact a pipeline consumes "without parsing markdown" (`steps-c/step-05-gate-decision.md`), and it publishes only the aggregates it derives from the per-criterion statuses: `coverage.inventory`, `priority_breakdown`, `by_level.criteria_covered`. A criterion id reaches the summary only on the negative side, in `blockers`, `rejected_evidence`, `recommendations[].requirements` and `live_evidence.requirements_live_only`, so the judgment the workflow makes is carried nowhere. `test/eval-trace.js` pays for that with a heading-and-backtick parser over `traceability-matrix.md` whose failure mode is an unmeasurable exit 2 rather than a low score, which is the cost this story removed for NFR.
+
+Two things differ from the NFR case and neither reverses the answer. The trace classification rule is already stated in `steps-c/step-03-map-criteria.md` and in `checklist.md`, so there is no ground-truth analogy to resolve there. And no consumer outside TEA's own harness reads the file today, which weakens the compatibility argument and not the contract one.
+
+It is a separate deliverable from this story's and is not in this story's diff. It needs its own story, which this epic does not yet carry.
 
 ## Epic 8: What the suites proved they do not measure
 

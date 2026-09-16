@@ -293,6 +293,7 @@ clamped to 0-100. The bonus has exactly six categories, each worth `0` or `5` wi
 
 - `{test_artifacts}/nfr-assessment.md`
 - Category assessments (PASS/CONCERNS/FAIL)
+- A Gate YAML snippet whose `audited_domains` block declares one status per domain (PASS, CONCERNS, FAIL or N/A), so reading a domain status does not mean parsing the report's prose
 - Mitigation plans
 - Gate decision inputs
 

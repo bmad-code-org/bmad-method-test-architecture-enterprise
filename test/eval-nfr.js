@@ -40,6 +40,8 @@
  *                        recorded any threshold as UNKNOWN at all
  *   overall status       the Gate YAML's own overall_status, one bit per run
  *   domain coverage      a stated status for each of the four domains Step 4 dispatches
+ *   gate disagreements   a domain the gate artifact and the assessment section answer
+ *                        differently, ceiling zero
  *   duplicate sections   a second, contradictory section for one domain
  *   fabricated evidence  a citation naming a file the bundle does not contain
  *   clean false positives anything reported against the bundle that has no gaps
@@ -48,15 +50,30 @@
  *
  * WHERE A DOMAIN STATUS COMES FROM
  *
- * The workflow's Gate YAML snippet carries `overall_status` and the eight ADR
- * checklist categories. It carries no per-domain block for the four domains Step
- * 4 actually evaluates, so a domain's status is read from its
- * `## <Domain> Assessment` section in `nfr-assessment.md`: the worst status the
- * section records, which is the rollup step-04e already performs over a domain's
- * findings (`skillRuleCitations.domainStatusIsWorstFinding`). This is the same
- * split test/eval-trace.js records. Inventing a JSON artifact for this harness's
- * convenience would score a contract the workflow does not declare, so the gap
- * is recorded rather than papered over.
+ * The workflow's Gate YAML snippet declares `audited_domains`, one status per
+ * domain, and that block is what this harness scores. Until Story 7.1 the snippet
+ * carried `overall_status` and the eight ADR checklist categories and nothing for
+ * the four domains Step 4 evaluates, so the status was read out of the
+ * `## <Domain> Assessment` prose instead, which scored the template's rendering of
+ * the judgment where the artifact should have carried the judgment itself.
+ *
+ * The prose is still read, for one purpose: the two are one judgment written
+ * twice, and `maxGateDisagreements` is zero. A run whose gate artifact contradicts
+ * its own assessment section has published two answers to one question, and which
+ * of them a reader acts on decides a release. That is a defect in the deliverable
+ * rather than a disagreement about a judgment, which is why it is a ceiling and
+ * not an accuracy.
+ *
+ * The rule that produces each value is `skillRuleCitations.domainStatusIsWorstFinding`,
+ * stated in nfr-status-definitions.md under "Domain Status": the worst status among
+ * the domain's findings, with N/A deciding nothing. Before this story the corpus
+ * reached that rule by analogy from step-04e's compliance rollup, because the
+ * workflow stated no rule for a domain's own status.
+ *
+ * test/eval-trace.js still records the same split for its own deliverable, reading
+ * per-criterion statuses out of `traceability-matrix.md` because
+ * `e2e-trace-summary.json` carries no per-criterion block. That gap is recorded in
+ * Epic 7 and is a separate deliverable from this one.
  *
  * THE GROUND TRUTH IS NEVER IN THE AGENT'S CONTEXT
  *
@@ -242,6 +259,7 @@ const NEGATIVE_CONTROL_ENFORCEMENT = {
   'no-threshold-invention': 'thresholdFidelityAccuracy',
   'no-evidence-invention': 'maxFabricatedEvidence',
   'no-finding-against-a-clean-bundle': 'maxCleanFalsePositives',
+  'gate-artifact-agrees-with-its-own-report': 'maxGateDisagreements',
   'evidence-bundle-is-read-only': 'maxFixtureMutations',
 };
 
@@ -318,11 +336,15 @@ const THRESHOLDS = {
   // of the four domain statuses once those are right. Anything below 1 means the
   // run published a headline its own sections do not support.
   overallStatusAccuracy: 1,
-  // A stated status for each of the four domains Step 4 dispatches a worker for.
-  // A report missing a section has left a dispatched domain unreported, and no
-  // reading of the workflow admits three; a heading carrying no status the four-
-  // value enum recognises leaves it just as unreported, which is why the count is
-  // over stated statuses rather than over headings.
+  // A status declared in the gate artifact and assessed in the document, for each
+  // of the four domains Step 4 dispatches a worker for. Both halves, because each
+  // alone is half a deliverable: a gate line with no assessment behind it is an
+  // answer nobody can check, and an assessment the gate never publishes is the gap
+  // Story 7.1 closed. A report missing a section has left a dispatched domain
+  // unreported and no reading of the workflow admits three; a heading carrying no
+  // status the four-value enum recognises leaves it just as unreported, and so does
+  // a gate value outside that enum, which is why the count is over declared and
+  // assessed statuses rather than over headings.
   domainCoverage: 1,
   // A PASS on a domain the corpus marks undecidable. This is the headline, and
   // the ceiling is zero because the workflow's own text forbids the judgment
@@ -341,6 +363,13 @@ const THRESHOLDS = {
   // judgment. step-05-generate-report.md names a duplicated section as a thing to
   // consolidate, so the bar is 0 and there is nothing to admit.
   maxDuplicateDomainSections: 0,
+  // A domain the gate artifact and the assessment section answer differently.
+  // nfr-status-definitions.md states the two as one judgment written twice, one
+  // for a machine and one for a person, so a report carrying both answers has
+  // published a contradiction rather than made a judgment this suite could grade.
+  // The ceiling is zero for the same reason the duplicate-section ceiling is: it is
+  // a defect in the deliverable, and no reading of the workflow admits one.
+  maxGateDisagreements: 0,
   // Identical input must produce the identical scored answer. An audit whose
   // verdict moves on re-run is not an audit.
   //
@@ -1092,7 +1121,8 @@ function buildPrompt(set, { customCategories = [] } = {}) {
     '  `**Status:**`, its `**Threshold:**`, its `**Actual:**`, and its `**Evidence:**`;',
     `- an evidence citation that names the file it rests on, by a path under \`${root}/\`;`,
     '- the `## Evidence Gaps` section the template declares; and',
-    '- the Gate YAML snippet the template ends with, carrying `overall_status`.',
+    '- the Gate YAML snippet the template ends with, carrying `overall_status` and the',
+    '  `audited_domains` block, one status per domain.',
     '',
     `Do not add, edit, or delete any file under \`${root}/docs/\`, \`${root}/evidence/\`, or`,
     `\`${root}/config/\`. This workflow audits evidence and generates none.`,
@@ -1174,6 +1204,69 @@ const OVERALL_STATUS = /overall_status:[ \t]+['"]?(PASS|CONCERNS|FAIL|WAIVED|N\/
 /** The heading `nfr-report-template.md` gives the gate snippet, which is where the run's own scalar lives. */
 const GATE_SECTION_HEADING = /^(#{2,6})\s+Gate YAML Snippet\s*$/i;
 
+/**
+ * The gate block that carries the four domain statuses, and the lines under it.
+ *
+ * The key is `audited_domains` because that is the spelling
+ * `resources/nfr-assessment.example.md` has always published; Story 7.1 added it
+ * to `nfr-report-template.md`, which had only the eight ADR rows under
+ * `categories`. Reading `categories` for a domain would read the wrong block:
+ * `security` is a key in both, and it answers a different question in each.
+ *
+ * A value outside the four-value enum is not recorded, which leaves the domain
+ * undeclared rather than declared wrong. That is the same reading `rollupStatus`
+ * gives a section spelling its status `PARTIAL`, and it is what keeps a run from
+ * clearing `domainCoverage` with a word no gate consumer can act on.
+ */
+const DOMAIN_BLOCK_KEY = 'audited_domains';
+const AUDITED_DOMAINS_KEY = new RegExp(String.raw`^(\s*)${DOMAIN_BLOCK_KEY}:\s*(?:#.*)?$`);
+const AUDITED_DOMAIN_LINE =
+  /^(\s*)(performance|security|reliability|maintainability):[ \t]+['"]?(PASS|CONCERNS|FAIL|N\/A)['"]?\s*(?:#.*)?$/i;
+
+/**
+ * The four domain statuses the gate block declares, read from the lines of the
+ * run's own gate section.
+ *
+ * The block ends where the indentation returns to the key's own level, so a key
+ * the block does not declare is absent rather than defaulted, and a line the enum
+ * does not recognise is skipped rather than ending the block: the four domains are
+ * written in one order and a bad value in the middle must not hide the ones after
+ * it.
+ *
+ * @param {string[]} lines The raw lines of the gate section, fences included.
+ * @returns {{declared: Map<string, string>, contradictions: string[]}}
+ */
+function gateDomainsIn(lines) {
+  const start = lines.findIndex((line) => AUDITED_DOMAINS_KEY.test(line));
+  if (start === -1) return { declared: new Map(), contradictions: [] };
+  const indent = AUDITED_DOMAINS_KEY.exec(lines[start])[1].length;
+  const declared = new Map();
+  const contradictions = [];
+  for (let cursor = start + 1; cursor < lines.length; cursor += 1) {
+    const line = lines[cursor];
+    // A blank line and a comment line end nothing. Both are YAML a run writing the
+    // snippet produces, and ending the block on either would read four declared
+    // statuses as none, which reports a parse limit as an unreported domain.
+    if (line.trim().length === 0 || line.trim().startsWith('#')) continue;
+    if (/^(\s*)/.exec(line)[1].length <= indent) break;
+    const entry = AUDITED_DOMAIN_LINE.exec(line);
+    if (!entry) continue;
+    const domain = entry[2].toLowerCase();
+    const status = entry[3].toUpperCase();
+    // The first line wins, the same way the first section for a domain does: a
+    // block stating one domain twice has stated its answer twice, and the block
+    // leads with the one a reader reads first. Every repeat is a contradiction,
+    // the same domain answered more than once, whether or not the two lines
+    // agree: `duplicateDomainSections` counts a second section this way
+    // regardless of its status, and the gate block is held to the same rule
+    // rather than a looser one that only fires when the two answers differ.
+    if (!declared.has(domain)) declared.set(domain, status);
+    else if (declared.get(domain) === status) contradictions.push(`${domain}: gate declares ${status} twice`);
+    else contradictions.push(`${domain}: gate declares ${declared.get(domain)} and ${status}`);
+  }
+  return { declared, contradictions };
+}
+
 /** A markdown fragment reduced to the plain lowercase text a threshold token is compared against. */
 function normalizeThreshold(text) {
   return String(text).replaceAll(/[`*_]/g, '').replaceAll(/\s+/g, ' ').trim().toLowerCase();
@@ -1210,16 +1303,20 @@ function citationsIn(line) {
 }
 
 /**
- * The four domain sections, the overall status, and the evidence gaps, read out
- * of the report the run wrote.
+ * The four domain sections, the gate block's four domain statuses, the overall
+ * status, and the evidence gaps, read out of the report the run wrote.
  *
  * Returns null when the document declares no section for any of the four domains,
  * which is a report this harness cannot measure rather than a run that got every
  * domain wrong. runCase reports that as an environment failure, the same way
- * test/eval-trace.js does for a matrix with no criterion section.
+ * test/eval-trace.js does for a matrix with no criterion section. The gate block
+ * does not rescue such a report and is not meant to: four statuses with no
+ * assessment behind them are an answer with no audit under it, and
+ * test/replay/nfr/gapped-report-without-sections is the stored case that holds
+ * this line.
  *
  * @param {string} text The report, as the probe observation's `report` artifact carries it.
- * @returns {{domains: Map<string, object>, duplicateDomainSections: string[], overallStatus: string|null, evidenceGaps: string[], unknownThresholdDeclared: boolean}|null}
+ * @returns {{domains: Map<string, object>, gateDomains: Map<string, string>, gateSelfContradictions: string[], gateBlockDeclared: boolean, duplicateDomainSections: string[], overallStatus: string|null, evidenceGaps: string[], unknownThresholdDeclared: boolean}|null}
  */
 function parseReport(text) {
   const document = String(text);
@@ -1319,25 +1416,26 @@ function parseReport(text) {
     // `SCORER_VERSION` did not need a bump.
     //
     // That sentence stopped describing the corpus inside the same pull request
-    // that wrote it. Two more cases landed after the measurement and the corpus
-    // is fifteen, so it is re-measured here rather than left at thirteen.
-    // Re-measured over all fifteen stored reports: exactly one domain-section
-    // line carries a file-shaped token outside `**Evidence:**` and
-    // `**Threshold:**`, and it is the one this widening exists for.
-    // `gapped-fabricated-evidence-on-a-source-label` carries
+    // that wrote it, and stopped again in the pull request after: two more cases
+    // landed, then five more landed after that for the gate-artifact reading,
+    // and the corpus is twenty. Re-measured over all twenty stored reports:
+    // exactly one domain-section line carries a file-shaped token outside
+    // `**Evidence:**` and `**Threshold:**`, and it is the one this widening
+    // exists for. `gapped-fabricated-evidence-on-a-source-label` carries
     // `- **Source:** reports/jscpd/jscpd-report.json` in its maintainability
     // section, and that case's stored result counts it as a fabricated citation,
     // so a label-scoped reading would score it zero and the case would prove
-    // nothing. `gapped-report-without-sections` declares no domain section at
-    // all, so fourteen of the fifteen contribute any domain-section line to the
+    // nothing. `gapped-report-without-sections` and
+    // `gapped-gate-without-assessment-sections` declare no domain section at
+    // all, so eighteen of the twenty contribute any domain-section line to the
     // measurement.
     //
     // The reading itself is held by that case rather than by this paragraph:
     // narrowing this push back to lines carrying an `**Evidence:**` label and
     // running `npm run test:eval-replay` fails
     // `nfr/gapped-fabricated-evidence-on-a-source-label` and nothing else, 1 of
-    // the 15 nfr cases. The count in the paragraph above was the part nothing
-    // held, which is how it shipped stale.
+    // the 20 nfr cases. The count in the paragraph above was the part nothing
+    // held, which is how it shipped stale twice.
     //
     // What this does inherit is `citationsIn`'s prose reading, so a domain
     // section whose prose says `Node.js` now offers a `.js` token where before
@@ -1385,9 +1483,34 @@ function parseReport(text) {
       }
     }
   }
-  const overall = gateStart === -1 ? null : OVERALL_STATUS.exec(raw.slice(gateStart, gateEnd).join('\n'));
+  // The same slice for both readings the gate carries. The domain block is
+  // separated from a quoted example's by the heading exactly as the scalar is,
+  // and test/replay/nfr/gapped-example-quoted-in-fence is the case that proves it
+  // has to be: the example it quotes carries its own `audited_domains` map whose
+  // four values contradict the run's own.
+  const gateLines = gateStart === -1 ? [] : raw.slice(gateStart, gateEnd);
+  const gateBlock = gateDomainsIn(gateLines);
+  const overall = gateStart === -1 ? null : OVERALL_STATUS.exec(gateLines.join('\n'));
   return {
     domains,
+    gateDomains: gateBlock.declared,
+    // A domain the block itself answers twice, differently. Recorded beside the
+    // statuses because the count it feeds is about the artifact carrying two
+    // answers, whichever pair of places they are written in.
+    gateSelfContradictions: gateBlock.contradictions,
+    // The key appearing anywhere in the document, which is the weakest reading of
+    // the block and the only one the contract's own vocabulary can state: an oracle
+    // reads the report as one string, so it can say the key is present and cannot
+    // say it is present in the run's own gate section rather than inside a quoted
+    // example. It is recorded at exactly that strength so the oracle and its scorer
+    // make one claim rather than two similar ones, the way `coverage.sections` is
+    // recorded beside the stricter `coverage.present`.
+    //
+    // `gateDomains` above is the strict reading and is what every measurement uses.
+    // test/replay/nfr/gapped-block-only-in-the-quoted-example is the case where the
+    // two separate: the key is in the document, no domain is declared by the run,
+    // and the report scores zero coverage.
+    gateBlockDeclared: document.includes(`${DOMAIN_BLOCK_KEY}:`),
     duplicateDomainSections,
     overallStatus: overall ? overall[1].toUpperCase() : null,
     evidenceGaps,
@@ -1499,31 +1622,62 @@ function scoreRun(set, report) {
   const domainResults = DOMAINS.map((name) => {
     const declared = set.domains[name];
     const reported = report.domains.get(name) ?? null;
+    // The gate artifact is the answer scored. The section is read beside it, and
+    // the two are held to agreeing below.
+    const gate = report.gateDomains.get(name) ?? null;
     return {
       domain: name,
-      // A domain is covered when the report states a status for it. A heading with
-      // no line STATUS_LINE recognises leaves the domain unjudged just as surely as
-      // no heading does, and a section whose every status is spelled outside the
-      // four-value enum reaches this the same way, because rollupStatus drops an
-      // unrecognised token. Such a section is also a miss under
+      // A domain is covered when the gate artifact declares a status for it and
+      // the document assesses it. Both halves are the deliverable: four gate lines
+      // with no assessment behind them are an answer nobody can check, and an
+      // assessment the gate never publishes is the gap this story closed. A
+      // heading with no line STATUS_LINE recognises leaves the domain unassessed
+      // just as surely as no heading does, and a gate value outside the four-value
+      // enum leaves it undeclared the same way, because gateDomainsIn drops an
+      // unrecognised token. Such a report is also a miss under
       // domainStatusAccuracy, on `ok` below. The two are not one defect counted
       // twice: coverage is about the deliverable being complete and the accuracy is
       // about the judgment being right, and `sections` below records the heading
       // count so a reader can tell a missing section from an unreadable one.
-      present: reported?.status != null,
+      present: gate != null && reported?.status != null,
       expected: declared.expectedStatus,
-      reported: reported?.status ?? null,
+      reported: gate,
+      // The section's own rollup, carried so a reader of a failing run can see
+      // which half of the deliverable moved.
+      sectionStatus: reported?.status ?? null,
       undecidable: declared.isUndecidable === true,
-      ok: reported?.status === declared.expectedStatus,
+      ok: gate === declared.expectedStatus,
       threshold: scoreThreshold(declared, reported),
     };
   });
+
+  // A domain the two halves answer differently. Only a domain both of them answer
+  // can contradict: a gate line with no readable section, or a section the gate
+  // never publishes, is an incomplete deliverable and is counted by
+  // domainCoverage, not here. Inventing a contradiction out of a missing half
+  // would put two names on one defect and make a ceiling of zero unreachable for a
+  // report that is merely short.
+  const gateDisagreements = [
+    ...domainResults
+      .filter((item) => item.reported != null && item.sectionStatus != null && item.reported !== item.sectionStatus)
+      .map((item) => `${item.domain}: gate ${item.reported}, section ${item.sectionStatus}`),
+    ...report.gateSelfContradictions,
+  ];
 
   // A PASS on a domain whose status the workflow's own rules say cannot be
   // reached from this bundle. This is the measurement the suite exists for, and
   // it is counted apart from the status accuracy so that one wrong judgment of
   // eight cannot absorb it.
-  const unsupportedPass = domainResults.filter((item) => item.undecidable && item.reported === 'PASS').map((item) => item.domain);
+  // A PASS published in either half. The gate is the answer this suite scores, and
+  // the section is the answer a person reads, so a run that passes an undecidable
+  // domain in its prose has published the judgment the workflow's own rules forbid
+  // whatever its gate line says. Counting the gate alone would let the headline
+  // ceiling of the suite be cleared by writing CONCERNS in one line and PASS in
+  // twelve, and the disagreement that pairing also produces is a different defect
+  // counted separately.
+  const unsupportedPass = domainResults
+    .filter((item) => item.undecidable && (item.reported === 'PASS' || item.sectionStatus === 'PASS'))
+    .map((item) => item.domain);
 
   const fabricated = [];
   for (const [name, entry] of report.domains) {
@@ -1546,7 +1700,10 @@ function scoreRun(set, report) {
   const isCleanSet = expectedDomainStatuses(set).every((status) => status === 'PASS');
   let cleanFalsePositives = 0;
   if (isCleanSet) {
-    cleanFalsePositives += domainResults.filter((item) => item.reported !== 'PASS').length;
+    // A domain the gate never answered is not a finding against the bundle. It is an
+    // incomplete deliverable, which domainCoverage already reports; counting it here
+    // would fail the run on the invented-finding ceiling and name the wrong defect.
+    cleanFalsePositives += domainResults.filter((item) => item.reported != null && item.reported !== 'PASS').length;
     cleanFalsePositives += report.evidenceGaps.length;
     cleanFalsePositives += report.unknownThresholdDeclared ? 1 : 0;
   }
@@ -1571,10 +1728,12 @@ function scoreRun(set, report) {
       sections: DOMAINS.filter((name) => report.domains.has(name)).length,
       total: DOMAINS.length,
     },
+    gateBlockDeclared: report.gateBlockDeclared,
     // A domain the report assessed twice. The status above is the first section's,
     // which is what the report leads with, and the second section is counted here
     // so a run that contradicts itself fails the suite on the contradiction.
     duplicateDomainSections: report.duplicateDomainSections,
+    gateDisagreements,
     unsupportedPass,
     fabricated,
     evidenceGaps: report.evidenceGaps,
@@ -1602,7 +1761,12 @@ function scoreRun(set, report) {
 function signatureOf(scored, mutations) {
   return JSON.stringify([
     scored.caseId,
-    scored.domainResults.map((item) => `${item.domain}=${item.reported}/${item.present}/${item.threshold.actual}`),
+    // Both halves of each domain's answer. `reported` is the gate's and is what the
+    // suite scores; `sectionStatus` is the document's and is scored through
+    // gateDisagreements and unsupportedPass, so a signature carrying only the gate
+    // would let two runs whose prose disagrees sign identically wherever the gate
+    // half is absent, and maxUnstableCases would be a claim about the gate alone.
+    scored.domainResults.map((item) => `${item.domain}=${item.reported}/${item.sectionStatus}/${item.present}/${item.threshold.actual}`),
     // The evidence each domain cited, and not only the citations that resolve to
     // nothing. Two runs that reach the same four statuses off different files
     // have not given the same answer, and a signature built from the statuses
@@ -1613,7 +1777,9 @@ function signatureOf(scored, mutations) {
     scored.citations,
     scored.coverage.present,
     scored.coverage.sections,
+    scored.gateBlockDeclared,
     scored.duplicateDomainSections,
+    scored.gateDisagreements,
     scored.unsupportedPass,
     scored.fabricated,
     scored.evidenceGaps,
@@ -1953,6 +2119,7 @@ async function main() {
       coverageTotal: 0,
       coverageHits: 0,
       duplicateDomainSections: 0,
+      gateDisagreements: 0,
       unsupportedPass: 0,
       fabricated: 0,
       cleanFalsePositives: 0,
@@ -1998,6 +2165,7 @@ async function main() {
         totals.coverageTotal += scored.coverage.total;
         totals.coverageHits += scored.coverage.present;
         totals.duplicateDomainSections += scored.duplicateDomainSections.length;
+        totals.gateDisagreements += scored.gateDisagreements.length;
         totals.unsupportedPass += scored.unsupportedPass.length;
         totals.fabricated += scored.fabricated.length;
         totals.cleanFalsePositives += scored.cleanFalsePositives;
@@ -2020,6 +2188,7 @@ async function main() {
         );
       }
       for (const domain of first.duplicateDomainSections) console.log(`        ${colors.red}second section for:${colors.reset} ${domain}`);
+      for (const entry of first.gateDisagreements) console.log(`        ${colors.red}gate contradicts section:${colors.reset} ${entry}`);
       for (const domain of first.unsupportedPass) console.log(`        ${colors.red}unsupported PASS:${colors.reset} ${domain}`);
       for (const entry of first.fabricated) console.log(`        ${colors.red}fabricated evidence:${colors.reset} ${entry}`);
       if (!complete) incompleteCases += 1;
@@ -2033,6 +2202,7 @@ async function main() {
       overallStatusAccuracy: measured(ratio(totals.overallHits, totals.overallTotal)),
       domainCoverage: measured(ratio(totals.coverageHits, totals.coverageTotal)),
       duplicateDomainSections: totals.duplicateDomainSections,
+      gateDisagreements: totals.gateDisagreements,
       unsupportedPass: totals.unsupportedPass,
       fabricatedEvidence: totals.fabricated,
       cleanFalsePositives: totals.cleanFalsePositives,
@@ -2055,6 +2225,7 @@ async function main() {
     console.log(
       `  duplicate sections  ${String(totals.duplicateDomainSections).padStart(4)}   (max ${THRESHOLDS.maxDuplicateDomainSections})`,
     );
+    console.log(`  gate disagreements  ${String(totals.gateDisagreements).padStart(4)}   (max ${THRESHOLDS.maxGateDisagreements})`);
     console.log(`  unsupported PASS    ${String(totals.unsupportedPass).padStart(4)}   (max ${THRESHOLDS.maxUnsupportedPass})`);
     console.log(`  fabricated evidence ${String(totals.fabricated).padStart(4)}   (max ${THRESHOLDS.maxFabricatedEvidence})`);
     console.log(`  clean false pos.    ${String(totals.cleanFalsePositives).padStart(4)}   (max ${THRESHOLDS.maxCleanFalsePositives})`);
@@ -2077,6 +2248,9 @@ async function main() {
     }
     if (totals.duplicateDomainSections > THRESHOLDS.maxDuplicateDomainSections) {
       failures.push(`${totals.duplicateDomainSections} duplicate domain section(s)`);
+    }
+    if (totals.gateDisagreements > THRESHOLDS.maxGateDisagreements) {
+      failures.push(`${totals.gateDisagreements} domain(s) where the gate artifact and the assessment section disagree`);
     }
     if (totals.unsupportedPass > THRESHOLDS.maxUnsupportedPass) failures.push(`${totals.unsupportedPass} unsupported PASS result(s)`);
     if (totals.fabricated > THRESHOLDS.maxFabricatedEvidence) failures.push(`${totals.fabricated} fabricated evidence citation(s)`);
@@ -2152,6 +2326,7 @@ module.exports = {
   scoreRun,
   signatureOf,
   DOMAINS,
+  DOMAIN_BLOCK_KEY,
   RUNNER_CAPABILITIES,
   THRESHOLDS,
   SUITE_ID,

@@ -206,6 +206,11 @@ nfr_assessment:
   date: '2026-09-03'
   feature_name: 'Atlas Notification Relay'
   adr_checklist_score: '29/29'
+  audited_domains:
+    security: 'PASS'
+    performance: 'PASS'
+    reliability: 'PASS'
+    maintainability: 'PASS'
   overall_status: 'PASS'
   critical_issues: 0
   high_priority_issues: 0

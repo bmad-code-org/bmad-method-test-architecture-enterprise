@@ -1,0 +1,115 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the half of the coverage rule the other cases do not reach. The gate",
+    "block declares all four domains and the document assesses three, so the fourth is declared and never audited.",
+    "Coverage counts a domain only when both halves carry it, and this is the case that holds that second half:",
+    "reading the gate alone would score this report 4 of 4.",
+    "",
+    "It is also the case that shows what the disagreement count deliberately does not do. Maintainability is",
+    "answered in one place and not the other, which is an incomplete deliverable rather than a contradiction, so",
+    "gateDisagreements stays empty and coverage is what reports it.",
+    "",
+    "It is gapped-correct-audit with the `## Maintainability Assessment` section deleted and its gate line kept.",
+    "",
+    "The report is CONSTRUCTED, following nfr-report-template.md's section order and its Gate YAML snippet."
+  ],
+  "id": "gapped-gate-declares-an-unassessed-domain",
+  "suite": "nfr",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "Gate block: security PASS, performance CONCERNS, reliability FAIL, maintainability CONCERNS.",
+    "Sections: security PASS, performance CONCERNS, reliability FAIL, and no maintainability section at all.",
+    "",
+    "Maintainability is declared and unassessed, so it is not present: coverage 3 of 4 against 3 headings. Its",
+    "status is still the gate's CONCERNS, which matches the corpus, so there is no status miss.",
+    "",
+    "Gate disagreements: none. Only a domain both halves answer can contradict.",
+    "",
+    "The maintainability citations and the Test Coverage evidence gap went with the deleted section, so the",
+    "citation map carries three domains and the gaps list is empty. Overall, thresholds elsewhere, and the",
+    "unknown-threshold bit are gapped-correct-audit's unchanged."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 3,
+      "sections": 3,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "sectionStatuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": null
+    },
+    "gateBlockDeclared": true,
+    "gateDisagreements": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ]
+    },
+    "fabricated": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 3,
+      "failed": [
+        {
+          "field": "threshold is stated",
+          "expected": true,
+          "actual": false
+        }
+      ]
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}
