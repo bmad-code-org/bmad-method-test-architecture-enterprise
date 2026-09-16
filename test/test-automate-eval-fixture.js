@@ -66,9 +66,9 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
-const Module = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const AjvModule = require('ajv/dist/2020');
 
@@ -160,16 +160,21 @@ function referenceDigest(relativePath) {
 /**
  * Loads `vouchers.js` fresh out of `scratchDir` without `require()`, whose
  * argument this repository's `dependency-direction` gate requires to be a
- * string literal. `scratchFile` is a path built at runtime, so it is compiled
- * directly through `Module`, which also means every call reads the file's
- * current bytes with nothing to invalidate.
+ * string literal: `scratchFile` is a path built at runtime, one the mutation
+ * cycle rewrites and reloads three times. `vm.compileFunction` wraps the
+ * source exactly the way `require()` does (`exports`, `require`, `module`,
+ * `__filename`, `__dirname`) using a public, documented Node API, so this is
+ * an evaluation of generated source, stated as one, with no module cache to
+ * invalidate and no private internals involved.
  */
 function requireFreshVouchers(scratchDir) {
   const scratchFile = path.join(scratchDir, 'vouchers.js');
-  const freshModule = new Module(scratchFile, module);
-  freshModule.filename = scratchFile;
-  freshModule.paths = Module._nodeModulePaths(scratchDir);
-  freshModule._compile(fs.readFileSync(scratchFile, 'utf8'), scratchFile);
+  const source = fs.readFileSync(scratchFile, 'utf8');
+  const wrapper = vm.compileFunction(source, ['exports', 'require', 'module', '__filename', '__dirname'], {
+    filename: scratchFile,
+  });
+  const freshModule = { exports: {} };
+  wrapper(freshModule.exports, require, freshModule, scratchFile, scratchDir);
   return freshModule.exports;
 }
 
