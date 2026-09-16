@@ -108,6 +108,23 @@ exports.TOTAL_CALLS_THREE_RUNNERS = exports.TOTAL_CALLS * 3;
 exports.FRAGMENT_SELECTION_CASES = caseCountOf('fragment-selection');
 
 /**
+ * How many suites the manifest declares in total, and how many of those get a
+ * real agent-preflight check (an executable on `PATH`, `--version`, a
+ * credential) rather than the corpus-and-tooling check `automate` gets,
+ * because it invokes no agent at all (README.md's preflight-output sentence).
+ * The split is read off `runnerCapabilities` rather than the suite's name, so
+ * a future suite in `automate`'s own shape is counted the same way without an
+ * edit here: `["command-execution"]` alone is what a suite with no agent to
+ * confine declares, since every agent-invoking suite needs a wider capability
+ * (`read-only` at least) for its runner.
+ */
+exports.TOTAL_SUITE_COUNT = manifest.suites.length;
+exports.NO_AGENT_SUITE_COUNT = manifest.suites.filter(
+  (suite) => JSON.stringify([...suite.runnerCapabilities].sort()) === JSON.stringify(['command-execution']),
+).length;
+exports.AGENT_PREFLIGHTED_SUITE_COUNT = exports.TOTAL_SUITE_COUNT - exports.NO_AGENT_SUITE_COUNT;
+
+/**
  * The npm test chain length, reusing the exact function `test:ci-coverage`
  * prints so the README sentence and the printed count can never state two
  * different numbers.

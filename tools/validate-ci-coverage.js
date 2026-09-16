@@ -102,6 +102,8 @@ const DELIBERATELY_LOCAL = {
   'eval:all':
     'a live agent eval; costs real credentials and API spend per run, kept out of CI by the eval-quality/deterministic-gate split (see README.md)',
   'eval:atdd': 'a live agent eval; same reason as eval:all',
+  'eval:automate':
+    'no live agent and no vendor cost, unlike its siblings above; test:eval-automate-data already runs this exact deterministic check in CI, so running it again here under a second name would be redundant rather than a coverage gap',
   'eval:ci': 'a live agent eval; same reason as eval:all',
   'eval:contract-strength': 'a live agent eval; same reason as eval:all',
   'eval:fragment-selection': 'a live agent eval; same reason as eval:all',

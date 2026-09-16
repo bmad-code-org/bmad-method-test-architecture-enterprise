@@ -70,9 +70,16 @@ function generateResultSchema() {
  * this to a closed, nine-entry set, and a literal keeps the load inside the
  * dependency-direction gate's declared edges rather than escaping its notice
  * as a specifier the gate could not read.
+ *
+ * `test/eval-automate.js` invokes no agent at all (see its own header for why),
+ * so it has no generation runner of its own to probe. `checkPreflightProbesRunner`
+ * below still spawns it with `--agent custom --agent-cmd <path>` the same way it
+ * spawns every other suite, and that harness's `--preflight-only` mode answers
+ * the probe purely so this check keeps working the same way for every suite.
  */
 const HARNESS_LOADERS = {
   'test/eval-atdd.js': () => require('../test/eval-atdd.js'),
+  'test/eval-automate.js': () => require('../test/eval-automate.js'),
   'test/eval-bmad-tea-routing.js': () => require('../test/eval-bmad-tea-routing.js'),
   'test/eval-ci.js': () => require('../test/eval-ci.js'),
   'test/eval-fragment-selection.js': () => require('../test/eval-fragment-selection.js'),

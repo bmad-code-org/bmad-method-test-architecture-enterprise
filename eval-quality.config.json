@@ -64,7 +64,8 @@
         "npm run test:eval-nfr-data",
         "npm run test:eval-ci-data",
         "npm run test:eval-test-design-data",
-        "npm run test:eval-routing-data"
+        "npm run test:eval-routing-data",
+        "npm run test:eval-automate-data"
       ]
     },
     "sampleInput": "package.json",
@@ -149,6 +150,14 @@
           "export": "FRAGMENT_SELECTION_CASES"
         }
       },
+      "totalSuiteCount": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "TOTAL_SUITE_COUNT" }
+      },
+      "agentPreflightedSuiteCount": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "AGENT_PREFLIGHTED_SUITE_COUNT" }
+      },
       "npmTestChainLength": {
         "kind": "module",
         "from": {
@@ -219,6 +228,14 @@
         },
         "counts": ["fragmentSelectionCases"],
         "rendering": "digits"
+      },
+      {
+        "file": "README.md",
+        "claim": "how many suites a preflight run checks in total, and how many of them get a real agent-preflight probe",
+        "pattern": {
+          "match": "for ([a-z-]+) of the ([a-z-]+) suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential\\."
+        },
+        "counts": ["agentPreflightedSuiteCount", "totalSuiteCount"]
       },
       {
         "file": "README.md",
@@ -1198,7 +1215,7 @@
           "key": "stay visible in the manifest as deferred work",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "THREE_SKILLS_DEFERRED"
+            "export": "TWO_SKILLS_DEFERRED"
           },
           "reason": "test/evals/suite-manifest.json's deferred array"
         },
@@ -1207,7 +1224,7 @@
           "key": "still listed as deferred",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "TWO_FRAGMENT_SELECTION_SKILLS_DEFERRED"
+            "export": "ONE_FRAGMENT_SELECTION_SKILL_DEFERRED"
           },
           "reason": "the fragment-selection suite's skills list filtered by suite-manifest.json's deferred array"
         },
@@ -1317,7 +1334,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "89036a765c9036bdf209705179d126dc4afb10937450b45db7d228d696b619a4"
+            "hash": "e8d45155913e094df6d508aea4a80f1c0a7ef0f0bad2262842db55ff2150e417"
           }
         },
         {

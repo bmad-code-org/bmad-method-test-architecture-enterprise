@@ -1,0 +1,131 @@
+{
+  "$comment": [
+    "Ground truth for the bmad-testarch-automate behavioral eval. It was authored from",
+    "voucher-service/docs/stories/6-6-voucher-redemption.md, from vouchers.js's own catalog",
+    "of rules, and from the seeded regression qualification.json records (the minimum-spend",
+    "boundary flipped from inclusive to exclusive). No bmad-testarch-automate run produced",
+    "any value in this file: every spec file under cases/ is hand-authored, standing in for",
+    "what a real run could produce against the fixed implementation.",
+    "",
+    "Each case declares, per test, the outcome the fixed implementation must produce and the",
+    "outcome the mutated implementation must produce. Where the mutated outcome is \"fail\",",
+    "attributionPattern is the literal text Playwright's own toEqual() diff prints when the",
+    "mutation flips that redemption from accepted to rejected: the rejected body's own",
+    "reason, \"below-minimum-spend\", which the fixed body never carries. A test whose",
+    "attributionPattern would match for any other reason is not attributing the failure to",
+    "the seeded boundary and this corpus does not claim it does.",
+    "",
+    "vacuousPattern and duplicateOfTitle are checked statically, against the test's own",
+    "source text, by test/eval-automate.js's validateCorpus: the pattern must be found",
+    "inside the named test's own body, and a declared duplicate's body must be textually",
+    "identical (whitespace collapsed) to the test it duplicates. Both are checked before any",
+    "server starts, the same way the atdd corpus's declaredPattern is checked against the",
+    "story before any scaffold runs.",
+    "",
+    "detectsRegression is true for exactly one case, correct-run: the only spec set that",
+    "tests the boundary itself, cartTotal exactly equal to a voucher's minimumSpend. The",
+    "other three cases each stand in for a different way generated coverage can look",
+    "thorough and still fail to catch the regression: interior-only assertions, an assertion",
+    "that cannot fail against real behavior, and a duplicated assertion that adds nothing",
+    "beyond the test it repeats."
+  ],
+  "fixtureRoot": "voucher-service",
+  "cases": [
+    {
+      "id": "correct-run",
+      "specFile": "cases/correct-run/redeem.spec.ts",
+      "detectsRegression": true,
+      "tests": [
+        {
+          "title": "SAVE10 redeemed exactly at its minimum spend is accepted with its full discount",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "fail",
+          "attributionPattern": "below-minimum-spend"
+        },
+        {
+          "title": "EXPIRED10 redeemed after its expiry date is rejected as expired",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        },
+        {
+          "title": "SAVE10 well above its minimum spend is accepted with a percentage discount",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        },
+        {
+          "title": "FLAT5 above its minimum spend is accepted with its fixed discount",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        },
+        {
+          "title": "SAVE10 far above its minimum spend has its discount capped",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        }
+      ]
+    },
+    {
+      "id": "misses-regression",
+      "specFile": "cases/misses-regression/redeem.spec.ts",
+      "detectsRegression": false,
+      "tests": [
+        {
+          "title": "SAVE10 comfortably above its minimum spend is accepted",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        },
+        {
+          "title": "SAVE10 well below its minimum spend is rejected",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        },
+        {
+          "title": "FLAT5 comfortably above its minimum spend is accepted",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        },
+        {
+          "title": "EXPIRED10 redeemed after its expiry date is rejected as expired",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        },
+        {
+          "title": "SAVE10 far above its minimum spend has its discount capped",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        }
+      ]
+    },
+    {
+      "id": "vacuous-pass",
+      "specFile": "cases/vacuous-pass/redeem.spec.ts",
+      "detectsRegression": false,
+      "tests": [
+        {
+          "title": "POST /redeem answers with an HTTP status under 600",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass",
+          "vacuousPattern": "toBeLessThan\\(600\\)"
+        }
+      ]
+    },
+    {
+      "id": "duplicate",
+      "specFile": "cases/duplicate/redeem.spec.ts",
+      "detectsRegression": false,
+      "tests": [
+        {
+          "title": "SAVE10 at cartTotal 120 is accepted with a 12 discount",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass"
+        },
+        {
+          "title": "SAVE10 at cartTotal 120 is accepted with a 12 discount (again)",
+          "fixedOutcome": "pass",
+          "mutatedOutcome": "pass",
+          "duplicateOfTitle": "SAVE10 at cartTotal 120 is accepted with a 12 discount"
+        }
+      ]
+    }
+  ]
+}
