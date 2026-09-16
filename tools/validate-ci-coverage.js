@@ -109,6 +109,7 @@ const DELIBERATELY_LOCAL = {
   'eval:test-design': 'a live agent eval; same reason as eval:all',
   'eval:test-review': 'a live agent eval; same reason as eval:all',
   'eval:trace': 'a live agent eval; same reason as eval:all',
+  'eval:transcript': 'a live agent eval; same reason as eval:all',
   prepare:
     'an npm lifecycle hook every `npm ci`/`npm install` invokes automatically; it runs, just never via the literal `npm run prepare` text this scan looks for',
   prepublishOnly:
