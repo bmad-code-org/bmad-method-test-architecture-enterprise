@@ -288,6 +288,9 @@ jobs:
       - name: Score every probe corpus through eval-quality against stored evidence
         run: npm run test:probe-corpus
 
+      - name: Prove compareDominance reaches every relation it declares and refuses a comparabilityKey mismatch
+        run: npm run test:compare-dominance
+
       - name: Prove the automate-eval fixture's seeded regression rolls back live
         run: npm run test:automate-eval-fixture
 
