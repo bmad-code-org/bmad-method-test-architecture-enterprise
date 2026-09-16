@@ -27,7 +27,7 @@ The single live entrypoint is:
 npm run eval:all -- --agent codex
 ```
 
-It runs 48 fragment selections, 36 routing intents, 4 complete test designs, 3 complete reviews, 4 complete audits, and 4 complete traces for one runner. The focused harnesses remain available for debugging.
+It runs 48 fragment selections, 36 routing intents, 4 complete test designs, 3 complete reviews, 4 complete audits, 4 complete pipelines, and 4 complete traces for one runner. The focused harnesses remain available for debugging.
 
 ## Coverage Still Owed
 
