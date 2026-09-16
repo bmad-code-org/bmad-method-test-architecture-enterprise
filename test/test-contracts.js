@@ -688,6 +688,17 @@ async function main(argv) {
   // contract can be well formed enough to compile while carrying a field Ajv
   // rejects, and a contract Ajv accepts can still fail `compile`'s own
   // structural rules. Neither result substitutes for the other.
+  //
+  // `validateArtifact` reads its schemas and version constants from the
+  // installed `node_modules/eval-quality` unconditionally, with no equivalent
+  // of `resolveCompiler`'s `--package` override. Under `--package`, `compile`
+  // above already runs against the named local build, so running this check
+  // too would silently validate every contract against a different release
+  // than the one `--package` names, which is worse than not running it: a
+  // contract wrong for the local build could report as fine, or right for it
+  // could report as broken. The check is skipped, named, rather than run
+  // silently against the wrong package.
+  const usingLocalPackage = argv.includes('--package');
   const ajvProblems = [];
 
   for (const contract of contracts) {
@@ -707,7 +718,9 @@ async function main(argv) {
       console.error(`${colors.dim}${key} did not parse as JSON: ${error.message}${colors.reset}`);
       continue;
     }
-    for (const message of await validateArtifact('eval-contract', source)) ajvProblems.push(`${key}: ${message}`);
+    if (!usingLocalPackage) {
+      for (const message of await validateArtifact('eval-contract', source)) ajvProblems.push(`${key}: ${message}`);
+    }
     try {
       // `strict: true` is the compiler's own default and was the default of the
       // `--strict-inputs` flag this check used to leave unset, so AD-4's two
@@ -760,7 +773,11 @@ async function main(argv) {
       `${colors.green}OK${colors.reset}   ${SEEDED_FAULTS.length} seeded fault(s) per contract ${colors.dim}(the blocked path still reports its code and its issue locations)${colors.reset}`,
     );
   }
-  if (ajvProblems.length === 0) {
+  if (usingLocalPackage) {
+    console.log(
+      `${colors.dim}SKIP  validateArtifact('eval-contract', ...) does not run under --package: it reads schemas from the installed eval-quality, not the named build.${colors.reset}`,
+    );
+  } else if (ajvProblems.length === 0) {
     console.log(
       `${colors.green}OK${colors.reset}   ${contracts.length} contract(s) also pass validateArtifact('eval-contract', ...) ${colors.dim}(Ajv and the schemaVersion stamp, independent of compile)${colors.reset}`,
     );
