@@ -163,13 +163,13 @@ exports.EVAL_QUALITY_AT_LEAST_1_2_0 = atLeast(evalQualityVersion, '1.2.0');
 exports.EVAL_QUALITY_AT_LEAST_3_0_0 = atLeast(evalQualityVersion, '3.0.0');
 
 /**
- * docs/explanation/eval-quality-roadmap.md:173, "The pin is 3.3.0 now." Unlike
+ * docs/explanation/eval-quality-roadmap.md:173, "The pin is 3.4.0 now." Unlike
  * the `>=` checks above, this is an exact-point-in-time claim about the pin
  * itself, so it is written to go stale the moment the pin moves again; that is
  * the correct behavior for a sentence stating a specific current version
  * rather than a floor a capability has held since.
  */
-exports.EVAL_QUALITY_PIN_IS_3_3_0 = evalQualityVersion === '3.3.0';
+exports.EVAL_QUALITY_PIN_IS_3_4_0 = evalQualityVersion === '3.4.0';
 
 /** README.md:397, "All 36 rows are currently mapped across 50 anchors." */
 const { MANIFEST: fragmentManifest } = require('../../tools/validate-criteria-fragments.js');

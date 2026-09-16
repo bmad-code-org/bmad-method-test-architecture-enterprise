@@ -1211,7 +1211,11 @@
           "file": "docs/explanation/eval-quality-adoption-guide.md",
           "key": "TEA's state today, as `test/evals/suite-manifest.json` registers it:",
           "settles": "read",
-          "reason": "an intro label for the table that follows, not itself a decidable fact"
+          "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against",
+          "asOf": {
+            "subject": "test/evals/suite-manifest.json",
+            "hash": "3e95334604f520b0351336b29c13ba2316ca6210732e127964476039a272739e"
+          }
         },
         {
           "file": "docs/explanation/eval-quality-command-adapter.md",
@@ -1236,10 +1240,10 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The pin is 3.3.0 now",
+          "key": "The pin is 3.4.0 now",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_PIN_IS_3_3_0"
+            "export": "EVAL_QUALITY_PIN_IS_3_4_0"
           },
           "reason": "package.json's eval-quality devDependency, compared for an exact match"
         },

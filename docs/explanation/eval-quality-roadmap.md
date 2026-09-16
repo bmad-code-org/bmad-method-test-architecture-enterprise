@@ -170,7 +170,7 @@ Items 1 through 8 are done. Item 9 is what remains:
      Measured against `codex` rather than `claude`/`sonnet`, because that account was rate limited when the confirming run was due. A second vendor agreeing is worth more here than a matched one would have been.
 7. Adopt `eval-quality`'s command-line adapter and retire the process-probing machinery this repository invented. `eval-quality` 1.0.0 ships `createCommandLineAdapter`, `nodeCommandMechanism`, and a deny-by-default `CommandTargetPolicy`, which is a real `EnvironmentProbePort` over a child process, plus a `cli` arm in its own conformance suite. `test/lib/probe-targets.js` and `npm run test:probe-targets` drive every one of TEA's commands through it: `tea-fragment-selection-runner` exists now, so the eight fragment-selection contracts name a command TEA ships, and `tea-trace-runner` and `tea-nfr-runner` exist, so the trace and NFR suites each have a command and a contract of their own.
    - Every harness probes through the port as of `eval-quality` 1.2.0, which added the repeatable-option spelling the harnesses needed to forward `--env-pass` and `--agent-arg` at all.
-   - The pin is 3.3.0 now.
+   - The pin is 3.4.0 now.
    - Every authorization has declared which environment keys its requests may carry since 3.0.0, so the channel the contract author declares is bounded by the operator's mapping rather than passed through whole; each was verified end to end against its stub agent with no model call, the trace harness by spawning it whole and reading its result record back.
 
    Reaching every skill therefore means giving the remaining skills real CLI entry points, which is already the direction the TEA CLI rollout records. This is owed work with a design document of its own.
