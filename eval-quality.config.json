@@ -1172,7 +1172,7 @@
     "dated": {
       "triggers": [
         {
-          "match": "stay visible in the manifest as deferred work"
+          "match": "The remaining two behavioral suites stay visible in"
         },
         {
           "match": "still listed as deferred"
@@ -1364,7 +1364,7 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "the pin is 3.4.0 now",
+          "key": "The pin is 3.4.0 now",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_PIN_IS_3_4_0"
