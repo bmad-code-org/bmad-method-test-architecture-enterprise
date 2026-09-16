@@ -112,6 +112,19 @@ two `tea-routing-*` contracts added since the table was written. `npm run
 test:contracts` and `test/contracts/expected-status.json` carry the current baseline; regenerate it
 with `--write` whenever the compiler version changes.
 
+**`bmad-testarch-automate`'s full behavioral suite has no contract here on purpose.** The skill itself
+already has one, `fragment-selection/bmad-testarch-automate.contract.json`, for its routing eval; this is
+about the `automate` behavioral suite specifically. `test/evals/suite-manifest.json`'s `automate` suite
+entry declares `contracts: []`, which the manifest's own schema allows for a suite with no contract yet.
+Every contract in this directory addresses a real command's real request shape, and `test/test-probe-targets.js`
+refuses one that names a CLI interface `test/lib/probe-targets.js`'s registry does not carry a real,
+shipped executable for -- the exact mistake that check exists to catch, once made for months by eight
+contracts naming a fragment-selection runner that did not exist yet. Story 6.7 builds no live-agent mode
+for `bmad-testarch-automate` at all (`test/eval-automate.js`'s own header explains why), so there is no
+real command for the behavioral suite's own contract to address, the same reason `atdd.contract.json`'s
+own oracles below already stop short of `cli/atdd-red-check.js`'s deterministic half. A future story that
+adds a real generation command for this skill is what would give the behavioral suite a contract to write.
+
 `fragment-selection/bmad-testarch-trace.contract.json` needed one more change to get there.
 Its selection operation declares request keys, the prompt, the stack, and the TEA config, and AD-10
 requires a witness on any operation that does, but trace's own eval deliberately keeps both cases'

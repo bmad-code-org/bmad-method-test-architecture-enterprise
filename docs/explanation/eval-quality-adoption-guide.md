@@ -87,9 +87,9 @@ Order the skills by the evidence available, and let the first ones build infrast
 
 `docs/explanation/eval-quality-command-adapter.md` orders the same skills by the shape of the artifact, which is what decides how much command work each one needs, and grades the difficulty:
 
-1. `trace` and `automate`, writing into a staged tree. One runner wrapping the agent in a staged workspace, and an artifact map over what it writes. `trace` is done and is the worked example in this repository.
+1. `trace`, writing into a staged tree. One runner wrapping the agent in a staged workspace, and an artifact map over what it writes. `trace` is done and is the worked example in this repository. `automate` was expected to need the same shape and does not: Story 6.7 decided against a runner for it entirely, since the skill has no live-agent mode to wrap into a staged workspace; its suite runs four hand-authored spec sets for real instead, against the fixed implementation and a mutated scratch copy.
 2. `nfr` and `test-design`, each writing its assessment artifact. Medium: neither has a harness, so the corpus is the work.
-3. `atdd`, and `automate`'s fail-before leg, one command against two revisions. Medium: the fixture reset such a plan needs does not exist.
+3. `atdd`, one command against two revisions. Medium: the fixture reset such a plan needs does not exist. `automate`'s fail-before leg is no longer part of this plan: it proves the same boundary a different way, against two live server processes rather than one command re-run against two revisions.
 4. `framework` and `ci`, scaffolding a project or pipeline. High: the artifact is a tree and the artifact map addresses files.
 5. `bmad-tea` and `bmad-teach-me-testing`. Unknown: one request and one observation is not a multi-turn transcript.
 

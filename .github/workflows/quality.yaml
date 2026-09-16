@@ -300,6 +300,9 @@ jobs:
       - name: Prove the automate-eval fixture's seeded regression rolls back live
         run: npm run test:automate-eval-fixture
 
+      - name: Prove bmad-testarch-automate's stand-in coverage catches the qualified regression
+        run: npm run test:eval-automate-data
+
       - name: Prove the clock port is in the path that produces a duration
         run: npm run test:clock-port
 

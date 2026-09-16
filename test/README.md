@@ -48,6 +48,7 @@ npm run test:release-metadata  # test-release-metadata
 npm run test:eval-data         # eval-fragment-selection --validate-only
 npm run test:eval-nfr-data     # eval-nfr --validate-only
 npm run test:eval-ci-data      # eval-ci --validate-only
+npm run test:eval-automate-data # eval-automate --validate-only
 npm run test:eval-test-design-data  # eval-test-design --validate-only
 npm run test:eval-trace-data   # eval-trace --validate-only
 npm run test:eval-routing-data # eval-bmad-tea-routing --validate-only
@@ -402,6 +403,37 @@ than halt, and nothing here attests that the fixture's own tests pass. `actionli
 part of the measurement rather than an incidental tool, so its identity travels with
 every result record: the pre-flight refuses to run below the version its flags were
 written against, and the version that actually ran is recorded beside the runner's own.
+
+## automate eval suite
+
+`eval-automate.js` measures `bmad-testarch-automate` against the corpus under
+`fixtures/automate-eval/`, and unlike every suite above, it invokes no agent at all.
+Four hand-authored Playwright spec sets under `fixtures/automate-eval/cases/` stand
+in for what a real `bmad-testarch-automate` run could produce, and `--validate-only`
+and the default invocation both run the exact same real, full cycle over them: no
+data is skipped to avoid a vendor-call cost, because there is no vendor call here to
+avoid. `--preflight-only` is the one cheap mode, checking that the corpus and
+Playwright resolve without starting anything.
+
+Each case's spec file runs for real, over HTTP, twice: once against the fixed
+`voucher-service` fixture (Story 6.6) and once against a scratch copy carrying its
+seeded regression, the minimum-spend boundary flipped from inclusive
+(`cartTotal >= voucher.minimumSpend`) to exclusive. `correct-run` asserts a
+redemption at a cart total exactly equal to a voucher's `minimumSpend`, the only
+input the mutation changes the answer for, and the scorer attributes the resulting
+mutated-run failure to the boundary through a declared message pattern. The other
+three cases each stand in for a different way generated coverage can look thorough
+and catch nothing: `misses-regression` asserts only interior values and passes on
+both runs, which the scorer reports as not detecting the regression rather than as a
+clean pass; `vacuous-pass` plants a status-code assertion no real response can fail;
+`duplicate` repeats one assertion under a second title. Vacuousness and duplication
+are confirmed statically, against each test's own source text, before either server
+starts.
+
+The suite's manifest entry declares `contracts: []`: `test/test-probe-targets.js`
+refuses a contract naming a CLI interface this repository does not ship, and this
+skill ships no live-agent command at all, so there is no real interaction for a
+contract to address. `test/contracts/README.md` records the reasoning.
 
 ## contract oracle suite
 

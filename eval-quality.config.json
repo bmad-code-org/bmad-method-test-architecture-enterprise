@@ -64,7 +64,8 @@
         "npm run test:eval-nfr-data",
         "npm run test:eval-ci-data",
         "npm run test:eval-test-design-data",
-        "npm run test:eval-routing-data"
+        "npm run test:eval-routing-data",
+        "npm run test:eval-automate-data"
       ]
     },
     "sampleInput": "package.json",
@@ -149,6 +150,14 @@
           "export": "FRAGMENT_SELECTION_CASES"
         }
       },
+      "totalSuiteCount": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "TOTAL_SUITE_COUNT" }
+      },
+      "agentPreflightedSuiteCount": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "AGENT_PREFLIGHTED_SUITE_COUNT" }
+      },
       "npmTestChainLength": {
         "kind": "module",
         "from": {
@@ -219,6 +228,14 @@
         },
         "counts": ["fragmentSelectionCases"],
         "rendering": "digits"
+      },
+      {
+        "file": "README.md",
+        "claim": "how many suites a preflight run checks in total, and how many of them get a real agent-preflight probe",
+        "pattern": {
+          "match": "for ([a-z-]+) of the ([a-z-]+) suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential\\."
+        },
+        "counts": ["agentPreflightedSuiteCount", "totalSuiteCount"]
       },
       {
         "file": "README.md",

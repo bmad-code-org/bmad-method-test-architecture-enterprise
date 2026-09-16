@@ -59,9 +59,9 @@ Fifteen contracts declare seven logical executables, each a command TEA ships. W
 
 One runner covers eight skills because the eight contracts declare one interface. The rest is per-skill: each item below is one registry entry, one contract, and no change to the probe layer:
 
-- ~~`trace`~~ and `automate`, writing into a staged tree. `trace` is done, below. `automate` is the same shape: one runner wrapping the agent in a staged workspace, and an artifact map over what it writes.
+- ~~`trace`~~ and ~~`automate`~~, writing into a staged tree. `trace` is done, below. `automate` is done differently: Story 6.7 decided against this runner entirely, since the skill has no live-agent mode to wrap into a staged workspace; its suite runs four hand-authored spec sets for real instead, against the fixed implementation and a mutated scratch copy.
 - ~~`nfr`~~ and `test-design`, each writing its assessment artifact. `nfr` is done: `tea-nfr-runner`, `test/eval-nfr.js`, and two evidence bundles under `test/fixtures/nfr-eval/`. `test-design` is the same shape, and the corpus is still the work.
-- `atdd`, and `automate`'s fail-before leg, one command against two revisions. Medium: the fixture reset such a plan needs does not exist.
+- `atdd`, one command against two revisions. Medium: the fixture reset such a plan needs does not exist. `automate`'s fail-before leg is no longer part of this plan: it proves the same boundary a different way, against two live server processes rather than one command re-run against two revisions.
 - `framework` and `ci`, scaffolding a project or pipeline. High: the artifact is a tree and the artifact map addresses files.
 - `bmad-tea` and `bmad-teach-me-testing`. Unknown: one request and one observation is not a multi-turn transcript. `test/lib/transcript-harness.js`'s `runTranscript` now closes that mechanism gap, composing N single-invocation calls against a new registry entry, `tea-transcript-runner`, into one persistent-workspace session; `bmad-teach-me-testing` is not measured by it yet, since that measurement is Story 6.11's job rather than the harness's own.
 

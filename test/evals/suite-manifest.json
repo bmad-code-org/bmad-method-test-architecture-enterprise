@@ -7,9 +7,10 @@
     "way is the most expensive possible mistake to make about your own quality gate.",
     "",
     "Only `evalType: behavioral` discharges a skill's coverage obligation. Fragment selection measures which",
-    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so three of the",
-    "eight skills it spans are still listed under `deferred`. The other five, `ci`, `nfr`, `test-design`,",
-    "`test-review` and `trace`, each carry a behavioral suite of their own, and that is what discharges them.",
+    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so one of the",
+    "eight skills it spans, `bmad-testarch-framework`, is still listed under `deferred`. The other seven, `atdd`,",
+    "`automate`, `ci`, `nfr`, `test-design`, `test-review` and `trace`, each carry a behavioral suite of their own,",
+    "and that is what discharges them.",
     "",
     "`ciTier` is the tier at which a suite runs in full. `npm run eval:all -- --preflight-only` runs each suite's",
     "`harnessOptions.preflightArgs` instead, which validates the data and then probes the runner: the executable",
@@ -85,6 +86,70 @@
       "caseCount": 1,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["scoped-artifact-writes"]
+    },
+    {
+      "$comment": [
+        "No live agent and no generation step, unlike every other suite here. Four hand-authored Playwright spec",
+        "sets under test/fixtures/automate-eval/cases/ stand in for what a real bmad-testarch-automate run could",
+        "produce against the Story 6.6 voucher-service fixture, and every one of them actually runs, twice: once",
+        "against the fixed implementation and once against a scratch copy carrying the fixture's seeded",
+        "regression (the minimum-spend boundary flipped from inclusive to exclusive).",
+        "",
+        "correct-run tests the boundary itself and is the only case whose mutated run must fail, with the failure",
+        "attributed to the seeded boundary through a declared message pattern. The other three each stand in for a",
+        "different way generated coverage can look thorough and catch nothing: misses-regression asserts only",
+        "interior values and passes on both runs, vacuous-pass asserts something that cannot fail against real",
+        "behavior, and duplicate repeats one assertion under a second title. All three must be reported as such",
+        "rather than as a clean pass, which is what every threshold below ceilings at zero: on this exact,",
+        "hand-authored corpus the scorer has to classify all four cases correctly, every time.",
+        "",
+        "runnerCapabilities names command-execution rather than scoped-artifact-writes: this harness spawns",
+        "Playwright and the fixture's own server as child processes and reads their output back, and writes",
+        "nothing else. `--agent` / `--agent-cmd` are accepted only so this harness's argv matches every other",
+        "suite's for tools/validate-eval-schemas.js's preflight-probe check; the harness's own header explains why",
+        "no live-agent mode exists to select between.",
+        "",
+        "contracts is empty, which the schema allows for a suite with no contract yet: eval-quality's oracle",
+        "vocabulary can only address evidence a real interaction produced, and test/test-probe-targets.js's",
+        "registry check refuses any contract naming a CLI interface this repository does not actually ship (the",
+        "exact mistake it exists to catch, once made for months by eight contracts naming a runner that did not",
+        "exist). This suite ships no command at all, so there is no real interaction for a contract to address; a",
+        "fictional `tea-automate-runner` interface would satisfy the schema and fail that registry check the same",
+        "way the runner it once caught did. `atdd.contract.json` is the nearest precedent for the same limit: its",
+        "oracles already stop at the one real command atdd ships and never address `cli/atdd-red-check.js`'s",
+        "deterministic half, because that half is not a vendor-calling interaction either."
+      ],
+      "id": "automate",
+      "skill": "bmad-testarch-automate",
+      "evalType": "behavioral",
+      "harness": "test/eval-automate.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": [
+        "test/fixtures/automate-eval/cases/playwright.config.ts",
+        "test/fixtures/automate-eval/cases/correct-run/redeem.spec.ts",
+        "test/fixtures/automate-eval/cases/misses-regression/redeem.spec.ts",
+        "test/fixtures/automate-eval/cases/vacuous-pass/redeem.spec.ts",
+        "test/fixtures/automate-eval/cases/duplicate/redeem.spec.ts",
+        "test/fixtures/automate-eval/voucher-service/src/server.js",
+        "test/fixtures/automate-eval/voucher-service/src/vouchers.js"
+      ],
+      "groundTruth": ["test/fixtures/automate-eval/ground-truth.json"],
+      "contracts": [],
+      "thresholds": {
+        "maxLoadErrors": 0,
+        "maxUndetectedRegressionCases": 0,
+        "maxFalseRegressionDetections": 0,
+        "maxUnattributedFailures": 0,
+        "maxUnexpectedOutcomes": 0
+      },
+      "repetitions": 1,
+      "caseCount": 4,
+      "ciTier": "full-matrix",
+      "runnerCapabilities": ["command-execution"]
     },
     {
       "$comment": [
@@ -540,12 +605,6 @@
       "owner": "TEA maintainers",
       "missingEvidence": "No suite of any kind. The skill ships no knowledge index, so even fragment selection does not apply, and nothing measures a multi-turn teaching session.",
       "exitCondition": "A transcript-based behavioral suite proves the skill places a learner at the right level, corrects seeded misconceptions, adapts the session, persists progress, and avoids claiming mastery without evidence."
-    },
-    {
-      "skill": "bmad-testarch-automate",
-      "owner": "TEA maintainers",
-      "missingEvidence": "Fragment selection only. No fixed implementation and no qualified seeded regression exist to run the generated tests against.",
-      "exitCondition": "A behavioral suite proves the workflow generates tests that pass on the fixed implementation, fail on a qualified seeded regression, and avoid vacuous or duplicate coverage."
     },
     {
       "skill": "bmad-testarch-framework",
