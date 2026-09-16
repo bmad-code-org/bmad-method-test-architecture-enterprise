@@ -54,6 +54,73 @@
  *
  * `TEA_ATDD_ISOLATION` selects a backend explicitly. It accepts the two backend
  * names and nothing else; there is no `none`, for the reason above.
+ *
+ * ALLOWHOSTLOOPBACK: THE ONE HOLE THIS MODULE ADMITS
+ *
+ * Every property above assumes the sandboxed content needs nothing beyond its
+ * own workspace and its own loopback -- true for every caller until Story 6.9,
+ * whose `npm install` must reach a real, host-side, unsandboxed process (a
+ * CONNECT-allowlisting proxy) over loopback, to relay to the real npm
+ * registry. `--unshare-net` cannot serve that caller: bubblewrap's own manual
+ * is explicit that it is all-or-nothing, a fresh network namespace with only
+ * its OWN loopback, never the host's -- discovered live on this story's own
+ * pull request, the same way `--unshare-pid`/`--unshare-ipc` were discovered
+ * live on an earlier one. seatbelt never had this problem: its profile denies
+ * network and re-allows loopback while the process still shares the host's
+ * real network stack, so a host-side loopback service was always reachable
+ * there. `sandboxedCommand`'s `allowHostLoopback: true` gives bubblewrap that
+ * same property, by a different mechanism, because bubblewrap has no
+ * seatbelt-style "allow just this" filter of its own:
+ *
+ *   - Skip `--unshare-net` (share the real network namespace, so loopback is
+ *     the host's loopback), and run the whole sandboxed command as a fixed,
+ *     unprivileged, non-root identity (`LOOPBACK_ONLY_UID`/`_GID`, the
+ *     standard `nobody`/`nogroup`) via `sudo setpriv --reuid --regid
+ *     --clear-groups`, never the caller's own uid.
+ *   - `ensureLoopbackOnlyEgress()` installs one `iptables` OWNER-match rule
+ *     pair, once, before that identity is ever used: outbound to
+ *     `127.0.0.0/8` accepted, everything else from that uid rejected. This is
+ *     the kernel enforcing "loopback and nothing else" for that one identity;
+ *     `--unshare-net`'s own network-namespace primitive cannot express "allow
+ *     one destination", so this is a different mechanism reaching the same
+ *     NFR9 property, not a relaxation of it.
+ *   - The sandboxed environment is baked into argv as `env -i KEY=value ...`,
+ *     never left to spawnSync's own `env` option: `sudo` resets the
+ *     environment by default, and relying on a runner's own sudoers
+ *     `env_keep`/`SETENV` policy to carry it through would make this silently
+ *     depend on configuration this module does not own.
+ *   - The workspace must be owned by `LOOPBACK_ONLY_UID`/`_GID` before this
+ *     mode's first use (`prepareWorkspaceOwnership`) and given back to the
+ *     caller's own uid before the caller deletes it (`restoreWorkspaceOwnership`):
+ *     a directory another uid owns cannot be written into, or recursively
+ *     unlinked by anyone but its owner or root, regardless of what the
+ *     sandbox itself permits.
+ *   - `bwrap`'s own `--chdir` sets the working directory, never the caller's
+ *     `cwd` option to `spawnSync`. A first version of this used `spawnSync`'s
+ *     `cwd`, which passed every check run as root and failed everywhere else:
+ *     `cwd` is applied by the calling process, before `sudo`/`setpriv` have
+ *     dropped to `LOOPBACK_ONLY_UID`, against a directory `prepareWorkspaceOwnership`
+ *     has already handed away -- `EACCES`, which Node reports as a failure to
+ *     spawn `sudo` itself rather than naming the `chdir` that actually failed.
+ *     `--chdir` runs after the identity switch, as the identity that owns the
+ *     directory, so it always succeeds. Root never exercises this path at
+ *     all (root can `chdir` into anything), which is exactly why testing this
+ *     mode as root first passed for the wrong reason and only testing as a
+ *     genuinely unprivileged sudoer -- the shape every real caller is in --
+ *     caught it.
+ *
+ * Verified live in a `ubuntu:24.04` container matching the CI image, as an
+ * unprivileged user granted passwordless `sudo` the way the GitHub Actions
+ * runner grants it (not as root, which would never exercise the identity
+ * switch that is the whole point), both ways: a direct attempt from the
+ * loopback-only identity to the real registry fails closed (`ECONNREFUSED`/DNS
+ * failure, before any TLS handshake), and a real `npm install` through the
+ * CONNECT-allowlisting proxy, over loopback, succeeds end to end. All four
+ * other bubblewrap properties this module already proves -- filesystem write
+ * scoping, the CPU budget, a spawned child's isolation matching its parent's
+ * -- hold identically under this mode, since none of them are what
+ * `--unshare-net` was providing. This is Linux only: `allowHostLoopback` is
+ * accepted and ignored on seatbelt, which never needed it.
  */
 
 'use strict';
@@ -72,6 +139,16 @@ const NET_GUARD_PATH = path.join(__dirname, 'atdd-net-guard.cjs');
 
 /** A generous CPU budget per process; the wall clock is the tighter bound on a well-behaved run. */
 const DEFAULT_CPU_SECONDS = 60;
+
+/**
+ * The fixed, unprivileged, non-root identity `allowHostLoopback` runs under on
+ * bubblewrap: the standard `nobody`/`nogroup` present on essentially every
+ * Linux distribution without provisioning an account, chosen so this needs no
+ * `useradd` step of its own. Never the caller's own uid: the whole point is an
+ * identity `ensureLoopbackOnlyEgress`'s rule can name specifically.
+ */
+const LOOPBACK_ONLY_UID = 65_534;
+const LOOPBACK_ONLY_GID = 65_534;
 
 function isolationError(message) {
   const error = new Error(message);
@@ -209,13 +286,16 @@ function buildSeatbeltProfile({ workspace }) {
  * and containerized test can still be wrong on the one machine, this
  * runner image, where the suite actually has to run.
  *
- * @param {{backend: string, profilePath?: string, workspace?: string, cpuSeconds: number, command: string, args: string[]}} options
+ * @param {{backend: string, profilePath?: string, workspace?: string, cpuSeconds: number, command: string, args: string[], allowHostLoopback?: boolean, env?: Record<string, string>}} options
  * @returns {{command: string, args: string[]}}
  */
-function sandboxedCommand({ backend, profilePath, workspace, cpuSeconds, command, args }) {
+function sandboxedCommand({ backend, profilePath, workspace, cpuSeconds, command, args, allowHostLoopback = false, env }) {
   if (!Number.isInteger(cpuSeconds) || cpuSeconds <= 0) throw isolationError(`cpuSeconds must be a positive integer; got ${cpuSeconds}`);
   if (backend === 'seatbelt') {
     if (!profilePath) throw isolationError('seatbelt needs a profile path');
+    // allowHostLoopback is a no-op here: the profile above already allows
+    // loopback in all three directions while the process shares the host's
+    // real network stack, so a host-side loopback service was always reachable.
     return {
       command: 'sh',
       args: ['-c', 'ulimit -t "$0" && exec "$@"', String(cpuSeconds), 'sandbox-exec', '-f', profilePath, command, ...args],
@@ -224,37 +304,126 @@ function sandboxedCommand({ backend, profilePath, workspace, cpuSeconds, command
   if (backend === 'bubblewrap') {
     if (!workspace) throw isolationError('bubblewrap needs a workspace path');
     const resolved = assertProfileSafePath(path.resolve(workspace));
+    const bwrapArgs = [
+      'bwrap',
+      '--unshare-user',
+      ...(allowHostLoopback ? [] : ['--unshare-net']),
+      '--ro-bind',
+      '/',
+      '/',
+      // A synthetic /dev, not the `--ro-bind / /` view of the real one.
+      // Without it, opening /dev/null under this user namespace — which is
+      // exactly what stdio: 'ignore' does for a spawned child — fails exec
+      // with EACCES: measured live, tea-atdd-red-check's own server spawn
+      // threw that error until this flag was added, and every other stdio
+      // configuration worked, which is what pointed at /dev rather than at
+      // the spawn call.
+      '--dev',
+      '/dev',
+      '--bind',
+      resolved,
+      resolved,
+      // allowHostLoopback only: bwrap's own --chdir, run after setpriv has
+      // already dropped to LOOPBACK_ONLY_UID, which by then owns `resolved`
+      // (prepareWorkspaceOwnership). The caller must NOT pass `cwd: workspace`
+      // to spawnSync for this mode: that chdir would run as the CALLING
+      // process's own uid, before setpriv, against a directory that uid no
+      // longer has permission to enter -- measured live: EACCES, misreported
+      // by Node as a failure to spawn `sudo` itself rather than naming the
+      // real chdir it failed on.
+      ...(allowHostLoopback ? ['--chdir', resolved] : []),
+      '--',
+      command,
+      ...args,
+    ];
+    if (!allowHostLoopback) {
+      return { command: 'sh', args: ['-c', 'ulimit -t "$0" && exec "$@"', String(cpuSeconds), ...bwrapArgs] };
+    }
+    // See the module header, ALLOWHOSTLOOPBACK. `env -i KEY=value ...` bakes
+    // the environment into argv rather than relying on spawnSync's own `env`
+    // option, which `sudo` resets by default.
+    if (!env || typeof env !== 'object') throw isolationError('allowHostLoopback needs the resolved environment to bake into argv');
+    const envArgs = Object.entries(env).map(([key, value]) => `${key}=${value}`);
     return {
-      command: 'sh',
+      command: 'sudo',
       args: [
+        'setpriv',
+        `--reuid=${LOOPBACK_ONLY_UID}`,
+        `--regid=${LOOPBACK_ONLY_GID}`,
+        '--clear-groups',
+        '--',
+        'env',
+        '-i',
+        ...envArgs,
+        'sh',
         '-c',
         'ulimit -t "$0" && exec "$@"',
         String(cpuSeconds),
-        'bwrap',
-        '--unshare-user',
-        '--unshare-net',
-        '--ro-bind',
-        '/',
-        '/',
-        // A synthetic /dev, not the `--ro-bind / /` view of the real one.
-        // Without it, opening /dev/null under this user namespace — which is
-        // exactly what stdio: 'ignore' does for a spawned child — fails exec
-        // with EACCES: measured live, tea-atdd-red-check's own server spawn
-        // threw that error until this flag was added, and every other stdio
-        // configuration worked, which is what pointed at /dev rather than at
-        // the spawn call.
-        '--dev',
-        '/dev',
-        '--bind',
-        resolved,
-        resolved,
-        '--',
-        command,
-        ...args,
+        ...bwrapArgs,
       ],
     };
   }
   throw isolationError(`unknown isolation backend "${backend}"`);
+}
+
+/**
+ * Installs the one iptables rule pair `allowHostLoopback` needs, once: outbound
+ * to `127.0.0.0/8` accepted for `LOOPBACK_ONLY_UID`, everything else from that
+ * uid rejected. Idempotent (`-C` checks before `-A` adds), so a caller running
+ * this ahead of every sandboxed call pays nothing on the second and later
+ * calls. A no-op on darwin, where seatbelt's own profile already provides this.
+ *
+ * @param {{platform?: string}} [options]
+ * @throws {Error} ISOLATION_UNAVAILABLE when the rule cannot be installed (no sudo, no iptables).
+ */
+function ensureLoopbackOnlyEgress({ platform = process.platform } = {}) {
+  if (platform !== 'linux') return;
+  const rules = [
+    ['-d', '127.0.0.0/8', '-j', 'ACCEPT'],
+    ['-j', 'REJECT', '--reject-with', 'icmp-port-unreachable'],
+  ];
+  for (const rule of rules) {
+    const args = ['iptables', '-C', 'OUTPUT', '-m', 'owner', '--uid-owner', String(LOOPBACK_ONLY_UID), ...rule];
+    const check = spawnSync('sudo', args, { encoding: 'utf8' });
+    if (check.status === 0) continue;
+    const add = spawnSync('sudo', ['iptables', '-A', 'OUTPUT', '-m', 'owner', '--uid-owner', String(LOOPBACK_ONLY_UID), ...rule], {
+      encoding: 'utf8',
+    });
+    if (add.status !== 0) {
+      throw isolationError(`could not install the loopback-only egress rule (${rule.join(' ')}): ${(add.stderr || '').trim()}`);
+    }
+  }
+}
+
+/**
+ * Gives `workspace` to `allowHostLoopback`'s fixed identity, recursively: that
+ * identity cannot write into (or, for `restoreWorkspaceOwnership`, be
+ * recursively unlinked out of) a directory it does not own, regardless of what
+ * the sandbox itself permits. A no-op on darwin.
+ *
+ * @param {string} workspace
+ * @param {{platform?: string}} [options]
+ * @throws {Error} ISOLATION_UNAVAILABLE when the chown fails.
+ */
+function prepareWorkspaceOwnership(workspace, { platform = process.platform } = {}) {
+  if (platform !== 'linux') return;
+  const result = spawnSync('sudo', ['chown', '-R', `${LOOPBACK_ONLY_UID}:${LOOPBACK_ONLY_GID}`, workspace], { encoding: 'utf8' });
+  if (result.status !== 0)
+    throw isolationError(`could not chown ${workspace} to the loopback-only identity: ${(result.stderr || '').trim()}`);
+}
+
+/**
+ * Gives `workspace` back to the calling process's own uid/gid, so it can
+ * delete it: the inverse of `prepareWorkspaceOwnership`, run before the
+ * caller's own `fs.rmSync`. A no-op on darwin. Best-effort: a failure here
+ * surfaces anyway, loudly, as the `fs.rmSync` that follows it failing.
+ *
+ * @param {string} workspace
+ * @param {{platform?: string}} [options]
+ */
+function restoreWorkspaceOwnership(workspace, { platform = process.platform } = {}) {
+  if (platform !== 'linux') return;
+  spawnSync('sudo', ['chown', '-R', `${process.getuid()}:${process.getgid()}`, workspace], { encoding: 'utf8' });
 }
 
 /**
@@ -320,10 +489,15 @@ module.exports = {
   BACKEND_OVERRIDE_ENV,
   DEFAULT_CPU_SECONDS,
   ISOLATION_BACKENDS,
+  LOOPBACK_ONLY_UID,
+  LOOPBACK_ONLY_GID,
   NET_GUARD_PATH,
   buildSeatbeltProfile,
   childEnvironment,
+  ensureLoopbackOnlyEgress,
+  prepareWorkspaceOwnership,
   probeBackend,
+  restoreWorkspaceOwnership,
   sandboxedCommand,
   selectBackend,
 };

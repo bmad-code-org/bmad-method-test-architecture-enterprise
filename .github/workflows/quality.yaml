@@ -229,6 +229,14 @@ jobs:
       - name: Prove atdd scoring requires assertion provenance, not just message text
         run: npm run test:atdd-scoring
 
+      # Needs the same isolation backend as the atdd proofs above. Reaches no
+      # external network: its positive control runs a second proxy instance
+      # substituting a loopback target for the real registry (see the test
+      # file's own header), which is what makes it safe in the local,
+      # offline-safe `npm test` chain the same way the atdd proofs above are.
+      - name: Prove framework-scaffold's install-time isolation (CONNECT-allowlisting proxy denies non-allowlisted hosts, allows its configured target, loopback still works)
+        run: npm run test:framework-scaffold-install-isolation
+
       # Two of the eight documented commands this gate re-runs (test:eval-schemas,
       # test:probe-targets) exercise the atdd preflight path, which needs the
       # linux isolation backend installed above — running this any earlier fails
@@ -257,6 +265,9 @@ jobs:
 
       - name: Validate CI eval corpus
         run: npm run test:eval-ci-data
+
+      - name: Validate framework-scaffold eval data (fixture present, isolation backend selectable, no install, no network)
+        run: npm run test:eval-framework-scaffold-data
 
       - name: Validate test-design eval corpus
         run: npm run test:eval-test-design-data

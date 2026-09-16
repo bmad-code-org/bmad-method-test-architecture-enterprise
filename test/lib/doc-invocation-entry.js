@@ -92,6 +92,8 @@ const ALLOWLIST_BY_COMMENT = new Map([
   ['eval-test-design --validate-only', 'test:eval-test-design-data'],
   ['eval-bmad-tea-routing --validate-only', 'test:eval-routing-data'],
   ['eval-automate --validate-only', 'test:eval-automate-data'],
+  ['eval-framework-scaffold --validate-only', 'test:eval-framework-scaffold-data'],
+  ['test-framework-scaffold-install-isolation', 'test:framework-scaffold-install-isolation'],
 ]);
 
 const ALLOWLISTED_SCRIPTS = new Set(ALLOWLIST_BY_COMMENT.values());

@@ -7,10 +7,10 @@
     "way is the most expensive possible mistake to make about your own quality gate.",
     "",
     "Only `evalType: behavioral` discharges a skill's coverage obligation. Fragment selection measures which",
-    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so one of the",
-    "eight skills it spans, `bmad-testarch-framework`, is still listed under `deferred`. The other seven, `atdd`,",
-    "`automate`, `ci`, `nfr`, `test-design`, `test-review` and `trace`, each carry a behavioral suite of their own,",
-    "and that is what discharges them.",
+    "knowledge a run loads, which is a routing decision taken before the workflow produces anything, so none of the",
+    "eight skills it spans is still listed under `deferred`. All eight, `atdd`, `automate`, `ci`, `framework`, `nfr`,",
+    "`test-design`, `test-review` and `trace`, each carry a behavioral suite of their own, and that is what",
+    "discharges them.",
     "",
     "`ciTier` is the tier at which a suite runs in full. `npm run eval:all -- --preflight-only` runs each suite's",
     "`harnessOptions.preflightArgs` instead, which validates the data and then probes the runner: the executable",
@@ -597,6 +597,68 @@
       "caseCount": 1,
       "ciTier": "deterministic",
       "runnerCapabilities": ["scoped-artifact-writes"]
+    },
+    {
+      "$comment": [
+        "Why this doesn't fit the existing agent-eval shape cleanly, and why it's registered in suites[] anyway: all",
+        "other behavioral suites here invoke a live agent and score what it produced. bmad-testarch-framework's",
+        "'generation' step is a parameterized template copy, not a live-agent judgment call -- Story 6.8 already",
+        "scored the committed fixture's contents statically with zero agent involvement. This suite is 100%",
+        "execution and 0% generation: it copies the committed clean fixture into a disposable workspace, runs a real",
+        "`npm install` and a real smoke test (tests/e2e/api-sample.spec.ts only -- ui-sample.spec.ts needs a real",
+        "Chromium navigation and stays out of scope) against a minimal in-memory stub backend, inside NFR9 isolation",
+        "extended with one loopback-bound CONNECT-allowlisting proxy that permits exactly one external host",
+        "(registry.npmjs.org) and nothing else. No vendor call is ever made; runnerCapabilities describes this",
+        "harness's OWN sandboxed execution step, the same generic vocabulary ATDD's own execution half is confined",
+        "by rather than a stretch of it, since the schema documents it as a policy declaration and not narrowly as a",
+        "live agent's own permission. `--agent` is accepted only for eval:all's CLI uniformity and is never read.",
+        "",
+        "`groundTruth` names the same file as `fixtures` on purpose: the sample spec's own assertions are the",
+        "oracle here, which the schema's own comment anticipates (\"a suite whose oracle is also its input has to",
+        "say so rather than let a reader assume the two were written independently\").",
+        "",
+        "`repetitions` is 1: a deterministic install-and-run against a fixed fixture has no stochastic process to",
+        "average over, unlike every other suite's repetition count, which exists to average over LLM stochasticity.",
+        "",
+        "`seededDefectDetectionRate` is the second threshold, measured only once `installAndSmokePassRate` already",
+        "passed: a backend seeded to answer the wrong status and a workspace copy seeded to drop its own auth fixture",
+        "from mergeTests(...) must each fail the smoke test for its own distinct, verified reason. A suite whose",
+        "smoke test cannot be observed to fail is decorative regardless of how often it passes; this threshold is",
+        "what rules that out on every live run, not only once by hand."
+      ],
+      "id": "framework",
+      "skill": "bmad-testarch-framework",
+      "evalType": "behavioral",
+      "harness": "test/eval-framework-scaffold.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": [
+        "test/fixtures/framework-scaffold/clean/.claude/hooks/tea-enforce.cjs",
+        "test/fixtures/framework-scaffold/clean/.claude/settings.json",
+        "test/fixtures/framework-scaffold/clean/.env.example",
+        "test/fixtures/framework-scaffold/clean/.nvmrc",
+        "test/fixtures/framework-scaffold/clean/.tea/enforce-config.json",
+        "test/fixtures/framework-scaffold/clean/package.json",
+        "test/fixtures/framework-scaffold/clean/playwright.config.ts",
+        "test/fixtures/framework-scaffold/clean/tests/README.md",
+        "test/fixtures/framework-scaffold/clean/tests/e2e/api-sample.spec.ts",
+        "test/fixtures/framework-scaffold/clean/tests/e2e/ui-sample.spec.ts",
+        "test/fixtures/framework-scaffold/clean/tests/support/auth-fixture.ts",
+        "test/fixtures/framework-scaffold/clean/tests/support/merged-fixtures.ts"
+      ],
+      "groundTruth": ["test/fixtures/framework-scaffold/clean/tests/e2e/api-sample.spec.ts"],
+      "contracts": [],
+      "thresholds": {
+        "installAndSmokePassRate": 1,
+        "seededDefectDetectionRate": 1
+      },
+      "repetitions": 1,
+      "caseCount": 1,
+      "ciTier": "full-matrix",
+      "runnerCapabilities": ["command-execution"]
     }
   ],
   "deferred": [
@@ -605,12 +667,6 @@
       "owner": "TEA maintainers",
       "missingEvidence": "No suite of any kind. The skill ships no knowledge index, so even fragment selection does not apply, and nothing measures a multi-turn teaching session.",
       "exitCondition": "A transcript-based behavioral suite proves the skill places a learner at the right level, corrects seeded misconceptions, adapts the session, persists progress, and avoids claiming mastery without evidence."
-    },
-    {
-      "skill": "bmad-testarch-framework",
-      "owner": "TEA maintainers",
-      "missingEvidence": "Fragment selection only. No generated scaffold is ever installed or smoke-tested, so nothing shows the output runs.",
-      "exitCondition": "A behavioral suite proves the workflow produces a scaffold that installs, validates, runs a smoke test, and contains the expected configuration, fixtures, scripts, and hook registration."
     }
   ]
 }
