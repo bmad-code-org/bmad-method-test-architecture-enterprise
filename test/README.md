@@ -49,6 +49,8 @@ npm run test:eval-data         # eval-fragment-selection --validate-only
 npm run test:eval-nfr-data     # eval-nfr --validate-only
 npm run test:eval-ci-data      # eval-ci --validate-only
 npm run test:eval-automate-data # eval-automate --validate-only
+npm run test:eval-framework-scaffold-data  # eval-framework-scaffold --validate-only
+npm run test:framework-scaffold-install-isolation  # test-framework-scaffold-install-isolation
 npm run test:eval-test-design-data  # eval-test-design --validate-only
 npm run test:eval-trace-data   # eval-trace --validate-only
 npm run test:eval-routing-data # eval-bmad-tea-routing --validate-only
@@ -434,6 +436,48 @@ The suite's manifest entry declares `contracts: []`: `test/test-probe-targets.js
 refuses a contract naming a CLI interface this repository does not ship, and this
 skill ships no live-agent command at all, so there is no real interaction for a
 contract to address. `test/contracts/README.md` records the reasoning.
+
+## framework-scaffold eval suite
+
+`eval-framework-scaffold.js` measures `bmad-testarch-framework`, not by invoking the
+workflow -- Story 6.8's own static scoring (`test-framework-scaffold.js`) already
+covers that with zero agent involvement -- but by actually installing and running
+what it generates. It copies `fixtures/framework-scaffold/clean/` into a disposable
+workspace, patches the copy's `manageAuthToken` (a `TODO` throw in the committed
+fixture, since no real auth endpoint exists here) and its
+`@seontechnologies/playwright-utils` version pin (the committed `^1.0.0` does not
+resolve on the real npm registry, which only publishes `3.10.0` and above), then runs
+a real `npm install` and a real `npx playwright test tests/e2e/api-sample.spec.ts`
+against `lib/framework-scaffold-stub-server.js`, an in-memory reservation stub, all
+inside NFR9 isolation. `lib/framework-scaffold-install-isolation.js` is the one new
+host-check surface: a loopback-bound, CONNECT-only proxy, run unsandboxed with real
+egress of its own, that allows exactly `registry.npmjs.org:443` and refuses
+everything else -- the sandboxed `npm install` reaches it through `HTTPS_PROXY`, so
+from inside the sandbox every registry request is a plain loopback connection.
+`ui-sample.spec.ts` stays out of scope: it needs a real Chromium navigation, which
+this suite does not take on.
+
+Once the clean case passes, the same installed workspace proves the suite is not
+vacuous: a second stub instance seeded with the wrong `createStatus` must fail the
+smoke test's status assertion with `Received: 500`, and dropping `authFixture` from
+the workspace copy's own `merged-fixtures.ts` `mergeTests(...)` call must fail it
+instead with Playwright's `unknown parameter "authToken"` -- two independent,
+verified-live failure signatures, neither a second `npm install`. Either going
+undetected misses the manifest's second threshold, `seededDefectDetectionRate`.
+
+No vendor call is ever made. `--agent`/`--agent-cmd`/`--runs`/etc. are accepted only
+for CLI uniformity with `eval:all` and are never read for the live run; the
+manifest's two thresholds (`installAndSmokePassRate`, `seededDefectDetectionRate`)
+and `repetitions: 1` reflect a deterministic install-and-run with no stochastic
+process to average over.
+
+`test-framework-scaffold-install-isolation.js` proves the isolation before the suite
+counts: a non-allowlisted host is refused both directly from inside the sandbox and
+through the proxy, and loopback still works, each checked directly and via a spawned
+child, plus a positive control (a second proxy instance, its allow-target substituted
+to a loopback address) proving the proxy's allow path is a real decision rather than
+a proxy that refuses everything indiscriminately. It needs no external network, so it
+runs in the local `npm test` chain the same way `test-atdd-isolation.js` does.
 
 ## contract oracle suite
 

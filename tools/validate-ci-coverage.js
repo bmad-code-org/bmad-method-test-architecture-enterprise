@@ -107,6 +107,8 @@ const DELIBERATELY_LOCAL = {
   'eval:ci': 'a live agent eval; same reason as eval:all',
   'eval:contract-strength': 'a live agent eval; same reason as eval:all',
   'eval:fragment-selection': 'a live agent eval; same reason as eval:all',
+  'eval:framework-scaffold':
+    "no live agent and no vendor cost, but a real npm install against the real registry and a real Playwright/Chromium run, unlike eval:automate above; test:eval-framework-scaffold-data and test:framework-scaffold-install-isolation already run its deterministic and isolation checks in CI, and the live install-and-smoke run itself stays in the manual/scheduled full-matrix tier the same way every live-agent eval above does, per docs/explanation/eval-quality-roadmap.md's CI policy",
   'eval:nfr': 'a live agent eval; same reason as eval:all',
   'eval:preflight': 'the --preflight-only entry point into the live eval:contract-strength; same reason as eval:all',
   'eval:routing': 'a live agent eval; same reason as eval:all',
