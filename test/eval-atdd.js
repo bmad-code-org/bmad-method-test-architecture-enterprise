@@ -108,6 +108,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -170,11 +171,38 @@ const RED_CHECK_OVERALL_TIMEOUT_MS = 5 * 60_000;
  * process and Playwright's wait for it to end both sat idle past this
  * harness's own wall-clock bounds. `test/fixtures/atdd-eval/reservations/package.json`
  * declares `npm start`, which every node fixture this suite might grow also
- * would, and its own `src/server.js` answers `/health`.
+ * would, and its own `src/server.js` answers `/health` on `PORT`.
+ *
+ * The port is resolved once per process, from an OS-assigned ephemeral port,
+ * rather than a fixed number: a fixed port is shared mutable state between
+ * every invocation of this suite on one host, and two of them running at
+ * once, in two worktrees or two peer sessions, is an ordinary occurrence
+ * here. `startServer` in `cli/atdd-red-check.js` refuses to start when
+ * something already answers its health URL, so a fixed port made the second
+ * invocation fail with "already in use" rather than run. `getFreePort`
+ * resolves once and every repetition in this process reuses the same port,
+ * which is safe: each run's server is fully stopped before the next one
+ * starts (`cli/atdd-red-check.js`'s own `finally` block).
  */
-const FIXTURE_SERVER_PORT = 4310;
-const FIXTURE_SERVER_COMMAND = 'npm start';
-const FIXTURE_SERVER_HEALTH_URL = `http://127.0.0.1:${FIXTURE_SERVER_PORT}/health`;
+let fixtureServerPortPromise = null;
+
+/** @returns {Promise<number>} An ephemeral TCP port, free on 127.0.0.1 at the moment this resolves. */
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const { port } = probe.address();
+      probe.close((closeError) => (closeError ? reject(closeError) : resolve(port)));
+    });
+  });
+}
+
+/** The one fixture-server port this process uses, resolved on first use and reused after. */
+function fixtureServerPort() {
+  if (fixtureServerPortPromise === null) fixtureServerPortPromise = getFreePort();
+  return fixtureServerPortPromise;
+}
 
 /**
  * What the generation runner is allowed to do, checked against the manifest's
@@ -676,9 +704,10 @@ function caseIds() {
  * @param {string} projectDir
  * @param {string} reportPath
  * @param {string} backend
- * @returns {{ok: true, report: object}|{ok: false, failureClass: string, reason: string}}
+ * @returns {Promise<{ok: true, report: object}|{ok: false, failureClass: string, reason: string}>}
  */
-function runRedCheck(projectDir, reportPath, backend) {
+async function runRedCheck(projectDir, reportPath, backend) {
+  const port = await fixtureServerPort();
   const args = [
     RED_CHECK_PATH,
     '--project-root',
@@ -694,9 +723,15 @@ function runRedCheck(projectDir, reportPath, backend) {
     '--per-file-timeout-ms',
     String(RED_CHECK_PER_FILE_TIMEOUT_MS),
     '--server-command',
-    FIXTURE_SERVER_COMMAND,
+    // `PORT=<n>` set for this one shell invocation, ahead of the command
+    // itself: `cli/atdd-red-check.js` spawns `--server-command` with `shell:
+    // true` and an environment closed to `PATH` alone, so this is the one
+    // channel that reaches `npm start` with the chosen port. `npm` forwards
+    // its own environment to the script it runs, the same as any `PORT=1234
+    // npm start` on a command line.
+    `PORT=${port} npm start`,
     '--server-health-url',
-    FIXTURE_SERVER_HEALTH_URL,
+    `http://127.0.0.1:${port}/health`,
   ];
 
   let profilePath;
@@ -912,7 +947,7 @@ async function runCase(groundTruth, options, agent, runIndex, backend) {
 
     const reportPath = path.join(workspace.projectDir, 'test-artifacts', 'atdd-red-report.json');
     const treeBeforeExecution = workingTreeState(PROJECT_ROOT);
-    const redCheck = runRedCheck(workspace.projectDir, reportPath, backend);
+    const redCheck = await runRedCheck(workspace.projectDir, reportPath, backend);
     // The sandbox is what actually confines the generated tests this runs; this
     // is a second, independent detector so a sandbox that silently stopped
     // confining is not the only thing standing between generated test code and
