@@ -187,6 +187,24 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
  */
 const EXECUTION_TARGETS = [
   {
+    interfaceId: 'tea-atdd-runner',
+    executable: 'tea-atdd-runner',
+    script: path.join('cli', 'atdd-runner.js'),
+    subcommandPaths: [[]],
+    // The generation half writes red-phase scaffolds under the project's own
+    // test directory, a location the ground truth names rather than a fixed
+    // path this registry could declare, so this command authorizes no
+    // artifact of its own: the harness reads the scaffolds off the working
+    // directory it staged, the same way a directory-shaped deliverable is
+    // read for the framework and CI suites once those exist.
+    artifacts: {},
+    environmentKeys: vendorEnvironmentNames(),
+    // One minute above RUN_TIMEOUT_MS in test/eval-atdd.js, for the reason the
+    // comment above EXECUTION_TARGETS gives: the inner clock classifies, and
+    // this one only backstops.
+    maxElapsedMs: 21 * 60_000,
+  },
+  {
     interfaceId: 'tea-test-design-runner',
     executable: 'tea-test-design-runner',
     script: path.join('cli', 'test-design-runner.js'),

@@ -1,0 +1,57 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: AC-1's scaffold is still red, but for the wrong reason, asserting",
+    "a status the story never promises. A run scoring this as correct would be rewarding a scaffold",
+    "that fails for an unrelated reason."
+  ],
+  "id": "wrong-reason-red",
+  "suite": "atdd",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json"
+  },
+  "derivation": "AC-1's scaffold fails with 'Expected: 500\\nReceived: 404', which does not match AC-1's declared pattern ('Expected: 201...Received: 404'), so scoreRun classifies it as non-assertion-exit. The other four criteria are unchanged from the correct run. redForIntendedReasonRate is 4/5 = 0.8.",
+  "result": {
+    "perCriterion": [
+      {
+        "id": "AC-1",
+        "present": true,
+        "outcome": "non-assertion-exit"
+      },
+      {
+        "id": "AC-2",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-3",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-4",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-5",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      }
+    ],
+    "mappedTestCount": 5,
+    "redForIntendedReasonCount": 4,
+    "redForIntendedReasonRate": 0.8,
+    "criteriaCoverage": 1,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": ["tests/api/reservations.spec.ts:[P0] AC-1 reserving a free locker creates it"],
+    "unmapped": [],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

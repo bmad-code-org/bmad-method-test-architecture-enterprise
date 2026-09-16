@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "<staged-workspace>/reservations",
+  "testDir": "tests",
+  "specFileCount": 1,
+  "productionFilesTouched": [],
+  "files": [
+    {
+      "file": "tests/api/reservations.spec.ts",
+      "hadSkipCall": true,
+      "loadError": "SyntaxError: <staged-workspace>/reservations/tests/api/reservations.spec.ts: Unexpected token, expected \",\" (10:2); Error: No tests found.",
+      "tests": []
+    }
+  ]
+}
