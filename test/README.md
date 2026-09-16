@@ -282,8 +282,8 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every case that produces a number was written by hand to be parsed, so a green
 run proves the scorers are deterministic and reproduce history, and proves
-nothing about whether they handle real agent output correctly. Eighty-six of the
-ninety cases produce a number and eighty-four of those are constructed. Two carry
+nothing about whether they handle real agent output correctly. Ninety-one of the
+ninety-six cases produce a number and eighty-nine of those are constructed. Two carry
 real captured bytes, both borrowed from `fixtures/test-review-cli/`, and both
 score zero recall: their reports document no finding at all. The live runs of
 2026-09-08 produced real numbers for the three suites that existed then, and none

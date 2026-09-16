@@ -127,13 +127,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Floating to latest rather than pinned: test/eval-ci.js's own pre-flight
-      # enforces the minimum version its flags were written against, so a newer
-      # release only ever adds coverage. actionlint publishes this installer
-      # script for exactly this use.
+      # The actionlint version this installs floats to latest rather than pinned:
+      # test/eval-ci.js's own pre-flight enforces the minimum version its flags
+      # were written against, so a newer release only ever adds coverage. The
+      # installer script itself is pinned by commit and checksummed before it
+      # runs, because "main" is mutable and a script that ends in `sudo mv` is
+      # not something to pipe from a branch nobody reviews on every run.
       - name: Install actionlint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash
+          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
+          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
+          bash download-actionlint.bash
           sudo mv ./actionlint /usr/local/bin/
 
       - name: Check for unresolved conflict markers
@@ -278,10 +282,13 @@ jobs:
       # test:cli's eval:all reconciliation tests run --preflight-only across every
       # manifest suite, including ci, whose pre-flight is a hard actionlint
       # dependency. See the validate job's own Install actionlint step for why
-      # this floats to latest rather than pinning a version.
+      # this floats to latest rather than pinning a version, and why the
+      # installer script itself is pinned by commit and checksummed.
       - name: Install actionlint
         run: |
-          curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash
+          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
+          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
+          bash download-actionlint.bash
           sudo mv ./actionlint /usr/local/bin/
 
       - name: Test TEA test-review CLI (${{ matrix.shard.name }})

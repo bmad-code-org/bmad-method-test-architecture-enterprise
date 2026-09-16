@@ -1078,15 +1078,26 @@ async function checkCiOracles(evaluator) {
       });
       const label = `${item.id} as ${set.id === expected.inputs?.fixtureSet ? 'its own project' : set.id}`;
       const own = specs.filter((spec) => spec.setId === set.id);
-      // A workflow the harness will not read at all: the artifact never came
-      // back as text. Nothing is compared and the skip is printed, the same
-      // shape nfr and trace use for a report or summary the harness refuses.
-      if (text === null) {
-        skippedUnscored += own.length;
-        continue;
-      }
       for (const spec of own) {
         const result = results.get(spec.id);
+        // A workflow the harness will not read at all: the artifact never came
+        // back as text. Nothing is compared, the same shape nfr and trace use for
+        // a report or summary the harness refuses, except for the one oracle that
+        // reads the run's shape rather than the workflow's content: the contract
+        // has to refuse it too.
+        if (text === null) {
+          if (spec.kind !== 'run-measured') {
+            skippedUnscored += 1;
+            continue;
+          }
+          assert(
+            agrees(result, null),
+            `${label}: ${spec.id} (${spec.kind}) refuses the run the harness refuses`,
+            `oracle ${describe(result)}`,
+          );
+          evaluated += 1;
+          continue;
+        }
         const scorer = spec.kind === 'run-measured' ? true : spec.scorer(text);
         if (scorer === false) seenFalse.add(spec.id);
         assert(
