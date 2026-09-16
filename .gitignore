@@ -65,6 +65,7 @@ build/
 # Test fixtures: stub skill installs must be tracked (negations must follow the _bmad/.claude exclusions)
 !test/fixtures/test-review-cli/project/_bmad
 !test/fixtures/test-review-cli/project-claude/.claude
+!test/fixtures/framework-scaffold/clean/.claude
 
 # epics.md is the one file under the gitignored _bmad-output tracked on purpose: the sprint's own
 # checklist, ticked by the story that closes it. Without this, `git add` on it prints "ignored by
