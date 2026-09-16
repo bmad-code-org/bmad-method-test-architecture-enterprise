@@ -13,7 +13,7 @@ TEA is a standalone BMAD module that delivers risk-based test strategy, test aut
 - `tea-test-review`, a headless CLI that runs the review workflow as a CI gate with real exit codes
 - a write-time enforcement hook that blocks the mechanically decidable violations before they reach disk
 
-TEA is two layers. **TEA Core** decides what must be verified, at what depth, with what evidence, and whether that evidence is sufficient to release; it assumes nothing about your language, framework, or platform. **Execution targets** turn those decisions into runnable tests on a specific stack, and that layer is swappable. See [Verification Architecture](./docs/explanation/verification-architecture.md) for the split, and [Execution Targets](./docs/reference/execution-targets.md) for exactly which stacks are covered at which depth.
+TEA is two layers. **TEA Core** decides what must be verified, at what depth, with what evidence, and whether that evidence is sufficient to release; it assumes nothing about your language, framework, or platform. **Execution targets** turn those decisions into runnable tests on a specific stack, and that layer is swappable. See [Verification Architecture](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/verification-architecture/) for the split, and [Execution Targets](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/execution-targets/) for exactly which stacks are covered at which depth.
 
 Docs: [https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/)
 
@@ -71,7 +71,7 @@ Phase 3 order matters and is deliberate: run `test-design` first so NFR evidence
 
 `module-help.csv`'s single `phase` column records the phase a workflow's catalog row is sequenced under (its `preceded-by`/`followed-by` chain), not every phase the workflow can run in. `test-design`'s row is `3-solutioning` because that is the chain the row encodes (`test-design` → `framework`); the epic-level Phase 4 invocation above has no dependency edges of its own and so gets no second row, only this prose.
 
-For the full lifecycle diagram including the BMad phases around TEA, see [TEA Overview](./docs/explanation/tea-overview.md).
+For the full lifecycle diagram including the BMad phases around TEA, see [TEA Overview](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/tea-overview/).
 
 ### One epic, end to end
 
@@ -192,7 +192,7 @@ flowchart TB
 
 **5. Validation.** `steps-v/` scores the finished output against `checklist.md`.
 
-See [Step-File Architecture](./docs/explanation/step-file-architecture.md) for the loading model, worker isolation, and the per-workflow step patterns.
+See [Step-File Architecture](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/step-file-architecture/) for the loading model, worker isolation, and the per-workflow step patterns.
 
 ### Parallel Workers and Execution Modes
 
@@ -293,7 +293,7 @@ npx bmad-method install
 
 `trace` Phase 2 produces the decision: PASS, CONCERNS, FAIL, or WAIVED. Two mechanics sit under that vocabulary and are easy to miss.
 
-**Live evidence is capped.** A requirement covered only by recorded live verification forces PASS down to CONCERNS, with a rationale naming the recorded source SHA. The overlay only ever lowers a PASS or annotates an existing CONCERNS. It can never lift a FAIL. Only a `pass` recorded against the commit under trace counts; `stale`, `unverifiable`, `contradicted`, `blocked`, and the rest are reported as blockers. The JSON contract is published at [Live Verification Results](./docs/reference/live-verification-results.md), so any runner can produce it. Trace reads that file and never runs anything itself.
+**Live evidence is capped.** A requirement covered only by recorded live verification forces PASS down to CONCERNS, with a rationale naming the recorded source SHA. The overlay only ever lowers a PASS or annotates an existing CONCERNS. It can never lift a FAIL. Only a `pass` recorded against the commit under trace counts; `stale`, `unverifiable`, `contradicted`, `blocked`, and the rest are reported as blockers. The JSON contract is published at [Live Verification Results](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/live-verification-results/), so any runner can produce it. Trace reads that file and never runs anything itself.
 
 **Some runs are not gate-eligible at all.** A collection status of `waived`, `restricted`, `inaccessible`, or `deferred_shared` means no decision is emitted rather than a decision computed on partial evidence. A missing manifest resolves to `INACCESSIBLE`, not to 0% coverage.
 
@@ -309,7 +309,7 @@ It scopes to changed tests (`--base`, `--files`), runs through an agent adapter 
 
 The recommendation is derived from the findings rather than taken from the agent's prose. Any CRITICAL derives Block. Any HIGH, or a score under 70, derives Request Changes. The agent's own stated recommendation is preserved as `reportedRecommendation` when the two disagree. `--waive` exists for the exceptions and requires an expiry.
 
-A copy-paste workflow lives at `cli/examples/pr-test-review.yml`, and the full flag, exit-code, and security reference is at [tea-test-review CLI](./docs/reference/tea-test-review-cli.md).
+A copy-paste workflow lives at `cli/examples/pr-test-review.yml`, and the full flag, exit-code, and security reference is at [tea-test-review CLI](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/).
 
 ## Configuration
 
@@ -328,7 +328,7 @@ TEA variables are defined in `src/module.yaml` and prompted during install. Ten 
 - `risk_threshold` — risk cutoff for mandatory testing. Prompted at install, not yet read by any workflow
 - `test_design_output`, `test_review_output`, `trace_output` — subfolders under `test_artifacts`. Prompted at install, not yet read by any workflow
 
-Full option reference: [Configuration](./docs/reference/configuration.md).
+Full option reference: [Configuration](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/).
 
 ## Knowledge Base
 
@@ -338,7 +338,7 @@ TEA relies on a curated testing knowledge base of 59 fragments, indexed by tier:
 - Fragments: `src/agents/bmad-tea/resources/knowledge/`
 - Tiers: 24 core, 19 extended, 16 specialized
 
-Workflows load only the fragments required for the current task, and the required set is named in the step file rather than inferred from index tags. See [Knowledge Base](./docs/reference/knowledge-base.md).
+Workflows load only the fragments required for the current task, and the required set is named in the step file rather than inferred from index tags. See [Knowledge Base](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/knowledge-base/).
 
 ## Repository Layout
 
@@ -388,7 +388,7 @@ The `atdd`, `ci`, `nfr`, `test-design`, `test-review`, and `trace` suites add be
 | `bmad-testarch-test-review` | 2                        | Yes; three files, nine planted defects, and one clean file        |
 | `bmad-testarch-trace`       | 2                        | Yes; a ten-criterion seeded set and a five-criterion clean set    |
 
-A passing fragment-selection eval means the workflow loaded the right knowledge. It makes no claim about the quality of the workflow's final output. Full behavioral evals for the remaining skills are a coverage gap. The source-controlled [Eval Quality and Behavioral Coverage Roadmap](./docs/explanation/eval-quality-roadmap.md) records the per-skill contracts, runner work, CI plan, and intended boundary with the upcoming standalone `eval-quality` project. [The eval-quality Command Adapter](./docs/explanation/eval-quality-command-adapter.md) records how TEA runs the commands those evals measure, and [Adopting eval-quality, One Skill at a Time](./docs/explanation/eval-quality-adoption-guide.md) is the guide for taking one skill in another BMAD module from asserted quality to measured quality.
+A passing fragment-selection eval means the workflow loaded the right knowledge. It makes no claim about the quality of the workflow's final output. Full behavioral evals for the remaining skills are a coverage gap. The source-controlled [Eval Quality and Behavioral Coverage Roadmap](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/eval-quality-roadmap/) records the per-skill contracts, runner work, CI plan, and intended boundary with the upcoming standalone `eval-quality` project. [The eval-quality Command Adapter](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/eval-quality-command-adapter/) records how TEA runs the commands those evals measure, and [Adopting eval-quality, One Skill at a Time](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/eval-quality-adoption-guide/) is the guide for taking one skill in another BMAD module from asserted quality to measured quality.
 
 ### Deterministic Checks
 

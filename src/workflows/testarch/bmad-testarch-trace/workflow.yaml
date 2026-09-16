@@ -68,9 +68,9 @@ gate_decision_output: "{test_artifacts}/gate-decision.json" # Optional downstrea
 
 # live-verification-results.json schema (READ by step-02 from {live_results_input}; this workflow never writes it)
 # Any producer may emit this file: an agent, a shell script, a CI job, or a person recording an outcome by hand.
-# The full contract, including the test-case ID format, is published in the
-# TEA documentation's live-verification-results reference (not shipped in the
-# installed skill).
+# The full contract, including the test-case ID format, is published at
+# https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/live-verification-results/
+# (not shipped in the installed skill).
 # schema_version: "0.1.0"   (enforced: a differing major version makes the file unreadable)
 # source_sha: git commit the observations were made against (enforced; per-result source_sha overrides it)
 # observed_at: ISO timestamp (recorded, not enforced; per-result observed_at overrides it)

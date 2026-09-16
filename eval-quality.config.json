@@ -262,7 +262,7 @@
       },
       {
         "name": "docs-path",
-        "match": "(?<!/)\\bdocs/(?:how-to|reference|explanation)/[\\w./-]+\\b",
+        "match": "(?<![\\w/])(?:\\.\\.?/)*docs/(?:how-to|reference|explanation)/[\\w./-]+\\b",
         "reason": "a page under docs/, referenced as a relative path the published tarball does not carry; the built site is the only place it is readable"
       },
       {

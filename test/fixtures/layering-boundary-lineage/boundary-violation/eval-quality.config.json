@@ -6,6 +6,11 @@
         "name": "tea-dev-test-file",
         "match": "\\btest/test-[\\w-]+\\.js\\b",
         "reason": "this repository's own dev test file, not part of the published tarball"
+      },
+      {
+        "name": "docs-path",
+        "match": "(?<![\\w/])(?:\\.\\.?/)*docs/(?:how-to|reference|explanation)/[\\w./-]+\\b",
+        "reason": "a page under docs/, referenced as a relative path the published tarball does not carry; the built site is the only place it is readable"
       }
     ]
   }

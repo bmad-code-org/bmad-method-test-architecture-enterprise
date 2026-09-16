@@ -151,6 +151,13 @@ function checkBoundarySeed(binary) {
   );
   check(output.includes('src/leaky.md'), `package-boundary did not name the seeded file\n${output}`);
   check(output.includes('test/test-knowledge-base.js'), `package-boundary did not quote the offending line\n${output}`);
+  // A relative `./docs/...` link, prefixed rather than bare: the `docs-path`
+  // pattern's negative lookbehind used to require the character right before
+  // `docs` not be `/`, which a leading `./` still satisfies, so this exact
+  // shape passed silently until the lookbehind also excluded a preceding word
+  // character.
+  check(output.includes('[docs-path]'), `package-boundary did not fire the docs-path pattern on the seeded relative link\n${output}`);
+  check(output.includes('./docs/reference/configuration.md'), `package-boundary did not quote the seeded relative docs link\n${output}`);
 }
 
 function checkLineageSeed(binary) {
