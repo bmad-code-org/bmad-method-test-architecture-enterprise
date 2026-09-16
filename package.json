@@ -135,8 +135,7 @@
     "test:supply-chain": "node test/test-supply-chain.js",
     "test:tea-workflow-descriptions": "node tools/validate-tea-workflow-descriptions.js",
     "test:transcript-harness": "node test/test-transcript-harness.js",
-    "validate:schemas": "node tools/validate-agent-schema.js",
-    "validate:tea-workflow-descriptions": "node tools/validate-tea-workflow-descriptions.js"
+    "validate:schemas": "node tools/validate-agent-schema.js"
   },
   "lint-staged": {
     "*.{js,cjs,mjs}": [
@@ -157,22 +156,27 @@
   },
   "c8": {
     "all": true,
+    "branches": 65,
+    "check-coverage": true,
     "exclude": [
       "tools/build-docs.js",
       "tools/fix-doc-links.js",
       "tools/generate-lockfile-age-cache.js",
       "tools/validate-doc-links.js"
     ],
+    "functions": 75,
     "include": [
       "cli/**",
       "tools/**",
       "src/workflows/testarch/bmad-testarch-framework/resources/hooks/**"
     ],
+    "lines": 78,
     "reporter": [
       "text",
       "html"
     ],
-    "reports-dir": "coverage"
+    "reports-dir": "coverage",
+    "statements": 78
   },
   "dependencies": {
     "@clack/prompts": "^0.11.0",

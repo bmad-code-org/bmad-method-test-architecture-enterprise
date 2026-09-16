@@ -432,9 +432,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # This job runs npm ci (arbitrary install scripts) and shells out to
-          # a third-party binary; the token persist-credentials would otherwise
-          # leave in .git/config has no business surviving that.
           persist-credentials: false
 
       - name: Setup Node
@@ -460,3 +457,37 @@ jobs:
 
       - name: Verify each gate's script name and seed one violation per failing gate
         run: npm run test:layering-boundary-lineage
+
+  # c8-wrapping the whole npm test chain roughly doubles its wall-clock time,
+  # so this runs as its own job rather than joining the pre-commit-driven
+  # chain, the same tradeoff test:cli and the supply-chain gates make.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # This job runs npm ci (arbitrary install scripts) and the full npm
+          # test chain, which pipes a third-party actionlint binary's output
+          # into the ci eval suite; the token persist-credentials would
+          # otherwise leave in .git/config has no business surviving that.
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install actionlint
+        run: |
+          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
+          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
+          bash download-actionlint.bash
+          sudo mv ./actionlint /usr/local/bin/
+
+      - name: Run the npm test chain under coverage and enforce the threshold
+        run: npm run test:coverage
