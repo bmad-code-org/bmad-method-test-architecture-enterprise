@@ -1289,9 +1289,35 @@ const CRITERION_BULLET = /^\s*[-*+]\s+\*\*([^*]+)\*\*\s*$/;
  * (Uptime)` carry their one parenthetical as part of the canonical name
  * itself, which is why `scoreRun` strips it from both sides rather than only
  * from the report's.
+ *
+ * Peels balanced trailing parenthetical groups one at a time by counting
+ * parens from the end, rather than matching `[^()]*` inside a single regex: a
+ * regex excluding parens from the group's own contents cannot describe a
+ * group containing another group, so `Disaster Recovery (evaluated
+ * separately (see appendix))` left the whole annotation unstripped under the
+ * regex this replaced. Unbalanced input (an unmatched `(` or `)`) is left
+ * alone rather than guessed at, since a heading that cannot be balanced is not
+ * one this function can safely claim to understand.
  */
 function stripCriterionAnnotation(text) {
-  return text.replace(/(?:\s*\([^()]*\))+\s*$/, '').trim();
+  let result = String(text).trim();
+  for (;;) {
+    if (!result.endsWith(')')) return result;
+    let depth = 0;
+    let start = -1;
+    for (let i = result.length - 1; i >= 0; i -= 1) {
+      if (result[i] === ')') depth += 1;
+      else if (result[i] === '(') {
+        depth -= 1;
+        if (depth === 0) {
+          start = i;
+          break;
+        }
+      }
+    }
+    if (start === -1) return result;
+    result = result.slice(0, start).trimEnd();
+  }
 }
 
 /**
@@ -1493,6 +1519,15 @@ function parseReport(text) {
       if (EVIDENCE_GAPS_HEADING.test(line.trim())) {
         inGaps = true;
         gapsDepth = depth;
+        // Closes the criterion the same way the domain branch above closes
+        // the domain. Left open, a gaps heading written one level under a
+        // domain (rather than at the domain's own top level, where every
+        // stored report writes it) would leave currentCriterion pointing at
+        // whichever criterion was last open, and every file-shaped token in
+        // the gap bullets below would attribute to it: the identical
+        // silent-misattribution shape the depth restriction exists to close,
+        // reached through this sibling branch instead.
+        currentCriterion = null;
       } else if (currentDomain !== null && depth === currentDepth + 1) {
         // Exactly one level under the domain's own heading is the next
         // criterion: `depth <= currentDepth` above would already have cleared
@@ -1878,13 +1913,31 @@ function scoreRun(set, report) {
   // this report's heading text does not resolve to any declared name at all
   // is silently excluded the same way an uncited one is, since there is
   // nothing in `set.domains[domain].criteria` to check it against.
+  //
+  // Two report headings that strip to the same name are concatenated rather
+  // than letting the second overwrite the first. `reportedCriteria` is keyed
+  // on the raw heading text, so both are present and distinct there; folding
+  // them with `new Map(...)` would keep only whichever came last, discarding
+  // the other's citations with nothing to show they existed. That is the
+  // same silent-loss shape the depth restriction above exists to close, one
+  // step later: a correct citation under the first of two same-stripped
+  // headings would vanish if the second, unrelated one, happened to be
+  // written last, and the real.every() check below could then read a wrong
+  // citation as the only one that ever existed. Concatenating instead scores
+  // every real citation from either heading against the criterion, so an
+  // extra wrong one is still caught by real.every() rather than silently
+  // dropped.
   const ungroundedCitations = [];
   let groundedCriteriaHits = 0;
   let groundedCriteriaTotal = 0;
   for (const domainName of DOMAINS) {
     const declaredCriteria = set.domains[domainName]?.criteria ?? [];
     const reportedCriteria = report.domains.get(domainName)?.criteria ?? new Map();
-    const byStrippedName = new Map([...reportedCriteria].map(([name, cites]) => [stripCriterionAnnotation(name), cites]));
+    const byStrippedName = new Map();
+    for (const [name, cites] of reportedCriteria) {
+      const key = stripCriterionAnnotation(name);
+      byStrippedName.set(key, [...(byStrippedName.get(key) ?? []), ...cites]);
+    }
     for (const criterion of declaredCriteria) {
       if ((criterion.evidence ?? []).length === 0) continue;
       const cited = byStrippedName.get(stripCriterionAnnotation(criterion.name));
@@ -2551,6 +2604,8 @@ module.exports = {
   parseArgs,
   loadGroundTruth,
   validateCorpus,
+  stripCriterionAnnotation,
+  CRITERION_BULLET_ALIASES,
   rollupStatus,
   deriveOverallStatus,
   expectedDomainStatuses,
