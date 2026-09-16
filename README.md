@@ -434,7 +434,7 @@ npm run eval:all -- --agent claude --preflight-only
 npm run eval:all -- --agent agy --preflight-only
 ```
 
-Output ending with `nothing measured` is expected in preflight mode. It means the static eval data is valid and, for eight of the nine suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential. `automate` invokes no agent at all, so its preflight only checks that its corpus and Playwright resolve, never a vendor or a credential. Some runners cannot expose session authentication to this probe, so a preflight pass does not guarantee that the later live call will authenticate. The flag intentionally exits before launching the agent. `npm run test:eval-schemas` runs each suite's preflight with a missing runner and with a present one, so a preflight that stopped probing the runner would fail `npm test`.
+Output ending with `nothing measured` is expected in preflight mode. It means the static eval data is valid and, for nine of the ten suites, the selected executable is on `PATH`, answers `--version`, and a built-in vendor has a credential. `automate` invokes no agent at all, so its preflight only checks that its corpus and Playwright resolve, never a vendor or a credential. Some runners cannot expose session authentication to this probe, so a preflight pass does not guarantee that the later live call will authenticate. The flag intentionally exits before launching the agent. `npm run test:eval-schemas` runs each suite's preflight with a missing runner and with a present one, so a preflight that stopped probing the runner would fail `npm test`.
 
 ### A La Carte Live Evals
 
