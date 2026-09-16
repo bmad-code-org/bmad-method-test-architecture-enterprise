@@ -7,7 +7,7 @@ description: 'Why TEA probes every measured command through eval-quality, what t
 
 TEA measures a skill by running a command and reading what it wrote. Every harness owned that mechanism itself: its own `spawnSync`, argv, timeout, and `existsSync` plus `JSON.parse` over the file the run produced. Three copies, disagreeing about what a command may do, none capping output.
 
-`eval-quality` 1.0.0 ships that mechanism as `createCommandLineAdapter`, a real `EnvironmentProbePort` over a child process with a conformance arm behind it, 16 outcomes on the 3.0.0 TEA now runs. TEA uses it and deletes what it invented. See the [roadmap](./eval-quality-roadmap.md) for the surrounding plan and `test/contracts/README.md` for the contracts.
+`eval-quality` 1.0.0 ships that mechanism as `createCommandLineAdapter`, a real `EnvironmentProbePort` over a child process with a conformance arm behind it, 16 outcomes on the 3.4.0 TEA now runs. TEA uses it and deletes what it invented. See the [roadmap](./eval-quality-roadmap.md) for the surrounding plan and `test/contracts/README.md` for the contracts.
 
 "Runner" has meant three processes here, which is most of why the boundary was unclear: the vendor agent doing the skill's work, the TEA command under evaluation, and `eval-all.js` orchestrating one child per suite. `eval-quality` has an opinion about the middle one only. It probes a declared interface and returns an observation, never launching an agent and holding no view on vendor routing or credential shape.
 
