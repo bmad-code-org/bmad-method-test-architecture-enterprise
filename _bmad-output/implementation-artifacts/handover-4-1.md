@@ -25,7 +25,7 @@ that work started, not its current state.
 Story 4.1 needs `eval-quality-gates doc-counts`, which ships in `eval-quality` 3.2.0.
 TEA's `package.json` still pins **3.1.0** as of `f3526f9`. Confirmed directly:
 
-```
+```text
 node -e "console.log(require('eval-quality/package.json').version)"   # 3.1.0
 node node_modules/.bin/eval-quality-gates --help                        # lists lockfile-age,
                                                                           # licences, dependency-direction,
@@ -119,7 +119,7 @@ default `runs`, but **not by one uniform formula** — this is the trap I'd have
 into if I'd configured it from the sentence alone without reading the harnesses:
 
 | Sentence phrase | Suite id | caseCount | default runs | Formula | Value |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | 48 fragment selections | `fragment-selection` | 24 | 2 | cases × runs | 48 |
 | 36 routing intents | `bmad-tea-routing` | 18 | 2 | cases × runs | 36 |
 | 4 complete test designs | `test-design` | 2 | 2 | cases × runs | 4 |

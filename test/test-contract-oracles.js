@@ -128,12 +128,7 @@ const {
   scoreRun: scoreNfrRun,
   NFR_OPERATION,
 } = require('./eval-nfr');
-const {
-  loadGroundTruth: loadCiGroundTruth,
-  workflowFromArtifact: ciWorkflowFromArtifact,
-  workflowMentions,
-  CI_OPERATION,
-} = require('./eval-ci');
+const { loadGroundTruth: loadCiGroundTruth, workflowFromArtifact: ciWorkflowFromArtifact, CI_OPERATION } = require('./eval-ci');
 const { loadGroundTruth: loadAtddGroundTruth, ATDD_INTERFACE, ATDD_OPERATION } = require('./eval-atdd');
 const { parseRouting } = require('../cli/lib/parse-routing');
 const {

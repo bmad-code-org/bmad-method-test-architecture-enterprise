@@ -108,7 +108,7 @@ const { DEFAULT_AGENT: NFR_DEFAULT_AGENT } = require('../cli/nfr-runner');
 // the harness's own, and the literal-search predicate a probe's rationale
 // compares against is the harness's `workflowMentions`, so a probe and the
 // contract it names cannot read one workflow file two different ways.
-const { buildPrompt: buildCiPrompt, workflowMentions, CI_INTERFACE, CI_OPERATION } = require('../test/eval-ci');
+const { buildPrompt: buildCiPrompt, CI_INTERFACE, CI_OPERATION } = require('../test/eval-ci');
 const { DEFAULT_AGENT: CI_DEFAULT_AGENT } = require('../cli/ci-runner');
 // The routing probes name the oracle they game by the pointer it reads, which is
 // how they stay attached to the right oracle when a case is added to the corpus
