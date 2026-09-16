@@ -1095,7 +1095,7 @@
           "key": "stay visible in the manifest as deferred work",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "FOUR_SKILLS_DEFERRED"
+            "export": "THREE_SKILLS_DEFERRED"
           },
           "reason": "test/evals/suite-manifest.json's deferred array"
         },
@@ -1104,7 +1104,7 @@
           "key": "still listed as deferred",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "THREE_FRAGMENT_SELECTION_SKILLS_DEFERRED"
+            "export": "TWO_FRAGMENT_SELECTION_SKILLS_DEFERRED"
           },
           "reason": "the fragment-selection suite's skills list filtered by suite-manifest.json's deferred array"
         },
