@@ -15,7 +15,7 @@
   ],
   "id": "gapped-gate-declares-an-unassessed-domain",
   "suite": "nfr",
-  "scorerVersion": 9,
+  "scorerVersion": 10,
   "storedOutput": {
     "origin": "constructed",
     "report": "test-artifacts/nfr-assessment.md"
@@ -36,7 +36,12 @@
     "",
     "The maintainability citations and the Test Coverage evidence gap went with the deleted section, so the",
     "citation map carries three domains and the gaps list is empty. Overall, thresholds elsewhere, and the",
-    "unknown-threshold bit are gapped-correct-audit's unchanged."
+    "unknown-threshold bit are gapped-correct-audit's unchanged.",
+    "",
+    "Grounding: all 15 of 15 criteria with declared evidence cite the file ground truth declares for",
+    "them; none is ungrounded. A criterion with no declared evidence, or no citation, or only a fabricated one is",
+    "excluded from that count rather than treated as a miss, which is why it need not equal the citation total",
+    "above."
   ],
   "result": {
     "isCleanSet": false,
@@ -86,6 +91,11 @@
       ]
     },
     "fabricated": [],
+    "groundedCriteria": {
+      "hits": 15,
+      "total": 15
+    },
+    "ungroundedCitations": [],
     "evidenceGaps": ["Test Coverage"],
     "thresholds": {
       "checks": 4,

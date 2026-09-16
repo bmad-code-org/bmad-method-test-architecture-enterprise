@@ -11,7 +11,7 @@
   ],
   "id": "clean-gaps-invented",
   "suite": "nfr",
-  "scorerVersion": 9,
+  "scorerVersion": 10,
   "storedOutput": {
     "origin": "constructed",
     "report": "test-artifacts/nfr-assessment.md"
@@ -41,7 +41,12 @@
     "Citations: clean-correct-audit's nineteen, unchanged, four under performance, five under security, six under",
     "reliability and four under maintainability. The invented gap is a status, a threshold sentence and a gap entry, and",
     "it moved no Evidence line, so this run and the correct audit are grounded identically and part on what they",
-    "concluded from that grounding."
+    "concluded from that grounding.",
+    "",
+    "Grounding: all 19 of 19 criteria with declared evidence cite the file ground truth declares for",
+    "them; none is ungrounded. A criterion with no declared evidence, or no citation, or only a fabricated one is",
+    "excluded from that count rather than treated as a miss, which is why it need not equal the citation total",
+    "above."
   ],
   "result": {
     "isCleanSet": true,
@@ -97,6 +102,11 @@
       ]
     },
     "fabricated": [],
+    "groundedCriteria": {
+      "hits": 19,
+      "total": 19
+    },
+    "ungroundedCitations": [],
     "evidenceGaps": ["Response Time (p95)"],
     "thresholds": {
       "checks": 4,

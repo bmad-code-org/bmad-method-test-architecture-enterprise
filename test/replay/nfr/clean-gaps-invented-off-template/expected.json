@@ -24,7 +24,7 @@
   ],
   "id": "clean-gaps-invented-off-template",
   "suite": "nfr",
-  "scorerVersion": 9,
+  "scorerVersion": 10,
   "storedOutput": {
     "origin": "constructed",
     "report": "test-artifacts/nfr-assessment.md"
@@ -65,7 +65,12 @@
     "Suggested Evidence lines of the two invented gaps sit under the gaps heading rather than under a domain,",
     "so no citation is read from them. The fabricated list is empty: this run invents findings and cites",
     "nothing that is not in the bundle, which is what separates it from",
-    "gapped-fabricated-evidence-on-a-source-label."
+    "gapped-fabricated-evidence-on-a-source-label.",
+    "",
+    "Grounding: all 19 of 19 criteria with declared evidence cite the file ground truth declares for",
+    "them; none is ungrounded. A criterion with no declared evidence, or no citation, or only a fabricated one is",
+    "excluded from that count rather than treated as a miss, which is why it need not equal the citation total",
+    "above."
   ],
   "result": {
     "isCleanSet": true,
@@ -121,6 +126,11 @@
       ]
     },
     "fabricated": [],
+    "groundedCriteria": {
+      "hits": 19,
+      "total": 19
+    },
+    "ungroundedCitations": [],
     "evidenceGaps": ["Retention Verification", "Key Rotation Proof"],
     "thresholds": {
       "checks": 4,

@@ -722,6 +722,13 @@ function projectTraceResult(scored) {
  * gapped-fault-tolerance-grounded-on-spec differ in this field alone, so dropping
  * it from either side fails.
  *
+ * `groundedCriteria` and `ungroundedCitations` are here for the same reason and
+ * carry a second, sharper case: two reports can cite the identical flat file list
+ * in `citations` while disagreeing on which criterion each file was cited for, a
+ * difference only these two fields see (Story 8.1). Dropping either from
+ * signatureOf lets such a pair sign identically; dropping either from here lets a
+ * pair with one result sign differently.
+ *
  * @param {object} scored One return value of eval-nfr's scoreRun.
  * @returns {object}
  */
@@ -744,6 +751,8 @@ function projectNfrResult(scored) {
     unsupportedPass: scored.unsupportedPass,
     citations: scored.citations,
     fabricated: scored.fabricated,
+    groundedCriteria: scored.groundedCriteria,
+    ungroundedCitations: scored.ungroundedCitations,
     evidenceGaps: scored.evidenceGaps,
     thresholds: {
       checks: thresholds.length,
