@@ -75,6 +75,7 @@
     "lint:md": "markdownlint-cli2 '**/*.md'",
     "prepare": "command -v husky >/dev/null 2>&1 && husky || exit 0",
     "prepublishOnly": "node tools/guard-publish.js",
+    "regenerate:doc-claim-hash": "node tools/regenerate-doc-claim-hash.mjs",
     "release:major": "gh workflow run publish.yaml -f channel=latest -f bump=major",
     "release:minor": "gh workflow run publish.yaml -f channel=latest -f bump=minor",
     "release:next": "gh workflow run publish.yaml -f channel=next",
