@@ -90,7 +90,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 
 ### Epic 4 progress: TEA's claims, codes and supply chain are machine-held
 
-- [x] [Story 4.1: Hold every published count against its source](#story-41-hold-every-published-count-against-its-source) ([#188](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/188), open)
+- [x] [Story 4.1: Hold every published count against its source](#story-41-hold-every-published-count-against-its-source) ([#188](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/188))
 - [ ] [Story 4.2: Hold every published prose claim against its artifact](#story-42-hold-every-published-prose-claim-against-its-artifact)
 - [ ] [Story 4.3: Execute the fenced commands in the documentation](#story-43-execute-the-fenced-commands-in-the-documentation)
 - [x] [Story 4.4: Narrow faults by type and assert every vocabulary](#story-44-narrow-faults-by-type-and-assert-every-vocabulary) ([#182](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/182))
