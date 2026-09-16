@@ -104,7 +104,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 
 - [x] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance) ([#199](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/199))
 - [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result)
-- [ ] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships)
+- [ ] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships) (**Active:** open in [#203](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/203); a final numeric pass once Epic 6 closes and its own counts stop moving remains)
 - [ ] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page) (**Active:** [#200](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/200) merged; the numeric pass after Epic 6 closes remains, and AC3's claim-gate clause is now unblocked by Story 4.2)
 - [ ] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea)
 
