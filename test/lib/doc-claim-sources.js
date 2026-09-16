@@ -132,7 +132,11 @@ exports.THIRTY_FOUR_CONCERNS = concernsCount === 34;
  * The claim is about when a capability arrived, so this compares `>=`, not
  * `==`, against the pin: bumping the pin further keeps the claim true.
  */
-const evalQualityVersion = require('../../package.json').devDependencies['eval-quality'];
+// A relative require() of package.json reads as an import escaping this
+// file's declared dependency-direction root (test/), since package.json sits
+// outside it; reading it as data through fs keeps the check honest about
+// what test/ actually imports.
+const evalQualityVersion = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8')).devDependencies['eval-quality'];
 if (!evalQualityVersion) refuse('package.json has no eval-quality devDependency');
 
 function atLeast(version, floor) {
@@ -159,13 +163,13 @@ exports.EVAL_QUALITY_AT_LEAST_1_2_0 = atLeast(evalQualityVersion, '1.2.0');
 exports.EVAL_QUALITY_AT_LEAST_3_0_0 = atLeast(evalQualityVersion, '3.0.0');
 
 /**
- * docs/explanation/eval-quality-roadmap.md:170, "the pin is 3.2.0 now." Unlike
+ * docs/explanation/eval-quality-roadmap.md:173, "The pin is 3.3.0 now." Unlike
  * the `>=` checks above, this is an exact-point-in-time claim about the pin
  * itself, so it is written to go stale the moment the pin moves again; that is
  * the correct behavior for a sentence stating a specific current version
  * rather than a floor a capability has held since.
  */
-exports.EVAL_QUALITY_PIN_IS_3_2_0 = evalQualityVersion === '3.2.0';
+exports.EVAL_QUALITY_PIN_IS_3_3_0 = evalQualityVersion === '3.3.0';
 
 /** README.md:397, "All 36 rows are currently mapped across 50 anchors." */
 const { MANIFEST: fragmentManifest } = require('../../tools/validate-criteria-fragments.js');

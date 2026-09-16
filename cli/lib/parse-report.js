@@ -375,7 +375,7 @@ function isDisplayItem(line) {
   return line.length > 0 && !/^n\s*\/?\s*a[.!]?$/i.test(line);
 }
 
-/** docs/reference/tea-test-review-cli.md:289, "capped at ten items." */
+/** tea-test-review-cli.md:289 states this cap, "capped at ten items." */
 const ADVISORY_OBSERVATIONS_MAX_ITEMS = 10;
 
 /**
