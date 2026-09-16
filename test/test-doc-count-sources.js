@@ -105,6 +105,12 @@ check("FRAGMENT_SELECTION_CASES is the manifest's own caseCount for that suite",
   assert.strictEqual(source.FRAGMENT_SELECTION_CASES, suite('fragment-selection').caseCount);
 });
 
+check('ADVISORY_OBSERVATIONS_MAX_ITEMS is re-exported unchanged from cli/lib/parse-report.js', () => {
+  const { ADVISORY_OBSERVATIONS_MAX_ITEMS } = require('../cli/lib/parse-report.js');
+  assert.strictEqual(source.ADVISORY_OBSERVATIONS_MAX_ITEMS, ADVISORY_OBSERVATIONS_MAX_ITEMS);
+  assert.strictEqual(typeof source.ADVISORY_OBSERVATIONS_MAX_ITEMS, 'number');
+});
+
 check('the knowledge-fragment tier breakdown matches an independent parse of tea-index.csv', () => {
   const rows = parse(fs.readFileSync(TEA_INDEX_CSV, 'utf8'), { columns: true, skip_empty_lines: true });
   assert.strictEqual(source.KNOWLEDGE_FRAGMENT_TOTAL, rows.length);

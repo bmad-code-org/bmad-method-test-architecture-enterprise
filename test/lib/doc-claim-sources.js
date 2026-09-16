@@ -92,21 +92,21 @@ exports.EXIT_CODE_STRINGS = Object.values(EXIT).map(String);
 const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'evals', 'suite-manifest.json'), 'utf8'));
 const deferredSkills = new Set(manifest.deferred.map((entry) => entry.skill));
 
-/** docs/explanation/eval-quality-roadmap.md:176, "The remaining five ... stay visible ... as deferred work." */
-exports.FIVE_SKILLS_DEFERRED = deferredSkills.size === 5;
+/** docs/explanation/eval-quality-roadmap.md:181, "The remaining four ... stay visible ... as deferred work." */
+exports.FOUR_SKILLS_DEFERRED = deferredSkills.size === 4;
 
-/** docs/explanation/eval-quality-adoption-guide.md:376, "four of the eight skills fragment selection spans are still listed as deferred." */
+/** docs/explanation/eval-quality-adoption-guide.md:377, "three of the eight skills fragment selection spans are still listed as deferred." */
 const fragmentSelectionSuite = manifest.suites.find((suite) => suite.id === 'fragment-selection');
 if (fragmentSelectionSuite === undefined) refuse('suite-manifest.json registers no suite with id "fragment-selection"');
 const fragmentSelectionSkills = fragmentSelectionSuite.skills ?? [];
 if (fragmentSelectionSkills.length === 0) refuse('the fragment-selection suite names no skills');
-exports.FOUR_FRAGMENT_SELECTION_SKILLS_DEFERRED = fragmentSelectionSkills.filter((skill) => deferredSkills.has(skill)).length === 4;
+exports.THREE_FRAGMENT_SELECTION_SKILLS_DEFERRED = fragmentSelectionSkills.filter((skill) => deferredSkills.has(skill)).length === 3;
 
 /** docs/explanation/eval-quality-roadmap.md:10, "It does not yet prove the complete behavior of every TEA skill." */
 exports.NOT_EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE = deferredSkills.size > 0;
 
 /**
- * docs/explanation/eval-quality-adoption-guide.md:201, "the 33 CONCERNS the
+ * docs/explanation/eval-quality-adoption-guide.md:203, "the 34 CONCERNS the
  * stored corpus scores, every one of which test/probes/expected-strength.json
  * already records as expected."
  */
@@ -117,7 +117,7 @@ for (const corpus of Object.values(expectedStrength)) {
     if (probe.verdict === 'CONCERNS') concernsCount += 1;
   }
 }
-exports.THIRTY_THREE_CONCERNS = concernsCount === 33;
+exports.THIRTY_FOUR_CONCERNS = concernsCount === 34;
 
 /**
  * docs/explanation/eval-quality-command-adapter.md:251,269, "as of 1.4.0."

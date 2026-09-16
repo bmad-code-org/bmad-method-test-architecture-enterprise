@@ -135,6 +135,10 @@
       "knowledgeFragmentSpecialized": {
         "kind": "module",
         "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_SPECIALIZED" }
+      },
+      "advisoryObservationsMaxItems": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "ADVISORY_OBSERVATIONS_MAX_ITEMS" }
       }
     },
     "entries": [
@@ -169,7 +173,7 @@
         "file": "README.md",
         "claim": "the npm test chain length",
         "pattern": {
-          "match": "`npm test` chains ([a-z-]+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Six of the ([a-z-]+) keep the rules, guidance, hook, eval data, eval contracts, and documentation aligned:"
+          "match": "`npm test` chains ([a-z-]+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Seven of the ([a-z-]+) keep the rules, guidance, hook, eval data, eval contracts, and documentation aligned:"
         },
         "counts": ["npmTestChainLength", "npmTestChainLength"]
       },
@@ -220,6 +224,14 @@
           "totalCallsThreeRunners"
         ],
         "rendering": "digits"
+      },
+      {
+        "file": "docs/reference/tea-test-review-cli.md",
+        "claim": "the Advisory Observations cap on advisoryObservations",
+        "pattern": {
+          "match": "capped at (\\w+) items"
+        },
+        "counts": ["advisoryObservationsMaxItems"]
       }
     ]
   },
@@ -1083,7 +1095,7 @@
           "key": "stay visible in the manifest as deferred work",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "FIVE_SKILLS_DEFERRED"
+            "export": "FOUR_SKILLS_DEFERRED"
           },
           "reason": "test/evals/suite-manifest.json's deferred array"
         },
@@ -1092,16 +1104,16 @@
           "key": "still listed as deferred",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "FOUR_FRAGMENT_SELECTION_SKILLS_DEFERRED"
+            "export": "THREE_FRAGMENT_SELECTION_SKILLS_DEFERRED"
           },
           "reason": "the fragment-selection suite's skills list filtered by suite-manifest.json's deferred array"
         },
         {
           "file": "docs/explanation/eval-quality-adoption-guide.md",
-          "key": "the 33 CONCERNS the stored corpus scores",
+          "key": "the 34 CONCERNS the stored corpus scores",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "THIRTY_THREE_CONCERNS"
+            "export": "THIRTY_FOUR_CONCERNS"
           },
           "reason": "a count of verdict: \"CONCERNS\" entries in test/probes/expected-strength.json"
         },
@@ -1203,9 +1215,9 @@
         },
         {
           "file": "docs/explanation/eval-quality-command-adapter.md",
-          "key": "of the 55 cannot pre-flight today",
+          "key": "of the 59 cannot pre-flight today",
           "settles": "read",
-          "reason": "a snapshot of how many of the 55 probes could not pre-flight when the rule was written; a historical measurement, not a live-rechecked invariant"
+          "reason": "a snapshot of how many of the 59 probes could not pre-flight when the rule was written (up from 55/eight pre-#186); a historical measurement, not a live-rechecked invariant"
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",

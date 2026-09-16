@@ -375,11 +375,14 @@ function isDisplayItem(line) {
   return line.length > 0 && !/^n\s*\/?\s*a[.!]?$/i.test(line);
 }
 
+/** docs/reference/tea-test-review-cli.md:289, "capped at ten items." */
+const ADVISORY_OBSERVATIONS_MAX_ITEMS = 10;
+
 /**
  * Extract advisory bullets in either the template's ℹ️ form or ordinary
  * Markdown-list form. Advisory text is deliberately not tied to findings.
  */
-function extractAdvisoryObservations(subsectionText, maxItems = 10) {
+function extractAdvisoryObservations(subsectionText, maxItems = ADVISORY_OBSERVATIONS_MAX_ITEMS) {
   if (!subsectionText) {
     return [];
   }
@@ -1725,4 +1728,5 @@ module.exports = {
   FINDING_KEYS,
   RECOMMENDATION_ENUM,
   rawScoreForViolations,
+  ADVISORY_OBSERVATIONS_MAX_ITEMS,
 };

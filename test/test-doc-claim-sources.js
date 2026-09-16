@@ -162,7 +162,7 @@ check('keyIsUnread’s word-boundary check finds a real bare-word reference, not
   }
 });
 
-check('THIRTY_THREE_CONCERNS matches an independent count of "CONCERNS" verdicts in expected-strength.json', () => {
+check('THIRTY_FOUR_CONCERNS matches an independent count of "CONCERNS" verdicts in expected-strength.json', () => {
   const data = JSON.parse(fs.readFileSync(path.join(__dirname, 'probes', 'expected-strength.json'), 'utf8'));
   let count = 0;
   for (const corpus of Object.values(data)) {
@@ -170,8 +170,8 @@ check('THIRTY_THREE_CONCERNS matches an independent count of "CONCERNS" verdicts
       if (probe.verdict === 'CONCERNS') count += 1;
     }
   }
-  assert.strictEqual(source.THIRTY_THREE_CONCERNS, count === 33);
-  assert.strictEqual(count, 33);
+  assert.strictEqual(source.THIRTY_FOUR_CONCERNS, count === 34);
+  assert.strictEqual(count, 34);
 });
 
 if (failures.length > 0) {

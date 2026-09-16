@@ -115,6 +115,15 @@ exports.FRAGMENT_SELECTION_CASES = caseCountOf('fragment-selection');
 exports.NPM_TEST_CHAIN_LENGTH = chainedScripts(packageJson).length;
 
 /**
+ * The cap on Advisory Observations pulled into a review verdict's
+ * `advisoryObservations` field, held in docs/reference/tea-test-review-cli.md.
+ * Re-exported from cli/lib/parse-report.js's own named constant rather than
+ * re-typed, so a change to the real default cannot drift silently out from
+ * under this page's claim.
+ */
+exports.ADVISORY_OBSERVATIONS_MAX_ITEMS = require('../../cli/lib/parse-report.js').ADVISORY_OBSERVATIONS_MAX_ITEMS;
+
+/**
  * The knowledge-fragment tier breakdown (README.md:215). Every workflow under
  * `src/workflows/testarch/` ships its own copy of `tea-index.csv`;
  * bmad-testarch-test-review's is as good as any other to read the totals off,
