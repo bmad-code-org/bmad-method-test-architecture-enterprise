@@ -24,10 +24,12 @@ name: Quality & Validation
 #
 # test:lockfile-age, test:licences and test:supply-chain are the same kind of
 # exception: they run in `npm test` and in their own `supply-chain` job below,
-# not inside `validate`. lockfile-age queries the public npm registry for every
-# locked entry's publication time, so folding it into `validate` would make an
-# unrelated check's failure look like a registry outage, and a registry outage
-# look like an unrelated check failing.
+# not inside `validate`, so a registry outage names itself here rather than
+# reading as an unrelated check failing. lockfile-age reads a committed
+# publication cache (`.lockfile-age-cache.json`) with no request for a cached
+# name@version and fetches only what is missing, which is what makes running it
+# in `npm test` on every local commit reasonable rather than a network
+# dependency the pre-commit hook cannot avoid.
 
 "on":
   pull_request:

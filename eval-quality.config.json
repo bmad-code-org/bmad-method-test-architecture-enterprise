@@ -2,6 +2,7 @@
   "lockfile-age": {
     "lockfiles": ["package-lock.json", "website/package-lock.json"],
     "windowDays": 7,
+    "cache": ".lockfile-age-cache.json",
     "exclude": [
       {
         "name": "eval-quality",

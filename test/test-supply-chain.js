@@ -32,13 +32,6 @@
  *   is safe to assume.
  * - A gate invoked with no section for it refuses at exit 64 and names the
  *   section, rather than passing over nothing.
- * - `eval-quality.config.json`'s `lockfile-age.exclude` and `licences.undeclared`
- *   keys are a shape the installed release has not published yet, and both
- *   gates refuse at exit 64 on them until the pin moves; that refusal is
- *   expected. Stripped of those two keys, neither gate refuses at exit 64 for
- *   any other reason, which is what this check proves: the two known keys are
- *   the only gap between today's pin and a real verdict, not a stand-in for an
- *   unrelated configuration mistake.
  * - `.npmrc` sets `min-release-age` to 7 as npm reads it from the repository
  *   root, and `website/.npmrc` sets the same value, because npm reads a project
  *   `.npmrc` from the local prefix and never inherits the root's. The root's
@@ -59,7 +52,6 @@
 'use strict';
 
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -80,13 +72,13 @@ const GATE_SCRIPTS = {
 };
 
 /**
- * `lockfile-age` is CI-only: it queries the public npm registry once per
- * unique locked package name, and `npm test` runs on every local commit
- * through the pre-commit hook, where a registry stall or outage has nothing to
- * do with the change being committed. `licences` reads both lockfiles
- * directly, makes no network call, and stays in the default chain.
+ * Every gate here now runs in the default chain: `lockfile-age` read from the
+ * public npm registry once per unique locked package name until a committed
+ * publication cache (`eval-quality.config.json`'s `lockfile-age.cache`) made
+ * that a local, offline lookup instead, which is what let it rejoin `licences`
+ * here rather than being confined to the CI-only `supply-chain` job.
  */
-const CI_ONLY_SCRIPTS = new Set(['test:lockfile-age']);
+const CI_ONLY_SCRIPTS = new Set();
 
 const colors = {
   reset: '[0m',
@@ -226,61 +218,6 @@ function checkAbsentSection(binary) {
   check(output.includes('declares no "licences" section'), `the refusal did not name the missing section\n${output}`);
 }
 
-/**
- * `eval-quality.config.json`'s "lockfile-age" section names an `exclude` list
- * and its "licences" section names an `undeclared` list, both shapes the
- * installed 3.1.0 has not published yet; each gate refuses at
- * `EXIT_USAGE` on the unrecognized key until the release that adds them is
- * pinned. That refusal is expected and is not this check's concern.
- *
- * What is this check's concern: whether either key is the *only* reason a gate
- * refuses. Strip both keys from a copy of the real configuration and run both
- * gates against it. Either gate exiting `EXIT_USAGE` on the stripped copy means
- * something else in the real configuration is malformed, hidden today behind
- * the one refusal reason CI already expects and ignores.
- */
-/**
- * Every occurrence of a root-relative lockfile path, anywhere in a JSON value,
- * rewritten absolute. A `licences` section names the same lockfile three ways
- * (`lockfiles`, a `policies` key, a `tolerances[].lockfiles` entry) and the
- * schema requires all three to agree, so a shallow rewrite of `lockfiles` alone
- * would leave the other two pointing at a name the rewritten section no longer
- * declares.
- */
-function rewriteLockfilePathsAbsolute(value) {
-  if (typeof value === 'string') {
-    return LOCKFILES.includes(value) ? path.join(PROJECT_ROOT, value) : value;
-  }
-  if (Array.isArray(value)) return value.map(rewriteLockfilePathsAbsolute);
-  if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, entry]) => [rewriteLockfilePathsAbsolute(key), rewriteLockfilePathsAbsolute(entry)]),
-    );
-  }
-  return value;
-}
-
-function checkPendingKeysAreTheOnlyGap(binary, config) {
-  const stripped = rewriteLockfilePathsAbsolute(structuredClone(config));
-  delete stripped['lockfile-age']?.exclude;
-  delete stripped.licences?.undeclared;
-
-  const tempPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'tea-supply-chain-')), 'eval-quality.config.json');
-  fs.writeFileSync(tempPath, JSON.stringify(stripped));
-  try {
-    for (const gate of Object.values(GATE_SCRIPTS)) {
-      if (stripped[gate] === undefined) continue;
-      const { status, output } = runGate(binary, gate, tempPath);
-      check(
-        status !== EXIT_USAGE,
-        `${gate} exited ${EXIT_USAGE} even with "exclude"/"undeclared" removed, so something else in eval-quality.config.json is malformed and hidden behind the known refusal\n${output}`,
-      );
-    }
-  } finally {
-    fs.rmSync(path.dirname(tempPath), { recursive: true, force: true });
-  }
-}
-
 function checkResolutionFloor(config) {
   const rootFloor = npmConfigGet('min-release-age', PROJECT_ROOT);
   const websiteFloor = npmConfigGet('min-release-age', path.join(PROJECT_ROOT, 'website'));
@@ -307,7 +244,6 @@ function main() {
   checkLicencesSeed(binary);
   checkLockfileAgeSeed(binary);
   checkAbsentSection(binary);
-  checkPendingKeysAreTheOnlyGap(binary, config);
   checkResolutionFloor(config);
 
   if (failures.length > 0) {
