@@ -34,8 +34,8 @@
  *
  * Every `schemaVersion` written here is the installed package's own, read from
  * the constant it exports for that kind. `SCHEMA_VERSIONS` is the one table of
- * the versions TEA writes, and `npm run test:schema-versions` holds every stamp
- * TEA commits, in source and on disk, to it.
+ * the versions TEA writes or receives, and `npm run test:schema-versions` holds
+ * every stamp TEA commits, in source and on disk, to it.
  */
 
 'use strict';
@@ -75,22 +75,26 @@ const SCHEMA_ROOT = path.join(PROJECT_ROOT, 'node_modules', 'eval-quality', 'sch
 const POLICY_PATH = path.join(PROJECT_ROOT, 'test', 'probes', 'scoring-policy.json');
 
 /**
- * The `schemaVersion` of each artifact TEA writes, keyed by the basename of the
- * schema `eval-quality` publishes for it, which is the key `validateArtifact`
- * takes. Every value is the constant the installed package exports for that
- * kind. Nothing here is stated.
+ * The `schemaVersion` of each artifact TEA writes or receives, keyed by the
+ * basename of the schema `eval-quality` publishes for it, which is the key
+ * `validateArtifact` takes. Every value is the constant the installed package
+ * exports for that kind. Nothing here is stated.
  *
  * Six kinds eval-quality publishes a schema for and TEA writes, and each has a
  * reader. The three this file builds stamp through `expectedSchemaVersion`.
  * `tools/generate-probes.js` and `tools/generate-contracts.js` read the probe
  * and contract versions the same way, so the bytes they commit carry the
  * package's number. The scoring policy at `test/probes/scoring-policy.json` is
- * hand-authored, so `schemaVersionProblems` is what holds it. A kind TEA only
- * receives has no entry until something reads one, which is Story 2.7's wiring
- * beside the Ajv pass; an entry with no reader is a number nothing holds. TEA
- * also stamps `suite-result` and `run-summary`, against its own
- * `test/schema/eval-result.schema.json`; those are not eval-quality's to
- * publish and carry no entry here.
+ * hand-authored, so `schemaVersionProblems` is what holds it.
+ *
+ * Three more kinds TEA only receives: `evidence-artifact`, `sealed-evaluator-brief`
+ * and `preflight-verdict`, each already read by a `validateArtifact` call site in
+ * `test/lib/probe-scoring.js`. `validateArtifact` runs `schemaVersionProblems`
+ * beside its Ajv pass for every kind this table covers, so a wrong stamp on a
+ * received artifact is named the same way a wrong stamp on a written one is; an
+ * entry with no reader is a number nothing holds. TEA also stamps `suite-result`
+ * and `run-summary`, against its own `test/schema/eval-result.schema.json`;
+ * those are not eval-quality's to publish and carry no entry here.
  *
  * It was a literal table, and it drifted the way a copied number does: on the
  * upgrade to 3.0.0 its record entry read 3 against a parser that reads 6, and
@@ -109,6 +113,9 @@ const SCHEMA_VERSIONS = Object.freeze({
   probe: packageVersions?.PROBE_SCHEMA_VERSION,
   'eval-contract': packageVersions?.EVAL_CONTRACT_SCHEMA_VERSION,
   'scoring-policy': packageVersions?.SCORING_POLICY_SCHEMA_VERSION,
+  'evidence-artifact': packageVersions?.EVIDENCE_ARTIFACT_SCHEMA_VERSION,
+  'sealed-evaluator-brief': packageVersions?.SEALED_EVALUATOR_BRIEF_SCHEMA_VERSION,
+  'preflight-verdict': packageVersions?.PREFLIGHT_VERDICT_SCHEMA_VERSION,
 });
 
 /**
@@ -137,7 +144,7 @@ const UNSTAMPED_KINDS = Object.freeze({
 function expectedSchemaVersion(kind) {
   if (Object.hasOwn(UNSTAMPED_KINDS, kind)) throw new TypeError(`${kind} carries no schemaVersion by design: ${UNSTAMPED_KINDS[kind]}`);
   if (!Object.hasOwn(SCHEMA_VERSIONS, kind)) {
-    throw new TypeError(`no schemaVersion is recorded for ${kind}; TEA writes ${Object.keys(SCHEMA_VERSIONS).join(', ')}`);
+    throw new TypeError(`no schemaVersion is recorded for ${kind}; TEA writes or receives ${Object.keys(SCHEMA_VERSIONS).join(', ')}`);
   }
   const value = SCHEMA_VERSIONS[kind];
   if (!Number.isInteger(value) || value <= 0) {
@@ -226,16 +233,28 @@ function validator(kind) {
 }
 
 /**
- * One artifact against the schema `eval-quality` publishes for it.
+ * One artifact against the schema `eval-quality` publishes for it, and, for a
+ * kind `SCHEMA_VERSIONS` covers, against the `schemaVersion` the installed
+ * package reads for it.
+ *
+ * The two checks test different things: a stamp one off from the package's
+ * constant is a legal integer, so Ajv alone would pass it, and Ajv catching a
+ * missing field says nothing about whether the stamp is the right one. Both run,
+ * and a version problem is reported before an Ajv problem, because a caller
+ * fixing a hand-built artifact reads the stamp first. The version check is
+ * skipped, not thrown, for a kind `SCHEMA_VERSIONS` does not cover: this stays
+ * the general Ajv-only entry point for `artifact-reference`,
+ * `private-artifact-manifest` and `rubric`.
  *
  * @param {string} kind The schema basename, for example `probe` or `evidence-artifact`.
  * @param {unknown} value
  * @returns {Promise<string[]>} Empty when the value conforms.
  */
 async function validateArtifact(kind, value) {
+  const versionProblems = Object.hasOwn(SCHEMA_VERSIONS, kind) ? schemaVersionProblems(kind, value) : [];
   const check = await validator(kind);
-  if (check(value)) return [];
-  return (check.errors ?? []).map((error) => `${error.instancePath || '/'} ${error.message}`);
+  const ajvProblems = check(value) ? [] : (check.errors ?? []).map((error) => `${error.instancePath || '/'} ${error.message}`);
+  return [...versionProblems, ...ajvProblems];
 }
 
 /**
