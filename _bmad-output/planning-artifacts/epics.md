@@ -105,7 +105,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [ ] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance)
 - [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result)
 - [ ] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships)
-- [ ] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page)
+- [ ] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page) (**Active:** open in [#200](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/200); the numeric pass after Epic 6 closes and AC3's claim-gate clause, pending Story 4.2, remain)
 - [ ] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea)
 
 ### Epic 6 progress: Every TEA skill is covered by a behavioral suite
