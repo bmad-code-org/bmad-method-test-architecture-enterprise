@@ -1,0 +1,6 @@
+{
+  "licences": {
+    "lockfiles": ["package-lock.json"],
+    "allowlist": ["MIT"]
+  }
+}

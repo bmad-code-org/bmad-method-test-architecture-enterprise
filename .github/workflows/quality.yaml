@@ -21,6 +21,15 @@ name: Quality & Validation
 # `npm test` runs on every commit through the pre-commit hook. The `cli` job
 # below shards that one file three ways (see its own comment) so CI's wall
 # time is the slowest shard, not the sum of all three.
+#
+# test:lockfile-age, test:licences and test:supply-chain are the same kind of
+# exception: they run in `npm test` and in their own `supply-chain` job below,
+# not inside `validate`, so a registry outage names itself here rather than
+# reading as an unrelated check failing. lockfile-age reads a committed
+# publication cache (`.lockfile-age-cache.json`) with no request for a cached
+# name@version and fetches only what is missing, which is what makes running it
+# in `npm test` on every local commit reasonable rather than a network
+# dependency the pre-commit hook cannot avoid.
 
 "on":
   pull_request:
@@ -258,3 +267,43 @@ jobs:
         run: npm run test:cli
         env:
           TEA_CLI_TEST_SUITES: ${{ matrix.shard.suites }}
+
+  # The supply-chain gates. lockfile-age asks the registry for every locked
+  # entry's publication time, licences holds every locked licence expression to
+  # the allowlist, and test:supply-chain seeds one violation per gate and watches
+  # each fail. Their own job, so a registry outage or a young pin names itself
+  # here rather than inside validate.
+  supply-chain:
+    runs-on: ubuntu-latest
+    # lockfile-age fetches publish metadata for every locked entry from the
+    # public npm registry; bound the worst case rather than letting a stalled
+    # request hold the runner until GitHub's own maximum job duration.
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # This job runs npm ci (arbitrary install scripts), fetches JSON from
+          # the npm registry, and shells out to a third-party binary; the token
+          # persist-credentials would otherwise leave in .git/config has no
+          # business surviving a step that is defending against exactly that
+          # class of compromise.
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit both lockfiles for publication age
+        run: npm run test:lockfile-age
+
+      - name: Hold both lockfiles to the licence allowlist
+        run: npm run test:licences
+
+      - name: Seed one violation per gate and watch it fail
+        run: npm run test:supply-chain

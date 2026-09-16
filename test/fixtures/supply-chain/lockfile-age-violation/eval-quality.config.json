@@ -1,0 +1,6 @@
+{
+  "lockfile-age": {
+    "lockfiles": ["package-lock.json"],
+    "windowDays": 7
+  }
+}
