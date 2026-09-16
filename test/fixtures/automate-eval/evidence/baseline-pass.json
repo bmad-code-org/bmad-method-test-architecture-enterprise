@@ -1,0 +1,20 @@
+{
+  "phase": "baseline-pass",
+  "targetArtifact": "test/fixtures/automate-eval/voucher-service/src/vouchers.js",
+  "input": {
+    "voucher": {
+      "type": "percentage",
+      "percentOff": 10,
+      "maxDiscount": 20,
+      "minimumSpend": 50,
+      "expiresOn": "2099-01-01"
+    },
+    "cartTotal": 50,
+    "redeemedOn": "2026-01-01"
+  },
+  "result": {
+    "accepted": true,
+    "discount": 5
+  },
+  "assertion": "cartTotal equals minimumSpend exactly; the fixed implementation accepts the redemption."
+}

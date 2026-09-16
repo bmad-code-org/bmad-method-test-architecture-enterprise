@@ -1,0 +1,25 @@
+{
+  "route": "controlled-mutation",
+  "mutationSource": "test/fixtures/automate-eval/voucher-service/docs/stories/6-6-voucher-redemption.md",
+  "mutationOperator": "flip-minimum-spend-boundary-inclusive-to-exclusive",
+  "targetArtifact": {
+    "storage": "public",
+    "path": "test/fixtures/automate-eval/voucher-service/src/vouchers.js",
+    "privateRef": null,
+    "digest": "sha256:f71b5a8311db35fac97f92033dff516036625c6a1024f681afa571d84bc723ca"
+  },
+  "expectedObservableFailure": "A cart total exactly equal to minimumSpend is wrongly rejected once the minimum-spend check in vouchers.js is mutated from `cartTotal >= voucher.minimumSpend` to `cartTotal > voucher.minimumSpend`.",
+  "baselinePassEvidence": {
+    "storage": "public",
+    "path": "test/fixtures/automate-eval/evidence/baseline-pass.json",
+    "privateRef": null,
+    "digest": "sha256:58b3aeeb0e4fa9ead2f18b9fe2ac0aa39330b9ec4718e1729d83af116c11ebc7"
+  },
+  "mutatedFailEvidence": {
+    "storage": "public",
+    "path": "test/fixtures/automate-eval/evidence/mutated-fail.json",
+    "privateRef": null,
+    "digest": "sha256:0793f92d7a7b1e7f2008f1c6eed4c1f267cbf50421caa2f14ac2cfe200d56727"
+  },
+  "rollbackVerified": true
+}
