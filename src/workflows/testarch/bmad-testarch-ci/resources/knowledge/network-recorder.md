@@ -334,7 +334,7 @@ await networkRecorder.setup(context, {
 | **Stateless**                      | **Stateful mocking**           |
 | Manual URL mapping                 | Automatic environment mapping  |
 
-**The game-changer: Stateful CRUD detection**
+### The game-changer: Stateful CRUD detection
 
 Native Playwright HAR playback is stateless - a POST create followed by GET list won't show the created item. This utility intelligently tracks CRUD operations in memory to reflect state changes, making offline tests behave like real APIs.
 

@@ -136,7 +136,7 @@ Add to `.vscode/mcp.json` (note: uses `servers` key, not `mcpServers`):
 
 When designing contract tests, use MCP to query existing provider states:
 
-```
+```text
 # Agent queries SmartBear MCP during test-design workflow:
 # → Fetch Provider States for consumer="movie-web", provider="SampleMoviesAPI"
 # ← Returns: ["movie with id 1 exists", "no movies exist", "user is authenticated"]
@@ -148,7 +148,7 @@ When designing contract tests, use MCP to query existing provider states:
 
 During test-review workflow, use MCP to evaluate test quality:
 
-```
+```text
 # Agent submits test file to SmartBear MCP Review tool:
 # → Review Pact Tests with test file content
 # ← Returns: feedback on matcher usage, state coverage, interaction naming
@@ -160,7 +160,7 @@ During test-review workflow, use MCP to evaluate test quality:
 
 During CI workflow design, reference the can-i-deploy tool:
 
-```
+```text
 # Agent generates CI pipeline with can-i-deploy gate:
 # → Can I Deploy: pacticipant="SampleMoviesAPI", version="${GITHUB_SHA}", to="production"
 # ← Returns: { ok: true/false, reason: "..." }
@@ -224,14 +224,14 @@ Everything above applies to the tools in this fragment only. It has no bearing o
 
 ### Wrong: Using MCP for runtime test execution
 
-```
+```text
 # ❌ Don't use MCP to run pact tests — use npm scripts and CI pipelines
 # MCP is for agent-assisted design, generation, and review
 ```
 
 ### Right: Use MCP for design-time assistance
 
-```
+```text
 # ✅ Use MCP during planning and review:
 # - Fetch provider states to inform test design
 # - Generate test scaffolds from existing contracts
@@ -239,4 +239,4 @@ Everything above applies to the tools in this fragment only. It has no bearing o
 # - Check can-i-deploy during CI pipeline design
 ```
 
-_Source: SmartBear MCP documentation, PactFlow developer docs_
+_Source: SmartBear MCP documentation, PactFlow developer docs._

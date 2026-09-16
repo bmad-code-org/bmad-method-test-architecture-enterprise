@@ -41,7 +41,7 @@ npm run preview
 
 ## Structure
 
-```
+```text
 website/
 ├── astro.config.mjs      # Astro configuration
 ├── package.json          # Dependencies

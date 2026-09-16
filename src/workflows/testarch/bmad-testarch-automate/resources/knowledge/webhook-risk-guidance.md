@@ -18,7 +18,7 @@ Webhook tests are **required** (not optional) when:
 
 ## Risk Scoring
 
-```
+```text
 Risk = Probability × Impact
 
 Probability factors (P1–P3):

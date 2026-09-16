@@ -47,7 +47,7 @@ If you have BMad artifacts (stories, test designs, PRDs):
 
 **What are you testing?**
 
-```
+```text
 I'm testing the user profile feature we just implemented.
 Story: story-profile-management.md
 Test Design: test-design-epic-1.md
@@ -62,7 +62,7 @@ Test Design: test-design-epic-1.md
 
 **Existing tests:**
 
-```
+```text
 We have basic tests in tests/e2e/profile-view.spec.ts
 Avoid duplicating that coverage
 ```
@@ -80,14 +80,14 @@ If you're using TEA Solo or don't have BMad artifacts:
 
 **What are you testing?**
 
-```
+```text
 TodoMVC React application at https://todomvc.com/examples/react/dist/
 Features: Create todos, mark as complete, filter by status, delete todos
 ```
 
 **Specific scenarios to cover:**
 
-```
+```text
 - Creating todos (happy path)
 - Marking todos as complete/incomplete
 - Filtering (All, Active, Completed)
@@ -110,7 +110,7 @@ TEA will ask which test levels to generate:
 
 **Example response:**
 
-```
+```text
 Generate:
 - API tests for all CRUD operations
 - E2E tests for critical user workflows (P0)
@@ -545,7 +545,7 @@ Not everything needs E2E tests:
 
 Tell TEA about existing tests:
 
-```
+```text
 We already have tests in:
 - tests/e2e/profile-view.spec.ts (viewing profile)
 - tests/api/auth.spec.ts (authentication)
@@ -573,14 +573,14 @@ Don't generate all tests at once:
 
 **Iteration 1:**
 
-```
+```text
 Generate P0 tests only (critical path)
 Run: automate
 ```
 
 **Iteration 2:**
 
-```
+```text
 Generate P1 tests (high value scenarios)
 Run: automate
 Tell TEA to avoid P0 coverage
@@ -588,7 +588,7 @@ Tell TEA to avoid P0 coverage
 
 **Iteration 3:**
 
-```
+```text
 Generate P2 tests (if time permits)
 Run: automate
 ```
@@ -609,7 +609,7 @@ This iterative approach:
 
 **Solution:** Provide more details:
 
-```
+```text
 Generate tests for:
 - All acceptance criteria in story-profile.md
 - Error scenarios (validation, authorization)
@@ -624,7 +624,7 @@ Generate tests for:
 
 **Solution:** Be specific:
 
-```
+```text
 Generate ONLY:
 - P0 and P1 scenarios
 - API tests for all scenarios
@@ -640,7 +640,7 @@ Generate ONLY:
 
 **Solution:** Specify existing coverage:
 
-```
+```text
 We already have these tests:
 - tests/api/profile.spec.ts (GET /api/profile)
 - tests/e2e/profile-view.spec.ts (viewing profile)

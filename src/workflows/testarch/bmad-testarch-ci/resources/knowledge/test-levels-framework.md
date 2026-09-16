@@ -447,7 +447,7 @@ describe('PriceCalculator', () => {
 
 ## Anti-Pattern Examples
 
-**❌ BAD: E2E test for business logic**
+### ❌ BAD: E2E test for business logic
 
 ```typescript
 // DON'T DO THIS
@@ -461,7 +461,7 @@ test('calculate discount via UI', async ({ page }) => {
 // Problem: Slow, brittle, tests logic that should be unit tested
 ```
 
-**✅ GOOD: Unit test for business logic**
+### ✅ GOOD: Unit test for business logic
 
 ```typescript
 test('calculate discount', () => {

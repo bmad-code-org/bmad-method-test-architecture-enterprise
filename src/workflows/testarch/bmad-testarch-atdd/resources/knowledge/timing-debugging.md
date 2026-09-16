@@ -461,4 +461,4 @@ Before deploying tests:
 - **Related fragments**: `test-healing-patterns.md` (race condition diagnosis), `network-first.md` (interception patterns), `playwright-config.md` (timeout configuration), `visual-debugging.md` (trace viewer analysis)
 - **Tools**: Playwright Inspector (`--debug`), Trace Viewer (`--trace on`), DevTools Network tab
 
-_Source: Playwright timing best practices, network-first pattern from test-resources-for-ai, production race condition debugging_
+_Source: Playwright timing best practices, network-first pattern from test-resources-for-ai, production race condition debugging._

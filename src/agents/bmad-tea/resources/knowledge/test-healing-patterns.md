@@ -641,4 +641,4 @@ Before enabling auto-healing in workflows:
 - **Related fragments**: `selector-resilience.md` (selector debugging), `timing-debugging.md` (race condition fixes), `network-first.md` (interception patterns), `data-factories.md` (dynamic data handling)
 - **Tools**: Error message parsing, AST analysis for code patterns, Playwright MCP (optional), pattern matching
 
-_Source: Playwright test-healer patterns, production test failure analysis, common anti-patterns from test-resources-for-ai_
+_Source: Playwright test-healer patterns, production test failure analysis, common anti-patterns from test-resources-for-ai._

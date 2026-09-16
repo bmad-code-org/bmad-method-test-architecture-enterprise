@@ -139,14 +139,14 @@ Both modes use the same workflow command. Make the scope explicit in your prompt
 - **System-level (Phase 3):** run immediately after architecture/ADR drafting. Produces `test-design-architecture.md` (for Architecture and Dev: testability gaps, ASRs, NFR requirements, planned evidence) and `test-design-qa.md` (for QA: test execution recipe, coverage plan, Sprint 0 setup, NFR coverage plan). Feeds the implementation-readiness gate. When an ADR or architecture draft is produced, run this before that gate so the ADR carries a testability review and an ADR → test mapping, and keep it updated if ADRs change.
 - **Epic-level (Phase 4):** run per epic. Produces `test-design-epic-N.md` with risk, priorities, coverage plan, and epic-specific NFR planning when relevant.
 
-**Phase 3 system-level example**
+#### Phase 3 system-level example
 
 ```text
 /bmad-testarch-test-design
 Run system-level test-design for Phase 3 using docs/prd.md, docs/architecture.md, and docs/adr/*.md. Focus on architecture testability, ASRs, NFR thresholds, planned NFR evidence, integration risks, and Sprint 0 setup. Produce test-design-architecture.md and test-design-qa.md before implementation-readiness.
 ```
 
-**Phase 4 per-epic example**
+#### Phase 4 per-epic example
 
 ```text
 /bmad-testarch-test-design
@@ -193,7 +193,9 @@ CLI and MCP are complementary. Auto mode uses each where it shines and lets you 
 
 **Configuration** (`_bmad/tea/config.yaml`):
 
-    tea_browser_automation: "auto"  # auto | cli | mcp | none
+```yaml
+tea_browser_automation: 'auto' # auto | cli | mcp | none
+```
 
 | Mode   | What happens                                                                                                                          |
 | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -217,7 +219,9 @@ Optional design-time broker interaction for contract testing workflows.
 
 **Configuration** (`_bmad/tea/config.yaml`):
 
-    tea_pact_mcp: "mcp"  # none | mcp (default "mcp")
+```yaml
+tea_pact_mcp: 'mcp' # none | mcp (default "mcp")
+```
 
 | Mode   | What happens                                                                                                                                                                                                            |
 | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

@@ -130,7 +130,7 @@ Present this content:
 
 **The P0-P3 Matrix:**
 
-**P0 - Critical (Must Test)**
+#### P0 - Critical (Must Test)
 
 - Login/Authentication
 - Payment processing
@@ -139,7 +139,7 @@ Present this content:
 - **Impact:** Business fails if broken
 - **Probability:** High usage, high complexity
 
-**P1 - High (Should Test)**
+#### P1 - High (Should Test)
 
 - Core user workflows
 - Key features
@@ -147,14 +147,14 @@ Present this content:
 - **Impact:** Major user pain
 - **Probability:** Frequent usage
 
-**P2 - Medium (Nice to Test)**
+#### P2 - Medium (Nice to Test)
 
 - Secondary features
 - Edge cases with workarounds
 - **Impact:** Inconvenience
 - **Probability:** Moderate usage
 
-**P3 - Low (Optional)**
+#### P3 - Low (Optional)
 
 - Tooltips, help text
 - Nice-to-have features
@@ -188,44 +188,44 @@ Present this content:
 
 **TEA Definition of Done ensures:**
 
-**1. No Flaky Tests**
+#### 1. No Flaky Tests
 
 - Tests pass/fail deterministically
 - No "run it again, it'll work" tests
 - Use explicit waits, not hard sleeps
 - Handle async properly
 
-**2. No Hard Waits/Sleeps**
+#### 2. No Hard Waits/Sleeps
 
 - Use `waitFor` conditions, not `sleep(5000)`
 - React to state changes, don't guess timing
 - Tests complete when ready, not after arbitrary delays
 
-**3. Stateless & Parallelizable**
+#### 3. Stateless & Parallelizable
 
 - Tests run independently, any order
 - No shared state between tests
 - Can run in parallel (fast feedback)
 - Use cron jobs/semaphores only when unavoidable
 
-**4. No Order Dependency**
+#### 4. No Order Dependency
 
 - Every `it`/`describe`/`context` block works in isolation
 - Supports `.only` execution for debugging
 - Tests don't depend on previous tests
 
-**5. Self-Cleaning Tests**
+#### 5. Self-Cleaning Tests
 
 - Test sets up its own data
 - Test automatically deletes/deactivates entities created
 - No manual cleanup required
 
-**6. Tests Live Near Source Code**
+#### 6. Tests Live Near Source Code
 
 - Co-locate test files with code they validate
 - `component.tsx` → `component.spec.tsx` in same folder
 
-**7. Low Maintenance**
+#### 7. Low Maintenance
 
 - Minimize manual upkeep
 - Avoid brittle selectors
@@ -254,13 +254,13 @@ Present this content:
 
 "### 🎯 Session 2 Key Takeaways
 
-**1. Testing is Engineering**
+#### 1. Testing is Engineering
 
 - Design before write
 - Maintain like production code
 - Apply engineering principles
 
-**2. Risk-Based Testing**
+#### 2. Risk-Based Testing
 
 - P0 = Critical (login, payment)
 - P1 = High (core workflows)
@@ -268,7 +268,7 @@ Present this content:
 - P3 = Low (tooltips, nice-to-have)
 - Prioritize based on Probability × Impact
 
-**3. Definition of Done**
+#### 3. Definition of Done
 
 - No flaky tests (deterministic)
 - No hard waits (use waitFor)
@@ -276,7 +276,7 @@ Present this content:
 - Self-cleaning tests
 - Low maintenance
 
-**4. Quality Standards = Engineering Rigor**
+#### 4. Quality Standards = Engineering Rigor
 
 - Not perfectionism, but reliability
 - Prevents test maintenance nightmares
@@ -311,7 +311,7 @@ Your answer (A, B, C, or D):"
 - If correct: "✅ Correct! Login/authentication is P0 - critical. Business fails if broken."
 - If incorrect: "❌ Login/authentication is P0 - Critical (D). It's high usage, high impact, and business-critical."
 
-**Store result**
+**Store result.**
 
 **Question 2:**
 
@@ -332,7 +332,7 @@ Your answer (A, B, C, or D):"
 - If correct: "✅ Correct! Hard waits don't react to state - they guess timing. Use `waitFor` to react to conditions."
 - If incorrect: "❌ The issue is that hard waits don't react to state changes (B). They guess timing instead of waiting for conditions. This violates TEA Definition of Done."
 
-**Store result**
+**Store result.**
 
 **Question 3:**
 
@@ -353,7 +353,7 @@ Your answer (A, B, C, or D):"
 - If correct: "✅ Correct! Self-cleaning tests clean up their data - no manual cleanup needed."
 - If incorrect: "❌ Self-cleaning means tests delete/deactivate entities they created (B). No manual cleanup required."
 
-**Store result**
+**Store result.**
 
 **Calculate score:**
 

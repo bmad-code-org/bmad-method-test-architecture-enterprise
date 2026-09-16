@@ -15,7 +15,7 @@ Use `createRequestFilter` and `noOpRequestFilter` from `@seontechnologies/pactjs
 
 ### Solutions
 
-- **`createRequestFilter`**: Accepts `{ tokenGenerator: () => string }` — generator returns raw token value synchronously, filter adds `Bearer ` prefix
+- **`createRequestFilter`**: Accepts `{ tokenGenerator: () => string }` — generator returns raw token value synchronously, filter adds `"Bearer "` prefix
 - **`noOpRequestFilter`**: Pre-built pass-through for providers without auth requirements
 - **Bearer prefix contract**: `tokenGenerator` returns raw value (e.g., `"abc123"`), filter always adds `"Bearer "` — impossible to double-prefix
 
@@ -221,4 +221,4 @@ async function setupVerifierOptions() {
 // const opts = await setupVerifierOptions();
 ```
 
-_Source: @seontechnologies/pactjs-utils request-filter module, pact-js-example-provider verification tests_
+_Source: @seontechnologies/pactjs-utils request-filter module, pact-js-example-provider verification tests._

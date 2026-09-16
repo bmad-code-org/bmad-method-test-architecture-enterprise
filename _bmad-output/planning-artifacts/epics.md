@@ -151,7 +151,7 @@ Explicitly out of scope, and the epic set's definition of done must name both ha
 
 ### Functional Requirements
 
-**Running on the current package**
+#### Running on the current package
 
 FR1: TEA depends on `eval-quality` 3.0.0, replacing the `1.4.0` pin at `package.json:140`.
 
@@ -169,7 +169,7 @@ FR7: TEA's `CommandProbeSubject` supplies `unauthorizedEnvironmentKeyRequest`, r
 
 FR8: TEA's branches stay total across the three-member `ProbeRequest` and `ProbeObservation` unions (`port-messages.ts:168` and `:245`) and the six-member `ConformancePort` (`src/testing/conformance.ts:32`).
 
-**What the package must publish, and what TEA then derives**
+#### What the package must publish, and what TEA then derives
 
 FR9: `eval-quality` exports `PROBE_SCHEMA_VERSION` and `EVAL_CONTRACT_SCHEMA_VERSION` from a public entry point. Both are declared (`probe.ts:90`, `eval-contract.ts:161`) and reachable from none of the four barrels, so 3.0.0 made a stale stamp a hard runtime fault while giving no caller a way to read the number. The root barrel exports 19 names and the exports map has no wildcard, so a deep import is refused with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
 
@@ -189,7 +189,7 @@ FR16: Every `eval-quality` change this epic set requires is published to npm, an
 
 FR17: `eval-quality`'s `VERSION` export tells the truth. `dist/index.d.ts` declares `VERSION = "2.0.0"` while `package.json` reads `3.0.0`.
 
-**Ports**
+#### Ports
 
 FR18: TEA resolves its corpus through `CorpusPort`, using the shipped `createLocalCorpusAdapter`, and certifies it with `runCorpusPortConformance`. TEA had four corpus readers, and three of them, `test/eval-trace.js`, `test/lib/probe-scoring.js` and `tools/generate-probes.js`, now load through `test/lib/corpus-port`. The fourth, `digestFiles` in `test/lib/eval-record.js`, computes the `fixtureDigest` every eval harness records and is still a direct read. It was found while Story 3.2 was being implemented and is carried by Story 3.6. Its remaining work is the `<missing>` marker translation; every caller is already inside an `async function`, so there is no async cascade.
 
@@ -201,7 +201,7 @@ FR21: ~~TEA runs `runEnvironmentProbePortConformance` against its adapter, the g
 
 FR22: Every expected conformance count TEA asserts reads from `CONFORMANCE_OUTCOME_COUNTS`, each arm TEA adds does the same, and a missing entry fails with the arm named rather than reporting an undefined expected count.
 
-**Claims, codes and supply chain**
+#### Claims, codes and supply chain
 
 FR23: TEA's gate computes every published count from its own source. `docs/explanation/eval-quality-roadmap.md` states "48 fragment selections, 3 complete reviews, and 4 complete traces", which is correct today and held by nothing.
 
@@ -252,7 +252,7 @@ FR56: TEA fails closed when `eval-quality` cannot be resolved. `test/test-contra
 
 FR39: Every new npm script is covered by CI. `tools/validate-ci-coverage.js` enforces only that scripts in the `npm test` chain run somewhere in CI, and states "the reverse is allowed", so a script outside that chain needs no step.
 
-**Proving it**
+#### Proving it
 
 FR40: TEA proves the pin move against the package's own published corpus before migrating a single TEA artifact, by compiling all 25 published contracts on 3.0.0 and diffing the sealed brief against the shipped bytes. `eval-quality/corpus/*` is a published subpath with a `sha256:` digest per entry and zero TEA references.
 
@@ -268,7 +268,7 @@ FR45: TEA's hand-maintained `CHANGELOG.md` carries an entry for this work, per `
 
 FR46: TEA cuts a release once the work closes.
 
-**Behavioral coverage**
+#### Behavioral coverage
 
 FR47: A behavioral suite proves `bmad-tea` routes realistic and ambiguous user intents to the correct workflow, explains the choice, preserves the requested scope, and declines unsupported claims.
 

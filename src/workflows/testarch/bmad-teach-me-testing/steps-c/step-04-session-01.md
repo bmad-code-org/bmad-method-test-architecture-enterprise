@@ -210,7 +210,7 @@ Your answer (A, B, C, or D):"
 - If correct: "✅ Correct! TEA makes testing expertise accessible and scalable."
 - If incorrect: "❌ Not quite. TEA's purpose is to make testing expertise accessible through structured workflows and knowledge (B). It's not about replacing tools or automating everything."
 
-**Store result (1 point if correct, 0 if incorrect)**
+**Store result (1 point if correct, 0 if incorrect).**
 
 **Question 2:**
 
@@ -231,7 +231,7 @@ Your answer (A, B, C, or D):"
 - If correct: "✅ Correct! P0-P3 helps prioritize what to test based on risk and criticality."
 - If incorrect: "❌ The P0-P3 matrix is about prioritizing test coverage (A). P0 = critical features like login, P3 = nice-to-have like tooltips."
 
-**Store result**
+**Store result.**
 
 **Question 3:**
 
@@ -252,7 +252,7 @@ Your answer (A, B, C, or D):"
 - If correct: "✅ Correct! TEA Lite is the 30-minute quick start approach."
 - If incorrect: "❌ TEA Lite (B) is the quick start approach. Enterprise and Integrated are more comprehensive."
 
-**Store result**
+**Store result.**
 
 **Calculate score:**
 

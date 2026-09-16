@@ -36,7 +36,7 @@ Collect test files in scope and parse structure/metadata.
 **CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
 > **Exception — `review_files` supplied:** If `review_files` is non-empty, the discovered set equals `review_files` (comma-separated paths). Validate that each file exists — report missing files in the review report rather than silently dropping them — skip the glob in section 1, and continue the sequence from section 2. This is a first-class branch of the file-set source; the sequence remains mandatory.
-
+>
 > **Disclose every exclusion, on every branch.** The rule above is not specific to `review_files`: any file that a reader would expect in the reviewed set and that is not there gets named in the report's `## Excluded From Review Set` section with its reason, never omitted. One section, one entry shape — `path — reason` — and exactly three reasons are legal:
 >
 > - `path does not exist` — a `review_files` entry that is not on disk.

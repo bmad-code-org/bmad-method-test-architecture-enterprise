@@ -58,7 +58,7 @@ TEA generates:
 
 **Frontend/Fullstack (Node.js):**
 
-```
+```text
 tests/
 ├── e2e/
 │   ├── example.spec.ts
@@ -71,7 +71,7 @@ tests/
 
 **Backend (Python example):**
 
-```
+```text
 tests/
 ├── unit/
 │   └── test_example.py

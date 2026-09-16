@@ -221,7 +221,7 @@ tests/
 
 ## Making Fixtures Reusable Across Projects
 
-**Option 1: Use Playwright Utils (recommended)**
+### Option 1: Use Playwright Utils (recommended)
 
 ```bash
 npm install -D @seontechnologies/playwright-utils
@@ -240,7 +240,9 @@ Auth-session requires provider configuration. See the [auth-session setup guide]
 
 Playwright Utils 4.4.0 exports ten utility modules: `api-request`, `intercept-network-call`, `auth-session`, `network-recorder`, `network-error-monitor`, `recurse`, `burn-in`, `file-utils`, `log`, and `webhook`.
 
-**Option 2: Build your own** when you need company-specific patterns, a custom authentication system, or something the utilities do not cover. Export one subpath per fixture so consumers compose only what they need:
+### Option 2: Build your own
+
+Build your own when you need company-specific patterns, a custom authentication system, or something the utilities do not cover. Export one subpath per fixture so consumers compose only what they need:
 
 ```json
 // package.json

@@ -524,4 +524,4 @@ Before deploying selectors:
 - **Related fragments**: `test-healing-patterns.md` (selector failure diagnosis), `fixture-architecture.md` (page object alternatives), `test-quality.md` (maintainability standards)
 - **Tools**: Playwright Inspector (Pick Locator), DevTools console, Playwright MCP browser_generate_locator (optional)
 
-_Source: Playwright selector best practices, accessibility guidelines (ARIA), production test maintenance patterns_
+_Source: Playwright selector best practices, accessibility guidelines (ARIA), production test maintenance patterns._

@@ -53,7 +53,7 @@ From the story acceptance criteria (Step 1 output), identify:
 
 **Example Acceptance Criteria:**
 
-```
+```text
 Story: User Registration
 - As a user, I can POST to /api/users/register with email and password
 - System returns 201 Created with user object

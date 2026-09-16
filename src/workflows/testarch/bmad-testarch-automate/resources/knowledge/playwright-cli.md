@@ -58,7 +58,7 @@ The `-s=tea-explore` flag scopes everything to a named session, preventing state
 
 **Selector verification** — Before generating test code, TEA can snapshot a page to see the actual labels, roles, and names of elements. Instead of guessing that a button says "Login", it knows it says "Sign In":
 
-```
+```text
 snapshot ref {role: "button", name: "Sign In"}
   → generates: page.getByRole('button', { name: 'Sign In' })
 ```

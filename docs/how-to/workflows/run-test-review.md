@@ -42,7 +42,7 @@ TEA will ask what to review.
 
 Review one test file:
 
-```
+```text
 tests/e2e/checkout.spec.ts
 ```
 
@@ -56,7 +56,7 @@ tests/e2e/checkout.spec.ts
 
 Review all tests in a directory:
 
-```
+```text
 tests/e2e/
 ```
 
@@ -70,7 +70,7 @@ tests/e2e/
 
 Review all tests:
 
-```
+```text
 tests/
 ```
 
@@ -354,15 +354,15 @@ test('should show validation error for expired card', async ({ page }) => {});
 
 ### Short-term (Apply Recommendations)
 
-4. Extract login fixture from `profile.spec.ts`
-5. Add network assertions to `api-calls.spec.ts`
-6. Improve test names in `checkout.spec.ts`
+1. Extract login fixture from `profile.spec.ts`
+2. Add network assertions to `api-calls.spec.ts`
+3. Improve test names in `checkout.spec.ts`
 
 ### Long-term (Continuous Improvement)
 
-7. Re-run `test-review` after fixes (target: 85/100)
-8. Add performance budgets to CI
-9. Document test patterns for team
+1. Re-run `test-review` after fixes (target: 85/100)
+2. Add performance budgets to CI
+3. Document test patterns for team
 
 ## Knowledge Base References
 
@@ -373,65 +373,72 @@ TEA reviewed against these patterns:
 - [timing-debugging.md](/docs/reference/knowledge-base.md) - Race conditions
 - [selector-resilience.md](/docs/reference/knowledge-base.md) - Robust selectors
 
-````
-
 ## Understanding the Scores
 
 ### What Do Scores Mean?
 
-| Score Range | Interpretation | Action |
-|-------------|----------------|--------|
-| **90-100** | Excellent | Minimal changes needed, production-ready |
-| **80-89** | Good | Minor improvements recommended |
-| **70-79** | Acceptable | Address recommendations before release |
-| **60-69** | Needs Improvement | Fix critical issues, apply recommendations |
-| **< 60** | Critical | Significant refactoring needed |
+| Score Range | Interpretation    | Action                                     |
+| ----------- | ----------------- | ------------------------------------------ |
+| **90-100**  | Excellent         | Minimal changes needed, production-ready   |
+| **80-89**   | Good              | Minor improvements recommended             |
+| **70-79**   | Acceptable        | Address recommendations before release     |
+| **60-69**   | Needs Improvement | Fix critical issues, apply recommendations |
+| **< 60**    | Critical          | Significant refactoring needed             |
 
 ### Scoring Criteria
 
 **Determinism (30%):**
+
 - Tests produce same result every run
 - No random failures (flakiness)
 - No environment-dependent behavior
 
 **Isolation (30%):**
+
 - Tests don't depend on each other
 - Can run in any order
 - Clean up after themselves
 
 **Maintainability (25%):**
+
 - Readable and maintainable
 - Appropriate size
 - Clear naming
 
 **Performance (15%):**
+
 - Fast execution
 - Efficient selectors
 - No unnecessary waits
 
 **Coverage:**
+
 - Not scored in `test-review`
 - Use `trace` for coverage percentage, requirement mapping, and gate decisions
 
 ## What You Get
 
 ### Quality Report
+
 - Overall score (0-100)
 - Category scores (Determinism, Isolation, etc.)
 - File-by-file breakdown
 
 ### Critical Issues
+
 - Specific line numbers
 - Code examples (current vs fixed)
 - Why it matters explanation
 - Impact assessment
 
 ### Recommendations
+
 - Actionable improvements
 - Code examples
 - Priority/severity levels
 
 ### Next Steps
+
 - Immediate actions (fix critical)
 - Short-term improvements
 - Long-term quality goals
@@ -444,17 +451,18 @@ Make test review part of release checklist:
 
 ```markdown
 ## Quality Checklist (Test-Review)
+
 - [ ] All tests passing
 - [ ] Test-review quality score > 80
 - [ ] Critical issues resolved
 - [ ] Performance within budget
-````
+```
 
 ### Review After AI Generation
 
 Always review AI-generated tests:
 
-```
+```text
 1. Run atdd or automate
 2. Run test-review on generated tests
 3. Fix critical issues
@@ -506,7 +514,7 @@ For large suites, review incrementally:
 
 Share reports with team:
 
-```
+```text
 Team Meeting:
 - Review test-review.md
 - Discuss critical issues

@@ -25,7 +25,7 @@ class WebhookTimeoutError extends Error {
 
 The error message format:
 
-```
+```text
 Webhook "movie.deleted" not received within 15000ms.
 3 webhook(s) were received but none matched.
 Matchers: field(event="movie.deleted"), field(data.id=42).

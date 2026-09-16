@@ -798,7 +798,7 @@ fs.writeFileSync('{outputFile}', reportContent, 'utf8');
 
 ### 5. Display Gate Decision
 
-```
+```text
 🚨 GATE DECISION: {gateDecision}
 
 📊 Coverage Analysis:

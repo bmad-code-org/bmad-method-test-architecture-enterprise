@@ -718,7 +718,7 @@ test.describe('error handling', { annotation: [{ type: 'skipNetworkMonitoring' }
 
 ## Fixture Composition
 
-**Option 1: Merge Fixtures Inline (Simplest)**
+### Option 1: Merge Fixtures Inline (Simplest)
 
 ```typescript
 // Merge the fixtures this spec needs
@@ -741,9 +741,9 @@ test('api test', async ({ apiRequest, interceptNetworkCall }) => {
 });
 ```
 
-**Option 2: Create Custom Merged Fixtures (Selective)**
+### Option 2: Create Custom Merged Fixtures (Selective)
 
-**File 1: support/merged-fixtures.ts**
+#### File 1: support/merged-fixtures.ts
 
 ```typescript
 import { test as base, mergeTests } from '@playwright/test';
@@ -759,7 +759,7 @@ export const expect = base.expect;
 export { log };
 ```
 
-**File 2: tests/api/users.spec.ts**
+#### File 2: tests/api/users.spec.ts
 
 ```typescript
 import { test, expect, log } from '../support/merged-fixtures';

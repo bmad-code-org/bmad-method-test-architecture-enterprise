@@ -617,9 +617,7 @@ See `CONTRIBUTING.md` for guidelines.
 
 ---
 
-**📦 Release Guide (for Maintainers)**
-
-## Publishing TEA to NPM
+## 📦 Publishing TEA to NPM (for Maintainers)
 
 TEA uses an automated publish workflow modeled after the main `BMAD-METHOD` repo. It supports:
 

@@ -10,7 +10,7 @@ This checklist covers **two sequential phases**:
 
 ---
 
-# PHASE 1: REQUIREMENTS TRACEABILITY
+## PHASE 1: REQUIREMENTS TRACEABILITY
 
 ## Prerequisites Validation
 
@@ -251,7 +251,7 @@ Knowledge fragments referenced:
 
 ---
 
-# PHASE 2: QUALITY GATE DECISION
+## PHASE 2: QUALITY GATE DECISION
 
 **Note**: Phase 2 always emits `e2e-trace-summary.json`; gate decision fields are populated only when `allow_gate: true` and `collection_status` resolves to `COLLECTED`.
 
@@ -603,7 +603,7 @@ This list is the definition of waiver validity. `steps-c/step-05-gate-decision.m
 
 ---
 
-# FINAL VALIDATION (Both Phases)
+## FINAL VALIDATION (Both Phases)
 
 ## Non-Prescriptive Validation
 

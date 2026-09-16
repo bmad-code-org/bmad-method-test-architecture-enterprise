@@ -19,8 +19,10 @@ export default [
       // rule would otherwise flag, and several are deliberately malformed YAML
       // that a real run could produce, which no linter here should try to fix.
       'test/replay/ci/**',
+      // The BMAD runtime install directory: generated per project, never
+      // committed. _bmad-output/ is a sibling, not a match of this pattern:
+      // it holds this repository's own tracked planning artifacts.
       '_bmad/**',
-      '_bmad*/**',
       // Build output
       'build/**',
       // Website uses ESM/Astro - separate linting ecosystem

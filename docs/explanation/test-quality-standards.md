@@ -281,30 +281,30 @@ test('fast test', async ({ page }) => {
 
 `test-review` scores tests against these standards out of 100. Each item is awarded whole or not at all.
 
-**Determinism (35 points)**
+### Determinism (35 points)
 
 - No hard waits: 10
 - No conditionals for flow control: 10
 - No try-catch for flow control: 10
 - Network-first: 5. The test waits on an actual network event rather than a timeout. A pure API test that awaits its own request satisfies this by construction.
 
-**Isolation (25 points)**
+### Isolation (25 points)
 
 - Self-cleaning: 15
 - No global state: 5
 - Parallel-safe: 5
 
-**Assertions (20 points)**
+### Assertions (20 points)
 
 - Explicit in the test body: 10
 - Specific and meaningful: 10
 
-**Structure (10 points)**
+### Structure (10 points)
 
 - Test size ≤ 1000 lines: 5
 - Clear naming: 5
 
-**Performance (10 points)**
+### Performance (10 points)
 
 - Execution time < 1.5 min: 10
 

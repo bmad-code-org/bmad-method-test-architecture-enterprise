@@ -258,17 +258,17 @@ Every P0 criterion below FULL coverage, whatever its status. Gate Rule 1 require
 
 #### Example Recommendations
 
-**Immediate Actions (Before PR Merge)**
+##### Immediate Actions (Before PR Merge)
 
 1. **Add P1 Password Reset Tests** - Implement `1.3-API-001` for email service integration and `1.3-E2E-004` for error path validation. P1 coverage currently at 80%, target is 90%.
 2. **Optimize Slow E2E Test** - Refactor `1.3-E2E-001` to use faster fixture setup. Currently 145s, target is <90s.
 
-**Short-term Actions (This Milestone)**
+##### Short-term Actions (This Milestone)
 
 1. **Enhance P2 Coverage** - Add E2E validation for session timeout (`1.3-E2E-005`). Currently UNIT-ONLY coverage.
 2. **Split Large Test File** - Break `1.3-UNIT-005` (1020 lines) into multiple focused test files (≤1000 lines each).
 
-**Long-term Actions (Backlog)**
+##### Long-term Actions (Backlog)
 
 1. **Enrich P3 Coverage** - Add tests for edge cases in P3 criteria if time permits.
 

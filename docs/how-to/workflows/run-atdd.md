@@ -42,7 +42,7 @@ TEA will ask for:
 
 **Story/Feature Details:**
 
-```
+```text
 We're adding a user profile page where users can:
 - View their profile information
 - Edit their name and email
@@ -52,7 +52,7 @@ We're adding a user profile page where users can:
 
 **Acceptance Criteria:**
 
-```
+```text
 Given I'm logged in
 When I navigate to /profile
 Then I see my current name and email
@@ -100,7 +100,7 @@ TEA generates component tests using framework-appropriate tools:
 
 **Example response:**
 
-```
+```text
 Generate:
 - API tests for profile CRUD operations
 - E2E tests for the complete profile editing flow
@@ -405,7 +405,7 @@ See [Configure Browser Automation](/docs/how-to/customization/configure-browser-
 
 Don't generate tests for everything at once:
 
-```
+```text
 Generate tests for:
 - P0: Critical path (happy path)
 - P1: High value (validation, errors)

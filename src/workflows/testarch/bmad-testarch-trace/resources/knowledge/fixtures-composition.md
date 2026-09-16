@@ -290,7 +290,7 @@ const test = mergeTests(fixture1Renamed, fixture2);
 
 ## Recommended Project Structure
 
-```
+```text
 playwright/
 ├── support/
 │   ├── merged-fixtures.ts        # ⭐ Single test object for project

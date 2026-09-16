@@ -722,4 +722,4 @@ Before shipping error handling code, verify:
 - Related fragments: `network-first.md`, `test-quality.md`, `contract-testing.md`
 - Monitoring tools: Sentry, Datadog, LogRocket
 
-_Source: Murat error-handling patterns, Pact resilience guidance, enterprise production error handling_
+_Source: Murat error-handling patterns, Pact resilience guidance, enterprise production error handling._

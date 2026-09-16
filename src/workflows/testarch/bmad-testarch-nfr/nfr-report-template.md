@@ -347,7 +347,7 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 
 ## Findings Summary
 
-**Based on ADR Quality Readiness Checklist (8 categories, 29 criteria)**
+**Based on ADR Quality Readiness Checklist (8 categories, 29 criteria).**
 
 | Category                                         | Criteria Met       | PASS             | CONCERNS             | FAIL             | Overall Status                      |
 | ------------------------------------------------ | ------------------ | ---------------- | -------------------- | ---------------- | ----------------------------------- |

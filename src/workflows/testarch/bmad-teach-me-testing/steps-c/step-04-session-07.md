@@ -69,7 +69,7 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 
 "### 📚 Knowledge Fragment Categories
 
-**1. Testing Patterns (9 fragments)**
+#### 1. Testing Patterns (9 fragments)
 
 - fixture-architecture.md - Composable fixture patterns
 - fixtures-composition.md - mergeTests composition patterns
@@ -81,7 +81,7 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - selector-resilience.md - Robust selectors
 - timing-debugging.md - Race condition fixes
 
-**2. Playwright & Pact Utils (23 fragments)**
+#### 2. Playwright & Pact Utils (23 fragments)
 
 - playwright-utils-mandate.md - Binding rule: utils are the default implementation
 - overview.md - Playwright Utils overview
@@ -107,7 +107,7 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - playwright-cli.md - CLI for AI browser automation
 - visual-debugging.md - Trace viewer workflows
 
-**3. Configuration & Governance (9 fragments)**
+#### 3. Configuration & Governance (9 fragments)
 
 - playwright-config.md - Environment & timeout guardrails
 - ci-burn-in.md - CI orchestration
@@ -119,7 +119,7 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - confidence-gate.md - Ask rather than invent when confidence is low
 - evidence-integrity.md - Checks that cannot fail, and how to spot them
 
-**4. Quality Frameworks (5 fragments)**
+#### 4. Quality Frameworks (5 fragments)
 
 - test-quality.md - DoD execution limits
 - test-levels-framework.md - Unit/Integration/E2E
@@ -127,19 +127,19 @@ Set session-07-advanced `status: 'in-progress'` (only first time).
 - probability-impact.md - Probability × impact scoring
 - nfr-criteria.md - NFR evidence audit definitions
 
-**5. Authentication & Security (3 fragments)**
+#### 5. Authentication & Security (3 fragments)
 
 - email-auth.md - Magic link extraction
 - auth-session.md - Token persistence
 - error-handling.md - Exception handling
 
-**6. Mobile (3 fragments)**
+#### 6. Mobile (3 fragments)
 
 - mobile-test-strategy.md - Level framework for device suites
 - maestro-flows.md - Declarative flow authoring and selectors
 - mobile-ci-device-lab.md - Simulators, emulators, device profiles in CI
 
-**7. Webhooks (7 fragments)**
+#### 7. Webhooks (7 fragments)
 
 - webhook-testing-fundamentals.md - What a webhook test proves
 - webhook-module-setup.md - Module wiring

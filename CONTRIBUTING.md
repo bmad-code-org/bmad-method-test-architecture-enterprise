@@ -132,17 +132,21 @@ If you're new to GitHub or pull requests, here's a quick guide:
 1. **Fork the repository** - Click the "Fork" button on GitHub to create your own copy
 2. **Clone your fork** - `git clone https://github.com/YOUR-USERNAME/bmad-method-test-architecture-enterprise.git`
 3. **Create a new branch** - Never work on `main` directly!
+
    ```bash
    git checkout -b fix/description
    # or
    git checkout -b feature/description
    ```
+
 4. **Make your changes** - Edit files, keeping changes small and focused
 5. **Commit your changes** - Use clear, descriptive commit messages
+
    ```bash
    git add .
    git commit -m "fix: correct typo in README"
    ```
+
 6. **Push to your fork** - `git push origin fix/description`
 7. **Create the Pull Request** - Go to your fork on GitHub and click "Compare & pull request"
 

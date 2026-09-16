@@ -251,7 +251,7 @@ fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(execu
 
 ### 7. Display Summary to User
 
-```
+```text
 ✅ NFR Evidence Audit Complete ({subagentExecutionLabel})
 
 🎯 Overall Risk Level: {overallRisk}

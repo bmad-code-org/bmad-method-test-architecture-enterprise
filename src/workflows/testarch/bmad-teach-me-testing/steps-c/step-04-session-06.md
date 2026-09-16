@@ -70,37 +70,37 @@ Set session-06-quality-trace `status: 'in-progress'`.
 
 **5 Dimensions of Quality:**
 
-**1. Determinism (0-100)**
+#### 1. Determinism (0-100)
 
 - Tests pass/fail consistently
 - No flakiness, no randomness
 - Proper async handling
 
-**2. Isolation (0-100)**
+#### 2. Isolation (0-100)
 
 - Tests run independently
 - No shared state
 - Parallelizable
 
-**3. Assertions (0-100)**
+#### 3. Assertions (0-100)
 
 - Correct checks for expected behavior
 - Meaningful assertions (not just presence)
 - Fails for the right reasons
 
-**4. Structure (0-100)**
+#### 4. Structure (0-100)
 
 - Readable test code
 - Clear organization and naming
 - Minimal duplication
 
-**5. Performance (0-100)**
+#### 5. Performance (0-100)
 
 - Test execution speed
 - Resource usage
 - Parallel efficiency
 
-**Overall Score = Average of 5 dimensions**
+**Overall Score = Average of 5 dimensions.**
 
 {Role-adapted example}
 

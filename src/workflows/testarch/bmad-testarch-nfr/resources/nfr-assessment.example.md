@@ -368,7 +368,7 @@ No custom NFR categories were requested for this run. The four standard domains 
 
 ## Four-Domain Findings Summary
 
-**Based on the four audited NFR domains: Security, Performance, Reliability, Maintainability**
+**Based on the four audited NFR domains: Security, Performance, Reliability, Maintainability.**
 
 | Domain          | Findings Assessed | PASS  | CONCERNS | FAIL  | N/A   | Overall Status |
 | --------------- | ----------------- | ----- | -------- | ----- | ----- | -------------- |
