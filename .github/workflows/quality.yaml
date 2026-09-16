@@ -214,6 +214,17 @@ jobs:
       - name: Prove atdd scoring requires assertion provenance, not just message text
         run: npm run test:atdd-scoring
 
+      # Two of the eight documented commands this gate re-runs (test:eval-schemas,
+      # test:probe-targets) exercise the atdd preflight path, which needs the
+      # linux isolation backend installed above — running this any earlier fails
+      # on a fresh runner with no bubblewrap yet, for a reason that has nothing
+      # to do with whether the documented command itself is correct.
+      - name: Test the doc-invocations gate's own entry script
+        run: npm run test:doc-invocation-entry
+
+      - name: Run documented commands against the real repository
+        run: npm run test:doc-invocations
+
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
 

@@ -40,22 +40,22 @@ npm test
 npm run test:coverage
 
 # Individual suites
-npm run test:schemas           # test-agent-schema.js
-npm run test:install           # test-installation-components.js
+npm run test:schemas           # test-agent-schema
+npm run test:install           # test-installation-components
 npm run test:cli               # test-test-review-cli.js
-npm run test:knowledge         # test-knowledge-base.js
-npm run test:release-metadata  # test-release-metadata.js
-npm run test:eval-data         # eval-fragment-selection.js --validate-only
-npm run test:eval-nfr-data     # eval-nfr.js --validate-only
-npm run test:eval-ci-data      # eval-ci.js --validate-only
-npm run test:eval-test-design-data  # eval-test-design.js --validate-only
-npm run test:eval-trace-data   # eval-trace.js --validate-only
-npm run test:eval-routing-data # eval-bmad-tea-routing.js --validate-only
-npm run test:eval-schemas      # tools/validate-eval-schemas.js
-npm run test:eval-replay       # test-eval-replay.js
-npm run test:contracts         # test-contracts.js
-npm run test:contract-oracles  # test-contract-oracles.js
-npm run test:probe-targets     # test-probe-targets.js
+npm run test:knowledge         # test-knowledge-base
+npm run test:release-metadata  # test-release-metadata
+npm run test:eval-data         # eval-fragment-selection --validate-only
+npm run test:eval-nfr-data     # eval-nfr --validate-only
+npm run test:eval-ci-data      # eval-ci --validate-only
+npm run test:eval-test-design-data  # eval-test-design --validate-only
+npm run test:eval-trace-data   # eval-trace --validate-only
+npm run test:eval-routing-data # eval-bmad-tea-routing --validate-only
+npm run test:eval-schemas      # validate-eval-schemas
+npm run test:eval-replay       # test-eval-replay
+npm run test:contracts         # test-contracts
+npm run test:contract-oracles  # test-contract-oracles
+npm run test:probe-targets     # test-probe-targets
 
 # Are the eval contracts still what their sources generate?
 node tools/generate-contracts.js --check
