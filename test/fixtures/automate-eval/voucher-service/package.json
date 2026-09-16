@@ -1,0 +1,17 @@
+{
+  "name": "voucher-redemption-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Voucher/discount redemption fixture for the automate-eval corpus: percentage and fixed vouchers, an inclusive minimum-spend boundary, and a discount cap.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

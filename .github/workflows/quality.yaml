@@ -273,6 +273,9 @@ jobs:
       - name: Score every probe corpus through eval-quality against stored evidence
         run: npm run test:probe-corpus
 
+      - name: Prove the automate-eval fixture's seeded regression rolls back live
+        run: npm run test:automate-eval-fixture
+
       - name: Prove the clock port is in the path that produces a duration
         run: npm run test:clock-port
 

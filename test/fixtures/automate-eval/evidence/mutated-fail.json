@@ -1,0 +1,21 @@
+{
+  "phase": "mutated-fail",
+  "targetArtifact": "test/fixtures/automate-eval/voucher-service/src/vouchers.js",
+  "mutationOperator": "flip-minimum-spend-boundary-inclusive-to-exclusive",
+  "input": {
+    "voucher": {
+      "type": "percentage",
+      "percentOff": 10,
+      "maxDiscount": 20,
+      "minimumSpend": 50,
+      "expiresOn": "2099-01-01"
+    },
+    "cartTotal": 50,
+    "redeemedOn": "2026-01-01"
+  },
+  "result": {
+    "accepted": false,
+    "reason": "below-minimum-spend"
+  },
+  "assertion": "the same boundary input, after the minimum-spend check is mutated from >= to >, is wrongly rejected."
+}
