@@ -200,6 +200,9 @@ jobs:
       - name: Test write-time enforcement hook
         run: npm run test:enforce-hook
 
+      - name: Score the bmad-testarch-framework scaffold's contents
+        run: npm run test:framework-scaffold
+
       - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
 
