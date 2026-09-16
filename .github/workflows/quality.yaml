@@ -275,6 +275,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # test:cli's eval:all reconciliation tests run --preflight-only across every
+      # manifest suite, including ci, whose pre-flight is a hard actionlint
+      # dependency. See the validate job's own Install actionlint step for why
+      # this floats to latest rather than pinning a version.
+      - name: Install actionlint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash
+          sudo mv ./actionlint /usr/local/bin/
+
       - name: Test TEA test-review CLI (${{ matrix.shard.name }})
         run: npm run test:cli
         env:
