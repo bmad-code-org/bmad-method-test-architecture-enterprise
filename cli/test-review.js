@@ -20,8 +20,8 @@
  * waivable.
  *
  * The payload shapes are declared as VERDICT_KEYS and SKIP_KEYS and exported,
- * because test/contracts/test-review.contract.json states the verdict's key set
- * and types and had no way to check that claim against this file.
+ * because this repository's own test-review contract states the verdict's key
+ * set and types and had no way to check that claim against this file.
  *
  * Usage:
  *   tea-test-review --base origin/main --agent claude --json test-review.json

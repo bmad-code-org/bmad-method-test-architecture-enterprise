@@ -22,8 +22,9 @@
  *
  * claude argv verified live against claude CLI 2.1.220, codex argv against
  * codex-cli 0.146.0 (both 2026-08-03, same review target: a real Playwright
- * spec, not a stub) — see docs/reference/tea-test-review-cli.md for what
- * "verified" means per vendor.
+ * spec, not a stub) — see the TEA documentation's tea-test-review CLI reference
+ * (https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/)
+ * for what "verified" means per vendor.
  *
  * Each adapter also pins a defaultModel. Left unpinned, the model is whatever
  * the vendor CLI resolves from its own config — ~/.codex/config.toml or
@@ -51,7 +52,7 @@
  */
 
 /**
- * What a runner may do to the filesystem, in the words test/evals/suite-manifest.json
+ * What a runner may do to the filesystem, in the words the eval suite manifest
  * declares per suite. The three are tiers: `command-execution` includes
  * `scoped-artifact-writes`, which includes `read-only`, because a runner that can
  * run a shell can write with it, so granting the shell and withholding the write
@@ -61,7 +62,7 @@
  * argv below. `custom` and `agy` receive no capability argv at all: the custom
  * contract puts the tool policy on the caller's command line, and agy exposes
  * no flag that narrows its tool set. A harness that declares `read-only` for one
- * of those runners has to enforce it itself, which test/eval-fragment-selection.js
+ * of those runners has to enforce it itself, which the fragment-selection eval harness
  * does by running in an empty scratch directory and failing any run that leaves
  * a file behind.
  */

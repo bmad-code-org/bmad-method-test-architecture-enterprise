@@ -1,0 +1,8 @@
+{
+  "dependency-direction": {
+    "roots": [{ "path": "test", "extensions": [".js"] }],
+    "layers": [{ "name": "test", "match": "prefix", "path": "test/", "label": "test/", "imports": ["test"] }],
+    "commonjs": "check",
+    "reportOnly": false
+  }
+}

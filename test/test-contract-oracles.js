@@ -110,7 +110,6 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 
 const { parseSelection } = require('../cli/lib/parse-selection');
 const { verdictFor } = require('../cli/lib/parse-report');
@@ -233,24 +232,14 @@ function readJson(absolute, label) {
 
 /** eval-quality's evaluator, or exit 2 with the reason it could not be loaded. */
 async function loadEvaluator() {
-  let root;
+  let evalQuality;
   try {
-    root = path.dirname(require.resolve('eval-quality/package.json', { paths: [PROJECT_ROOT] }));
-  } catch {
-    unreadable('eval-quality is not installed; it is a declared devDependency, so run npm install');
-  }
-  const load = (relative) => import(pathToFileURL(path.join(root, 'dist', 'core', relative)).href);
-  try {
-    const [resolution, evidence] = await Promise.all([load('evaluate/resolution.js'), load('evaluate/evidence-resolution.js')]);
-    return {
-      resolveCheck: resolution.resolveCheck,
-      makeResolveOperand: evidence.makeResolveOperand,
-      makePointerDenotesCollection: evidence.makePointerDenotesCollection,
-      referenceSetKeysOf: evidence.referenceSetKeysOf,
-    };
+    evalQuality = require('eval-quality');
   } catch (error) {
-    unreadable(`eval-quality's evaluator could not be loaded from ${root}/dist/core: ${error.message}`);
+    unreadable(`eval-quality's evaluator could not be loaded: ${error.message}`);
   }
+  const { resolveCheck, makeResolveOperand, makePointerDenotesCollection, referenceSetKeysOf } = evalQuality;
+  return { resolveCheck, makeResolveOperand, makePointerDenotesCollection, referenceSetKeysOf };
 }
 
 /**

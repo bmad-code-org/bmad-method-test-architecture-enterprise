@@ -222,11 +222,15 @@ function main() {
   // The generators, each named. Their constants are the numbers that land in
   // committed bytes, so a generator reading a literal fails here before its
   // `--check` reports the bytes as changed.
+  const GENERATOR_LOADERS = {
+    'tools/generate-probes.js': () => require('../tools/generate-probes.js'),
+    'tools/generate-contracts.js': () => require('../tools/generate-contracts.js'),
+  };
   for (const [file, exportName, kind] of [
     ['tools/generate-probes.js', 'PROBE_SCHEMA_VERSION', 'probe'],
     ['tools/generate-contracts.js', 'EVAL_CONTRACT_SCHEMA_VERSION', 'eval-contract'],
   ]) {
-    const exported = require(path.join(PROJECT_ROOT, file))[exportName];
+    const exported = GENERATOR_LOADERS[file]()[exportName];
     hold(
       exported === expected[kind],
       `${file} writes ${kind} with ${expected[kind]}`,

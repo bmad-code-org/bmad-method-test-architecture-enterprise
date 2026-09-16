@@ -65,6 +65,24 @@ function generateResultSchema() {
 }
 
 /**
+ * Every harness `suite-manifest.json` names, as a literal require() rather than
+ * one built from `entry.harness` at runtime. The manifest's own schema fixes
+ * this to a closed, eight-entry set, and a literal keeps the load inside the
+ * dependency-direction gate's declared edges rather than escaping its notice
+ * as a specifier the gate could not read.
+ */
+const HARNESS_LOADERS = {
+  'test/eval-atdd.js': () => require('../test/eval-atdd.js'),
+  'test/eval-bmad-tea-routing.js': () => require('../test/eval-bmad-tea-routing.js'),
+  'test/eval-ci.js': () => require('../test/eval-ci.js'),
+  'test/eval-fragment-selection.js': () => require('../test/eval-fragment-selection.js'),
+  'test/eval-nfr.js': () => require('../test/eval-nfr.js'),
+  'test/eval-test-design.js': () => require('../test/eval-test-design.js'),
+  'test/eval-test-review.js': () => require('../test/eval-test-review.js'),
+  'test/eval-trace.js': () => require('../test/eval-trace.js'),
+};
+
+/**
  * The suite's harness module, or null once the failure has been reported.
  *
  * @param {object} entry
@@ -72,8 +90,13 @@ function generateResultSchema() {
  * @returns {object|null}
  */
 function loadHarness(entry, problems) {
+  const load = HARNESS_LOADERS[entry.harness];
+  if (!load) {
+    problems.push(`${entry.id}: harness ${entry.harness} is not one of the loaders this script declares; add it to HARNESS_LOADERS`);
+    return null;
+  }
   try {
-    return require(path.join(PROJECT_ROOT, entry.harness));
+    return load();
   } catch (error) {
     problems.push(`${entry.id}: harness ${entry.harness} could not be loaded: ${error.message}`);
     return null;

@@ -11,8 +11,9 @@
  * (convention-baseline.js) fixes, and the same fix: stop trusting the agent to get a
  * checkable fact right, check it.
  *
- * The registry is the source of truth (per docs/explanation/test-review-cli-architecture.md's
- * "Governing rule: the skill is the source of truth"), so this reads the real file
+ * The registry is the source of truth (per the TEA documentation's test-review CLI
+ * architecture explanation, "Governing rule: the skill is the source of truth"),
+ * so this reads the real file
  * shipped with the skill rather than a hardcoded copy that could drift from it —
  * no sync test needed, because there is nothing to sync.
  */

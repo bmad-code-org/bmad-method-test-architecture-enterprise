@@ -54,12 +54,12 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 | Epic 1 | 5 / 5 | 0 | 0 | Complete |
 | Epic 2 | 7 / 7 | 0 | 0 | Complete |
 | Epic 3 | 6 / 6 | 0 | 0 | Complete |
-| Epic 4 | 4 / 8 | 0 | 4 | In progress |
+| Epic 4 | 5 / 8 | 0 | 3 | In progress |
 | Epic 5 | 0 / 5 | 0 | 5 | Queued |
 | Epic 6 | 4 / 12 | 1 | 7 | In progress |
 | Epic 7 | 1 / 1 | 0 | 0 | Complete |
 | Epic 8 | 0 / 1 | 0 | 1 | Queued |
-| **Total** | **27 / 45** | **1** | **17** | **60% merged** |
+| **Total** | **28 / 45** | **1** | **16** | **62% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -96,7 +96,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 4.4: Narrow faults by type and assert every vocabulary](#story-44-narrow-faults-by-type-and-assert-every-vocabulary) ([#182](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/182))
 - [x] [Story 4.5: Read diagnostics from the sink and decide the strict rung](#story-45-read-diagnostics-from-the-sink-and-decide-the-strict-rung) ([#175](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/175))
 - [x] [Story 4.6: Hold the supply chain](#story-46-hold-the-supply-chain) ([#180](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/180))
-- [ ] [Story 4.7: Hold layering, boundary and lineage](#story-47-hold-layering-boundary-and-lineage)
+- [x] [Story 4.7: Hold layering, boundary and lineage](#story-47-hold-layering-boundary-and-lineage) ([#191](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/191))
 - [ ] [Story 4.8: Gate the ungated trees, allowlists, coverage and CI](#story-48-gate-the-ungated-trees-allowlists-coverage-and-ci)
 
 ### Epic 5 progress: Drift is measured and the upgrade is proven live
@@ -234,9 +234,9 @@ FR30: TEA compares run strength through `compareDominance`, honoring `comparabil
 
 FR31: TEA audits both lockfiles for age and licence, and sets a resolution-time floor in `.npmrc`. TEA's `.npmrc` is one line; `eval-quality` sets `min-release-age=7` and keeps the fail-closed audit beside it because that setting fails open on an already-committed lockfile.
 
-FR32: TEA holds the dependency direction between the trees that have an import graph: `cli/`, `tools/`, `test/` and `src/**/*.cjs`. `src/` holds 725 files of which one is JavaScript, so a gate over `src/` as a whole would be vacuous.
+FR32: TEA holds the dependency direction between the trees that have an import graph: `cli/`, `tools/`, `test/` and `src/**/*.cjs`. `src/` holds 724 files of which one is JavaScript, so a gate over `src/` as a whole would be vacuous.
 
-FR33: TEA holds its package boundary, so nothing the published tarball carries references the repository it was built in. TEA publishes to npm with three `bin` entries and ships `src/workflows/`.
+FR33: TEA holds its package boundary, so nothing the published tarball carries references the repository it was built in. TEA publishes to npm with seven `bin` entries and ships `src/workflows/`.
 
 FR34: TEA holds lineage ownership over the fields `tools/generate-probes.js` and `tools/generate-contracts.js` write and several readers consume.
 
@@ -1016,7 +1016,7 @@ So that a violation fails the build rather than surviving review.
 
 **Acceptance Criteria:**
 
-**Given** `src/` holds 725 files of which one is JavaScript, so a gate over it as a whole would be vacuous
+**Given** `src/` holds 724 files of which one is JavaScript, so a gate over it as a whole would be vacuous
 **When** the direction gate from Story 2.5 is configured
 **Then** it covers `cli/`, `tools/`, `test/` and `src/**/*.cjs`, and the declared edges are written down
 **And** the gate reports violations without failing on its first run, so the size of the fix is known before it starts
@@ -1025,7 +1025,7 @@ So that a violation fails the build rather than surviving review.
 **When** the violations are fixed
 **Then** the gate is switched to failing, and the fix is its own commit with its diff size reported
 
-**Given** TEA publishes to npm with three `bin` entries and ships `src/workflows/`
+**Given** TEA publishes to npm with seven `bin` entries and ships `src/workflows/`
 **When** the boundary gate runs
 **Then** nothing in the published tarball references `test/`, `_bmad-output/` or any dev-only path
 

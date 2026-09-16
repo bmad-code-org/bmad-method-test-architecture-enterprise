@@ -35,7 +35,7 @@
  * It declares the one capability the workflow needs, `scoped-artifact-writes`:
  * the deliverable is a file inside the working directory, so claude runs with
  * its write tools and no shell, and codex under its workspace-write sandbox,
- * which is what the ci suite declares in test/evals/suite-manifest.json. No
+ * which is what the ci suite declares in the eval suite manifest. No
  * shell means the workflow's own "run the tests locally" pre-flight cannot
  * execute here; the harness's prompt says so and tells the run to record it
  * as not run rather than halt.
@@ -44,7 +44,7 @@
  * inner one has to be the shorter of the two: --timeout-ms bounds the vendor
  * call and reports a timeout as exit 5, while the adapter's own maxElapsedMs
  * SIGKILLs this process and reports `budget-exhausted` with no exit code at all.
- * test/lib/probe-targets.js sets the outer bound a minute above the harness's
+ * the probe-targets check sets the outer bound a minute above the harness's
  * own for exactly this reason.
  *
  * Usage:
@@ -68,7 +68,7 @@ const { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNam
 /** The same default the other runner commands declare, so this command changes no run that omits `--agent`. */
 const DEFAULT_AGENT = 'claude';
 
-/** Twenty minutes, matching RUN_TIMEOUT_MS in test/eval-ci.js, which is the only caller that measures. */
+/** Twenty minutes, matching RUN_TIMEOUT_MS in the ci eval harness, which is the only caller that measures. */
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
 
 /** A CI run writes its deliverable into the working directory; see the header. */

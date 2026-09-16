@@ -2,7 +2,7 @@
 /**
  * tea-trace-runner — the command the trace behavioral contract names.
  *
- * `test/eval-trace.js` was the last harness spawning its own agent: it staged a
+ * The trace eval harness was the last one spawning its own agent: it staged a
  * workspace, called `runAgent` in process, and read two files back by path. It
  * was also the only harness with no command to point at, because `tea-test-review`
  * and `tea-fragment-selection-runner` both exist and a trace runner did not. This
@@ -29,7 +29,7 @@
  * It declares the one capability the workflow needs, `scoped-artifact-writes`:
  * the deliverable is two files inside the working directory, so claude runs with
  * its write tools and no shell, and codex under its workspace-write sandbox, which
- * is what the trace suite declares in test/evals/suite-manifest.json. A selection
+ * is what the trace suite declares in the eval suite manifest. A selection
  * needs no file and a trace run does; that is the whole difference between this
  * command's capability and tea-fragment-selection-runner's.
  *
@@ -38,7 +38,7 @@
  * and reports a timeout as exit 5, while the adapter's own maxElapsedMs SIGKILLs
  * this process and reports `budget-exhausted` with no exit code at all. A run that
  * hits the outer bound first loses the classification the inner one would have
- * produced. test/lib/probe-targets.js sets the outer bound a minute above the
+ * produced. The probe-targets check sets the outer bound a minute above the
  * harness's own for exactly this reason.
  *
  * Usage:
@@ -62,10 +62,10 @@ const { AGENT_ADAPTERS } = require('./lib/agent-adapters');
 const { runAgent } = require('./lib/run-agent');
 const { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNames } = require('./lib/runner-exit-codes');
 
-/** The same default `test/eval-trace.js` applies and the other two commands declare, so this command changes no run that omits `--agent`. */
+/** The same default the trace eval harness applies and the other two commands declare, so this command changes no run that omits `--agent`. */
 const DEFAULT_AGENT = 'claude';
 
-/** Twenty minutes, matching RUN_TIMEOUT_MS in test/eval-trace.js, which is the only caller that measures. */
+/** Twenty minutes, matching RUN_TIMEOUT_MS in the trace eval harness, which is the only caller that measures. */
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
 
 /** A trace run writes its two deliverables into the working directory; see the header. */

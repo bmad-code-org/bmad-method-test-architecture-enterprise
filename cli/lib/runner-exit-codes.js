@@ -10,19 +10,19 @@
  * which command it came from. One table, read by both, is what keeps the two
  * commands and every caller on the same spelling.
  *
- * The names are TEA's own failure classes (test/schema/eval-result.js), so a
- * caller reading an exit code back lands on the class it would have derived from
- * a thrown error, with no second table to keep in step. `usage` has no failure
- * class: a malformed invocation is the caller's defect rather than the
- * environment's, and it is spelled 2 because every TEA harness already spells a
- * usage error 2.
+ * The names are TEA's own failure classes, declared by the eval harness's own
+ * result schema under this repository's dev tree, so a caller reading an exit
+ * code back lands on the class it would have derived from a thrown error, with
+ * no second table to keep in step. `usage` has no failure class: a malformed
+ * invocation is the caller's defect rather than the environment's, and it is
+ * spelled 2 because every TEA harness already spells a usage error 2.
  *
- * `classOfAgentError` is test/lib/eval-record.js's `classifyAgentError`,
- * restated here rather than imported: this file ships in the package and that
- * one lives under test/, so importing it would put the eval harness on the
- * published dependency path. Restating it is only safe while the two agree, so
- * test/test-probe-targets.js runs both over the same error shapes and compares
- * the answers.
+ * `classOfAgentError` restates the eval harness's own `classifyAgentError`
+ * rather than importing it: this file ships in the package and that one lives
+ * under the repository's dev tree, so importing it would put the eval harness
+ * on the published dependency path. Restating it is only safe while the two
+ * agree, which a dev-only check in this repository's own test suite proves by
+ * running both over the same error shapes and comparing the answers.
  */
 
 'use strict';

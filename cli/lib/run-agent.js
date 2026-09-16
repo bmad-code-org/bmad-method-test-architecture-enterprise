@@ -2,8 +2,10 @@
  * Spawn the review agent CLI through a built-in adapter or the custom runner
  * contract. This is one of two subprocesses the
  * CLI launches; the other is `git diff` in changed-tests.js. Never exercised
- * live by unit tests (a stub agent is used instead) — see
- * docs/reference/tea-test-review-cli.md for how each real vendor was verified.
+ * live by unit tests (a stub agent is used instead) — see the TEA documentation's
+ * tea-test-review CLI reference
+ * (https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/)
+ * for how each real vendor was verified.
  *
  * Hardening notes:
  * - claude, codex, and custom receive the prompt on STDIN via spawnSync `input`.

@@ -15,7 +15,7 @@
     "applies to codes recovered at runtime, from the seeded faults this check compiles on every run,",
     "and it would apply to an entry here the day one of these contracts stops compiling.",
     "",
-    "Regenerate with: node test/test-contracts.js --package <path to eval-quality dist/index.js> --write"
+    "Regenerate with: node test/test-contracts.js --write"
   ],
   "contracts": {
     "atdd.contract.json": {

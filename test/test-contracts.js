@@ -36,8 +36,11 @@
  * results about a package this repository does not declare. The pin is read
  * through `pinnedVersion` in test/test-eval-quality-corpus.js, which is the one
  * comparison of its kind in this repository rather than a second copy of it.
- * `--package` is exempt from the pin, since naming a local build is the whole
- * purpose of the flag.
+ * To run this against an unreleased build, `npm link` it (or `npm install` its
+ * packed tarball) so `node_modules/eval-quality` resolves to it, then run this
+ * check with no flags; there is no `--package` path override here, since an
+ * arbitrary path cannot be the literal `import()` specifier
+ * `dependency-direction`'s scan of import statements requires.
  *
  * WHERE THE FAILURE SHAPE COMES FROM
  *
@@ -54,8 +57,7 @@
  *
  * Usage:
  *   node test/test-contracts.js
- *   node test/test-contracts.js --package /path/to/eval-quality/dist/index.js
- *   node test/test-contracts.js --package <path> --write   # rewrite the baseline
+ *   node test/test-contracts.js --write   # rewrite the baseline
  *
  * Exit codes:
  *   0  every contract matched its recorded status
@@ -74,7 +76,6 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 
 const { loadEvalQuality, validateArtifact } = require('./lib/eval-quality-inputs');
 const { publishedMember } = require('./lib/vocabularies');
@@ -116,13 +117,11 @@ function findContracts(directory) {
  * so taking `compile` from a local build and `RuntimeFault` from the installed
  * one would report every fault as outside the compiler's declared classes.
  *
- * An explicit --package wins, so the check can run against a local build before
- * a release reaches npm, and that arm is deliberately exempt from the version
- * comparison below: naming an unreleased build is what the flag is for.
  * require.resolve settles the installed case, because it answers from this
  * repository's own resolution rather than from whatever happens to be on PATH,
  * and `loadEvalQuality` is the same accessor the rest of the test tree imports
- * the package through.
+ * the package through, so an unreleased build under test resolves the same way
+ * once `npm link` (or an equivalent local install) points `eval-quality` at it.
  *
  * Every arm that cannot produce a compiler returns a code and the lines to print
  * rather than exiting here, so one place decides what this check's exit codes
@@ -137,24 +136,12 @@ function findContracts(directory) {
  * bug in the calls below (the wrong value passed to `offThePin`, a swapped
  * argument) then fails the same way a real broken tree would.
  *
- * @param {string[]} argv
  * @param {number} contractCount How many contracts go unchecked when this fails, which is what makes the message worth reading.
  * @param {{resolveManifestPath?: () => string, readTeaManifest?: () => object, readInstalledVersion?: (manifestPath: string) => string}} [reads]
  * @returns {Promise<{ok: true, module: object}|{ok: false, exitCode: 1|2, lines: string[]}>}
  */
-async function resolveCompiler(argv, contractCount, reads = {}) {
+async function resolveCompiler(contractCount, reads = {}) {
   const unchecked = `${contractCount} contract(s) went unchecked.`;
-  const flagIndex = argv.indexOf('--package');
-  if (flagIndex !== -1) {
-    const value = argv[flagIndex + 1];
-    if (!value) {
-      return { ok: false, exitCode: 2, lines: [`--package requires a path to eval-quality's built entry point; ${unchecked}`] };
-    }
-    if (!fs.existsSync(value)) {
-      return { ok: false, exitCode: 2, lines: [`--package names a path that does not exist: ${value}; ${unchecked}`] };
-    }
-    return { ok: true, module: await import(pathToFileURL(path.resolve(value)).href) };
-  }
 
   const {
     // eval-quality is a declared devDependency, so this resolves in a normal
@@ -219,7 +206,7 @@ function unresolvable(detail, contractCount) {
     lines: [
       `eval-quality could not be resolved, so ${contractCount} contract(s) went unchecked.`,
       detail,
-      'Run npm ci, or pass --package <path to dist/index.js>. See test/contracts/README.md.',
+      'Run npm ci, or npm link an unreleased build so eval-quality resolves to it. See test/contracts/README.md.',
     ],
   };
 }
@@ -252,13 +239,12 @@ function offThePin(pinned, resolved, contractCount) {
  * refusal nobody has watched is a refusal nobody has tested, and this one was
  * wrong for the whole life of the check.
  *
- * The two `--package` cases call `resolveCompiler` with real arguments, which
- * exercises that branch as written. Every other case injects one of
- * `resolveCompiler`'s three reads to fail the way a real tree would - an
- * unresolvable manifest, a manifest that resolves and will not parse, a
- * `package.json` with no comparable pin, or an installed version other than
- * the one declared - and lets the real function's own calls to `unresolvable`
- * and `offThePin` produce the refusal. A wiring bug inside `resolveCompiler`
+ * Each case injects one of `resolveCompiler`'s three reads to fail the way a
+ * real tree would - an unresolvable manifest, a manifest that resolves and
+ * will not parse, a `package.json` with no comparable pin, or an installed
+ * version other than the one declared - and lets the real function's own
+ * calls to `unresolvable` and `offThePin` produce the refusal. A wiring bug
+ * inside `resolveCompiler`
  * (the wrong value threaded to `offThePin`, a swapped argument to
  * `unresolvable`) fails here the same way an actually broken tree would,
  * which a case built from `unresolvable(...)` or `offThePin(...)` called
@@ -282,14 +268,9 @@ async function checkFailClosed(contractCount) {
   const count = `${contractCount} contract(s) went unchecked`;
   const unresolvableMessage = "Cannot find module 'eval-quality/package.json'";
   const cases = [
-    { id: 'a --package flag with no path after it', result: await resolveCompiler(['--package'], contractCount) },
-    {
-      id: 'a --package path that does not exist',
-      result: await resolveCompiler(['--package', '/nonexistent/eval-quality/dist/index.js'], contractCount),
-    },
     {
       id: 'an eval-quality that will not resolve',
-      result: await resolveCompiler([], contractCount, {
+      result: await resolveCompiler(contractCount, {
         resolveManifestPath: () => {
           throw new Error(unresolvableMessage);
         },
@@ -297,7 +278,7 @@ async function checkFailClosed(contractCount) {
     },
     {
       id: 'an eval-quality manifest that resolves and will not read',
-      result: await resolveCompiler([], contractCount, {
+      result: await resolveCompiler(contractCount, {
         readInstalledVersion: () => {
           throw new SyntaxError('Unexpected end of JSON input');
         },
@@ -305,11 +286,11 @@ async function checkFailClosed(contractCount) {
     },
     {
       id: 'a package.json with no eval-quality pin to compare',
-      result: await resolveCompiler([], contractCount, { readTeaManifest: () => ({}) }),
+      result: await resolveCompiler(contractCount, { readTeaManifest: () => ({}) }),
     },
     {
       id: 'an installed version other than the pin',
-      result: await resolveCompiler([], contractCount, { readInstalledVersion: () => '1.4.0' }),
+      result: await resolveCompiler(contractCount, { readInstalledVersion: () => '1.4.0' }),
     },
   ];
   for (const { id, result } of cases) {
@@ -358,7 +339,7 @@ async function checkFailClosed(contractCount) {
   // The other half of the same guarantee: the tree this repository actually
   // declares must still produce a compiler, or the refusals above would be
   // satisfied by a function that refuses everything.
-  const intact = await resolveCompiler([], contractCount);
+  const intact = await resolveCompiler(contractCount);
   if (!intact.ok) {
     problems.push(`the installed tree this repository declares is refused rather than producing a compiler: ${JSON.stringify(intact)}`);
   }
@@ -604,7 +585,7 @@ function writeBaseline(observed) {
       'applies to codes recovered at runtime, from the seeded faults this check compiles on every run,',
       'and it would apply to an entry here the day one of these contracts stops compiling.',
       '',
-      'Regenerate with: node test/test-contracts.js --package <path to eval-quality dist/index.js> --write',
+      'Regenerate with: node test/test-contracts.js --write',
     ],
     contracts: Object.fromEntries(
       Object.keys(observed)
@@ -647,7 +628,7 @@ async function main(argv) {
     `${colors.green}OK${colors.reset}   ${driven} refusal(s) drive the fail-closed path ${colors.dim}(a package this repository cannot compare exits 1; every other refusal exits 2 and names ${contracts.length} contract(s) unchecked)${colors.reset}`,
   );
 
-  const resolution = await resolveCompiler(argv, contracts.length);
+  const resolution = await resolveCompiler(contracts.length);
   if (!resolution.ok) {
     const [first, ...rest] = resolution.lines;
     console.error(`${colors.red}${first}${colors.reset}`);
@@ -664,9 +645,9 @@ async function main(argv) {
   const faultClasses = [RuntimeFault, StructuralFailure];
   // Destructured beside the classes, from the one resolution, for the same
   // reason the classes are: a code recovered from a fault thrown by this
-  // compiler is held against the registries this compiler publishes, and a local
-  // build whose registries have moved is exactly the case `--package` exists to
-  // find out about.
+  // compiler is held against the registries this compiler publishes, and an
+  // unreleased build whose registries have moved is exactly the case linking
+  // one in to test against exists to find out about.
   const registries = { RUNTIME_FAULT_CODES, FAILURE_CODES };
 
   // Driven immediately, before anything real compiles: nothing below ever
@@ -690,15 +671,8 @@ async function main(argv) {
   // structural rules. Neither result substitutes for the other.
   //
   // `validateArtifact` reads its schemas and version constants from the
-  // installed `node_modules/eval-quality` unconditionally, with no equivalent
-  // of `resolveCompiler`'s `--package` override. Under `--package`, `compile`
-  // above already runs against the named local build, so running this check
-  // too would silently validate every contract against a different release
-  // than the one `--package` names, which is worse than not running it: a
-  // contract wrong for the local build could report as fine, or right for it
-  // could report as broken. The check is skipped, named, rather than run
-  // silently against the wrong package.
-  const usingLocalPackage = argv.includes('--package');
+  // installed `node_modules/eval-quality`, the same tree `compile` above runs
+  // against, so the two checks always agree on which release they are reading.
   const ajvProblems = [];
 
   for (const contract of contracts) {
@@ -718,9 +692,7 @@ async function main(argv) {
       console.error(`${colors.dim}${key} did not parse as JSON: ${error.message}${colors.reset}`);
       continue;
     }
-    if (!usingLocalPackage) {
-      for (const message of await validateArtifact('eval-contract', source)) ajvProblems.push(`${key}: ${message}`);
-    }
+    for (const message of await validateArtifact('eval-contract', source)) ajvProblems.push(`${key}: ${message}`);
     try {
       // `strict: true` is the compiler's own default and was the default of the
       // `--strict-inputs` flag this check used to leave unset, so AD-4's two
@@ -773,11 +745,7 @@ async function main(argv) {
       `${colors.green}OK${colors.reset}   ${SEEDED_FAULTS.length} seeded fault(s) per contract ${colors.dim}(the blocked path still reports its code and its issue locations)${colors.reset}`,
     );
   }
-  if (usingLocalPackage) {
-    console.log(
-      `${colors.dim}SKIP  validateArtifact('eval-contract', ...) does not run under --package: it reads schemas from the installed eval-quality, not the named build.${colors.reset}`,
-    );
-  } else if (ajvProblems.length === 0) {
+  if (ajvProblems.length === 0) {
     console.log(
       `${colors.green}OK${colors.reset}   ${contracts.length} contract(s) also pass validateArtifact('eval-contract', ...) ${colors.dim}(Ajv and the schemaVersion stamp, independent of compile)${colors.reset}`,
     );

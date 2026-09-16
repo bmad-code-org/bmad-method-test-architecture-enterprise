@@ -60,7 +60,7 @@ When the oracle is synthetic (`synthetic_requirements` or `user_journeys`), also
 
 Some requirements are verified by running the system rather than by adding a file to `{test_dir}`. That evidence leaves no spec file, so a file-only search reports those requirements as uncovered and a P0 among them fails the gate. `{live_results_input}` is how such a run gets recorded, and this section is the only place trace reads it.
 
-Trace never produces this file and never runs anything to produce it. Any producer may write it: an agent, a shell script, a CI job, or a person recording an outcome by hand. The contract is published in `docs/reference/live-verification-results.md`.
+Trace never produces this file and never runs anything to produce it. Any producer may write it: an agent, a shell script, a CI job, or a person recording an outcome by hand. The contract is published at <https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/live-verification-results/>.
 
 Apply these rules exactly. Do not improvise a substitute.
 

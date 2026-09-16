@@ -1,0 +1,14 @@
+{
+  "dependency-direction": {
+    "roots": [
+      { "path": "cli", "extensions": [".js"] },
+      { "path": "tools", "extensions": [".js"] }
+    ],
+    "layers": [
+      { "name": "cli", "match": "prefix", "path": "cli/", "label": "cli/", "imports": ["cli"] },
+      { "name": "tools", "match": "prefix", "path": "tools/", "label": "tools/", "imports": ["tools"] }
+    ],
+    "commonjs": "check",
+    "reportOnly": false
+  }
+}

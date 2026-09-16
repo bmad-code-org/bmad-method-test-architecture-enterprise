@@ -36,14 +36,14 @@
  * It declares the one capability the workflow needs, `scoped-artifact-writes`:
  * the deliverable is a file inside the working directory, so claude runs with
  * its write tools and no shell, and codex under its workspace-write sandbox,
- * which is what the nfr suite declares in test/evals/suite-manifest.json.
+ * which is what the nfr suite declares in the eval suite manifest.
  *
  * Two nested wall clocks are in play when this runs behind the adapter, and the
  * inner one has to be the shorter of the two: --timeout-ms bounds the vendor
  * call and reports a timeout as exit 5, while the adapter's own maxElapsedMs
  * SIGKILLs this process and reports `budget-exhausted` with no exit code at all.
  * A run that hits the outer bound first loses the classification the inner one
- * would have produced. test/lib/probe-targets.js sets the outer bound a minute
+ * would have produced. the probe-targets check sets the outer bound a minute
  * above the harness's own for exactly this reason.
  *
  * Usage:
@@ -70,7 +70,7 @@ const { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNam
 /** The same default the other runner commands declare, so this command changes no run that omits `--agent`. */
 const DEFAULT_AGENT = 'claude';
 
-/** Twenty minutes, matching RUN_TIMEOUT_MS in test/eval-nfr.js, which is the only caller that measures. */
+/** Twenty minutes, matching RUN_TIMEOUT_MS in the nfr eval harness, which is the only caller that measures. */
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
 
 /** An NFR run writes its one deliverable into the working directory; see the header. */

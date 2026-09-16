@@ -251,7 +251,7 @@ const FENCE_LINE = /^[ \t]*(`{3,}|~{3,})([^\r\n]*?)\r?$/;
  * example surfaced.
  *
  * The depth is returned rather than a boolean because a caller can need to ask
- * the question per line and keep the line numbering. `test/eval-nfr.js` reads it
+ * the question per line and keep the line numbering. The nfr eval harness reads it
  * that way: it locates the run's own `## Gate YAML Snippet` heading among the
  * lines at depth 0, because a heading inside a fence is quoted content, and then
  * reads the gate scalar out of that section of the original document. Depth alone
@@ -1699,7 +1699,7 @@ function scoreFails(score, minScore) {
 
 module.exports = {
   parseReport,
-  // Exported because test/eval-nfr.js reads a different markdown deliverable and
+  // Exported because the nfr eval harness reads a different markdown deliverable and
   // needs the same answer to "is this line the report's own content". A second
   // implementation there would be a fourth parser with its own opinion about what
   // a fence is, which is the class of defect this function exists to close.
