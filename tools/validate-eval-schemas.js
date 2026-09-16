@@ -67,7 +67,7 @@ function generateResultSchema() {
 /**
  * Every harness `suite-manifest.json` names, as a literal require() rather than
  * one built from `entry.harness` at runtime. The manifest's own schema fixes
- * this to a closed, nine-entry set, and a literal keeps the load inside the
+ * this to a closed, ten-entry set, and a literal keeps the load inside the
  * dependency-direction gate's declared edges rather than escaping its notice
  * as a specifier the gate could not read.
  *
