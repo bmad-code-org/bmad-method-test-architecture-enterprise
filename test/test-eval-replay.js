@@ -296,6 +296,15 @@ const ATDD_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'atdd-eval', 'ground-
  * one it wrote without an answer. No test-review, fragment-selection, test-design
  * or trace case moved.
  *
+ * 10 is `usesTestSkip` reaching the stored result. `scoreRun` had read it off
+ * `tea-atdd-red-check`'s own report since it entered the corpus, and returned it
+ * as part of the scored answer, but `projectAtddResult` dropped it: a scaffold
+ * whose report lost the workflow's own `test.skip()` marker while every test
+ * status stayed the same would have replayed clean. Every stored atdd result
+ * grew the field at `true`, the only value any of the six carries; nothing else
+ * moved. No test-review, fragment-selection, test-design, trace or nfr case
+ * moved with it.
+ *
  * 9 is the atdd scorers entering the corpus: scoreRun and signatureOf in eval-atdd.js, and
  * projectAtddResult in this file. No test-review, fragment-selection, test-design, trace or nfr case
  * moved with it, so every case recorded at an earlier version reproduces and is reported as a version
@@ -553,6 +562,21 @@ function ciScoringInputs(set) {
 }
 
 /**
+ * The scoring-relevant half of the atdd ground truth: every criterion's id and
+ * declaredPattern, in the order scoreRun reads them, which is also the order
+ * perCriterion carries into signatureOf. A criterion's title and why, and
+ * every other field ground-truth.json carries, are read by validateCorpus and
+ * by the prompt builder, never by scoreRun, so they stay out: a change to
+ * them cannot move a stored result and does not belong in this digest.
+ *
+ * @param {object} groundTruth
+ * @returns {string[]}
+ */
+function atddScoringInputs(groundTruth) {
+  return (groundTruth.criteria ?? []).map((criterion) => `${criterion.id}|${criterion.declaredPattern}`);
+}
+
+/**
  * scoreRun's return value for one atdd case, reduced to what a stored result can
  * hold and a reader can derive by hand: which criteria were reached and how,
  * the counts behind each ceiling, and the production files touched.
@@ -562,6 +586,7 @@ function ciScoringInputs(set) {
  */
 function projectAtddResult(scored) {
   return {
+    usesTestSkip: scored.usesTestSkip,
     perCriterion: scored.perCriterion.map((entry) => ({ id: entry.id, present: entry.present, outcome: entry.outcome })),
     mappedTestCount: scored.mappedTestCount,
     redForIntendedReasonCount: scored.redForIntendedReasonCount,
@@ -982,8 +1007,7 @@ async function replayCiCase(item, set) {
  */
 function replayAtddCase(item, groundTruth) {
   const reportPath = path.join(item.directory, 'atdd-red-report.json');
-  if (!fs.existsSync(reportPath)) unreadable(`${item.id}: no atdd-red-report.json beside expected.json`);
-  const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  const report = readJson(reportPath, `${item.id} atdd red report`);
   const scored = scoreAtddRun(groundTruth, report, []);
   return { result: projectAtddResult(scored), scored };
 }
@@ -1569,6 +1593,17 @@ async function replayCase(item, expected, context) {
       return { observed: replayed.result };
     }
     case 'atdd': {
+      const recordedDigest = expected.inputs?.scoringInputsDigest;
+      const groundTruthDigest = digest(atddScoringInputs(context.atddGroundTruth));
+      if (recordedDigest !== groundTruthDigest) {
+        return {
+          failure:
+            `the ground truth moved. This result was derived against ${recordedDigest ?? '(nothing recorded)'} and ` +
+            `${path.relative(PROJECT_ROOT, ATDD_GROUND_TRUTH)} now digests to ${groundTruthDigest}. A criterion's id, its ` +
+            'declaredPattern, or their order changed, so the expected result has to be re-derived by hand and the digest ' +
+            'updated with it. --accept will not do this one.',
+        };
+      }
       const replayed = replayAtddCase(item, context.atddGroundTruth);
       context.atddReplayed.push({ id: item.id, result: replayed.result, scored: replayed.scored });
       return { observed: replayed.result };

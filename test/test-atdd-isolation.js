@@ -266,20 +266,28 @@ function main() {
     // shows up here in either direction: today this assertion is expected to
     // find the marker, not fail to.
     const realHomeMarker = path.join(os.homedir(), '.tea-atdd-isolation-marker-known-readable');
-    fs.writeFileSync(realHomeMarker, 'reads are not denied by design; see buildSeatbeltProfile');
+    let markerWritten = false;
     try {
-      const readProbe = runSandboxed(
-        workspace,
-        backend,
-        `console.log("SEES_MARKER",require("node:fs").existsSync(${JSON.stringify(realHomeMarker)}))`,
-      );
-      assert(
-        readProbe.status === 0 && /SEES_MARKER\s*true/.test(readProbe.stdout),
-        'a real home path, known outright rather than derived from $HOME, is still readable (accepted scope, not a general read seal)',
-        `stdout ${JSON.stringify(readProbe.stdout)}`,
-      );
-    } finally {
-      fs.rmSync(realHomeMarker, { force: true });
+      fs.writeFileSync(realHomeMarker, 'reads are not denied by design; see buildSeatbeltProfile');
+      markerWritten = true;
+    } catch (error) {
+      assert(false, 'the read-scope marker can be written in the real home', error.message);
+    }
+    if (markerWritten) {
+      try {
+        const readProbe = runSandboxed(
+          workspace,
+          backend,
+          `console.log("SEES_MARKER",require("node:fs").existsSync(${JSON.stringify(realHomeMarker)}))`,
+        );
+        assert(
+          readProbe.status === 0 && /SEES_MARKER\s*true/.test(readProbe.stdout),
+          'a real home path, known outright rather than derived from $HOME, is still readable (accepted scope, not a general read seal)',
+          `stdout ${JSON.stringify(readProbe.stdout)}`,
+        );
+      } finally {
+        fs.rmSync(realHomeMarker, { force: true });
+      }
     }
   } finally {
     fs.rmSync(workspace, { recursive: true, force: true });

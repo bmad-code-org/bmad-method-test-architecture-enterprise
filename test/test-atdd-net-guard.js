@@ -138,9 +138,9 @@ function main() {
     'require("node:dgram").createSocket("udp4").send("x",53,"8.8.8.8",(err)=>{console.log(err?("REFUSED "+err.code):"UNEXPECTED_SUCCESS")})',
   );
   assert(
-    /REFUSED EISOLATED/.test(dgramSend.stdout),
+    dgramSend.status === 0 && /REFUSED EISOLATED/.test(dgramSend.stdout),
     'dgram send() naming a non-loopback address is refused',
-    `stdout ${JSON.stringify(dgramSend.stdout)}`,
+    `status ${dgramSend.status}, stdout ${JSON.stringify(dgramSend.stdout)}`,
   );
 
   // dgram: connect() to a non-loopback target is refused before any send.
@@ -148,9 +148,9 @@ function main() {
     'require("node:dgram").createSocket("udp4").connect(53,"8.8.8.8",(err)=>{console.log(err?("REFUSED "+err.code):"UNEXPECTED_SUCCESS")})',
   );
   assert(
-    /REFUSED EISOLATED/.test(dgramConnect.stdout),
+    dgramConnect.status === 0 && /REFUSED EISOLATED/.test(dgramConnect.stdout),
     'dgram connect() to a non-loopback host is refused, closing the send()-with-no-address bypass',
-    `stdout ${JSON.stringify(dgramConnect.stdout)}`,
+    `status ${dgramConnect.status}, stdout ${JSON.stringify(dgramConnect.stdout)}`,
   );
 
   // dgram: connect() then send() with no address argument still works on loopback.

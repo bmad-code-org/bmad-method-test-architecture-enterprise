@@ -5,16 +5,18 @@
   ],
   "id": "still-skipped",
   "suite": "atdd",
-  "scorerVersion": 9,
+  "scorerVersion": 10,
   "storedOutput": {
     "origin": "captured",
     "report": "atdd-red-report.json"
   },
   "inputs": {
-    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json"
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
   },
-  "derivation": "AC-4's scaffold status is 'skipped' after activation, which scoreRun classifies as still-skipped rather than red-for-intended-reason. The other four criteria are unchanged from the correct run. redForIntendedReasonRate is 4/5 = 0.8.",
+  "derivation": "AC-4's scaffold status is 'skipped' after activation, which scoreRun classifies as still-skipped rather than red-for-intended-reason. The other four criteria are unchanged from the correct run. redForIntendedReasonRate is 4/5 = 0.8. usesTestSkip is true: hadSkipCall reads the file text before activation, so AC-4's test.fixme() elsewhere does not change it.",
   "result": {
+    "usesTestSkip": true,
     "perCriterion": [
       {
         "id": "AC-1",

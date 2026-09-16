@@ -3,7 +3,7 @@
   "parentDigest": null,
   "revisionCount": 0,
   "contractId": "tea-atdd-behavioral",
-  "sourceSpecDigest": "sha256:ac400439aba69e12638f6200f721fc5dab6de45ede3aba8b81099da64d04de3e",
+  "sourceSpecDigest": "sha256:7db023f2dc7a820a5fb2fcf398042b41d11aabf9b28d4b0a72c9b74e154ced92",
   "behaviors": [
     {
       "id": "B-001",
@@ -409,7 +409,7 @@
                   "environment": {},
                   "stdin": {
                     "kind": "text",
-                    "value": "You are running the TEA workflow `bmad-testarch-atdd` against the project in `reservations/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `reservations`\n- `{config_source}`: `reservations/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `reservations/test-artifacts`\n- `{test_dir}`: `reservations/tests`\n- `{skill-root}`: `skill`\n- `{story_file}`: `reservations/../witness/docs/stories/9-1-witness-only-story.md`\n\nThe story is at `reservations/../witness/docs/stories/9-1-witness-only-story.md`. Read the whole project under\n`reservations/` to discover its stack, existing routes, and test framework the way step-01 says to;\nnothing outside that directory is relevant to this story.\n\n----- what to produce -----\nGenerate red-phase acceptance test scaffolds for every acceptance criterion the story states, into\nexactly one file: `reservations/tests/api/reservations.spec.ts`. The fixture is a\nJSON API with no browser surface, so every criterion is an API test and none needs the workflow's\nE2E worker. Every scaffold must be a `test.skip()` call, per the workflow's own TDD red-phase rule,\nasserting the behavior the criterion promises rather than a placeholder. Do not add, edit, or delete\nany file outside that one path: this workflow generates tests and touches nothing else.\n\nWhen you are done, print one line naming how many test files you wrote. Nothing else you print is read."
+                    "value": "You are running the TEA workflow `bmad-testarch-atdd` against the project in `reservations/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `reservations`\n- `{config_source}`: `reservations/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `reservations/test-artifacts`\n- `{test_dir}`: `reservations/tests`\n- `{skill-root}`: `skill`\n- `{story_file}`: `reservations/../witness/docs/stories/9-1-witness-only-story.md`\n\nThe story is at `reservations/../witness/docs/stories/9-1-witness-only-story.md`. Read the whole project under\n`reservations/` to discover its stack, existing routes, and test framework the way step-01 says to;\nnothing outside that directory is relevant to this story, except `{story_file}` itself, named above.\n\n----- what to produce -----\nGenerate red-phase acceptance test scaffolds for every acceptance criterion the story states, into\nexactly one file: `reservations/tests/api/reservations.spec.ts`. The fixture is a\nJSON API with no browser surface, so every criterion is an API test and none needs the workflow's\nE2E worker. Every scaffold must be a `test.skip()` call, per the workflow's own TDD red-phase rule,\nasserting the behavior the criterion promises rather than a placeholder. Do not add, edit, or delete\nany file outside that one path: this workflow generates tests and touches nothing else.\n\nWhen you are done, print one line naming how many test files you wrote. Nothing else you print is read."
                   }
                 }
               }
@@ -441,6 +441,17 @@
                           "literal": "AC-1"
                         }
                       ]
+                    }
+                  ]
+                },
+                {
+                  "op": "containment",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-only-story/artifact/scaffold"
+                    },
+                    {
+                      "literal": "AC-9"
                     }
                   ]
                 }

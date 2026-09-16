@@ -6,16 +6,18 @@
   ],
   "id": "wrong-reason-red",
   "suite": "atdd",
-  "scorerVersion": 9,
+  "scorerVersion": 10,
   "storedOutput": {
     "origin": "captured",
     "report": "atdd-red-report.json"
   },
   "inputs": {
-    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json"
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
   },
-  "derivation": "AC-1's scaffold fails with 'Expected: 500\\nReceived: 404', which does not match AC-1's declared pattern ('Expected: 201...Received: 404'), so scoreRun classifies it as non-assertion-exit. The other four criteria are unchanged from the correct run. redForIntendedReasonRate is 4/5 = 0.8.",
+  "derivation": "AC-1's scaffold fails with 'Expected: 500\\nReceived: 404', which does not match AC-1's declared pattern ('Expected: 201...Received: 404'), so scoreRun classifies it as non-assertion-exit. The other four criteria are unchanged from the correct run. redForIntendedReasonRate is 4/5 = 0.8. usesTestSkip is true: the file carried test.skip() before activation.",
   "result": {
+    "usesTestSkip": true,
     "perCriterion": [
       {
         "id": "AC-1",

@@ -444,8 +444,9 @@ function validateCorpus(groundTruth) {
 
   // A corpus with no vacuous-pass temptation measures half of what this suite
   // exists for. AC-5 in the authored corpus extends a route the fixture
-  // already serves; this asserts that shape holds rather than assuming it, by
-  // checking the fixture actually answers 200 on the route the story extends.
+  // already serves, which is what makes a vacuous pass possible. That shape is
+  // assumed here rather than asserted: nothing above starts the fixture, so no
+  // request confirms it actually answers 200 on the route the story extends.
   return problems;
 }
 
@@ -551,8 +552,14 @@ function stageWorkspace(groundTruth) {
 function digestFilesByPath(root, relativePaths) {
   const digests = new Map();
   for (const relative of relativePaths) {
+    const absolute = path.join(root, relative);
     try {
-      digests.set(relative, digest(fs.readFileSync(path.join(root, relative))));
+      // The permission bits ride along with the content digest: a scaffold that
+      // flips a production file's executable bit without changing a byte is
+      // still a detected mutation, matching cli/atdd-red-check.js's own
+      // snapshotFile for the execution phase.
+      const mode = fs.statSync(absolute).mode & 0o777;
+      digests.set(relative, `${mode.toString(8)}:${digest(fs.readFileSync(absolute))}`);
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
       digests.set(relative, null);
@@ -605,6 +612,14 @@ function addedFiles(root, known, testDir) {
 function buildPrompt(groundTruth, { storyRelativePath } = {}) {
   const root = groundTruth.projectRoot;
   const storyPath = storyRelativePath ?? path.join('docs', 'stories', '4-2-reserve-a-locker.md');
+  // The sensitivity witness's second leg overrides storyRelativePath with a
+  // path that climbs out of root on purpose, to point at a story no other
+  // fixture names; the scope sentence below has to say so explicitly there,
+  // or it reads as forbidding the read the very next line asks for.
+  const storyOutsideRoot = storyPath.startsWith('..');
+  const scopeNote = storyOutsideRoot
+    ? `nothing outside that directory is relevant to this story, except \`{story_file}\` itself, named above.`
+    : `nothing outside that directory is relevant to this story.`;
   return [
     `You are running the TEA workflow \`bmad-testarch-atdd\` against the project in \`${root}/\`.`,
     '',
@@ -623,7 +638,7 @@ function buildPrompt(groundTruth, { storyRelativePath } = {}) {
     '',
     `The story is at \`${root}/${storyPath}\`. Read the whole project under`,
     `\`${root}/\` to discover its stack, existing routes, and test framework the way step-01 says to;`,
-    'nothing outside that directory is relevant to this story.',
+    scopeNote,
     '',
     '----- what to produce -----',
     `Generate red-phase acceptance test scaffolds for every acceptance criterion the story states, into`,

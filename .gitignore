@@ -36,7 +36,7 @@ CLAUDE.local.md
 z*/
 
 _bmad
-_bmad-output
+_bmad-output/*
 .clinerules
 .augment
 .crush
@@ -69,10 +69,15 @@ build/
 # epics.md is the one file under the gitignored _bmad-output tracked on purpose: the sprint's own
 # checklist, ticked by the story that closes it. Without this, `git add` on it prints "ignored by
 # one of your .gitignore files" every time, and lint-staged's own internal re-add after formatting
-# fails the same way. Un-ignoring a nested file requires un-ignoring its parent directories too, by
-# name rather than by the bare `_bmad-output` entry above, so every other file under the directory
-# (e.g. _bmad-output/implementation-artifacts/) stays hidden from `git status` as before.
+# fails the same way. `_bmad-output` above is `/*` rather than bare, and every level here is
+# negated then re-ignored by `/*` in turn, because `git add` still reports a path as ignored when
+# any ancestor directory entry (not just the file itself) matches a plain ignore rule, even though
+# `git check-ignore` on the file alone already reads it as not ignored. Every other file under the
+# directory (e.g. _bmad-output/implementation-artifacts/) stays hidden from `git status` as before.
+!_bmad-output/
+_bmad-output/*
 !_bmad-output/planning-artifacts/
+_bmad-output/planning-artifacts/*
 !_bmad-output/planning-artifacts/epics.md
 
 # Live eval output: the pre-flight observation cache, whose entries are each a

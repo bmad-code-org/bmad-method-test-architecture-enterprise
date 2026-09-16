@@ -6,16 +6,18 @@
   ],
   "id": "not-mapped",
   "suite": "atdd",
-  "scorerVersion": 9,
+  "scorerVersion": 10,
   "storedOutput": {
     "origin": "captured",
     "report": "atdd-red-report.json"
   },
   "inputs": {
-    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json"
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
   },
-  "derivation": "All five criteria are unchanged from the correct run, so redForIntendedReasonRate is 5/5 = 1 and criteriaCoverage is 5/5 = 1. The sixth scaffold, 'smoke check', names no AC-<n> token, so scoreRun reports it as unmapped rather than counting it toward any criterion or toward the mapped-test denominator.",
+  "derivation": "All five criteria are unchanged from the correct run, so redForIntendedReasonRate is 5/5 = 1 and criteriaCoverage is 5/5 = 1. The sixth scaffold, 'smoke check', names no AC-<n> token, so scoreRun reports it as unmapped rather than counting it toward any criterion or toward the mapped-test denominator. usesTestSkip is true: every scaffold, mapped or not, carried test.skip() before activation.",
   "result": {
+    "usesTestSkip": true,
     "perCriterion": [
       {
         "id": "AC-1",

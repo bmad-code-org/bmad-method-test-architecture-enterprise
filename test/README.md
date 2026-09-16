@@ -25,6 +25,13 @@ edit from leaving a contract quietly wrong. Regenerate with
 
 ## Quick Start
 
+On Linux, `npm test` needs `bubblewrap` (`bwrap`) on `PATH`: `test:atdd-isolation`
+and `test:atdd-net-guard` execute generated Playwright tests under an OS sandbox
+with no unconfined fallback, and `selectBackend()` exits 2 naming the missing
+binary and the install command if it is absent. macOS needs nothing extra;
+`sandbox-exec` ships with the OS. See `.github/workflows/quality.yaml`'s
+`validate` job for the exact install step CI runs.
+
 ```bash
 # Full quality gate (all suites, lint, markdownlint, format)
 npm test

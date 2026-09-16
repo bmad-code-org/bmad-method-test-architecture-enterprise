@@ -407,7 +407,7 @@ These checks produce the same answer from the same repository state. They need n
 
 You do not start an interactive agent session. A live eval launches the selected agent CLI as a headless subprocess, sends it each prompt, waits for the result, and scores the result.
 
-The normal path is one command. It runs fragment selection across all eight covered workflow skills, then runs the behavioral `bmad-tea-routing`, `ci`, `nfr`, `test-design`, `test-review` and `trace` evals:
+The normal path is one command. It runs fragment selection across all eight covered workflow skills, then runs the behavioral `bmad-tea-routing`, `ci`, `nfr`, `test-design`, `test-review`, `trace` and `atdd` evals:
 
 ```bash
 npm run eval:all -- --agent codex

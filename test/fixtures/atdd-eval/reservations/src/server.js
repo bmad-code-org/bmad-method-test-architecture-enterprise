@@ -46,7 +46,14 @@ function handle(request, response) {
   }
   const locker = /^\/lockers\/([^/]+)$/.exec(path);
   if (request.method === 'GET' && locker) {
-    const found = findLocker(decodeURIComponent(locker[1]));
+    let id;
+    try {
+      id = decodeURIComponent(locker[1]);
+    } catch {
+      send(response, 400, { error: 'invalid-locker-id' });
+      return;
+    }
+    const found = findLocker(id);
     if (found) send(response, 200, found);
     else send(response, 404, { error: 'locker-not-found' });
     return;

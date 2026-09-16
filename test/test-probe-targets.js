@@ -1360,9 +1360,18 @@ function checkAtddHarnessSmoke(runDir) {
 
   // A vendor that writes no scaffold leaves the staged test directory empty,
   // which is also what proves the execution phase's own "no spec files" guard:
-  // cli/atdd-red-check.js refuses rather than reporting 0% coverage as a score.
+  // cli/atdd-red-check.js refuses (exit 2) rather than reporting 0% coverage as
+  // a score. The lost repetition is what makes redForIntendedReasonRate and
+  // criteriaCoverage unmeasurable, and cli/atdd-red-check.js's own usage exit
+  // is what actually produces the environment-configuration class here, not a
+  // threshold miss.
   const nothing = runAtddHarness(runDir, 'nothing', ['--runs', '1']);
-  assert(nothing.status !== 0, 'a run that writes no scaffold does not pass', `exit ${nothing.status}`);
+  assert(nothing.status === 2, 'a run that writes no scaffold is a lost run rather than a low score', `exit ${nothing.status}`);
+  assert(
+    nothing.record?.failureClass === 'environment-configuration' && nothing.record?.runners?.[0]?.repetitions?.completed === 0,
+    'the record classifies the empty test directory as an environment failure and counts no completed repetition',
+    JSON.stringify(nothing.record && { failureClass: nothing.record.failureClass, repetitions: nothing.record.runners?.[0]?.repetitions }),
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -109,6 +109,16 @@ function fail(message) {
   process.exit(2);
 }
 
+/**
+ * A file's content and permission bits together, so a scaffold that flips a
+ * production file's executable bit without touching a single byte is still a
+ * detected mutation: content alone is silent on it, and git records the bit.
+ */
+function snapshotFile(absolute) {
+  const mode = fs.statSync(absolute).mode & 0o777;
+  return `${mode.toString(8)}:${fs.readFileSync(absolute).toString('base64')}`;
+}
+
 /** Every file under `root`, relative to it, in a stable order, skipping the excluded directories and the test/output directories named. */
 function filesUnder(root, { skip = [] } = {}) {
   const skipSet = new Set(skip.map((entry) => path.resolve(root, entry)));
@@ -360,6 +370,13 @@ function respondsOnce(url) {
  * @returns {Promise<import('node:child_process').ChildProcess>}
  */
 async function startServer({ command, cwd, env, healthUrl, timeoutMs }) {
+  // Checked before spawning, not just polled after: the readiness loop below
+  // treats any response as ready, so a stray process already bound to the port
+  // would let the poll succeed while this run's own server failed to bind, and
+  // every spec file would then run against whatever that stray process is.
+  if (await respondsOnce(healthUrl)) {
+    throw new Error(`the fixture server URL is already in use: ${healthUrl}`);
+  }
   const child = spawn(command, { cwd, env, shell: true, stdio: 'ignore', detached: true });
   const deadline = Date.now() + timeoutMs;
   let spawnError = null;
@@ -429,7 +446,7 @@ async function main(argv) {
   const beforeDigest = new Map(
     beforeFiles.map((relative) => {
       try {
-        return [relative, fs.readFileSync(path.join(projectRoot, relative)).toString('base64')];
+        return [relative, snapshotFile(path.join(projectRoot, relative))];
       } catch {
         return [relative, null];
       }
@@ -486,7 +503,7 @@ async function main(argv) {
     const after = afterSet.has(relative)
       ? (() => {
           try {
-            return fs.readFileSync(path.join(projectRoot, relative)).toString('base64');
+            return snapshotFile(path.join(projectRoot, relative));
           } catch {
             return null;
           }

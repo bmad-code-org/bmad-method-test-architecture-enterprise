@@ -3081,6 +3081,14 @@ const ATDD_REQUEST_SHAPE = Object.fromEntries(
 const ATDD_SCAFFOLD_POINTER = `/interactions/${ATDD_INTERFACE}-run/artifact/scaffold`;
 
 /**
+ * The one criterion id the sensitivity witness's own story states, per
+ * test/fixtures/atdd-eval/witness/docs/stories/9-1-witness-only-story.md; not
+ * a member of groundTruth.criteria, because the witness story is deliberately
+ * outside the scored corpus.
+ */
+const ATDD_WITNESS_CRITERION_ID = 'AC-9';
+
+/**
  * The oracles this contract states, one spec per claim, mirroring the
  * correspondence tools/generate-contracts.js already writes for nfr and trace:
  * each carries the oracle as it will be rendered and, beside it, the scorer's
@@ -3474,6 +3482,11 @@ function buildAtddContract() {
   const citedFiles = [
     path.join(PROJECT_ROOT, 'test', 'fixtures', 'atdd-eval', 'ground-truth.json'),
     path.join(PROJECT_ROOT, 'test', 'fixtures', 'atdd-eval', 'reservations', 'docs', 'stories', '4-2-reserve-a-locker.md'),
+    // The sensitivity relation's second leg depends on this story stating
+    // ATDD_WITNESS_CRITERION_ID and naming none of the corpus story's own
+    // criteria; an edit to it that broke either property would otherwise
+    // leave sourceSpecDigest, and the contract generated from it, unchanged.
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'atdd-eval', 'witness', 'docs', 'stories', '9-1-witness-only-story.md'),
   ];
   for (const file of citedFiles) assert(fs.existsSync(file), `atdd contract source ${file} does not exist`);
 
@@ -3555,6 +3568,11 @@ function buildAtddContract() {
                 operands: [
                   contains(`/interactions/witness-corpus-story/artifact/scaffold`, criteria[0].id),
                   { op: 'not', operands: [contains(`/interactions/witness-only-story/artifact/scaffold`, criteria[0].id)] },
+                  // Absence alone is not evidence of reading the witness story:
+                  // an empty or unrelated scaffold also omits criteria[0].id.
+                  // This is the positive half, naming the one criterion the
+                  // witness story actually states.
+                  contains(`/interactions/witness-only-story/artifact/scaffold`, ATDD_WITNESS_CRITERION_ID),
                 ],
               },
             },
