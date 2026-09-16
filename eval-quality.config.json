@@ -44,6 +44,24 @@
       }
     ]
   },
+  "doc-invocations": {
+    "pages": ["README.md", "docs/explanation/eval-quality-adoption-guide.md"],
+    "binary": {
+      "entry": "test/lib/doc-invocation-entry.js",
+      "spellings": [
+        "npm run test:eval-data",
+        "npm run test:eval-trace-data",
+        "npm run test:eval-schemas",
+        "npm run test:eval-replay",
+        "npm run test:contract-sources",
+        "npm run test:contracts",
+        "npm run test:contract-oracles",
+        "npm run test:probe-targets"
+      ]
+    },
+    "sampleInput": "package.json",
+    "timeoutMs": 90000
+  },
   "doc-counts": {
     "sources": {
       "totalCalls": {

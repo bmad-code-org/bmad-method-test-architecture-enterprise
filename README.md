@@ -392,7 +392,7 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 
 ### Deterministic Checks
 
-`npm test` chains fifty-one checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Six of the fifty-one keep the rules, guidance, hook, eval data, eval contracts, and documentation aligned:
+`npm test` chains fifty-three checks. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list. `npm run test:ci-coverage` derives the count from `package.json` and prints it. Six of the fifty-three keep the rules, guidance, hook, eval data, eval contracts, and documentation aligned:
 
 - `test:criteria-fragments` fails when a registry row is neither mapped to a knowledge fragment nor declared a known gap. A rule the reviewer scores but no fragment teaches is a rule TEA punishes without ever having explained it. All 36 rows are currently mapped across 50 anchors. Because the declared-gap list is empty, the validator feeds itself a synthetic unmapped row on every run to prove that path still works.
 - `test:doc-counts` runs `eval-quality-gates doc-counts`, which holds a hand-written count on a published page against the source that computes it: the roadmap's per-suite `eval:all` call counts, the knowledge-fragment tier breakdown, this section's own npm-test-chain length, and the fragment-selection case count. A pattern matching no sentence, or more than one, fails the same way a wrong number does, so the entry cannot go stale by drifting out from under its own pattern either.
@@ -402,6 +402,8 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 - `test:contract-oracles` evaluates every oracle in every eval contract with `eval-quality`'s own evaluator, over the stored replay outputs and over constructed selections for all 24 fragment-selection cases, and fails when an oracle faults or disagrees with the harness scorer on the same evidence. The first run found that every regex oracle in the `test-review` contract was refused by the evaluator before it matched anything.
 
 These checks produce the same answer from the same repository state. They need no agent credential, network call, or model budget. `test:eval-data` runs through `npm test`, the local pre-commit hook, pull-request quality checks, and the publish workflow.
+
+`test:doc-invocations` runs `eval-quality-gates doc-invocations`, which re-runs every `npm run <script>` this README and the adoption guide document in their CI-usage blocks against the real repository, so a renamed script or a broken example fails the build instead of a reader. Each of the eight documented scripts is declared as a full literal spelling, never a shared `npm run` prefix, which is what keeps the gate from ever matching, let alone running, `npm run eval:all` or `npm run release:next` on the same pages. `test/lib/doc-invocation-entry.js` is the one real program the gate is allowed to reach; it refuses anything outside its own hardcoded allowlist before invoking real `npm`, and `test:doc-invocation-entry` holds that allowlist's comment-to-script lookup against both pages' literal text, line by line, so a swapped or drifted comment fails there even when the script it resolves to would still run.
 
 ### Start Here
 
@@ -582,10 +584,10 @@ Run the eval's deterministic checks on every pull request. `npm test` runs all o
 
 ```bash
 npm ci
-npm run test:eval-data
-npm run test:eval-trace-data
-npm run test:eval-schemas
-npm run test:eval-replay
+npm run test:eval-data          # fragment-selection corpus, static
+npm run test:eval-trace-data    # trace corpus, static
+npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
+npm run test:eval-replay        # 96 stored outputs against the scorers
 ```
 
 Run live evals in a scheduled or manually triggered CI job after installing and authenticating the selected agent CLI:

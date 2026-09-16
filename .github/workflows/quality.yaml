@@ -185,6 +185,12 @@ jobs:
       - name: Hold published documentation counts against their source
         run: npm run test:doc-counts
 
+      - name: Test the doc-invocations gate's own entry script
+        run: npm run test:doc-invocation-entry
+
+      - name: Run documented commands against the real repository
+        run: npm run test:doc-invocations
+
       - name: Test write-time enforcement hook
         run: npm run test:enforce-hook
 
