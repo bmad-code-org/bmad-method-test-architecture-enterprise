@@ -76,7 +76,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
-const { loadEvalQuality } = require('./lib/eval-quality-inputs');
+const { loadEvalQuality, validateArtifact } = require('./lib/eval-quality-inputs');
 const { publishedMember } = require('./lib/vocabularies');
 // The one pin comparison in this repository. `test/test-eval-quality-corpus.js`
 // already owns it and already exports it, and a second copy here would be a
@@ -682,6 +682,13 @@ async function main(argv) {
   const expected = readBaseline();
   const observed = {};
   const moved = [];
+  // `validateArtifact` is the Ajv pass plus the schemaVersion check beside it,
+  // over the published `eval-contract` schema. It answers a different question
+  // than `compile` does, and runs independently of whether `compile` throws: a
+  // contract can be well formed enough to compile while carrying a field Ajv
+  // rejects, and a contract Ajv accepts can still fail `compile`'s own
+  // structural rules. Neither result substitutes for the other.
+  const ajvProblems = [];
 
   for (const contract of contracts) {
     const key = path.relative(CONTRACT_ROOT, contract);
@@ -700,6 +707,7 @@ async function main(argv) {
       console.error(`${colors.dim}${key} did not parse as JSON: ${error.message}${colors.reset}`);
       continue;
     }
+    for (const message of await validateArtifact('eval-contract', source)) ajvProblems.push(`${key}: ${message}`);
     try {
       // `strict: true` is the compiler's own default and was the default of the
       // `--strict-inputs` flag this check used to leave unset, so AD-4's two
@@ -752,11 +760,17 @@ async function main(argv) {
       `${colors.green}OK${colors.reset}   ${SEEDED_FAULTS.length} seeded fault(s) per contract ${colors.dim}(the blocked path still reports its code and its issue locations)${colors.reset}`,
     );
   }
+  if (ajvProblems.length === 0) {
+    console.log(
+      `${colors.green}OK${colors.reset}   ${contracts.length} contract(s) also pass validateArtifact('eval-contract', ...) ${colors.dim}(Ajv and the schemaVersion stamp, independent of compile)${colors.reset}`,
+    );
+  }
 
   if (write) {
-    if (seeded.length > 0) {
+    if (seeded.length > 0 || ajvProblems.length > 0) {
       for (const problem of seeded) console.error(`${colors.red}SEED${colors.reset}  ${problem}`);
-      console.error(`\n${colors.red}the baseline was not rewritten: fix the seeded faults first.${colors.reset}`);
+      for (const problem of ajvProblems) console.error(`${colors.red}AJV${colors.reset}   ${problem}`);
+      console.error(`\n${colors.red}the baseline was not rewritten: fix the seeded faults and the Ajv problems first.${colors.reset}`);
       return 1;
     }
     writeBaseline(observed);
@@ -765,6 +779,7 @@ async function main(argv) {
   }
 
   for (const problem of seeded) console.error(`${colors.red}SEED${colors.reset}  ${problem}`);
+  for (const problem of ajvProblems) console.error(`${colors.red}AJV${colors.reset}   ${problem}`);
 
   for (const { key, actual, expected: before } of moved) {
     console.error(`${colors.red}MOVED${colors.reset} ${key}`);
@@ -779,7 +794,10 @@ async function main(argv) {
   if (seeded.length > 0) {
     console.error(`\n${colors.red}${seeded.length} seeded fault(s) no longer report the shape this check records for them.${colors.reset}`);
   }
-  if (moved.length > 0 || seeded.length > 0) return 1;
+  if (ajvProblems.length > 0) {
+    console.error(`\n${colors.red}${ajvProblems.length} contract(s) failed validateArtifact('eval-contract', ...).${colors.reset}`);
+  }
+  if (moved.length > 0 || seeded.length > 0 || ajvProblems.length > 0) return 1;
   console.log(`\n${colors.green}${contracts.length} contract(s) match their recorded status.${colors.reset}`);
   return 0;
 }

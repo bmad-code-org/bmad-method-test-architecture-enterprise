@@ -1,5 +1,6 @@
 /**
- * Every `schemaVersion` TEA writes is the one the installed `eval-quality` reads.
+ * Every `schemaVersion` TEA writes or receives is the one the installed
+ * `eval-quality` reads.
  *
  * WHY THIS FILE EXISTS
  *
@@ -10,7 +11,11 @@
  * literal beside the code that wrote it, and nothing compared any of them with
  * the constants the package exports, so an upstream bump passed `npm test` until
  * a `schema-version-mismatch` fault surfaced inside a pipeline stage, naming the
- * stage.
+ * stage. TEA also receives three kinds it never stamps itself: `evidence-artifact`,
+ * `sealed-evaluator-brief` and `preflight-verdict`, each read back from the
+ * package through a `validateArtifact` call in `test/lib/probe-scoring.js`. This
+ * file holds the package's own constant for all nine, so a renamed or moved
+ * export is caught here rather than inside a live run.
  *
  * So the question this file answers: if the package moves a version, or someone
  * puts a literal back, what fails first and what does it say?
@@ -23,10 +28,10 @@
  *
  * WHAT IS CHECKED
  *
- * - Each of the six constants the package exports for a kind TEA writes is a
- *   positive integer. A renamed export reads `undefined` on both sides of a
- *   comparison and would agree with itself.
- * - `SCHEMA_VERSIONS` carries exactly those six kinds, each value the package's
+ * - Each of the nine constants the package exports for a kind TEA writes or
+ *   receives is a positive integer. A renamed export reads `undefined` on both
+ *   sides of a comparison and would agree with itself.
+ * - `SCHEMA_VERSIONS` carries exactly those nine kinds, each value the package's
  *   constant.
  * - Each of the three builders stamps the version its kind's constant reads, and
  *   each generator's exported constant is the package's. A failure names the
@@ -84,6 +89,9 @@ const CONSTANT_OF = {
   probe: 'PROBE_SCHEMA_VERSION',
   'eval-contract': 'EVAL_CONTRACT_SCHEMA_VERSION',
   'scoring-policy': 'SCORING_POLICY_SCHEMA_VERSION',
+  'evidence-artifact': 'EVIDENCE_ARTIFACT_SCHEMA_VERSION',
+  'sealed-evaluator-brief': 'SEALED_EVALUATOR_BRIEF_SCHEMA_VERSION',
+  'preflight-verdict': 'PREFLIGHT_VERDICT_SCHEMA_VERSION',
 };
 
 /** The one published kind TEA records as carrying no stamp by design. */
@@ -179,14 +187,14 @@ function main() {
   const inputs = require('./lib/eval-quality-inputs');
   const { SCHEMA_VERSIONS, expectedSchemaVersion, schemaVersionProblems } = inputs;
 
-  // The table, held to the independent reading: exactly the kinds TEA writes,
-  // and the package's number for each.
+  // The table, held to the independent reading: exactly the kinds TEA writes or
+  // receives, and the package's number for each.
   const tableKinds = Object.keys(SCHEMA_VERSIONS).sort();
   const expectedKinds = Object.keys(CONSTANT_OF).sort();
   hold(
     JSON.stringify(tableKinds) === JSON.stringify(expectedKinds),
-    `SCHEMA_VERSIONS covers exactly the ${expectedKinds.length} kinds TEA writes`,
-    `SCHEMA_VERSIONS covers ${tableKinds.join(', ')}; TEA writes ${expectedKinds.join(', ')}`,
+    `SCHEMA_VERSIONS covers exactly the ${expectedKinds.length} kinds TEA writes or receives`,
+    `SCHEMA_VERSIONS covers ${tableKinds.join(', ')}; TEA writes or receives ${expectedKinds.join(', ')}`,
   );
   for (const kind of expectedKinds) {
     hold(

@@ -1310,10 +1310,12 @@ async function scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot
     resourceUse: REPLAY_USE,
   });
 
+  const policy = await scoringPolicy();
   const schemaProblems = [
     ...(await validateArtifact('sealed-run-record', record)).map((message) => `SealedRunRecord${message}`),
     ...(await validateArtifact('isolation-manifest', manifest)).map((message) => `IsolationManifest${message}`),
     ...(await validateArtifact('evaluator-configuration', configuration)).map((message) => `EvaluatorConfiguration${message}`),
+    ...(await validateArtifact('scoring-policy', policy)).map((message) => `ScoringPolicy${message}`),
   ];
 
   const result = await runScore({
@@ -1323,7 +1325,7 @@ async function scoreProbe(suite, probe, { preflightVerdict, runId, modelSnapshot
     contract: suite.contract,
     probe,
     preflightVerdict,
-    policy: await scoringPolicy(),
+    policy,
     privateManifest: null,
     corpusDigest,
     signal,
