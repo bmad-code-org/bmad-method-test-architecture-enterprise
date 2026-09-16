@@ -149,23 +149,77 @@ check('the tier-sum guard refuses when a fragment carries a tier none of the thr
   assert.match(result.stderr, /tiers sum to \d+ and the file carries \d+ rows/);
 });
 
-check("the cross-copy guard refuses when another workflow's tea-index.csv disagrees on a fragment's tier", () => {
-  const atddCsv = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-atdd', 'resources', 'tea-index.csv');
-  const originalAtdd = fs.readFileSync(atddCsv, 'utf8');
-  const atddRows = parse(originalAtdd, { columns: true, skip_empty_lines: true });
-  const atddLines = originalAtdd.split('\n');
-  const coreIndex = atddRows.findIndex((row) => row.tier === 'core');
-  assert.ok(coreIndex !== -1, "fixture setup: expected at least one core-tier row in bmad-testarch-atdd's copy");
-  atddLines[coreIndex + 1] = atddLines[coreIndex + 1].replace(',core,', ',extended,');
-  fs.writeFileSync(atddCsv, atddLines.join('\n'));
+const ATDD_CSV = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch', 'bmad-testarch-atdd', 'resources', 'tea-index.csv');
+
+/**
+ * Corrupts `bmad-testarch-atdd`'s real tea-index.csv (there is no scratch
+ * seam for the cross-copy guard the way there is for the tier-sum guard,
+ * since the whole point is comparing against a sibling on disk), runs the
+ * module in a subprocess, and restores the file whatever the outcome —
+ * `remove: true` deletes it instead of mutating it, to prove the missing-copy
+ * case.
+ */
+function runAgainstMutatedSibling({ remove = false, mutate } = {}) {
+  const original = fs.readFileSync(ATDD_CSV, 'utf8');
   try {
-    const result = spawnSync(process.execPath, ['-e', `require(${JSON.stringify(MODULE_PATH)})`], { encoding: 'utf8' });
-    assert.notStrictEqual(result.status, 0, 'expected the module to throw on a cross-copy tier disagreement');
-    assert.match(result.stderr, /tags .* as tier .* and .* tags it/);
+    if (remove) {
+      fs.rmSync(ATDD_CSV);
+    } else {
+      const rows = parse(original, { columns: true, skip_empty_lines: true });
+      const lines = original.split('\n');
+      mutate(rows, lines);
+      fs.writeFileSync(ATDD_CSV, lines.join('\n'));
+    }
+    return spawnSync(process.execPath, ['-e', `require(${JSON.stringify(MODULE_PATH)})`], { encoding: 'utf8' });
   } finally {
-    fs.writeFileSync(atddCsv, originalAtdd);
+    fs.writeFileSync(ATDD_CSV, original);
   }
-  assert.strictEqual(fs.readFileSync(atddCsv, 'utf8'), originalAtdd, "bmad-testarch-atdd's tea-index.csv must be restored exactly");
+}
+
+check("the cross-copy guard refuses when another workflow's tea-index.csv disagrees on a fragment's tier", () => {
+  const original = fs.readFileSync(ATDD_CSV, 'utf8');
+  const result = runAgainstMutatedSibling({
+    mutate: (rows, lines) => {
+      const coreIndex = rows.findIndex((row) => row.tier === 'core');
+      assert.ok(coreIndex !== -1, "fixture setup: expected at least one core-tier row in bmad-testarch-atdd's copy");
+      lines[coreIndex + 1] = lines[coreIndex + 1].replace(',core,', ',extended,');
+    },
+  });
+  assert.notStrictEqual(result.status, 0, 'expected the module to throw on a cross-copy tier disagreement');
+  assert.match(result.stderr, /tags .* as tier .* and .* tags it/);
+  assert.strictEqual(fs.readFileSync(ATDD_CSV, 'utf8'), original, "bmad-testarch-atdd's tea-index.csv must be restored exactly");
+});
+
+check('the cross-copy guard refuses when a sibling workflow ships no tea-index.csv at all', () => {
+  const original = fs.readFileSync(ATDD_CSV, 'utf8');
+  const result = runAgainstMutatedSibling({ remove: true });
+  assert.notStrictEqual(result.status, 0, 'expected the module to throw when a sibling copy is missing');
+  assert.match(result.stderr, /could not be read/);
+  assert.strictEqual(fs.readFileSync(ATDD_CSV, 'utf8'), original, "bmad-testarch-atdd's tea-index.csv must be restored exactly");
+});
+
+check('the cross-copy guard refuses when a sibling tea-index.csv is missing a row the canonical copy carries', () => {
+  const original = fs.readFileSync(ATDD_CSV, 'utf8');
+  const result = runAgainstMutatedSibling({
+    mutate: (rows, lines) => {
+      lines.splice(1, 1);
+    },
+  });
+  assert.notStrictEqual(result.status, 0, 'expected the module to throw on a missing row');
+  assert.match(result.stderr, /is missing .*, which .* carries/);
+  assert.strictEqual(fs.readFileSync(ATDD_CSV, 'utf8'), original, "bmad-testarch-atdd's tea-index.csv must be restored exactly");
+});
+
+check('the cross-copy guard refuses when a sibling tea-index.csv lists a row the canonical copy does not carry', () => {
+  const original = fs.readFileSync(ATDD_CSV, 'utf8');
+  const result = runAgainstMutatedSibling({
+    mutate: (rows, lines) => {
+      lines.push('fake-extra-fragment,Fake,Fake description,tag,core,knowledge/fake.md');
+    },
+  });
+  assert.notStrictEqual(result.status, 0, 'expected the module to throw on an extra row');
+  assert.match(result.stderr, /lists .*, which .* does not carry/);
+  assert.strictEqual(fs.readFileSync(ATDD_CSV, 'utf8'), original, "bmad-testarch-atdd's tea-index.csv must be restored exactly");
 });
 
 check("every doc-counts entry's counts array names its sources in the order its pattern's capture groups carry them", () => {

@@ -3,6 +3,13 @@
 Written cold, for whoever picks this up next. The fleet that was running this is
 retiring; this file and the branch are what survive it.
 
+**Superseded.** Story 4.1 is implemented in full: `eval-quality-gates doc-counts` is
+configured, wired into `npm test` and CI, and every entry proven by revert. See
+`PR #188` for the finished work. Everything below is the investigation this PR was
+built from, kept as a record of the decisions it made; the "next action, cold"
+section and the "no code changes" line describe the state the branch was in before
+that work started, not its current state.
+
 ## Story and branch
 
 - Story text: `_bmad-output/planning-artifacts/epics.md`, `### Story 4.1`. Its checklist

@@ -157,26 +157,57 @@ if (tierSum !== exports.KNOWLEDGE_FRAGMENT_TOTAL) {
   );
 }
 
-// Every other workflow's own copy has to agree on every fragment's tier, or
-// the total and breakdown above describe whichever copy this module happened
-// to read rather than a fact the whole knowledge base shares. Skipped when an
-// override is set, since the override exists to point at a scratch copy that
-// has no siblings to compare against.
+// Every other workflow's own copy has to be the exact same set of ids, each
+// tagged with the exact same tier, or the total and breakdown above describe
+// whichever copy this module happened to read rather than a fact the whole
+// knowledge base shares. Skipped when an override is set, since the override
+// exists to point at a scratch copy that has no siblings to compare against.
 if (!process.env.DOC_COUNT_SOURCES_TEA_INDEX_CSV) {
   const tierById = new Map(fragments.map((fragment) => [fragment.id, fragment.tier]));
+  // A workflow that ships no `resources/knowledge` directory ships no
+  // tea-index.csv either, by design (bmad-teach-me-testing, per its own
+  // "no suite of any kind" entry in test/evals/suite-manifest.json's
+  // `deferred` list). test/test-knowledge-base.js discovers workflows the
+  // same way, off the knowledge directory's presence, not a hardcoded name.
   const otherWorkflows = fs
     .readdirSync(TESTARCH_ROOT, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && entry.name !== 'bmad-testarch-test-review')
-    .map((entry) => path.join(TESTARCH_ROOT, entry.name, 'resources', 'tea-index.csv'))
-    .filter((csvPath) => fs.existsSync(csvPath));
+    .map((entry) => ({
+      knowledgeDir: path.join(TESTARCH_ROOT, entry.name, 'resources', 'knowledge'),
+      csvPath: path.join(TESTARCH_ROOT, entry.name, 'resources', 'tea-index.csv'),
+    }))
+    .filter(({ knowledgeDir }) => fs.existsSync(knowledgeDir))
+    .map(({ csvPath }) => csvPath);
 
   for (const csvPath of otherWorkflows) {
+    // No existence filter beyond the knowledge-directory check above: every
+    // workflow that ships a knowledge directory is expected to ship a
+    // tea-index.csv beside it, the same assumption test/test-knowledge-base.js
+    // makes, so a missing one here is a real gap, not a sibling with nothing
+    // to compare.
     const otherRows = readTeaIndex(csvPath);
+    const otherTierById = new Map();
+    const duplicates = new Set();
     for (const row of otherRows) {
-      const expectedTier = tierById.get(row.id);
-      if (expectedTier !== undefined && expectedTier !== row.tier) {
+      if (otherTierById.has(row.id)) duplicates.add(row.id);
+      otherTierById.set(row.id, row.tier);
+    }
+    if (duplicates.size > 0) {
+      refuse(`${csvPath} lists ${[...duplicates].join(', ')} more than once; a fragment id must appear exactly once`);
+    }
+    const missing = [...tierById.keys()].filter((id) => !otherTierById.has(id));
+    if (missing.length > 0) {
+      refuse(`${csvPath} is missing ${missing.join(', ')}, which ${TEA_INDEX_CSV} carries; the two copies must list the same ids`);
+    }
+    const extra = [...otherTierById.keys()].filter((id) => !tierById.has(id));
+    if (extra.length > 0) {
+      refuse(`${csvPath} lists ${extra.join(', ')}, which ${TEA_INDEX_CSV} does not carry; the two copies must list the same ids`);
+    }
+    for (const [id, tier] of otherTierById) {
+      const expectedTier = tierById.get(id);
+      if (expectedTier !== tier) {
         refuse(
-          `${csvPath} tags "${row.id}" as tier "${row.tier}" and ${TEA_INDEX_CSV} tags it "${expectedTier}"; ` +
+          `${csvPath} tags "${id}" as tier "${tier}" and ${TEA_INDEX_CSV} tags it "${expectedTier}"; ` +
             'the knowledge-fragment tier breakdown assumes every copy agrees',
         );
       }
