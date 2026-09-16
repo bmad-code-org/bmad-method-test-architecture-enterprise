@@ -2,7 +2,7 @@
 /**
  * tea-transcript-runner — one turn of a multi-turn agent session.
  *
- * `test/lib/transcript-harness.js` drives a whole session by calling this
+ * The transcript-driving engine drives a whole session by calling this
  * command once per turn, in one persistent workspace, so the workflow it
  * exercises can read what an earlier turn left on disk even though each turn
  * is a fresh process with no memory of its own. This file is one turn's whole
@@ -59,10 +59,9 @@ const DEFAULT_AGENT = 'claude';
 
 /**
  * Ten minutes. A single conversational turn is lighter than a whole workflow
- * read, so this sits below RUN_TIMEOUT_MS in test/eval-nfr.js and
- * test/eval-trace.js rather than matching it; a caller whose own turn is
- * heavier, the way Story 6.11's teaching turns may be, raises it with
- * `--timeout-ms`.
+ * read, so this sits below the nfr and trace harnesses' own wall-clock bound
+ * rather than matching it; a caller whose own turn is heavier, the way Story
+ * 6.11's teaching turns may be, raises it with `--timeout-ms`.
  */
 const DEFAULT_TIMEOUT_MS = 10 * 60_000;
 
@@ -163,9 +162,9 @@ function main(argv) {
     fail(classOfAgentError(error), error.message);
   }
 
-  // What the agent printed, unchanged. This is the turn's reply: the caller
-  // (test/lib/transcript-harness.js) reads it off the observation's stdout and
-  // hands it to the next turn's buildTurnPrompt as prior-turn context.
+  // What the agent printed, unchanged. This is the turn's reply: the calling
+  // engine reads it off the observation's stdout and hands it to the next
+  // turn's buildTurnPrompt as prior-turn context.
   if (stdout.length > 0) process.stdout.write(stdout.endsWith('\n') ? stdout : `${stdout}\n`);
 }
 
