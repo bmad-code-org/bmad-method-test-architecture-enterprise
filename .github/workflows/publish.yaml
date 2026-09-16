@@ -75,6 +75,41 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # This job runs the full npm test chain plus test:cli, the same as
+      # quality.yaml's coverage and cli jobs, and inherits whatever system
+      # dependencies that chain has accumulated: this job must stay in step
+      # with quality.yaml on system dependencies, or it fails at "Run tests"
+      # on every push, the way it did from roughly 16:40 UTC today onward.
+      # test:doc-invocations executes documented commands that need
+      # actionlint on PATH (test:eval-ci-data's lint half) and a working
+      # bubblewrap isolation backend (the atdd preflight path), and neither
+      # was installed here.
+      #
+      # The actionlint version installed floats to latest rather than
+      # pinned, for the same reason quality.yaml's own Install actionlint
+      # steps give: test/eval-ci.js's own pre-flight enforces the minimum
+      # version its flags were written against, so a newer release only ever
+      # adds coverage. The installer script itself is pinned by commit and
+      # checksummed before it runs.
+      - name: Install actionlint
+        run: |
+          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
+          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
+          bash download-actionlint.bash
+          sudo mv ./actionlint /usr/local/bin/
+
+      - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+
+      # Ubuntu 24.04+ ships kernel.apparmor_restrict_unprivileged_userns=1,
+      # which blocks bwrap's --unshare-net from bringing up its own loopback
+      # interface inside an unprivileged user namespace unless the bwrap
+      # binary carries an AppArmor profile explicitly granting `userns`, one
+      # this runner image's bubblewrap package does not ship. See
+      # quality.yaml's own step of the same name for the full explanation.
+      - name: Allow bubblewrap to create its own network namespace
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       - name: Run tests
         run: npm test && npm run test:cli
 

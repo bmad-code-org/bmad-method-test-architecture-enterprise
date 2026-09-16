@@ -56,11 +56,11 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 | Epic 2    |       7 / 7 |      0 |         0 | Complete       |
 | Epic 3    |       6 / 6 |      0 |         0 | Complete       |
 | Epic 4    |       8 / 8 |      0 |         0 | Complete       |
-| Epic 5    |       1 / 5 |      1 |         3 | In progress    |
+| Epic 5    |       2 / 6 |      1 |         3 | In progress    |
 | Epic 6    |      7 / 12 |      2 |         3 | In progress    |
 | Epic 7    |       1 / 1 |      0 |         0 | Complete       |
 | Epic 8    |       1 / 1 |      0 |         0 | Complete       |
-| **Total** | **36 / 45** |  **3** |     **6** | **80% merged** |
+| **Total** | **37 / 46** |  **3** |     **6** | **80% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -102,6 +102,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 
 ### Epic 5 progress: Drift is measured and the upgrade is proven live
 
+- [x] [Story 5.0: Repair the publish workflow](#story-50-repair-the-publish-workflow) ([#209](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/209))
 - [x] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance) ([#199](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/199))
 - [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result) (**Active:** open in [#204](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/204); stage one only, no live agent call spent yet)
 - [ ] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships) (**Active:** open in [#203](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/203); a final numeric pass once Epic 6 closes and its own counts stop moving remains)
@@ -1077,6 +1078,27 @@ So that a suppression is a decision rather than an inheritance.
 Drift between two runs is measurable, the suite has been run live with its result recorded, the documentation states the baseline that ships, and TEA releases.
 
 **FRs covered:** FR30, FR41, FR42, FR43, FR44, FR45, FR46
+
+### Story 5.0: Repair the publish workflow
+
+As a TEA maintainer,
+I want `publish.yaml` to run the same tests, with the same system dependencies, that `quality.yaml` already proves in CI,
+So that a push to `main` ships a release instead of failing at the test step.
+
+**Acceptance Criteria:**
+
+**Given** `publish.yaml`'s "Run tests" step runs the same `npm test` chain and `test:cli` that `quality.yaml`'s `validate`, `cli` and `coverage` jobs run
+**When** the job is fixed
+**Then** it installs the same system dependencies those jobs install (`actionlint`, a working `bubblewrap` isolation backend) before that step runs
+**And** the job runs the full chain unreduced, with no step skipped or removed to reach green
+
+**Given** the missing dependencies were failing "Run tests" on every push to `main`, thirteen consecutive runs since 09:07 UTC on 2026-09-16 with the identical `actionlint`/`bubblewrap` failure signature, and no `next`-channel version shipping since `1.26.1-next.11` at 01:40 UTC the same day
+**When** the fix lands and a push triggers the workflow
+**Then** the run completes past the test step and reaches the publish step, rather than failing before it
+
+**Given** the two jobs must not drift apart again
+**When** the fix is written
+**Then** `publish.yaml` carries a comment stating it must stay in step with `quality.yaml` on system dependencies, and why
 
 ### Story 5.1: Compare run strength through `compareDominance`
 
