@@ -40,20 +40,20 @@
  *
  * It does not decide which criterion a test maps to, does not judge whether a
  * failure message matches the story's declared pattern, and does not classify
- * red-for-the-right-reason from wrong-reason. All three are `test/eval-atdd.js`
- * scoring a report this command produced, over the story's ground truth, which
- * this command never reads. Keeping the split is what lets the report be
- * replayed against a changed ground truth with no re-execution: the recorded
- * facts do not move, only their judgment does.
+ * red-for-the-right-reason from wrong-reason. All three are the atdd eval
+ * harness scoring a report this command produced, over the story's ground
+ * truth, which this command never reads. Keeping the split is what lets the
+ * report be replayed against a changed ground truth with no re-execution: the
+ * recorded facts do not move, only their judgment does.
  *
  * ISOLATION
  *
- * This command does not isolate itself. `test/eval-atdd.js` and
+ * This command does not isolate itself. The atdd eval harness and
  * `cli/lib/atdd-isolation.js` wrap the whole invocation of this process in the
  * sandboxed backend before it ever starts, the way a caller wraps any command
  * it wants confined; the alternative, isolating from inside, cannot confine the
  * process already running unconfined at the moment it decided to. NFR9 names
- * the properties test/test-atdd-isolation.js proves.
+ * the properties the atdd isolation test proves.
  *
  * Usage:
  *   tea-atdd-red-check --project-root <dir> --report <path> [--test-dir tests]
@@ -97,7 +97,7 @@ function stripAnsi(value) {
  * itself, its own output, package state nobody hand-writes, and `_bmad`, the
  * eval harness's own bookkeeping directory (the staged workflow config the
  * generation prompt tells the agent to read, not the fixture's product
- * surface). `test/eval-atdd.js`'s generation-phase scope excludes the same
+ * surface). The atdd eval harness's generation-phase scope excludes the same
  * directory for the same reason; the two phases check the same tree and have
  * to draw the "production" boundary the same way, or an identical write
  * scores differently depending only on which phase made it.
@@ -241,7 +241,7 @@ function runOneSpecFile({ projectRoot, relativeFile, cliPath, nodePathDirectory,
     CI: '',
   };
   // Not sandboxed here. Isolation confines a process from the outside, so the
-  // caller (test/eval-atdd.js) wraps this whole command's invocation in
+  // caller (the atdd eval harness) wraps this whole command's invocation in
   // cli/lib/atdd-isolation.js's sandboxedCommand before it ever starts; by the
   // time this function runs, the process it is already inside is the one
   // being confined, and everything spawnSync starts below inherits that.

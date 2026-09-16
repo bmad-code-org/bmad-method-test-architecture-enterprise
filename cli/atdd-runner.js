@@ -29,8 +29,7 @@
  * It declares the one capability the workflow needs, `scoped-artifact-writes`:
  * the deliverable is a set of files inside the working directory, so claude
  * runs with its write tools and no shell, and codex under its workspace-write
- * sandbox, which is what the atdd suite declares in
- * test/evals/suite-manifest.json.
+ * sandbox, which is what the atdd suite declares in the eval suite manifest.
  *
  * Usage:
  *   tea-atdd-runner --agent codex < prompt.txt
@@ -52,7 +51,7 @@ const { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNam
 /** The same default the other runner commands declare, so this command changes no run that omits `--agent`. */
 const DEFAULT_AGENT = 'claude';
 
-/** Twenty minutes, matching RUN_TIMEOUT_MS in test/eval-atdd.js, the only caller that measures. */
+/** Twenty minutes, matching RUN_TIMEOUT_MS in the atdd eval harness, the only caller that measures. */
 const DEFAULT_TIMEOUT_MS = 20 * 60_000;
 
 /** An ATDD generation run writes test files into the working directory; see the header. */

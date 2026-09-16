@@ -4,8 +4,8 @@
     "patterns": [
       {
         "name": "tea-dev-test-file",
-        "match": "\\btest/test-[\\w-]+\\.js\\b",
-        "reason": "this repository's own dev test file, not part of the published tarball"
+        "match": "(?<!/)\\btest/[\\w./-]+\\.(?:js|json)\\b",
+        "reason": "a file under this repository's own dev tree, not part of the published tarball"
       },
       {
         "name": "docs-path",

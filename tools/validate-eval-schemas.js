@@ -67,11 +67,12 @@ function generateResultSchema() {
 /**
  * Every harness `suite-manifest.json` names, as a literal require() rather than
  * one built from `entry.harness` at runtime. The manifest's own schema fixes
- * this to a closed, six-entry set, and a literal keeps the load inside the
+ * this to a closed, eight-entry set, and a literal keeps the load inside the
  * dependency-direction gate's declared edges rather than escaping its notice
  * as a specifier the gate could not read.
  */
 const HARNESS_LOADERS = {
+  'test/eval-atdd.js': () => require('../test/eval-atdd.js'),
   'test/eval-bmad-tea-routing.js': () => require('../test/eval-bmad-tea-routing.js'),
   'test/eval-ci.js': () => require('../test/eval-ci.js'),
   'test/eval-fragment-selection.js': () => require('../test/eval-fragment-selection.js'),

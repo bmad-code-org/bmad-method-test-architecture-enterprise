@@ -158,6 +158,16 @@ function checkBoundarySeed(binary) {
   // character.
   check(output.includes('[docs-path]'), `package-boundary did not fire the docs-path pattern on the seeded relative link\n${output}`);
   check(output.includes('./docs/reference/configuration.md'), `package-boundary did not quote the seeded relative docs link\n${output}`);
+  // `\btest/...` alone matches inside an unrelated path too, such as
+  // `@playwright/test/package.json`: the character before "test" there is "/",
+  // the same transition a real `test/foo.js` reference makes from a backtick
+  // or a space. Excluding a preceding "/" fixed it without narrowing the
+  // pattern's own repository-relative matches.
+  check(
+    !output.includes('@playwright/test/package.json'),
+    `package-boundary flagged an unrelated @playwright/test path as this repository's own test/ tree\n${output}`,
+  );
+  check(output.includes('2 violation(s)'), `package-boundary reported a different violation count than the two seeded leaks\n${output}`);
 }
 
 function checkLineageSeed(binary) {
