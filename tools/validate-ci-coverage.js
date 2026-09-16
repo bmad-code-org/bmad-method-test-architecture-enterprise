@@ -97,6 +97,8 @@ const DELIBERATELY_LOCAL = {
   'lint:fix': '--fix mode of the covered lint; running fix-mode in CI would mutate the diff mid-job',
   'generate:lockfile-age-cache':
     'a write-mode cache regenerator; the covered test:lockfile-age reads the cache it writes specifically to avoid registry calls in CI, so running the generator there would be circular',
+  'regenerate:doc-claim-hash':
+    'a manual, human-triggered helper that prints a sha256 for a doc-claims asOf.subject file; it takes a path argument CI has none to supply, and its only job is producing a hash for a human to paste into eval-quality.config.json by hand, so there is nothing for a CI run to assert against',
   'eval:all':
     'a live agent eval; costs real credentials and API spend per run, kept out of CI by the eval-quality/deterministic-gate split (see README.md)',
   'eval:atdd': 'a live agent eval; same reason as eval:all',

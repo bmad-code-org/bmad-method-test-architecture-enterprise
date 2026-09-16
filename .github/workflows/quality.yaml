@@ -191,6 +191,12 @@ jobs:
       - name: Hold published documentation counts against their source
         run: npm run test:doc-counts
 
+      - name: Test the doc-claims gate's own source module
+        run: npm run test:doc-claim-sources
+
+      - name: Hold published prose claims against their artifact
+        run: npm run test:doc-claims
+
       - name: Test write-time enforcement hook
         run: npm run test:enforce-hook
 

@@ -263,6 +263,7 @@ A review verdict (also written to `--json <file>` when given):
   "contextWaiversApplied": 0,
   "keyStrengths": ["Fully deterministic, no conditional branching or timing dependencies"],
   "keyWeaknesses": ["Missing explicit test IDs on two test cases"],
+  "advisoryObservations": ["Consider extracting the login flow into a shared fixture"],
   "executionMode": "subagent",
   "conventionBaseline": {
     "baselineUnavailable": false,
@@ -285,7 +286,7 @@ Per severity, `findings` agrees with `violations`: exactly for Critical and High
 
 `reviewProvenance` records the TeA package version, rubric version, resolved model, base/head commits, GitHub trigger comment, workflow run, and gate mode. Unknown values are `null`. Its `sources` map names the source or fallback for every value, so a local run or custom adapter never invents CI or model metadata.
 
-`contextWaiversApplied` is strict and always `0`. `keyStrengths` and `keyWeaknesses` are best-effort, pulled from the report's Executive Summary bullet lists for PR-comment display; they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
+`contextWaiversApplied` is strict and always `0`. `keyStrengths`, `keyWeaknesses`, and `advisoryObservations` are best-effort, pulled from the report's Executive Summary bullet lists (the third from an "Advisory Observations" subsection, capped at ten items) for PR-comment display; they're not part of the gating contract, a report that omits them still passes or fails on its own merits and the fields just come back as `[]`.
 
 `executionMode` is the mode `step-03-quality-evaluation.md`'s capability probe resolved for this run: `agent-team`, `subagent`, or `sequential`. It is absent when the report states none. Without it a run that asked for parallel workers and silently fell back to `sequential` was indistinguishable afterwards from one that got what it asked for, which made any speed claim about the run unfalsifiable.
 
@@ -312,6 +313,7 @@ A skipped review (no changed test files):
   "files": [],
   "contextBasis": "none",
   "contextFiles": [],
+  "gateOn": "all",
   "reviewProvenance": {
     "teaCliVersion": "1.24.0",
     "skillRubricVersion": "4.0",

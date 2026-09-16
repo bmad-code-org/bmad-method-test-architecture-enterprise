@@ -373,7 +373,7 @@ Take one directory per week (`tests/auth/`, then `tests/api/`, then `tests/e2e/`
 
 - ✅ Modernized: Quality >80, no critical issues
 - ⚠️ In Progress: Active improvement
-- ❌ Legacy: Not yet touched
+- ❌ Legacy: Untouched
 ```
 
 ## Common Brownfield Challenges

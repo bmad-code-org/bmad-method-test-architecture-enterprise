@@ -1147,4 +1147,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, defaultTimeoutMs };
+module.exports = { EXIT, VERDICT_KEYS, SKIP_KEYS, DEFAULT_AGENT, DEFAULT_TIMEOUT_MS, defaultTimeoutMs };
