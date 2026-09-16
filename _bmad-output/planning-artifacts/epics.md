@@ -118,7 +118,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 6.6: Build the fixed implementation and qualified regression fixture](#story-66-build-the-fixed-implementation-and-qualified-regression-fixture) ([#193](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/193))
 - [ ] [Story 6.7: Prove `bmad-testarch-automate` catches the qualified regression](#story-67-prove-bmad-testarch-automate-catches-the-qualified-regression) (**Active:** open in [#201](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/201))
 - [x] [Story 6.8: Score the `bmad-testarch-framework` scaffold's contents](#story-68-score-the-bmad-testarch-framework-scaffolds-contents) ([#196](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/196))
-- [ ] [Story 6.9: Install and smoke-test the generated scaffold](#story-69-install-and-smoke-test-the-generated-scaffold)
+- [x] [Story 6.9: Install and smoke-test the generated scaffold](#story-69-install-and-smoke-test-the-generated-scaffold) — [PR #207](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/207)
 - [x] [Story 6.10: Build the multi-turn transcript harness](#story-610-build-the-multi-turn-transcript-harness) ([#195](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/195))
 - [ ] [Story 6.11: Prove `bmad-teach-me-testing` teaches rather than asserts](#story-611-prove-bmad-teach-me-testing-teaches-rather-than-asserts)
 - [ ] [Story 6.12: Empty the deferred array](#story-612-empty-the-deferred-array)
