@@ -36,6 +36,23 @@ function check(name, fn) {
   }
 }
 
+// keyIsUnread's word-boundary check (below) needs a real reference staged
+// under src/workflows/ before doc-claim-sources.js is first required: its
+// workflowFileBodies cache memoizes at the first call inside that module,
+// triggered at module load by RISK_THRESHOLD_UNREAD's own computation, so
+// calling keyIsUnread afterward would only ever see the directory listing
+// from before this file existed. Cleanup runs once at the very end of this
+// file, guarded by SIGINT/SIGTERM handlers so an interrupted run doesn't
+// leave the probe file behind under src/workflows -- the same lifecycle
+// test/test-clock-port.js uses around its own probe skill.
+const workflowsRoot = path.join(__dirname, '..', 'src', 'workflows');
+const stagingFile = path.join(workflowsRoot, `doc-claim-sources-test-${process.pid}.md`);
+const probeKey = `probe_key_${process.pid}`;
+fs.writeFileSync(stagingFile, `if ${probeKey} is set, do the thing\n`);
+const removeStagingFile = () => fs.rmSync(stagingFile, { force: true });
+process.once('SIGINT', removeStagingFile);
+process.once('SIGTERM', removeStagingFile);
+
 const source = require('./lib/doc-claim-sources.js');
 const { EXIT, VERDICT_KEYS, SKIP_KEYS } = require('../cli/test-review.js');
 const { RECOMMENDATION_ENUM } = require('../cli/lib/parse-report.js');
@@ -107,6 +124,7 @@ check('SKIP_SCHEMA requires every SKIP_KEYS.always key and rejects an undeclared
     delete missing[key];
     assert.strictEqual(source.SKIP_SCHEMA.safeParse(missing).success, false, `${key} should be required`);
   }
+  assert.strictEqual(source.SKIP_SCHEMA.safeParse({ ...base, notARealKey: 1 }).success, false);
 });
 
 check('FUTURE_KEYS matches an independent walk of module.yaml’s "⏭️ FUTURE" marker positions', () => {
@@ -146,31 +164,23 @@ check('atLeast() compares a real version correctly and refuses a version it cann
 });
 
 check('keyIsUnread reports a genuinely referenced key as read, not just an injected probe as unread', () => {
-  // The word-boundary test below only exercises the "unread" (true) branch via
-  // a staged probe file; a genuinely referenced key proves the "read" (false)
-  // branch actually fires, so a `.some()`→`.every()` typo (an easy mistake,
-  // `.every()` is used one line below on a sibling array in production) cannot
-  // silently make every `*_UNREAD` export stay `true` forever with this file
-  // still green. tea_use_playwright_utils is confirmed referenced under
-  // src/workflows/ by direct grep, so this needs no staged fixture.
+  // A genuinely referenced key proves the "read" (false) branch actually
+  // fires against real, pre-existing content, so a `.some()`→`.every()` typo
+  // (an easy mistake, `.every()` is used one line below on a sibling array in
+  // production) cannot silently make every `*_UNREAD` export stay `true`
+  // forever with this file still green. tea_use_playwright_utils is
+  // confirmed referenced under src/workflows/ by direct grep, so this needs
+  // no staged fixture.
   assert.strictEqual(source.keyIsUnread('tea_use_playwright_utils'), false);
 });
 
 check('keyIsUnread’s word-boundary check finds a real bare-word reference, not only {key} interpolation', () => {
-  const workflowsRoot = path.join(__dirname, '..', 'src', 'workflows');
-  const stagingFile = path.join(workflowsRoot, `doc-claim-sources-test-${process.pid}.md`);
-  const probeKey = `probe_key_${process.pid}`;
-  fs.writeFileSync(stagingFile, `if ${probeKey} is set, do the thing\n`);
-  try {
-    const wordBoundary = new RegExp(`\\b${probeKey}\\b`);
-    const found = fs
-      .readdirSync(workflowsRoot, { recursive: true })
-      .filter((name) => fs.statSync(path.join(workflowsRoot, name)).isFile())
-      .some((name) => wordBoundary.test(fs.readFileSync(path.join(workflowsRoot, name), 'utf8')));
-    assert.strictEqual(found, true, 'a bare-word reference with no surrounding braces should be found');
-  } finally {
-    fs.rmSync(stagingFile);
-  }
+  // probeKey is staged into stagingFile (top of this file, before
+  // doc-claim-sources.js's first require) as a bare word with no surrounding
+  // braces, so this calls the real production function rather than
+  // re-implementing its search, and a positive result here can only come from
+  // the word-boundary regex actually matching prose.
+  assert.strictEqual(source.keyIsUnread(probeKey), false, 'a bare-word reference with no surrounding braces should be found');
 });
 
 check('THIRTY_FOUR_CONCERNS matches an independent count of "CONCERNS" verdicts in expected-strength.json', () => {
@@ -184,6 +194,10 @@ check('THIRTY_FOUR_CONCERNS matches an independent count of "CONCERNS" verdicts 
   assert.strictEqual(source.THIRTY_FOUR_CONCERNS, count === 34);
   assert.strictEqual(count, 34);
 });
+
+removeStagingFile();
+process.off('SIGINT', removeStagingFile);
+process.off('SIGTERM', removeStagingFile);
 
 if (failures.length > 0) {
   console.error('\ndoc-claim-sources validation failed:\n');
