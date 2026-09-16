@@ -113,7 +113,25 @@ function main() {
       process.exit(2);
     }
 
-    assert(process.getuid ? process.getuid() !== 0 : true, 'this check does not run as root', 'NFR9 requires a non-privileged workspace');
+    assert(
+      process.getuid ? process.getuid() !== 0 : true,
+      'this harness itself is not running as root',
+      'NFR9 requires a non-privileged workspace',
+    );
+
+    // The property NFR9 actually names is about the sandboxed process, not this
+    // harness: `--unshare-user` creates a new user namespace, and a namespace
+    // that remapped the real uid to 0 inside it would satisfy the check above
+    // while running the generated test as root in every way that matters. Read
+    // directly from inside the sandbox rather than assumed to match the outer
+    // process's own uid.
+    const uidProbe = runSandboxed(workspace, backend, 'console.log("UID",process.getuid())');
+    const sandboxedUid = /UID (\d+)/.exec(uidProbe.stdout)?.[1];
+    assert(
+      uidProbe.status === 0 && sandboxedUid !== undefined && sandboxedUid !== '0',
+      'the sandboxed process itself does not run as root',
+      `stdout ${JSON.stringify(uidProbe.stdout)}`,
+    );
 
     // Network: a non-loopback host, denied. 192.0.2.1 is RFC 5737's
     // documentation-only address (TEST-NET-1): it never routes anywhere, so the
