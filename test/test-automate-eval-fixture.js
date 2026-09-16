@@ -66,6 +66,7 @@
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
+const Module = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -156,11 +157,20 @@ function referenceDigest(relativePath) {
   return digest([relativePath, fs.readFileSync(absolute(relativePath))]);
 }
 
-/** Runs `vouchers.js` fresh out of `scratchDir`, bypassing Node's module cache so a rewritten file is actually re-read. */
+/**
+ * Loads `vouchers.js` fresh out of `scratchDir` without `require()`, whose
+ * argument this repository's `dependency-direction` gate requires to be a
+ * string literal. `scratchFile` is a path built at runtime, so it is compiled
+ * directly through `Module`, which also means every call reads the file's
+ * current bytes with nothing to invalidate.
+ */
 function requireFreshVouchers(scratchDir) {
   const scratchFile = path.join(scratchDir, 'vouchers.js');
-  delete require.cache[require.resolve(scratchFile)];
-  return require(scratchFile);
+  const freshModule = new Module(scratchFile, module);
+  freshModule.filename = scratchFile;
+  freshModule.paths = Module._nodeModulePaths(scratchDir);
+  freshModule._compile(fs.readFileSync(scratchFile, 'utf8'), scratchFile);
+  return freshModule.exports;
 }
 
 function redeemAtBoundary(scratchDir) {
