@@ -1,0 +1,125 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: parseReport used to promote any heading nested under a domain's own to the next",
+    "currentCriterion, whatever its depth. A model writing an unplanned sub-heading between a criterion's own heading and",
+    "its Evidence line (a `#### Root Cause Note` under `### MTTR`, say) silently reassigned currentCriterion to that",
+    "sub-heading's text, and the criterion's own later citations landed under a name no ground truth entry resolves to:",
+    "not scored as ungrounded, just gone from both the numerator and the denominator of groundedCitationAccuracy. Two",
+    "independent review passes on Story 8.1 reproduced this before the PR opened, both showing groundedCriteria.total drop",
+    "by one with no error printed anywhere.",
+    "",
+    "The report is CONSTRUCTED: gapped-correct-audit's report with a `#### Root Cause Note` paragraph inserted between",
+    "MTTR's Actual line and its Evidence line, and nothing else touched. `#### Root Cause Note` is two levels under",
+    "Reliability's own `## Reliability Assessment` heading (`###` criteria sit one level under a domain, per",
+    "nfr-report-template.md), so it is nested under MTTR's own heading rather than beside it as a sibling criterion.",
+    "",
+    "parseReport now promotes a nested heading to currentCriterion only when it sits exactly one level under the domain,",
+    "the depth nfr-report-template.md actually gives a criterion; a heading nested any deeper is left alone, so MTTR stays",
+    "the open criterion straight through the stray sub-heading and its Evidence line still attributes correctly.",
+    "",
+    "Reverting the depth check and replaying this case fails it: groundedCriteria moves from {17,17} to {16,16}, MTTR",
+    "silently dropped from both sides, which is the regression this case exists to catch."
+  ],
+  "id": "gapped-mttr-stray-subheading",
+  "suite": "nfr",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "A paragraph and a `####` heading were inserted between two lines of MTTR's own section, and nothing else changed, so",
+    "every status, count and ceiling below is gapped-correct-audit's own, unmoved.",
+    "",
+    "Statuses, coverage, thresholds, overall, unknownThreshold and cleanFalsePositives: identical to gapped-correct-audit,",
+    "since none of those readers are sensitive to a heading appearing between two lines of a criterion's own body.",
+    "",
+    "Citations: identical set and order to gapped-correct-audit. `stripFencedCodeBlocks` does not touch the inserted",
+    "heading or its paragraph (it is not a code fence), and neither carries a file-shaped token, so entry.citations is",
+    "unaffected by the insertion. fabricated stays empty.",
+    "",
+    "Grounding: seventeen of the seventeen criteria with declared evidence are grounded, matching gapped-correct-audit",
+    "exactly. MTTR's Evidence line, which follows the stray `#### Root Cause Note` heading, still attributes to MTTR rather",
+    "than to the stray heading's own text, because a heading nested two levels under the domain is not promoted to",
+    "currentCriterion; only a heading exactly one level under the domain is. ungroundedCitations stays empty."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "sectionStatuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "gateBlockDeclared": true,
+    "gateDisagreements": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": [
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json",
+        "evidence/load-test-2026-08-28.json"
+      ],
+      "security": [
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/security-review-2026-08-29.md",
+        "evidence/dependency-scan-2026-08-30.json",
+        "evidence/security-review-2026-08-29.md"
+      ],
+      "reliability": [
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json",
+        "evidence/reliability-2026-08.json"
+      ],
+      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+    },
+    "fabricated": [],
+    "groundedCriteria": {
+      "hits": 17,
+      "total": 17
+    },
+    "ungroundedCitations": [],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

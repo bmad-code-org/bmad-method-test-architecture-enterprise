@@ -733,6 +733,7 @@ async function validateCorpus(groundTruth) {
 
   const seenSetIds = new Set();
   const seenProjectRoots = new Set();
+  const seenCriterionNames = new Set();
   let undecidableTotal = 0;
   for (const set of groundTruth.fixtureSets) {
     const label = `fixtureSets[${set.id || '(no id)'}]`;
@@ -845,6 +846,12 @@ async function validateCorpus(groundTruth) {
         problems.push(`${domainLabel}: declares no criteria, so the declared status rolls up from nothing`);
         continue;
       }
+      // scoreRun matches a report's criterion heading to one of these names after
+      // stripCriterionAnnotation strips both sides, so two declared criteria that
+      // strip to the same name would share one citation list in scoreRun with
+      // nothing to tell them apart; caught here, at the one place both names are
+      // in hand together, rather than left to surface as moved replay numbers.
+      const strippedNames = new Map();
       for (const criterion of criteria) {
         if (!STATUSES.has(criterion.expectedStatus)) {
           problems.push(`${domainLabel}: criterion "${criterion.name}" has status "${criterion.expectedStatus}"`);
@@ -859,6 +866,16 @@ async function validateCorpus(groundTruth) {
         if (criterion.expectedStatus === 'PASS' && (criterion.evidence ?? []).length === 0) {
           problems.push(`${domainLabel}: criterion "${criterion.name}" expects PASS and cites no evidence`);
         }
+        const strippedName = stripCriterionAnnotation(String(criterion.name ?? ''));
+        if (strippedNames.has(strippedName)) {
+          problems.push(
+            `${domainLabel}: criteria "${strippedNames.get(strippedName)}" and "${criterion.name}" both strip to "${strippedName}", ` +
+              'and scoreRun would share one citation list between them',
+          );
+        } else {
+          strippedNames.set(strippedName, criterion.name);
+        }
+        if (typeof criterion.name === 'string') seenCriterionNames.add(criterion.name);
       }
       const rolled = rollupStatus(criteria.map((criterion) => criterion.expectedStatus));
       if (rolled !== domain.expectedStatus) {
@@ -877,6 +894,19 @@ async function validateCorpus(groundTruth) {
     if (set.expectedUnknownThresholdDeclared !== anyUnstated) {
       problems.push(
         `${label}: expectedUnknownThresholdDeclared is ${set.expectedUnknownThresholdDeclared} and ${anyUnstated ? 'a domain states no threshold' : 'every domain states its threshold'}`,
+      );
+    }
+  }
+
+  // CRITERION_BULLET_ALIASES's two targets are literals in eval-nfr.js, not read
+  // from ground-truth.json, so a rename there would otherwise surface only
+  // indirectly, as a moved replay number with no named cause. Checked once,
+  // against every criterion name declared anywhere in the corpus, since the
+  // aliases are parser-wide rather than scoped to one bundle.
+  for (const target of CRITERION_BULLET_ALIASES.values()) {
+    if (!seenCriterionNames.has(target)) {
+      problems.push(
+        `CRITERION_BULLET_ALIASES names "${target}" as a bullet alias target, and no criterion in ground-truth.json is named that`,
       );
     }
   }
@@ -1251,14 +1281,17 @@ const CRITERION_BULLET = /^\s*[-*+]\s+\*\*([^*]+)\*\*\s*$/;
  * headings whose ground-truth name carries no such suffix at all, next to
  * `CI Burn-In (Stability)` against `CI Burn-In`, which is the one case the
  * stored corpus alone had shown. A per-string alias table sized to the stored
- * corpus would have missed three of those four; stripping one trailing
- * `(...)` annotation is what a name written for a human, decorated for a
- * human, actually needs. `Response Time (p95)` and `Availability (Uptime)`
- * carry their parenthetical as part of the canonical name itself, which is
- * why `scoreRun` strips it from both sides rather than only from the report's.
+ * corpus would have missed three of those four; stripping every trailing
+ * `(...)` annotation, not just the last one, is what a name written for a
+ * human, decorated for a human, actually needs: a heading chaining two, `MTTR
+ * (Mean Time To Recovery) (revised)`, defeats a single strip the same way an
+ * un-stripped one defeats none. `Response Time (p95)` and `Availability
+ * (Uptime)` carry their one parenthetical as part of the canonical name
+ * itself, which is why `scoreRun` strips it from both sides rather than only
+ * from the report's.
  */
 function stripCriterionAnnotation(text) {
-  return text.replace(/\s*\([^()]*\)\s*$/, '').trim();
+  return text.replace(/(?:\s*\([^()]*\))+\s*$/, '').trim();
 }
 
 /**
@@ -1271,11 +1304,19 @@ function stripCriterionAnnotation(text) {
  * absent: ground truth declares one Disaster Recovery criterion, not two, so
  * a report writing those bullets keeps citing under the heading above them,
  * which is what leaving them out of this table does.
+ *
+ * Looked up case-insensitively and with a trailing colon stripped
+ * (`normalizeBulletKey`), since `**CPU Usage:**` and `**cpu usage**` name the
+ * same bullet a live model could write either of and `stripCriterionAnnotation`
+ * strips neither on its own.
  */
-const CRITERION_BULLET_ALIASES = new Map([
-  ['CPU Usage', 'Resource Usage: CPU'],
-  ['Memory Usage', 'Resource Usage: Memory'],
-]);
+const normalizeBulletKey = (name) => name.replace(/:\s*$/, '').trim().toLowerCase();
+const CRITERION_BULLET_ALIASES = new Map(
+  [
+    ['CPU Usage', 'Resource Usage: CPU'],
+    ['Memory Usage', 'Resource Usage: Memory'],
+  ].map(([key, value]) => [normalizeBulletKey(key), value]),
+);
 
 /**
  * The gate block that carries the four domain statuses, and the lines under it.
@@ -1452,11 +1493,19 @@ function parseReport(text) {
       if (EVIDENCE_GAPS_HEADING.test(line.trim())) {
         inGaps = true;
         gapsDepth = depth;
-      } else if (currentDomain !== null) {
-        // Any other heading nested under a domain's own is the next criterion:
-        // `depth <= currentDepth` above would already have cleared currentDomain
-        // for a heading that is not nested under it. Stored as written: matching
-        // it against a ground-truth criterion name is scoreRun's job, not this
+      } else if (currentDomain !== null && depth === currentDepth + 1) {
+        // Exactly one level under the domain's own heading is the next
+        // criterion: `depth <= currentDepth` above would already have cleared
+        // currentDomain for a heading that is not nested under it, and a
+        // heading nested deeper than one level (a model's own aside inside a
+        // criterion, `#### Root Cause Note` under `### Fault Tolerance`) is
+        // left alone rather than promoted, so it cannot silently steal the
+        // still-open criterion's later citations. `currentDepth` never moves
+        // off the domain's own depth, so this is a fixed one-level test, not
+        // a running one; nfr-report-template.md gives every criterion exactly
+        // one level under its domain, and no live calibration run has ever
+        // written one any other depth. Stored as written: matching it against
+        // a ground-truth criterion name is scoreRun's job, not this
         // ground-truth-blind parser's, and stripCriterionAnnotation is what it
         // uses to do that.
         const heading = CRITERION_HEADING.exec(line.trim());
@@ -1485,9 +1534,9 @@ function parseReport(text) {
     // whatever heading is still open, which is correct because ground truth
     // declares no separate criterion for either.
     const bullet = CRITERION_BULLET.exec(line);
-    const bulletName = bullet ? stripCriterionAnnotation(bullet[1]) : null;
-    if (bulletName !== null && CRITERION_BULLET_ALIASES.has(bulletName)) {
-      currentCriterion = CRITERION_BULLET_ALIASES.get(bulletName);
+    const bulletKey = bullet ? normalizeBulletKey(stripCriterionAnnotation(bullet[1])) : null;
+    if (bulletKey !== null && CRITERION_BULLET_ALIASES.has(bulletKey)) {
+      currentCriterion = CRITERION_BULLET_ALIASES.get(bulletKey);
     }
     const status = STATUS_LINE.exec(line);
     if (status) entry.statuses.push(status[1].toUpperCase());
@@ -1843,9 +1892,15 @@ function scoreRun(set, report) {
       const real = cited.filter((file) => known.has(path.basename(file)));
       if (real.length === 0) continue;
       groundedCriteriaTotal += 1;
-      const grounded = real.some((file) => criterion.evidence.some((declared) => path.basename(declared) === path.basename(file)));
-      if (grounded) groundedCriteriaHits += 1;
-      else ungroundedCitations.push(`${domainName}: ${criterion.name} -> ${real.join(', ')}`);
+      // Every real citation has to match, not just one of them: a criterion
+      // cited with both the right file and an extra real-but-wrong one is not
+      // grounded, because the wrong file is still a citation of a real but
+      // irrelevant file, exactly what AC1 says cannot read as grounding. Only
+      // the mismatched file(s) are named below; the correct one alongside them
+      // is not a finding.
+      const mismatched = real.filter((file) => !criterion.evidence.some((declared) => path.basename(declared) === path.basename(file)));
+      if (mismatched.length === 0) groundedCriteriaHits += 1;
+      else ungroundedCitations.push(`${domainName}: ${criterion.name} -> ${mismatched.join(', ')}`);
     }
   }
 
