@@ -251,6 +251,9 @@ jobs:
       - name: Prove the multi-turn transcript engine drives a session and catches a contradiction
         run: npm run test:transcript-harness
 
+      - name: Prove the deferred-declaration gate fails on an unaccounted skill and passes when the array is empty
+        run: npm run test:suite-manifest
+
       - name: Prove the teach-me-testing scoring functions fail on a violation and pass on a consistent case
         run: npm run test:teach-me-testing-scoring
 
