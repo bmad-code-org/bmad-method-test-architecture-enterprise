@@ -32,7 +32,10 @@ const { EVAL_TYPES, CI_TIERS, RUNNER_CAPABILITIES } = require('./suite-manifest'
 // discharges no skill's coverage obligation and so names none; every other
 // evalType still must name at least one, held by the schema's own superRefine
 // rather than by `.min(1)` alone.
-const SCHEMA_VERSION = '1.2.0';
+// 1.3.0 added `evalQualityVersion` to the run summary, so a stored run names the
+// installed `eval-quality` it was measured against instead of leaving a reader
+// to infer it from the commit alone.
+const SCHEMA_VERSION = '1.3.0';
 
 /**
  * Failure classes in ascending severity. `worstFailureClass` picks the highest
@@ -217,6 +220,12 @@ const evalRunSchema = z
     kind: z.literal('run-summary'),
     generatedAt: z.string().datetime(),
     repository: repositorySchema,
+    // The installed `eval-quality` every suite below was scored against, read
+    // from its own `VERSION` export rather than declared by a caller: a stored
+    // run this old field cannot answer "is this the same eval-quality that
+    // scored the earlier run I am comparing it with", which is exactly the
+    // question a drift comparison across an upgrade has to ask first.
+    evalQualityVersion: nonEmptyString,
     suites: z.array(evalResultSchema),
     // Skills with neither a behavioral suite nor a deferred declaration. A
     // non-empty list is an environment failure, not a finding to read past.

@@ -177,6 +177,7 @@ const { fenceDepths, stripFencedCodeBlocks } = require('../cli/lib/parse-report'
 const { failureClassForExit } = require('../cli/nfr-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const { contractVersionsFor } = require('./lib/contract-versions');
 const {
   digest,
   digestFiles,
@@ -2258,6 +2259,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
         runners,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
+        contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
       }),
     );
     console.log(`${colors.dim}result written to ${options.jsonPath}${colors.reset}`);

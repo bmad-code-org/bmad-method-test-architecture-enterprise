@@ -179,6 +179,7 @@ const { AGENT_ADAPTERS, resolveModel } = require('../cli/lib/agent-adapters');
 const { failureClassForExit } = require('../cli/trace-runner');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const { contractVersionsFor } = require('./lib/contract-versions');
 const { UNRESOLVABLE_MEMBER, loadCorpus } = require('./lib/corpus-port');
 const { readJson, readText, writeText } = require('./lib/file-system-port');
 const {
@@ -2264,6 +2265,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
         runners,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
+        contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
       }),
     );
     console.log(`${colors.dim}result written to ${options.jsonPath}${colors.reset}`);

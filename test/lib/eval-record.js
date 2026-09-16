@@ -30,6 +30,14 @@ const { createHash } = require('node:crypto');
 const { boundedProbe } = require('./bounded-probe');
 const { readBytes, writeText } = require('./file-system-port');
 
+// `require(esm)` is stable on every Node the engines field admits (>= 22.20.0);
+// see test/lib/eval-quality-inputs.js for the same reasoning applied to the
+// package's schema-version constants. Unguarded on purpose: `runSummaryRecord`
+// cannot honestly stamp `evalQualityVersion` without it, and a run that cannot
+// even resolve its own scoring package is not one that should keep going far
+// enough to write a record that omits the fact.
+const { VERSION: EVAL_QUALITY_VERSION } = require('eval-quality');
+
 const {
   validateEvalResult,
   validateEvalRun,
@@ -301,6 +309,11 @@ function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, 
     kind: 'run-summary',
     generatedAt,
     repository,
+    // The installed `eval-quality`'s own version, not a caller-supplied argument:
+    // every suite in `suites` was already scored against this exact install, so
+    // asking a caller to pass it back in would only invite the two from
+    // disagreeing.
+    evalQualityVersion: EVAL_QUALITY_VERSION,
     suites,
     unaccountedSkills,
     durationMs,

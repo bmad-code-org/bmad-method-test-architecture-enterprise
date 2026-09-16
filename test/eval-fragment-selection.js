@@ -111,6 +111,7 @@ const { failureClassForExit } = require('../cli/fragment-selection-runner');
 const { parseSelection } = require('../cli/lib/parse-selection');
 const { missingCredential } = require('./eval-test-review');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const { contractVersionsFor } = require('./lib/contract-versions');
 const {
   digest,
   digestFiles,
@@ -555,6 +556,7 @@ async function finish({ options, startedAt, mode, suites, runners, suiteFailureC
         runners,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
+        contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
       }),
     );
     console.log(`${colors.dim}result written to ${options.jsonPath}${colors.reset}`);

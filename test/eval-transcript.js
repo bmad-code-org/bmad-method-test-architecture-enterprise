@@ -86,6 +86,7 @@ const { AGENT_ADAPTERS } = require('../cli/lib/agent-adapters');
 const { failureClassForExit } = require('../cli/transcript-runner');
 const { runTranscript } = require('./lib/transcript-harness');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
+const { contractVersionsFor } = require('./lib/contract-versions');
 const { digestFiles, repositoryState, probeVersion, measured, suiteResultRecord, writeSuiteResult } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
@@ -496,6 +497,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         runners,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
+        contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
       }),
     );
     console.log(`${colors.dim}result written to ${options.jsonPath}${colors.reset}`);
