@@ -100,7 +100,7 @@ const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'eva
 if (!Array.isArray(manifest.deferred)) refuse('suite-manifest.json has no "deferred" array');
 const deferredSkills = new Set(manifest.deferred.map((entry) => entry.skill));
 
-/** docs/explanation/eval-quality-roadmap.md:182, "The remaining two ... stay visible ... as deferred work." */
+/** docs/explanation/eval-quality-roadmap.md:179, "The remaining two behavioral suites stay visible in ... deferred array." */
 exports.TWO_SKILLS_DEFERRED = deferredSkills.size === 2;
 
 /** docs/explanation/eval-quality-adoption-guide.md:385, "one of the eight skills fragment selection spans is still listed as deferred." */
@@ -110,7 +110,7 @@ const fragmentSelectionSkills = fragmentSelectionSuite.skills ?? [];
 if (fragmentSelectionSkills.length === 0) refuse('the fragment-selection suite names no skills');
 exports.ONE_FRAGMENT_SELECTION_SKILL_DEFERRED = fragmentSelectionSkills.filter((skill) => deferredSkills.has(skill)).length === 1;
 
-/** docs/explanation/eval-quality-roadmap.md:10, "It does not yet prove the complete behavior of every TEA skill." */
+/** docs/explanation/eval-quality-roadmap.md:10, "It does not yet prove the complete behavior of `bmad-teach-me-testing` or `bmad-testarch-framework`." */
 exports.NOT_EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE = deferredSkills.size > 0;
 
 /**
@@ -156,14 +156,14 @@ function atLeast(version, floor) {
 exports.atLeast = atLeast;
 exports.EVAL_QUALITY_AT_LEAST_1_4_0 = atLeast(evalQualityVersion, '1.4.0');
 
-/** docs/explanation/eval-quality-roadmap.md:170, "Every harness probes through the port as of `eval-quality` 1.2.0." */
+/** docs/explanation/eval-quality-roadmap.md:170, "Every harness has probed through the port as of `eval-quality` 1.2.0." */
 exports.EVAL_QUALITY_AT_LEAST_1_2_0 = atLeast(evalQualityVersion, '1.2.0');
 
-/** docs/explanation/eval-quality-roadmap.md:170, "every authorization has declared which environment keys its requests may carry since 3.0.0." */
+/** docs/explanation/eval-quality-roadmap.md:172, "every authorization has declared which environment keys its requests may carry since 3.0.0." */
 exports.EVAL_QUALITY_AT_LEAST_3_0_0 = atLeast(evalQualityVersion, '3.0.0');
 
 /**
- * docs/explanation/eval-quality-roadmap.md:173, "The pin is 3.4.0 now." Unlike
+ * docs/explanation/eval-quality-roadmap.md:171, "The pin is 3.4.0 now." Unlike
  * the `>=` checks above, this is an exact-point-in-time claim about the pin
  * itself, so it is written to go stale the moment the pin moves again; that is
  * the correct behavior for a sentence stating a specific current version

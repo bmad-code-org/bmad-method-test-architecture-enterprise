@@ -477,6 +477,10 @@
           "reason": "an eval-quality package export, not a TEA declaration"
         },
         {
+          "token": "compareDominance",
+          "reason": "an eval-quality package export, not a TEA declaration"
+        },
+        {
           "token": "digestArtifact",
           "reason": "an eval-quality package export, not a TEA declaration"
         },
@@ -1168,7 +1172,7 @@
     "dated": {
       "triggers": [
         {
-          "match": "stay visible in the manifest as deferred work"
+          "match": "The remaining two behavioral suites stay visible in"
         },
         {
           "match": "still listed as deferred"
@@ -1212,7 +1216,7 @@
       "claims": [
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "stay visible in the manifest as deferred work",
+          "key": "The remaining two behavioral suites stay visible in",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "TWO_SKILLS_DEFERRED"
@@ -1345,7 +1349,7 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "does not yet prove the complete behavior of every TEA skill",
+          "key": "does not yet prove the complete behavior of",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "NOT_EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE"
