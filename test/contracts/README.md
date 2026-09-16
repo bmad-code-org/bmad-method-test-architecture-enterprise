@@ -373,8 +373,8 @@ deterministic gate stays credential-free and runs with no network. It used to sk
 package printed a yellow "skipped" and exited 0, which is a green check over fifteen contracts
 nobody looked at, and it was the only check in this repository that answered an absent package with
 a pass. An unresolvable package now exits 2 and says how many contracts went unchecked, and so does
-a tree resolving an `eval-quality` other than the version `package.json` pins, since fourteen
-contracts compiled against the wrong release are fourteen results about a package this repository
+a tree resolving an `eval-quality` other than the version `package.json` pins, since sixteen
+contracts compiled against the wrong release are sixteen results about a package this repository
 does not declare. To run this against an unreleased build, `npm link` it (or install its packed
 tarball) so `node_modules/eval-quality` resolves to it, then run the check with no flags: there is no
 path-override flag here, since an arbitrary path cannot be the literal `import()` specifier
