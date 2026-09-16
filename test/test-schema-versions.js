@@ -263,10 +263,14 @@ function main() {
     if (found.length === 0) held(`${rel} carries schemaVersion ${expected['eval-contract']}`);
   }
 
-  // The scoring policy, the one hand-authored stamp.
+  // The scoring policy, the one hand-authored stamp. Read directly rather than
+  // through `inputs.scoringPolicy()`, which is asynchronous now that it goes
+  // through the file-system port: this file already reads every other
+  // committed artifact directly, for the same reason it reads the package's
+  // constants directly rather than through the module under test.
   {
     const rel = relative(POLICY_PATH);
-    const found = schemaVersionProblems('scoring-policy', inputs.scoringPolicy());
+    const found = schemaVersionProblems('scoring-policy', JSON.parse(fs.readFileSync(POLICY_PATH, 'utf8')));
     for (const message of found) problem(`${rel}: ${message}`);
     if (found.length === 0) held(`${rel} carries schemaVersion ${expected['scoring-policy']}`);
   }
