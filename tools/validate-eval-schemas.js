@@ -86,6 +86,7 @@ const HARNESS_LOADERS = {
   'test/eval-framework-scaffold.js': () => require('../test/eval-framework-scaffold.js'),
   'test/eval-nfr.js': () => require('../test/eval-nfr.js'),
   'test/eval-test-design.js': () => require('../test/eval-test-design.js'),
+  'test/eval-teach-me-testing.js': () => require('../test/eval-teach-me-testing.js'),
   'test/eval-test-review.js': () => require('../test/eval-test-review.js'),
   'test/eval-trace.js': () => require('../test/eval-trace.js'),
   'test/eval-transcript.js': () => require('../test/eval-transcript.js'),
