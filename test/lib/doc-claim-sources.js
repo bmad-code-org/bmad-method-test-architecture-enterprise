@@ -144,6 +144,9 @@ function atLeast(version, floor) {
 exports.atLeast = atLeast;
 exports.EVAL_QUALITY_AT_LEAST_1_4_0 = atLeast(evalQualityVersion, '1.4.0');
 
+/** docs/explanation/eval-quality-roadmap.md:170, "Every harness probes through the port as of `eval-quality` 1.2.0." */
+exports.EVAL_QUALITY_AT_LEAST_1_2_0 = atLeast(evalQualityVersion, '1.2.0');
+
 /** docs/explanation/eval-quality-roadmap.md:170, "every authorization has declared which environment keys its requests may carry since 3.0.0." */
 exports.EVAL_QUALITY_AT_LEAST_3_0_0 = atLeast(evalQualityVersion, '3.0.0');
 
@@ -185,14 +188,21 @@ const promptedKeys = Object.keys(moduleYaml).filter(
  * claim exists to catch.
  */
 const moduleYamlLines = moduleYamlText.split('\n');
-const TOP_LEVEL_KEY = /^([A-Za-z_][A-Za-z0-9_]*):/;
+// Any top-level YAML scalar key, not just the underscore-only shape a prompted
+// variable happens to use: a hyphenated key such as `post-install-notes:` is a
+// real group boundary too, and matching only `[A-Za-z0-9_]*` let the scan miss
+// it and tunnel through everything nested under it on the (incidental, and
+// therefore fragile) hope that nothing in between coincidentally matched the
+// narrower shape either.
+const TOP_LEVEL_KEY = /^([A-Za-z_][A-Za-z0-9_-]*):/;
 const FUTURE_KEYS = [];
 for (const [index, line] of moduleYamlLines.entries()) {
   if (!/⏭️\s*FUTURE/.test(line)) continue;
   // A marker's comment names one group ("Test output folders"), which can cover
   // several consecutive prompted variables, not only the first key line after
-  // it; the group ends at the first following top-level key that is not itself
-  // a prompted variable (a non-prompted section, or the next marker's own key).
+  // it; the group ends explicitly at the first following top-level key line
+  // (matched with no restriction on which characters that key spells), not
+  // merely at whichever line the scan's own regex happens to notice.
   let named = 0;
   for (const candidate of moduleYamlLines.slice(index + 1)) {
     if (/⏭️\s*FUTURE/.test(candidate)) break;
@@ -217,13 +227,27 @@ exports.FUTURE_KEYS = FUTURE_KEYS;
  * "this key is genuinely referenced nowhere" a claim about the whole codebase
  * rather than about one reference style.
  */
+// `keyIsUnread` is called once per candidate key below, up to eight times in
+// this module load (`RISK_THRESHOLD_UNREAD`, three calls folded into
+// `OUTPUT_FOLDER_KEYS_UNREAD`, four folded into `FOUR_FUTURE_KEYS_UNREAD`).
+// Walking every file under `src/workflows` from disk on each call multiplies
+// that cost by eight for no reason: the tree does not change mid-load, so the
+// walk and every file's contents are read once and reused.
+let workflowFileBodies = null;
+function readWorkflowFileBodies() {
+  if (workflowFileBodies === null) {
+    const workflowsRoot = path.join(PROJECT_ROOT, 'src', 'workflows');
+    workflowFileBodies = fs
+      .readdirSync(workflowsRoot, { recursive: true })
+      .filter((name) => fs.statSync(path.join(workflowsRoot, name)).isFile())
+      .map((name) => fs.readFileSync(path.join(workflowsRoot, name), 'utf8'));
+  }
+  return workflowFileBodies;
+}
+
 function keyIsUnread(key) {
   const wordBoundary = new RegExp(`\\b${key}\\b`);
-  const workflowsRoot = path.join(PROJECT_ROOT, 'src', 'workflows');
-  return !fs
-    .readdirSync(workflowsRoot, { recursive: true })
-    .filter((name) => fs.statSync(path.join(workflowsRoot, name)).isFile())
-    .some((name) => wordBoundary.test(fs.readFileSync(path.join(workflowsRoot, name), 'utf8')));
+  return !readWorkflowFileBodies().some((body) => wordBoundary.test(body));
 }
 
 exports.RISK_THRESHOLD_UNREAD = keyIsUnread('risk_threshold');

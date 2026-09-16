@@ -305,7 +305,7 @@
   },
   "doc-claims-omitted-classes": {
     "$comment": "Not read by any gate; each gate reads only its own top-level key, so this is a place to record a deliberate non-adoption without it being validated as part of the doc-claims section itself.",
-    "citations": "Deliberately unadopted. Zero path:line style references exist anywhere in the scanned pages today, and this class's own refusal rule (a class examining zero sentences fails to load) means declaring it empty is not an option either. A citation added to a page later is invisible to this gate until someone notices and configures the class for real.",
+    "citations": "Deliberately unadopted. Eight path:line-shaped strings exist in the scanned pages today (docs/how-to/workflows/run-test-review.md and run-trace.md's worked examples, e.g. `tests/e2e/checkout.spec.ts:45`), but every one names a fixture file in the hypothetical user project those walkthroughs describe, not a line in TEA's own cli/, tools/, or test/lib/ sources this class would resolve citations against; none is a real citation into this repository's code, so the class's own refusal rule (a class examining zero real citations fails to load) still blocks adopting it as configured today. A citation naming TEA's own source added to a page later is invisible to this gate until someone notices and configures the class for real.",
     "vocabulary": "Deliberately unadopted. Every candidate accept/refuse pair found needs either a custom verbs.accepts/refuses list or reworded prose to produce a real accept/refuse-governed sentence under the gate's verb-governance heuristic, and configuring one on a guess is exactly the false-green risk this gate exists to avoid.",
     "transcriptions": "Deliberately unadopted. Every STRONG candidate found is either a bare number (doc-counts territory once that gate exists here) or a fenced bash-invocation block (doc-invocations territory, Story 4.3), not a byte-for-byte literal string block TEA's own code emits."
   },
@@ -1045,22 +1045,7 @@
           "match": "the \\d+ CONCERNS the stored corpus scores"
         },
         {
-          "match": "as of 1\\.4\\.0"
-        },
-        {
-          "match": "\\bcurrently mapped\\b"
-        },
-        {
-          "match": "\\bcurrently emits\\b"
-        },
-        {
-          "match": "no plugin API for execution targets today"
-        },
-        {
           "match": "never been run live"
-        },
-        {
-          "match": "not yet read by any workflow"
         },
         {
           "match": "nothing reads yet"
@@ -1083,6 +1068,13 @@
         {
           "match": "\\btoday\\b",
           "flags": "i"
+        },
+        {
+          "match": "the pin is \\d+\\.\\d+\\.\\d+ now",
+          "flags": "i"
+        },
+        {
+          "match": "\\bsince \\d+\\.\\d+\\.\\d+\\b"
         }
       ],
       "claims": [
@@ -1232,12 +1224,30 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "the pin is 3.2.0 now",
+          "key": "The pin is 3.2.0 now",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "EVAL_QUALITY_PIN_IS_3_2_0"
           },
           "reason": "package.json's eval-quality devDependency, compared for an exact match"
+        },
+        {
+          "file": "docs/explanation/eval-quality-roadmap.md",
+          "key": "as of `eval-quality` 1.2.0",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "EVAL_QUALITY_AT_LEAST_1_2_0"
+          },
+          "reason": "the eval-quality pin in package.json, compared >= 1.2.0"
+        },
+        {
+          "file": "docs/explanation/eval-quality-roadmap.md",
+          "key": "may carry since 3.0.0",
+          "settles": {
+            "module": "test/lib/doc-claim-sources.js",
+            "export": "EVAL_QUALITY_AT_LEAST_3_0_0"
+          },
+          "reason": "the eval-quality pin in package.json, compared >= 3.0.0"
         },
         {
           "file": "docs/explanation/verification-architecture.md",

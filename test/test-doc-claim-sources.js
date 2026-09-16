@@ -37,7 +37,6 @@ function check(name, fn) {
 }
 
 const source = require('./lib/doc-claim-sources.js');
-const { parseRegistryRows } = require('../tools/validate-criteria-fragments.js');
 const { EXIT, VERDICT_KEYS, SKIP_KEYS } = require('../cli/test-review.js');
 const { RECOMMENDATION_ENUM } = require('../cli/lib/parse-report.js');
 
@@ -46,15 +45,43 @@ check('RECOMMENDATION_ENUM is re-exported unchanged from cli/lib/parse-report.js
 });
 
 check('MOBILE_ROW_IDS and PLAYWRIGHT_UTILS_ROW_IDS match an independent read of criteria-registry.md', () => {
-  const rows = parseRegistryRows();
-  assert.deepStrictEqual(
-    source.MOBILE_ROW_IDS,
-    rows.filter((row) => row.gate.includes('Maestro flow')).map((row) => row.id),
+  // Independent of tools/validate-criteria-fragments.js's parseRegistryRows():
+  // this re-derives the same two lists from the raw table text with its own
+  // pipe-splitting rather than calling the shared parser back with the same
+  // predicate strings production already uses, which would prove only that
+  // calling one function twice is deterministic, not that the parser or the
+  // predicate itself reads the right column.
+  const registryPath = path.join(
+    __dirname,
+    '..',
+    'src',
+    'workflows',
+    'testarch',
+    'bmad-testarch-test-review',
+    'steps-c',
+    'criteria-registry.md',
   );
-  assert.deepStrictEqual(
-    source.PLAYWRIGHT_UTILS_ROW_IDS,
-    rows.filter((row) => row.gate.includes('playwrightUtils')).map((row) => row.id),
-  );
+  const mobileIds = [];
+  const playwrightUtilsIds = [];
+  for (const line of fs.readFileSync(registryPath, 'utf8').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('|')) continue;
+    const cells = trimmed
+      .replace(/^\|/, '')
+      .replace(/\|$/, '')
+      .split('|')
+      .map((cell) => cell.trim());
+    if (cells.length < 5) continue;
+    const id = cells[0];
+    if (!/^[CHML]\d+$/.test(id)) continue;
+    const gate = cells.at(-1);
+    if (gate.includes('Maestro flow')) mobileIds.push(id);
+    if (gate.includes('playwrightUtils')) playwrightUtilsIds.push(id);
+  }
+  assert.ok(mobileIds.length > 0, 'fixture setup: expected at least one Maestro-flow row in criteria-registry.md');
+  assert.ok(playwrightUtilsIds.length > 0, 'fixture setup: expected at least one playwrightUtils row in criteria-registry.md');
+  assert.deepStrictEqual(source.MOBILE_ROW_IDS, mobileIds);
+  assert.deepStrictEqual(source.PLAYWRIGHT_UTILS_ROW_IDS, playwrightUtilsIds);
 });
 
 check('EXIT_CODE_STRINGS is every EXIT value from cli/test-review.js, stringified', () => {
