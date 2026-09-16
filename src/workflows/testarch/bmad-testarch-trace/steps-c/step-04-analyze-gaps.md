@@ -697,7 +697,7 @@ Step 5 reads `tempCoverageMatrixPath` from the frontmatter first; falls back to 
 
 ### 7. Display Phase 1 Summary
 
-```
+```text
 ✅ Phase 1 Complete: Coverage Matrix Generated
 
 📊 Coverage Statistics:
@@ -761,7 +761,7 @@ If `resolvedMode` is `sequential`, execute sections 1→7 in order.
 - ✅ Coverage matrix saved to temp file
 - ✅ Summary displayed
 
-**Proceed to Phase 2 (Step 5: Gate Decision)**
+**Proceed to Phase 2 (Step 5: Gate Decision).**
 
 ---
 

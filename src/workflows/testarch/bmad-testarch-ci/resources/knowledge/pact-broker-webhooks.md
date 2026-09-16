@@ -233,42 +233,42 @@ jobs:
 
 ### Wrong: Using a human's personal PAT
 
-```
+```text
 # ❌ PactFlow secret githubToken stores the lead engineer's personal classic PAT
 # When they leave / rotate / revoke → all provider verifications stop silently
 ```
 
 ### Right: Dedicated machine user owns the PAT
 
-```
+```text
 # ✅ Machine user `pactflow-<org>` generates the PAT; secret is owned by the org
 # PAT lifecycle is decoupled from any individual's employment or laptop state
 ```
 
 ### Wrong: No staleness monitoring
 
-```
+```text
 # ❌ No scheduled check for verification recency
 # First signal that the webhook is dead: a blocked release PR, several days later
 ```
 
 ### Right: Daily scheduled sanity check
 
-```
+```text
 # ✅ Scheduled workflow fails if latest verification > 24h old
 # Team gets email alert on failed scheduled run → rotate PAT before anyone is blocked
 ```
 
 ### Wrong: Short-expiration PAT with no rotation tooling
 
-```
+```text
 # ❌ 90-day expiry PAT, no calendar reminder, no runbook
 # Breaks every 90 days for a day or two until someone notices
 ```
 
 ### Right: No-expiration PAT on machine user + monitoring + documented runbook
 
-```
+```text
 # ✅ Long-lived PAT, scoped narrowly, stored in PactFlow, monitored for staleness
 # Rotation is intentional (security review, suspected leak) not calendar-driven
 ```

@@ -115,7 +115,7 @@ e2eTestsOutput.tests.forEach((test) => {
 
 **If validation passes:**
 
-```
+```text
 ✅ TDD Red Phase Validation: PASS
 - All tests use test.skip()
 - All tests assert expected behavior (not placeholders)
@@ -324,7 +324,7 @@ fs.writeFileSync('/tmp/tea-atdd-summary-{{timestamp}}.json', JSON.stringify(summ
 
 Display to user:
 
-```
+```text
 ✅ ATDD Test Generation Complete (TDD RED PHASE)
 
 🔴 TDD Red Phase: Test Scaffolds Generated

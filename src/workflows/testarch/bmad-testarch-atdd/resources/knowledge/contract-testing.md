@@ -1108,4 +1108,4 @@ Provider suites require the same `pool: 'forks'` + `singleFork: true` combinatio
 
 When `can-i-deploy` in a consumer repo times out with `There is no verified pact between <consumer> and the version of <provider> currently in <env>` — check the provider's PactFlow webhook. Silent failures from an expired/revoked GitHub PAT are the most common non-code cause of this symptom. See `pact-broker-webhooks.md` for the dedicated-machine-user pattern, classic-PAT-with-`repo`-scope rationale, rotation runbook, and staleness monitoring options.
 
-_Source: Pact consumer/provider sample repos, Murat contract testing blog, Pact official documentation, @seontechnologies/pactjs-utils library_
+_Source: Pact consumer/provider sample repos, Murat contract testing blog, Pact official documentation, @seontechnologies/pactjs-utils library._

@@ -143,7 +143,7 @@ Full selection rules: [TEA Overview: Browser Automation](/docs/explanation/tea-o
 
 Even in `auto` mode, you can override per-request:
 
-```
+```text
 "Use the CLI to snapshot the login page"
 "Open MCP browser and walk through the checkout wizard"
 ```

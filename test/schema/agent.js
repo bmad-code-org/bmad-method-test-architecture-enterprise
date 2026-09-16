@@ -7,21 +7,6 @@ const TRIGGER_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const COMPOUND_TRIGGER_PATTERN = /^([A-Z]{1,3}) or fuzzy match on ([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 
 /**
- * Derive the expected shortcut from a kebab-case trigger.
- * - Single word: first letter (e.g., "help" → "H")
- * - Multi-word: first letter of first two words (e.g., "tech-spec" → "TS")
- * @param {string} kebabTrigger The kebab-case trigger name.
- * @returns {string} The expected uppercase shortcut.
- */
-function deriveShortcutFromKebab(kebabTrigger) {
-  const words = kebabTrigger.split('-');
-  if (words.length === 1) {
-    return words[0][0].toUpperCase();
-  }
-  return (words[0][0] + words[1][0]).toUpperCase();
-}
-
-/**
  * Parse and validate a compound trigger string.
  * Format: "<SHORTCUT> or fuzzy match on <kebab-case>"
  * @param {string} triggerValue The trigger string to parse.
@@ -44,13 +29,13 @@ function parseCompoundTrigger(triggerValue) {
  * Validate an agent YAML payload against the schema derived from its file location.
  * Exposed as the single public entry point, so callers do not reach into schema internals.
  *
- * @param {string} filePath Path to the agent file (used to infer module scope).
+ * @param {string} filePath Path to the agent file, asserted to live under `src/`.
  * @param {unknown} agentYaml Parsed YAML content.
  * @returns {import('zod').SafeParseReturnType<unknown, unknown>} SafeParse result.
  */
 function validateAgentFile(filePath, agentYaml) {
-  const expectedModule = deriveModuleFromPath(filePath);
-  const schema = agentSchema({ module: expectedModule });
+  deriveModuleFromPath(filePath);
+  const schema = agentSchema();
   return schema.safeParse(agentYaml);
 }
 
@@ -60,20 +45,14 @@ module.exports = { validateAgentFile };
 
 /**
  * Build a Zod schema for validating a single agent definition.
- * The schema is generated per call so module-scoped agents can pass their expected
- * module slug while core agents leave it undefined.
  *
- * @param {Object} [options]
- * @param {string|null|undefined} [options.module] Module slug for module agents; omit or null for core agents.
  * @returns {import('zod').ZodSchema} Configured Zod schema instance.
  */
-function agentSchema(options = {}) {
-  const expectedModule = normalizeModuleOption(options.module);
-
+function agentSchema() {
   return (
     z
       .object({
-        agent: buildAgentSchema(expectedModule),
+        agent: buildAgentSchema(),
       })
       .strict()
       // Refinement: enforce trigger format and uniqueness rules after structural checks.
@@ -199,13 +178,12 @@ function agentSchema(options = {}) {
 }
 
 /**
- * Assemble the full agent schema using the module expectation provided by the caller.
- * @param {string|null} expectedModule Trimmed module slug or null for core agents.
+ * Assemble the full agent schema.
  */
-function buildAgentSchema(expectedModule) {
+function buildAgentSchema() {
   return z
     .object({
-      metadata: buildMetadataSchema(expectedModule),
+      metadata: buildMetadataSchema(),
       persona: buildPersonaSchema(),
       critical_actions: z.array(createNonEmptyString('agent.critical_actions[]')).optional(),
       menu: z.array(buildMenuItemSchema()).min(1, { message: 'agent.menu must include at least one entry' }),
@@ -218,11 +196,10 @@ function buildAgentSchema(expectedModule) {
 }
 
 /**
- * Validate metadata shape.
- * @param {string|null} expectedModule Trimmed module slug or null when core agent metadata is expected.
- * Note: Module field is optional and can be any value - no validation against path.
+ * Validate metadata shape. The module field is optional and can be any
+ * value; it is not validated against the file's path.
  */
-function buildMetadataSchema(expectedModule) {
+function buildMetadataSchema() {
   const schemaShape = {
     id: createNonEmptyString('agent.metadata.id'),
     name: createNonEmptyString('agent.metadata.name'),
@@ -454,32 +431,16 @@ function buildMenuItemSchema() {
 }
 
 /**
- * Derive the expected module slug from a file path residing under src/<module>/agents/.
+ * Assert filePath has the shape validateAgentFile requires. No longer
+ * derives or returns a module slug: the path-vs-module validation that once
+ * consumed one was dead code and was removed, leaving only these assertions.
  * @param {string} filePath Absolute or relative agent path.
- * @returns {string|null} Module slug if identifiable, otherwise null.
+ * @returns {void}
  */
 function deriveModuleFromPath(filePath) {
   assert(filePath, 'validateAgentFile expects filePath to be provided');
   assert(typeof filePath === 'string', 'validateAgentFile expects filePath to be a string');
   assert(filePath.startsWith('src/'), 'validateAgentFile expects filePath to start with "src/"');
-
-  const marker = 'src/';
-  if (!filePath.startsWith(marker)) {
-    return null;
-  }
-
-  const remainder = filePath.slice(marker.length);
-  const slashIndex = remainder.indexOf('/');
-  return slashIndex === -1 ? null : remainder.slice(0, slashIndex);
-}
-
-function normalizeModuleOption(moduleOption) {
-  if (typeof moduleOption !== 'string') {
-    return null;
-  }
-
-  const trimmed = moduleOption.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 // Primitive validators -----------------------------------------------------

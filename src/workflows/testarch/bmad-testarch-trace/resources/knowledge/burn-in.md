@@ -136,7 +136,7 @@ jobs:
 
 **Scenario:**
 
-```
+```text
 Git diff finds: 21 changed files
 ├─ Step 1: Skip patterns filter
 │  Removed: 6 files (*.md, config/*, *types*)

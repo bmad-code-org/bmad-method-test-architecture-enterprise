@@ -20,11 +20,7 @@ const path = require('node:path');
 const DOCS_ROOT = path.resolve(__dirname, '../docs');
 const DRY_RUN = !process.argv.includes('--write');
 
-// Regex to match markdown links:
-// - [text](path.md) or [text](path.md#anchor) - existing .md links
-// - [text](/path/to/page/) or [text](/path/to/page/#anchor) - site-relative links to convert
-const MARKDOWN_LINK_REGEX = /\[([^\]]*)\]\(([^)]+(?:\.md|\/))(?:#[^)]*)?(?:\?[^)]*)?\)/g;
-// Simpler approach: match all markdown links and filter in the handler
+// Regex to match all markdown links; the handler filters which ones need rewriting.
 const ALL_MARKDOWN_LINKS_REGEX = /\[([^\]]*)\]\(([^)]+)\)/g;
 
 /**

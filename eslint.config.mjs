@@ -19,8 +19,10 @@ export default [
       // rule would otherwise flag, and several are deliberately malformed YAML
       // that a real run could produce, which no linter here should try to fix.
       'test/replay/ci/**',
+      // The BMAD runtime install directory: generated per project, never
+      // committed. _bmad-output/ is a sibling, not a match of this pattern:
+      // it holds this repository's own tracked planning artifacts.
       '_bmad/**',
-      '_bmad*/**',
       // Build output
       'build/**',
       // Website uses ESM/Astro - separate linting ecosystem
@@ -76,6 +78,10 @@ export default [
       // Relax some Unicorn rules that are too opinionated for this codebase
       'unicorn/prevent-abbreviations': 'off',
       'unicorn/no-null': 'off',
+      // `const { key, ...rest } = value` to drop one key from an object is a
+      // real pattern here (see test/lib/probe-scoring.js's stripComment and
+      // test/eval-contract-strength.js's requestKey), not an unused binding.
+      'no-unused-vars': ['error', { ignoreRestSiblings: true }],
     },
   },
 
@@ -83,6 +89,13 @@ export default [
   // framework workflow copies verbatim into a user's project. Those must stay
   // plain, dependency-free CommonJS that runs on whatever Node the project has,
   // so the same relaxations apply.
+  //
+  // no-undef and no-unreachable used to be suppressed here too. Both are
+  // correctness rules, not style, and this tree had zero violations of
+  // either the moment they were turned on: eslint-plugin-n's flat config
+  // already declares the Node globals these scripts use, so nothing here
+  // actually relied on the suppression. Reviewed and reactivated rather
+  // than left off (TEA Story 4.8).
   {
     files: ['cli/**/*.js', 'tools/**/*.js', 'tools/**/*.mjs', 'test/**/*.js', 'src/workflows/**/resources/hooks/*.cjs'],
     rules: {
@@ -93,8 +106,6 @@ export default [
       'n/no-process-exit': 'off',
       'unicorn/no-await-expression-member': 'off',
       'unicorn/prefer-top-level-await': 'off',
-      // Avoid failing CI on incidental unused vars in internal scripts
-      'no-unused-vars': 'off',
       // Reduce style-only churn in internal tools
       'unicorn/prefer-ternary': 'off',
       'unicorn/filename-case': 'off',
@@ -105,12 +116,9 @@ export default [
       'n/no-extraneous-import': 'off',
       'n/no-unpublished-require': 'off',
       'n/no-unpublished-import': 'off',
-      // Some scripts intentionally use globals provided at runtime
-      'no-undef': 'off',
       // Additional relaxed rules for legacy/internal scripts
       'no-useless-catch': 'off',
       'unicorn/prefer-number-properties': 'off',
-      'no-unreachable': 'off',
       'unicorn/text-encoding-identifier-case': 'off',
     },
   },

@@ -50,7 +50,7 @@ From the story acceptance criteria (Step 1 output), identify:
 
 **Example Acceptance Criteria:**
 
-```
+```text
 Story: User Registration
 - As a user, I can navigate to /register page
 - I can fill in email and password fields

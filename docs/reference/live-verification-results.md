@@ -74,7 +74,7 @@ The tables below distinguish **Enforced** fields, whose absence stops a record o
 
 ### Test-case ID format
 
-```
+```text
 {target}-LIVE-{NNN}
 ```
 

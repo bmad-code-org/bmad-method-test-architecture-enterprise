@@ -667,4 +667,4 @@ Before release gate:
   - **Reliability**: Playwright (E2E error handling), API tests (retries, health checks), Chaos Engineering tools
   - **Maintainability**: GitHub Actions (coverage, duplication, audit), jscpd, Playwright (observability validation)
 
-_Source: Test Architect course (NFR testing approaches, Utility Tree, Quality Scenarios), ISO/IEC 25010 Software Quality Characteristics, OWASP Top 10, k6 documentation, SRE practices_
+_Source: Test Architect course (NFR testing approaches, Utility Tree, Quality Scenarios), ISO/IEC 25010 Software Quality Characteristics, OWASP Top 10, k6 documentation, SRE practices._

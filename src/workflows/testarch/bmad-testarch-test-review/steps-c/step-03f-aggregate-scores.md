@@ -380,7 +380,7 @@ fs.writeFileSync(`/tmp/tea-test-review-summary-${timestamp}.json`, JSON.stringif
 
 ### 6. Display Summary to User
 
-```
+```text
 ✅ Quality Evaluation Complete (Parallel Execution)
 
 📊 Overall Quality Score: {roundedScore}/100 (Grade: {overallGrade})

@@ -14,7 +14,7 @@ average_score: 92
 
 ## Dana Whitfield's Learning Journey
 
-**Dana Whitfield completed the TEA Academy testing curriculum**
+**Dana Whitfield completed the TEA Academy testing curriculum.**
 
 ---
 

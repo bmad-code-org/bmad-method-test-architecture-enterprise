@@ -124,4 +124,4 @@ Run the full matrix nightly and on release candidates. Run the primary target on
 - **Related fragments**: `maestro-flows.md` (flow syntax and quality), `mobile-ci-device-lab.md` (build artifact selection, emulator caching, version pinning, per-device identity, failure diagnosis), `test-levels-framework.md` (the general level model this specializes), `probability-impact.md` (the scoring scale), `test-priorities-matrix.md` (P0-P3), `ci-burn-in.md` (burn-in and sharding mechanics), `feature-flags.md` (testing both flag states without a live provider)
 - **Tools**: `maestro test`, `maestro studio`, platform instrumentation (Xcode Instruments, Android Profiler, Firebase Performance)
 
-_Source: TEA test-levels framework applied to mobile constraints, Maestro CI practice, mobile risk categories from permissions/lifecycle/connectivity/fragmentation failure modes_
+_Source: TEA test-levels framework applied to mobile constraints, Maestro CI practice, mobile risk categories from permissions/lifecycle/connectivity/fragmentation failure modes._

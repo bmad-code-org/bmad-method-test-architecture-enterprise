@@ -183,12 +183,7 @@ const { parseSelection, scoreCase } = require('./eval-fragment-selection');
 const { readSummary, readMatrix, scoreRun, signatureOf } = require('./eval-trace');
 const { parseRouting } = require('../cli/lib/parse-routing');
 const { scoreCase: scoreRoutingCase, signatureOf: routingSignatureOf } = require('./eval-bmad-tea-routing');
-const {
-  readDesign: readTestDesign,
-  scoreRun: scoreTestDesignRun,
-  signatureOf: testDesignSignatureOf,
-  loadGroundTruth: loadTestDesignGroundTruth,
-} = require('./eval-test-design');
+const { readDesign: readTestDesign, scoreRun: scoreTestDesignRun, signatureOf: testDesignSignatureOf } = require('./eval-test-design');
 const {
   readReport: readNfrReport,
   scoreRun: scoreNfrRun,
@@ -202,7 +197,7 @@ const {
   scoreRun: scoreCiRun,
   signatureOf: ciSignatureOf,
 } = require('./eval-ci');
-const { loadGroundTruth: loadAtddGroundTruth, scoreRun: scoreAtddRun, signatureOf: atddSignatureOf } = require('./eval-atdd');
+const { scoreRun: scoreAtddRun, signatureOf: atddSignatureOf } = require('./eval-atdd');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');

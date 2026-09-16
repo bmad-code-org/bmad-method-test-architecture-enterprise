@@ -57,7 +57,7 @@ TEA will ask which NFR categories to audit.
 
 **Example Response:**
 
-```
+```text
 Assess:
 - Security (critical for user data)
 - Performance (API must be fast)
@@ -78,7 +78,7 @@ If you don't know the exact requirement, tell TEA to mark it as UNKNOWN/CONCERNS
 
 **Example:**
 
-```
+```text
 Requirements:
 - All endpoints require authentication: YES
 - Data encrypted at rest: YES (PostgreSQL TDE)
@@ -91,7 +91,7 @@ Requirements:
 
 **Example:**
 
-```
+```text
 Requirements:
 - API response time P99: < 200ms
 - API response time P95: < 150ms
@@ -104,7 +104,7 @@ Requirements:
 
 **Example:**
 
-```
+```text
 Requirements:
 - Error handling: All endpoints return structured errors
 - Availability: 99.9% uptime
@@ -117,7 +117,7 @@ Requirements:
 
 **Example:**
 
-```
+```text
 Requirements:
 - Test coverage: > 80%
 - Code quality: SonarQube grade A
@@ -147,7 +147,7 @@ TEA will ask where to find evidence for each requirement.
 
 **Example Response:**
 
-```
+```text
 Evidence:
 - Security: npm audit results (clean), auth tests 15/15 passing
 - Performance: k6 load test at /reports/k6-results.json
@@ -570,14 +570,14 @@ Give TEA the path to each artifact. For anything you cannot produce, say so: TEA
 
 **Don't:**
 
-```
+```text
 System is probably fast enough
 Security seems fine
 ```
 
 **Do:**
 
-```
+```text
 Load test results show P99 = 350ms
 npm audit shows 0 vulnerabilities
 Test coverage report shows 85%
@@ -609,7 +609,7 @@ Risk: 1% of users experience 350ms latency (acceptable for launch)
 
 After implementing mitigations:
 
-```
+```text
 1. Fix performance issues
 2. Run load tests again
 3. Run nfr-assess with new evidence
@@ -657,7 +657,7 @@ Don't deploy with CONCERNS without mitigation or waiver.
 
 **Solution:**
 
-```
+```text
 Mark as CONCERNS for categories without evidence
 Document what evidence is needed
 Set up tests/scans before re-audit
@@ -677,7 +677,7 @@ Set up tests/scans before re-audit
 
 **Solution:**
 
-```
+```text
 Negotiate thresholds with stakeholders:
 - "P99 < 50ms is unrealistic for our DB queries"
 - "Propose P99 < 200ms based on industry standards"
@@ -694,7 +694,7 @@ Use data to negotiate realistic requirements.
 
 **For most projects:**
 
-```
+```text
 Priority 1: Security (always critical)
 Priority 2: Performance (if high-traffic)
 Priority 3: Reliability (if uptime critical)

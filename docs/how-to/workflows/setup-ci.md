@@ -48,7 +48,7 @@ TEA will ask which platform you're using.
 
 **Example:**
 
-```
+```text
 GitHub Actions
 ```
 
@@ -68,7 +68,7 @@ TEA will ask about your test execution strategy.
 
 **Example:**
 
-```
+```text
 Monorepo with multiple apps
 Need selective testing for changed packages only
 ```
@@ -284,7 +284,7 @@ burn-in:
 
 #### Burn-In Testing
 
-**Option 1: Classic Burn-In (Playwright Built-In)**
+##### Option 1: Classic Burn-In (Playwright Built-In)
 
 ```json
 {
@@ -305,7 +305,7 @@ burn-in:
 
 ---
 
-**Option 2: Smart Burn-In (Playwright Utils)**
+##### Option 2: Smart Burn-In (Playwright Utils)
 
 If `tea_use_playwright_utils: true`:
 
@@ -424,7 +424,7 @@ git push
 
 **Expected Result:**
 
-```
+```text
 ✓ test (shard 1/4) - 3m 24s
 ✓ test (shard 2/4) - 3m 18s
 ✓ test (shard 3/4) - 3m 31s
@@ -588,29 +588,28 @@ When burn-in detects flakiness:
 
 1. **Quarantine flaky test:**
 
-```typescript
-test.skip('flaky test - investigating', async ({ page }) => {
-  // TODO: Fix flakiness
-});
-```
+   ```typescript
+   test.skip('flaky test - investigating', async ({ page }) => {
+     // TODO: Fix flakiness
+   });
+   ```
 
 2. **Investigate with trace viewer:**
 
-```bash
-npx playwright show-trace test-results/trace.zip
-```
+   ```bash
+   npx playwright show-trace test-results/trace.zip
+   ```
 
 3. **Fix root cause:**
-
-- Add network-first patterns
-- Remove hard waits
-- Fix race conditions
+   - Add network-first patterns
+   - Remove hard waits
+   - Fix race conditions
 
 4. **Verify fix:**
 
-```bash
-npm run test:burn-in -- tests/flaky.spec.ts --repeat 20
-```
+   ```bash
+   npm run test:burn-in -- tests/flaky.spec.ts --repeat 20
+   ```
 
 ### Secure Secrets
 

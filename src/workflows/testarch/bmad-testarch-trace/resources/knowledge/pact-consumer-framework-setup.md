@@ -16,7 +16,7 @@ The TEA framework workflow generates scaffolding for consumer-driven contract (C
 
 **Implementation**:
 
-```
+```text
 tests/contract/
 ├── consumer/
 │   ├── get-filter-fields.pacttest.ts    # Consumer test (one per endpoint group)
@@ -684,7 +684,7 @@ export const setJsonBody = (body: unknown) => setJsonContent({ body });
 
 **Context**: Pact-specific entries to add to `.gitignore`.
 
-```
+```text
 # Pact contract testing artifacts
 /pacts/
 pact-logs/

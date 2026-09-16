@@ -21,6 +21,19 @@
  * The reverse is allowed: a workflow may run more than the chain does, which is
  * how the packaged-install and CLI jobs work.
  *
+ * The reverse direction has its own gap: nothing held every OTHER script in
+ * `package.json` to that same "covered or explained" bar, so a script outside
+ * the chain (a fix-mode variant, a live eval, a release trigger) could sit
+ * there uncovered and unexplained indefinitely, and a genuinely dead script
+ * (a duplicate alias nothing calls any more) is indistinguishable from one of
+ * those without reading every line by hand. `uncoveredScripts` closes that:
+ * every script is either found running in CI, listed in `DELIBERATELY_LOCAL`
+ * with the reason it stays out, or it fails. `test` itself is exempted by
+ * name rather than added to the allowlist, because its sub-scripts are what
+ * `chainedScripts`/`scriptsRunInCi` above already validate individually, and
+ * this file's own workflow deliberately runs each as its own step rather than
+ * the meta-script (see the header comment on why).
+ *
  * It also holds the chain against `scripts` itself: every name the chain calls
  * has to be defined. `npm run` reports a missing script only when the chain
  * reaches it, and a rebase resolution that takes one side of the chain string can
@@ -70,6 +83,62 @@ function scriptsRunInCi() {
     for (const match of text.matchAll(/npm run ([\w:-]+)/g)) found.add(match[1]);
   }
   return found;
+}
+
+/**
+ * Every script `scriptsRunInCi()` will never find, paired with why running it
+ * in CI would be wrong rather than merely unproven, not a convenience.
+ */
+const DELIBERATELY_LOCAL = {
+  'docs:dev': 'an interactive dev server; categorically cannot run unattended in CI',
+  'docs:preview': 'an interactive preview server; categorically cannot run unattended in CI',
+  'docs:fix-links': '--write mode of the covered docs:validate-links; running fix-mode in CI would mutate the diff mid-job',
+  'format:fix': '--write mode of the covered format:check; running fix-mode in CI would mutate the diff mid-job',
+  'lint:fix': '--fix mode of the covered lint; running fix-mode in CI would mutate the diff mid-job',
+  'generate:lockfile-age-cache':
+    'a write-mode cache regenerator; the covered test:lockfile-age reads the cache it writes specifically to avoid registry calls in CI, so running the generator there would be circular',
+  'eval:all':
+    'a live agent eval; costs real credentials and API spend per run, kept out of CI by the eval-quality/deterministic-gate split (see README.md)',
+  'eval:atdd': 'a live agent eval; same reason as eval:all',
+  'eval:ci': 'a live agent eval; same reason as eval:all',
+  'eval:contract-strength': 'a live agent eval; same reason as eval:all',
+  'eval:fragment-selection': 'a live agent eval; same reason as eval:all',
+  'eval:nfr': 'a live agent eval; same reason as eval:all',
+  'eval:preflight': 'the --preflight-only entry point into the live eval:contract-strength; same reason as eval:all',
+  'eval:routing': 'a live agent eval; same reason as eval:all',
+  'eval:test-design': 'a live agent eval; same reason as eval:all',
+  'eval:test-review': 'a live agent eval; same reason as eval:all',
+  'eval:trace': 'a live agent eval; same reason as eval:all',
+  'eval:transcript': 'a live agent eval; same reason as eval:all',
+  prepare:
+    'an npm lifecycle hook every `npm ci`/`npm install` invokes automatically; it runs, just never via the literal `npm run prepare` text this scan looks for',
+  prepublishOnly:
+    'an npm lifecycle hook `npm publish` invokes automatically; its logic is exercised by the covered test:guard-publish, which seeds the refusal case directly rather than through the literal `npm run prepublishOnly` text this scan looks for',
+  'release:major': 'a human-triggered `gh workflow run publish.yaml` call; a release is a deliberate action, not an automated gate',
+  'release:minor': 'a human-triggered `gh workflow run publish.yaml` call; a release is a deliberate action, not an automated gate',
+  'release:next': 'a human-triggered `gh workflow run publish.yaml` call; a release is a deliberate action, not an automated gate',
+  'release:patch': 'a human-triggered `gh workflow run publish.yaml` call; a release is a deliberate action, not an automated gate',
+};
+
+/**
+ * Every script in `package.json` that is neither found running in CI nor
+ * named in `DELIBERATELY_LOCAL`, with `test` itself exempted (see the header
+ * comment for why).
+ */
+function uncoveredScripts(manifest, inCi) {
+  return Object.keys(manifest.scripts).filter((name) => name !== 'test' && !inCi.has(name) && !(name in DELIBERATELY_LOCAL));
+}
+
+/**
+ * Every `DELIBERATELY_LOCAL` key that no longer names a `package.json` script.
+ *
+ * `uncoveredScripts` only checks the forward direction: a script the
+ * allowlist doesn't cover. A renamed or deleted script leaves its old entry
+ * here silently inert, which is the same blind spot this file exists to
+ * close, just facing the other way.
+ */
+function staleDeliberatelyLocalEntries(manifest) {
+  return Object.keys(DELIBERATELY_LOCAL).filter((name) => typeof manifest.scripts[name] !== 'string');
 }
 
 const CLI_SUITE_FILE = path.join(PROJECT_ROOT, 'test', 'test-test-review-cli.js');
@@ -173,13 +242,45 @@ function main() {
     return 1;
   }
 
+  const uncovered = uncoveredScripts(manifest, inCi);
+  if (uncovered.length > 0) {
+    console.error(
+      `${colors.red}${uncovered.length} script(s) in package.json are neither run in CI nor listed as deliberately local:${colors.reset}`,
+    );
+    for (const script of uncovered) console.error(`  - npm run ${script}`);
+    console.error(
+      `\n${colors.dim}Add a CI step that runs it, or add an entry to DELIBERATELY_LOCAL in tools/validate-ci-coverage.js with the reason it stays out.${colors.reset}`,
+    );
+    return 1;
+  }
+
+  const stale = staleDeliberatelyLocalEntries(manifest);
+  if (stale.length > 0) {
+    console.error(
+      `${colors.red}${stale.length} DELIBERATELY_LOCAL entry(ies) name a script package.json no longer defines:${colors.reset}`,
+    );
+    for (const script of stale) console.error(`  - ${script}`);
+    console.error(`\n${colors.dim}Remove the stale entry from DELIBERATELY_LOCAL in tools/validate-ci-coverage.js.${colors.reset}`);
+    return 1;
+  }
+
+  const totalScripts = Object.keys(manifest.scripts).length;
   console.log(
-    `${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) are defined and run in CI, and every one of the ` +
-      `${cliSuiteNumbers().size} CLI suite(s) is in a shard`,
+    `${colors.green}✅${colors.reset} all ${chained.length} npm test chain step(s) are defined and run in CI, every one of the ` +
+      `${cliSuiteNumbers().size} CLI suite(s) is in a shard, and every one of ${totalScripts} package.json script(s) is either CI-covered or deliberately local`,
   );
   return 0;
 }
 
 if (require.main === module) process.exit(main());
 
-module.exports = { chainedScripts, cliSuiteNumbers, scriptsRunInCi, shardProblems, shardedSuiteNumbers };
+module.exports = {
+  chainedScripts,
+  cliSuiteNumbers,
+  DELIBERATELY_LOCAL,
+  scriptsRunInCi,
+  shardProblems,
+  shardedSuiteNumbers,
+  staleDeliberatelyLocalEntries,
+  uncoveredScripts,
+};

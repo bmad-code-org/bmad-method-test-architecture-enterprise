@@ -67,7 +67,7 @@ npm install -D @pact-foundation/pact
 
 ## Decision Tree: Which Flow?
 
-```
+```text
 Is this a monorepo (consumer + provider in same repo)?
 ├── YES → Local Flow
 │   - Consumer generates pact files to ./pacts/
@@ -230,4 +230,4 @@ import { createProviderState } from '@seontechnologies/pactjs-utils';
 provider.given(...createProviderState({ name: 'user exists', params: { id: 1 } }));
 ```
 
-_Source: @seontechnologies/pactjs-utils library, pactjs-utils README, pact-js-example-provider workflows_
+_Source: @seontechnologies/pactjs-utils library, pactjs-utils README, pact-js-example-provider workflows._

@@ -53,7 +53,7 @@ Read `{outputFile}` and parse YAML frontmatter for (when `output_file_override` 
 
 Display progress with checkmark/empty indicators:
 
-```
+```text
 Test Quality Review - Resume Progress:
 
 1. Load Context (step-01-load-context)              [completed/pending]

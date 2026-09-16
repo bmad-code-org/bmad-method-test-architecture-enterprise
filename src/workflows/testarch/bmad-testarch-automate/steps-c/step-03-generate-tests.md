@@ -159,7 +159,7 @@ If probing is disabled, honor the requested mode strictly. If that mode cannot b
 
 Report selected mode before dispatch:
 
-```
+```text
 ⚙️ Execution Mode Resolution:
 - Requested: {requestedMode}
 - Probe Enabled: {probeEnabled}
@@ -240,7 +240,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 **System Action:**
 
-```
+```text
 🚀 Launching Subagent A: API Test Generation
 📝 Output: /tmp/tea-automate-api-tests-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
@@ -264,7 +264,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 **System Action:**
 
-```
+```text
 🚀 Launching Subagent B: E2E Test Generation
 📝 Output: /tmp/tea-automate-e2e-tests-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
@@ -290,7 +290,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 **System Action:**
 
-```
+```text
 🚀 Launching Subagent B-backend: Backend Test Generation
 📝 Output: /tmp/tea-automate-backend-tests-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
@@ -316,7 +316,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 **System Action:**
 
-```
+```text
 🚀 Launching Subagent B-mobile: Mobile Test Generation
 📝 Output: /tmp/tea-automate-mobile-tests-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
@@ -331,7 +331,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 **If `resolvedMode` is `agent-team` or `subagent`:**
 
-```
+```text
 ⏳ Waiting for subagents to complete...
   ├── Subagent A (API): Running... ⟳
   ├── Subagent B (E2E): Running... ⟳       [if frontend/fullstack]
@@ -349,7 +349,7 @@ When `pact_mcp` is `"mcp"`, the subagent can use SmartBear MCP tools to fetch ex
 
 **If `resolvedMode` is `sequential`:**
 
-```
+```text
 ✅ Sequential mode: each worker already completed during dispatch.
 ```
 
@@ -392,7 +392,7 @@ The aggregate step reads whichever output file(s) exist based on `{detected_stac
 
 **Display performance metrics:**
 
-```
+```text
 🚀 Performance Report:
 - Execution Mode: {resolvedMode}
 - Stack Type: {detected_stack}

@@ -203,17 +203,17 @@ The seven points to verify for each interaction:
 
 5. **Document scrutiny evidence** as a block comment in the generated test:
 
-```typescript
-/*
- * Provider Scrutiny Evidence:
- * - Handler: server/src/routes/userHandlers.ts:45
- * - OpenAPI: server/openapi.yaml paths./api/v2/users/{userId}.get (if available)
- * - Response type: UserResponseDto (server/src/types/user.ts:12)
- * - Status: 201 for creation (line 52), 400 for validation error (line 48)
- * - Fields: { id: number, name: string, email: string, role: "user" | "admin" }
- * - Required request headers: Authorization (Bearer token)
- */
-```
+   ```typescript
+   /*
+    * Provider Scrutiny Evidence:
+    * - Handler: server/src/routes/userHandlers.ts:45
+    * - OpenAPI: server/openapi.yaml paths./api/v2/users/{userId}.get (if available)
+    * - Response type: UserResponseDto (server/src/types/user.ts:12)
+    * - Status: 201 for creation (line 52), 400 for validation error (line 48)
+    * - Fields: { id: number, name: string, email: string, role: "user" | "admin" }
+    * - Required request headers: Authorization (Bearer token)
+    */
+   ```
 
 6. **Graceful degradation** when provider source is not accessible (follows the canonical four-step protocol from `contract-testing.md`):
    1. **OpenAPI/Swagger spec available**: Use the spec as the source of truth for response shapes, status codes, and field names

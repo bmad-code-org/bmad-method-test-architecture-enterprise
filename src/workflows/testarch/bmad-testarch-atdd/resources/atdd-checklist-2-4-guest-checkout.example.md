@@ -533,7 +533,7 @@ See [tea-index.csv](./tea-index.csv) for complete knowledge fragment mapping.
 
 **Results:**
 
-```
+```text
 Running 9 tests using 2 workers
 
   -  [chromium] › guest-checkout.spec.ts › Guest Checkout E2E User Journey (ATDD) › [P0] should complete guest checkout with a new email and reach the confirmation screen

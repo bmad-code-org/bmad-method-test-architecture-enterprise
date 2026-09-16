@@ -57,7 +57,6 @@ function validateFile(filePath, projectRoot) {
   const descriptionMatch = yamlDoc.match(/^\s*description:\s*(?:'((?:''|[^'])*)'|"((?:\\"|[^"])*)")\s*(?:#.*)?$/m);
   if (descriptionMatch) {
     const singleQuotedInner = descriptionMatch[1];
-    const doubleQuotedInner = descriptionMatch[2];
     const quote = singleQuotedInner === undefined ? '"' : "'";
 
     if (quote !== "'") {

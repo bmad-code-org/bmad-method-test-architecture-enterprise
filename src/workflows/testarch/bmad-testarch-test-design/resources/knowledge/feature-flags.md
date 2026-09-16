@@ -747,4 +747,4 @@ Before merging flag-related code, verify:
 - Related fragments: `test-quality.md`, `selective-testing.md`
 - Flag services: LaunchDarkly, Split.io, Unleash, custom implementations
 
-_Source: LaunchDarkly strategy blog, Murat test architecture notes, enterprise feature flag governance_
+_Source: LaunchDarkly strategy blog, Murat test architecture notes, enterprise feature flag governance._

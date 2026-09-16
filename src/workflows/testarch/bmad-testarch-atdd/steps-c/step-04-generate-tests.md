@@ -203,7 +203,7 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 
 **System Action:**
 
-```
+```text
 🚀 Launching Subagent A: RED-PHASE API Test Generation
 📝 Output: /tmp/tea-atdd-api-tests-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
@@ -227,7 +227,7 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 
 **System Action:**
 
-```
+```text
 🚀 Launching Subagent B: RED-PHASE E2E Test Generation
 📝 Output: /tmp/tea-atdd-e2e-tests-${timestamp}.json
 ⚙️ Mode: ${resolvedMode}
@@ -241,7 +241,7 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 
 **If `resolvedMode` is `agent-team` or `subagent`:**
 
-```
+```text
 ⏳ Waiting for subagents to complete...
   ├── Subagent A (API RED): Running... ⟳
   └── Subagent B (E2E RED): Running... ⟳
@@ -256,7 +256,7 @@ This contract does not apply to Cypress suites, Maestro flows, or Pact/Vitest co
 
 **If `resolvedMode` is `sequential`:**
 
-```
+```text
 ✅ Sequential mode: each worker already completed during dispatch.
 ```
 
@@ -277,7 +277,7 @@ if (!apiOutputExists || !e2eOutputExists) {
 
 **Display TDD status:**
 
-```
+```text
 🔴 TDD RED PHASE: Test Scaffolds Generated
 
 ✅ Both subagents completed:
@@ -298,7 +298,7 @@ Next: Aggregation will verify TDD compliance
 
 **Display performance metrics:**
 
-```
+```text
 🚀 Performance Report:
 - Execution Mode: {resolvedMode}
 - API Test Generation: ~X minutes

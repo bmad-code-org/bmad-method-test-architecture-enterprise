@@ -253,7 +253,7 @@ Security failures block everything else in enterprise, so make security requirem
 3. Run the security test suite
 4. Pass the security audit before moving forward
 
-**Example: RBAC Testing**
+#### Example: RBAC Testing
 
 **Vanilla Playwright:**
 

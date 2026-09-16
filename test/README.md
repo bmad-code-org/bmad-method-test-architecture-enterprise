@@ -91,7 +91,7 @@ A fixture report is shaped to the parser, so a green run here proves nothing
 about what a live agent emits. `wrapped-steps-flow.md` and `empty-steps-flow.md`
 exist because a real run produced a frontmatter shape that every other fixture
 had missed; `plain-bullets-key-strengths.md` exists because a real `--agent
-codex` run wrote plain `- ` bullets under Key Strengths/Weaknesses instead of
+codex` run wrote plain `"- "` bullets under Key Strengths/Weaknesses instead of
 the `✅`/`❌`-prefixed form `claude` reliably produces; the parser's own
 best-effort design already tolerates this, the fixture just pins it down.
 

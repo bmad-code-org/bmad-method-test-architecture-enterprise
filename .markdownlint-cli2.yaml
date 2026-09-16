@@ -6,18 +6,24 @@ ignores:
   - website/node_modules/**
   - test/fixtures/**
   - CODE_OF_CONDUCT.md
+  # The BMAD runtime install directory: generated per project, never
+  # committed. _bmad-output/ is a sibling, not a match of this pattern: it
+  # holds this repository's own tracked planning artifacts and is gated
+  # like any other markdown.
   - _bmad/**
-  - _bmad*/**
   - .*/**
   - z*/**
 
 # Rule configuration
+#
+# Reviewed rule by rule (TEA Story 4.8): every markdownlint rule is enabled
+# except the three named below, each with a reason that is not "avoids
+# noise" or "costs time to fix" — the story's own bar for what counts as a
+# reason. MD024 and MD026 keep the narrower configuration they shipped with,
+# since the defaults would have been noisier without being more correct.
 config:
-  # Disable all rules by default
-  default: false
-
-  # Heading levels should increment by one (h1 -> h2 -> h3, not h1 -> h3)
-  MD001: true
+  # Enable everything by default; the exceptions are named and reasoned below.
+  default: true
 
   # Duplicate sibling headings (same heading text at same level under same parent)
   MD024:
@@ -27,10 +33,47 @@ config:
   MD026:
     punctuation: ","
 
-  # Bare URLs - may not render as links in all parsers
-  # Should use <url> or [text](url) format
-  MD034: true
+  # MD025 (single H1 per document) treats a YAML frontmatter `title:` field as
+  # an implicit H1 by default. Every Astro Starlight doc under docs/ carries a
+  # frontmatter title that the site renders as the page's real H1, and the
+  # same file also carries a body `# Heading` for GitHub-raw and non-Starlight
+  # viewing; the two are not a duplicate title, they are the same title
+  # serving two rendering paths. Disabling front-matter-title detection keeps
+  # the rule live for what it actually catches: two real body-level H1s in
+  # one document, which is a genuine, if rare, structural mistake (see
+  # bmad-testarch-trace/checklist.md's fix history).
+  MD025:
+    front_matter_title: ""
 
-  # Spaces inside emphasis markers - breaks rendering
-  # e.g., "* text *" won't render as emphasis
-  MD037: true
+  # MD013 (line length) stays off. This repository's prose — CHANGELOG.md,
+  # every knowledge fragment, every workflow step file — is written in
+  # deliberately long, unwrapped paragraphs on purpose, not by neglect: at
+  # the 80-column default, over 27,000 lines flag; even a generous 2000-
+  # column backstop (code blocks and tables excluded) catches exactly two
+  # lines in the whole tree, both ordinary CHANGELOG paragraphs a hair over
+  # the limit, not a runaway paste or a real defect. A limit loose enough to
+  # avoid rewrapping the corpus is too loose to catch anything a limit tight
+  # enough to catch something would force reformatting the entire corpus
+  # against its established style. Enforcing this rule here trades a real,
+  # consistently-applied authorial convention for a number with no
+  # corresponding defect to catch.
+  MD013: false
+
+  # MD043 (required heading structure) needs a `headings:` list naming the
+  # exact expected heading sequence, and matches nothing without one. This
+  # repository has no single heading structure to require: 830 markdown
+  # files span API docs, workflow step files, knowledge fragments, a
+  # CHANGELOG and a story tracker, each with its own shape by necessity.
+  # Enabling it bare would be a rule that always passes because it never has
+  # anything to check, which is a worse trap than leaving it off named.
+  MD043: false
+
+  # MD044 (proper-name capitalization) needs a `names:` list and matches
+  # nothing without one. Building and maintaining a repo-wide capitalization
+  # list (GitHub, JavaScript, Node.js, TEA, BMAD, and every vendor and
+  # package name this repo quotes verbatim from external sources, including
+  # user-supplied CHANGELOG and eval-corpus text) is a content-governance
+  # decision with its own ongoing maintenance cost, not a lint toggle; it is
+  # a real candidate for a future story, not a bare `true` that would check
+  # nothing today.
+  MD044: false

@@ -201,7 +201,7 @@ Error patterns are grouped by `method + status + base path`:
 
 **Output for subsequent tests:**
 
-```
+```text
 Warning: Network errors detected but not failing test (maxTestsPerError limit reached):
   GET 500 https://api.example.com/api/v2/case-management/cases
 ```

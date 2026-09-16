@@ -79,7 +79,7 @@ The raw deduction score is 97: the file is small, readable, and mostly determini
 
 ## Quality Score Breakdown
 
-```
+```text
 Starting Score:          100
 Critical Violations:     -0 × 10 = -0
 High Violations:         -1 × 5 = -5

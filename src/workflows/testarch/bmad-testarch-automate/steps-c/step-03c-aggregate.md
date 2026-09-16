@@ -408,7 +408,7 @@ console.log('✅ Subagent temp files cleaned up');
 
 Display to user:
 
-```
+```text
 ✅ Test Generation Complete ({subagent_execution})
 
 📊 Summary:

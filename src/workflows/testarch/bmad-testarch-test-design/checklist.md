@@ -97,7 +97,7 @@
 
 ### Execution Strategy
 
-**CRITICAL: Keep execution strategy simple, avoid redundancy**
+**CRITICAL: Keep execution strategy simple, avoid redundancy.**
 
 - [ ] **Simple structure**: PR / Nightly / Weekly (NOT complex smoke/P0/P1/P2 tiers)
 - [ ] **PR execution**: All functional tests unless significant infrastructure overhead
@@ -108,7 +108,7 @@
 
 ### Resource Estimates
 
-**CRITICAL: Use intervals/ranges, NOT exact numbers**
+**CRITICAL: Use intervals/ranges, NOT exact numbers.**
 
 - [ ] P0 effort provided as interval range (e.g., "~25-40 hours" NOT "36 hours")
 - [ ] P1 effort provided as interval range (e.g., "~20-35 hours" NOT "27 hours")
@@ -149,7 +149,7 @@
 
 ### Priority Assignment Accuracy
 
-**CRITICAL: Priority classification is separate from execution timing**
+**CRITICAL: Priority classification is separate from execution timing.**
 
 - [ ] **Priority sections (P0/P1/P2/P3) do NOT include execution context** (e.g., no "Run on every commit" in headers)
 - [ ] **Priority sections have only "Criteria" and "Purpose"** (no "Execution:" field)
@@ -351,7 +351,7 @@
 
 ### Document Quality (Anti-Bloat Check)
 
-**CRITICAL: Check for bloat and repetition across BOTH documents**
+**CRITICAL: Check for bloat and repetition across BOTH documents.**
 
 - [ ] **No repeated notes 10+ times** (e.g., "Timing is pessimistic until R-005 fixed" on every section)
 - [ ] **Repeated information consolidated** (write once at top, reference briefly if needed)
@@ -369,7 +369,7 @@
 
 ### Architecture Doc Structure (Actionable-First Principle)
 
-**CRITICAL: Validate structure follows actionable-first, FYI-last principle**
+**CRITICAL: Validate structure follows actionable-first, FYI-last principle.**
 
 - [ ] **Actionable sections at TOP:**
   - [ ] Quick Guide (🚨 BLOCKERS first, then ⚠️ HIGH PRIORITY, then 📋 INFO ONLY last)

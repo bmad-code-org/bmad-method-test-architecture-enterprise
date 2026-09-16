@@ -45,13 +45,13 @@ Full invocation rules: [Invoking a TEA Workflow](/docs/reference/commands.md#inv
 
 TEA will ask which phase you're running.
 
-**Phase 1: Coverage Traceability**
+#### Phase 1: Coverage Traceability
 
 - Analyze coverage
 - Identify gaps
 - Generate recommendations
 
-**Phase 2: Quality Gate Decision**
+#### Phase 2: Quality Gate Decision
 
 - Make PASS/CONCERNS/FAIL/WAIVED decision
 - Requires Phase 1 complete
@@ -80,7 +80,7 @@ TEA will first look for the best available coverage oracle.
 
 **Example Response:**
 
-```
+```text
 Coverage sources:
 - story-profile-management.md (acceptance criteria)
 - test-design-epic-1.md (test priorities)
@@ -94,7 +94,7 @@ TEA will ask where tests are located.
 
 **Example:**
 
-```
+```text
 Test location: tests/
 Include:
 - tests/api/
@@ -113,7 +113,7 @@ The file format and the test-case ID format are published in [Live Verification 
 
 **Example:**
 
-```
+```text
 Focus on:
 - Profile CRUD operations
 - Validation scenarios
@@ -673,7 +673,7 @@ TEA uses deterministic rules when decision_mode = "deterministic":
 
 **Phase 3:**
 
-```
+```text
 After architecture complete:
 1. Run test-design (system-level)
 2. Run trace Phase 1 (baseline)
@@ -682,7 +682,7 @@ After architecture complete:
 
 **Phase 4:**
 
-```
+```text
 After each epic/story:
 1. Run trace Phase 1 (refresh coverage)
 2. Identify gaps
@@ -691,7 +691,7 @@ After each epic/story:
 
 **Release Gate:**
 
-```
+```text
 Before deployment:
 1. Run trace Phase 1 (final coverage check)
 2. Run trace Phase 2 (make gate decision)
@@ -703,7 +703,7 @@ Before deployment:
 
 **Phase 2:**
 
-```
+```text
 Before planning new work:
 1. Run trace Phase 1 (establish baseline)
 2. Understand existing coverage
@@ -712,7 +712,7 @@ Before planning new work:
 
 **Phase 4:**
 
-```
+```text
 After each epic/story:
 1. Run trace Phase 1 (refresh)
 2. Compare to baseline
@@ -721,7 +721,7 @@ After each epic/story:
 
 **Release Gate:**
 
-```
+```text
 Before deployment:
 1. Run trace Phase 1 (final check)
 2. Run trace Phase 2 (gate decision)
@@ -735,7 +735,7 @@ Before deployment:
 
 Don't wait until release gate:
 
-```
+```text
 After Story 1: trace Phase 1 (identify gaps early)
 After Story 2: trace Phase 1 (refresh)
 After Story 3: trace Phase 1 (refresh)
@@ -905,7 +905,7 @@ test('[REQ-1] should display profile', async ({ page }) => {
 
 **FULL** ✅: All expected behaviors for the item tested
 
-```
+```text
 Requirement: User can edit profile
 Acceptance criteria:
   - Can modify name ✅ Tested
@@ -917,7 +917,7 @@ Result: FULL coverage
 
 **PARTIAL** ⚠️: Some criteria tested, some not
 
-```
+```text
 Requirement: User can edit profile
 Acceptance criteria:
   - Can modify name ✅ Tested

@@ -14,6 +14,8 @@ test/schema/eval-result.schema.json
 # Contributor Covenant (external standard)
 CODE_OF_CONDUCT.md
 
-# BMAD runtime folders (user-specific, not in repo)
+# The BMAD runtime install directory: generated per project, never committed.
+# _bmad-output/ is a sibling, not a match of this pattern: it holds this
+# repository's own tracked planning artifacts and is gated like any other
+# markdown.
 _bmad/
-_bmad*/

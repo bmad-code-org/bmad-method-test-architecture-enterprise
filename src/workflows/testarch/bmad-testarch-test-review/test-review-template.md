@@ -123,7 +123,7 @@ render an empty bullet or `n/a`.}
 
 ## Quality Score Breakdown
 
-```
+```text
 Starting Score:          100
 Critical Violations:     -{critical_count} × 10 = -{critical_deduction}
 High Violations:         -{high_count} × 5 = -{high_deduction}

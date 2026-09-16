@@ -262,4 +262,4 @@ The corollary for a suite: that cheap discriminating measurement should already 
 - **Related fragments**: `confidence-gate.md` (do not fabricate the artifact in the first place), `test-quality.md` (determinism and isolation), `risk-governance.md` (what a gate decision may rest on), `mobile-ci-device-lab.md` (where these failures concentrate on mobile)
 - **Tools**: any CI summary, the runner's own executed-test count, exit codes
 
-_Source: TEA quality-gate standards; hollow-green and false-negative diagnostic patterns observed in a live mobile CI investigation_
+_Source: TEA quality-gate standards; hollow-green and false-negative diagnostic patterns observed in a live mobile CI investigation._

@@ -376,18 +376,18 @@ function runTests() {
     // Two kinds of stated count, checked separately because a heuristic that tries
     // to tell them apart by magnitude gets it wrong the moment a category grows.
     //
-    // Category subtotals: `**2. Playwright & Pact Utils (23 fragments)**` must match
+    // Category subtotals: `#### 2. Playwright & Pact Utils (23 fragments)` must match
     // the bullets that follow it.
     const lines = menu.split('\n');
     const subtotalErrors = [];
     let subtotalSum = 0;
     for (const [index, line] of lines.entries()) {
-      const heading = /^\*\*(\d+)\.\s+(.+?)\s+\((\d+)\s+fragments\)\*\*$/.exec(line.trim());
+      const heading = /^#### (\d+)\.\s+(.+?)\s+\((\d+)\s+fragments\)$/.exec(line.trim());
       if (!heading) continue;
       subtotalSum += Number(heading[3]);
       let counted = 0;
       for (let scan = index + 1; scan < lines.length; scan += 1) {
-        if (/^\*\*\d+\.\s/.test(lines[scan].trim())) break;
+        if (/^#### \d+\.\s/.test(lines[scan].trim())) break;
         if (/^- [a-z0-9-]+\.md -/.test(lines[scan].trim())) counted += 1;
       }
       if (counted !== Number(heading[3])) {
@@ -409,7 +409,7 @@ function runTests() {
     // Prose totals: every other stated count refers to the whole base, and prose
     // drifts silently. This is the drift that hid the 17 unreachable fragments:
     // the number matched the menu, so nobody noticed the menu was short.
-    const withoutHeadings = lines.filter((line) => !/^\*\*\d+\.\s.*\(\d+\s+fragments\)\*\*$/.test(line.trim())).join('\n');
+    const withoutHeadings = lines.filter((line) => !/^#### \d+\.\s.*\(\d+\s+fragments\)$/.test(line.trim())).join('\n');
     const advertised = [...withoutHeadings.matchAll(/(\d+)\s+(?:TEA\s+)?(?:knowledge\s+)?fragments/g)].map((match) => Number(match[1]));
     const wrongTotals = [...new Set(advertised.filter((value) => value !== allFragments.length))];
     assert(

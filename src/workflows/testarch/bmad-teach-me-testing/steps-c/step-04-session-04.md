@@ -98,13 +98,13 @@ Set session-04-test-design `status: 'in-progress'`, `started_date`.
 - **Impact:** What happens if it fails? (Low/Medium/High)
 - **Risk = Probability × Impact**
 
-**Example: Login Feature**
+#### Example: Login Feature
 
 - Probability: High (complex, authentication)
 - Impact: High (business critical)
 - **Risk: HIGH** → P0 priority
 
-**Example: Tooltip Text**
+#### Example: Tooltip Text
 
 - Probability: Low (simple rendering)
 - Impact: Low (aesthetic only)

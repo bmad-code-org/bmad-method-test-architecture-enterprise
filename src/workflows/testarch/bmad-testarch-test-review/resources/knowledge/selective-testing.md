@@ -698,7 +698,7 @@ gh pr merge --admin     # Force merge (requires admin)
 ```
 ````
 
-```
+```text
 
 **Key Points**:
 - **Progressive validation**: More tests at each stage

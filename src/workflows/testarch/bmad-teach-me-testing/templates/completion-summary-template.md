@@ -14,7 +14,7 @@ average_score: { { average_score } }
 
 ## {{user_name}}'s Learning Journey
 
-**{{user_name}} completed the TEA Academy testing curriculum**
+**{{user_name}} completed the TEA Academy testing curriculum.**
 
 ---
 

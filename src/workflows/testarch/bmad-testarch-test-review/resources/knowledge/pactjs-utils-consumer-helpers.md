@@ -376,4 +376,4 @@ it('returns empty list', async () => {
 
 See Example 6 above for the full rationale.
 
-_Source: @seontechnologies/pactjs-utils consumer-helpers module, pactjs-utils sample-app consumer tests_
+_Source: @seontechnologies/pactjs-utils consumer-helpers module, pactjs-utils sample-app consumer tests._

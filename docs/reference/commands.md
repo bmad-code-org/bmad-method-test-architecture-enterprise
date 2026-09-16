@@ -313,14 +313,14 @@ clamped to 0-100. The bonus has exactly six categories, each worth `0` or `5` wi
 
 **Two-Phase Workflow:**
 
-**Phase 1: Coverage Traceability**
+### Phase 1: Coverage Traceability
 
 - Coverage oracle items → test mapping
 - Coverage classification (FULL/PARTIAL/NONE)
 - Gap prioritization
 - Output: `{test_artifacts}/traceability-matrix.md`
 
-**Phase 2: Gate Decision**
+### Phase 2: Gate Decision
 
 - PASS/CONCERNS/FAIL/WAIVED decision
 - Evidence-based (coverage %, quality scores, NFRs)

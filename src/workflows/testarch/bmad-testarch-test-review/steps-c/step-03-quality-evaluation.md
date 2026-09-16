@@ -207,7 +207,7 @@ resolve. Write all of the following into each worker's launch prompt literally:
 Every one of these failures is a quieter score rather than a louder error, so state
 the payload rather than assuming the worker can reach it.
 
-**Subagent A: Determinism**
+#### Subagent A: Determinism
 
 - File: `./step-03a-subagent-determinism.md`
 - Output: `/tmp/tea-test-review-determinism-${timestamp}.json`
@@ -216,19 +216,19 @@ the payload rather than assuming the worker can reach it.
   - `sequential`: run blocking and wait
 - Status: Running... ⟳
 
-**Subagent B: Isolation**
+#### Subagent B: Isolation
 
 - File: `./step-03b-subagent-isolation.md`
 - Output: `/tmp/tea-test-review-isolation-${timestamp}.json`
 - Status: Running... ⟳
 
-**Subagent C: Maintainability**
+#### Subagent C: Maintainability
 
 - File: `./step-03c-subagent-maintainability.md`
 - Output: `/tmp/tea-test-review-maintainability-${timestamp}.json`
 - Status: Running... ⟳
 
-**Subagent D: Performance**
+#### Subagent D: Performance
 
 - File: `./step-03e-subagent-performance.md`
 - Output: `/tmp/tea-test-review-performance-${timestamp}.json`
@@ -247,14 +247,14 @@ where one the agent invented is only as unique as the string it happened to pick
 
 **If `resolvedMode` is `agent-team` or `subagent`:**
 
-```
+```text
 ⏳ Waiting for 4 quality subagents to complete...
 ✅ All 4 quality subagents completed successfully!
 ```
 
 **If `resolvedMode` is `sequential`:**
 
-```
+```text
 ✅ Sequential mode: each worker already completed during dispatch.
 ```
 
@@ -278,7 +278,7 @@ outputs.forEach((output) => {
 
 ### 6. Execution Report
 
-```
+```text
 🚀 Performance Report:
 - Execution Mode: {resolvedMode}
 - Total Elapsed: ~mode-dependent

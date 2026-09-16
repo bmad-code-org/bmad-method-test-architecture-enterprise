@@ -12,7 +12,7 @@ The failure mode of LLM-generated tests is rarely "refused to try" — it is "ge
 
 Every non-trivial test artifact proposal must include:
 
-```
+```text
 Confidence: <1-10>
 Rationale: <one or two sentences citing concrete evidence from the repo or contract>
 Unknowns: <bulleted list of things the agent does not know>

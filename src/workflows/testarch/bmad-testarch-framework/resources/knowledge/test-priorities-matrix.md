@@ -142,7 +142,7 @@ Guide for prioritizing test scenarios based on risk, criticality, and business i
 
 ## Priority Decision Tree
 
-```
+```text
 Is it revenue-critical?
 ├─ YES → P0
 └─ NO → Does it affect core user journey?
@@ -379,4 +379,4 @@ Before finalizing test priorities:
 - **Related fragments**: `risk-governance.md` (risk scoring), `probability-impact.md` (impact assessment), `selective-testing.md` (tag-based execution)
 - **Tools**: Playwright/Cypress grep for tag filtering, CI scripts for priority-based execution
 
-_Source: Risk-based testing practices, test prioritization strategies, production incident analysis_
+_Source: Risk-based testing practices, test prioritization strategies, production incident analysis._

@@ -141,8 +141,6 @@ function findContracts(directory) {
  * @returns {Promise<{ok: true, module: object}|{ok: false, exitCode: 1|2, lines: string[]}>}
  */
 async function resolveCompiler(contractCount, reads = {}) {
-  const unchecked = `${contractCount} contract(s) went unchecked.`;
-
   const {
     // eval-quality is a declared devDependency, so this resolves in a normal
     // install. A tree installed with --omit=dev throws here, and the honest

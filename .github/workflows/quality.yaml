@@ -167,6 +167,12 @@ jobs:
       - name: Check that every npm test step runs in CI
         run: npm run test:ci-coverage
 
+      - name: Prove the script-coverage gate's own filter logic against synthetic input
+        run: npm run test:ci-coverage-filters
+
+      - name: Prove _bmad-output/ is gated by lint, markdownlint and prettier while _bmad/ is not
+        run: npm run test:bmad-output-gated
+
       - name: Validate release metadata
         run: npm run test:release-metadata
 
@@ -432,9 +438,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
         with:
-          # This job runs npm ci (arbitrary install scripts) and shells out to
-          # a third-party binary; the token persist-credentials would otherwise
-          # leave in .git/config has no business surviving that.
           persist-credentials: false
 
       - name: Setup Node
@@ -460,3 +463,67 @@ jobs:
 
       - name: Verify each gate's script name and seed one violation per failing gate
         run: npm run test:layering-boundary-lineage
+
+  # c8-wrapping the whole npm test chain roughly doubles its wall-clock time,
+  # so this runs as its own job rather than joining the pre-commit-driven
+  # chain, the same tradeoff test:cli and the supply-chain gates make.
+  coverage:
+    runs-on: ubuntu-latest
+    # The full npm test chain includes test:lockfile-age and
+    # test:lockfile-age-cache, both of which hit the public npm registry;
+    # bound the worst case the same way the supply-chain job does rather than
+    # letting a stalled request hold the runner until GitHub's own maximum.
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          # This job runs npm ci (arbitrary install scripts) and the full npm
+          # test chain, which pipes a third-party actionlint binary's output
+          # into the ci eval suite; the token persist-credentials would
+          # otherwise leave in .git/config has no business surviving that.
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The actionlint version this installs floats to latest rather than
+      # pinned, for the same reason the validate job's own Install actionlint
+      # step gives: test/eval-ci.js's own pre-flight enforces the minimum
+      # version its flags were written against, so a newer release only ever
+      # adds coverage. The installer script itself is pinned by commit and
+      # checksummed before it runs.
+      - name: Install actionlint
+        run: |
+          curl -sSfL -o download-actionlint.bash https://raw.githubusercontent.com/rhysd/actionlint/3795ba2f6cb243eeca54c9d22e5c531cb9dcfb4a/scripts/download-actionlint.bash
+          echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
+          bash download-actionlint.bash
+          sudo mv ./actionlint /usr/local/bin/
+
+      # This job runs the whole npm test chain, which includes
+      # tea-atdd-red-check's isolation proof: the same reason the validate
+      # job installs bubblewrap. Skipping this here does not skip that test,
+      # it makes it fail on a missing backend instead of proving the
+      # confinement, taking the whole chain down before c8 has instrumented
+      # most of cli/lib and tools/ and reporting a near-zero, meaningless
+      # coverage number rather than a real one. Discovered exactly this way
+      # the first time this job ran in CI: a 4-second failure reading as
+      # "coverage is 9.9%" when the real story was "the chain crashed before
+      # c8 had anything to instrument." Any future job that runs the full
+      # chain inherits whatever system dependencies the chain has
+      # accumulated; keep this job's install steps in step with validate's
+      # and cli's rather than rediscovering this the same way.
+      - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+
+      - name: Allow bubblewrap to create its own network namespace
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Run the npm test chain under coverage and enforce the threshold
+        run: npm run test:coverage

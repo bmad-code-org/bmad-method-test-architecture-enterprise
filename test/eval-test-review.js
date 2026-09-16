@@ -119,7 +119,6 @@ const { readText } = require('./lib/file-system-port');
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
-const CLI = path.join(PROJECT_ROOT, 'cli', 'test-review.js');
 const SUITE_ID = 'test-review';
 
 /**

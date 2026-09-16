@@ -353,7 +353,7 @@ See `tea-index.csv` for complete knowledge fragment mapping.
 
 **Results:**
 
-```
+```text
 {paste_test_run_output_showing_scaffolds_skipped_or_activated_tests_failing}
 ```
 
