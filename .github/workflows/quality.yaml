@@ -251,6 +251,9 @@ jobs:
       - name: Prove the multi-turn transcript engine drives a session and catches a contradiction
         run: npm run test:transcript-harness
 
+      - name: Prove the teach-me-testing scoring functions fail on a violation and pass on a consistent case
+        run: npm run test:teach-me-testing-scoring
+
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
 
@@ -280,6 +283,9 @@ jobs:
 
       - name: Validate transcript eval corpus
         run: npm run test:eval-transcript-data
+
+      - name: Validate teach-me-testing eval corpus
+        run: npm run test:eval-teach-me-testing-data
 
       - name: Validate the eval suite manifest and result schema
         run: npm run test:eval-schemas

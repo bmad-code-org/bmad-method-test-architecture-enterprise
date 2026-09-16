@@ -27,7 +27,9 @@
     "listed path is missing and when a generated contract is claimed by no suite, so the link cannot rot in either",
     "direction. It is an array because a suite can need more than one: `bmad-tea-routing` is eighteen intents and",
     "eval-quality's AD-39 scripting bound caps an interaction plan at sixteen steps, so its corpus is expressed as",
-    "an intents contract and a controls contract. test/contracts/README.md records the split."
+    "an intents contract and a controls contract. test/contracts/README.md records the split.",
+    "`bmad-teach-me-testing` ships no knowledge index at all, so fragment selection does not apply to it; its own",
+    "behavioral suite, `teach-me-testing`, is what discharges it."
   ],
   "manifestVersion": 1,
   "suites": [
@@ -659,14 +661,99 @@
       "caseCount": 1,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["command-execution"]
+    },
+    {
+      "$comment": [
+        "The suite that retires bmad-teach-me-testing from deferred, reusing Story 6.10's transcript-driving",
+        "engine and runner completely unchanged: one case, two turns, against a real vendor. Turn 1 plays the",
+        "whole first-session path through the real skill, itself supplying both the facilitator (following the",
+        "real step files exactly) and a scripted learner (role, Beginner experience, learning goals, session",
+        "1, a deliberately wrong answer to session-1's own Q1, the resulting below-70% [R] review choice, and",
+        "exit). Turn 2 is a brand-new, memoryless process in the same persistent workspace that proves progress",
+        "persistence is real rather than assumed: a headless agent CLI carries no session state between",
+        "invocations, so a fresh process correctly finding and reporting progress.yaml is the only thing that",
+        "actually proves the file, not the model's own context, is what carries state forward.",
+        "",
+        "Every check is a mechanical containment or equality test over structural data -- does progress.yaml's",
+        "experience_level equal the fixture's declared level, does turn 1's transcript contain the step file's",
+        "own verbatim correction text for the seeded wrong answer, does that same corrective content reappear",
+        "AFTER the [R] review choice (not merely once, from the original mistake), does turn 2 land on the",
+        "continuation greeting rather than the fresh-start one, and does every session progress.yaml claims",
+        "`completed` correspond to a session the transcript actually shows was quizzed -- never a semantic",
+        "judgment of reply quality. test/test-teach-me-testing-scoring.js proves each of the four scoring",
+        "functions this suite shares with the story spec (placementHolds, correctionHolds, reTeachingHolds,",
+        "masteryClaimHolds) actually fails on a hand-built violation before this suite is trusted to run one.",
+        "",
+        "AC2 was rewritten before this suite was built: bmad-teach-me-testing has no mechanism, in any",
+        "session, where a wrong answer on one topic pulls in a different topic the pre-correction plan did not",
+        "already have (see _bmad-output/planning-artifacts/epics.md's Story 6.11 finding). The real branch is",
+        "[R] review the same session's content again, or [C] continue anyway, and reTeachingHolds scores that",
+        "real branch instead.",
+        "",
+        "contracts is deliberately empty, the same declared deviation test/eval-transcript.js records for its",
+        "own reason: every check here is the same containment/equality shape test/eval-atdd.js's scoreRun",
+        "already uses for comparably structural claims, and test/test-teach-me-testing-scoring.js's own",
+        "pure-function proof is what gives that shape independent verification without a contract adding",
+        "value the proof does not already give.",
+        "",
+        "One repetition by default: this is a live-cost suite spending two real vendor calls (one per turn),",
+        "not the free scripted exchange test/eval-transcript.js proves the engine against, so",
+        "ciTier full-matrix matches nfr's, ci's, and atdd's own live suites rather than transcript's",
+        "deterministic tier."
+      ],
+      "id": "teach-me-testing",
+      "skill": "bmad-teach-me-testing",
+      "evalType": "behavioral",
+      "harness": "test/eval-teach-me-testing.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": [
+        "src/workflows/testarch/bmad-teach-me-testing/checklist.md",
+        "src/workflows/testarch/bmad-teach-me-testing/customize.toml",
+        "src/workflows/testarch/bmad-teach-me-testing/data/curriculum.yaml",
+        "src/workflows/testarch/bmad-teach-me-testing/data/quiz-questions.yaml",
+        "src/workflows/testarch/bmad-teach-me-testing/data/role-paths.yaml",
+        "src/workflows/testarch/bmad-teach-me-testing/data/session-content-map.yaml",
+        "src/workflows/testarch/bmad-teach-me-testing/data/tea-resources-index.yaml",
+        "src/workflows/testarch/bmad-teach-me-testing/instructions.md",
+        "src/workflows/testarch/bmad-teach-me-testing/resources/tea-completion-summary.example.md",
+        "src/workflows/testarch/bmad-teach-me-testing/SKILL.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-01-init.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-01b-continue.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-02-assess.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-03-session-menu.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-01.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-02.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-03.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-04.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-05.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-06.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-07.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-05-completion.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-e/step-e-01-assess-workflow.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-e/step-e-02-apply-edits.md",
+        "src/workflows/testarch/bmad-teach-me-testing/steps-v/step-v-01-validate.md",
+        "src/workflows/testarch/bmad-teach-me-testing/templates/completion-summary-template.md",
+        "src/workflows/testarch/bmad-teach-me-testing/templates/progress-template.yaml",
+        "src/workflows/testarch/bmad-teach-me-testing/templates/session-notes-template.md"
+      ],
+      "groundTruth": ["test/fixtures/teach-me-testing-eval/ground-truth.json"],
+      "contracts": [],
+      "thresholds": {
+        "placementAccuracy": 1,
+        "correctionRate": 1,
+        "reTeachingRate": 1,
+        "continuationRate": 1,
+        "maxUnearnedMastery": 0
+      },
+      "repetitions": 1,
+      "caseCount": 1,
+      "ciTier": "full-matrix",
+      "runnerCapabilities": ["scoped-artifact-writes"]
     }
   ],
-  "deferred": [
-    {
-      "skill": "bmad-teach-me-testing",
-      "owner": "TEA maintainers",
-      "missingEvidence": "No suite of any kind. The skill ships no knowledge index, so even fragment selection does not apply, and nothing measures a multi-turn teaching session.",
-      "exitCondition": "A transcript-based behavioral suite proves the skill places a learner at the right level, corrects seeded misconceptions, adapts the session, persists progress, and avoids claiming mastery without evidence."
-    }
-  ]
+  "deferred": []
 }

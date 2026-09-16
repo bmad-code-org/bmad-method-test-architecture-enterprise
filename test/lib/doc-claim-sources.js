@@ -100,8 +100,8 @@ const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'eva
 if (!Array.isArray(manifest.deferred)) refuse('suite-manifest.json has no "deferred" array');
 const deferredSkills = new Set(manifest.deferred.map((entry) => entry.skill));
 
-/** docs/explanation/eval-quality-roadmap.md, "The remaining behavioral suite stays visible in ... deferred array." */
-exports.ONE_SKILL_DEFERRED = deferredSkills.size === 1;
+/** suite-manifest.json's `deferred` array is empty: every TEA skill now carries a real suite. */
+exports.NO_SKILLS_DEFERRED = deferredSkills.size === 0;
 
 /** docs/explanation/eval-quality-adoption-guide.md, "none of the eight skills fragment selection spans is still listed as deferred." */
 const fragmentSelectionSuite = manifest.suites.find((suite) => suite.id === 'fragment-selection');
@@ -110,8 +110,8 @@ const fragmentSelectionSkills = fragmentSelectionSuite.skills ?? [];
 if (fragmentSelectionSkills.length === 0) refuse('the fragment-selection suite names no skills');
 exports.NO_FRAGMENT_SELECTION_SKILL_DEFERRED = fragmentSelectionSkills.filter((skill) => deferredSkills.has(skill)).length === 0;
 
-/** docs/explanation/eval-quality-roadmap.md:10, "It does not yet prove the complete behavior of `bmad-teach-me-testing` or `bmad-testarch-framework`." */
-exports.NOT_EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE = deferredSkills.size > 0;
+/** docs/explanation/eval-quality-roadmap.md:10, "every TEA skill now has one." */
+exports.EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE = deferredSkills.size === 0;
 
 /**
  * docs/explanation/eval-quality-adoption-guide.md:203, "the 34 CONCERNS the

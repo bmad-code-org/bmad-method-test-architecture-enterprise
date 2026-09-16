@@ -121,7 +121,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 6.8: Score the `bmad-testarch-framework` scaffold's contents](#story-68-score-the-bmad-testarch-framework-scaffolds-contents) ([#196](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/196))
 - [x] [Story 6.9: Install and smoke-test the generated scaffold](#story-69-install-and-smoke-test-the-generated-scaffold) — [PR #207](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/207)
 - [x] [Story 6.10: Build the multi-turn transcript harness](#story-610-build-the-multi-turn-transcript-harness) ([#195](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/195))
-- [ ] [Story 6.11: Prove `bmad-teach-me-testing` teaches rather than asserts](#story-611-prove-bmad-teach-me-testing-teaches-rather-than-asserts)
+- [x] [Story 6.11: Prove `bmad-teach-me-testing` teaches rather than asserts](#story-611-prove-bmad-teach-me-testing-teaches-rather-than-asserts) ([#198](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/198))
 - [ ] [Story 6.12: Empty the deferred array](#story-612-empty-the-deferred-array)
 
 ### Epic 7 progress: The output contracts the behavioral suites exposed
@@ -1421,14 +1421,16 @@ So that I am not told I have mastered something the session never checked.
 **Then** the placement is scored against the known level
 **And** the seeded misconception is scored for being corrected rather than passed over
 
-**Given** the fixture declares a remediation topic absent from the pre-correction plan
-**When** the session continues after the correction
-**Then** adaptation is scored as the post-correction turns covering that declared topic
+**Given** the fixture's scripted learner answers below the passing threshold and chooses to review
+**When** the session re-presents that session's content
+**Then** corrective re-teaching is scored as the review turn's reply covering the specific sub-topic the wrong answer was about, by containment against the step file's own correction text
 
 **Given** progress is persisted across turns
 **When** the session ends
 **Then** the persisted progress matches what the transcript shows was covered
 **And** a claim of mastery for a topic the transcript never tested scores as a defect
+
+**Finding, checked while writing this story:** the original AC2 described a fixture declaring a remediation topic absent from the pre-correction plan, adapted to after a wrong answer. All seven `steps-c/step-04-session-0N.md` files and `data/curriculum.yaml` were read in full to find that mechanism. It does not exist. Every session's only wrong-answer branch is the same binary choice below a 70% quiz score: `[R]` review the content again, which re-presents that session's own material, or `[C]` continue anyway. Session routing (which of the 7 sessions to recommend) is decided once at placement, gated by role and experience and by `curriculum.yaml`'s `prerequisites`, never by a specific quiz mistake mid-session. "Adapt" elsewhere in the skill means role-flavored examples (QA, Dev, Lead, VP), also decided at placement. `bmad-teach-me-testing` has no mechanism, in any session, where a wrong answer on one topic pulls in a topic the pre-correction plan did not already have. AC2 above is rewritten to score the mechanism the skill actually has, corrective re-teaching of the missed sub-topic, rather than the adaptive branching it does not have. Whether the skill should gain misconception-triggered topic routing is a product question about `bmad-teach-me-testing` itself, out of this story's scope.
 
 ### Story 6.12: Empty the deferred array
 

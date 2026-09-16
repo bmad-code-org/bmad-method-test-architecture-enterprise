@@ -102,7 +102,16 @@ function stripAnsi(value) {
  * to draw the "production" boundary the same way, or an identical write
  * scores differently depending only on which phase made it.
  */
-const DIGEST_EXCLUDED_DIRECTORIES = new Set(['node_modules', 'test-results', '.cache', '.tea-atdd-cache', '_bmad']);
+const DIGEST_EXCLUDED_DIRECTORIES = new Set(['node_modules', 'test-results', '.cache', '_bmad']);
+
+/**
+ * Prefix for the per-invocation Playwright transform-cache directory (see
+ * `runOneSpecFile`'s PWTEST_CACHE_DIR comment). A fixed name here previously
+ * let two back-to-back invocations against the same project root collide on
+ * one cache directory, producing a stale-cache flake; `fs.mkdtempSync` turns
+ * this prefix into a unique directory per run.
+ */
+const CACHE_DIR_PREFIX = '.tea-atdd-cache-';
 
 function fail(message) {
   process.stderr.write(`tea-atdd-red-check: ${message}\n`);
@@ -133,7 +142,7 @@ function filesUnder(root, { skip = [] } = {}) {
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        if (DIGEST_EXCLUDED_DIRECTORIES.has(entry.name) || skipSet.has(absolute)) continue;
+        if (DIGEST_EXCLUDED_DIRECTORIES.has(entry.name) || entry.name.startsWith(CACHE_DIR_PREFIX) || skipSet.has(absolute)) continue;
         walk(absolute);
       } else if (entry.isFile()) {
         found.push(path.relative(root, absolute));
@@ -196,7 +205,7 @@ function resolvePlaywrightCli(searchPaths) {
  *   tests: Array<{title: string, status: string, message: string|null}>,
  * }}
  */
-function runOneSpecFile({ projectRoot, relativeFile, cliPath, nodePathDirectory, netGuardPath, timeoutMs, baseUrl }) {
+function runOneSpecFile({ projectRoot, relativeFile, cliPath, nodePathDirectory, netGuardPath, timeoutMs, baseUrl, cacheDir }) {
   const absolute = path.join(projectRoot, relativeFile);
   const original = fs.readFileSync(absolute, 'utf8');
   const hadSkipCall = SKIP_CALL.test(original);
@@ -230,8 +239,8 @@ function runOneSpecFile({ projectRoot, relativeFile, cliPath, nodePathDirectory,
     // which sits outside the workspace an isolated run is confined to write
     // under. Pointed inside the project instead, so a correct run under
     // isolation is not indistinguishable from a run whose cache write was
-    // refused.
-    PWTEST_CACHE_DIR: path.join(projectRoot, '.tea-atdd-cache'),
+    // refused. `cacheDir` is unique per invocation (see CACHE_DIR_PREFIX).
+    PWTEST_CACHE_DIR: cacheDir,
     // Deterministic across machines: no color codes to strip out of a message
     // a later scorer pattern-matches against, and no host CI variable reaching
     // the child (see cli/lib/probe-targets.js's own reasoning for the same
@@ -475,6 +484,7 @@ async function main(argv) {
     }
   }
 
+  const cacheDir = fs.mkdtempSync(path.join(projectRoot, CACHE_DIR_PREFIX));
   let results;
   try {
     results = specFiles.map((relativeFile) =>
@@ -489,10 +499,12 @@ async function main(argv) {
         // config) is what makes it skip starting or stopping a server of its
         // own once this one already answers `--server-health-url`.
         baseUrl: options.serverHealthUrl ? options.serverHealthUrl.replace(/\/health$/, '') : undefined,
+        cacheDir,
       }),
     );
   } finally {
     stopServer(server);
+    fs.rmSync(cacheDir, { recursive: true, force: true });
   }
 
   const afterFiles = filesUnder(projectRoot, { skip: [options.testDir, 'test-artifacts', 'test-results'] });

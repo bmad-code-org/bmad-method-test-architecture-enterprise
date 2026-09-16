@@ -336,10 +336,19 @@ const EXECUTION_TARGETS = [
     // every staged eval workspace overrides the trace and nfr targets above.
     artifacts: {},
     environmentKeys: vendorEnvironmentNames(),
-    // One minute above cli/transcript-runner.js's own DEFAULT_TIMEOUT_MS, for
-    // the reason the comment above EXECUTION_TARGETS gives: the inner clock
-    // classifies, and this one only backstops.
-    maxElapsedMs: 11 * 60_000,
+    // One minute above the 20-minute RUN_TIMEOUT_MS test/eval-teach-me-testing.js
+    // passes as its own per-turn --timeout-ms, the heavier caller
+    // cli/transcript-runner.js's own header comment anticipates: a real teaching
+    // turn reads several step files, plays both facilitator and learner through
+    // an entire session, and writes a progress file, session notes, and a
+    // transcript log, so it needs materially more than the runner's own
+    // DEFAULT_TIMEOUT_MS (10 minutes). Every other registered target's backstop
+    // sits one minute above its own harness's RUN_TIMEOUT_MS for the same reason
+    // the comment above EXECUTION_TARGETS gives: the inner clock classifies, and
+    // this one only backstops, and `commandTargetPolicy`'s budget override can
+    // only lower this ceiling, never raise it, so the backstop has to already be
+    // wide enough for the heaviest caller.
+    maxElapsedMs: 21 * 60_000,
   },
 ];
 

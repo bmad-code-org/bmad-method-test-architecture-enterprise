@@ -1,0 +1,78 @@
+{
+  "$comment": [
+    "The single scripted two-turn session test/eval-teach-me-testing.js drives against a real vendor.",
+    "Turn 1 runs the whole first-session path through the real bmad-teach-me-testing skill, playing both",
+    "the facilitator and the learner: role, experience level, learning goals, session selection, a",
+    "deliberately wrong answer to session-01's own Q1, the below-70% [R]/[C] review branch, and exit.",
+    "Turn 2 is a fresh, memoryless process that proves progress persistence is real rather than assumed --",
+    "see the story spec's Design Notes for why a single-turn design could not tell a correct write from a",
+    "skill that would forget everything the instant the process exited.",
+    "",
+    "Every value below that describes the real skill's own wording is cross-checked in validateCorpus",
+    "against the live step files and data files it names, the same discipline test/eval-nfr.js's",
+    "skillRuleCitations applies: a claim this corpus rests a score on has to still be true of the skill on",
+    "disk, so a later edit to the real workflow fails this corpus before it silently miscalibrates a live",
+    "run.",
+    "",
+    "correctionPhrase is step-04-session-01.md's own verbatim text for an incorrect answer to session-01's",
+    "Q1 (q1-purpose in data/quiz-questions.yaml), pinned as the containment token for two separate checks:",
+    "correctionHolds asks whether it appears at all in turn 1's transcript (the seeded misconception being",
+    "corrected the first time), and reTeachingHolds asks whether it appears AGAIN after reviewMarker (the",
+    "same content actually being re-taught when the learner chooses to review, rather than the review",
+    "silently reusing the transcript's own earlier occurrence).",
+    "",
+    "quizAnswers scripts exactly one wrong answer (q1-purpose) against the real answer key in",
+    "data/quiz-questions.yaml, landing at 2/3 = 66.67%, below the file's own 70% passing_score, which is",
+    "what puts the session on the [R]/[C] branch at all. quizQuestionEvidence is what masteryClaimHolds",
+    "cross-references a completed session's claim against: session-01-quickstart's own Q1 question text,",
+    "unique to that session, so a progress.yaml claiming a DIFFERENT session complete with no matching",
+    "evidence in the transcript is caught as an unearned mastery claim rather than passed by a marker",
+    "generic enough to appear in any session's quiz.",
+    "",
+    "continuationMarker and freshStartMarker are step-01-init.md's own two mutually exclusive greetings:",
+    "turn 2 must land on the continuation branch (having found turn 1's progress file), never the fresh-",
+    "start branch, which is the structural proof that persistence is real rather than assumed."
+  ],
+  "sessionId": "session-01-quickstart",
+  "declaredLevel": "Beginner",
+  "role": "QA",
+  "learningGoals": "Learn testing fundamentals well enough to start contributing automated coverage at work.",
+  "userName": "tea-eval-harness",
+  "seededWrongQuestion": {
+    "id": "q1-purpose",
+    "scriptedAnswer": "A",
+    "correctAnswer": "B"
+  },
+  "quizAnswers": {
+    "q1-purpose": "A",
+    "q2-risk-matrix": "A",
+    "q3-engagement": "B"
+  },
+  "correctionPhrase": "TEA's purpose is to make testing expertise accessible through structured workflows and knowledge (B)",
+  "reviewMarker": "[R]",
+  "quizQuestionEvidence": {
+    "session-01-quickstart": "What is the primary purpose of TEA?"
+  },
+  "continuationMarker": "Welcome back",
+  "freshStartMarker": "Starting fresh",
+  "corpusCitations": {
+    "correctionPhrase": {
+      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-01.md"
+    },
+    "reviewMarker": {
+      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-01.md"
+    },
+    "quizQuestionEvidence": {
+      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-04-session-01.md"
+    },
+    "continuationMarker": {
+      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-01-init.md"
+    },
+    "freshStartMarker": {
+      "file": "src/workflows/testarch/bmad-teach-me-testing/steps-c/step-01-init.md"
+    },
+    "quizAnswers": {
+      "file": "src/workflows/testarch/bmad-teach-me-testing/data/quiz-questions.yaml"
+    }
+  }
+}
