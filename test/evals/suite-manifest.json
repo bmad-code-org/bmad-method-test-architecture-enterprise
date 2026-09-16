@@ -60,9 +60,7 @@
       "harness": "test/eval-atdd.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
@@ -73,12 +71,8 @@
         "test/fixtures/atdd-eval/reservations/src/server.js",
         "test/fixtures/atdd-eval/reservations/docs/stories/4-2-reserve-a-locker.md"
       ],
-      "groundTruth": [
-        "test/fixtures/atdd-eval/ground-truth.json"
-      ],
-      "contracts": [
-        "test/contracts/atdd.contract.json"
-      ],
+      "groundTruth": ["test/fixtures/atdd-eval/ground-truth.json"],
+      "contracts": ["test/contracts/atdd.contract.json"],
       "thresholds": {
         "redForIntendedReasonRate": 1,
         "criteriaCoverage": 1,
@@ -93,9 +87,7 @@
       "repetitions": 2,
       "caseCount": 1,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "scoped-artifact-writes"
-      ]
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -135,9 +127,7 @@
       "harness": "test/eval-automate.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
@@ -149,9 +139,7 @@
         "test/fixtures/automate-eval/voucher-service/src/server.js",
         "test/fixtures/automate-eval/voucher-service/src/vouchers.js"
       ],
-      "groundTruth": [
-        "test/fixtures/automate-eval/ground-truth.json"
-      ],
+      "groundTruth": ["test/fixtures/automate-eval/ground-truth.json"],
       "contracts": [],
       "thresholds": {
         "maxLoadErrors": 0,
@@ -163,9 +151,7 @@
       "repetitions": 1,
       "caseCount": 4,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "command-execution"
-      ]
+      "runnerCapabilities": ["command-execution"]
     },
     {
       "$comment": [
@@ -190,21 +176,12 @@
       "harness": "test/eval-bmad-tea-routing.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
-      "fixtures": [
-        "test/fixtures/tea-routing-eval/intents.json"
-      ],
-      "groundTruth": [
-        "test/fixtures/tea-routing-eval/ground-truth.json"
-      ],
-      "contracts": [
-        "test/contracts/tea-routing-controls.contract.json",
-        "test/contracts/tea-routing-intents.contract.json"
-      ],
+      "fixtures": ["test/fixtures/tea-routing-eval/intents.json"],
+      "groundTruth": ["test/fixtures/tea-routing-eval/ground-truth.json"],
+      "contracts": ["test/contracts/tea-routing-controls.contract.json", "test/contracts/tea-routing-intents.contract.json"],
       "thresholds": {
         "routeAccuracy": 0.9,
         "reasonTokenRecall": 0.8,
@@ -219,9 +196,7 @@
       "repetitions": 2,
       "caseCount": 18,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "read-only"
-      ]
+      "runnerCapabilities": ["read-only"]
     },
     {
       "$comment": [
@@ -244,9 +219,7 @@
       "harness": "test/eval-fragment-selection.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": true
       },
       "fixtures": [
@@ -286,9 +259,7 @@
       "repetitions": 2,
       "caseCount": 24,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "read-only"
-      ]
+      "runnerCapabilities": ["read-only"]
     },
     {
       "$comment": [
@@ -316,9 +287,7 @@
       "harness": "test/eval-ci.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
@@ -338,12 +307,8 @@
         "test/fixtures/ci-eval/minimal/src/audit-log.js",
         "test/fixtures/ci-eval/minimal/tests/audit-log.test.js"
       ],
-      "groundTruth": [
-        "test/fixtures/ci-eval/ground-truth.json"
-      ],
-      "contracts": [
-        "test/contracts/ci.contract.json"
-      ],
+      "groundTruth": ["test/fixtures/ci-eval/ground-truth.json"],
+      "contracts": ["test/contracts/ci.contract.json"],
       "thresholds": {
         "maxParseFailures": 0,
         "maxLintFindings": 0,
@@ -357,9 +322,7 @@
       "repetitions": 2,
       "caseCount": 2,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "scoped-artifact-writes"
-      ]
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -384,9 +347,7 @@
       "harness": "test/eval-nfr.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
@@ -405,12 +366,8 @@
         "test/fixtures/nfr-eval/clean/evidence/reliability-2026-09.json",
         "test/fixtures/nfr-eval/clean/evidence/security-review-2026-09-01.md"
       ],
-      "groundTruth": [
-        "test/fixtures/nfr-eval/ground-truth.json"
-      ],
-      "contracts": [
-        "test/contracts/nfr.contract.json"
-      ],
+      "groundTruth": ["test/fixtures/nfr-eval/ground-truth.json"],
+      "contracts": ["test/contracts/nfr.contract.json"],
       "thresholds": {
         "domainStatusAccuracy": 0.875,
         "undecidableDomainAccuracy": 1,
@@ -429,9 +386,7 @@
       "repetitions": 2,
       "caseCount": 2,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "scoped-artifact-writes"
-      ]
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -474,21 +429,15 @@
       "harness": "test/eval-test-design.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
         "test/fixtures/test-design-eval/seeded/docs/epics/epic-7-offline-order-capture.md",
         "test/fixtures/test-design-eval/clean/docs/epics/epic-9-last-sync-indicator.md"
       ],
-      "groundTruth": [
-        "test/fixtures/test-design-eval/ground-truth.json"
-      ],
-      "contracts": [
-        "test/contracts/test-design.contract.json"
-      ],
+      "groundTruth": ["test/fixtures/test-design-eval/ground-truth.json"],
+      "contracts": ["test/contracts/test-design.contract.json"],
       "thresholds": {
         "groundedRiskRecall": 0.8,
         "riskPrecision": 0.8,
@@ -510,9 +459,7 @@
       "repetitions": 2,
       "caseCount": 2,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "scoped-artifact-writes"
-      ]
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -525,9 +472,7 @@
       "harness": "test/eval-test-review.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
@@ -535,12 +480,8 @@
         "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
         "test/fixtures/test-review-eval/clean/profile.spec.ts"
       ],
-      "groundTruth": [
-        "test/fixtures/test-review-eval/ground-truth.json"
-      ],
-      "contracts": [
-        "test/contracts/test-review.contract.json"
-      ],
+      "groundTruth": ["test/fixtures/test-review-eval/ground-truth.json"],
+      "contracts": ["test/contracts/test-review.contract.json"],
       "thresholds": {
         "criticalRecall": 1,
         "recall": 0.7,
@@ -551,9 +492,7 @@
       "repetitions": 3,
       "caseCount": 3,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "scoped-artifact-writes"
-      ]
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -576,9 +515,7 @@
       "harness": "test/eval-trace.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
@@ -597,12 +534,8 @@
         "test/fixtures/trace-eval/clean/tests/component/token-list.spec.tsx",
         "test/fixtures/trace-eval/clean/tests/e2e/token-management.spec.ts"
       ],
-      "groundTruth": [
-        "test/fixtures/trace-eval/ground-truth.json"
-      ],
-      "contracts": [
-        "test/contracts/trace.contract.json"
-      ],
+      "groundTruth": ["test/fixtures/trace-eval/ground-truth.json"],
+      "contracts": ["test/contracts/trace.contract.json"],
       "thresholds": {
         "criterionStatusAccuracy": 0.9,
         "discriminatingCriterionAccuracy": 1,
@@ -624,9 +557,7 @@
       "repetitions": 2,
       "caseCount": 2,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "scoped-artifact-writes"
-      ]
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -655,18 +586,11 @@
       "harness": "test/eval-transcript.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
-      "fixtures": [
-        "test/fixtures/transcript-eval/ground-truth.json",
-        "test/fixtures/transcript-runner/stub-agent.js"
-      ],
-      "groundTruth": [
-        "test/fixtures/transcript-eval/ground-truth.json"
-      ],
+      "fixtures": ["test/fixtures/transcript-eval/ground-truth.json", "test/fixtures/transcript-runner/stub-agent.js"],
+      "groundTruth": ["test/fixtures/transcript-eval/ground-truth.json"],
       "contracts": [],
       "thresholds": {
         "crossTurnConsistencyRate": 1
@@ -674,9 +598,7 @@
       "repetitions": 1,
       "caseCount": 1,
       "ciTier": "deterministic",
-      "runnerCapabilities": [
-        "scoped-artifact-writes"
-      ]
+      "runnerCapabilities": ["scoped-artifact-writes"]
     },
     {
       "$comment": [
@@ -712,9 +634,7 @@
       "harness": "test/eval-framework-scaffold.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
@@ -731,9 +651,7 @@
         "test/fixtures/framework-scaffold/clean/tests/support/auth-fixture.ts",
         "test/fixtures/framework-scaffold/clean/tests/support/merged-fixtures.ts"
       ],
-      "groundTruth": [
-        "test/fixtures/framework-scaffold/clean/tests/e2e/api-sample.spec.ts"
-      ],
+      "groundTruth": ["test/fixtures/framework-scaffold/clean/tests/e2e/api-sample.spec.ts"],
       "contracts": [],
       "thresholds": {
         "installAndSmokePassRate": 1,
@@ -742,9 +660,7 @@
       "repetitions": 1,
       "caseCount": 1,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "command-execution"
-      ]
+      "runnerCapabilities": ["command-execution"]
     },
     {
       "$comment": [
@@ -791,9 +707,7 @@
       "harness": "test/eval-teach-me-testing.js",
       "harnessOptions": {
         "repetitionFlag": "--runs",
-        "preflightArgs": [
-          "--preflight-only"
-        ],
+        "preflightArgs": ["--preflight-only"],
         "acceptsWorkflowFilter": false
       },
       "fixtures": [
@@ -826,9 +740,7 @@
         "src/workflows/testarch/bmad-teach-me-testing/templates/progress-template.yaml",
         "src/workflows/testarch/bmad-teach-me-testing/templates/session-notes-template.md"
       ],
-      "groundTruth": [
-        "test/fixtures/teach-me-testing-eval/ground-truth.json"
-      ],
+      "groundTruth": ["test/fixtures/teach-me-testing-eval/ground-truth.json"],
       "contracts": [],
       "thresholds": {
         "placementAccuracy": 1,
@@ -840,9 +752,7 @@
       "repetitions": 1,
       "caseCount": 1,
       "ciTier": "full-matrix",
-      "runnerCapabilities": [
-        "scoped-artifact-writes"
-      ]
+      "runnerCapabilities": ["scoped-artifact-writes"]
     }
   ],
   "deferred": []

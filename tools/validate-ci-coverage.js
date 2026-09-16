@@ -112,6 +112,7 @@ const DELIBERATELY_LOCAL = {
   'eval:nfr': 'a live agent eval; same reason as eval:all',
   'eval:preflight': 'the --preflight-only entry point into the live eval:contract-strength; same reason as eval:all',
   'eval:routing': 'a live agent eval; same reason as eval:all',
+  'eval:teach-me-testing': 'a live agent eval; same reason as eval:all',
   'eval:test-design': 'a live agent eval; same reason as eval:all',
   'eval:test-review': 'a live agent eval; same reason as eval:all',
   'eval:trace': 'a live agent eval; same reason as eval:all',

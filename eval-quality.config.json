@@ -1172,7 +1172,10 @@
     "dated": {
       "triggers": [
         {
-          "match": "The remaining behavioral suite stays visible in"
+          "match": "The central constraint is closed"
+        },
+        {
+          "match": "no skill's coverage obligation is discharged by declaration"
         },
         {
           "match": "still listed as deferred"
@@ -1216,10 +1219,10 @@
       "claims": [
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The remaining behavioral suite stays visible in",
+          "key": "no skill's coverage obligation is discharged by declaration",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "ONE_SKILL_DEFERRED"
+            "export": "NO_SKILLS_DEFERRED"
           },
           "reason": "test/evals/suite-manifest.json's deferred array"
         },
@@ -1338,7 +1341,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "251eb7975e1555bd83e691173bf59606ea5aeb7744a59ad06a027246d8ff38bc"
+            "hash": "753efb1642a8925afd1f5040e968418910303d72096bcd175601b9679b9f3268"
           }
         },
         {
@@ -1349,12 +1352,12 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "does not yet prove the complete behavior of",
+          "key": "The central constraint is closed",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "NOT_EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE"
+            "export": "EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE"
           },
-          "reason": "test/evals/suite-manifest.json's deferred array is non-empty"
+          "reason": "test/evals/suite-manifest.json's deferred array is empty"
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
