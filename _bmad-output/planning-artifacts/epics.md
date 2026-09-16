@@ -56,11 +56,11 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 | Epic 2    |       7 / 7 |      0 |         0 | Complete       |
 | Epic 3    |       6 / 6 |      0 |         0 | Complete       |
 | Epic 4    |       8 / 8 |      0 |         0 | Complete       |
-| Epic 5    |       2 / 6 |      3 |         1 | In progress    |
+| Epic 5    |       4 / 6 |      1 |         1 | In progress    |
 | Epic 6    |     12 / 12 |      0 |         0 | Complete       |
 | Epic 7    |       1 / 1 |      0 |         0 | Complete       |
 | Epic 8    |       1 / 1 |      0 |         0 | Complete       |
-| **Total** | **42 / 46** |  **3** |     **1** | **91% merged** |
+| **Total** | **44 / 46** |  **1** |     **1** | **96% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -105,8 +105,8 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 5.0: Repair the publish workflow](#story-50-repair-the-publish-workflow) ([#209](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/209))
 - [x] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance) ([#199](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/199))
 - [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result) (**Active:** [#204](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/204) merged; stage one only, the live run itself remains)
-- [ ] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships) (**Active:** [#203](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/203) merged; a final numeric pass now that Epic 6 has closed remains)
-- [ ] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page) (**Active:** [#200](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/200) and [#206](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/206) merged; a final pass now that Epic 6 has closed remains)
+- [x] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships) (both PRs merged: [#203](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/203) and [#211](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/211))
+- [x] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page) (all three PRs merged: [#200](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/200), [#206](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/206), and [#211](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/211))
 - [ ] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea)
 
 ### Epic 6 progress: Every TEA skill is covered by a behavioral suite
