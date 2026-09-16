@@ -107,14 +107,15 @@ What the corpus scores, read off `test/probes/expected-strength.json` as it stan
 | the eight fragment-selection contracts | none authored | 1 of 1 caught on each | fragment selection seeds no defect; it is a routing measurement with a required set and a forbidden set |
 | `trace`                                | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
 | `nfr`                                  | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
-| `ci`                                   | refused       | none authored         | all three signatures read a written file, so AD-9's gate refuses them                                   |
+| `ci`                                   | refused       | none authored         | all three fail pre-flight on `seeded-fault-fired` before AD-9's gate is reached                         |
 
 The two numbers that moved and what moved them: `test-review`'s defect class went from four exercised
 and four caught to nine and nine when `eval-quality` 1.4.0 dropped a clean leg that had issued the
 fault leg's own request, and `trace`'s three plants stopped failing pre-flight when its witness legs
 moved off the seeded set. Both are `seeded-faults-scoped`, and both are below. Fourteen of
-`test-design`'s sixteen probes still fail pre-flight on `seeded-fault-fired`, and every probe in the
-other thirteen corpora pre-flights, so what is left unscored elsewhere is the qualification gate alone.
+`test-design`'s sixteen probes and all three of `ci`'s defect probes still fail pre-flight on
+`seeded-fault-fired`, and every probe in the other thirteen corpora pre-flights, so what is left
+unscored elsewhere is the qualification gate alone.
 
 A clean control never enters the vector, which is AD-7's rule rather than a gap: what it establishes
 is that the contract does not fire where there is nothing to find.
@@ -123,10 +124,10 @@ is that the contract does not fire where there is nothing to find.
 `test/probes/expected-strength.json` rather than against pass and fail directly: 0 when every probe
 reached the outcome the corpus records, 1 when a verdict moved, 2 when a pre-flight outcome moved.
 Eight probes could not be pre-flighted when that rule was written, and both scripts would have been
-red on every run, which is how a script stops being read before the day it means something. Fourteen
-of the 55 cannot pre-flight today, all of them `test-design`'s, so the baseline is what says a green
-run is green rather than what excuses a red one, and the rule is what catches the first probe whose
-outcome moves in either direction.
+red on every run, which is how a script stops being read before the day it means something. Seventeen
+of the 59 cannot pre-flight today, fourteen of them `test-design`'s and three of them `ci`'s, so the
+baseline is what says a green run is green rather than what excuses a red one, and the rule is what
+catches the first probe whose outcome moves in either direction.
 
 ### The behavior grouping was a defect, and it is fixed
 

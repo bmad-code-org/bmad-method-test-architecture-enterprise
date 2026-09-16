@@ -4,16 +4,16 @@ A contract says what a TEA skill has to do. A probe says what was wrong with the
 contract was asked, and `eval-quality`'s `runScore` reads the two together to answer the question the
 package exists for: did this contract's oracles catch the defect that was actually there?
 
-| Corpus                                      | Probes | What they are                                                          |
-| ------------------------------------------- | -----: | ---------------------------------------------------------------------- |
-| `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe   |
-| `test-design.probes.json`                   |     16 | Fourteen defective documents, one clean control, one gameability probe |
-| `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                          |
-| `nfr.probes.json`                           |      4 | Three planted domains, one clean control                               |
-| `ci.probes.json`                            |      4 | Three planted requested-element gaps, one clean control                |
-| `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow               |
-| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                            |
-| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                            |
+| Corpus                                      | Probes | What they are                                                              |
+| ------------------------------------------- | -----: | -------------------------------------------------------------------------- |
+| `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe       |
+| `test-design.probes.json`                   |     16 | Fourteen defective documents, one clean control, one gameability probe     |
+| `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                              |
+| `nfr.probes.json`                           |      4 | Three planted domains, one clean control                                   |
+| `ci.probes.json`                            |      4 | Two requested-element gaps, one forbidden-element plant, one clean control |
+| `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow                   |
+| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                                |
+| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                                |
 
 **Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all fifteen
 files from the sources this repository already keeps: `test/fixtures/test-review-eval/ground-truth.json`
@@ -145,7 +145,9 @@ is the same command shape and its three plant probes are refused the same way, o
 for the same reason: every completed audit exits 0 whatever it wrote, so the one channel that would
 qualify would separate nothing. `tea-ci-runner`'s three plant probes are refused for the same reason
 again: a scaffold that wrote an incomplete or over-generous pipeline still exits 0, so no channel
-besides the artifact one carries the truth, and it is the one AD-9 refuses.
+besides the artifact one carries the truth, and it is the one AD-9 refuses. Unlike `tea-nfr-runner`'s,
+all three also fail pre-flight on `seeded-fault-fired` and exit 3 before a verdict exists at all: the
+manifestation witness fires on a leg the contract calls clean, the same blocker `test-design` carries.
 
 **A document-level oracle reaches a domain only through the rollup.** The nfr contract addresses one
 markdown report, which is one string to this vocabulary, so its claims are about the document: the

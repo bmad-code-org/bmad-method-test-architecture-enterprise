@@ -434,7 +434,11 @@ function parseArgs(argv) {
         break;
       }
       case '--runs': {
-        runs = Number.parseInt(argv[index + 1] ?? '', 10);
+        // Tested on the raw string before the parse. Number.parseInt truncates, so
+        // values such as `2.5` and `3abc` otherwise become valid small run counts.
+        const value = argv[index + 1] ?? '';
+        if (!/^[0-9]+$/.test(value)) fatal(2, '--runs requires a positive integer');
+        runs = Number.parseInt(value, 10);
         if (!Number.isInteger(runs) || runs < 1) fatal(2, '--runs requires a positive integer');
         index += 1;
         break;
@@ -645,7 +649,11 @@ async function validateCorpus(groundTruth) {
       continue;
     }
     const lines = cited.text.split('\n');
-    if (citation.section && !headingsOf(lines).has(citation.section)) {
+    if (typeof citation.section !== 'string' || citation.section.trim().length === 0) {
+      problems.push(`skillRuleCitations.${key}: declares no section`);
+      continue;
+    }
+    if (!headingsOf(lines).has(citation.section)) {
       problems.push(`skillRuleCitations.${key}: ${citation.file} has no section titled "${citation.section}"`);
       continue;
     }

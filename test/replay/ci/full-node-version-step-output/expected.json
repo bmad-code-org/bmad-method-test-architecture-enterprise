@@ -1,0 +1,51 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: full-correct-pipeline with every setup-node step spelled the way github-actions-template.yaml itself ships it, a run: step reading .nvmrc into a step output that node-version then interpolates, rather than node-version-file naming the file directly. This is the shipped default, and until this case existed nothing in the replay corpus exercised nodeVersionFromNvmrc's third recognized spelling at all.",
+    "Every requested element is still present, because the rewrite only changes how the Node version is resolved, not what any other step does.",
+    "Zero unrequested elements and zero rule violations, same as full-correct-pipeline."
+  ],
+  "id": "full-node-version-step-output",
+  "suite": "ci",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "full-correct-pipeline with every setup-node step's node-version-file: .nvmrc replaced by a Determine Node version step (id: node-version) that reads .nvmrc into a step output, and node-version: ${{ steps.node-version.outputs.value }} on the setup-node step that follows it in the same job.",
+    "gate: every requested element still present, because nodeVersionFromNvmrc's third spelling recognizes a node-version expression reading a step output an earlier run: step in the same job produced from .nvmrc."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-push-main": true,
+      "trigger-pull-request-main": true,
+      "trigger-weekly-schedule": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-e2e-tests": true,
+      "gate-lint-precedes-tests": true,
+      "gate-matrix-shards": true,
+      "gate-burn-in": true,
+      "artifact-playwright-report": true,
+      "artifact-test-results": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

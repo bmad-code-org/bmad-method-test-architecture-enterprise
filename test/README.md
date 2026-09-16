@@ -249,15 +249,17 @@ grounded on a different file of the same bundle, a gate artifact contradicting i
 assessment section, a gate block declaring a domain the document never assesses, the same
 audit with no `audited_domains` block at all, a block that appears only inside the quoted
 example, a report whose gate declares four statuses under headings no domain section
-recognises, and a report the harness must refuse to score at all. Twenty `ci` cases cover
-both projects: a correct pipeline for each, every threshold-breaching deviation the harness
-scores (a missing trigger, a missing or widened permission, the wrong Node-version spelling
-and the right one signing alike, an undefined `needs:` job, an untrusted context interpolated
-into a `run:` block, `continue-on-error` on a test step, a dropped burn-in job, a swapped test
-command, an added trigger, unconditional artifact uploads, the full-request template copied
-onto the minimal project, a retry action a minimal request forbids by name, and two documents
-`actionlint` refuses for reasons the `yaml` package does not: one that fails to parse and one
-that parses to something that is not a workflow at all).
+recognises, and a report the harness must refuse to score at all. Twenty-one `ci` cases cover
+both projects: a correct pipeline for each, a third correct pipeline spelling every Node
+version the way the shipped template itself does, a run: step reading `.nvmrc` into a step
+output that `node-version` then interpolates, and every threshold-breaching deviation the
+harness scores (a missing trigger, a missing or widened permission, the wrong Node-version
+spelling and the right one signing alike, an undefined `needs:` job, an untrusted context
+interpolated into a `run:` block, `continue-on-error` on a test step, a dropped burn-in job, a
+swapped test command, an added trigger, unconditional artifact uploads, the full-request
+template copied onto the minimal project, a retry action a minimal request forbids by name,
+and two documents `actionlint` refuses for reasons the `yaml` package does not: one that fails
+to parse and one that parses to something that is not a workflow at all).
 All three suites hold
 `signatureOf` to its contract: two cases of one set or bundle sign identically exactly
 when their results are identical, and a counted fixture mutation always changes the
