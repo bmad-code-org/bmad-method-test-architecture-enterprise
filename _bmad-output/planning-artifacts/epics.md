@@ -129,7 +129,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 
 ### Epic 8 progress: What the suites proved they do not measure
 
-- [ ] [Story 8.1: The nfr suite scores whether evidence supports the status, not only whether it exists](#story-81-the-nfr-suite-scores-whether-evidence-supports-the-status-not-only-whether-it-exists)
+- [x] [Story 8.1: The nfr suite scores whether evidence supports the status, not only whether it exists](#story-81-the-nfr-suite-scores-whether-evidence-supports-the-status-not-only-whether-it-exists) ([#197](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/197))
 
 Supporting work merged during this sequence: [TEA #172](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/172) holds the `npm test` chain against missing script definitions. [eval-quality #131](https://github.com/bmad-code-org/bmad-eval-quality/pull/131) keeps the pending-release note current while upstream work continues. These strengthen delivery and close no story by themselves.
 

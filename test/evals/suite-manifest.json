@@ -307,6 +307,7 @@
         "thresholdFidelityAccuracy": 0.9,
         "overallStatusAccuracy": 1,
         "domainCoverage": 1,
+        "groundedCitationAccuracy": 1,
         "maxUnsupportedPass": 0,
         "maxFabricatedEvidence": 0,
         "maxCleanFalsePositives": 0,

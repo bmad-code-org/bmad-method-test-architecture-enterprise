@@ -243,6 +243,9 @@ jobs:
       - name: Validate NFR eval corpus
         run: npm run test:eval-nfr-data
 
+      - name: Validate NFR corpus validation checks fire on a seeded defect
+        run: npm run test:nfr-validate-corpus
+
       - name: Validate CI eval corpus
         run: npm run test:eval-ci-data
 

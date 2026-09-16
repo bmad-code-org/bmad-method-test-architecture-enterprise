@@ -354,6 +354,21 @@ behind them are an answer with no audit under it. The scored
 result carries the heading count beside it, because that weaker number is the one the
 contract's coverage oracle can see.
 
+A status can be supported by evidence and still be supported by the wrong evidence: a real
+file in the bundle, cited for a criterion ground truth declares a different file for.
+`groundedCitationAccuracy`, ceiling 1, is what tells the two apart. `parseReport` tracks a
+`### <Criterion>` heading, or one of Resource Usage's two un-headed bold bullets, the same
+way it tracks a domain heading, exactly one level under the domain's own; a heading nested
+any deeper is left alone rather than promoted, so a model's own aside under a criterion
+cannot silently steal its later citations. Over the criteria ground truth declares evidence
+for, a real (not fabricated) citation is grounded only when every real file cited for it is
+one ground truth names; one correct file cited alongside one wrong one is not grounded, and
+`ungroundedCitations` names only the wrong file. A criterion with no declared evidence, or
+one the report never cited, is excluded rather than scored. The ceiling was calibrated
+against a live `--agent claude` run of both bundles (`node test/eval-nfr.js --agent claude
+--runs 2`), scoring every real citation the model made correctly grounded across four
+repetitions; it has not been calibrated against `codex` or `gemini`.
+
 ## ci eval suite
 
 `eval-ci.js` measures `bmad-testarch-ci` against the corpus under

@@ -15,7 +15,7 @@
   ],
   "id": "gapped-block-only-in-the-quoted-example",
   "suite": "nfr",
-  "scorerVersion": 9,
+  "scorerVersion": 10,
   "storedOutput": {
     "origin": "constructed",
     "report": "test-artifacts/nfr-assessment.md"
@@ -36,7 +36,12 @@
     "Gate disagreements: none, because the run answered in one place only.",
     "",
     "The quoted example's own headings sit inside a fence, so they are stripped before the sections are walked",
-    "and they add no duplicate section. Overall, thresholds, citations and evidence gaps are unchanged."
+    "and they add no duplicate section. Overall, thresholds, citations and evidence gaps are unchanged.",
+    "",
+    "Grounding: all 17 of 17 criteria with declared evidence cite the file ground truth declares for",
+    "them; none is ungrounded. A criterion with no declared evidence, or no citation, or only a fabricated one is",
+    "excluded from that count rather than treated as a miss, which is why it need not equal the citation total",
+    "above."
   ],
   "result": {
     "isCleanSet": false,
@@ -92,6 +97,11 @@
       "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
     },
     "fabricated": [],
+    "groundedCriteria": {
+      "hits": 17,
+      "total": 17
+    },
+    "ungroundedCitations": [],
     "evidenceGaps": ["Test Coverage"],
     "thresholds": {
       "checks": 4,

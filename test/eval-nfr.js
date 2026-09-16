@@ -346,6 +346,27 @@ const THRESHOLDS = {
   // a gate value outside that enum, which is why the count is over declared and
   // assessed statuses rather than over headings.
   domainCoverage: 1,
+  // Over the criteria ground truth declares evidence for, a real citation the
+  // report made for one names the file ground truth declares for it. Two
+  // designs were worked out by hand before this was calibrated: exempt a
+  // criterion with no declared evidence, or count every criterion uniformly
+  // and let the two structurally-empty criteria in the gapped bundle's
+  // maintainability domain (Test Coverage, Code Duplication, correctly cited
+  // to the tech spec to state the threshold and record that no report exists)
+  // register as permanent misses. The second reads as a live-noise band worth
+  // calibrating; it is not, because those two misses are a fixed count baked
+  // into the bundle rather than something a model's behavior varies. Live
+  // calibration settled it: `node test/eval-nfr.js --agent claude --runs 2`
+  // against both bundles scored the exempting design 72/72 (100%) over both
+  // repetitions of both bundles, with real evidence citations grounded
+  // correctly everywhere the model did not fabricate one outright, against
+  // the uniform design's fixed 72/76 (94.7%) every single repetition, never
+  // moving. A live model's real behavior confirmed the clean design rather
+  // than merely a hand-built fixture's, so the ceiling is 1, matching
+  // domainCoverage and overallStatusAccuracy: exempting an evidence-free
+  // criterion is what the workflow's own rule already means by "evidence
+  // that speaks to it", not a threshold chosen to admit slack.
+  groundedCitationAccuracy: 1,
   // A PASS on a domain the corpus marks undecidable. This is the headline, and
   // the ceiling is zero because the workflow's own text forbids the judgment
   // outright rather than discouraging it.
@@ -712,6 +733,7 @@ async function validateCorpus(groundTruth) {
 
   const seenSetIds = new Set();
   const seenProjectRoots = new Set();
+  const seenCriterionNames = new Set();
   let undecidableTotal = 0;
   for (const set of groundTruth.fixtureSets) {
     const label = `fixtureSets[${set.id || '(no id)'}]`;
@@ -824,6 +846,12 @@ async function validateCorpus(groundTruth) {
         problems.push(`${domainLabel}: declares no criteria, so the declared status rolls up from nothing`);
         continue;
       }
+      // scoreRun matches a report's criterion heading to one of these names after
+      // stripCriterionAnnotation strips both sides, so two declared criteria that
+      // strip to the same name would share one citation list in scoreRun with
+      // nothing to tell them apart; caught here, at the one place both names are
+      // in hand together, rather than left to surface as moved replay numbers.
+      const strippedNames = new Map();
       for (const criterion of criteria) {
         if (!STATUSES.has(criterion.expectedStatus)) {
           problems.push(`${domainLabel}: criterion "${criterion.name}" has status "${criterion.expectedStatus}"`);
@@ -838,6 +866,16 @@ async function validateCorpus(groundTruth) {
         if (criterion.expectedStatus === 'PASS' && (criterion.evidence ?? []).length === 0) {
           problems.push(`${domainLabel}: criterion "${criterion.name}" expects PASS and cites no evidence`);
         }
+        const strippedName = stripCriterionAnnotation(String(criterion.name ?? ''));
+        if (strippedNames.has(strippedName)) {
+          problems.push(
+            `${domainLabel}: criteria "${strippedNames.get(strippedName)}" and "${criterion.name}" both strip to "${strippedName}", ` +
+              'and scoreRun would share one citation list between them',
+          );
+        } else {
+          strippedNames.set(strippedName, criterion.name);
+        }
+        if (typeof criterion.name === 'string') seenCriterionNames.add(criterion.name);
       }
       const rolled = rollupStatus(criteria.map((criterion) => criterion.expectedStatus));
       if (rolled !== domain.expectedStatus) {
@@ -856,6 +894,19 @@ async function validateCorpus(groundTruth) {
     if (set.expectedUnknownThresholdDeclared !== anyUnstated) {
       problems.push(
         `${label}: expectedUnknownThresholdDeclared is ${set.expectedUnknownThresholdDeclared} and ${anyUnstated ? 'a domain states no threshold' : 'every domain states its threshold'}`,
+      );
+    }
+  }
+
+  // CRITERION_BULLET_ALIASES's two targets are literals in eval-nfr.js, not read
+  // from ground-truth.json, so a rename there would otherwise surface only
+  // indirectly, as a moved replay number with no named cause. Checked once,
+  // against every criterion name declared anywhere in the corpus, since the
+  // aliases are parser-wide rather than scoped to one bundle.
+  for (const target of CRITERION_BULLET_ALIASES.values()) {
+    if (!seenCriterionNames.has(target)) {
+      problems.push(
+        `CRITERION_BULLET_ALIASES names "${target}" as a bullet alias target, and no criterion in ground-truth.json is named that`,
       );
     }
   }
@@ -1205,6 +1256,95 @@ const OVERALL_STATUS = /overall_status:[ \t]+['"]?(PASS|CONCERNS|FAIL|WAIVED|N\/
 const GATE_SECTION_HEADING = /^(#{2,6})\s+Gate YAML Snippet\s*$/i;
 
 /**
+ * A criterion `###` heading, one level under a domain's `##` heading: the text
+ * after the `#`s, trimmed.
+ */
+const CRITERION_HEADING = /^(#{2,6})\s+(.+?)\s*$/;
+
+/**
+ * A bullet naming a criterion and nothing else on the line, the shape
+ * `nfr-report-template.md` gives Resource Usage's two sub-criteria and Disaster
+ * Recovery's two sub-criteria: `- **CPU Usage**`, with the fields that would
+ * normally follow a `###` heading nested one level deeper instead. A field
+ * label line (`- **Status:** PASS`) always carries a value after the label, so
+ * requiring nothing but whitespace to end of line is what keeps this from
+ * matching one.
+ */
+const CRITERION_BULLET = /^\s*[-*+]\s+\*\*([^*]+)\*\*\s*$/;
+
+/**
+ * A live model's own heading text decorates a criterion far more freely than
+ * the two hand-curated fixture sets that this parser's design started from.
+ * Calibrating against `claude`, four live runs of the two bundles wrote
+ * `MTTR (Mean Time To Recovery)`, `Compliance (GDPR)`, `Compliance (if
+ * applicable)`, and `Disaster Recovery (evaluated separately — ...)` for
+ * headings whose ground-truth name carries no such suffix at all, next to
+ * `CI Burn-In (Stability)` against `CI Burn-In`, which is the one case the
+ * stored corpus alone had shown. A per-string alias table sized to the stored
+ * corpus would have missed three of those four; stripping every trailing
+ * `(...)` annotation, not just the last one, is what a name written for a
+ * human, decorated for a human, actually needs: a heading chaining two, `MTTR
+ * (Mean Time To Recovery) (revised)`, defeats a single strip the same way an
+ * un-stripped one defeats none. `Response Time (p95)` and `Availability
+ * (Uptime)` carry their one parenthetical as part of the canonical name
+ * itself, which is why `scoreRun` strips it from both sides rather than only
+ * from the report's.
+ *
+ * Peels balanced trailing parenthetical groups one at a time by counting
+ * parens from the end, rather than matching `[^()]*` inside a single regex: a
+ * regex excluding parens from the group's own contents cannot describe a
+ * group containing another group, so `Disaster Recovery (evaluated
+ * separately (see appendix))` left the whole annotation unstripped under the
+ * regex this replaced. Unbalanced input (an unmatched `(` or `)`) is left
+ * alone rather than guessed at, since a heading that cannot be balanced is not
+ * one this function can safely claim to understand.
+ */
+function stripCriterionAnnotation(text) {
+  let result = String(text).trim();
+  for (;;) {
+    if (!result.endsWith(')')) return result;
+    let depth = 0;
+    let start = -1;
+    for (let i = result.length - 1; i >= 0; i -= 1) {
+      if (result[i] === ')') depth += 1;
+      else if (result[i] === '(') {
+        depth -= 1;
+        if (depth === 0) {
+          start = i;
+          break;
+        }
+      }
+    }
+    if (start === -1) return result;
+    result = result.slice(0, start).trimEnd();
+  }
+}
+
+/**
+ * Resource Usage's two sub-criteria are the one place a live report renames
+ * the criterion outright rather than decorating it: `**CPU Usage**` names
+ * nothing `stripCriterionAnnotation` alone can recover, because the
+ * ground-truth name it stands for, `Resource Usage: CPU`, shares no substring
+ * with it. Disaster Recovery's own two bullets, `**RTO (Recovery Time
+ * Objective)**` and `**RPO (Recovery Point Objective)**`, are deliberately
+ * absent: ground truth declares one Disaster Recovery criterion, not two, so
+ * a report writing those bullets keeps citing under the heading above them,
+ * which is what leaving them out of this table does.
+ *
+ * Looked up case-insensitively and with a trailing colon stripped
+ * (`normalizeBulletKey`), since `**CPU Usage:**` and `**cpu usage**` name the
+ * same bullet a live model could write either of and `stripCriterionAnnotation`
+ * strips neither on its own.
+ */
+const normalizeBulletKey = (name) => name.replace(/:\s*$/, '').trim().toLowerCase();
+const CRITERION_BULLET_ALIASES = new Map(
+  [
+    ['CPU Usage', 'Resource Usage: CPU'],
+    ['Memory Usage', 'Resource Usage: Memory'],
+  ].map(([key, value]) => [normalizeBulletKey(key), value]),
+);
+
+/**
  * The gate block that carries the four domain statuses, and the lines under it.
  *
  * The key is `audited_domains` because that is the spelling
@@ -1315,6 +1455,19 @@ function citationsIn(line) {
  * test/replay/nfr/gapped-report-without-sections is the stored case that holds
  * this line.
  *
+ * Each domain entry also carries `criteria`, a `Map<string, string[]>` from a
+ * criterion name, as the report itself spells it, to every file-shaped
+ * citation attributed to it. It is tracked the same way `currentDomain` is: a
+ * `###` heading or a promoted bullet opens a criterion, and every citation
+ * line until the next one belongs to it. The parser never reads ground truth,
+ * so a heading's text is stored as written; `stripCriterionAnnotation` and the
+ * match against `ground-truth.json`'s `criteria[].name` are `scoreRun`'s job,
+ * where both sides of that comparison are available. `citations` above stays
+ * the flat per-domain array signatureOf and maxFabricatedEvidence already
+ * read; `criteria` is what `scoreRun` reads for `groundedCitationAccuracy`,
+ * the two consulted for different questions rather than one replacing the
+ * other.
+ *
  * @param {string} text The report, as the probe observation's `report` artifact carries it.
  * @returns {{domains: Map<string, object>, gateDomains: Map<string, string>, gateSelfContradictions: string[], gateBlockDeclared: boolean, duplicateDomainSections: string[], overallStatus: string|null, evidenceGaps: string[], unknownThresholdDeclared: boolean}|null}
  */
@@ -1336,6 +1489,7 @@ function parseReport(text) {
 
   let currentDomain = null;
   let currentDepth = 0;
+  let currentCriterion = null;
   let inGaps = false;
   let gapsDepth = 0;
   for (const line of lines) {
@@ -1348,6 +1502,7 @@ function parseReport(text) {
       if (domainHeading) {
         const name = domainHeading[2].toLowerCase();
         currentDepth = depth;
+        currentCriterion = null;
         // A second section for a domain that already has one keeps the first.
         // Two sections state the domain's answer twice and a reader cannot tell
         // which one the overall status came from; the first is the one the report
@@ -1357,13 +1512,39 @@ function parseReport(text) {
         if (repeated) duplicateDomainSections.push(name);
         currentDomain = repeated ? null : name;
         if (currentDomain !== null) {
-          domains.set(name, { statuses: [], thresholdLines: [], citations: [] });
+          domains.set(name, { statuses: [], thresholdLines: [], citations: [], criteria: new Map() });
         }
         continue;
       }
       if (EVIDENCE_GAPS_HEADING.test(line.trim())) {
         inGaps = true;
         gapsDepth = depth;
+        // Closes the criterion the same way the domain branch above closes
+        // the domain. Left open, a gaps heading written one level under a
+        // domain (rather than at the domain's own top level, where every
+        // stored report writes it) would leave currentCriterion pointing at
+        // whichever criterion was last open, and every file-shaped token in
+        // the gap bullets below would attribute to it: the identical
+        // silent-misattribution shape the depth restriction exists to close,
+        // reached through this sibling branch instead.
+        currentCriterion = null;
+      } else if (currentDomain !== null && depth === currentDepth + 1) {
+        // Exactly one level under the domain's own heading is the next
+        // criterion: `depth <= currentDepth` above would already have cleared
+        // currentDomain for a heading that is not nested under it, and a
+        // heading nested deeper than one level (a model's own aside inside a
+        // criterion, `#### Root Cause Note` under `### Fault Tolerance`) is
+        // left alone rather than promoted, so it cannot silently steal the
+        // still-open criterion's later citations. `currentDepth` never moves
+        // off the domain's own depth, so this is a fixed one-level test, not
+        // a running one; nfr-report-template.md gives every criterion exactly
+        // one level under its domain, and no live calibration run has ever
+        // written one any other depth. Stored as written: matching it against
+        // a ground-truth criterion name is scoreRun's job, not this
+        // ground-truth-blind parser's, and stripCriterionAnnotation is what it
+        // uses to do that.
+        const heading = CRITERION_HEADING.exec(line.trim());
+        if (heading) currentCriterion = heading[2];
       }
       continue;
     }
@@ -1381,6 +1562,17 @@ function parseReport(text) {
     }
     if (currentDomain === null) continue;
     const entry = domains.get(currentDomain);
+    // Resource Usage's two sub-criteria, and any bullet shaped the same way, name
+    // themselves on their own line with nothing else on it. Only the two names the
+    // template actually splits switch the criterion; every other such bullet
+    // (Disaster Recovery's RTO/RPO, chiefly) leaves citations attributed to
+    // whatever heading is still open, which is correct because ground truth
+    // declares no separate criterion for either.
+    const bullet = CRITERION_BULLET.exec(line);
+    const bulletKey = bullet ? normalizeBulletKey(stripCriterionAnnotation(bullet[1])) : null;
+    if (bulletKey !== null && CRITERION_BULLET_ALIASES.has(bulletKey)) {
+      currentCriterion = CRITERION_BULLET_ALIASES.get(bulletKey);
+    }
     const status = STATUS_LINE.exec(line);
     if (status) entry.statuses.push(status[1].toUpperCase());
     const threshold = THRESHOLD_LINE.exec(line);
@@ -1441,7 +1633,20 @@ function parseReport(text) {
     // section whose prose says `Node.js` now offers a `.js` token where before
     // only an evidence line could; that is the same reading the evidence line has
     // always had, applied to more lines.
-    if (!threshold) entry.citations.push(...citationsIn(line));
+    if (!threshold) {
+      const found = citationsIn(line);
+      entry.citations.push(...found);
+      // Attributed to whichever criterion heading or promoted bullet is still
+      // open. A line read before the first one (not observed in a real report,
+      // where the first line of a domain's body is always its first criterion's
+      // heading) attributes to nothing, the same way an unrecognised criterion
+      // name does in `scoreRun`: silently not scored, neither grounded nor not.
+      if (currentCriterion !== null && found.length > 0) {
+        const list = entry.criteria.get(currentCriterion) ?? [];
+        list.push(...found);
+        entry.criteria.set(currentCriterion, list);
+      }
+    }
   }
 
   if (domains.size === 0) return null;
@@ -1686,6 +1891,72 @@ function scoreRun(set, report) {
     }
   }
 
+  // Whether a domain's citations speak to the criterion they were cited for,
+  // over the criteria ground truth declares evidence for. Fabrication above
+  // asks whether a cited file is in the bundle at all; this asks the
+  // different question a real file cannot answer for itself, whether it is
+  // the file ground truth names for THIS criterion.
+  //
+  // A criterion with no declared evidence is excluded outright: the gapped
+  // bundle's Test Coverage and Code Duplication have none, and a report that
+  // cites the tech spec there to state the threshold and record that no report
+  // exists is correct, not a miss with nothing to check it against. A
+  // criterion the report never cited is excluded too -- that is a missing
+  // citation, a different failure this measurement does not speak to. And a
+  // citation already counted as fabricated above is excluded from the
+  // criteria it was cited under: a file absent from the bundle cannot also be
+  // scored as the wrong file for this one, or one defect would be named twice.
+  //
+  // Matched by `stripCriterionAnnotation` on both sides, because a live
+  // model's own heading text decorates a criterion far more freely than the
+  // stored fixtures alone showed; see the note on that function. A criterion
+  // this report's heading text does not resolve to any declared name at all
+  // is silently excluded the same way an uncited one is, since there is
+  // nothing in `set.domains[domain].criteria` to check it against.
+  //
+  // Two report headings that strip to the same name are concatenated rather
+  // than letting the second overwrite the first. `reportedCriteria` is keyed
+  // on the raw heading text, so both are present and distinct there; folding
+  // them with `new Map(...)` would keep only whichever came last, discarding
+  // the other's citations with nothing to show they existed. That is the
+  // same silent-loss shape the depth restriction above exists to close, one
+  // step later: a correct citation under the first of two same-stripped
+  // headings would vanish if the second, unrelated one, happened to be
+  // written last, and the real.every() check below could then read a wrong
+  // citation as the only one that ever existed. Concatenating instead scores
+  // every real citation from either heading against the criterion, so an
+  // extra wrong one is still caught by real.every() rather than silently
+  // dropped.
+  const ungroundedCitations = [];
+  let groundedCriteriaHits = 0;
+  let groundedCriteriaTotal = 0;
+  for (const domainName of DOMAINS) {
+    const declaredCriteria = set.domains[domainName]?.criteria ?? [];
+    const reportedCriteria = report.domains.get(domainName)?.criteria ?? new Map();
+    const byStrippedName = new Map();
+    for (const [name, cites] of reportedCriteria) {
+      const key = stripCriterionAnnotation(name);
+      byStrippedName.set(key, [...(byStrippedName.get(key) ?? []), ...cites]);
+    }
+    for (const criterion of declaredCriteria) {
+      if ((criterion.evidence ?? []).length === 0) continue;
+      const cited = byStrippedName.get(stripCriterionAnnotation(criterion.name));
+      if (!cited || cited.length === 0) continue;
+      const real = cited.filter((file) => known.has(path.basename(file)));
+      if (real.length === 0) continue;
+      groundedCriteriaTotal += 1;
+      // Every real citation has to match, not just one of them: a criterion
+      // cited with both the right file and an extra real-but-wrong one is not
+      // grounded, because the wrong file is still a citation of a real but
+      // irrelevant file, exactly what AC1 says cannot read as grounding. Only
+      // the mismatched file(s) are named below; the correct one alongside them
+      // is not a finding.
+      const mismatched = real.filter((file) => !criterion.evidence.some((declared) => path.basename(declared) === path.basename(file)));
+      if (mismatched.length === 0) groundedCriteriaHits += 1;
+      else ungroundedCitations.push(`${domainName}: ${criterion.name} -> ${mismatched.join(', ')}`);
+    }
+  }
+
   const expectedOverall = set.expectedOverallStatus;
   const overall = check('overall_status', expectedOverall, report.overallStatus);
   const unknownThreshold = check(
@@ -1736,6 +2007,12 @@ function scoreRun(set, report) {
     gateDisagreements,
     unsupportedPass,
     fabricated,
+    // Over the criteria with declared evidence, a citation the report actually
+    // made, and a resolving file: `groundedCriteria.hits`/`.total` is what
+    // groundedCitationAccuracy aggregates, and `ungroundedCitations` names the
+    // misses the way `fabricated` names its own.
+    groundedCriteria: { hits: groundedCriteriaHits, total: groundedCriteriaTotal },
+    ungroundedCitations,
     evidenceGaps: report.evidenceGaps,
     overall,
     unknownThreshold,
@@ -1782,6 +2059,14 @@ function signatureOf(scored, mutations) {
     scored.gateDisagreements,
     scored.unsupportedPass,
     scored.fabricated,
+    // Which criterion a citation was attributed to, not only which files were
+    // cited. Two runs can carry the identical flat citation list in `citations`
+    // above and still disagree on which criterion each file was cited for --
+    // swapping two headings while the citations beneath them keep the same
+    // document order reorders nothing in that flat array -- so grounding needs
+    // its own place here rather than riding on citations already covering it.
+    scored.groundedCriteria,
+    scored.ungroundedCitations,
     scored.evidenceGaps,
     scored.overall.actual,
     scored.unknownThreshold.actual,
@@ -2122,6 +2407,8 @@ async function main() {
       gateDisagreements: 0,
       unsupportedPass: 0,
       fabricated: 0,
+      groundedTotal: 0,
+      groundedHits: 0,
       cleanFalsePositives: 0,
       mutations: 0,
     };
@@ -2168,6 +2455,8 @@ async function main() {
         totals.gateDisagreements += scored.gateDisagreements.length;
         totals.unsupportedPass += scored.unsupportedPass.length;
         totals.fabricated += scored.fabricated.length;
+        totals.groundedTotal += scored.groundedCriteria.total;
+        totals.groundedHits += scored.groundedCriteria.hits;
         totals.cleanFalsePositives += scored.cleanFalsePositives;
       }
 
@@ -2191,6 +2480,7 @@ async function main() {
       for (const entry of first.gateDisagreements) console.log(`        ${colors.red}gate contradicts section:${colors.reset} ${entry}`);
       for (const domain of first.unsupportedPass) console.log(`        ${colors.red}unsupported PASS:${colors.reset} ${domain}`);
       for (const entry of first.fabricated) console.log(`        ${colors.red}fabricated evidence:${colors.reset} ${entry}`);
+      for (const entry of first.ungroundedCitations) console.log(`        ${colors.red}ungrounded citation:${colors.reset} ${entry}`);
       if (!complete) incompleteCases += 1;
       else if (!stable) unstableCases += 1;
     }
@@ -2201,6 +2491,7 @@ async function main() {
       thresholdFidelityAccuracy: measured(ratio(totals.thresholdHits, totals.thresholdTotal)),
       overallStatusAccuracy: measured(ratio(totals.overallHits, totals.overallTotal)),
       domainCoverage: measured(ratio(totals.coverageHits, totals.coverageTotal)),
+      groundedCitationAccuracy: measured(ratio(totals.groundedHits, totals.groundedTotal)),
       duplicateDomainSections: totals.duplicateDomainSections,
       gateDisagreements: totals.gateDisagreements,
       unsupportedPass: totals.unsupportedPass,
@@ -2218,6 +2509,7 @@ async function main() {
       ['threshold fidelity ', 'thresholdFidelityAccuracy'],
       ['overall status     ', 'overallStatusAccuracy'],
       ['domain coverage    ', 'domainCoverage'],
+      ['grounded citations ', 'groundedCitationAccuracy'],
     ]) {
       const value = measurements[key] === null ? Number.NaN : measurements[key];
       console.log(`  ${label} ${pct(value)}   (threshold ${pct(THRESHOLDS[key])})`);
@@ -2238,6 +2530,7 @@ async function main() {
       'thresholdFidelityAccuracy',
       'overallStatusAccuracy',
       'domainCoverage',
+      'groundedCitationAccuracy',
     ]) {
       const value = measurements[key];
       // NaN fails every comparison, so an unmeasurable metric would otherwise
@@ -2311,6 +2604,8 @@ module.exports = {
   parseArgs,
   loadGroundTruth,
   validateCorpus,
+  stripCriterionAnnotation,
+  CRITERION_BULLET_ALIASES,
   rollupStatus,
   deriveOverallStatus,
   expectedDomainStatuses,
