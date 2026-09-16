@@ -189,6 +189,9 @@ jobs:
       - name: Prove the in-process net guard refuses what the OS backend cannot
         run: npm run test:atdd-net-guard
 
+      - name: Prove atdd scoring requires assertion provenance, not just message text
+        run: npm run test:atdd-scoring
+
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
 

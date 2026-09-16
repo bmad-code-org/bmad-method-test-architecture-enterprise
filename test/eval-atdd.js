@@ -205,6 +205,18 @@ const ATDD_SCAFFOLD_RELATIVE_PATH = path.join('api', 'reservations.spec.ts');
 const CRITERION_ID = /\bAC-(\d+)\b/;
 
 /**
+ * Every failure Playwright's own `expect()` library raises names the matcher
+ * call this way, ANSI codes stripped, whichever matcher failed:
+ * `expect(received).toBe(expected)`, `expect(received).toEqual(expected)`, and
+ * so on. Verified live across `toBe`, `toEqual` and `toContain`. A test that
+ * fails by throwing a plain `Error` carries none of this, even when its
+ * message text happens to match a criterion's declared pattern, because a
+ * declared pattern is usually just the literal "Expected: X" / "Received: Y"
+ * text a hand-thrown message can reproduce with no assertion behind it at all.
+ */
+const ASSERTION_LIBRARY_MARKER = /\bexpect\(/;
+
+/**
  * Keys that appear only in ground-truth.json: the field names this corpus
  * invents to hold its own answers, and the vocabulary of its own commentary.
  * Finding one in a staged file or in the prompt means the answers reached the
@@ -751,7 +763,9 @@ function scoreRun(groundTruth, report, productionMutatedFromGeneration = []) {
     const classified = tests.map((test) => {
       if (test.status === 'passed') return { ...test, outcome: 'vacuous-pass' };
       if (test.status === 'skipped') return { ...test, outcome: 'still-skipped' };
-      if (test.status === 'failed' && test.message && pattern.test(test.message)) return { ...test, outcome: 'red-for-intended-reason' };
+      if (test.status === 'failed' && test.message && ASSERTION_LIBRARY_MARKER.test(test.message) && pattern.test(test.message)) {
+        return { ...test, outcome: 'red-for-intended-reason' };
+      }
       return { ...test, outcome: 'non-assertion-exit' };
     });
     return {
