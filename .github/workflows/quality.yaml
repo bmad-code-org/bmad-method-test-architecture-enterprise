@@ -30,6 +30,13 @@ name: Quality & Validation
 # name@version and fetches only what is missing, which is what makes running it
 # in `npm test` on every local commit reasonable rather than a network
 # dependency the pre-commit hook cannot avoid.
+#
+# The `validate` job installs `bubblewrap` before it reaches the atdd isolation
+# proof, because that suite runs generated test code and refuses to run
+# unconfined: `bubblewrap` is its linux backend, not preinstalled on this
+# runner image, and a failed install here has to read as "the dependency did
+# not install" rather than surface three steps later as an opaque isolation
+# failure.
 
 "on":
   pull_request:
@@ -173,8 +180,17 @@ jobs:
       - name: Test write-time enforcement hook
         run: npm run test:enforce-hook
 
+      - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+
+      - name: Prove tea-atdd-red-check's isolation backend confines a hostile spec
+        run: npm run test:atdd-isolation
+
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
+
+      - name: Validate ATDD eval corpus
+        run: npm run test:eval-atdd-data
 
       - name: Validate NFR eval corpus
         run: npm run test:eval-nfr-data

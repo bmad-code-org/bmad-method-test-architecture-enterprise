@@ -191,13 +191,12 @@ const EXECUTION_TARGETS = [
     executable: 'tea-atdd-runner',
     script: path.join('cli', 'atdd-runner.js'),
     subcommandPaths: [[]],
-    // The generation half writes red-phase scaffolds under the project's own
-    // test directory, a location the ground truth names rather than a fixed
-    // path this registry could declare, so this command authorizes no
-    // artifact of its own: the harness reads the scaffolds off the working
-    // directory it staged, the same way a directory-shaped deliverable is
-    // read for the framework and CI suites once those exist.
-    artifacts: {},
+    // The one deliverable the atdd eval's own prompt asks generation to write,
+    // at the default location a project without its own override gets. The
+    // harness overrides this per run with the project root and test directory
+    // its ground truth declares, the same way the nfr and trace targets below
+    // are overridden with a bundle's or a fixture set's own project root.
+    artifacts: { scaffold: path.join('tests', 'api', 'reservations.spec.ts') },
     environmentKeys: vendorEnvironmentNames(),
     // One minute above RUN_TIMEOUT_MS in test/eval-atdd.js, for the reason the
     // comment above EXECUTION_TARGETS gives: the inner clock classifies, and

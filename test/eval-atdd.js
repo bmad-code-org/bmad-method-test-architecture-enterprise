@@ -187,6 +187,19 @@ const RUNNER_CAPABILITIES = ['scoped-artifact-writes'];
 const ATDD_INTERFACE = 'tea-atdd-runner';
 const ATDD_OPERATION = 'generate-red-phase-tests';
 
+/**
+ * The one file, relative to `{test_dir}`, the prompt asks generation to write
+ * every scaffold into. A generated scaffold set has no fixed name in general —
+ * the workflow's own step-04 dispatches an API worker and an E2E worker into
+ * separate files it names itself — but this fixture is a JSON API with no
+ * browser surface, so asking for one named path is an honest simplification
+ * rather than a constraint fighting the workflow. It is also what makes the
+ * deliverable addressable at all: the contract's `descriptorChannel` names one
+ * artifact path, and a path an agent is free to invent is not one a contract
+ * can point at before the run.
+ */
+const ATDD_SCAFFOLD_RELATIVE_PATH = path.join('api', 'reservations.spec.ts');
+
 /** A test maps to the criterion whose id it carries in its title, the workflow's own scaffold convention. */
 const CRITERION_ID = /\bAC-(\d+)\b/;
 
@@ -555,11 +568,21 @@ function addedFiles(root, known, testDir) {
  * story to work from, and nothing about which routes exist or do not: the
  * fixture is left to be discovered the way step-01 discovers a codebase.
  *
+ * `storyRelativePath` is the one value the atdd contract's sensitivity witness
+ * varies: the corpus's own story names AC-1 through AC-5, and the witness-only
+ * story under test/fixtures/atdd-eval/witness/ names AC-9 alone, so two prompts
+ * differing only in this value produce two scaffolds naming different
+ * criteria, which is a true and checkable claim that the command reads its
+ * standard input. It is never varied by test/eval-atdd.js itself, which always
+ * scores the corpus's own story.
+ *
  * @param {object} groundTruth
+ * @param {{storyRelativePath?: string}} [options]
  * @returns {string}
  */
-function buildPrompt(groundTruth) {
+function buildPrompt(groundTruth, { storyRelativePath } = {}) {
   const root = groundTruth.projectRoot;
+  const storyPath = storyRelativePath ?? path.join('docs', 'stories', '4-2-reserve-a-locker.md');
   return [
     `You are running the TEA workflow \`bmad-testarch-atdd\` against the project in \`${root}/\`.`,
     '',
@@ -574,18 +597,19 @@ function buildPrompt(groundTruth) {
     `- \`{test_artifacts}\`: \`${root}/test-artifacts\``,
     `- \`{test_dir}\`: \`${root}/${groundTruth.testDir}\``,
     '- `{skill-root}`: `skill`',
-    `- \`{story_file}\`: \`${root}/${path.relative(FIXTURE_ROOT, path.join(FIXTURE_ROOT, groundTruth.storyFile.replace('test/fixtures/atdd-eval/', '')))}\``,
+    `- \`{story_file}\`: \`${root}/${storyPath}\``,
     '',
-    `The story is at \`${root}/docs/stories/4-2-reserve-a-locker.md\`. Read the whole project under`,
+    `The story is at \`${root}/${storyPath}\`. Read the whole project under`,
     `\`${root}/\` to discover its stack, existing routes, and test framework the way step-01 says to;`,
     'nothing outside that directory is relevant to this story.',
     '',
     '----- what to produce -----',
-    `Generate red-phase acceptance test scaffolds under \`${root}/${groundTruth.testDir}/\` for every`,
-    'acceptance criterion the story states. Every scaffold must be a `test.skip()` call, per the',
-    "workflow's own TDD red-phase rule, asserting the behavior the criterion promises rather than a",
-    'placeholder. Do not add, edit, or delete any file outside that directory: this workflow generates',
-    'tests and touches nothing else.',
+    `Generate red-phase acceptance test scaffolds for every acceptance criterion the story states, into`,
+    `exactly one file: \`${root}/${groundTruth.testDir}/${ATDD_SCAFFOLD_RELATIVE_PATH}\`. The fixture is a`,
+    "JSON API with no browser surface, so every criterion is an API test and none needs the workflow's",
+    "E2E worker. Every scaffold must be a `test.skip()` call, per the workflow's own TDD red-phase rule,",
+    'asserting the behavior the criterion promises rather than a placeholder. Do not add, edit, or delete',
+    'any file outside that one path: this workflow generates tests and touches nothing else.',
     '',
     'When you are done, print one line naming how many test files you wrote. Nothing else you print is read.',
   ].join('\n');
@@ -743,6 +767,12 @@ function scoreRun(groundTruth, report, productionMutatedFromGeneration = []) {
 
   return {
     caseId: CASE_ID,
+    // Whether any scaffold file used the workflow's own `test.skip()` call at
+    // all, read off tea-atdd-red-check's own report rather than re-derived:
+    // it is the one fact this contract's `uses-test-skip` oracle states, and
+    // it is a property of the file before activation, which nothing else in
+    // this scored object records.
+    usesTestSkip: (report.files ?? []).some((file) => file.hadSkipCall === true),
     perCriterion,
     mappedTestCount: mappedTests.length,
     redForIntendedReasonCount: redCount,
@@ -801,6 +831,7 @@ async function runCase(groundTruth, options, agent, runIndex, backend) {
     const { port } = await createProbePort({
       cwd: workspace.dir,
       interfaceIds: [ATDD_INTERFACE],
+      artifacts: { [ATDD_INTERFACE]: { scaffold: path.join(groundTruth.projectRoot, groundTruth.testDir, ATDD_SCAFFOLD_RELATIVE_PATH) } },
       environmentKeys: { [ATDD_INTERFACE]: options.envPass },
     });
     const result = await probeCommand(
@@ -1254,4 +1285,5 @@ module.exports = {
   ATDD_OPERATION,
   RED_CHECK_PATH,
   CRITERION_ID,
+  ATDD_SCAFFOLD_RELATIVE_PATH,
 };
