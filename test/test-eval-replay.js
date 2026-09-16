@@ -98,8 +98,8 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Eighty-five of the
- * eighty-nine cases produce a number and all but two of those are constructed. Two
+ * produces a number was written by hand to be parsed. Eighty-six of the
+ * ninety cases produce a number and all but two of those are constructed. Two
  * carry real captured bytes borrowed from the CLI parser fixtures, and both now
  * score as a measured miss rather than as unmeasurable: their reports document
  * no finding at all, and a verdict whose findings array is empty is a reviewer

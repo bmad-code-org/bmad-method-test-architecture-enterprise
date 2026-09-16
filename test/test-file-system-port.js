@@ -84,10 +84,10 @@
  *                                 `fs.readFileSync` either would read the real
  *                                 file and score every probe.
  *
- *   test/eval-nfr.js              Each of the three remaining behavioural
+ *   test/eval-nfr.js              Each of the four remaining behavioural
  *   test/eval-test-design.js      harnesses has its own corpus scripted as text
  *   test/eval-bmad-tea-routing.js that is not JSON, and `--validate-only` must
- *                                 refuse it. A direct read validates the real
+ *   test/eval-ci.js               refuse it. A direct read validates the real
  *                                 corpus and exits 0, so the outcome differs by
  *                                 the whole verdict. The routing harness gets a
  *                                 second case for the menu its prompts are built
@@ -158,6 +158,12 @@ const CORPUS_HARNESSES = [
     label: 'the routing harness',
     scripted: path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval', 'intents.json'),
     reports: /intents\.json is not valid JSON/,
+  },
+  {
+    harness: path.join(PROJECT_ROOT, 'test', 'eval-ci.js'),
+    label: 'the ci harness',
+    scripted: path.join(PROJECT_ROOT, 'test', 'fixtures', 'ci-eval', 'ground-truth.json'),
+    reports: /ground truth at .* is missing or not valid JSON/,
   },
 ];
 

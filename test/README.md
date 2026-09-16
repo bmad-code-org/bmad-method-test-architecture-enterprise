@@ -249,15 +249,15 @@ grounded on a different file of the same bundle, a gate artifact contradicting i
 assessment section, a gate block declaring a domain the document never assesses, the same
 audit with no `audited_domains` block at all, a block that appears only inside the quoted
 example, a report whose gate declares four statuses under headings no domain section
-recognises, and a report the harness must refuse to score at all. Nineteen `ci` cases cover
+recognises, and a report the harness must refuse to score at all. Twenty `ci` cases cover
 both projects: a correct pipeline for each, every threshold-breaching deviation the harness
 scores (a missing trigger, a missing or widened permission, the wrong Node-version spelling
 and the right one signing alike, an undefined `needs:` job, an untrusted context interpolated
 into a `run:` block, `continue-on-error` on a test step, a dropped burn-in job, a swapped test
 command, an added trigger, unconditional artifact uploads, the full-request template copied
-onto the minimal project, and two documents `actionlint` refuses for reasons the `yaml`
-package does not: one that fails to parse and one that parses to something that is not a
-workflow at all).
+onto the minimal project, a retry action a minimal request forbids by name, and two documents
+`actionlint` refuses for reasons the `yaml` package does not: one that fails to parse and one
+that parses to something that is not a workflow at all).
 All three suites hold
 `signatureOf` to its contract: two cases of one set or bundle sign identically exactly
 when their results are identical, and a counted fixture mutation always changes the
@@ -280,8 +280,8 @@ cases whose numbers actually moved.
 The same caveat the CLI parser fixtures carry applies here and applies harder.
 Every case that produces a number was written by hand to be parsed, so a green
 run proves the scorers are deterministic and reproduce history, and proves
-nothing about whether they handle real agent output correctly. Eighty-five of the
-eighty-nine cases produce a number and eighty-three of those are constructed. Two carry
+nothing about whether they handle real agent output correctly. Eighty-six of the
+ninety cases produce a number and eighty-four of those are constructed. Two carry
 real captured bytes, both borrowed from `fixtures/test-review-cli/`, and both
 score zero recall: their reports document no finding at all. The live runs of
 2026-09-08 produced real numbers for the three suites that existed then, and none

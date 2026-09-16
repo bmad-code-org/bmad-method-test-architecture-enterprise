@@ -463,6 +463,25 @@
     },
     {
       "id": "B-025",
+      "description": "minimal-lantern-audit-log: the request forbids this. The request forbids a retry wrapper, and the skill's own checklist calls for retry logic unconditionally with no stack or request gate, so this is scoped to the project whose request actually says no to it.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The workflow written for the minimal request carries none of the elements its request forbids by name.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "minimal-lantern-audit-log/mustNotEmit"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "template-copied-onto-a-minimal-request"
+        }
+      ],
+      "oracles": ["O-025"]
+    },
+    {
+      "id": "B-026",
       "description": "minimal-lantern-audit-log: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
       "severity": "critical",
       "observableSuccessCriterion": "Each run left the workflow file the platform requires on disk and exited 0.",
@@ -478,7 +497,7 @@
           "id": "unmeasurable-run-scored-as-a-miss"
         }
       ],
-      "oracles": ["O-025"]
+      "oracles": ["O-026"]
     }
   ],
   "oracles": [
@@ -1087,6 +1106,34 @@
     },
     {
       "id": "O-025",
+      "polarity": "expects-hold",
+      "commentary": "minimal-lantern-audit-log: the request forbids this. The request forbids a retry wrapper, and the skill's own checklist calls for retry logic unconditionally with no stack or request gate, so this is scoped to the project whose request actually says no to it.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "not",
+        "scope": "The workflow file written for minimal-lantern-audit-log, read as one document.",
+        "negativeDomain": "A run whose workflow contains \"/retry@\".",
+        "evidenceTargets": ["/interactions/ci-minimal-lantern-audit-log/artifact/workflow"]
+      },
+      "check": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "containment",
+            "operands": [
+              {
+                "pointer": "/interactions/ci-minimal-lantern-audit-log/artifact/workflow"
+              },
+              {
+                "literal": "/retry@"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-026",
       "polarity": "expects-hold",
       "commentary": "minimal-lantern-audit-log: the run wrote the workflow file the platform requires and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad pipeline.",
       "direction": {

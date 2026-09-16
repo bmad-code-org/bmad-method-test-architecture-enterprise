@@ -413,6 +413,10 @@
         {
           "token": "npm run lint",
           "why": "The request forbids a lint job, and the project declares no lint script."
+        },
+        {
+          "token": "/retry@",
+          "why": "The request forbids a retry wrapper, and the skill's own checklist calls for retry logic unconditionally with no stack or request gate, so this is scoped to the project whose request actually says no to it."
         }
       ],
       "why": "Five elements and a closing sentence that forbids the rest. The stack is backend, so step-03's own default is to skip burn-in, and the request adds that nothing beyond one job is wanted. A run that copies the shipped template onto this project carries a schedule trigger, a lint job, a four-way shard matrix, a burn-in loop and two upload steps the request never mentioned, and every one of them is counted as an unrequested element. This set is the control that stops a suite scoring well by emitting everything."

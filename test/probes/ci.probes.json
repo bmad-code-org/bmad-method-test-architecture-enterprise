@@ -7,9 +7,9 @@
     "probeClass": "defect",
     "behaviorId": "B-003",
     "systemId": "tea-ci-full-meridian-storefront",
-    "implementationDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
-    "artifactDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
-    "commitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "implementationDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
+    "artifactDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
+    "commitDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
     "rationale": "full-meridian-storefront: the weekly schedule trigger is missing, under triggersConfigured. A Playwright storefront whose request names every element a production pipeline carries asked for it in as many words. O-003 is the oracle that has to see its consequence in the workflow the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -19,7 +19,7 @@
         "storage": "public",
         "path": "test/fixtures/ci-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+        "digest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77"
       },
       "expectedObservableFailure": "The workflow written for full-meridian-storefront does not contain \"0 2 * * 0\".",
       "baselinePassEvidence": {
@@ -48,7 +48,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+            "digest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77"
           }
         ],
         "source": "controlled-mutation",
@@ -138,9 +138,9 @@
     "probeClass": "defect",
     "behaviorId": "B-004",
     "systemId": "tea-ci-full-meridian-storefront",
-    "implementationDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
-    "artifactDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
-    "commitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "implementationDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
+    "artifactDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
+    "commitDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
     "rationale": "full-meridian-storefront: the contents: read permission grant is missing entirely, which githubActionsOutputPath's own request states. O-004 is the oracle that has to see its consequence in the workflow the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -150,7 +150,7 @@
         "storage": "public",
         "path": "test/fixtures/ci-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+        "digest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77"
       },
       "expectedObservableFailure": "The workflow written for full-meridian-storefront does not contain \"contents: read\".",
       "baselinePassEvidence": {
@@ -179,7 +179,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+            "digest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77"
           }
         ],
         "source": "controlled-mutation",
@@ -269,9 +269,9 @@
     "probeClass": "defect",
     "behaviorId": "B-022",
     "systemId": "tea-ci-minimal-lantern-audit-log",
-    "implementationDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
-    "artifactDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
-    "commitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "implementationDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
+    "artifactDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
+    "commitDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
     "rationale": "minimal-lantern-audit-log's request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. O-022 is the oracle that has to see the template's burn-in job in the workflow the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -281,7 +281,7 @@
         "storage": "public",
         "path": "test/fixtures/ci-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+        "digest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77"
       },
       "expectedObservableFailure": "The workflow written for minimal-lantern-audit-log contains \"burn-in\".",
       "baselinePassEvidence": {
@@ -310,7 +310,7 @@
             "storage": "public",
             "path": "test/fixtures/ci-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31"
+            "digest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77"
           }
         ],
         "source": "controlled-mutation",
@@ -390,9 +390,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-017",
     "systemId": "tea-ci-minimal-lantern-audit-log",
-    "implementationDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
-    "artifactDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
-    "commitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+    "implementationDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
+    "artifactDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
+    "commitDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
     "rationale": "minimal-lantern-audit-log states five elements and the workflow carries exactly them, so any gap or addition the run reports against it is a false positive. It is the control that stops the suite scoring well by only ever catching an over-generous pipeline.",
     "qualification": {
       "route": "clean-control",
@@ -402,7 +402,7 @@
         "privateRef": null,
         "digest": "sha256:e58c6b78968c4f13d474ae060c6e390ccb6ebff5e4b2047c89b23bbe97edf4ed"
       },
-      "revisionCommitDigest": "sha256:6d102137936188d0615ccded5abc05c92f10ae48dfc81eed5bf287db6693ad31",
+      "revisionCommitDigest": "sha256:2410a5a0f2b588e0413e8c8f4941931a07b82cf7f8797627b0d6692651ba0f77",
       "noKnownDefectStatement": "A backend service whose request is one job and a sentence forbidding everything else"
     },
     "expectedClean": true,

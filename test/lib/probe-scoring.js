@@ -780,18 +780,21 @@ async function nfrEvidence(contract) {
 // evidence: ci
 // ---------------------------------------------------------------------------
 
+/** The stored workflow one project produced, as the bytes on disk. */
+async function storedCiWorkflow(caseId) {
+  return readText(path.join(REPLAY_ROOT, 'ci', caseId, '.github', 'workflows', 'test.yml'));
+}
+
 /** The one artifact a ci run leaves behind, as the stored case for one project holds it. */
-function ciWorkflowArtifact(caseId) {
-  return {
-    workflow: { kind: 'text', value: fs.readFileSync(path.join(REPLAY_ROOT, 'ci', caseId, '.github', 'workflows', 'test.yml'), 'utf8') },
-  };
+function ciWorkflowArtifact(workflow) {
+  return { workflow: { kind: 'text', value: workflow } };
 }
 
 /** The `ci_platform` value one assembled prompt carries. */
 const CI_PLATFORM_PATTERN = /`ci_platform`: `([^`]*)`/;
 
-function ciEvidence(contract) {
-  const groundTruth = readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'ci-eval', 'ground-truth.json'));
+async function ciEvidence(contract) {
+  const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'ci-eval', 'ground-truth.json'));
 
   /**
    * One entry per project: the plan step that scaffolds it, the stored run its
@@ -840,17 +843,18 @@ function ciEvidence(contract) {
      * for a different platform, and step-02 would write that leg's pipeline
      * somewhere else entirely, so the declared path comes back absent.
      */
-    answer(request) {
+    async answer(request) {
       const prompt = String(request.channels.stdin?.value ?? '');
       const matched = [...caseByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
       if (matched === undefined) {
         throw new Error('a ci leg sent a prompt naming no project root, so no staged run answers it');
       }
       const platform = CI_PLATFORM_PATTERN.exec(prompt)?.[1] ?? 'github-actions';
-      const artifacts = platform === 'github-actions' ? ciWorkflowArtifact(matched[1]) : { workflow: { kind: 'absent' } };
+      const artifacts =
+        platform === 'github-actions' ? ciWorkflowArtifact(await storedCiWorkflow(matched[1])) : { workflow: { kind: 'absent' } };
       return { exitCode: 0, stdout: { kind: 'text', value: '' }, stderr: { kind: 'text', value: '' }, artifacts };
     },
-    recordInputs(probe) {
+    async recordInputs(probe) {
       const clean = probe.expectedClean;
       // The clean control's record carries both projects, for the reason the nfr
       // control does: each step binds its own project's prompt as a literal, so
@@ -864,6 +868,10 @@ function ciEvidence(contract) {
       // qualification gate resolves every one of its oracles before a selection
       // is read, so a second observation would add evidence nothing reaches.
       const selected = clean ? legs : legs.filter((leg) => probe.systemId === `tea-ci-${leg.setId}`);
+      // Read above the map rather than inside it, so a stored workflow two legs
+      // share is read once.
+      const workflowByCase = new Map();
+      for (const caseId of new Set(selected.map((leg) => leg.caseId))) workflowByCase.set(caseId, await storedCiWorkflow(caseId));
       const observations = selected.map((leg, index) =>
         recordObservation({
           observationId: leg.observationId,
@@ -873,7 +881,7 @@ function ciEvidence(contract) {
           stdout: { kind: 'text', value: '' },
           stderr: { kind: 'text', value: '' },
           exitCode: 0,
-          artifacts: ciWorkflowArtifact(leg.caseId),
+          artifacts: ciWorkflowArtifact(workflowByCase.get(leg.caseId)),
         }),
       );
       const observationIdByStep = new Map(selected.map((leg) => [leg.step.stepId, leg.observationId]));

@@ -279,7 +279,16 @@ const TEST_RUNNER_PATTERNS = [
 /** A run: block that lints, for the unrequested-gate count when no lint gate was asked for. */
 const LINT_INVOCATION = /(?<![\w-])(?:npm run lint|npx eslint|eslint |prettier --check)/;
 
-/** A retry wrapper action, which the minimal request forbids by name. */
+/**
+ * A retry wrapper action.
+ *
+ * Checked only against a project whose own request forbids it by name
+ * (`set.isMinimalRequest`), never unconditionally. The skill's own
+ * checklist calls for retry logic with no stack or request condition
+ * ("Step 7: Retry Logic" carries no gate at all), so a full-request project
+ * that wraps a flaky step in one of these is doing exactly what the
+ * checklist asks for, not accumulating something nobody wanted.
+ */
 const RETRY_ACTION = /^(?:nick-fields|nick-invision|Wandalen)\/retry(?:@|$)/;
 
 /**
@@ -1694,8 +1703,10 @@ function unrequestedElements(set, workflow) {
     if (!requestedGates.has('lint-precedes-tests') && jobScripts(job).some((script) => LINT_INVOCATION.test(script))) {
       found.push(`gate: lint job ${jobId}`);
     }
-    for (const { step } of stepsOf(job)) {
-      if (typeof step.uses === 'string' && RETRY_ACTION.test(step.uses)) found.push(`gate: retry action in job ${jobId}`);
+    if (set.isMinimalRequest) {
+      for (const { step } of stepsOf(job)) {
+        if (typeof step.uses === 'string' && RETRY_ACTION.test(step.uses)) found.push(`gate: retry action in job ${jobId}`);
+      }
     }
   }
 
