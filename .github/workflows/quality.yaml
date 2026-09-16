@@ -22,14 +22,17 @@ name: Quality & Validation
 # below shards that one file three ways (see its own comment) so CI's wall
 # time is the slowest shard, not the sum of all three.
 #
-# test:lockfile-age, test:licences and test:supply-chain are the same kind of
-# exception: they run in `npm test` and in their own `supply-chain` job below,
-# not inside `validate`, so a registry outage names itself here rather than
-# reading as an unrelated check failing. lockfile-age reads a committed
-# publication cache (`.lockfile-age-cache.json`) with no request for a cached
-# name@version and fetches only what is missing, which is what makes running it
-# in `npm test` on every local commit reasonable rather than a network
-# dependency the pre-commit hook cannot avoid.
+# test:lockfile-age, test:lockfile-age-cache, test:licences and
+# test:supply-chain are the same kind of exception: they run in `npm test` and
+# in their own `supply-chain` job below, not inside `validate`, so a registry
+# outage names itself here rather than reading as an unrelated check failing.
+# lockfile-age reads a committed publication cache (`.lockfile-age-cache.json`)
+# with no request for a cached name@version and fetches only what is missing,
+# which is what makes running it in `npm test` on every local commit
+# reasonable rather than a network dependency the pre-commit hook cannot
+# avoid. lockfile-age-cache makes exactly one such request, against a fixed,
+# already-published package, and skips rather than fails when it cannot reach
+# the registry at all.
 #
 # The `validate` job installs `bubblewrap` before it reaches the atdd isolation
 # proof, because that suite runs generated test code and refuses to run
@@ -387,6 +390,9 @@ jobs:
 
       - name: Audit both lockfiles for publication age
         run: npm run test:lockfile-age
+
+      - name: Prove the lockfile-age cache generator still reads the registry correctly
+        run: npm run test:lockfile-age-cache
 
       - name: Hold both lockfiles to the licence allowlist
         run: npm run test:licences
