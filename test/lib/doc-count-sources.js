@@ -25,8 +25,8 @@ const { parse } = require('csv-parse/sync');
 
 const { validateSuiteManifest } = require('../schema/suite-manifest');
 const { suiteById, MANIFEST_RELATIVE_PATH } = require('./suite-manifest');
-const rawManifest = require('../evals/suite-manifest.json');
-const packageJson = require('../../package.json');
+const rawManifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'evals', 'suite-manifest.json'), 'utf8'));
+const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', 'package.json'), 'utf8'));
 const { chainedScripts } = require('../../tools/validate-ci-coverage');
 
 function refuse(message) {

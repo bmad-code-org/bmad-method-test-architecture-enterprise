@@ -317,7 +317,6 @@ runs, and every oracle here is a predicate over one interaction's evidence.
 ```bash
 node tools/generate-contracts.js --check   # are the contracts what their sources generate?
 npm run test:contracts                     # does the compiler still say what the baseline records?
-npm run test:contracts -- --package /path/to/eval-quality/dist/index.js
 npm run test:contract-oracles              # does every oracle resolve, and agree with the harness scorer?
 ```
 
@@ -363,8 +362,10 @@ nobody looked at, and it was the only check in this repository that answered an 
 a pass. An unresolvable package now exits 2 and says how many contracts went unchecked, and so does
 a tree resolving an `eval-quality` other than the version `package.json` pins, since fourteen
 contracts compiled against the wrong release are fourteen results about a package this repository
-does not declare. `--package` is exempt from the version comparison, because naming an unreleased
-local build is what the flag is for.
+does not declare. To run this against an unreleased build, `npm link` it (or install its packed
+tarball) so `node_modules/eval-quality` resolves to it, then run the check with no flags: there is no
+path-override flag here, since an arbitrary path cannot be the literal `import()` specifier
+`dependency-direction` requires.
 
 Every contract here records `compiles`, so `expected-status.json` carries no failure code to check:
 the comparison short-circuits on that status and never reaches a `code` field. The check that holds

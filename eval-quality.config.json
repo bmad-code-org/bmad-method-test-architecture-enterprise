@@ -240,7 +240,7 @@
       }
     ],
     "commonjs": "check",
-    "reportOnly": true
+    "reportOnly": false
   },
   "package-boundary": {
     "paths": [

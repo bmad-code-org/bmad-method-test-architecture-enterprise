@@ -73,6 +73,7 @@ function generateResultSchema() {
  */
 const HARNESS_LOADERS = {
   'test/eval-bmad-tea-routing.js': () => require('../test/eval-bmad-tea-routing.js'),
+  'test/eval-ci.js': () => require('../test/eval-ci.js'),
   'test/eval-fragment-selection.js': () => require('../test/eval-fragment-selection.js'),
   'test/eval-nfr.js': () => require('../test/eval-nfr.js'),
   'test/eval-test-design.js': () => require('../test/eval-test-design.js'),

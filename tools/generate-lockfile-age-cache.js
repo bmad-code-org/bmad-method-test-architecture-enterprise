@@ -5,9 +5,19 @@
  * A publication time is fixed the moment a version is published, so a cache
  * entry never goes stale; the gate uses one with no request when a name@version
  * is present, and falls back to a live fetch when it is not. This script reads
- * both committed lockfiles, fetches every unique package name once through the
- * same `fetchTimeMap` the gate itself calls, and writes every locked
- * name@version's real publish timestamp.
+ * both committed lockfiles, fetches every unique package name once against the
+ * public npm registry, and writes every locked name@version's real publish
+ * timestamp. The cache file's shape is all the gate reads; it has no opinion on
+ * how an entry was produced.
+ *
+ * `fetchTimeMap` here is TEA's own, rather than the same-named function
+ * `eval-quality`'s `dist/gates/audit-lockfile-age.mjs` carries: that module
+ * sits outside the package's declared `exports`, so importing it would be
+ * exactly the unexported-internals reach `dependency-direction` exists to
+ * catch, in the gate's own package. The registry request it makes is one GET
+ * per package name against a documented public endpoint, small enough that
+ * duplicating it here is cheaper and more robust than depending on a path
+ * `eval-quality` has not published.
  *
  * Usage:
  *   node tools/generate-lockfile-age-cache.js
@@ -17,22 +27,43 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { pathToFileURL } = require('node:url');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
+const REGISTRY_PREFIX = 'https://registry.npmjs.org/';
+const FETCH_TIMEOUT_MS = 10_000;
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 500;
 
-/**
- * `fetchTimeMap`, resolved through the package's own manifest rather than a
- * subpath export: the gates' internal modules carry no public export, the same
- * reason `test/test-supply-chain.js` resolves the `eval-quality-gates` binary
- * this way rather than importing it.
- */
-async function loadFetchTimeMap() {
-  const manifestPath = require.resolve('eval-quality/package.json');
-  const auditModulePath = path.join(path.dirname(manifestPath), 'dist', 'gates', 'audit-lockfile-age.mjs');
-  const module_ = await import(pathToFileURL(auditModulePath).href);
-  return module_.fetchTimeMap;
+function registryUrlForName(name) {
+  const encoded = name.startsWith('@') ? `${name.split('/')[0]}/${encodeURIComponent(name.split('/')[1])}` : encodeURIComponent(name);
+  return `${REGISTRY_PREFIX}${encoded}`;
 }
+
+class NonRetryableFetchError extends Error {}
+
+async function fetchWithRetry(url, attempts = MAX_RETRIES) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+      if (res.ok) return await res.json();
+      if (res.status !== 429 && res.status < 500) throw new NonRetryableFetchError(`HTTP ${res.status}`);
+      throw new Error(`HTTP ${res.status}`);
+    } catch (error) {
+      lastError = error;
+      if (error instanceof NonRetryableFetchError) break;
+      if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, RETRY_BASE_MS * attempt));
+    }
+  }
+  throw lastError;
+}
+
+/** One registry request per unique package name; the response carries a `time` map covering every published version. */
+async function fetchTimeMap(name) {
+  const meta = await fetchWithRetry(registryUrlForName(name));
+  return meta.time ?? {};
+}
+
 const LOCKFILES = ['package-lock.json', 'website/package-lock.json'];
 const CACHE_PATH = path.join(PROJECT_ROOT, '.lockfile-age-cache.json');
 const CONCURRENCY = 8;
@@ -64,7 +95,6 @@ async function mapWithConcurrency(items, limit, fn) {
 }
 
 async function main() {
-  const fetchTimeMap = await loadFetchTimeMap();
   const allEntries = [];
   for (const relative of LOCKFILES) {
     const lockfile = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, relative), 'utf8'));

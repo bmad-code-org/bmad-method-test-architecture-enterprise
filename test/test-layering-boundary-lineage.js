@@ -1,16 +1,13 @@
 /**
  * The layering, boundary and lineage gates are wired to the right gate names,
- * and the two that fail (package-boundary, field-ownership) each fail on the
- * violation they exist to catch.
+ * and each one fails on the violation it exists to catch.
  *
  * `npm run test:direction`, `npm run test:boundary` and `npm run test:lineage`
  * are three separate `eval-quality-gates` invocations, and nothing before this
- * check asserted which gate name each script actually calls. `test:direction`
- * runs `reportOnly: true` and so always exits 0 regardless of what it finds; a
- * script accidentally pointed at it instead of `package-boundary` or
- * `field-ownership` would still be a syntactically valid `eval-quality-gates`
- * invocation, still exit 0, and silently stop enforcing the gate its name
- * promises.
+ * check asserted which gate name each script actually calls. A script
+ * accidentally pointed at the wrong gate name would still be a syntactically
+ * valid `eval-quality-gates` invocation and silently stop enforcing the gate
+ * its name promises.
  *
  * WHAT IS CHECKED
  *
@@ -21,21 +18,29 @@
  *   matching a dev-only-path pattern, naming the file and the line.
  * - `field-ownership` fails at exit 1 on a fixture where a file outside the
  *   declared `writers` list sets the owned field, naming the file and field.
- * - `dependency-direction`, staying `reportOnly: true` on purpose (two of its
- *   three remaining first-run findings are eval-quality limits, queued
- *   upstream), is proven to still be running for real: it is run against the
- *   repository's own configuration and asserted to report at least the three
- *   known, currently-open findings, so a config edit that silently stopped it
- *   from scanning anything would be caught even though the exit code alone
- *   could not.
+ * - `dependency-direction` fails at exit 1 on a fixture where a `cli/` file
+ *   reaches into `tools/`, a layer its graph does not permit `cli/` to import.
+ * - `dependency-direction` stays quiet on a fixture whose only construct is a
+ *   `require(name) {` method shorthand inside an object literal: this is the
+ *   exact shape eval-quality's own scanner used to misread as a `require()`
+ *   call before eval-quality 3.3.0's `isMethodDefinition` fix, and the story
+ *   this check belongs to could not flip the gate to failing until it was
+ *   confirmed gone.
+ * - `dependency-direction` is proven to still be scanning the repository for
+ *   real, run against the repository's own configuration and asserted to
+ *   report the number of files `test:ci-coverage`'s own file-discovery would
+ *   expect, so a config edit that silently narrowed its roots to nothing would
+ *   be caught even though a report of zero violations over zero files reads
+ *   the same as a clean pass.
  *
  * Usage:
  *   node test/test-layering-boundary-lineage.js
  *
  * Exit codes:
  *   0  every gate is wired to the right name and refused its seeded violation
- *   1  a gate is wired to the wrong name, passed a seeded violation, or the
- *      direction gate reported fewer open findings than expected
+ *   1  a gate is wired to the wrong name, passed a seeded violation, wrongly
+ *      flagged the require-shorthand fixture, or scanned fewer files than
+ *      expected against the real repository
  *   2  the binary or a fixture could not be read, so nothing was measured
  */
 
@@ -59,13 +64,15 @@ const GATE_SCRIPTS = {
 };
 
 /**
- * The three known-open dependency-direction findings this repository's own
- * `eval-quality.config.json` reports today, traced to eval-quality rather
- * than TEA (see the story's Implementation Notes). Not a fixture: this is the
- * live count against the real configuration, so it also proves the gate is
- * actually scanning real source rather than a fixture standing in for it.
+ * A floor on how many files `dependency-direction` should scan against this
+ * repository's own configuration. Not a fixture: this is the live count
+ * against the real configuration, so it also proves the gate is actually
+ * scanning real source rather than a fixture standing in for it. Set well
+ * below the true count (101 as of this writing) so ordinary file churn does
+ * not make this check flaky; it exists to catch a roots list narrowed to
+ * nothing, not to track the exact count.
  */
-const MINIMUM_KNOWN_DIRECTION_FINDINGS = 3;
+const MINIMUM_SCANNED_DIRECTION_FILES = 50;
 
 const colors = { reset: '[0m', red: '[31m', green: '[32m' };
 
@@ -157,14 +164,45 @@ function checkLineageSeed(binary) {
   check(output.includes('schemaVersion'), `field-ownership did not name the owned field\n${output}`);
 }
 
+function checkDirectionSeed(binary) {
+  const fixture = path.join(FIXTURE_ROOT, 'direction-violation', 'eval-quality.config.json');
+  const { status, output } = runGate(binary, 'dependency-direction', fixture, path.join(FIXTURE_ROOT, 'direction-violation'));
+  check(
+    status === EXIT_GATE_FAILED,
+    `dependency-direction exited ${status} on the seeded cli/-into-tools/ reach; expected ${EXIT_GATE_FAILED}\n${output}`,
+  );
+  check(output.includes('reach-into-tools.js'), `dependency-direction did not name the seeded file\n${output}`);
+  check(output.includes('cli/ may not import tools/'), `dependency-direction did not name the violated layer rule\n${output}`);
+}
+
+/**
+ * eval-quality 3.3.0's `isMethodDefinition` fix, proven directly rather than
+ * inferred from an overall clean run. Before 3.3.0 the scanner read any
+ * `require(` token sequence as a call site regardless of whether it was a
+ * method definition on an object literal, which is exactly the shape
+ * `test/test-test-review-cli.js`'s sandboxed `require` mock carries; this
+ * fixture isolates that one construct so a regression in a future
+ * eval-quality release is caught here rather than read as "the repository
+ * happens to report zero violations today."
+ */
+function checkDirectionNoRequireShorthandFalsePositive(binary) {
+  const fixture = path.join(FIXTURE_ROOT, 'direction-require-shorthand', 'eval-quality.config.json');
+  const { status, output } = runGate(binary, 'dependency-direction', fixture, path.join(FIXTURE_ROOT, 'direction-require-shorthand'));
+  check(
+    status === 0,
+    `dependency-direction exited ${status} on a require(name) { method shorthand; expected 0 (no false positive)\n${output}`,
+  );
+  check(output.includes('0 violations'), `dependency-direction reported a violation on the require-shorthand fixture\n${output}`);
+}
+
 function checkDirectionStillScans(binary) {
   const { status, output } = runGate(binary, 'dependency-direction', CONFIG_PATH, PROJECT_ROOT);
-  check(status === 0, `dependency-direction exited ${status} against the real configuration; expected 0 (reportOnly)\n${output}`);
-  const match = output.match(/report-only, (\d+) violation/);
-  const reported = match ? Number(match[1]) : 0;
+  check(status === 0, `dependency-direction exited ${status} against the real configuration; expected 0 (0 violations)\n${output}`);
+  const match = output.match(/passed, (\d+) file\(s\) scanned/);
+  const scanned = match ? Number(match[1]) : 0;
   check(
-    reported >= MINIMUM_KNOWN_DIRECTION_FINDINGS,
-    `dependency-direction reported ${reported} violation(s) against the real repository; expected at least ${MINIMUM_KNOWN_DIRECTION_FINDINGS} known, still-open finding(s)\n${output}`,
+    scanned >= MINIMUM_SCANNED_DIRECTION_FILES,
+    `dependency-direction scanned ${scanned} file(s) against the real repository; expected at least ${MINIMUM_SCANNED_DIRECTION_FILES}\n${output}`,
   );
 }
 
@@ -175,6 +213,8 @@ function main() {
   checkWiring(config);
   checkBoundarySeed(binary);
   checkLineageSeed(binary);
+  checkDirectionSeed(binary);
+  checkDirectionNoRequireShorthandFalsePositive(binary);
   checkDirectionStillScans(binary);
 
   if (failures.length > 0) {
