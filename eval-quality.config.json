@@ -74,71 +74,122 @@
     "sources": {
       "totalCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "TOTAL_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "TOTAL_CALLS"
+        }
       },
       "totalCallsThreeRunners": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "TOTAL_CALLS_THREE_RUNNERS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "TOTAL_CALLS_THREE_RUNNERS"
+        }
       },
       "fragmentSelectionCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "FRAGMENT_SELECTION_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "FRAGMENT_SELECTION_CALLS"
+        }
       },
       "routingIntentCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "ROUTING_INTENT_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "ROUTING_INTENT_CALLS"
+        }
       },
       "testDesignCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "TEST_DESIGN_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "TEST_DESIGN_CALLS"
+        }
       },
       "testReviewCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "TEST_REVIEW_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "TEST_REVIEW_CALLS"
+        }
       },
       "nfrCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "NFR_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "NFR_CALLS"
+        }
       },
       "traceCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "TRACE_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "TRACE_CALLS"
+        }
       },
       "ciCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "CI_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "CI_CALLS"
+        }
       },
       "atddCalls": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "ATDD_CALLS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "ATDD_CALLS"
+        }
       },
       "fragmentSelectionCases": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "FRAGMENT_SELECTION_CASES" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "FRAGMENT_SELECTION_CASES"
+        }
       },
       "npmTestChainLength": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "NPM_TEST_CHAIN_LENGTH" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "NPM_TEST_CHAIN_LENGTH"
+        }
       },
       "knowledgeFragmentTotal": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_TOTAL" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "KNOWLEDGE_FRAGMENT_TOTAL"
+        }
       },
       "knowledgeFragmentCore": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_CORE" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "KNOWLEDGE_FRAGMENT_CORE"
+        }
       },
       "knowledgeFragmentExtended": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_EXTENDED" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "KNOWLEDGE_FRAGMENT_EXTENDED"
+        }
       },
       "knowledgeFragmentSpecialized": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "KNOWLEDGE_FRAGMENT_SPECIALIZED" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "KNOWLEDGE_FRAGMENT_SPECIALIZED"
+        }
       },
       "advisoryObservationsMaxItems": {
         "kind": "module",
-        "from": { "module": "test/lib/doc-count-sources.js", "export": "ADVISORY_OBSERVATIONS_MAX_ITEMS" }
+        "from": {
+          "module": "test/lib/doc-count-sources.js",
+          "export": "ADVISORY_OBSERVATIONS_MAX_ITEMS"
+        }
       }
     },
     "entries": [
@@ -237,10 +288,22 @@
   },
   "dependency-direction": {
     "roots": [
-      { "path": "cli", "extensions": [".js"] },
-      { "path": "tools", "extensions": [".js"] },
-      { "path": "test", "extensions": [".js"] },
-      { "path": "src", "extensions": [".cjs"] }
+      {
+        "path": "cli",
+        "extensions": [".js"]
+      },
+      {
+        "path": "tools",
+        "extensions": [".js"]
+      },
+      {
+        "path": "test",
+        "extensions": [".js"]
+      },
+      {
+        "path": "src",
+        "extensions": [".cjs"]
+      }
     ],
     "layers": [
       {
@@ -282,11 +345,22 @@
   },
   "package-boundary": {
     "paths": [
-      { "path": "src" },
-      { "path": "cli" },
-      { "path": ".claude-plugin", "extensions": [".json"] },
-      { "path": "README.md" },
-      { "path": "LICENSE" }
+      {
+        "path": "src"
+      },
+      {
+        "path": "cli"
+      },
+      {
+        "path": ".claude-plugin",
+        "extensions": [".json"]
+      },
+      {
+        "path": "README.md"
+      },
+      {
+        "path": "LICENSE"
+      }
     ],
     "manifest": {
       "file": "package.json",
@@ -311,7 +385,12 @@
     ]
   },
   "field-ownership": {
-    "paths": [{ "path": "tools", "extensions": [".js"] }],
+    "paths": [
+      {
+        "path": "tools",
+        "extensions": [".js"]
+      }
+    ],
     "fields": ["schemaVersion"],
     "writers": ["tools/generate-probes.js", "tools/generate-contracts.js"]
   },
@@ -654,35 +733,35 @@
         },
         {
           "token": "waitForTimeout",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "getByRole",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "getByLabel",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "getByTestId",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "waitForSelector",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "waitForResponse",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "toBeTruthy",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "toJSON",
-          "reason": "Playwright’s own built-in API, not a TEA declaration"
+          "reason": "Playwright\u2019s own built-in API, not a TEA declaration"
         },
         {
           "token": "PATH",
@@ -942,27 +1021,51 @@
         },
         {
           "token": "isDiscriminatingCase",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "nonDeterministicReportedValues",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "expectedTestInventory",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "negativeControls",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "rejectedCases",
-          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md’s own worked prose, not a TEA source declaration"
+          "reason": "a ground-truth or scoring field name from eval-quality-adoption-guide.md\u2019s own worked prose, not a TEA source declaration"
         },
         {
           "token": "mechanicalSignal",
-          "reason": "cli/lib/convention-baseline.js’s own field, declared inline in an object literal rather than as a standalone const or a property on its own source line, which the declaration scan does not reach"
+          "reason": "cli/lib/convention-baseline.js\u2019s own field, declared inline in an object literal rather than as a standalone const or a property on its own source line, which the declaration scan does not reach"
+        },
+        {
+          "token": "SEALED_RUN_RECORD_SCHEMA_VERSION",
+          "reason": "an eval-quality package export (one of its per-artifact schemaVersion constants), not a TEA declaration"
+        },
+        {
+          "token": "resolveCheck",
+          "reason": "an eval-quality package export, reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
+        },
+        {
+          "token": "makeResolveOperand",
+          "reason": "an eval-quality package export, reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
+        },
+        {
+          "token": "makePointerDenotesCollection",
+          "reason": "an eval-quality package export, reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
+        },
+        {
+          "token": "referenceSetKeysOf",
+          "reason": "an eval-quality package export, reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
+        },
+        {
+          "token": "ABSENT",
+          "reason": "an eval-quality package export (its sentinel), reachable off require('eval-quality') since 3.3.0's public barrel, not a TEA declaration"
         }
       ]
     },
@@ -1173,7 +1276,7 @@
         },
         {
           "file": "README.md",
-          "key": "`risk_threshold` — risk cutoff for mandatory testing",
+          "key": "`risk_threshold` \u2014 risk cutoff for mandatory testing",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "RISK_THRESHOLD_UNREAD"
@@ -1297,6 +1400,12 @@
             "export": "OUTPUT_FOLDER_KEYS_UNREAD"
           },
           "reason": "a grep of src/workflows/ for each of the three output-folder keys"
+        },
+        {
+          "file": "docs/explanation/eval-quality-command-adapter.md",
+          "key": "score today where its own gameability probe",
+          "settles": "read",
+          "reason": "a claim about the test-review defect probes' current exit-code discrimination capability, added by #200; nothing in the tree derives this automatically today, matching the disposition already used for the neighboring pre-flight-capability claim on the same page"
         }
       ]
     }
