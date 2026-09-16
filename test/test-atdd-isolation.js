@@ -10,7 +10,7 @@
  *
  * WHAT IS PROVEN
  *
- *   network deny     a connection to a real external host is refused, at the
+ *   network deny     a connection to a non-loopback host is refused, at the
  *                    process level, whether attempted directly or from a
  *                    spawned child. Loopback still works both ways, because the
  *                    fixture server the red-check starts binds to it and the
@@ -21,9 +21,14 @@
  *   cpu bound        a process that spins forever is killed inside the
  *                    declared budget rather than running to the wall-clock
  *                    backstop.
- *   credential seal  the workspace HOME carries none of the parent's files, so
- *                    a stored login is not on any path a child derives from
- *                    home.
+ *   home redirect    the sandboxed HOME is the workspace, not the operator's real
+ *                    one, so anything a generated test derives from `os.homedir()`
+ *                    or `$HOME` cannot land on a real stored login. This is not a
+ *                    general read seal: neither backend denies reads (see
+ *                    `buildSeatbeltProfile`'s own comment), so a script that reads
+ *                    a credential by its real, hardcoded path rather than by
+ *                    deriving it from `$HOME` is a known, accepted gap this check
+ *                    does not claim to close.
  *   privilege        the check does not run this file, or anything it spawns,
  *                    as the root user; NFR9 says non-privileged.
  *
@@ -110,18 +115,21 @@ function main() {
 
     assert(process.getuid ? process.getuid() !== 0 : true, 'this check does not run as root', 'NFR9 requires a non-privileged workspace');
 
-    // Network: a real external host, denied.
+    // Network: a non-loopback host, denied. 192.0.2.1 is RFC 5737's
+    // documentation-only address (TEST-NET-1): it never routes anywhere, so the
+    // check proves the sandbox refuses the attempt itself rather than depending
+    // on a specific third party's host staying up and behaving a certain way.
     const externalConnect = runSandboxed(
       workspace,
       backend,
-      'const s=require("node:net").connect({host:"93.184.216.34",port:80});' +
+      'const s=require("node:net").connect({host:"192.0.2.1",port:80});' +
         's.setTimeout(5000,()=>{console.log("TIMEOUT");s.destroy();process.exit(1)});' +
         's.on("error",(e)=>{console.log("ERROR",e.code);process.exit(0)});' +
         's.on("connect",()=>{console.log("CONNECTED");s.destroy();process.exit(1)})',
     );
     assert(
       externalConnect.status === 0 && /ERROR/.test(externalConnect.stdout),
-      'a connection to a real external host is refused',
+      'a connection to a non-loopback host is refused',
       `status ${externalConnect.status}, stdout ${JSON.stringify(externalConnect.stdout)}, stderr ${JSON.stringify(externalConnect.stderr)}`,
     );
 
@@ -130,7 +138,7 @@ function main() {
       workspace,
       backend,
       'const cp=require("node:child_process");' +
-        String.raw`const r=cp.spawnSync(process.execPath,["-e","require(\"node:net\").connect({host:\"93.184.216.34\",port:80}).on(\"error\",()=>process.exit(9)).on(\"connect\",()=>process.exit(0))"]);` +
+        String.raw`const r=cp.spawnSync(process.execPath,["-e","require(\"node:net\").connect({host:\"192.0.2.1\",port:80}).on(\"error\",()=>process.exit(9)).on(\"connect\",()=>process.exit(0))"]);` +
         'console.log("CHILD_STATUS",r.status)',
     );
     assert(
@@ -216,22 +224,41 @@ function main() {
       `elapsed ${busyElapsed}ms, status ${busy.status}, signal ${busy.signal}, stdout ${JSON.stringify(busy.stdout)}`,
     );
 
-    // Credential seal: the sandboxed HOME carries none of the real one's files.
-    const realHomeMarker = path.join(os.homedir(), '.tea-atdd-isolation-marker-should-not-be-visible');
-    fs.writeFileSync(realHomeMarker, 'if a sandboxed run can read this, HOME leaked');
+    // Home redirect: the sandboxed HOME is the workspace itself, not the real
+    // one. Checked by exact equality rather than by probing for a marker
+    // through process.env.HOME: childEnvironment always sets HOME to the
+    // workspace before the process starts, so a marker looked up by joining
+    // it onto process.env.HOME can never resolve to the real home's path
+    // regardless of what the sandbox actually confines — that check would
+    // pass even against an entirely unconfined process.
+    const homeProbe = runSandboxed(workspace, backend, 'console.log("HOME_IS",process.env.HOME)');
+    const resolvedWorkspace = fs.realpathSync(workspace);
+    assert(
+      homeProbe.status === 0 &&
+        (homeProbe.stdout.includes(`HOME_IS ${workspace}`) || homeProbe.stdout.includes(`HOME_IS ${resolvedWorkspace}`)),
+      'the sandboxed HOME is exactly the workspace, not the real one',
+      `stdout ${JSON.stringify(homeProbe.stdout)}, workspace ${workspace}`,
+    );
+
+    // The property above seals derivation from $HOME; it is not a general read
+    // seal. Neither backend denies reads (see buildSeatbeltProfile's own
+    // comment), so a script that knows the operator's real home path outright,
+    // rather than deriving it from $HOME, can still read a file there. Proven
+    // rather than assumed, so a future change to either profile's read policy
+    // shows up here in either direction: today this assertion is expected to
+    // find the marker, not fail to.
+    const realHomeMarker = path.join(os.homedir(), '.tea-atdd-isolation-marker-known-readable');
+    fs.writeFileSync(realHomeMarker, 'reads are not denied by design; see buildSeatbeltProfile');
     try {
-      const homeProbe = runSandboxed(
+      const readProbe = runSandboxed(
         workspace,
         backend,
-        `console.log("HOME_IS",process.env.HOME);console.log("SEES_MARKER",require("node:fs").existsSync(require("node:path").join(process.env.HOME,".tea-atdd-isolation-marker-should-not-be-visible")))`,
+        `console.log("SEES_MARKER",require("node:fs").existsSync(${JSON.stringify(realHomeMarker)}))`,
       );
       assert(
-        homeProbe.status === 0 &&
-          /HOME_IS/.test(homeProbe.stdout) &&
-          !homeProbe.stdout.includes(os.homedir()) &&
-          /SEES_MARKER\s*false/.test(homeProbe.stdout),
-        'the sandboxed HOME is the workspace, not the real one, and carries none of its files',
-        `stdout ${JSON.stringify(homeProbe.stdout)}`,
+        readProbe.status === 0 && /SEES_MARKER\s*true/.test(readProbe.stdout),
+        'a real home path, known outright rather than derived from $HOME, is still readable (accepted scope, not a general read seal)',
+        `stdout ${JSON.stringify(readProbe.stdout)}`,
       );
     } finally {
       fs.rmSync(realHomeMarker, { force: true });

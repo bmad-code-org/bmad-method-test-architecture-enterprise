@@ -136,6 +136,7 @@ const {
   sandboxedCommand,
   buildSeatbeltProfile,
   childEnvironment,
+  probeBackend,
   DEFAULT_CPU_SECONDS,
 } = require('../cli/lib/atdd-isolation');
 
@@ -534,18 +535,27 @@ function stageWorkspace(groundTruth) {
   return { dir, projectDir, productionFiles };
 }
 
-/** Digest of a set of files under `root`, keyed by relative path so a rename shows up. */
-function digestTree(root, relativePaths) {
-  const parts = [];
-  for (const relative of [...relativePaths].sort()) {
+/** One digest per file under `root`, keyed by relative path, so a specific changed path can be named rather than only that some file in the set changed. */
+function digestFilesByPath(root, relativePaths) {
+  const digests = new Map();
+  for (const relative of relativePaths) {
     try {
-      parts.push(relative, fs.readFileSync(path.join(root, relative)));
+      digests.set(relative, digest(fs.readFileSync(path.join(root, relative))));
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
-      parts.push(relative, '\0missing', relative);
+      digests.set(relative, null);
     }
   }
-  return digest(parts);
+  return digests;
+}
+
+/** The relative paths whose digest differs between two digestFilesByPath() results over the same relativePaths, sorted for a stable report. */
+function changedPaths(before, after) {
+  const changed = [];
+  for (const [relative, beforeDigest] of before) {
+    if (after.get(relative) !== beforeDigest) changed.push(relative);
+  }
+  return changed.sort();
 }
 
 /** Files newly present under `root` that were not in `known`, excluding the scaffold and harness directories. */
@@ -826,7 +836,7 @@ async function runCase(groundTruth, options, agent, runIndex, backend) {
       return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
     }
 
-    const beforeGeneration = digestTree(workspace.projectDir, workspace.productionFiles);
+    const beforeGeneration = digestFilesByPath(workspace.projectDir, workspace.productionFiles);
     const treeBefore = workingTreeState(PROJECT_ROOT);
     const { port } = await createProbePort({
       cwd: workspace.dir,
@@ -865,9 +875,9 @@ async function runCase(groundTruth, options, agent, runIndex, backend) {
       };
     }
 
-    const afterGeneration = digestTree(workspace.projectDir, workspace.productionFiles);
+    const afterGeneration = digestFilesByPath(workspace.projectDir, workspace.productionFiles);
     const productionMutatedByGeneration = [
-      ...(beforeGeneration === afterGeneration ? [] : ['(a declared production file changed)']),
+      ...changedPaths(beforeGeneration, afterGeneration),
       ...addedFiles(workspace.projectDir, workspace.productionFiles, groundTruth.testDir),
     ];
 
@@ -907,6 +917,34 @@ function failureClassForExit(code) {
 /* Pre-flight                                                                  */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The backend this platform runs generated tests under, only after actually
+ * spawning a trivial process through it. `selectBackend()` alone confirms the
+ * binary is on `PATH`; a host can carry that binary and still refuse the
+ * kernel feature it needs (an unprivileged user namespace, on some hardened
+ * distributions), and a check that only looked at `PATH` would schedule a
+ * live run that dies at its first spawn instead of refusing before it starts.
+ *
+ * @returns {string}
+ * @throws {Error} whatever `selectBackend` throws, or an `ISOLATION_UNAVAILABLE`
+ *   error naming the backend the kernel refused to run.
+ */
+function verifiedBackend() {
+  const backend = selectBackend();
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-atdd-backend-probe-'));
+  try {
+    const probe = probeBackend({ backend, workspace });
+    if (!probe.ok) {
+      const error = new Error(`isolation backend "${backend}" is on PATH but the kernel refuses to run it: ${probe.reason}`);
+      error.code = 'ISOLATION_UNAVAILABLE';
+      throw error;
+    }
+    return backend;
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+}
+
 function preflight({ agents, agentCmd }) {
   const problems = [];
   const versions = {};
@@ -917,7 +955,7 @@ function preflight({ agents, agentCmd }) {
   for (const problem of targetProblems(PROJECT_ROOT, [ATDD_INTERFACE])) report('environment-configuration', problem);
 
   try {
-    selectBackend();
+    verifiedBackend();
   } catch (error) {
     report('environment-configuration', `no isolation backend runs here, so generated tests cannot be executed safely: ${error.message}`);
   }
@@ -1106,7 +1144,7 @@ async function main() {
 
   let backend;
   try {
-    backend = selectBackend();
+    backend = verifiedBackend();
   } catch (error) {
     console.error(`${colors.red}eval: ${error.message}${colors.reset}`);
     await finish({ options, startedAt, mode: 'live', groundTruth, runners: [], suiteFailureClasses: ['environment-configuration'] });

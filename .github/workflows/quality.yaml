@@ -186,6 +186,9 @@ jobs:
       - name: Prove tea-atdd-red-check's isolation backend confines a hostile spec
         run: npm run test:atdd-isolation
 
+      - name: Prove the in-process net guard refuses what the OS backend cannot
+        run: npm run test:atdd-net-guard
+
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
 

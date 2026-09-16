@@ -138,8 +138,14 @@ function assertProfileSafePath(candidate) {
  *
  * Everything is allowed except what NFR9 names. Network is denied outright and
  * then re-allowed on loopback in all three directions a server and its client
- * need, plus unix sockets, which the resolver and the system use and which
- * cannot leave the machine. File writes are denied outright and re-allowed under
+ * need, and nothing else: an earlier draft also re-allowed outbound unix-socket
+ * connections for the system resolver, which a generated test never needs (the
+ * fixture is addressed by loopback IP, not by hostname) and which is reachable
+ * local IPC rather than network in name only — it would have reached a live
+ * `ssh-agent` or Docker daemon socket exactly as easily as a resolver socket.
+ * Verified live: `cli/atdd-red-check.js` still runs a full spec file to
+ * completion against the fixture server with that allowance removed. File
+ * writes are denied outright and re-allowed under
  * the workspace, by its path and by its real path because `/var` is a symlink to
  * `/private/var` on darwin, plus `/dev/null`, which a child's closed stdio is.
  *
@@ -167,7 +173,6 @@ function buildSeatbeltProfile({ workspace }) {
     '(allow network-bind (local ip "localhost:*"))',
     '(allow network-inbound (local ip "localhost:*"))',
     '(allow network-outbound (remote ip "localhost:*"))',
-    '(allow network-outbound (remote unix-socket))',
     '(deny file-write*)',
     `(allow file-write*\n${subpaths}\n    (literal "/dev/null"))`,
     '',
@@ -182,17 +187,24 @@ function buildSeatbeltProfile({ workspace }) {
  * `"$@"` the command, so no argument is ever interpolated into shell text.
  *
  * bubblewrap's flags, in the order verified live:
- *   --unshare-user   an unprivileged user namespace, the same mechanism a bare
- *                    `unshare --user` uses, and what lets an ordinary account
- *                    create the namespaces below with no setuid helper
- *   --unshare-net    a fresh network namespace with only loopback, brought up
- *                    already: unlike a bare `unshare --net`, bubblewrap starts
- *                    `lo` itself, so no separate `ip link set lo up` step exists
- *                    to forget
- *   --ro-bind / /    the real filesystem, read-only, so node, Playwright and
- *                    the fixture's own dependencies resolve exactly as they do
- *                    outside the sandbox
- *   --bind ws ws     the one path writable inside that read-only view
+ *   --unshare-user     an unprivileged user namespace, the same mechanism a bare
+ *                      `unshare --user` uses, and what lets an ordinary account
+ *                      create the namespaces below with no setuid helper
+ *   --unshare-net      a fresh network namespace with only loopback, brought up
+ *                      already: unlike a bare `unshare --net`, bubblewrap starts
+ *                      `lo` itself, so no separate `ip link set lo up` step exists
+ *                      to forget
+ *   --unshare-pid      a fresh PID namespace, so a generated test cannot see, and
+ *                      is not counted among, host or sibling-run process trees
+ *   --unshare-ipc      a fresh IPC namespace, so no generated test can reach a
+ *                      SysV or POSIX IPC object another process on the host holds
+ *   --die-with-parent  the sandboxed process tree is killed if the process that
+ *                      started bubblewrap dies first, so an OOM-killed harness
+ *                      cannot orphan a still-running sandboxed child
+ *   --ro-bind / /      the real filesystem, read-only, so node, Playwright and
+ *                      the fixture's own dependencies resolve exactly as they do
+ *                      outside the sandbox
+ *   --bind ws ws       the one path writable inside that read-only view
  *
  * @param {{backend: string, profilePath?: string, workspace?: string, cpuSeconds: number, command: string, args: string[]}} options
  * @returns {{command: string, args: string[]}}
@@ -218,6 +230,9 @@ function sandboxedCommand({ backend, profilePath, workspace, cpuSeconds, command
         'bwrap',
         '--unshare-user',
         '--unshare-net',
+        '--unshare-pid',
+        '--unshare-ipc',
+        '--die-with-parent',
         '--ro-bind',
         '/',
         '/',

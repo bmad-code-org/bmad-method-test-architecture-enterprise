@@ -114,13 +114,7 @@ const { buildPrompt: buildCiPrompt, workflowMentions, PLATFORM: CI_PLATFORM, CI_
 // scaffold this contract addresses has no fixed name in general, so the
 // harness names the one path its own prompt asks generation to write into.
 const { ATDD_REQUEST_KEYS, DEFAULT_AGENT: ATDD_DEFAULT_AGENT } = require('../cli/atdd-runner');
-const {
-  buildPrompt: buildAtddPrompt,
-  CRITERION_ID: ATDD_CRITERION_ID,
-  ATDD_INTERFACE,
-  ATDD_OPERATION,
-  ATDD_SCAFFOLD_RELATIVE_PATH,
-} = require('../test/eval-atdd');
+const { buildPrompt: buildAtddPrompt, ATDD_INTERFACE, ATDD_OPERATION, ATDD_SCAFFOLD_RELATIVE_PATH } = require('../test/eval-atdd');
 // And for the routing command the bmad-tea suite names: its request and response
 // shapes and its default agent are its own, and the prompt, the menu reading and
 // the three pattern sources are the harness's. The patterns matter most. An

@@ -91,6 +91,21 @@ dns.lookup = function guardedLookup(hostname, ...rest) {
   throw error;
 };
 
+// The reverse of dns.lookup: an address and a port in, a hostname and service
+// name out. It resolves through the same OS-level path dns.lookup does (the
+// reason either needs an in-process guard at all), so an address argument is
+// checked the same way.
+const originalLookupService = dns.lookupService;
+dns.lookupService = function guardedLookupService(address, port, callback) {
+  if (isLoopback(address)) return originalLookupService.call(this, address, port, callback);
+  const error = refusal(`a reverse lookup of ${address}`);
+  if (typeof callback === 'function') {
+    process.nextTick(() => callback(error));
+    return;
+  }
+  throw error;
+};
+
 const originalPromiseLookup = dns.promises.lookup;
 dns.promises.lookup = function guardedPromiseLookup(hostname, ...rest) {
   if (isLoopback(hostname)) return originalPromiseLookup.call(this, hostname, ...rest);
@@ -144,7 +159,27 @@ for (const method of RESOLVER_METHODS) {
   }
 }
 
-// UDP has no connect step to intercept, so the send is what is checked.
+// A UDP socket reaches a remote host two ways: an address named on the send
+// call itself, or a target fixed earlier by connect() and then omitted from
+// every send() after. Both are checked, because the second is not a
+// hypothetical: connect() is the documented way to use a dgram socket for a
+// whole session, and a send() with no address argument is exactly what a
+// connected socket calls.
+const originalDgramConnect = dgram.Socket.prototype.connect;
+dgram.Socket.prototype.connect = function guardedDgramConnect(port, address, callback) {
+  const target = typeof address === 'function' ? undefined : address;
+  if (target !== undefined && !isLoopback(target)) {
+    const done = typeof address === 'function' ? address : callback;
+    const error = refusal(`connecting a datagram socket to ${target}`);
+    if (typeof done === 'function') {
+      process.nextTick(() => done(error));
+      return;
+    }
+    throw error;
+  }
+  return Reflect.apply(originalDgramConnect, this, arguments);
+};
+
 const originalSend = dgram.Socket.prototype.send;
 dgram.Socket.prototype.send = function guardedSend(...args) {
   const address = args.find((value, index) => index >= 1 && typeof value === 'string' && !/^\d+$/.test(value));

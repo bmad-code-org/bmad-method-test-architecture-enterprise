@@ -118,6 +118,8 @@ const {
   failureClassForExit: ciFailureClassForExit,
 } = require('../cli/ci-runner');
 const { RUNNER_CAPABILITIES: CI_HARNESS_DECLARED_CAPABILITIES, ACTIONLINT } = require('./eval-ci');
+const { RUNNER_CAPABILITIES: ATDD_RUNNER_DECLARED_CAPABILITIES } = require('../cli/atdd-runner');
+const { RUNNER_CAPABILITIES: ATDD_HARNESS_DECLARED_CAPABILITIES } = require('./eval-atdd');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -134,6 +136,8 @@ const NFR_HARNESS = path.join(__dirname, 'eval-nfr.js');
 const CI_HARNESS = path.join(__dirname, 'eval-ci.js');
 const TEST_DESIGN_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-design-runner', 'stub-agent.js');
 const TEST_DESIGN_HARNESS = path.join(__dirname, 'eval-test-design.js');
+const ATDD_STUB_AGENT = path.join(__dirname, 'fixtures', 'atdd-runner', 'stub-agent.js');
+const ATDD_HARNESS = path.join(__dirname, 'eval-atdd.js');
 
 /**
  * The environment names the three stub agents read, passed through `--env-pass`.
@@ -1290,6 +1294,77 @@ function checkTestDesignHarnessSmoke(runDir) {
   );
 }
 
+function runAtddHarness(runDir, stubMode, extraArgs) {
+  return runHarnessAgainstStub(ATDD_HARNESS, ATDD_STUB_AGENT, path.join(runDir, `atdd-harness-${stubMode}.json`), stubMode, extraArgs);
+}
+
+/**
+ * The atdd harness end to end against its stub: a real generation call through
+ * the adapter, then a real execution of the generated scaffold under the real
+ * isolation backend. No stored report stands in for either half.
+ *
+ * This is the one place `cli/atdd-red-check.js` and `cli/atdd-runner.js` are
+ * actually run in the pull-request gate. Every other atdd check either replays
+ * a report someone captured once by hand (`test/test-eval-replay.js`), scores
+ * static scaffold text (`test/test-contract-oracles.js`), or exercises the
+ * sandbox primitives directly with no scaffold in play at all
+ * (`test/test-atdd-isolation.js`). A regression in activation, in
+ * `runOneSpecFile`'s status/message extraction, or in either phase's
+ * before/after digest would ship undetected without this: the corpus's
+ * `--validate-only` mode returns before `runCase`, and `STUB_MODE=mutate`
+ * existed in `test/fixtures/atdd-runner/stub-agent.js` with nothing to invoke
+ * it until this check.
+ */
+function checkAtddHarnessSmoke(runDir) {
+  console.log('\nthe atdd harness end to end against the stub');
+
+  const correct = runAtddHarness(runDir, 'correct-run', ['--runs', '1']);
+  assert(
+    correct.status === 0,
+    'a correct generation, executed for real under isolation, meets every threshold',
+    correct.stderr.trim().split('\n').slice(-5).join(' | '),
+  );
+  assert(
+    correct.record?.mode === 'live' && correct.record?.failureClass === 'none',
+    'the record is a live run with no failure class',
+    JSON.stringify(correct.record && { mode: correct.record.mode, failureClass: correct.record.failureClass }),
+  );
+  const runner = correct.record?.runners?.[0];
+  assert(
+    runner?.repetitions?.expected === 1 && runner?.repetitions?.completed === 1,
+    'the declared repetition completed',
+    JSON.stringify(runner?.repetitions),
+  );
+  assert(
+    runner?.measurements?.redForIntendedReasonRate === 1 && runner?.measurements?.criteriaCoverage === 1,
+    'every generated test is red for the intended reason and every criterion is covered',
+    JSON.stringify(runner?.measurements),
+  );
+  assert(runner?.failures?.length === 0, 'every threshold is met', JSON.stringify(runner?.failures));
+
+  // The generation-phase negative control: a real edit under src/, made by the
+  // stub standing in for a misbehaving agent, caught by the same before/after
+  // digest AC3 relies on, driven for real rather than asserted from the source.
+  const mutate = runAtddHarness(runDir, 'mutate', ['--runs', '1']);
+  assert(mutate.status === 1, 'a generation run that edits a file outside tests/ exits 1', `exit ${mutate.status}`);
+  assert(
+    mutate.record?.failureClass === 'quality' && (mutate.record?.runners?.[0]?.measurements?.productionMutations ?? 0) > 0,
+    'the record carries a quality failure and counts the production mutation the stub made',
+    JSON.stringify(mutate.record?.runners?.[0]?.measurements),
+  );
+  assert(
+    recordedFailures(mutate)?.some((entry) => entry.includes('production mutation')),
+    'the failure list names the production mutation',
+    JSON.stringify(recordedFailures(mutate)),
+  );
+
+  // A vendor that writes no scaffold leaves the staged test directory empty,
+  // which is also what proves the execution phase's own "no spec files" guard:
+  // cli/atdd-red-check.js refuses rather than reporting 0% coverage as a score.
+  const nothing = runAtddHarness(runDir, 'nothing', ['--runs', '1']);
+  assert(nothing.status !== 0, 'a run that writes no scaffold does not pass', `exit ${nothing.status}`);
+}
+
 // ---------------------------------------------------------------------------
 // 4. a killed run is classified, not scored
 // ---------------------------------------------------------------------------
@@ -1503,6 +1578,11 @@ function checkRunnerDeclarations() {
     `harness ${JSON.stringify(CI_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(CI_RUNNER_DECLARED_CAPABILITIES)}`,
   );
   assert(
+    JSON.stringify([...ATDD_HARNESS_DECLARED_CAPABILITIES].sort()) === JSON.stringify([...ATDD_RUNNER_DECLARED_CAPABILITIES].sort()),
+    'the atdd harness and tea-atdd-runner declare the same runner capabilities',
+    `harness ${JSON.stringify(ATDD_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(ATDD_RUNNER_DECLARED_CAPABILITIES)}`,
+  );
+  assert(
     TRACE_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       NFR_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       CI_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
@@ -1668,6 +1748,7 @@ async function main() {
     checkCiHarnessSmoke(runDir);
     checkTraceHarnessSmoke(runDir);
     checkTestDesignHarnessSmoke(runDir);
+    checkAtddHarnessSmoke(runDir);
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });
   }

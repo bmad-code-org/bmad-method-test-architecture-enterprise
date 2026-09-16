@@ -92,8 +92,17 @@ function stripAnsi(value) {
   return String(value ?? '').replaceAll(ANSI_ESCAPE, '');
 }
 
-/** Directories a production-file digest never descends into: the test suite itself, its own output, and package state nobody hand-writes. */
-const DIGEST_EXCLUDED_DIRECTORIES = new Set(['node_modules', 'test-results', '.cache', '.tea-atdd-cache']);
+/**
+ * Directories a production-file digest never descends into: the test suite
+ * itself, its own output, package state nobody hand-writes, and `_bmad`, the
+ * eval harness's own bookkeeping directory (the staged workflow config the
+ * generation prompt tells the agent to read, not the fixture's product
+ * surface). `test/eval-atdd.js`'s generation-phase scope excludes the same
+ * directory for the same reason; the two phases check the same tree and have
+ * to draw the "production" boundary the same way, or an identical write
+ * scores differently depending only on which phase made it.
+ */
+const DIGEST_EXCLUDED_DIRECTORIES = new Set(['node_modules', 'test-results', '.cache', '.tea-atdd-cache', '_bmad']);
 
 function fail(message) {
   process.stderr.write(`tea-atdd-red-check: ${message}\n`);
@@ -339,11 +348,19 @@ function respondsOnce(url) {
  * or stop a server of its own: it finds one already answering and leaves it
  * alone.
  *
+ * `detached: true` makes the spawned shell the leader of its own process
+ * group, which is why `stopServer` kills `-child.pid` rather than `child.pid`:
+ * the command actually declared, `npm start`, is the shell's own child rather
+ * than the shell itself, so killing only the shell's PID leaves that real
+ * server process orphaned and still holding the port. Measured live: with a
+ * bare `child.kill('SIGKILL')`, the port answered again a second later; with
+ * the process-group kill below, it did not.
+ *
  * @param {{command: string, cwd: string, env: Record<string,string>, healthUrl: string, timeoutMs: number}} options
  * @returns {Promise<import('node:child_process').ChildProcess>}
  */
 async function startServer({ command, cwd, env, healthUrl, timeoutMs }) {
-  const child = spawn(command, { cwd, env, shell: true, stdio: 'ignore' });
+  const child = spawn(command, { cwd, env, shell: true, stdio: 'ignore', detached: true });
   const deadline = Date.now() + timeoutMs;
   let spawnError = null;
   child.once('error', (error) => {
@@ -351,21 +368,28 @@ async function startServer({ command, cwd, env, healthUrl, timeoutMs }) {
   });
   while (Date.now() < deadline) {
     if (spawnError) throw new Error(`the fixture server failed to start: ${spawnError.message}`);
-    if (child.exitCode !== null) throw new Error(`the fixture server exited (code ${child.exitCode}) before answering ${healthUrl}`);
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(`the fixture server exited (code ${child.exitCode}, signal ${child.signalCode}) before answering ${healthUrl}`);
+    }
     if (await respondsOnce(healthUrl)) return child;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  child.kill('SIGKILL');
+  stopServer(child);
   throw new Error(`the fixture server did not answer ${healthUrl} within ${timeoutMs}ms`);
 }
 
 /** SIGKILL rather than SIGTERM: this command owns the server for its own run and needs it gone, not given a chance to linger. */
 function stopServer(child) {
-  if (!child || child.exitCode !== null) return;
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
   try {
-    child.kill('SIGKILL');
+    process.kill(-child.pid, 'SIGKILL');
   } catch {
-    // already gone
+    // already gone, or the group leader itself is what died
+    try {
+      child.kill('SIGKILL');
+    } catch {
+      // already gone
+    }
   }
 }
 
@@ -413,6 +437,7 @@ async function main(argv) {
   );
 
   const specFiles = discoverSpecFiles(projectRoot, options.testDir);
+  if (specFiles.length === 0) fail(`no *.spec.ts files found under ${path.join(projectRoot, options.testDir)}`);
 
   if (options.serverCommand && !options.serverHealthUrl) fail('--server-command requires --server-health-url');
   if (options.serverHealthUrl && !options.serverCommand) fail('--server-health-url requires --server-command');
