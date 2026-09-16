@@ -882,7 +882,21 @@ async function runCase(groundTruth, options, agent, runIndex, backend) {
     ];
 
     const reportPath = path.join(workspace.projectDir, 'test-artifacts', 'atdd-red-report.json');
+    const treeBeforeExecution = workingTreeState(PROJECT_ROOT);
     const redCheck = runRedCheck(workspace.projectDir, reportPath, backend);
+    // The sandbox is what actually confines the generated tests this runs; this
+    // is a second, independent detector so a sandbox that silently stopped
+    // confining is not the only thing standing between generated test code and
+    // the real repository. Checked regardless of redCheck.ok, since a hostile
+    // spec could reach the repository on its way to a non-zero exit too.
+    const executionTreeChanges = workingTreeChanges(treeBeforeExecution, workingTreeState(PROJECT_ROOT));
+    if (executionTreeChanges.length > 0) {
+      return {
+        ok: false,
+        failureClass: 'environment-configuration',
+        reason: `executing the generated tests changed the real repository, which the sandbox exists to prevent: ${executionTreeChanges.join(', ')}`,
+      };
+    }
     if (!redCheck.ok) return redCheck;
 
     return { ok: true, scored: scoreRun(groundTruth, redCheck.report, productionMutatedByGeneration) };
