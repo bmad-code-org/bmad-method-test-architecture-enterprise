@@ -102,7 +102,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 
 ### Epic 5 progress: Drift is measured and the upgrade is proven live
 
-- [ ] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance)
+- [x] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance) ([#199](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/199))
 - [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result)
 - [ ] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships)
 - [ ] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page)
