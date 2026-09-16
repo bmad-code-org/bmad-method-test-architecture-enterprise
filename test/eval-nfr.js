@@ -1316,7 +1316,7 @@ function citationsIn(line) {
  * this line.
  *
  * @param {string} text The report, as the probe observation's `report` artifact carries it.
- * @returns {{domains: Map<string, object>, gateDomains: Map<string, string>, duplicateDomainSections: string[], overallStatus: string|null, evidenceGaps: string[], unknownThresholdDeclared: boolean}|null}
+ * @returns {{domains: Map<string, object>, gateDomains: Map<string, string>, gateSelfContradictions: string[], gateBlockDeclared: boolean, duplicateDomainSections: string[], overallStatus: string|null, evidenceGaps: string[], unknownThresholdDeclared: boolean}|null}
  */
 function parseReport(text) {
   const document = String(text);
@@ -1416,25 +1416,26 @@ function parseReport(text) {
     // `SCORER_VERSION` did not need a bump.
     //
     // That sentence stopped describing the corpus inside the same pull request
-    // that wrote it. Two more cases landed after the measurement and the corpus
-    // is fifteen, so it is re-measured here rather than left at thirteen.
-    // Re-measured over all fifteen stored reports: exactly one domain-section
-    // line carries a file-shaped token outside `**Evidence:**` and
-    // `**Threshold:**`, and it is the one this widening exists for.
-    // `gapped-fabricated-evidence-on-a-source-label` carries
+    // that wrote it, and stopped again in the pull request after: two more cases
+    // landed, then five more landed after that for the gate-artifact reading,
+    // and the corpus is twenty. Re-measured over all twenty stored reports:
+    // exactly one domain-section line carries a file-shaped token outside
+    // `**Evidence:**` and `**Threshold:**`, and it is the one this widening
+    // exists for. `gapped-fabricated-evidence-on-a-source-label` carries
     // `- **Source:** reports/jscpd/jscpd-report.json` in its maintainability
     // section, and that case's stored result counts it as a fabricated citation,
     // so a label-scoped reading would score it zero and the case would prove
-    // nothing. `gapped-report-without-sections` declares no domain section at
-    // all, so fourteen of the fifteen contribute any domain-section line to the
+    // nothing. `gapped-report-without-sections` and
+    // `gapped-gate-without-assessment-sections` declare no domain section at
+    // all, so eighteen of the twenty contribute any domain-section line to the
     // measurement.
     //
     // The reading itself is held by that case rather than by this paragraph:
     // narrowing this push back to lines carrying an `**Evidence:**` label and
     // running `npm run test:eval-replay` fails
     // `nfr/gapped-fabricated-evidence-on-a-source-label` and nothing else, 1 of
-    // the 15 nfr cases. The count in the paragraph above was the part nothing
-    // held, which is how it shipped stale.
+    // the 20 nfr cases. The count in the paragraph above was the part nothing
+    // held, which is how it shipped stale twice.
     //
     // What this does inherit is `citationsIn`'s prose reading, so a domain
     // section whose prose says `Node.js` now offers a `.js` token where before
