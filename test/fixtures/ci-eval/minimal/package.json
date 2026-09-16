@@ -1,0 +1,9 @@
+{
+  "name": "lantern-audit-log",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Append-only audit log service for the Lantern platform",
+  "scripts": {
+    "test": "node --test tests"
+  }
+}

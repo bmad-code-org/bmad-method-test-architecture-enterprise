@@ -1,0 +1,80 @@
+{
+  "$comment": [
+    "A YAML document that parses cleanly to a top-level sequence rather than a mapping, the shape a copy-paste error into the wrong block style produces.",
+    "The yaml package accepts this as valid YAML, so parse.ok is true; parseWorkflow's own guard then reduces it to an empty workflow object because a sequence carries no jobs or on block to read, so all thirteen elements score missing the ordinary way. actionlint refuses the same document with three syntax-check findings naming the missing on and jobs sections and the wrong node kind, which is why maxLintFindings and not maxParseFailures is the ceiling this case breaches: the file is syntactically valid YAML and semantically not a workflow."
+  ],
+  "id": "full-not-a-workflow",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "A YAML document that parses cleanly to a top-level sequence rather than a mapping, the shape a copy-paste error into the wrong block style produces.",
+    "The yaml package accepts this as valid YAML, so parse.ok is true; parseWorkflow's own guard then reduces it to an empty workflow object because a sequence carries no jobs or on block to read, so all thirteen elements score missing the ordinary way. actionlint refuses the same document with three syntax-check findings naming the missing on and jobs sections and the wrong node kind, which is why maxLintFindings and not maxParseFailures is the ceiling this case breaches: the file is syntactically valid YAML and semantically not a workflow."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": [
+        {
+          "kind": "syntax-check",
+          "message": "\"jobs\" section is missing in workflow",
+          "line": 2
+        },
+        {
+          "kind": "syntax-check",
+          "message": "\"on\" section is missing in workflow",
+          "line": 2
+        },
+        {
+          "kind": "syntax-check",
+          "message": "\"workflow\" section is sequence node but mapping node is expected",
+          "line": 2
+        }
+      ]
+    },
+    "elements": {
+      "trigger-push-main": false,
+      "trigger-pull-request-main": false,
+      "trigger-weekly-schedule": false,
+      "permission-contents-read": false,
+      "node-version-from-nvmrc": false,
+      "command-install": false,
+      "command-unit-tests": false,
+      "command-e2e-tests": false,
+      "gate-lint-precedes-tests": false,
+      "gate-matrix-shards": false,
+      "gate-burn-in": false,
+      "artifact-playwright-report": false,
+      "artifact-test-results": false
+    },
+    "elementMisses": [
+      "trigger-push-main: no push trigger",
+      "trigger-pull-request-main: no pull_request trigger",
+      "trigger-weekly-schedule: no schedule trigger",
+      "permission-contents-read: no permissions block grants contents: read at workflow level or on every job",
+      "node-version-from-nvmrc: no actions/setup-node step",
+      "command-install: no run: block invokes npm ci",
+      "command-unit-tests: no run: block invokes npm test",
+      "command-e2e-tests: no run: block invokes npm run test:e2e",
+      "gate-lint-precedes-tests: no job invokes npm run lint",
+      "gate-matrix-shards: no job runs npm run test:e2e under a shard matrix",
+      "gate-burn-in: no job is named as a burn-in",
+      "artifact-playwright-report: no upload-artifact step names a path containing playwright-report",
+      "artifact-test-results: no upload-artifact step names a path containing test-results"
+    ],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

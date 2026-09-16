@@ -96,6 +96,91 @@
       }
     }
   },
+  "ci": {
+    "contractId": "tea-ci-behavioral",
+    "corpusDigest": "sha256:5d5d564e10635e00c762aa71cefebfb3c58e5c13b280b47aa31dedf06bc64c7c",
+    "probeCount": 4,
+    "strength": {
+      "defect": {
+        "exercised": 0,
+        "caught": 0,
+        "rate": null
+      },
+      "gameability": null,
+      "zero-action": null
+    },
+    "unsatisfiedCoverageRules": [
+      "malformed-input",
+      "omission-and-completeness",
+      "per-record",
+      "state-change-read-back",
+      "success-indicator-separation"
+    ],
+    "probes": {
+      "P-001": {
+        "probeClass": "defect",
+        "expectedClean": false,
+        "behaviorId": "B-003",
+        "preflight": "failed: seeded-fault-fired, seeded-faults-scoped",
+        "preflightLegs": 3,
+        "verdict": null,
+        "exitCode": 3,
+        "strictPromotable": true,
+        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "qualification": ["condition-artifact-channel-contract-local"],
+        "strength": null
+      },
+      "P-002": {
+        "probeClass": "defect",
+        "expectedClean": false,
+        "behaviorId": "B-004",
+        "preflight": "failed: seeded-fault-fired, seeded-faults-scoped",
+        "preflightLegs": 3,
+        "verdict": null,
+        "exitCode": 3,
+        "strictPromotable": true,
+        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "qualification": ["condition-artifact-channel-contract-local"],
+        "strength": null
+      },
+      "P-003": {
+        "probeClass": "defect",
+        "expectedClean": false,
+        "behaviorId": "B-022",
+        "preflight": "failed: seeded-fault-fired, seeded-faults-scoped",
+        "preflightLegs": 3,
+        "verdict": null,
+        "exitCode": 3,
+        "strictPromotable": true,
+        "basis": ["oracle resolved infrastructure-error", "pre-flight verdict did not pass"],
+        "qualification": ["condition-artifact-channel-contract-local"],
+        "strength": null
+      },
+      "P-004": {
+        "probeClass": "zero-action",
+        "expectedClean": true,
+        "behaviorId": "B-017",
+        "preflight": "passed",
+        "preflightLegs": 2,
+        "verdict": "CONCERNS",
+        "exitCode": 0,
+        "strictPromotable": true,
+        "basis": [
+          "coverage gap malformed-input unsatisfied at or above the severity floor",
+          "coverage gap omission-and-completeness unsatisfied at or above the severity floor",
+          "coverage gap per-record unsatisfied at or above the severity floor",
+          "coverage gap state-change-read-back unsatisfied at or above the severity floor",
+          "coverage gap success-indicator-separation unsatisfied at or above the severity floor"
+        ],
+        "qualification": null,
+        "strength": {
+          "defect": null,
+          "gameability": null,
+          "zero-action": null
+        }
+      }
+    }
+  },
   "tea-routing-intents": {
     "contractId": "tea-routing-intents-behavioral",
     "corpusDigest": "sha256:d635cfdf72fcd249df5c3d6827ff2c2cad49116b483143a9c9c9573262259c5f",

@@ -28,6 +28,11 @@
  *                       leaves in a staged workspace, read by readReport and scored
  *                       by scoreRun against one evidence bundle of the eval's real
  *                       ground truth
+ *   ci                  .github/workflows/test.yml, the one file a CI run leaves in
+ *                       a staged project that a linter can hold to account, read by
+ *                       readWorkflow, linted by lintWorkflow through actionlint, and
+ *                       scored by scoreRun against one project of the eval's real
+ *                       ground truth
  *
  * Each expected.json carries the result, the arithmetic that produced it, and
  * whether the stored output is a real capture or was constructed. The numbers
@@ -55,7 +60,16 @@
  * refuses, because it is absent or because it declares no section for any of the
  * four audited domains, records `{ "unmeasurable": <failure class> }`.
  *
- * The trace and nfr cases also pin signatureOf, the string main() compares across
+ * A ci case is one project's workflow file, so its expected.json names the
+ * project and digests that project's scoring inputs, and its result is the
+ * scored object reduced the same way: whether the file parsed and the parser's
+ * errors, every actionlint finding, the presence of every requested element with
+ * each miss spelled out, every unrequested element, and every workflow rule
+ * violation. The lint half spawns actionlint, so this suite needs it on PATH and
+ * fails closed with a reason when it is absent: a stored lint result nothing
+ * re-derived would be a claim about a tool nobody ran.
+ *
+ * The trace, nfr and ci cases also pin signatureOf, the string main() compares across
  * repetitions to call a case stable. Its contract is that nothing scored is left
  * out and nothing environmental is let in, and the corpus is what makes that
  * checkable: two cases scored against the same set or bundle must sign identically
@@ -84,16 +98,16 @@
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
  * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Sixty-six of the
- * seventy cases produce a number and all but two of those are constructed. Two
+ * produces a number was written by hand to be parsed. Eighty-six of the
+ * ninety cases produce a number and all but two of those are constructed. Two
  * carry real captured bytes borrowed from the CLI parser fixtures, and both now
  * score as a measured miss rather than as unmeasurable: their reports document
  * no finding at all, and a verdict whose findings array is empty is a reviewer
  * that named nothing. The live runs of 2026-09-08 measured the three suites that
  * existed then and none of their output was committed, so this repository still
  * holds no captured output that this suite can turn into a number a vendor
- * actually earned, and the trace, nfr, test-design and bmad-tea-routing suites in
- * particular have no real capture at all.
+ * actually earned, and the trace, nfr, ci, test-design and bmad-tea-routing suites
+ * in particular have no real capture at all.
  *
  * Two more things sit outside what a green run covers:
  *
@@ -152,9 +166,10 @@
  * Exit codes:
  *   0  every case reproduced its stored result
  *   1  a case moved, its ground truth moved, its verdict and report disagree, or
- *      a trace, nfr, test-design or routing signature disagrees with the results
+ *      a trace, nfr, ci, test-design or routing signature disagrees with the results
  *      it is supposed to summarize
- *   2  the corpus could not be read, or --accept named a case that does not exist
+ *   2  the corpus could not be read, actionlint is not on PATH to re-derive a ci
+ *      case's lint half, or --accept named a case that does not exist
  */
 
 'use strict';
@@ -181,6 +196,12 @@ const {
   parseReport: parseNfrReport,
   DOMAINS: NFR_DOMAINS,
 } = require('./eval-nfr');
+const {
+  readWorkflow: readCiWorkflow,
+  lintWorkflow: lintCiWorkflow,
+  scoreRun: scoreCiRun,
+  signatureOf: ciSignatureOf,
+} = require('./eval-ci');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -189,6 +210,7 @@ const GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-review-eval', 'groun
 const TRACE_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'trace-eval', 'ground-truth.json');
 const TEST_DESIGN_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-design-eval', 'ground-truth.json');
 const NFR_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'nfr-eval', 'ground-truth.json');
+const CI_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'ci-eval', 'ground-truth.json');
 
 /**
  * The version of the parsing and scoring behaviour this corpus was recorded
@@ -196,7 +218,8 @@ const NFR_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'nfr-eval', 'ground-tr
  * parseSelection and scoreCase in eval-fragment-selection.js, readSummary,
  * readMatrix, scoreRun with the eight scorers it calls, and signatureOf in
  * eval-trace.js, readDesign with scoreRun in eval-test-design.js, readReport,
- * parseReport, scoreRun and signatureOf in eval-nfr.js, and the four projections
+ * parseReport, scoreRun and signatureOf in eval-nfr.js, readWorkflow, lintWorkflow,
+ * parseWorkflow, scoreRun and signatureOf in eval-ci.js, and the five projections
  * in this file, which decide what a stored result records of all of them. It does
  * not cover the aggregation those feed or the thresholds it is compared against;
  * see the header for why.
@@ -323,8 +346,18 @@ const NFR_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'nfr-eval', 'ground-tr
  * gapped-block-only-in-the-quoted-example separates the document-wide reading the
  * contract's oracle can state from the run's own block the harness scores. No
  * test-review, fragment-selection, test-design or trace case moved.
+ *
+ * 10 is the ci scorers entering the corpus: readWorkflow, parseWorkflow,
+ * lintWorkflow, scoreRun with checkElement, unrequestedElements and
+ * workflowRuleViolations, and signatureOf in eval-ci.js. The lint half of every
+ * stored result is actionlint's own answer under the flags the harness pins, so a
+ * newer actionlint that reports a finding the recorded one did not is a moved
+ * case, and the version rule applies to it as to any scorer change. No
+ * test-review, fragment-selection, test-design, trace, nfr or routing case moved,
+ * so every case recorded at an earlier version reproduces and is reported as a
+ * version stamp only.
  */
-const SCORER_VERSION = 9;
+const SCORER_VERSION = 10;
 
 const colors = {
   reset: '[0m',
@@ -480,6 +513,33 @@ function nfrScoringInputs(set) {
         domain.thresholdStated === true,
         (domain.thresholdTokens ?? []).join(' '),
       ].join('|');
+    }),
+  ];
+}
+
+/**
+ * The scoring-relevant half of one ci project, as canonical strings.
+ *
+ * Only what scoreRun reads: the project's role, the Node version its .nvmrc
+ * states, the file list, and each requested element's identity, kind and the
+ * parameters its check reads. The request quote, the rule citation and the
+ * contract token stay out because scoreRun never reads them, and so does
+ * mustNotEmit, which only the contract's oracles address; every `why` and
+ * `title` string stays out so an editorial pass moves no digest.
+ *
+ * @param {object} set One entry of groundTruth.fixtureSets.
+ * @returns {string[]}
+ */
+function ciScoringInputs(set) {
+  return [
+    `set=${set.id}`,
+    `minimal=${set.isMinimalRequest === true}`,
+    `nvmrc=${set.nvmrcVersion}`,
+    `files=${[...(set.projectFiles ?? [])].sort().join(' ')}`,
+    ...(set.expectedElements ?? []).map((element) => {
+      // Rest-destructured to drop the fields scoreRun never reads.
+      const { id, kind, requestQuote, rule, contractToken, ...parameters } = element;
+      return [id, kind, JSON.stringify(canonical(parameters))].join('|');
     }),
   ];
 }
@@ -641,6 +701,32 @@ function projectNfrResult(scored) {
     overall: scored.overall,
     unknownThreshold: scored.unknownThreshold,
     cleanFalsePositives: scored.cleanFalsePositives,
+  };
+}
+
+/**
+ * scoreRun's return value for one ci case, reduced to what a stored result can
+ * hold and a reader can derive by hand.
+ *
+ * Whether the file parsed and what the parser said, every lint finding with its
+ * line, the presence of every requested element keyed by id with each miss
+ * spelled out, every unrequested element, and every rule violation. The lint
+ * line is stored because a reader checks a finding against the file by it, and
+ * left out of signatureOf because two runs that produce one defect on two lines
+ * have given the same answer.
+ *
+ * @param {object} scored One return value of eval-ci's scoreRun.
+ * @returns {object}
+ */
+function projectCiResult(scored) {
+  return {
+    isMinimalRequest: scored.isMinimalRequest,
+    parse: scored.parse,
+    lint: scored.lint,
+    elements: Object.fromEntries(scored.elements.map((element) => [element.id, element.present])),
+    elementMisses: scored.elements.filter((element) => !element.present).map((element) => `${element.id}: ${element.detail}`),
+    unrequested: scored.unrequested,
+    ruleViolations: scored.ruleViolations,
   };
 }
 
@@ -829,6 +915,31 @@ async function replayNfrCase(item, set) {
   if (!report.ok) return { result: { unmeasurable: report.failureClass } };
   const scored = scoreNfrRun(set, report.report);
   return { result: projectNfrResult(scored), scored };
+}
+
+/**
+ * Read, lint and score one stored ci case, the way runCase does after the agent
+ * returns.
+ *
+ * The workflow file has to be on disk, because a case missing it would record an
+ * environment failure that says nothing about the scorer. A file that is there
+ * and does not parse is a real result, scored as a parse failure with every
+ * element missing. The lint half spawns actionlint and fails closed when it is
+ * not there: a case whose lint findings nothing re-derived is a stored claim
+ * about a tool nobody ran, so the corpus is unreadable rather than green.
+ *
+ * @returns {Promise<{result: object, scored?: object}>}
+ */
+async function replayCiCase(item, set) {
+  if (!fs.existsSync(path.join(item.directory, '.github', 'workflows', 'test.yml'))) {
+    unreadable(`${item.id}: no .github/workflows/test.yml beside expected.json`);
+  }
+  const workflow = await readCiWorkflow(item.directory);
+  if (!workflow.ok) return { result: { unmeasurable: workflow.failureClass } };
+  const lint = lintCiWorkflow(workflow.text);
+  if (!lint.ok) unreadable(`${item.id}: the lint half of a ci case cannot be re-derived: ${lint.reason}`);
+  const scored = scoreCiRun(set, workflow.text, lint);
+  return { result: projectCiResult(scored), scored };
 }
 
 /** Parse and score one stored fragment-selection case. */
@@ -1253,6 +1364,40 @@ function checkNfrSignatures(replayed) {
 }
 
 /**
+ * signatureOf held to its own contract over every scored ci case, the same two
+ * halves checkNfrSignatures asserts and for the same reason: main() in
+ * eval-ci.js calls a case stable when every repetition signs the same. The pair
+ * that carries the first half is full-correct-pipeline beside
+ * full-node-version-literal: two spellings of one answer, identical on every
+ * field the suite grades, and they have to sign identically or a run that
+ * reworded its setup-node step between repetitions would fail the suite for
+ * having changed nothing scored.
+ *
+ * @param {Array<{id: string, set: string, result: object, scored: object}>} replayed
+ */
+function checkCiSignatures(replayed) {
+  if (replayed.length === 0) return;
+  const mutationBlind = replayed.filter((item) => ciSignatureOf(item.scored, 0) === ciSignatureOf(item.scored, 1)).map((item) => item.id);
+  assert(mutationBlind.length === 0, 'ci signatures move when a fixture mutation is counted', `unchanged for ${mutationBlind.join(', ')}`);
+
+  const disagreements = [];
+  for (const [index, left] of replayed.entries()) {
+    for (const right of replayed.slice(index + 1)) {
+      if (left.set !== right.set) continue;
+      const sameResult = same(left.result, right.result);
+      const sameSignature = ciSignatureOf(left.scored, 0) === ciSignatureOf(right.scored, 0);
+      if (sameResult === sameSignature) continue;
+      disagreements.push(
+        sameResult
+          ? `${left.id} and ${right.id} score identically and sign differently, so the signature reads something the scorer does not`
+          : `${left.id} and ${right.id} score differently and sign identically, so a scored field is outside the signature`,
+      );
+    }
+  }
+  assert(disagreements.length === 0, 'ci signatures agree exactly when the scored results agree', disagreements.join('\n  '));
+}
+
+/**
  * Score one stored case the way its suite scores it.
  *
  * A failure here is a reason the case cannot be compared at all, as opposed to a
@@ -1328,6 +1473,29 @@ async function replayCase(item, expected, context) {
       if (replayed.scored) context.nfrReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
       return { observed: replayed.result };
     }
+    case 'ci': {
+      const setId = expected.inputs?.fixtureSet;
+      const set = context.ciSets.get(setId);
+      if (!set) {
+        unreadable(
+          `${item.id}: inputs.fixtureSet names "${setId ?? '(nothing)'}", which is not a project in ${path.relative(PROJECT_ROOT, CI_GROUND_TRUTH)}`,
+        );
+      }
+      const recordedDigest = expected.inputs?.scoringInputsDigest;
+      const setDigest = digest(ciScoringInputs(set));
+      if (recordedDigest !== setDigest) {
+        return {
+          failure:
+            `the ground truth moved. This result was derived against ${recordedDigest ?? '(nothing recorded)'} and project ${setId} in ` +
+            `${path.relative(PROJECT_ROOT, CI_GROUND_TRUTH)} now digests to ${setDigest}. A requested element, one of its parameters, the ` +
+            'Node version or the project file list changed, so the expected result has to be re-derived by hand and the digest updated ' +
+            'with it. --accept will not do this one.',
+        };
+      }
+      const replayed = await replayCiCase(item, set);
+      if (replayed.scored) context.ciReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
+      return { observed: replayed.result };
+    }
     case 'trace': {
       const setId = expected.inputs?.fixtureSet;
       const set = context.traceSets.get(setId);
@@ -1386,7 +1554,7 @@ async function replayCase(item, expected, context) {
     }
     default: {
       return {
-        failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection, nfr, test-design or trace`,
+        failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection, nfr, ci, test-design or trace`,
       };
     }
   }
@@ -1414,6 +1582,9 @@ async function main(argv) {
   const nfrGroundTruth = readJson(NFR_GROUND_TRUTH, 'nfr ground truth');
   const nfrSets = new Map((nfrGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
   const nfrReplayed = [];
+  const ciGroundTruth = readJson(CI_GROUND_TRUTH, 'ci ground truth');
+  const ciSets = new Map((ciGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
+  const ciReplayed = [];
   const cases = findCases();
 
   // A mistyped case id used to be a silent no-op that exited 0, which reads as
@@ -1458,6 +1629,8 @@ async function main(argv) {
       testDesignReplayed,
       nfrSets,
       nfrReplayed,
+      ciSets,
+      ciReplayed,
     });
     if ('failure' in replayed) {
       assert(false, item.id, replayed.failure);
@@ -1515,6 +1688,7 @@ async function main(argv) {
   checkTraceSignatures(traceReplayed);
   checkRoutingSignatures(routingReplayed);
   checkNfrSignatures(nfrReplayed);
+  checkCiSignatures(ciReplayed);
   checkRecordHygiene();
   checkNfrGateBlockReadings();
 
@@ -1544,10 +1718,12 @@ module.exports = {
   scoringInputs,
   traceScoringInputs,
   nfrScoringInputs,
+  ciScoringInputs,
   projectReviewResult,
   projectSelectionResult,
   projectTraceResult,
   projectNfrResult,
+  projectCiResult,
   differences,
   verdictDriftFromReport,
   findCases,

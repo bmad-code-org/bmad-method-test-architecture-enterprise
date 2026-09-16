@@ -4,22 +4,24 @@ A contract says what a TEA skill has to do. A probe says what was wrong with the
 contract was asked, and `eval-quality`'s `runScore` reads the two together to answer the question the
 package exists for: did this contract's oracles catch the defect that was actually there?
 
-| Corpus                                      | Probes | What they are                                                          |
-| ------------------------------------------- | -----: | ---------------------------------------------------------------------- |
-| `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe   |
-| `test-design.probes.json`                   |     16 | Fourteen defective documents, one clean control, one gameability probe |
-| `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                          |
-| `nfr.probes.json`                           |      4 | Three planted domains, one clean control                               |
-| `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow               |
-| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                            |
-| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                            |
+| Corpus                                      | Probes | What they are                                                              |
+| ------------------------------------------- | -----: | -------------------------------------------------------------------------- |
+| `test-review.probes.json`                   |     11 | Nine planted registry rows, one clean control, one gameability probe       |
+| `test-design.probes.json`                   |     16 | Fourteen defective documents, one clean control, one gameability probe     |
+| `trace.probes.json`                         |      4 | Three seeded coverage gaps, one clean control                              |
+| `nfr.probes.json`                           |      4 | Three planted domains, one clean control                                   |
+| `ci.probes.json`                            |      4 | Two requested-element gaps, one forbidden-element plant, one clean control |
+| `fragment-selection/<workflow>.probes.json` |    2x8 | One gameability probe and one clean control per workflow                   |
+| `tea-routing-intents.probes.json`           |      2 | One gameability probe and one clean control                                |
+| `tea-routing-controls.probes.json`          |      2 | One gameability probe and one clean control                                |
 
-**Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all fourteen
+**Every probe here is generated. Do not hand-edit one.** `tools/generate-probes.js` writes all fifteen
 files from the sources this repository already keeps: `test/fixtures/test-review-eval/ground-truth.json`
 and `criteria-registry.md` for the planted rows and their severities,
 `test/fixtures/trace-eval/ground-truth.json` for the seeded set's coverage gaps,
 `test/fixtures/nfr-eval/ground-truth.json` for the domains one evidence bundle leaves undecidable or
-breached, `test/fixtures/test-design-eval/ground-truth.json` for the risks each epic supports and the
+breached, `test/fixtures/ci-eval/ground-truth.json` for the elements one project's request states and
+forbids, `test/fixtures/test-design-eval/ground-truth.json` for the risks each epic supports and the
 risks it rules out, each `test/evals/<workflow>/evals.json` for the required and forbidden fragment sets, and
 `test/fixtures/tea-routing-eval/ground-truth.json` for the routing answers. Regenerate with
 `node tools/generate-probes.js`; `npm run test:probe-sources` fails when a file on disk differs from
@@ -124,8 +126,8 @@ pointer as `condition-artifact-channel-contract-local`, because an artifact iden
 contract and a signature carrying one resolves only against the contract it was authored on. A
 `stdout` pointer resolves only where the operation declares standard output as its descriptor
 channel. `tea-fragment-selection-runner` does, so its signatures qualify and its gameability probes
-score. `tea-test-review`, `tea-trace-runner` and `tea-nfr-runner` all write their deliverable to a
-file, so a signature that says something true about their plants is refused, and the refusal is
+score. `tea-test-review`, `tea-trace-runner`, `tea-nfr-runner` and `tea-ci-runner` all write their
+deliverable to a file, so a signature that says something true about their plants is refused, and the refusal is
 recorded in `expected-strength.json` rather than replaced by an `exit-code` signature that would
 qualify and discriminate nothing.
 
@@ -141,7 +143,11 @@ carry it. `tea-trace-runner` has no such channel, so its three probes keep the s
 the truth about the plant and stay refused, with the reason code recorded per probe. `tea-nfr-runner`
 is the same command shape and its three plant probes are refused the same way, on the same code and
 for the same reason: every completed audit exits 0 whatever it wrote, so the one channel that would
-qualify would separate nothing.
+qualify would separate nothing. `tea-ci-runner`'s three plant probes are refused for the same reason
+again: a scaffold that wrote an incomplete or over-generous pipeline still exits 0, so no channel
+besides the artifact one carries the truth, and it is the one AD-9 refuses. Unlike `tea-nfr-runner`'s,
+all three also fail pre-flight on `seeded-fault-fired` and exit 3 before a verdict exists at all: the
+manifestation witness fires on a leg the contract calls clean, the same blocker `test-design` carries.
 
 **A document-level oracle reaches a domain only through the rollup.** The nfr contract addresses one
 markdown report, which is one string to this vocabulary, so its claims are about the document: the
@@ -151,6 +157,13 @@ would violate. The third does not: a run that passed maintainability on a prose 
 `FAIL`, because reliability breaches a threshold in the same bundle, and still records `UNKNOWN`,
 because performance states no target. `tools/generate-probes.js` points that probe at the gate oracle
 and says so, and the harness is where that domain's status is actually scored.
+
+The ci contract reaches the same shape from the request side. Its oracles are one substring claim per
+requested or forbidden element, so each of the three planted probes (a missing trigger, a missing
+permission, the full-request template copied onto the minimal project) has an oracle of its own that a
+run producing the plant would violate directly; nothing here needed the gate-oracle workaround nfr's
+third plant does, because a missing element and a forbidden one are each their own claim rather than a
+consequence of a rollup.
 
 **A rejected probe now names its reason.** The qualification gate computes a closed list of twenty
 reason codes. Through eval-quality 1.3.0 none of them reached the evidence artifact or any published

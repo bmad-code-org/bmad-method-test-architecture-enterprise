@@ -1,0 +1,45 @@
+{
+  "$comment": [
+    "minimal-correct-pipeline with one extra step added to the test job: a nick-fields/retry wrapper around a network check the request never named, and the correct npm test step left untouched.",
+    "This exercises the forbidden retry-action entry in negativeControls' no-element-the-request-did-not-ask-for. The check itself is scoped to a minimal-request project (set.isMinimalRequest) rather than firing on every project, because the skill's own checklist calls for retry logic with no request condition at all: a full-request project adding one is doing what the checklist asks, and only a project whose request forbids it by name may be scored against it.",
+    "Every requested element still passes, because the added step touches nothing checkElement reads: with.command is invisible to runScripts, which only reads run: steps. One unrequested element is counted for the retry action the request forbids by name."
+  ],
+  "id": "minimal-retry-action-added",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "minimal-lantern-audit-log",
+    "scoringInputsDigest": "sha256:2f7f5271cf9c348bcb4c63137fb58f8722a344c34fc7fd808ac4e9f5773ff193"
+  },
+  "derivation": [
+    "minimal-correct-pipeline with one extra step added to the test job: a nick-fields/retry wrapper around a network check the request never named.",
+    "gate: retry action in job test is the one unrequested element. Every requested element is unaffected because the added step carries its command under with.command rather than run:, which runScripts never reads."
+  ],
+  "result": {
+    "isMinimalRequest": true,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-pull-request-main": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true
+    },
+    "elementMisses": [],
+    "unrequested": [
+      "gate: retry action in job test"
+    ],
+    "ruleViolations": []
+  }
+}

@@ -15,20 +15,22 @@ A skill is measured when a run of it produces evidence that a checked-in oracle 
 
 TEA's state today, as `test/evals/suite-manifest.json` registers it:
 
-| Layer                           | What it covers                                                                                                                               | Where                             |
-| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| Deterministic repository checks | The `npm test` chain, credential-free, no network, no model call                                                                             | `package.json`                    |
-| Fragment-selection eval         | 24 cases across the eight workflow skills that ship a knowledge index, measuring which knowledge a run loads                                 | `test/eval-fragment-selection.js` |
-| Behavioral eval, `test-review`  | 9 planted defects across two seeded files, one clean control, one scope control, repeated three times                                        | `test/eval-test-review.js`        |
-| Behavioral eval, `trace`        | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice                            | `test/eval-trace.js`              |
-| Behavioral eval, `bmad-tea`     | 18 intents put to the agent, one call each, measuring which menu item a sentence routes to, repeated twice                                   | `test/eval-bmad-tea-routing.js`   |
-| Behavioral eval, `nfr`          | An evidence bundle with known gaps and a clean control, each audited in its own staged workspace, repeated twice                             | `test/eval-nfr.js`                |
-| Behavioral Evaluation Contracts | Fourteen, all compiling, all generated, every oracle evaluated against stored evidence                                                       | `test/contracts/`                 |
-| Replay corpus                   | 70 stored outputs scored with no model call: 3 selections, 10 verdicts, 14 trace pairs, 15 nfr reports, 11 test-design documents, 17 replies | `test/replay/`                    |
+| Layer                           | What it covers                                                                                                                                           | Where                             |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Deterministic repository checks | The `npm test` chain, credential-free, no network, no model call                                                                                         | `package.json`                    |
+| Fragment-selection eval         | 24 cases across the eight workflow skills that ship a knowledge index, measuring which knowledge a run loads                                             | `test/eval-fragment-selection.js` |
+| Behavioral eval, `test-review`  | 9 planted defects across two seeded files, one clean control, one scope control, repeated three times                                                    | `test/eval-test-review.js`        |
+| Behavioral eval, `trace`        | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice                                        | `test/eval-trace.js`              |
+| Behavioral eval, `bmad-tea`     | 18 intents put to the agent, one call each, measuring which menu item a sentence routes to, repeated twice                                               | `test/eval-bmad-tea-routing.js`   |
+| Behavioral eval, `nfr`          | An evidence bundle with known gaps and a clean control, each audited in its own staged workspace, repeated twice                                         | `test/eval-nfr.js`                |
+| Behavioral eval, `test-design`  | A seeded epic with five material risks and four ruled out, and a clean control epic, each in its own staged workspace, repeated twice                    | `test/eval-test-design.js`        |
+| Behavioral eval, `ci`           | A full-request project and a minimal-request project, each scaffolded and linted in its own staged workspace, repeated twice                             | `test/eval-ci.js`                 |
+| Behavioral Evaluation Contracts | Fifteen, all compiling, all generated, every oracle evaluated against stored evidence                                                                    | `test/contracts/`                 |
+| Replay corpus                   | 96 stored outputs scored with no model call: 3 selections, 10 verdicts, 14 trace pairs, 20 nfr reports, 21 ci runs, 11 test-design documents, 17 replies | `test/replay/`                    |
 
 One of the ten skills, `bmad-teach-me-testing`, has no suite of any kind. It carries a deferred entry in the manifest naming its owner, its missing evidence, and the condition that retires the entry, because a suite list with a skill quietly missing from it reads as coverage.
 
-The three suites that existed then were measured live for the first time on 2026-09-08 and all three were green. No result artifact is committed, so the numbers live in `docs/explanation/eval-quality-roadmap.md` and any claim about them needs a fresh measurement. The `bmad-tea-routing`, `nfr` and `test-design` suites were added afterwards and have never been run live, so each has declared thresholds and no measurement behind them.
+The three suites that existed then were measured live for the first time on 2026-09-08 and all three were green. No result artifact is committed, so the numbers live in `docs/explanation/eval-quality-roadmap.md` and any claim about them needs a fresh measurement. The `bmad-tea-routing`, `nfr`, `test-design` and `ci` suites were added afterwards and have never been run live, so each has declared thresholds and no measurement behind them.
 
 ## 1. What you need before you start
 
@@ -224,14 +226,14 @@ Every harness supports the same three:
 
 ### Replay the scorers without a model
 
-A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 70 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
+A harness is mostly scoring logic, and scoring logic is code that needs its own regression test. `test/replay/` holds 96 stored outputs and `npm run test:eval-replay` scores them with no model call and no network. Two rules make the corpus worth having:
 
 - **Derive each expected result by hand from the ground truth**, before running the code under test. A result generated from the scorer proves the scorer agrees with itself.
 - **Carry a scorer version.** A parser or scorer change either reproduces every stored result or bumps `SCORER_VERSION` in an edit somebody has to review. `--accept` refuses to re-record until that bump happens.
 
 Deriving by hand is not ceremony. Writing the `trace` parser-rejection case by hand found a defect: `readMatrix` closed a criterion section only at the next criterion-shaped heading, so a `### Gap Analysis` heading left the last section open and a test cited beneath it was recorded as that criterion's evidence. The derivation gave 10 citations and the code gave 11.
 
-Two of the 70 stored outputs are real captures. The other 68 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
+Two of the 96 stored outputs are real captures. The other 94 are constructed, because the only real outputs this repository has banked from live runs are both unscoreable.
 
 ## 5. Express the skill as a contract
 
@@ -239,7 +241,7 @@ A Behavioral Evaluation Contract states what a skill has to do in a vocabulary t
 
 ### Generate contracts, never hand-write them
 
-All fourteen TEA contracts are written by `tools/generate-contracts.js` from their sources, and `node tools/generate-contracts.js --check` regenerates them in memory and fails when the bytes on disk differ. It runs in `npm test`, so a fixture edit that leaves a contract stale fails the deterministic gate.
+All fifteen TEA contracts are written by `tools/generate-contracts.js` from their sources, and `node tools/generate-contracts.js --check` regenerates them in memory and fails when the bytes on disk differ. It runs in `npm test`, so a fixture edit that leaves a contract stale fails the deterministic gate.
 
 What the generator reads rather than transcribes is the interesting part: every planted row and its admitted-line set from the ground truth; which behavior a row belongs to and how hard it grades, from the row's severity in the criteria registry; every required and forbidden fragment list from each `evals.json`; the verdict descriptor's key set and types from `VERDICT_KEYS` in `cli/test-review.js`; each runner's request shape from the runner itself; the trace summary's key set from the object literal in the workflow's step-05; and both source-spec digests, recomputed from the files they pin through a helper that length-prefixes each file, so a byte moved from the tail of one step file to the head of the next changes the answer.
 
@@ -285,7 +287,7 @@ The `npm test` chain is credential-free, makes no network call and no model call
 npm run test:eval-data          # fragment-selection corpus, static
 npm run test:eval-trace-data    # trace corpus, static
 npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # 70 stored outputs against the scorers
+npm run test:eval-replay        # 96 stored outputs against the scorers
 npm run test:contract-sources   # are the contracts what their sources generate?
 npm run test:contracts          # does the compiler still say what the baseline records?
 npm run test:contract-oracles   # does every oracle resolve, and agree with the scorer?

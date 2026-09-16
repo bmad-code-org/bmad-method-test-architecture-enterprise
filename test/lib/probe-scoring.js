@@ -66,6 +66,9 @@ const { buildPrompt: buildTracePrompt } = require('../eval-trace');
 // output as their stdin literal; `legs` in nfrEvidence says what a restated prompt
 // would cost.
 const { buildPrompt: buildNfrPrompt } = require('../eval-nfr');
+// And the same for the ci contract, whose plan steps bind the same function's
+// output as their stdin literal; the tripwire below is what says so.
+const { buildPrompt: buildCiPrompt } = require('../eval-ci');
 // The routing evidence sends the prompt the live run sends, for the reason the
 // trace evidence does: the plan binds standard input as a literal, so a described
 // prompt selects nothing and the record is scored against no evidence at all.
@@ -774,6 +777,139 @@ async function nfrEvidence(contract) {
 }
 
 // ---------------------------------------------------------------------------
+// evidence: ci
+// ---------------------------------------------------------------------------
+
+/** The stored workflow one project produced, as the bytes on disk. */
+async function storedCiWorkflow(caseId) {
+  return readText(path.join(REPLAY_ROOT, 'ci', caseId, '.github', 'workflows', 'test.yml'));
+}
+
+/** The one artifact a ci run leaves behind, as the stored case for one project holds it. */
+function ciWorkflowArtifact(workflow) {
+  return { workflow: { kind: 'text', value: workflow } };
+}
+
+/** The `ci_platform` value one assembled prompt carries. */
+const CI_PLATFORM_PATTERN = /`ci_platform`: `([^`]*)`/;
+
+async function ciEvidence(contract) {
+  const groundTruth = await readJson(path.join(PROJECT_ROOT, 'test', 'fixtures', 'ci-eval', 'ground-truth.json'));
+
+  /**
+   * One entry per project: the plan step that scaffolds it, the stored run its
+   * project root names, the fixture set id, and the prompt the harness assembles
+   * for it.
+   *
+   * `buildCiPrompt` is test/eval-ci.js's own `buildPrompt`, which is also what
+   * tools/generate-contracts.js calls to build each step's stdin literal. A
+   * literal is compared with `deepEquals`, so a prompt restated here in any other
+   * form would select nothing, every oracle would resolve `unreached`, and the
+   * run would report clean at exit 0 having scaffolded nothing. The equality
+   * below is the tripwire: the prompt this record will carry is checked against
+   * the literal the contract on disk binds, so a divergence fails the run where
+   * it would otherwise pass it silently.
+   */
+  const legs = groundTruth.fixtureSets.map((set, index) => {
+    const step = contract.interactionPlan[index];
+    const prompt = buildCiPrompt(set);
+    if (step?.inputBinding.stdin?.prompt?.literal !== prompt) {
+      throw new Error(
+        `${step?.stepId ?? `interactionPlan[${index}]`} binds a stdin literal that is not the prompt the harness assembles for ${set.id}; run node tools/generate-contracts.js`,
+      );
+    }
+    return {
+      setId: set.id,
+      caseId: set.isMinimalRequest ? 'minimal-correct-pipeline' : 'full-correct-pipeline',
+      observationId: set.isMinimalRequest ? 'ci-minimal-run' : 'ci-full-run',
+      projectRoot: set.projectRoot,
+      step,
+      prompt,
+    };
+  });
+
+  // The stored run each project's root names. A ci prompt is written against
+  // one project root, and that root is the only thing in the request that says
+  // which project the leg is asking for, so it is what the port stages against.
+  const caseByProjectRoot = new Map(legs.map((leg) => [leg.projectRoot, leg.caseId]));
+
+  return {
+    /**
+     * Two things decide a leg's answer, and both are in its request. The project
+     * root the prompt is written against says which project was staged, so a leg
+     * naming one project's root gets that project's correct workflow. Then
+     * `ci_platform` decides whether the workflow lands at the declared artifact
+     * path at all: the contract's own sensitivity witness names a leg that asks
+     * for a different platform, and step-02 would write that leg's pipeline
+     * somewhere else entirely, so the declared path comes back absent.
+     */
+    async answer(request) {
+      const prompt = String(request.channels.stdin?.value ?? '');
+      const matched = [...caseByProjectRoot].find(([root]) => prompt.includes(`\`{project-root}\`: \`${root}\``));
+      if (matched === undefined) {
+        throw new Error('a ci leg sent a prompt naming no project root, so no staged run answers it');
+      }
+      const platform = CI_PLATFORM_PATTERN.exec(prompt)?.[1] ?? 'github-actions';
+      const artifacts =
+        platform === 'github-actions' ? ciWorkflowArtifact(await storedCiWorkflow(matched[1])) : { workflow: { kind: 'absent' } };
+      return { exitCode: 0, stdout: { kind: 'text', value: '' }, stderr: { kind: 'text', value: '' }, artifacts };
+    },
+    async recordInputs(probe) {
+      const clean = probe.expectedClean;
+      // The clean control's record carries both projects, for the reason the nfr
+      // control does: each step binds its own project's prompt as a literal, so
+      // the full step selects the full observation and the minimal step selects
+      // the minimal one, and the oracles of each read the workflow their own
+      // project produced. With one observation the other step selects nothing
+      // and its oracles resolve against no interaction at all.
+      //
+      // A defect probe carries only the observation of the project it plants a
+      // defect on, read off its own systemId (`tea-ci-<set id>`), because AD-9's
+      // qualification gate resolves every one of its oracles before a selection
+      // is read, so a second observation would add evidence nothing reaches.
+      const selected = clean ? legs : legs.filter((leg) => probe.systemId === `tea-ci-${leg.setId}`);
+      // Read above the map rather than inside it, so a stored workflow two legs
+      // share is read once.
+      const workflowByCase = new Map();
+      for (const caseId of new Set(selected.map((leg) => leg.caseId))) workflowByCase.set(caseId, await storedCiWorkflow(caseId));
+      const observations = selected.map((leg, index) =>
+        recordObservation({
+          observationId: leg.observationId,
+          sequence: index + 1,
+          operationId: leg.step.operationId,
+          callInputs: { option: { agent: 'claude' }, stdin: { prompt: leg.prompt } },
+          stdout: { kind: 'text', value: '' },
+          stderr: { kind: 'text', value: '' },
+          exitCode: 0,
+          artifacts: ciWorkflowArtifact(workflowByCase.get(leg.caseId)),
+        }),
+      );
+      const observationIdByStep = new Map(selected.map((leg) => [leg.step.stepId, leg.observationId]));
+      const stepOf = (pointer) => String(pointer).split('/')[2];
+      const citedObservationId = (oracle) => {
+        const target = (oracle.direction?.evidenceTargets ?? []).find((pointer) => observationIdByStep.has(stepOf(pointer)));
+        return target === undefined ? observations[0].observationId : observationIdByStep.get(stepOf(target));
+      };
+      return {
+        observations,
+        findings: [],
+        // Every stored workflow is a correct one: every requested element
+        // present, nothing unrequested, no rule violation. Every oracle held on
+        // the evidence the harness read.
+        oracleDispositions: contract.oracles.map((oracle) => ({
+          oracleId: oracle.id,
+          disposition: 'held',
+          observationIds: [citedObservationId(oracle)],
+          note: null,
+        })),
+        evaluatorRecommendation: 'PASS',
+        conditionArm: clean ? 'clean-correct-pipeline' : legs.find((leg) => probe.systemId === `tea-ci-${leg.setId}`)?.caseId,
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // evidence: fragment selection
 // ---------------------------------------------------------------------------
 
@@ -1039,6 +1175,12 @@ async function suites() {
       contractPath: path.join(CONTRACT_ROOT, 'nfr.contract.json'),
       probesPath: path.join(PROBE_ROOT, 'nfr.probes.json'),
       evidenceFor: nfrEvidence,
+    },
+    {
+      id: 'ci',
+      contractPath: path.join(CONTRACT_ROOT, 'ci.contract.json'),
+      probesPath: path.join(PROBE_ROOT, 'ci.probes.json'),
+      evidenceFor: ciEvidence,
     },
     ...ROUTING_CONTRACTS.map((spec) => ({
       id: spec.relativePath.replace('.contract.json', ''),

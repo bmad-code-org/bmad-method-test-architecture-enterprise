@@ -110,6 +110,14 @@ const {
   failureClassForExit: nfrFailureClassForExit,
 } = require('../cli/nfr-runner');
 const { RUNNER_CAPABILITIES: NFR_HARNESS_DECLARED_CAPABILITIES } = require('./eval-nfr');
+const {
+  EXIT_CODES: CI_EXIT_CODES,
+  RUNNER_CAPABILITIES: CI_RUNNER_DECLARED_CAPABILITIES,
+  CI_REQUEST_KEYS,
+  classOfAgentError: ciClassOfAgentError,
+  failureClassForExit: ciFailureClassForExit,
+} = require('../cli/ci-runner');
+const { RUNNER_CAPABILITIES: CI_HARNESS_DECLARED_CAPABILITIES, ACTIONLINT } = require('./eval-ci');
 const { classifyAgentError } = require('./lib/eval-record');
 const { FAILURE_CLASSES } = require('./schema/eval-result');
 
@@ -120,8 +128,10 @@ const REVIEW_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-review-cli', 's
 const SELECTION_STUB_AGENT = path.join(__dirname, 'fixtures', 'fragment-selection-runner', 'stub-agent.js');
 const TRACE_STUB_AGENT = path.join(__dirname, 'fixtures', 'trace-runner', 'stub-agent.js');
 const NFR_STUB_AGENT = path.join(__dirname, 'fixtures', 'nfr-runner', 'stub-agent.js');
+const CI_STUB_AGENT = path.join(__dirname, 'fixtures', 'ci-runner', 'stub-agent.js');
 const TRACE_HARNESS = path.join(__dirname, 'eval-trace.js');
 const NFR_HARNESS = path.join(__dirname, 'eval-nfr.js');
+const CI_HARNESS = path.join(__dirname, 'eval-ci.js');
 const TEST_DESIGN_STUB_AGENT = path.join(__dirname, 'fixtures', 'test-design-runner', 'stub-agent.js');
 const TEST_DESIGN_HARNESS = path.join(__dirname, 'eval-test-design.js');
 
@@ -798,6 +808,97 @@ async function checkNfrProbe(runDir) {
   );
 }
 
+/**
+ * One tea-ci-runner probe against the stub, in a fresh working directory under
+ * `runDir`, because the stub writes where the previous probe wrote and a second
+ * probe expecting `absent` would otherwise read the first probe's file.
+ */
+async function ciProbe(runDir, probeId, stubMode, { artifacts, prompt, timeoutMs = '60000' } = {}) {
+  const cwd = fs.mkdtempSync(path.join(runDir, 'ci-'));
+  const { port } = await createProbePort({
+    cwd,
+    interfaceIds: ['tea-ci-runner'],
+    ...(artifacts ? { artifacts: { 'tea-ci-runner': artifacts } } : {}),
+    environmentKeys: { 'tea-ci-runner': STUB_ENVIRONMENT_KEYS },
+  });
+  return probeCommand(
+    port,
+    probeRequest({
+      probeId,
+      interfaceId: 'tea-ci-runner',
+      operationId: 'generate-pipeline',
+      option: { agent: 'custom', 'agent-cmd': CI_STUB_AGENT, 'env-pass': 'STUB_MODE', 'timeout-ms': timeoutMs },
+      environment: { STUB_MODE: stubMode },
+      stdin: { kind: 'text', value: prompt ?? 'Scaffold the CI pipeline the project requests and write the workflow file.' },
+    }),
+    new AbortController().signal,
+  );
+}
+
+async function checkCiProbe(runDir) {
+  console.log('\ntea-ci-runner through the adapter');
+
+  // The registry's default artifact map: the platform's own path under a project
+  // root that is the working directory. The stub, given no project root in the
+  // prompt, writes there.
+  const complete = await ciProbe(runDir, 'ci-complete', 'complete');
+  assert(complete.ok, 'the probe returned an observation', complete.ok ? '' : complete.reason);
+  if (complete.ok) {
+    const { observation } = complete;
+    assert(observation.exitCode === CI_EXIT_CODES.none, 'a completed CI run exits 0', `exitCode ${observation.exitCode}`);
+    assert(
+      observation.artifacts.workflow.kind === 'text' && /^name: Test Pipeline$/m.test(observation.artifacts.workflow.value),
+      'the workflow artifact is read back as text at the registry default path',
+      JSON.stringify(observation.artifacts.workflow).slice(0, 200),
+    );
+    assert(
+      observation.stdout.kind === 'text' && /Wrote .*test\.yml/.test(observation.stdout.value),
+      'the runner forwards what the agent printed',
+      JSON.stringify(observation.stdout).slice(0, 200),
+    );
+  }
+
+  // The per-run override the harness supplies: the workspace holds the project
+  // under its own root, so the workflow sits three directories down from the
+  // authorization cwd. The prompt names that root, and the stub picks its
+  // template by it.
+  const staged = await ciProbe(runDir, 'ci-staged', 'complete', {
+    artifacts: { workflow: path.join('lantern-audit-log', '.github', 'workflows', 'test.yml') },
+    prompt: '- `{project-root}`: `lantern-audit-log`\n',
+  });
+  assert(
+    staged.ok && staged.observation.artifacts.workflow.kind === 'text' && /pull_request:/.test(staged.observation.artifacts.workflow.value),
+    'a per-run artifact override reads the workflow the stub wrote under the project root the prompt named',
+    JSON.stringify(staged.ok ? staged.observation.artifacts.workflow : staged).slice(0, 200),
+  );
+
+  // An artifact the run never wrote is `absent`, not a throw and not an empty
+  // string, which is what lets the harness classify it as a missing artifact.
+  const nothing = await ciProbe(runDir, 'ci-nothing', 'nothing');
+  assert(
+    nothing.ok && nothing.observation.exitCode === CI_EXIT_CODES.none && nothing.observation.artifacts.workflow.kind === 'absent',
+    'a run that wrote no workflow exits 0 with the artifact absent',
+    JSON.stringify(nothing.ok ? nothing.observation.artifacts : nothing),
+  );
+
+  // A vendor that exits nonzero is the runner's transport class, on the exit code.
+  const failed = await ciProbe(runDir, 'ci-fail', 'fail');
+  assert(
+    failed.ok && ciFailureClassForExit(failed.observation.exitCode) === 'environment-transport',
+    'a vendor that exits nonzero is reported as a transport failure on the exit code',
+    JSON.stringify(failed.ok ? failed.observation.exitCode : failed),
+  );
+
+  const invalidTimeout = await ciProbe(runDir, 'ci-invalid-timeout', 'complete', { timeoutMs: '1.5' });
+  assert(
+    invalidTimeout.ok &&
+      invalidTimeout.observation.exitCode === CI_EXIT_CODES.usage &&
+      /--timeout-ms must be a positive integer; got "1\.5"/.test(observedText(invalidTimeout.observation.stderr)),
+    'a decimal timeout is rejected as a usage error before the runner starts',
+    JSON.stringify(invalidTimeout.ok ? invalidTimeout.observation : invalidTimeout).slice(0, 300),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // 5. the behavioral harnesses run end to end against the stub
 // ---------------------------------------------------------------------------
@@ -844,6 +945,10 @@ function runTestDesignHarness(runDir, stubMode, extraArgs) {
 
 function runNfrHarness(runDir, stubMode, extraArgs) {
   return runHarnessAgainstStub(NFR_HARNESS, NFR_STUB_AGENT, path.join(runDir, `nfr-harness-${stubMode}.json`), stubMode, extraArgs);
+}
+
+function runCiHarness(runDir, stubMode, extraArgs) {
+  return runHarnessAgainstStub(CI_HARNESS, CI_STUB_AGENT, path.join(runDir, `ci-harness-${stubMode}.json`), stubMode, extraArgs);
 }
 
 /**
@@ -914,6 +1019,95 @@ function checkNfrHarnessSmoke(runDir) {
   // Nothing written is an environment failure with a class, never a low score.
   const nothing = runNfrHarness(runDir, 'nothing', ['--runs', '1', '--set', 'gapped-harbor-billing-ledger']);
   assert(nothing.status === 2, 'a run that wrote no report exits 2', `exit ${nothing.status}`);
+  assert(
+    nothing.record?.failureClass === 'environment-missing-artifact' && nothing.record?.runners?.[0]?.repetitions?.completed === 0,
+    'the record classifies the lost run as a missing artifact and counts no completed repetition',
+    JSON.stringify(nothing.record && { failureClass: nothing.record.failureClass, repetitions: nothing.record.runners?.[0]?.repetitions }),
+  );
+}
+
+/**
+ * The ci harness end to end against its stub. Requires actionlint on PATH,
+ * because the harness's own pre-flight refuses to run without it, the way it
+ * refuses to run without a vendor CLI; see WHAT ACTIONLINT IS RUN WITH in
+ * test/eval-ci.js.
+ *
+ * What it asserts is what the nfr, trace and test-design smokes assert, plus
+ * the two failure modes unique to a linted deliverable: a workflow that does
+ * not parse, and a workflow carrying elements the request never asked for.
+ */
+function checkCiHarnessSmoke(runDir) {
+  console.log('\nthe ci harness end to end against the stub');
+
+  const complete = runCiHarness(runDir, 'complete', ['--runs', '2']);
+  assert(
+    complete.status === 0,
+    'a correct pipeline for both projects, twice, exits 0',
+    complete.stderr.trim().split('\n').slice(-3).join(' | '),
+  );
+  assert(
+    complete.record?.mode === 'live' && complete.record?.failureClass === 'none',
+    'the record is a live run with no failure class',
+    JSON.stringify(complete.record && { mode: complete.record.mode, failureClass: complete.record.failureClass }),
+  );
+  const runner = complete.record?.runners?.[0];
+  assert(
+    runner?.repetitions?.expected === 4 && runner?.repetitions?.completed === 4,
+    'every declared repetition completed: two projects, two runs each',
+    JSON.stringify(runner?.repetitions),
+  );
+  assert(runner?.failures?.length === 0, 'every threshold is met on the correct pipeline', JSON.stringify(runner?.failures));
+  assert(
+    runner?.version === 'stub-agent 1.0.0',
+    'the pre-flight recorded the version the stub answered --version with',
+    JSON.stringify(runner?.version),
+  );
+  assert(runner?.parameters?.envPassNames?.includes('STUB_MODE'), 'the record names the environment variable the operator passed through');
+  assert(
+    runner?.parameters?.tools?.[0]?.name === ACTIONLINT.executable && typeof runner?.parameters?.tools?.[0]?.version === 'string',
+    'the record names the linter and the version that ran',
+    JSON.stringify(runner?.parameters?.tools),
+  );
+
+  // A workflow that does not parse is scored, not lost: every requested element
+  // is missing because checkElement is never reached, and the run is a measured
+  // quality failure rather than an environment failure.
+  const unparseable = runCiHarness(runDir, 'unparseable', ['--runs', '1', '--set', 'full-meridian-storefront']);
+  assert(unparseable.status === 1, 'a run that writes a workflow that does not parse exits 1', `exit ${unparseable.status}`);
+  assert(
+    unparseable.record?.failureClass === 'quality' && unparseable.record?.runners?.[0]?.failures?.includes('1 parse failure(s)'),
+    'the record carries a quality failure naming one parse failure',
+    JSON.stringify(unparseable.record?.runners?.[0]?.failures),
+  );
+
+  // The full-request template written for the minimal project: every requested
+  // element still present, and a run of unrequested elements the request never
+  // named. This is the control negativeControls' no-element-the-request-did-not-ask-for
+  // exists to catch.
+  const unrequested = runCiHarness(runDir, 'unrequested', ['--runs', '1', '--set', 'minimal-lantern-audit-log']);
+  assert(unrequested.status === 1, 'a run that copies the full template onto the minimal request exits 1', `exit ${unrequested.status}`);
+  assert(
+    unrequested.record?.failureClass === 'quality' &&
+      unrequested.record?.runners?.[0]?.measurements?.requestedElementRecall === 1 &&
+      unrequested.record?.runners?.[0]?.measurements?.unrequestedElements > 0,
+    'the record keeps every requested element and counts the elements the request never named',
+    JSON.stringify(unrequested.record?.runners?.[0]?.measurements),
+  );
+
+  // The workflow scaffolds a pipeline and does not edit the project, so a write
+  // into it is a measured quality failure. This is the only path that reaches
+  // maxFixtureMutations at all, which is what its threshold comment promises.
+  const mutate = runCiHarness(runDir, 'mutate', ['--runs', '1', '--set', 'full-meridian-storefront']);
+  assert(mutate.status === 1, 'a run that edits a pre-existing project file exits 1', `exit ${mutate.status}`);
+  assert(
+    mutate.record?.failureClass === 'quality' && mutate.record?.runners?.[0]?.failures?.includes('fixture mutations'),
+    'the record carries a quality failure naming fixture mutations',
+    JSON.stringify(mutate.record?.runners?.[0]?.failures),
+  );
+
+  // Nothing written is an environment failure with a class, never a low score.
+  const nothing = runCiHarness(runDir, 'nothing', ['--runs', '1', '--set', 'full-meridian-storefront']);
+  assert(nothing.status === 2, 'a run that wrote no workflow exits 2', `exit ${nothing.status}`);
   assert(
     nothing.record?.failureClass === 'environment-missing-artifact' && nothing.record?.runners?.[0]?.repetitions?.completed === 0,
     'the record classifies the lost run as a missing artifact and counts no completed repetition',
@@ -1304,28 +1498,37 @@ function checkRunnerDeclarations() {
     `harness ${JSON.stringify(NFR_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(NFR_RUNNER_DECLARED_CAPABILITIES)}`,
   );
   assert(
+    JSON.stringify([...CI_HARNESS_DECLARED_CAPABILITIES].sort()) === JSON.stringify([...CI_RUNNER_DECLARED_CAPABILITIES].sort()),
+    'the ci harness and tea-ci-runner declare the same runner capabilities',
+    `harness ${JSON.stringify(CI_HARNESS_DECLARED_CAPABILITIES)} vs command ${JSON.stringify(CI_RUNNER_DECLARED_CAPABILITIES)}`,
+  );
+  assert(
     TRACE_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       NFR_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
+      CI_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       TEST_DESIGN_RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes') &&
       !RUNNER_DECLARED_CAPABILITIES.includes('scoped-artifact-writes'),
-    'a trace, NFR or test-design run may write its deliverable and a selection may not; that is the one capability the commands differ in',
+    'a trace, NFR, ci or test-design run may write its deliverable and a selection may not; that is the one capability the commands differ in',
   );
 
-  // The three runner commands checked here share one exit-code table, because a
+  // The four runner commands checked here share one exit-code table, because a
   // caller holding an observation cannot tell which command produced it. The table
   // lives in cli/lib/runner-exit-codes.js and each re-exports it; this is the check
   // that none has grown a spelling of its own.
   assert(
-    JSON.stringify(TRACE_EXIT_CODES) === JSON.stringify(EXIT_CODES) && JSON.stringify(NFR_EXIT_CODES) === JSON.stringify(EXIT_CODES),
-    'all three runner commands spell every failure class with the same exit code',
-    `${JSON.stringify(TRACE_EXIT_CODES)} and ${JSON.stringify(NFR_EXIT_CODES)} vs ${JSON.stringify(EXIT_CODES)}`,
+    JSON.stringify(TRACE_EXIT_CODES) === JSON.stringify(EXIT_CODES) &&
+      JSON.stringify(NFR_EXIT_CODES) === JSON.stringify(EXIT_CODES) &&
+      JSON.stringify(CI_EXIT_CODES) === JSON.stringify(EXIT_CODES),
+    'all four runner commands spell every failure class with the same exit code',
+    `${JSON.stringify(TRACE_EXIT_CODES)}, ${JSON.stringify(NFR_EXIT_CODES)} and ${JSON.stringify(CI_EXIT_CODES)} vs ${JSON.stringify(EXIT_CODES)}`,
   );
   for (const [failureClass, code] of Object.entries(EXIT_CODES)) {
     assert(
       failureClassForExit(code) === failureClass &&
         traceFailureClassForExit(code) === failureClass &&
-        nfrFailureClassForExit(code) === failureClass,
-      `exit ${code} maps back to ${failureClass} in all three runners`,
+        nfrFailureClassForExit(code) === failureClass &&
+        ciFailureClassForExit(code) === failureClass,
+      `exit ${code} maps back to ${failureClass} in all four runners`,
     );
   }
   assert(
@@ -1339,9 +1542,15 @@ function checkRunnerDeclarations() {
   );
   assert(NFR_REQUEST_KEYS.stdin.required.includes('prompt'), 'the nfr prompt is required on standard input');
   assert(
+    CI_REQUEST_KEYS.option.required.every((key) => CI_REQUEST_KEYS.option.permitted.includes(key)),
+    'every required ci option key is also permitted',
+  );
+  assert(CI_REQUEST_KEYS.stdin.required.includes('prompt'), 'the ci prompt is required on standard input');
+  assert(
     JSON.stringify(TRACE_REQUEST_KEYS.environment) === JSON.stringify(SELECTION_REQUEST_KEYS.environment) &&
-      JSON.stringify(NFR_REQUEST_KEYS.environment) === JSON.stringify(SELECTION_REQUEST_KEYS.environment),
-    'all three runners permit the same environment names, because all three wrap the same vendor call',
+      JSON.stringify(NFR_REQUEST_KEYS.environment) === JSON.stringify(SELECTION_REQUEST_KEYS.environment) &&
+      JSON.stringify(CI_REQUEST_KEYS.environment) === JSON.stringify(SELECTION_REQUEST_KEYS.environment),
+    'all four runners permit the same environment names, because all four wrap the same vendor call',
   );
 
   // cli/fragment-selection-runner.js restates test/lib/eval-record.js's error
@@ -1370,6 +1579,7 @@ function checkRunnerDeclarations() {
       traceClassOfAgentError(error),
     );
     assert(nfrClassOfAgentError(error) === shared, `${probe.code} classifies the same in tea-nfr-runner`, nfrClassOfAgentError(error));
+    assert(ciClassOfAgentError(error) === shared, `${probe.code} classifies the same in tea-ci-runner`, ciClassOfAgentError(error));
     assert(FAILURE_CLASSES.includes(runner), `${probe.code} classifies to a declared TEA failure class`, runner);
     assert(Object.hasOwn(EXIT_CODES, runner), `${probe.code} classifies to a class this command can exit with`, runner);
   }
@@ -1452,8 +1662,10 @@ async function main() {
     await checkFragmentSelectionProbe(runDir);
     await checkTraceProbe(runDir);
     await checkNfrProbe(runDir);
+    await checkCiProbe(runDir);
     await checkBudgets(runDir);
     checkNfrHarnessSmoke(runDir);
+    checkCiHarnessSmoke(runDir);
     checkTraceHarnessSmoke(runDir);
     checkTestDesignHarnessSmoke(runDir);
   } finally {

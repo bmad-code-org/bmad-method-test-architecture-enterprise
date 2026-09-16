@@ -21,8 +21,9 @@
  * test-review's gameability probe and trace's three defect probes score nothing.
  * tools/generate-probes.js states it in full. The other blocker was a defect
  * probe whose manifestation witness fired on a leg the contract called clean.
- * Fourteen of `test-design`'s sixteen probes still fail pre-flight with
- * `seeded-fault-fired`, and every probe in the other twelve corpora pre-flights.
+ * Fourteen of `test-design`'s sixteen probes and all three of `ci`'s defect probes
+ * still fail pre-flight with `seeded-fault-fired`, and every probe in the other
+ * thirteen corpora pre-flights.
  * A baseline is what makes the day one of them closes visible instead of silent,
  * so movement in either direction fails this check until somebody has read why
  * and regenerated it.

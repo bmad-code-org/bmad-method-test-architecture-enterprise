@@ -1,0 +1,52 @@
+{
+  "$comment": [
+    "full-correct-pipeline with continue-on-error: true added to the e2e job's test-running step and nothing else changed.",
+    "actionlint has no rule for this shape, so lint stays clean, and workflowRuleViolations is the only thing that catches it: the step invokes a test-runner pattern and carries continue-on-error, which step-03's own rule forbids in as many words. This is the case gateMustBeAbleToFail exists to prove is caught."
+  ],
+  "id": "full-test-step-suppressed",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "full-correct-pipeline with continue-on-error: true added to the e2e job's test-running step and nothing else changed.",
+    "actionlint has no rule for this shape, so lint stays clean, and workflowRuleViolations is the only thing that catches it: the step invokes a test-runner pattern and carries continue-on-error, which step-03's own rule forbids in as many words. This is the case gateMustBeAbleToFail exists to prove is caught."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-push-main": true,
+      "trigger-pull-request-main": true,
+      "trigger-weekly-schedule": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-e2e-tests": true,
+      "gate-lint-precedes-tests": true,
+      "gate-matrix-shards": true,
+      "gate-burn-in": true,
+      "artifact-playwright-report": true,
+      "artifact-test-results": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": [
+      "continue-on-error: on a step that runs tests in job e2e step 6"
+    ]
+  }
+}

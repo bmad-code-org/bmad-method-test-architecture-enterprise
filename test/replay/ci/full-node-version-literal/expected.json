@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "full-correct-pipeline with every setup-node step's node-version-file replaced by a literal node-version: '24', which is what .nvmrc actually states.",
+    "node-version-from-nvmrc still reads present, because nodeVersionFromNvmrc accepts a literal equal to the recorded nvmrcVersion as well as the file reference. Every other field is identical to full-correct-pipeline, which is the pair signatureOf is checked against: two spellings of one true answer have to sign identically."
+  ],
+  "id": "full-node-version-literal",
+  "suite": "ci",
+  "scorerVersion": 9,
+  "storedOutput": {
+    "origin": "constructed",
+    "workflow": ".github/workflows/test.yml"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/ci-eval/ground-truth.json",
+    "fixtureSet": "full-meridian-storefront",
+    "scoringInputsDigest": "sha256:f9406ce2b7e8e168498fdb2eaea4d68baf092a1ca33ee0749ad9c33a9c2ffd6e"
+  },
+  "derivation": [
+    "full-correct-pipeline with every setup-node step's node-version-file replaced by a literal node-version: '24', which is what .nvmrc actually states.",
+    "node-version-from-nvmrc still reads present, because nodeVersionFromNvmrc accepts a literal equal to the recorded nvmrcVersion as well as the file reference. Every other field is identical to full-correct-pipeline, which is the pair signatureOf is checked against: two spellings of one true answer have to sign identically."
+  ],
+  "result": {
+    "isMinimalRequest": false,
+    "parse": {
+      "ok": true,
+      "errors": []
+    },
+    "lint": {
+      "findings": []
+    },
+    "elements": {
+      "trigger-push-main": true,
+      "trigger-pull-request-main": true,
+      "trigger-weekly-schedule": true,
+      "permission-contents-read": true,
+      "node-version-from-nvmrc": true,
+      "command-install": true,
+      "command-unit-tests": true,
+      "command-e2e-tests": true,
+      "gate-lint-precedes-tests": true,
+      "gate-matrix-shards": true,
+      "gate-burn-in": true,
+      "artifact-playwright-report": true,
+      "artifact-test-results": true
+    },
+    "elementMisses": [],
+    "unrequested": [],
+    "ruleViolations": []
+  }
+}

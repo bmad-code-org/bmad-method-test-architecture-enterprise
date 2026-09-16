@@ -104,6 +104,12 @@ const {
   NFR_OPERATION,
 } = require('../test/eval-nfr');
 const { DEFAULT_AGENT: NFR_DEFAULT_AGENT } = require('../cli/nfr-runner');
+// And the same for the ci command: the prompt a manifestation witness sends is
+// the harness's own, and the literal-search predicate a probe's rationale
+// compares against is the harness's `workflowMentions`, so a probe and the
+// contract it names cannot read one workflow file two different ways.
+const { buildPrompt: buildCiPrompt, workflowMentions, CI_INTERFACE, CI_OPERATION } = require('../test/eval-ci');
+const { DEFAULT_AGENT: CI_DEFAULT_AGENT } = require('../cli/ci-runner');
 // The routing probes name the oracle they game by the pointer it reads, which is
 // how they stay attached to the right oracle when a case is added to the corpus
 // and every id after it shifts.
@@ -117,6 +123,8 @@ const PROBE_ROOT = path.join(PROJECT_ROOT, 'test', 'probes');
 const EVAL_ROOT = path.join(PROJECT_ROOT, 'test', 'evals');
 const REVIEW_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval');
 const TRACE_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'trace-eval');
+const CI_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'ci-eval');
+const CI_FIXTURE_PREFIX = 'test/fixtures/ci-eval/';
 const NFR_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'nfr-eval');
 const ROUTING_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'tea-routing-eval');
 const TEST_DESIGN_FIXTURE_ROOT = path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-design-eval');
@@ -1359,6 +1367,267 @@ function buildNfrProbes() {
 }
 
 // ---------------------------------------------------------------------------
+// ci
+// ---------------------------------------------------------------------------
+
+/** The oracles this contract states about one project, read off the requirement each behavior links. */
+function ciOraclesFor(contract, setId) {
+  const ids = new Set(
+    contract.behaviors
+      .filter((behavior) => behavior.requirementLinks.some((link) => link.id.startsWith(`${setId}/`)))
+      .flatMap((behavior) => behavior.oracles),
+  );
+  assert(ids.size > 0, `ci.contract.json declares no behavior linked to ${setId}`);
+  return contract.oracles.filter((oracle) => ids.has(oracle.id));
+}
+
+/**
+ * The one oracle among a project's that reads the workflow for a given literal.
+ *
+ * Found by the literal it checks, the same idiom `nfrOracleReading` uses and for
+ * the same reason: the numbering is a convention nothing holds to a meaning, and
+ * the literal is the claim itself.
+ */
+function ciOracleReading(oracles, literal, setId) {
+  const found = oracles.filter((oracle) => literalsOf(oracle.check).includes(literal));
+  assert(found.length === 1, `${setId}: ${found.length} oracle(s) check the workflow for "${literal}", and a probe needs exactly one`);
+  return found[0].id;
+}
+
+/**
+ * The probe corpus for the ci contract.
+ *
+ * Two plants and one control, all read out of `test/fixtures/ci-eval/ground-truth.json`
+ * and each pointed at a real deviant workflow already stored under
+ * `test/replay/ci/`: a requested element missing from the full project's
+ * pipeline, and the full-request template written for the minimal project. The
+ * clean control is the minimal project scaffolded correctly, because a suite
+ * that only rewarded catching an over-generous pipeline would be cleared by a
+ * workflow that emits nothing at all.
+ *
+ * Every signature here is refused at the qualification gate for the same reason
+ * `nfr`'s three are: the contract's descriptorChannel is `artifact`, so a
+ * signature stating the truth about the plant reads the workflow file, and
+ * `condition-artifact-channel-contract-local` refuses an artifact pointer
+ * because the identifier is minted per contract. The rationale still says which
+ * project and which rule each probe rests on, so a later contract with a
+ * differently addressed deliverable can be pointed at the right claim.
+ */
+function buildCiProbes() {
+  const contract = loadContract('ci.contract.json');
+  const groundTruth = JSON.parse(fs.readFileSync(path.join(CI_FIXTURE_ROOT, 'ground-truth.json'), 'utf8'));
+  const full = groundTruth.fixtureSets.find((set) => set.isMinimalRequest === false);
+  const minimal = groundTruth.fixtureSets.find((set) => set.isMinimalRequest === true);
+  assert(full && minimal, 'ci ground truth carries no full project or no minimal project');
+
+  const groundTruthPath = `${CI_FIXTURE_PREFIX}ground-truth.json`;
+  const corpusDigest = digestOf([groundTruthPath]);
+
+  const baselineFullReport = 'test/replay/ci/full-correct-pipeline/.github/workflows/test.yml';
+  const baselineMinimalReport = 'test/replay/ci/minimal-correct-pipeline/.github/workflows/test.yml';
+
+  const fullOracles = ciOraclesFor(contract, full.id);
+  const scheduleElement = full.expectedElements.find((element) => element.id === 'trigger-weekly-schedule');
+  assert(scheduleElement, `${full.id}: no trigger-weekly-schedule element to plant a missing trigger on`);
+  const scheduleOracleId = ciOracleReading(fullOracles, scheduleElement.contractToken, full.id);
+
+  const permissionElement = full.expectedElements.find((element) => element.id === 'permission-contents-read');
+  assert(permissionElement, `${full.id}: no permission-contents-read element to plant a missing permission on`);
+  const permissionOracleId = ciOracleReading(fullOracles, permissionElement.contractToken, full.id);
+
+  const minimalOracles = ciOraclesFor(contract, minimal.id);
+  const forbiddenBurnIn = minimal.mustNotEmit.find((entry) => entry.token === 'burn-in');
+  assert(forbiddenBurnIn, `${minimal.id}: mustNotEmit carries no "burn-in" entry to plant a copied template on`);
+  const burnInOracleId = ciOracleReading(minimalOracles, forbiddenBurnIn.token, minimal.id);
+
+  const plants = [
+    {
+      set: full,
+      element: scheduleElement,
+      oracleId: scheduleOracleId,
+      mutatedReport: 'test/replay/ci/full-trigger-schedule-missing/.github/workflows/test.yml',
+      baselineReport: baselineFullReport,
+      summary: `${full.id}: the weekly schedule trigger is missing, under triggersConfigured. ${full.title} asked for it in as many words.`,
+      expectedObservableFailure: `The workflow written for ${full.id} does not contain ${JSON.stringify(scheduleElement.contractToken)}.`,
+    },
+    {
+      set: full,
+      element: permissionElement,
+      oracleId: permissionOracleId,
+      mutatedReport: 'test/replay/ci/full-permissions-missing/.github/workflows/test.yml',
+      baselineReport: baselineFullReport,
+      summary: `${full.id}: the contents: read permission grant is missing entirely, which githubActionsOutputPath's own request states.`,
+      expectedObservableFailure: `The workflow written for ${full.id} does not contain ${JSON.stringify(permissionElement.contractToken)}.`,
+    },
+  ];
+
+  const probes = plants.map((plant, index) => {
+    const behaviorId = soleBehaviorFor(contract, plant.oracleId);
+    const legId = `manifest-${plant.element.id}`;
+    return {
+      schemaVersion: PROBE_SCHEMA_VERSION,
+      parentDigest: null,
+      revisionCount: 0,
+      probeId: `P-${pad(index + 1)}`,
+      probeClass: 'defect',
+      behaviorId,
+      systemId: `tea-ci-${plant.set.id}`,
+      implementationDigest: corpusDigest,
+      artifactDigest: corpusDigest,
+      commitDigest: corpusDigest,
+      rationale: `${plant.summary} ${plant.oracleId} is the oracle that has to see its consequence in the workflow the run wrote.`,
+      qualification: {
+        route: 'controlled-mutation',
+        mutationSource: groundTruthPath,
+        mutationOperator: `plant-${plant.element.id}-missing`,
+        targetArtifact: fileReference(groundTruthPath),
+        expectedObservableFailure: plant.expectedObservableFailure,
+        baselinePassEvidence: fileReference(plant.baselineReport),
+        mutatedFailEvidence: fileReference(plant.mutatedReport),
+        rollbackVerified: true,
+      },
+      expectedClean: false,
+      defects: [
+        {
+          defectId: `D-${pad(index + 1)}`,
+          behaviorId,
+          summary: `${plant.element.id} is requested by ${plant.set.requestSource} and has to appear in the workflow ${plant.set.id} writes.`,
+          severity: 'critical',
+          oracleEvidence: [fileReference(groundTruthPath)],
+          source: 'controlled-mutation',
+          manifestationWitness: {
+            legId,
+            interfaceId: CI_INTERFACE,
+            operationId: CI_OPERATION,
+            inputs: {
+              argument: {},
+              option: { agent: CI_DEFAULT_AGENT },
+              environment: {},
+              stdin: { kind: 'text', value: buildCiPrompt(plant.set) },
+            },
+            relation: {
+              op: 'not',
+              operands: [
+                {
+                  op: 'containment',
+                  operands: [{ pointer: `/interactions/${legId}/artifact/workflow` }, { literal: plant.element.contractToken }],
+                },
+              ],
+            },
+          },
+        },
+      ],
+      defectSignature: {
+        interfaceKind: 'cli',
+        invocation: { executable: CI_INTERFACE, subcommandPath: [] },
+        observableChannel: 'artifact',
+        condition: {
+          selector: selector({ option: { agent: { matcher: 'any' } } }),
+          predicate: {
+            op: 'not',
+            operands: [
+              {
+                op: 'containment',
+                operands: [{ pointer: '/interactions/observed/artifact/workflow' }, { literal: plant.element.contractToken }],
+              },
+            ],
+          },
+        },
+      },
+    };
+  });
+
+  // The template-copied-onto-a-minimal-request control answers to the same
+  // claim on its own side: the pipeline written for the minimal project must not
+  // contain a token the request forbids by name.
+  const templateProbe = {
+    schemaVersion: PROBE_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    probeId: `P-${pad(plants.length + 1)}`,
+    probeClass: 'defect',
+    behaviorId: soleBehaviorFor(contract, burnInOracleId),
+    systemId: `tea-ci-${minimal.id}`,
+    implementationDigest: corpusDigest,
+    artifactDigest: corpusDigest,
+    commitDigest: corpusDigest,
+    rationale: `${minimal.id}'s request forbids a burn-in loop in as many words, under negativeControls' no-element-the-request-did-not-ask-for. ${burnInOracleId} is the oracle that has to see the template's burn-in job in the workflow the run wrote.`,
+    qualification: {
+      route: 'controlled-mutation',
+      mutationSource: groundTruthPath,
+      mutationOperator: 'plant-template-copied-onto-minimal',
+      targetArtifact: fileReference(groundTruthPath),
+      expectedObservableFailure: `The workflow written for ${minimal.id} contains "burn-in".`,
+      baselinePassEvidence: fileReference(baselineMinimalReport),
+      mutatedFailEvidence: fileReference('test/replay/ci/minimal-template-copied/.github/workflows/test.yml'),
+      rollbackVerified: true,
+    },
+    expectedClean: false,
+    defects: [
+      {
+        defectId: `D-${pad(plants.length + 1)}`,
+        behaviorId: soleBehaviorFor(contract, burnInOracleId),
+        summary: `${minimal.id}'s request forbids a burn-in loop, and the full-request template carries one.`,
+        severity: 'critical',
+        oracleEvidence: [fileReference(groundTruthPath)],
+        source: 'controlled-mutation',
+        manifestationWitness: {
+          legId: 'manifest-template-copied',
+          interfaceId: CI_INTERFACE,
+          operationId: CI_OPERATION,
+          inputs: {
+            argument: {},
+            option: { agent: CI_DEFAULT_AGENT },
+            environment: {},
+            stdin: { kind: 'text', value: buildCiPrompt(minimal) },
+          },
+          relation: {
+            op: 'containment',
+            operands: [{ pointer: '/interactions/manifest-template-copied/artifact/workflow' }, { literal: 'burn-in' }],
+          },
+        },
+      },
+    ],
+    defectSignature: {
+      interfaceKind: 'cli',
+      invocation: { executable: CI_INTERFACE, subcommandPath: [] },
+      observableChannel: 'artifact',
+      condition: {
+        selector: selector({ option: { agent: { matcher: 'any' } } }),
+        predicate: { op: 'containment', operands: [{ pointer: '/interactions/observed/artifact/workflow' }, { literal: 'burn-in' }] },
+      },
+    },
+  };
+  probes.push(templateProbe);
+
+  const cleanOracles = ciOraclesFor(contract, minimal.id);
+  const cleanOracleId = ciOracleReading(cleanOracles, 'npm test', minimal.id);
+  probes.push({
+    schemaVersion: PROBE_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    probeId: `P-${pad(plants.length + 2)}`,
+    probeClass: 'zero-action',
+    behaviorId: soleBehaviorFor(contract, cleanOracleId),
+    systemId: `tea-ci-${minimal.id}`,
+    implementationDigest: corpusDigest,
+    artifactDigest: corpusDigest,
+    commitDigest: corpusDigest,
+    rationale: `${minimal.id} states five elements and the workflow carries exactly them, so any gap or addition the run reports against it is a false positive. It is the control that stops the suite scoring well by only ever catching an over-generous pipeline.`,
+    qualification: {
+      route: 'clean-control',
+      baselinePassEvidence: fileReference(baselineMinimalReport),
+      revisionCommitDigest: corpusDigest,
+      noKnownDefectStatement: minimal.title,
+    },
+    expectedClean: true,
+    defects: [],
+  });
+
+  return probes;
+}
+
+// ---------------------------------------------------------------------------
 // fragment selection
 // ---------------------------------------------------------------------------
 
@@ -1577,6 +1846,7 @@ function targets() {
     { relativePath: 'test-design.probes.json', build: buildTestDesignProbes },
     { relativePath: 'trace.probes.json', build: buildTraceProbes },
     { relativePath: 'nfr.probes.json', build: buildNfrProbes },
+    { relativePath: 'ci.probes.json', build: buildCiProbes },
     ...fragmentSelectionWorkflows().map((workflow) => ({
       relativePath: path.join('fragment-selection', `${workflow}.probes.json`),
       build: () => buildFragmentSelectionProbes(workflow),
