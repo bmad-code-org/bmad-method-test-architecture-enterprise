@@ -24,8 +24,11 @@ const { z } = require('zod');
 const MANIFEST_VERSION = 1;
 
 // fragment-selection is routing evidence; behavioral is end-to-end artifact
-// evidence. Only the second one covers a skill.
-const EVAL_TYPES = ['fragment-selection', 'behavioral'];
+// evidence. infrastructure proves a harness mechanism rather than a skill's
+// behavior, so it is a third kind rather than a weaker `behavioral`: a suite
+// carrying it declares neither `skill` nor `skills`, and discharges no
+// coverage obligation, the same way fragment-selection already does not.
+const EVAL_TYPES = ['fragment-selection', 'behavioral', 'infrastructure'];
 
 // The tiers in the roadmap's CI policy: deterministic runs on every pull
 // request with no credentials, smoke runs one case per suite, full-matrix runs
@@ -97,7 +100,15 @@ const suiteEntrySchema = z
   .superRefine((value, ctx) => {
     const hasSkill = typeof value.skill === 'string';
     const hasSkills = Array.isArray(value.skills);
-    if (hasSkill === hasSkills) {
+    if (value.evalType === 'infrastructure') {
+      if (hasSkill || hasSkills) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'an "infrastructure" suite entry proves a harness mechanism, not a skill\'s behavior, so it must declare neither "skill" nor "skills"',
+        });
+      }
+    } else if (hasSkill === hasSkills) {
       ctx.addIssue({
         code: 'custom',
         message: 'a suite entry declares exactly one of "skill" or "skills"',

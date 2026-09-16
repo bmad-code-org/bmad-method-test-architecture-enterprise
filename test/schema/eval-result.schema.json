@@ -6,7 +6,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.1.0"
+          "const": "1.2.0"
         },
         "kind": {
           "type": "string",
@@ -54,15 +54,15 @@
               "type": "string",
               "enum": [
                 "fragment-selection",
-                "behavioral"
+                "behavioral",
+                "infrastructure"
               ]
             },
             "skills": {
               "type": "array",
               "items": {
                 "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
-              },
-              "minItems": 1
+              }
             },
             "contracts": {
               "type": "array",
@@ -438,7 +438,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.1.0"
+          "const": "1.2.0"
         },
         "kind": {
           "type": "string",

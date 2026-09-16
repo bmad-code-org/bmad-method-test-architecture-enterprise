@@ -59,11 +59,15 @@ async function loadSuiteManifest(projectRoot = PROJECT_ROOT) {
 /**
  * The skills one suite entry speaks for.
  *
+ * Empty for an `infrastructure` entry, which declares neither `skill` nor
+ * `skills`: `entry.skills ?? [entry.skill]` used to fall back to `[undefined]`
+ * for one, which is not an empty list and is not a skill either.
+ *
  * @param {object} entry
  * @returns {string[]}
  */
 function skillsOf(entry) {
-  return entry.skills ?? [entry.skill];
+  return entry.skills ?? (typeof entry.skill === 'string' ? [entry.skill] : []);
 }
 
 /**

@@ -323,6 +323,24 @@ const EXECUTION_TARGETS = [
     // one only backstops.
     maxElapsedMs: 21 * 60_000,
   },
+  {
+    interfaceId: 'tea-transcript-runner',
+    executable: 'tea-transcript-runner',
+    script: path.join('cli', 'transcript-runner.js'),
+    subcommandPaths: [[]],
+    // A turn's whole output is its reply on standard output; the transcript
+    // harness records it directly rather than reading a file, so this target
+    // declares no default artifact. A caller whose turn needs one, the way
+    // Story 6.11's teaching session might record progress to disk, supplies its
+    // own path through `commandTargetPolicy`'s artifact override, the same way
+    // every staged eval workspace overrides the trace and nfr targets above.
+    artifacts: {},
+    environmentKeys: vendorEnvironmentNames(),
+    // One minute above cli/transcript-runner.js's own DEFAULT_TIMEOUT_MS, for
+    // the reason the comment above EXECUTION_TARGETS gives: the inner clock
+    // classifies, and this one only backstops.
+    maxElapsedMs: 11 * 60_000,
+  },
 ];
 
 /** @returns {object|undefined} */

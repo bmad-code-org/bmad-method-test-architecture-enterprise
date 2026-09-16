@@ -39,7 +39,8 @@
     "tea-routing-runner": "cli/routing-runner.js",
     "tea-test-design-runner": "cli/test-design-runner.js",
     "tea-test-review": "cli/test-review.js",
-    "tea-trace-runner": "cli/trace-runner.js"
+    "tea-trace-runner": "cli/trace-runner.js",
+    "tea-transcript-runner": "cli/transcript-runner.js"
   },
   "files": [
     "src",
@@ -65,6 +66,7 @@
     "eval:test-design": "node test/eval-test-design.js",
     "eval:test-review": "node test/eval-test-review.js",
     "eval:trace": "node test/eval-trace.js",
+    "eval:transcript": "node test/eval-transcript.js",
     "format:check": "prettier --check .",
     "format:fix": "prettier --write .",
     "format:fix:staged": "prettier --write",
@@ -78,7 +80,7 @@
     "release:minor": "gh workflow run publish.yaml -f channel=latest -f bump=minor",
     "release:next": "gh workflow run publish.yaml -f channel=next",
     "release:patch": "gh workflow run publish.yaml -f channel=latest -f bump=patch",
-    "test": "npm run test:conflict-markers && npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:criteria-fragments && npm run test:doc-count-sources && npm run test:doc-counts && npm run test:doc-invocation-entry && npm run test:doc-invocations && npm run test:enforce-hook && npm run test:atdd-isolation && npm run test:atdd-net-guard && npm run test:atdd-scoring && npm run test:eval-data && npm run test:eval-atdd-data && npm run test:eval-ci-data && npm run test:eval-nfr-data && npm run test:eval-test-design-data && npm run test:eval-trace-data && npm run test:eval-routing-data && npm run test:eval-schemas && npm run test:eval-replay && npm run test:eval-quality-corpus && npm run test:schema-versions && npm run test:contract-sources && npm run test:contracts && npm run test:contract-oracles && npm run test:probe-sources && npm run test:probe-corpus && npm run test:automate-eval-fixture && npm run test:clock-port && npm run test:probe-conformance && npm run test:corpus-conformance && npm run test:file-system-conformance && npm run test:file-system-port && npm run test:probe-targets && npm run test:port-totality && npm run test:ci-coverage && npm run test:release-metadata && npm run test:lockfile-age && npm run test:lockfile-age-cache && npm run test:licences && npm run test:supply-chain && npm run test:boundary && npm run test:direction && npm run test:lineage && npm run test:guard-publish && npm run test:layering-boundary-lineage && npm run test:changelog && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
+    "test": "npm run test:conflict-markers && npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:criteria-fragments && npm run test:doc-count-sources && npm run test:doc-counts && npm run test:doc-invocation-entry && npm run test:doc-invocations && npm run test:enforce-hook && npm run test:atdd-isolation && npm run test:atdd-net-guard && npm run test:atdd-scoring && npm run test:transcript-harness && npm run test:eval-data && npm run test:eval-atdd-data && npm run test:eval-ci-data && npm run test:eval-nfr-data && npm run test:eval-test-design-data && npm run test:eval-trace-data && npm run test:eval-routing-data && npm run test:eval-transcript-data && npm run test:eval-schemas && npm run test:eval-replay && npm run test:eval-quality-corpus && npm run test:schema-versions && npm run test:contract-sources && npm run test:contracts && npm run test:contract-oracles && npm run test:probe-sources && npm run test:probe-corpus && npm run test:automate-eval-fixture && npm run test:clock-port && npm run test:probe-conformance && npm run test:corpus-conformance && npm run test:file-system-conformance && npm run test:file-system-port && npm run test:probe-targets && npm run test:port-totality && npm run test:ci-coverage && npm run test:release-metadata && npm run test:lockfile-age && npm run test:lockfile-age-cache && npm run test:licences && npm run test:supply-chain && npm run test:boundary && npm run test:direction && npm run test:lineage && npm run test:guard-publish && npm run test:layering-boundary-lineage && npm run test:changelog && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
     "test:atdd-isolation": "node test/test-atdd-isolation.js",
     "test:atdd-net-guard": "node test/test-atdd-net-guard.js",
     "test:atdd-scoring": "node test/test-atdd-scoring.js",
@@ -111,6 +113,7 @@
     "test:eval-schemas": "node tools/validate-eval-schemas.js",
     "test:eval-test-design-data": "node test/eval-test-design.js --validate-only",
     "test:eval-trace-data": "node test/eval-trace.js --validate-only",
+    "test:eval-transcript-data": "node test/eval-transcript.js --validate-only",
     "test:file-system-conformance": "node test/test-file-system-conformance.js",
     "test:file-system-port": "node test/test-file-system-port.js",
     "test:guard-publish": "node test/test-guard-publish.js",
@@ -131,6 +134,7 @@
     "test:schemas": "node test/test-agent-schema.js",
     "test:supply-chain": "node test/test-supply-chain.js",
     "test:tea-workflow-descriptions": "node tools/validate-tea-workflow-descriptions.js",
+    "test:transcript-harness": "node test/test-transcript-harness.js",
     "validate:schemas": "node tools/validate-agent-schema.js",
     "validate:tea-workflow-descriptions": "node tools/validate-tea-workflow-descriptions.js"
   },

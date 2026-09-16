@@ -1,0 +1,32 @@
+{
+  "$comment": [
+    "The trivial 3-turn scripted session test/eval-transcript.js drives every run: turn 1 establishes a",
+    "fact, turn 2 asks the scripted responder to confirm it, and turn 3 asks for a final confirmation.",
+    "The responder is test/fixtures/transcript-runner/stub-agent.js in its 'consistent' mode, which always",
+    "agrees with itself, so this suite's own case is deterministic and spends no vendor call regardless of",
+    "the --agent flag eval:all was given: it proves the transcript-harness engine's plumbing, not a skill's",
+    "behavior. test/test-transcript-harness.js drives the same stub's 'contradictory' and 'fail-turn-2'",
+    "modes to prove the cross-turn check actually fires and a mid-session failure actually stops the",
+    "session; this suite's own registered case never does.",
+    "",
+    "turns is a pinned copy of the stub's own SCRIPTS.consistent table, not an independent guess: a stub",
+    "edited to say something else without this file moving is the corpus rotting exactly the way",
+    "test/contracts/README.md's discipline exists to catch, and validateCorpus in test/eval-transcript.js",
+    "holds the two equal by requiring the stub module rather than by re-typing its strings a second time.",
+    "",
+    "crossTurnCheck names which turn establishes establishedToken and which turn a consistent session must",
+    "still state it in; the harness checks containment against establishedToken rather than exact reply",
+    "text, so a rewording of the stub's prose alone does not break this fixture."
+  ],
+  "turnCount": 3,
+  "establishedToken": "4471",
+  "turns": {
+    "1": "Established fact: the vault's access code is 4471.",
+    "2": "Confirmed: the vault's access code is 4471, same as turn 1.",
+    "3": "Final answer: the vault's access code is 4471, unchanged since turn 1."
+  },
+  "crossTurnCheck": {
+    "sourceTurn": 1,
+    "checkedTurn": 3
+  }
+}

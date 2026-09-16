@@ -490,6 +490,47 @@
       "caseCount": 2,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["scoped-artifact-writes"]
+    },
+    {
+      "$comment": [
+        "evalType: infrastructure, not behavioral: this suite proves the reusable multi-turn",
+        "transcript-driving engine, test/lib/transcript-harness.js's runTranscript, against a trivial",
+        "scripted three-turn session. It discharges no skill's coverage obligation and declares neither",
+        "skill nor skills, the same way fragment-selection's evalType already withholds coverage while",
+        "measuring something real. bmad-teach-me-testing stays in deferred until Story 6.11 actually",
+        "measures it with this engine; this suite proving the engine works is not that measurement.",
+        "",
+        "The one registered case always drives test/fixtures/transcript-runner/stub-agent.js through",
+        "--agent custom --agent-cmd, hardcoded by the suite regardless of the --agent flag eval:all was",
+        "given, so it spends no vendor call and is fully reproducible: ciTier deterministic fits for the",
+        "same reason it fits atdd's isolation proof and no other behavioral suite here, no credential, no",
+        "model spend, runs on every PR.",
+        "",
+        "contracts is deliberately empty. No eval-quality contract, oracle, or probe-corpus machinery",
+        "backs this suite; test/contracts/README.md's discipline is for a suite that states a skill's",
+        "behavior in that vocabulary, and this one proves a harness mechanism in plain assertions instead,",
+        "test/test-transcript-harness.js's own contradictory-script and mid-session-failure proofs among",
+        "them. The one threshold is named on the cross-turn check: crossTurnConsistencyRate is the",
+        "property a multi-turn session exists to prove can be checked at all."
+      ],
+      "id": "transcript",
+      "evalType": "infrastructure",
+      "harness": "test/eval-transcript.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": ["test/fixtures/transcript-eval/ground-truth.json", "test/fixtures/transcript-runner/stub-agent.js"],
+      "groundTruth": ["test/fixtures/transcript-eval/ground-truth.json"],
+      "contracts": [],
+      "thresholds": {
+        "crossTurnConsistencyRate": 1
+      },
+      "repetitions": 1,
+      "caseCount": 1,
+      "ciTier": "deterministic",
+      "runnerCapabilities": ["scoped-artifact-writes"]
     }
   ],
   "deferred": [

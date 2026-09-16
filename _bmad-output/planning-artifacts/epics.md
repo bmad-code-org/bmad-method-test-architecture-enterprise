@@ -118,7 +118,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [ ] [Story 6.7: Prove `bmad-testarch-automate` catches the qualified regression](#story-67-prove-bmad-testarch-automate-catches-the-qualified-regression)
 - [ ] [Story 6.8: Score the `bmad-testarch-framework` scaffold's contents](#story-68-score-the-bmad-testarch-framework-scaffolds-contents)
 - [ ] [Story 6.9: Install and smoke-test the generated scaffold](#story-69-install-and-smoke-test-the-generated-scaffold)
-- [ ] [Story 6.10: Build the multi-turn transcript harness](#story-610-build-the-multi-turn-transcript-harness)
+- [x] [Story 6.10: Build the multi-turn transcript harness](#story-610-build-the-multi-turn-transcript-harness) ([#195](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/195))
 - [ ] [Story 6.11: Prove `bmad-teach-me-testing` teaches rather than asserts](#story-611-prove-bmad-teach-me-testing-teaches-rather-than-asserts)
 - [ ] [Story 6.12: Empty the deferred array](#story-612-empty-the-deferred-array)
 
