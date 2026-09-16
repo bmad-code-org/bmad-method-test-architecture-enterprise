@@ -100,6 +100,7 @@ const DELIBERATELY_LOCAL = {
     'a write-mode cache regenerator; the covered test:lockfile-age reads the cache it writes specifically to avoid registry calls in CI, so running the generator there would be circular',
   'eval:all':
     'a live agent eval; costs real credentials and API spend per run, kept out of CI by the eval-quality/deterministic-gate split (see README.md)',
+  'eval:atdd': 'a live agent eval; same reason as eval:all',
   'eval:ci': 'a live agent eval; same reason as eval:all',
   'eval:contract-strength': 'a live agent eval; same reason as eval:all',
   'eval:fragment-selection': 'a live agent eval; same reason as eval:all',
@@ -111,6 +112,8 @@ const DELIBERATELY_LOCAL = {
   'eval:trace': 'a live agent eval; same reason as eval:all',
   prepare:
     'an npm lifecycle hook every `npm ci`/`npm install` invokes automatically; it runs, just never via the literal `npm run prepare` text this scan looks for',
+  prepublishOnly:
+    'an npm lifecycle hook `npm publish` invokes automatically; its logic is exercised by the covered test:guard-publish, which seeds the refusal case directly rather than through the literal `npm run prepublishOnly` text this scan looks for',
   'release:major': 'a human-triggered `gh workflow run publish.yaml` call; a release is a deliberate action, not an automated gate',
   'release:minor': 'a human-triggered `gh workflow run publish.yaml` call; a release is a deliberate action, not an automated gate',
   'release:next': 'a human-triggered `gh workflow run publish.yaml` call; a release is a deliberate action, not an automated gate',

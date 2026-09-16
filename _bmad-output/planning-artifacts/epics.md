@@ -1,5 +1,6 @@
 ---
-stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation', 'peer-review-refinement']
+stepsCompleted:
+  ['step-01-validate-prerequisites', 'step-02-design-epics', 'step-03-create-stories', 'step-04-final-validation', 'peer-review-refinement']
 inputDocuments:
   - '~/opensource/bmad-eval-quality/CHANGELOG.md'
   - '~/opensource/bmad-eval-quality/package.json'
@@ -49,17 +50,17 @@ This document is the epic and story breakdown for upgrading TEA from `eval-quali
 
 Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-enterprise` and `bmad-eval-quality`. A checked story has all of its work merged to the relevant repository's `main`. An unchecked story marked **Active** has work in merged or open pull requests and still has acceptance criteria left. Every other unchecked story has no pull request recorded here.
 
-| Epic | Merged | Active | Remaining | State |
-| --- | ---: | ---: | ---: | --- |
-| Epic 1 | 5 / 5 | 0 | 0 | Complete |
-| Epic 2 | 7 / 7 | 0 | 0 | Complete |
-| Epic 3 | 6 / 6 | 0 | 0 | Complete |
-| Epic 4 | 5 / 8 | 0 | 3 | In progress |
-| Epic 5 | 0 / 5 | 0 | 5 | Queued |
-| Epic 6 | 4 / 12 | 1 | 7 | In progress |
-| Epic 7 | 1 / 1 | 0 | 0 | Complete |
-| Epic 8 | 0 / 1 | 0 | 1 | Queued |
-| **Total** | **28 / 45** | **1** | **16** | **62% merged** |
+| Epic      |      Merged | Active | Remaining | State          |
+| --------- | ----------: | -----: | --------: | -------------- |
+| Epic 1    |       5 / 5 |      0 |         0 | Complete       |
+| Epic 2    |       7 / 7 |      0 |         0 | Complete       |
+| Epic 3    |       6 / 6 |      0 |         0 | Complete       |
+| Epic 4    |       5 / 8 |      0 |         3 | In progress    |
+| Epic 5    |       0 / 5 |      0 |         5 | Queued         |
+| Epic 6    |      4 / 12 |      1 |         7 | In progress    |
+| Epic 7    |       1 / 1 |      0 |         0 | Complete       |
+| Epic 8    |       0 / 1 |      0 |         1 | Queued         |
+| **Total** | **28 / 45** |  **1** |    **16** | **62% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -328,64 +329,64 @@ NFR9: Any gate that executes content rather than reading it runs isolated. Three
 
 ### FR Coverage Map
 
-| FR | Epic | Covered by |
-| --- | --- | --- |
-| FR1 | Epic 1 | The pin moves to 3.0.0 |
-| FR2 | Epic 1 | `permittedEnvironmentKeys` on both policy sites |
-| FR3 | Epic 1 | Keys match `EnvironmentKeyName`, no `PATH` |
-| FR4 | Epic 1 | 31 probes stamped 5, ninth channel added |
-| FR5 | Epic 1 | 10 contracts stamped 5 |
-| FR6 | Epic 1 | `preflight` and `score` clear every probe |
-| FR7 | Epic 1 | `unauthorizedEnvironmentKeyRequest`, arm reports 16 |
-| FR8 | Epic 1 | Totality across the widened unions |
-| FR9 | Epic 2 | Schema-version constants exported |
-| FR10 | Epic 2 | `compareDominance` exported |
-| FR11 | Epic 2 | The three package-stamped artifacts get constants |
-| FR12 | Epic 2 | TEA validates the stamp against the constant |
-| FR13 | Epic 2 | `SCHEMA_VERSIONS` derived; two wrong entries fixed |
-| FR14 | Epic 2 | `eval-contract` and `scoring-policy` validated |
-| FR15 | Epic 2 | The eight repo-local gates ship to consumers |
-| FR16 | Epic 2 | Published, no local checkout on `main` |
-| FR17 | Epic 2 | `VERSION` matches `package.json` |
-| FR18 | Epic 3 | `createLocalCorpusAdapter` adopted and certified |
-| FR19 | Epic 3 | `createNodeFileSystemAdapter` adopted and certified |
-| FR20 | Epic 3 | `createSystemClockAdapter` adopted and certified |
-| FR21 | Epic 3 | Withdrawn: the api arm has no adapter and no subject in TEA |
+| FR   | Epic   | Covered by                                                                   |
+| ---- | ------ | ---------------------------------------------------------------------------- |
+| FR1  | Epic 1 | The pin moves to 3.0.0                                                       |
+| FR2  | Epic 1 | `permittedEnvironmentKeys` on both policy sites                              |
+| FR3  | Epic 1 | Keys match `EnvironmentKeyName`, no `PATH`                                   |
+| FR4  | Epic 1 | 31 probes stamped 5, ninth channel added                                     |
+| FR5  | Epic 1 | 10 contracts stamped 5                                                       |
+| FR6  | Epic 1 | `preflight` and `score` clear every probe                                    |
+| FR7  | Epic 1 | `unauthorizedEnvironmentKeyRequest`, arm reports 16                          |
+| FR8  | Epic 1 | Totality across the widened unions                                           |
+| FR9  | Epic 2 | Schema-version constants exported                                            |
+| FR10 | Epic 2 | `compareDominance` exported                                                  |
+| FR11 | Epic 2 | The three package-stamped artifacts get constants                            |
+| FR12 | Epic 2 | TEA validates the stamp against the constant                                 |
+| FR13 | Epic 2 | `SCHEMA_VERSIONS` derived; two wrong entries fixed                           |
+| FR14 | Epic 2 | `eval-contract` and `scoring-policy` validated                               |
+| FR15 | Epic 2 | The eight repo-local gates ship to consumers                                 |
+| FR16 | Epic 2 | Published, no local checkout on `main`                                       |
+| FR17 | Epic 2 | `VERSION` matches `package.json`                                             |
+| FR18 | Epic 3 | `createLocalCorpusAdapter` adopted and certified                             |
+| FR19 | Epic 3 | `createNodeFileSystemAdapter` adopted and certified                          |
+| FR20 | Epic 3 | `createSystemClockAdapter` adopted and certified                             |
+| FR21 | Epic 3 | Withdrawn: the api arm has no adapter and no subject in TEA                  |
 | FR22 | Epic 3 | Each arm reads its count from the package, and a missing entry names the arm |
-| FR23 | Epic 4 | Published counts computed from source |
-| FR24 | Epic 4 | Published prose claims held |
-| FR25 | Epic 4 | 23 files of fenced commands executed |
-| FR26 | Epic 4 | `instanceof RuntimeFault` narrowing |
-| FR27 | Epic 4 | Five exported registries asserted |
-| FR28 | Epic 4 | `DiagnosticSink` replaces stderr parsing |
-| FR29 | Epic 4 | `strictPromotable` decided explicitly |
-| FR30 | Epic 5 | `compareDominance` wired for drift |
-| FR31 | Epic 4 | Lockfile age, licences, `.npmrc` floor |
-| FR32 | Epic 4 | Dependency direction over the JavaScript trees |
-| FR33 | Epic 4 | Package boundary held |
-| FR34 | Epic 4 | Lineage ownership held |
-| FR35 | Epic 4 | Publish authorization guarded |
-| FR36 | Epic 4 | `_bmad-output` read by a gate |
-| FR37 | Epic 4 | Suppression allowlists justified or removed |
-| FR38 | Epic 4 | Coverage enforced or tooling removed |
-| FR39 | Epic 4 | CI coverage extended past the `test` chain |
-| FR56 | Epic 4 | TEA fails closed on an unresolvable `eval-quality` |
-| FR40 | Epic 1 | Published corpus compiled as the pin-move smoke test |
-| FR41 | Epic 5 | `eval:all` run live, exit class recorded |
-| FR42 | Epic 5 | Roadmap states the shipped baseline |
-| FR43 | Epic 5 | Adoption guide describes 3.0.0 |
-| FR44 | Epic 5 | Command-adapter page updated and its three gaps decided |
-| FR45 | Epic 5 | TEA `CHANGELOG.md` entry |
-| FR46 | Epic 5 | TEA cuts its release |
-| FR47 | Epic 6 | `bmad-tea` suite |
-| FR48 | Epic 6 | `test-design` suite |
-| FR49 | Epic 6 | `nfr` suite |
-| FR50 | Epic 6 | `ci` suite |
-| FR51 | Epic 6 | `atdd` suite |
-| FR52 | Epic 6 | `automate` suite |
-| FR53 | Epic 6 | `framework` suite |
-| FR54 | Epic 6 | `teach-me-testing` suite |
-| FR55 | Epic 6 | The manifest `deferred` array is empty |
+| FR23 | Epic 4 | Published counts computed from source                                        |
+| FR24 | Epic 4 | Published prose claims held                                                  |
+| FR25 | Epic 4 | 23 files of fenced commands executed                                         |
+| FR26 | Epic 4 | `instanceof RuntimeFault` narrowing                                          |
+| FR27 | Epic 4 | Five exported registries asserted                                            |
+| FR28 | Epic 4 | `DiagnosticSink` replaces stderr parsing                                     |
+| FR29 | Epic 4 | `strictPromotable` decided explicitly                                        |
+| FR30 | Epic 5 | `compareDominance` wired for drift                                           |
+| FR31 | Epic 4 | Lockfile age, licences, `.npmrc` floor                                       |
+| FR32 | Epic 4 | Dependency direction over the JavaScript trees                               |
+| FR33 | Epic 4 | Package boundary held                                                        |
+| FR34 | Epic 4 | Lineage ownership held                                                       |
+| FR35 | Epic 4 | Publish authorization guarded                                                |
+| FR36 | Epic 4 | `_bmad-output` read by a gate                                                |
+| FR37 | Epic 4 | Suppression allowlists justified or removed                                  |
+| FR38 | Epic 4 | Coverage enforced or tooling removed                                         |
+| FR39 | Epic 4 | CI coverage extended past the `test` chain                                   |
+| FR56 | Epic 4 | TEA fails closed on an unresolvable `eval-quality`                           |
+| FR40 | Epic 1 | Published corpus compiled as the pin-move smoke test                         |
+| FR41 | Epic 5 | `eval:all` run live, exit class recorded                                     |
+| FR42 | Epic 5 | Roadmap states the shipped baseline                                          |
+| FR43 | Epic 5 | Adoption guide describes 3.0.0                                               |
+| FR44 | Epic 5 | Command-adapter page updated and its three gaps decided                      |
+| FR45 | Epic 5 | TEA `CHANGELOG.md` entry                                                     |
+| FR46 | Epic 5 | TEA cuts its release                                                         |
+| FR47 | Epic 6 | `bmad-tea` suite                                                             |
+| FR48 | Epic 6 | `test-design` suite                                                          |
+| FR49 | Epic 6 | `nfr` suite                                                                  |
+| FR50 | Epic 6 | `ci` suite                                                                   |
+| FR51 | Epic 6 | `atdd` suite                                                                 |
+| FR52 | Epic 6 | `automate` suite                                                             |
+| FR53 | Epic 6 | `framework` suite                                                            |
+| FR54 | Epic 6 | `teach-me-testing` suite                                                     |
+| FR55 | Epic 6 | The manifest `deferred` array is empty                                       |
 
 Every FR from FR1 to FR56 is mapped, and no epic requires a later epic to function.
 
@@ -453,16 +454,16 @@ Every epic carries two standing items in its definition of done, and each is wri
 
 Sizing was measured where it could be. The largest item in an earlier draft, hand-implementing three ports, collapsed when the review found the package already ships adapters for all three.
 
-| Epic | Size | What drives it |
-| --- | --- | --- |
-| Epic 1 | Small | Pin, two policy sites, 31 stamps and 21 channel additions by generator, one conformance scenario, one totality test. |
-| Epic 2 | Medium | Seven small upstream exports and constants, one release, then three TEA-side derivation stories. Story 2.5, publishing eight repo-local gates, is the one genuine design item. |
-| Epic 3 | Small to medium | Three adapters are imports rather than implementations. The cost is the cutover of TEA's existing call sites, which is why the file-system cutover is split per harness. |
-| Epic 4 | Largest of Epics 1 to 5 | Sixteen requirements, each a gate. Several are small; FR37 and FR38 have unknowable size until their first run reports, so both are split into report-then-fix. |
-| Epic 5 | Medium | Documentation, one live run, one release, and wiring the dominance comparison. |
-| Epic 6 | Largest overall | Eight behavioral suites, each needing fixtures, seeded defects and clean controls. |
-| Epic 7 | Small per story | Each story extends one workflow's declared artifact and repoints the suite that found the gap. The cost is the agreement gate between the artifact and the document it summarizes. |
-| Epic 8 | Unknown until run | Each story closes something a suite admits and should reject. Sizing is not knowable in advance, because the threshold needs a live run to calibrate before it can be declared. |
+| Epic   | Size                    | What drives it                                                                                                                                                                     |
+| ------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Epic 1 | Small                   | Pin, two policy sites, 31 stamps and 21 channel additions by generator, one conformance scenario, one totality test.                                                               |
+| Epic 2 | Medium                  | Seven small upstream exports and constants, one release, then three TEA-side derivation stories. Story 2.5, publishing eight repo-local gates, is the one genuine design item.     |
+| Epic 3 | Small to medium         | Three adapters are imports rather than implementations. The cost is the cutover of TEA's existing call sites, which is why the file-system cutover is split per harness.           |
+| Epic 4 | Largest of Epics 1 to 5 | Sixteen requirements, each a gate. Several are small; FR37 and FR38 have unknowable size until their first run reports, so both are split into report-then-fix.                    |
+| Epic 5 | Medium                  | Documentation, one live run, one release, and wiring the dominance comparison.                                                                                                     |
+| Epic 6 | Largest overall         | Eight behavioral suites, each needing fixtures, seeded defects and clean controls.                                                                                                 |
+| Epic 7 | Small per story         | Each story extends one workflow's declared artifact and repoints the suite that found the gap. The cost is the agreement gate between the artifact and the document it summarizes. |
+| Epic 8 | Unknown until run       | Each story closes something a suite admits and should reject. Sizing is not knowable in advance, because the threshold needs a live run to calibrate before it can be declared.    |
 
 The story count is high because each gate, adapter and suite is its own story. That keeps every story reviewable in one session and every failure attributable to one change.
 
@@ -1530,17 +1531,17 @@ So that a citation of a real but irrelevant file cannot read as grounding.
 
 Checked mechanically where possible.
 
-| Check | Result |
-| --- | --- |
-| Functional requirements defined | 56 |
-| Covered in the FR coverage map | 56 |
-| Assigned to an epic | 56 |
-| Withdrawn, struck in place with the evidence | 1 (FR21) |
-| Stories carrying acceptance criteria | 45 of 45 |
-| Stories in the As a / I want / So that form | 45 of 45 |
+| Check                                         | Result   |
+| --------------------------------------------- | -------- |
+| Functional requirements defined               | 56       |
+| Covered in the FR coverage map                | 56       |
+| Assigned to an epic                           | 56       |
+| Withdrawn, struck in place with the evidence  | 1 (FR21) |
+| Stories carrying acceptance criteria          | 45 of 45 |
+| Stories in the As a / I want / So that form   | 45 of 45 |
 | Stories carrying Given / When / Then criteria | 45 of 45 |
-| Stories referencing a later story or epic | 0 |
-| Unreplaced template placeholders | 0 |
+| Stories referencing a later story or epic     | 0        |
+| Unreplaced template placeholders              | 0        |
 
 **Epic independence.** Epic 1 depends on nothing. Epic 2 depends on Epic 1 only for the pin. Epic 3 depends on Epic 1. Epic 4's first three stories depend on Epic 2's release, 4.6 and 4.7 depend on Story 2.5 and on a release carrying it, and 4.4, 4.5 and 4.8 depend on nothing. Epic 5 depends on Epic 2 for `compareDominance` and on Epics 1, 3 and 4 for what it documents. Epic 6's stories depend on nothing outside the epic; inside it, 6.7 needs 6.6, 6.9 needs 6.8, 6.11 needs 6.10, and 6.12 needs all eleven. Epic 7's stories each depend on the Epic 6 story that discovered them: 7.1 on 6.3. Epic 8's do the same: 8.1 on 6.3. Every dependency points backwards.
 
@@ -1586,15 +1587,15 @@ Three independent reviewers read this document against both repositories before 
 
 Eight findings, each verified against the document before it was acted on. Seven were valid as stated, one partly.
 
-| Finding | Verdict | Change |
-| --- | --- | --- |
-| Epic 3 says four conformance arms where there are five | Valid | Corrected in the epic summary and the closing criterion, and the five are now named |
-| Epic 6's independence claim contradicts its own stories | Valid | The four in-epic dependencies are stated, and the eight stories that really are independent are named |
-| FR12 overreaches to artifacts with no stamp | Partly valid | Scoped to the artifacts TEA authors and `artifact-reference` excluded by name. The suggested narrowing to `eval-contract` and `scoring-policy` was declined: that is FR14's scope, and the stamp check matters most for probes |
-| Story 5.5 lacks the standing gate criteria every other closing story has | Valid | Added |
-| The skip-reads-as-pass in `test-contracts.js` is documented and owned by nothing | Valid | Now FR56, with a fail-closed criterion and a test on Story 4.4 |
-| FR35 has no executable criterion | Valid, and understated | FR35 was mapped to Epic 4 and implemented by no story at all. A criterion is now on Story 4.7 |
-| FR13 cannot resolve `sealedRunRecord` without a literal | Valid | `sealed-run-record` is caller-produced, so the package stamps it nowhere. FR11 and Story 2.2 now export a constant for it and for every caller-produced artifact whose reader pins a version, and Story 2.6 gains a mismatch-path test |
-| Three gates execute content with no stated isolation | Valid | NFR9 states the isolation, and Stories 4.3, 6.5 and 6.9 each carry it as a criterion proven before the gate is enabled |
+| Finding                                                                          | Verdict                | Change                                                                                                                                                                                                                                 |
+| -------------------------------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Epic 3 says four conformance arms where there are five                           | Valid                  | Corrected in the epic summary and the closing criterion, and the five are now named                                                                                                                                                    |
+| Epic 6's independence claim contradicts its own stories                          | Valid                  | The four in-epic dependencies are stated, and the eight stories that really are independent are named                                                                                                                                  |
+| FR12 overreaches to artifacts with no stamp                                      | Partly valid           | Scoped to the artifacts TEA authors and `artifact-reference` excluded by name. The suggested narrowing to `eval-contract` and `scoring-policy` was declined: that is FR14's scope, and the stamp check matters most for probes         |
+| Story 5.5 lacks the standing gate criteria every other closing story has         | Valid                  | Added                                                                                                                                                                                                                                  |
+| The skip-reads-as-pass in `test-contracts.js` is documented and owned by nothing | Valid                  | Now FR56, with a fail-closed criterion and a test on Story 4.4                                                                                                                                                                         |
+| FR35 has no executable criterion                                                 | Valid, and understated | FR35 was mapped to Epic 4 and implemented by no story at all. A criterion is now on Story 4.7                                                                                                                                          |
+| FR13 cannot resolve `sealedRunRecord` without a literal                          | Valid                  | `sealed-run-record` is caller-produced, so the package stamps it nowhere. FR11 and Story 2.2 now export a constant for it and for every caller-produced artifact whose reader pins a version, and Story 2.6 gains a mismatch-path test |
+| Three gates execute content with no stated isolation                             | Valid                  | NFR9 states the isolation, and Stories 4.3, 6.5 and 6.9 each carry it as a criterion proven before the gate is enabled                                                                                                                 |
 
 The document moved from 55 requirements to 56 and from 8 non-functional requirements to 9.

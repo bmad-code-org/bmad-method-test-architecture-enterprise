@@ -197,7 +197,7 @@ const {
   scoreRun: scoreCiRun,
   signatureOf: ciSignatureOf,
 } = require('./eval-ci');
-const { loadGroundTruth: loadAtddGroundTruth, scoreRun: scoreAtddRun, signatureOf: atddSignatureOf } = require('./eval-atdd');
+const { scoreRun: scoreAtddRun, signatureOf: atddSignatureOf } = require('./eval-atdd');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
