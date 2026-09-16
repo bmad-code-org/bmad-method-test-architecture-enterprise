@@ -13,25 +13,26 @@ test.describe('API: locker reservation', () => {
       headers: { Authorization: `Bearer ${authToken}` },
       body: { item: 'locker-42' },
     });
-
-    // When the reservation is created
     expect(created.status).toBe(201);
 
-    // Then it can be read back
-    const fetched = await apiRequest({
-      method: 'GET',
-      path: `/api/reservations/${created.body.id}`,
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-    expect(fetched.status).toBe(200);
-    expect(fetched.body.item).toBe('locker-42');
-
-    // Cleanup
-    await log.step('cleanup reservation');
-    await apiRequest({
-      method: 'DELETE',
-      path: `/api/reservations/${created.body.id}`,
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
+    // Cleanup runs even when a verification step below throws, so a failing
+    // assertion never leaks a reservation into the next test run.
+    try {
+      // Then it can be read back
+      const fetched = await apiRequest({
+        method: 'GET',
+        path: `/api/reservations/${created.body.id}`,
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      expect(fetched.status).toBe(200);
+      expect(fetched.body.item).toBe('locker-42');
+    } finally {
+      await log.step('cleanup reservation');
+      await apiRequest({
+        method: 'DELETE',
+        path: `/api/reservations/${created.body.id}`,
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+    }
   });
 });

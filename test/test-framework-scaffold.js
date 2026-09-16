@@ -95,26 +95,215 @@ function ok(problems) {
 }
 
 // ---------------------------------------------------------------------------
+// Tiny scope-aware text helpers
+//
+// TypeScript 7's package no longer exports a parser (`createSourceFile` and
+// friends are gone from both the root entry and `typescript/unstable/ast`,
+// which carries type guards and a scanner but nothing that builds a tree from
+// source text), so structural checks below use hand-rolled, brace/string-aware
+// scoping instead of a real AST. Each function tracks nesting depth and string
+// state as it scans, which is what lets a check see "is this key a direct,
+// active property of this specific object literal" rather than "does this
+// text appear anywhere in the file" -- the gap a commented-out setting or a
+// setting moved one level deeper both exploit against a plain regex over the
+// whole file.
+// ---------------------------------------------------------------------------
+
+/** Removes `//` and `/* *\/` comments while leaving string/template contents untouched. */
+function stripComments(source) {
+  let result = '';
+  let i = 0;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let stringChar = null;
+  while (i < source.length) {
+    const c = source[i];
+    const next = source[i + 1];
+    if (inLineComment) {
+      if (c === '\n') {
+        inLineComment = false;
+        result += c;
+      }
+      i += 1;
+      continue;
+    }
+    if (inBlockComment) {
+      if (c === '*' && next === '/') {
+        inBlockComment = false;
+        i += 2;
+        continue;
+      }
+      if (c === '\n') result += c;
+      i += 1;
+      continue;
+    }
+    if (stringChar) {
+      result += c;
+      if (c === '\\') {
+        result += next ?? '';
+        i += 2;
+        continue;
+      }
+      if (c === stringChar) stringChar = null;
+      i += 1;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      stringChar = c;
+      result += c;
+      i += 1;
+      continue;
+    }
+    if (c === '/' && next === '/') {
+      inLineComment = true;
+      i += 2;
+      continue;
+    }
+    if (c === '/' && next === '*') {
+      inBlockComment = true;
+      i += 2;
+      continue;
+    }
+    result += c;
+    i += 1;
+  }
+  return result;
+}
+
+/** The substring strictly inside the `{`/`}` pair opening at `openBraceIndex`, or null if unbalanced. */
+function extractBraceBody(source, openBraceIndex) {
+  if (source[openBraceIndex] !== '{') return null;
+  let depth = 0;
+  for (let i = openBraceIndex; i < source.length; i += 1) {
+    if (source[i] === '{') depth += 1;
+    else if (source[i] === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(openBraceIndex + 1, i);
+    }
+  }
+  return null;
+}
+
+/** Splits an object literal's body into its top-level `key: value` segments, never inside a nested brace/bracket/paren/string. */
+function splitTopLevel(objectBody) {
+  const parts = [];
+  let depth = 0;
+  let current = '';
+  let stringChar = null;
+  for (let i = 0; i < objectBody.length; i += 1) {
+    const c = objectBody[i];
+    if (stringChar) {
+      current += c;
+      if (c === '\\') {
+        current += objectBody[i + 1] ?? '';
+        i += 1;
+        continue;
+      }
+      if (c === stringChar) stringChar = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === '`') {
+      stringChar = c;
+      current += c;
+      continue;
+    }
+    if (c === '{' || c === '[' || c === '(') {
+      depth += 1;
+      current += c;
+      continue;
+    }
+    if (c === '}' || c === ']' || c === ')') {
+      depth -= 1;
+      current += c;
+      continue;
+    }
+    if (c === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += c;
+  }
+  if (current.trim()) parts.push(current);
+  return parts;
+}
+
+/** `{ key: 'value text, exactly as written' }` for every direct property of an object literal's body. Nested objects stay as one opaque value. */
+function topLevelProperties(objectBody) {
+  const map = new Map();
+  for (const part of splitTopLevel(objectBody)) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const colonIndex = trimmed.indexOf(':');
+    if (colonIndex === -1) continue;
+    const key = trimmed
+      .slice(0, colonIndex)
+      .trim()
+      .replaceAll(/^['"]|['"]$/g, '');
+    map.set(key, trimmed.slice(colonIndex + 1).trim());
+  }
+  return map;
+}
+
+/** The direct properties of the object literal `defineConfig(...)` is called with, or null if no such call is found. */
+function defineConfigProperties(strippedSource) {
+  const call = /\bdefineConfig\s*\(\s*\{/.exec(strippedSource);
+  if (!call) return null;
+  const openBrace = strippedSource.indexOf('{', call.index);
+  const body = extractBraceBody(strippedSource, openBrace);
+  return body === null ? null : topLevelProperties(body);
+}
+
+/** The direct properties of the object literal a `key: {` value holds within `properties`, or an empty map if absent/not an object. */
+function nestedObjectProperties(strippedSource, properties, key) {
+  const value = properties.get(key);
+  if (!value || !value.startsWith('{')) return new Map();
+  const body = extractBraceBody(value, 0);
+  return body === null ? new Map() : topLevelProperties(body);
+}
+
+// ---------------------------------------------------------------------------
 // Category: config (playwright.config.ts)
 // ---------------------------------------------------------------------------
 
-const CONFIG_CHECKS = [
-  { label: 'fullyParallel: true', pattern: /fullyParallel:\s*true\b/ },
-  { label: 'actionTimeout: 15000', pattern: /actionTimeout:\s*15000\b/ },
-  { label: 'navigationTimeout: 30000', pattern: /navigationTimeout:\s*30000\b/ },
-  { label: 'top-level timeout: 60000', pattern: /(?<!action)(?<!navigation)\btimeout:\s*60000\b/ },
-  { label: "trace: 'retain-on-failure-and-retries'", pattern: /trace:\s*['"]retain-on-failure-and-retries['"]/ },
-  { label: "screenshot: 'only-on-failure'", pattern: /screenshot:\s*['"]only-on-failure['"]/ },
-  { label: "video: 'retain-on-failure'", pattern: /video:\s*['"]retain-on-failure['"]/ },
-  { label: 'HTML reporter', pattern: /\[\s*['"]html['"]/ },
-  { label: 'JUnit reporter', pattern: /\[\s*['"]junit['"]/ },
-  { label: 'baseURL env fallback (BASE_URL)', pattern: /baseURL:[^,\n]*process\.env\.BASE_URL/ },
+const TOP_LEVEL_CONFIG_CHECKS = [
+  { key: 'fullyParallel', label: 'fullyParallel: true', matches: (value) => value === 'true' },
+  { key: 'timeout', label: 'top-level timeout: 60000', matches: (value) => value === '60000' },
+  { key: 'reporter', label: 'HTML reporter', matches: (value) => /['"]html['"]/.test(value) },
+  { key: 'reporter', label: 'JUnit reporter', matches: (value) => /['"]junit['"]/.test(value) },
+];
+
+const USE_CONFIG_CHECKS = [
+  { key: 'actionTimeout', label: 'use.actionTimeout: 15000', matches: (value) => value === '15000' },
+  { key: 'navigationTimeout', label: 'use.navigationTimeout: 30000', matches: (value) => value === '30000' },
+  {
+    key: 'trace',
+    label: "use.trace: 'retain-on-failure-and-retries'",
+    matches: (value) => /^['"]retain-on-failure-and-retries['"]$/.test(value),
+  },
+  { key: 'screenshot', label: "use.screenshot: 'only-on-failure'", matches: (value) => /^['"]only-on-failure['"]$/.test(value) },
+  { key: 'video', label: "use.video: 'retain-on-failure'", matches: (value) => /^['"]retain-on-failure['"]$/.test(value) },
+  { key: 'baseURL', label: 'use.baseURL env fallback (BASE_URL)', matches: (value) => /process\.env\.BASE_URL/.test(value) },
 ];
 
 function scoreConfig(dir) {
   const source = readText(dir, 'playwright.config.ts');
   if (source === null) return ok(['playwright.config.ts is missing']);
-  const problems = CONFIG_CHECKS.filter((check) => !check.pattern.test(source)).map((check) => `missing ${check.label}`);
+
+  const stripped = stripComments(source);
+  const topLevel = defineConfigProperties(stripped);
+  if (!topLevel) return ok(['no defineConfig({...}) call found']);
+  const useProps = nestedObjectProperties(stripped, topLevel, 'use');
+
+  const problems = [];
+  for (const check of TOP_LEVEL_CONFIG_CHECKS) {
+    const value = topLevel.get(check.key);
+    if (value === undefined || !check.matches(value)) problems.push(`missing ${check.label}`);
+  }
+  for (const check of USE_CONFIG_CHECKS) {
+    const value = useProps.get(check.key);
+    if (value === undefined || !check.matches(value)) problems.push(`missing ${check.label}`);
+  }
   return ok(problems);
 }
 
@@ -189,12 +378,31 @@ function scoreAuthFixture(dir) {
   const source = readText(dir, 'tests/support/auth-fixture.ts');
   if (source === null) return ok(['tests/support/auth-fixture.ts is missing']);
 
+  const stripped = stripComments(source);
   const problems = [];
-  for (const member of REQUIRED_AUTH_PROVIDER_MEMBERS) {
-    if (!new RegExp(`\\b${member}\\s*:`).test(source)) problems.push(`AuthProvider is missing ${member}`);
+
+  // The member check has to land on the object actually passed to
+  // setAuthProvider(...), not just anywhere in the file: a member's name
+  // sitting in a comment, or in a second, unused object, is not a member the
+  // registered provider carries.
+  const registration = /\bsetAuthProvider\s*\(\s*([A-Za-z_$][\w$]*)\s*\)/.exec(stripped);
+  if (registration) {
+    const identifier = registration[1];
+    const declaration = new RegExp(`\\b(?:const|let|var)\\s+${identifier}\\b[^=]*=\\s*\\{`).exec(stripped);
+    const openBrace = declaration ? stripped.indexOf('{', declaration.index) : -1;
+    const providerBody = openBrace === -1 ? null : extractBraceBody(stripped, openBrace);
+    if (providerBody === null) {
+      problems.push(`could not find the object literal assigned to ${identifier}, the identifier passed to setAuthProvider(...)`);
+    } else {
+      const providerProps = topLevelProperties(providerBody);
+      for (const member of REQUIRED_AUTH_PROVIDER_MEMBERS) {
+        if (!providerProps.has(member)) problems.push(`AuthProvider is missing ${member}`);
+      }
+    }
+  } else {
+    problems.push('missing setAuthProvider(...) call');
   }
-  if (!/setAuthProvider\s*\(/.test(source)) problems.push('missing setAuthProvider(...) call');
-  if (!/createAuthFixtures\s*\(\s*\)/.test(source)) problems.push('missing base.extend(createAuthFixtures()) wiring');
+  if (!/createAuthFixtures\s*\(\s*\)/.test(stripped)) problems.push('missing base.extend(createAuthFixtures()) wiring');
   return ok(problems);
 }
 
@@ -239,6 +447,9 @@ function scorePackageScript(dir) {
   if (error) return ok([error]);
   const script = value?.scripts?.['test:e2e'];
   if (typeof script !== 'string' || script.trim() === '') return ok(['package.json is missing scripts["test:e2e"]']);
+  if (!/\bplaywright\s+test\b/.test(script)) {
+    return ok([`package.json's scripts["test:e2e"] does not invoke Playwright's test command (got ${JSON.stringify(script)})`]);
+  }
   return ok([]);
 }
 
@@ -269,7 +480,11 @@ function scoreDocs(dir) {
 function hookEntriesFire(entries, flag) {
   if (!Array.isArray(entries)) return false;
   return entries.some(
-    (entry) => Array.isArray(entry?.hooks) && entry.hooks.some((hook) => typeof hook?.command === 'string' && hook.command.includes(flag)),
+    (entry) =>
+      Array.isArray(entry?.hooks) &&
+      entry.hooks.some(
+        (hook) => typeof hook?.command === 'string' && hook.command.includes('tea-enforce.cjs') && hook.command.includes(flag),
+      ),
   );
 }
 
@@ -287,12 +502,15 @@ function scoreHookSettings(dir) {
 }
 
 /**
- * Presence and shape only: does `.tea/enforce-config.json` name a non-empty
- * `testGlobs` and a well-formed `hookSha256`. Deliberately does not cross-check
- * `hookSha256` against the actual bytes of `.claude/hooks/tea-enforce.cjs` — that
- * would make an edit to the hook script (the hookScript category's own seeded
- * mutation) also fail this category, which is exactly the folding-together the
- * AC requires each part to stay independent of.
+ * `.tea/enforce-config.json` names a non-empty `testGlobs`, and `hookSha256`
+ * is well-formed and equal to the *real, canonical* hook's digest — read from
+ * `REAL_HOOK_PATH`, never from the fixture's own copy of `tea-enforce.cjs`.
+ * Comparing against the fixture's own bytes would make an edit to the hook
+ * script (the `hookScript` category's own seeded mutation) also fail this
+ * category, exactly the folding-together the AC requires each part to stay
+ * independent of; comparing against the real source instead still catches a
+ * `hookSha256` that is well-formed but simply wrong, which the shape check
+ * alone cannot.
  */
 function scoreHookConfig(dir) {
   const { value, error } = readJson(dir, '.tea/enforce-config.json');
@@ -304,6 +522,13 @@ function scoreHookConfig(dir) {
   }
   if (typeof value?.hookSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(value.hookSha256)) {
     problems.push('`.tea/enforce-config.json` is missing hookSha256 (a 64-char sha256 hex digest)');
+  } else if (fs.existsSync(REAL_HOOK_PATH)) {
+    const canonicalHash = crypto.createHash('sha256').update(fs.readFileSync(REAL_HOOK_PATH)).digest('hex');
+    if (value.hookSha256 !== canonicalHash) {
+      problems.push(
+        `\`.tea/enforce-config.json\`'s hookSha256 (${value.hookSha256}) does not match the real hook's digest (${canonicalHash})`,
+      );
+    }
   }
   return ok(problems);
 }
@@ -453,6 +678,41 @@ function main() {
     },
   });
 
+  // Regression cover for a real gap: a plain regex over the whole file text
+  // is satisfied by a commented-out setting, since the text is still there.
+  runMutationCase({
+    label: 'config settings present only as comments',
+    category: 'config',
+    expectedProblemSubstring: 'actionTimeout',
+    mutate(scratch) {
+      const configPath = path.join(scratch, 'playwright.config.ts');
+      const source = fs.readFileSync(configPath, 'utf8');
+      const mutated = source.replaceAll(
+        /^(\s*)(fullyParallel|timeout|actionTimeout|navigationTimeout|trace|screenshot|video|baseURL):/gm,
+        '$1// $2:',
+      );
+      if (mutated === source) throw new Error('fixture no longer has settings on their own line to comment out');
+      fs.writeFileSync(configPath, mutated, 'utf8');
+    },
+  });
+
+  // Regression cover for a real gap: a setting moved one level deeper under
+  // an unrelated key (still somewhere inside `use { ... }`) still matched a
+  // whole-file regex for "actionTimeout: 15000" even though no active
+  // top-level `use` property carries it.
+  runMutationCase({
+    label: 'config setting moved out of its expected scope',
+    category: 'config',
+    expectedProblemSubstring: 'actionTimeout',
+    mutate(scratch) {
+      const configPath = path.join(scratch, 'playwright.config.ts');
+      const source = fs.readFileSync(configPath, 'utf8');
+      const mutated = source.replace('actionTimeout: 15000,', 'headers: { actionTimeout: 15000 },');
+      if (mutated === source) throw new Error('fixture no longer has a top-level use.actionTimeout to relocate');
+      fs.writeFileSync(configPath, mutated, 'utf8');
+    },
+  });
+
   runMutationCase({
     label: 'merged-fixtures.ts drops a required fixture from the merge',
     category: 'mergedFixtures',
@@ -485,6 +745,33 @@ function main() {
     },
   });
 
+  // Regression cover for a real gap: `scoreAuthFixture` used to search the
+  // whole file for each member's name, so a member sitting in a comment or in
+  // a second, unused object still passed. This empties the object actually
+  // registered through setAuthProvider(...) while leaving every member's
+  // name findable elsewhere in the file.
+  runMutationCase({
+    label: 'AuthProvider members present outside the registered object',
+    category: 'authFixture',
+    expectedProblemSubstring: 'getEnvironment',
+    mutate(scratch) {
+      const authPath = path.join(scratch, 'tests', 'support', 'auth-fixture.ts');
+      const source = fs.readFileSync(authPath, 'utf8');
+      const marker = 'const authProvider: AuthProvider = {';
+      if (!source.includes(marker)) throw new Error('fixture no longer declares authProvider the expected way');
+      const mutated = source.replace(
+        marker,
+        [
+          'const authProvider: AuthProvider = {};',
+          '// getEnvironment, getUserIdentifier, extractToken, extractCookies, isTokenExpired, manageAuthToken',
+          '// all named here, but not on the object actually registered above.',
+          'const unusedAuthProvider: AuthProvider = {',
+        ].join('\n'),
+      );
+      fs.writeFileSync(authPath, mutated, 'utf8');
+    },
+  });
+
   runMutationCase({
     label: 'sample test imports @playwright/test directly',
     category: 'sampleTests',
@@ -505,6 +792,20 @@ function main() {
     mutate(scratch) {
       const manifest = readJsonForMutation(scratch, 'package.json');
       delete manifest.scripts['test:e2e'];
+      writeJson(scratch, 'package.json', manifest);
+    },
+  });
+
+  // Regression cover for a real gap: any non-empty string used to satisfy
+  // `packageScript`, so a script that runs nothing Playwright-shaped at all
+  // still passed.
+  runMutationCase({
+    label: 'test:e2e set to a non-Playwright command',
+    category: 'packageScript',
+    expectedProblemSubstring: 'does not invoke',
+    mutate(scratch) {
+      const manifest = readJsonForMutation(scratch, 'package.json');
+      manifest.scripts['test:e2e'] = 'echo scaffold';
       writeJson(scratch, 'package.json', manifest);
     },
   });
@@ -541,6 +842,21 @@ function main() {
     },
   });
 
+  // Regression cover for a real gap: `hookConfig` used to check hookSha256's
+  // shape only, so a well-formed but simply wrong digest passed. The fixture's
+  // own tea-enforce.cjs is left untouched, which is what keeps this case
+  // isolated from hookScript's own byte-identity mutation above.
+  runMutationCase({
+    label: '.tea/enforce-config.json carries a well-formed but wrong hookSha256',
+    category: 'hookConfig',
+    expectedProblemSubstring: 'does not match',
+    mutate(scratch) {
+      const config = readJsonForMutation(scratch, '.tea/enforce-config.json');
+      config.hookSha256 = '0'.repeat(64);
+      writeJson(scratch, '.tea/enforce-config.json', config);
+    },
+  });
+
   runMutationCase({
     label: '.claude/settings.json missing the Stop hook entry only',
     category: 'hookSettings',
@@ -563,6 +879,28 @@ function main() {
         `${label}: names exactly Stop, not "hooks incomplete" and not PreToolUse/PostToolUse`,
         JSON.stringify(problems),
       );
+    },
+  });
+
+  // Regression cover for a real gap: `hookEntriesFire` used to accept any
+  // command containing the stage flag, so a command unrelated to the
+  // enforcement hook (but carrying the same flag text) still passed.
+  runMutationCase({
+    label: 'hook commands carry the stage flag but not the hook path',
+    category: 'hookSettings',
+    expectedProblemSubstring: 'PreToolUse',
+    mutate(scratch) {
+      const settings = readJsonForMutation(scratch, '.claude/settings.json');
+      for (const [section, flag] of [
+        ['PreToolUse', '--pre'],
+        ['PostToolUse', '--post'],
+        ['Stop', '--stop'],
+      ]) {
+        for (const entry of settings.hooks[section]) {
+          for (const hook of entry.hooks) hook.command = `echo ${flag}`;
+        }
+      }
+      writeJson(scratch, '.claude/settings.json', settings);
     },
   });
 
