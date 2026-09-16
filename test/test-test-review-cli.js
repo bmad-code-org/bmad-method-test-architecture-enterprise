@@ -57,7 +57,6 @@ const {
   rawScoreForViolations,
   PARSED_VERDICT_KEYS,
   CONTEXT_BASIS_ENUM,
-  verifyFindingSeverityCounts,
   extractFindings,
   FINDING_KEYS,
 } = require('../cli/lib/parse-report');

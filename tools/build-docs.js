@@ -446,32 +446,6 @@ function formatFileSize(bytes) {
 }
 
 // =============================================================================
-// Post-build Injection
-/**
- * Recursively collects all files with the given extension under a directory.
- *
- * @param {string} dir - Root directory to search.
- * @param {string} ext - File extension to match (include the leading dot, e.g. ".md").
- * @returns {string[]} An array of file paths for files ending with `ext` found under `dir`.
- */
-
-function getAllFilesByExtension(dir, ext) {
-  const result = [];
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      result.push(...getAllFilesByExtension(fullPath, ext));
-    } else if (entry.name.endsWith(ext)) {
-      result.push(fullPath);
-    }
-  }
-
-  return result;
-}
-
-// =============================================================================
 // File System Utilities
 /**
  * Remove any existing build output and recreate the build directory.
