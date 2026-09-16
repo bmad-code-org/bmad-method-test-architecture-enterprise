@@ -1,0 +1,82 @@
+{
+  "$comment": [
+    "Ground truth for the bmad-testarch-atdd behavioral eval. It was authored from the fixture design,",
+    "from the story it is written against, and from the workflow's own step files. No ATDD run produced",
+    "any value in this file.",
+    "",
+    "The corpus is one story, docs/stories/4-2-reserve-a-locker.md, against one unimplemented service,",
+    "quay-locker-service. Every criterion names a route the service does not have yet, so a scaffold that",
+    "actually asserts the story's own promise fails on the exact `Expected: <value>\\nReceived: <value>`",
+    "shape Playwright's own `expect().toBe()` failure produces, and `declaredPattern` is that shape spelled",
+    "out per criterion. AC-5 is the one criterion that extends a route the service already has rather than",
+    "adding a new one, which is what makes it possible to write a scaffold for it that passes on the",
+    "unimplemented service by asserting only what already works; that is the vacuous-pass trap the suite",
+    "exists to catch, and it is a property of the fixture design rather than a fact this file states about",
+    "any run.",
+    "",
+    "A test maps to a criterion by carrying its id, `AC-<n>`, in its title. The workflow's own scaffolds are",
+    "titled this way in every example the step files show, so requiring the marker is a claim about the",
+    "workflow's own convention rather than an invented rule.",
+    "",
+    "Every declared pattern is anchored to the criterion's own expected value and says nothing about the",
+    "value a broken implementation might return, so a scaffold that reads the story correctly matches",
+    "regardless of exactly which wrong status the unimplemented route happens to answer with today."
+  ],
+  "storyFile": "test/fixtures/atdd-eval/reservations/docs/stories/4-2-reserve-a-locker.md",
+  "projectRoot": "reservations",
+  "testDir": "tests",
+  "skillRuleCitations": {
+    "redPhaseIsSkipped": {
+      "file": "src/workflows/testarch/bmad-testarch-atdd/steps-c/step-04a-subagent-api-failing.md",
+      "section": "CRITICAL ATDD Requirements",
+      "requiredPhrase": "Use `test.skip()` to mark tests as red-phase scaffolds"
+    },
+    "noPlaceholderAssertions": {
+      "file": "src/workflows/testarch/bmad-testarch-atdd/steps-c/step-04c-aggregate.md",
+      "section": "2. Verify TDD Red Phase Compliance",
+      "requiredPhrase": "has placeholder assertions - must assert EXPECTED behavior"
+    },
+    "confirmRedBeforeGreen": {
+      "file": "src/workflows/testarch/bmad-testarch-atdd/checklist.md",
+      "section": "Red-Phase Scaffolds Verified",
+      "requiredPhrase": "Activation guidance is documented: remove `test.skip()` for the current task, then confirm RED before implementing"
+    },
+    "workflowDoesNotRunTests": {
+      "file": "src/workflows/testarch/bmad-testarch-atdd/steps-c/step-04a-subagent-api-failing.md",
+      "section": "MANDATORY EXECUTION RULES",
+      "requiredPhrase": "Do NOT run tests (that's step 5)"
+    }
+  },
+  "criteria": [
+    {
+      "id": "AC-1",
+      "title": "A free locker can be reserved",
+      "declaredPattern": "Expected: 201[\\s\\S]*Received: 404",
+      "why": "POST /lockers/{id}/reservations does not exist yet, so a scaffold asserting the story's own 201 fails with Received: 404. Any other received value or a differently-worded failure is not this criterion's own promise."
+    },
+    {
+      "id": "AC-2",
+      "title": "A reserved locker cannot be reserved again",
+      "declaredPattern": "Expected: 409[\\s\\S]*Received: 404",
+      "why": "The route the second call needs does not exist either, so both calls 404 and a scaffold asserting the story's 409 on the second fails the same way."
+    },
+    {
+      "id": "AC-3",
+      "title": "The duration is validated",
+      "declaredPattern": "Expected: 422[\\s\\S]*Received: 404",
+      "why": "The validation the story describes has no route to run inside yet."
+    },
+    {
+      "id": "AC-4",
+      "title": "A reservation can be released",
+      "declaredPattern": "Expected: 204[\\s\\S]*Received: 404",
+      "why": "DELETE /lockers/{id}/reservations/{reservationId} does not exist yet."
+    },
+    {
+      "id": "AC-5",
+      "title": "The locker reports whether it is reserved",
+      "declaredPattern": "Expected: true[\\s\\S]*Received: undefined",
+      "why": "GET /lockers/{id} already exists and returns 200 today; only the `reserved` field is missing, which is exactly the field this criterion adds. A scaffold that asserts only the status code this route already returns passes without any implementation, which is the vacuous-pass trap this criterion exists to carry: the fixture design tempts it, not any statement this file makes about a run."
+    }
+  ]
+}

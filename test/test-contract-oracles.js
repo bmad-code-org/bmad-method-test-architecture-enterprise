@@ -135,6 +135,7 @@ const {
   workflowMentions,
   CI_OPERATION,
 } = require('./eval-ci');
+const { loadGroundTruth: loadAtddGroundTruth, ATDD_INTERFACE, ATDD_OPERATION } = require('./eval-atdd');
 const { parseRouting } = require('../cli/lib/parse-routing');
 const {
   correctRoutingAnswer,
@@ -151,6 +152,7 @@ const {
   nfrStepId,
   ciOracleSpecs,
   ciStepId,
+  atddOracleSpecs,
   traceOracleSpecs,
   traceStepId,
   routingOracleSpecs,
@@ -1024,6 +1026,7 @@ async function checkNfrOracles(evaluator) {
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // ci
 // ---------------------------------------------------------------------------
 
@@ -1120,6 +1123,76 @@ async function checkCiOracles(evaluator) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// atdd
+// ---------------------------------------------------------------------------
+
+/**
+ * The facts atdd's oracles and scorers both read off a scaffold's raw text,
+ * derived directly from the text rather than by running it: whether it uses
+ * the workflow's own `test.skip()` call, and which criteria it names. This is
+ * the same reduction test/eval-atdd.js's `scoreRun` performs on a real
+ * red-check report, restated here because these two stored files were never
+ * executed and carry no report to read it from.
+ *
+ * @param {string} text
+ * @param {object[]} criteria
+ * @returns {{usesTestSkip: boolean, perCriterion: Array<{id: string, present: boolean}>}}
+ */
+function atddFactsFromScaffold(text, criteria) {
+  return {
+    usesTestSkip: text.includes('test.skip('),
+    perCriterion: criteria.map((criterion) => ({ id: criterion.id, present: text.includes(criterion.id) })),
+  };
+}
+
+const ATDD_CORRECT_SCAFFOLD = path.join(__dirname, 'fixtures', 'atdd-eval', 'cases', 'correct-run', 'tests', 'api', 'reservations.spec.ts');
+const ATDD_ORACLE_CHECK_SCAFFOLD = path.join(__dirname, 'fixtures', 'atdd-eval', 'oracle-check', 'reservations.spec.ts');
+
+function checkAtddOracles(evaluator) {
+  console.log('\natdd.contract.json over a correct scaffold and one built to fail every oracle');
+  const contract = readJson(path.join(CONTRACT_ROOT, 'atdd.contract.json'), 'the atdd contract');
+  const groundTruth = loadAtddGroundTruth();
+  if (!groundTruth) unreadable('the atdd ground truth is missing or not valid JSON');
+  const specs = atddOracleSpecs(groundTruth);
+  assert(
+    contract.oracles.length === specs.length && contract.oracles.every((oracle, index) => oracle.id === specs[index].id),
+    'the contract declares exactly the oracles the generator specifies, in order',
+    `${contract.oracles.length} on disk, ${specs.length} specified`,
+  );
+
+  const stepId = `${ATDD_INTERFACE}-run`;
+  const runs = [
+    { label: 'the correct scaffold', text: fs.readFileSync(ATDD_CORRECT_SCAFFOLD, 'utf8') },
+    { label: 'the scaffold built to fail every oracle', text: fs.readFileSync(ATDD_ORACLE_CHECK_SCAFFOLD, 'utf8') },
+  ];
+
+  let evaluated = 0;
+  const seenFalse = new Set();
+  for (const run of runs) {
+    const facts = atddFactsFromScaffold(run.text, groundTruth.criteria ?? []);
+    const results = evaluateOracles(evaluator, contract, {
+      [stepId]: observation({ operationId: ATDD_OPERATION, exitCode: 0, artifacts: { scaffold: { kind: 'text', value: run.text } } }),
+    });
+    for (const spec of specs) {
+      const result = results.get(spec.id);
+      const scorer = spec.scorer(facts);
+      if (scorer === false) seenFalse.add(spec.id);
+      assert(
+        agrees(result, scorer),
+        `${run.label}: ${spec.id} (${spec.kind}) agrees with the harness's own facts`,
+        `harness says ${scorer ? 'pass' : 'fail'}, oracle ${describe(result)}`,
+      );
+      evaluated += 1;
+    }
+  }
+  for (const spec of specs) {
+    if (spec.kind === 'run-measured') continue;
+    assert(seenFalse.has(spec.id), `${spec.id} (${spec.kind}) was seen resolving false on some stored run`);
+  }
+  console.log(`  ${colors.dim}${evaluated} oracle evaluation(s) across ${runs.length} stored scaffold(s)${colors.reset}`);
+}
+
 async function main() {
   console.log('contract oracles, evaluated with eval-quality and compared with the harness scorers');
   REGEX_STEP_BUDGET = (await scoringPolicy()).regexMatchStepBudget;
@@ -1133,6 +1206,7 @@ async function main() {
   await checkTraceOracles(evaluator);
   await checkNfrOracles(evaluator);
   await checkCiOracles(evaluator);
+  checkAtddOracles(evaluator);
 
   console.log('');
   if (failed > 0) {

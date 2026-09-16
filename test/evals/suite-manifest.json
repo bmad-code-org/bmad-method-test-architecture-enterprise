@@ -32,6 +32,62 @@
   "suites": [
     {
       "$comment": [
+        "One story, quay-locker-service, staged into a disposable workspace and generated against by a",
+        "vendor run, then executed under NFR9's isolation by the deterministic tea-atdd-red-check, which",
+        "spends no vendor call of its own.",
+        "",
+        "Five acceptance criteria, four asking for a route the fixture does not have and one extending a",
+        "route it already has, which is what makes a vacuous pass possible: a scaffold that asserts only",
+        "what the fixture already returns passes with no implementation at all. A test maps to a criterion",
+        "by carrying its id, AC-<n>, in its title, the workflow's own scaffold convention.",
+        "",
+        "redForIntendedReasonRate is 1 and every other way of not being red for the intended reason carries",
+        "its own zero ceiling beside it: a vacuous pass, a scaffold left skipped after activation, a spec",
+        "file that never parsed, a failure that does not match the criterion's declared message pattern,",
+        "and a test naming no criterion. Nothing here admits slack, because AC1's own rule is a binary",
+        "classification with no defensible middle case at this corpus size.",
+        "",
+        "runnerCapabilities names only the generation half. Execution spends no vendor call and is not a",
+        "runner capability in this vocabulary, so it is confined by cli/lib/atdd-isolation.js instead, proven",
+        "by test/test-atdd-isolation.js before this suite is registered."
+      ],
+      "id": "atdd",
+      "skill": "bmad-testarch-atdd",
+      "evalType": "behavioral",
+      "harness": "test/eval-atdd.js",
+      "harnessOptions": {
+        "repetitionFlag": "--runs",
+        "preflightArgs": ["--preflight-only"],
+        "acceptsWorkflowFilter": false
+      },
+      "fixtures": [
+        "test/fixtures/atdd-eval/reservations/package.json",
+        "test/fixtures/atdd-eval/reservations/playwright.config.ts",
+        "test/fixtures/atdd-eval/reservations/README.md",
+        "test/fixtures/atdd-eval/reservations/src/lockers.js",
+        "test/fixtures/atdd-eval/reservations/src/server.js",
+        "test/fixtures/atdd-eval/reservations/docs/stories/4-2-reserve-a-locker.md"
+      ],
+      "groundTruth": ["test/fixtures/atdd-eval/ground-truth.json"],
+      "contracts": ["test/contracts/atdd.contract.json"],
+      "thresholds": {
+        "redForIntendedReasonRate": 1,
+        "criteriaCoverage": 1,
+        "maxVacuousPass": 0,
+        "maxStillSkipped": 0,
+        "maxLoadErrors": 0,
+        "maxNonAssertionExit": 0,
+        "maxUnmappedTests": 0,
+        "maxProductionMutations": 0,
+        "maxUnstableCases": 0
+      },
+      "repetitions": 2,
+      "caseCount": 1,
+      "ciTier": "full-matrix",
+      "runnerCapabilities": ["scoped-artifact-writes"]
+    },
+    {
+      "$comment": [
         "18 intents put to `bmad-tea`, one agent call each: ten with one right menu item, four where two or more",
         "items are genuinely close and the right answer is to ask, and four nothing on the menu serves.",
         "",
@@ -442,12 +498,6 @@
       "owner": "TEA maintainers",
       "missingEvidence": "No suite of any kind. The skill ships no knowledge index, so even fragment selection does not apply, and nothing measures a multi-turn teaching session.",
       "exitCondition": "A transcript-based behavioral suite proves the skill places a learner at the right level, corrects seeded misconceptions, adapts the session, persists progress, and avoids claiming mastery without evidence."
-    },
-    {
-      "skill": "bmad-testarch-atdd",
-      "owner": "TEA maintainers",
-      "missingEvidence": "Fragment selection only. The generated acceptance tests are never executed, so nothing shows they fail before implementation for the intended reason.",
-      "exitCondition": "A behavioral suite proves the workflow produces acceptance tests that map to the supplied criteria, fail before implementation for the intended reason, and avoid changing production code."
     },
     {
       "skill": "bmad-testarch-automate",

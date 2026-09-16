@@ -1,0 +1,59 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: AC-5's scaffold asserts only the status code the fixture's",
+    "existing route already returns, so it passes with no implementation at all. This is the",
+    "vacuous-pass trap the suite exists to catch."
+  ],
+  "id": "vacuous-pass",
+  "suite": "atdd",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "AC-1 through AC-4 are unchanged from the correct run. AC-5's scaffold status is 'passed', which scoreRun classifies as vacuous-pass rather than red-for-intended-reason. redForIntendedReasonRate is 4/5 = 0.8, below the suite's threshold of 1, and vacuousPass carries the one test. usesTestSkip is true: the file carried test.skip() before activation.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      {
+        "id": "AC-1",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-2",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-3",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-4",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-5",
+        "present": true,
+        "outcome": "vacuous-pass"
+      }
+    ],
+    "mappedTestCount": 5,
+    "redForIntendedReasonCount": 4,
+    "redForIntendedReasonRate": 0.8,
+    "criteriaCoverage": 1,
+    "vacuousPass": ["tests/api/reservations.spec.ts:[P1] AC-5 the locker reports it is reserved"],
+    "stillSkipped": [],
+    "nonAssertion": [],
+    "unmapped": [],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

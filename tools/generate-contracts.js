@@ -110,6 +110,11 @@ const {
 // document-global predicate an oracle over one workflow file is paired with.
 const { CI_REQUEST_KEYS, DEFAULT_AGENT: CI_DEFAULT_AGENT } = require('../cli/ci-runner');
 const { buildPrompt: buildCiPrompt, workflowMentions, PLATFORM: CI_PLATFORM, CI_INTERFACE, CI_OPERATION } = require('../test/eval-ci');
+// And for the atdd command, on the same two rules, with one addition: the
+// scaffold this contract addresses has no fixed name in general, so the
+// harness names the one path its own prompt asks generation to write into.
+const { ATDD_REQUEST_KEYS, DEFAULT_AGENT: ATDD_DEFAULT_AGENT } = require('../cli/atdd-runner');
+const { buildPrompt: buildAtddPrompt, ATDD_INTERFACE, ATDD_OPERATION, ATDD_SCAFFOLD_RELATIVE_PATH } = require('../test/eval-atdd');
 // And for the routing command the bmad-tea suite names: its request and response
 // shapes and its default agent are its own, and the prompt, the menu reading and
 // the three pattern sources are the harness's. The patterns matter most. An
@@ -3064,6 +3069,114 @@ function ciOracleSpecs(groundTruth) {
   return specs;
 }
 
+// ---------------------------------------------------------------------------
+// atdd.contract.json
+// ---------------------------------------------------------------------------
+
+const ATDD_REQUEST_SHAPE = Object.fromEntries(
+  Object.entries(ATDD_REQUEST_KEYS).map(([channel, keys]) => [channel, stringShape(keys.required, keys.permitted)]),
+);
+
+/** The pointer into the one artifact the atdd generation operation declares: the scaffold file, read as text. */
+const ATDD_SCAFFOLD_POINTER = `/interactions/${ATDD_INTERFACE}-run/artifact/scaffold`;
+
+/**
+ * The one criterion id the sensitivity witness's own story states, per
+ * test/fixtures/atdd-eval/witness/docs/stories/9-1-witness-only-story.md; not
+ * a member of groundTruth.criteria, because the witness story is deliberately
+ * outside the scored corpus.
+ */
+const ATDD_WITNESS_CRITERION_ID = 'AC-9';
+
+/**
+ * The oracles this contract states, one spec per claim, mirroring the
+ * correspondence tools/generate-contracts.js already writes for nfr and trace:
+ * each carries the oracle as it will be rendered and, beside it, the scorer's
+ * answer for the same evidence, which test/test-contract-oracles.js compares.
+ *
+ * The scaffold this operation writes is one file and it is TypeScript, which
+ * the operator vocabulary addresses only as a whole document through
+ * `containment`, the same limit test/contracts/README.md records for nfr's
+ * markdown and test-design's prose. What a substring test can reach about a
+ * generated scaffold is narrower still than either: whether it used the
+ * workflow's own `test.skip()` call, and whether it names each criterion's id.
+ * It cannot reach whether an activated scaffold actually fails, whether it
+ * fails for the criterion's own reason, or whether the run touched a file
+ * outside the scaffold — those are `cli/atdd-red-check.js` executing the
+ * scaffold and test/eval-atdd.js's `scoreRun` reading what happened, and
+ * neither is expressible as a predicate over a file nobody has run yet.
+ *
+ * @param {object} groundTruth Parsed test/fixtures/atdd-eval/ground-truth.json.
+ * @returns {Array<{id: string, kind: string, oracle: object, scorer: Function}>}
+ */
+function atddOracleSpecs(groundTruth) {
+  const specs = [];
+  const push = (kind, oracle, scorer) => specs.push({ id: `O-${String(specs.length + 1).padStart(3, '0')}`, kind, oracle, scorer });
+
+  push(
+    'run-measured',
+    {
+      polarity: 'expects-hold',
+      commentary:
+        'The run wrote the one scaffold file the prompt asked for and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad scaffold.',
+      direction: {
+        polarity: 'expects-hold',
+        relation: 'all',
+        scope: 'The exit code and the scaffold artifact of the generation run.',
+        negativeDomain: 'A run that left no scaffold behind, or whose command reported a failure class through its exit code.',
+        evidenceTargets: [ATDD_SCAFFOLD_POINTER, `/interactions/${ATDD_INTERFACE}-run/exit-code`],
+      },
+      check: {
+        op: 'all',
+        operands: [
+          { op: 'equality', operands: [{ pointer: `/interactions/${ATDD_INTERFACE}-run/exit-code` }, { literal: 0 }] },
+          { op: 'existence', operands: [{ pointer: ATDD_SCAFFOLD_POINTER }] },
+        ],
+      },
+    },
+    () => true,
+  );
+
+  push(
+    'uses-test-skip',
+    {
+      polarity: 'expects-hold',
+      commentary:
+        "The scaffold carries the workflow's own red-phase call, `test.skip(`. A file with none of these was never a red-phase scaffold to begin with, whatever else it asserts.",
+      direction: {
+        polarity: 'expects-hold',
+        relation: 'containment',
+        scope: 'The scaffold file, read as one document.',
+        negativeDomain: 'A scaffold emitted as an active test, with no test.skip() call anywhere in it.',
+        evidenceTargets: [ATDD_SCAFFOLD_POINTER],
+      },
+      check: contains(ATDD_SCAFFOLD_POINTER, 'test.skip('),
+    },
+    (scored) => scored.usesTestSkip,
+  );
+
+  for (const criterion of groundTruth.criteria ?? []) {
+    push(
+      'names-criterion',
+      {
+        polarity: 'expects-hold',
+        commentary: `The scaffold names ${criterion.id} somewhere in it, the workflow's own convention for which criterion a generated test maps to. A scaffold naming none of the story's criteria has nothing this contract can tell apart from one that read no criterion at all.`,
+        direction: {
+          polarity: 'expects-hold',
+          relation: 'containment',
+          scope: 'The scaffold file, read as one document.',
+          negativeDomain: `A scaffold that never mentions ${criterion.id}.`,
+          evidenceTargets: [ATDD_SCAFFOLD_POINTER],
+        },
+        check: contains(ATDD_SCAFFOLD_POINTER, criterion.id),
+      },
+      (scored) => scored.perCriterion.some((entry) => entry.id === criterion.id && entry.present),
+    );
+  }
+
+  return specs;
+}
+
 /**
  * The authored half of the ci contract: how hard each group of claims grades,
  * which risk it names, and the sentence that says what the group is about. The
@@ -3302,6 +3415,217 @@ function buildCiContract() {
     ],
     // One step per project, plus room for the two probe steps the compiler may add.
     probeStepBound: sets.length + 2,
+    fixtureReset: null,
+  };
+}
+
+/**
+ * The authored half of the atdd contract: how hard each group of claims
+ * grades, which risk it names, and the sentence that says what the group is
+ * about. The claims themselves come from ground-truth.json.
+ */
+const ATDD_BEHAVIORS = [
+  {
+    kinds: ['run-measured'],
+    severity: 'critical',
+    risk: 'unmeasurable-run-scored-as-a-miss',
+    success: 'The run left the scaffold the prompt named on disk and exited 0.',
+    requirement: 'projectRoot',
+  },
+  {
+    kinds: ['uses-test-skip'],
+    severity: 'critical',
+    risk: 'active-scaffold-shipped-as-red-phase',
+    success: "The scaffold's tests are declared with the workflow's own test.skip() call.",
+    requirement: 'projectRoot',
+  },
+  {
+    kinds: ['names-criterion'],
+    severity: 'material',
+    risk: 'criterion-left-unaddressed',
+    success: 'The scaffold names every criterion the story states.',
+    requirement: 'criteria',
+  },
+];
+
+function buildAtddContract() {
+  const groundTruth = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'atdd-eval', 'ground-truth.json'), 'utf8'));
+  const criteria = groundTruth.criteria ?? [];
+  assert(criteria.length >= 2, 'atdd ground-truth.json declares fewer than two criteria');
+
+  const specs = atddOracleSpecs(groundTruth);
+  const oracles = specs.map((spec) => ({ id: spec.id, ...spec.oracle }));
+
+  const behaviors = [];
+  for (const authored of ATDD_BEHAVIORS) {
+    const matched = specs.filter((spec) => authored.kinds.includes(spec.kind));
+    assert(matched.length > 0, `no oracle matches kinds [${authored.kinds.join(', ')}]`);
+    for (const spec of matched) {
+      behaviors.push({
+        id: spec.id,
+        description: oracles.find((oracle) => oracle.id === spec.id).commentary,
+        severity: authored.severity,
+        observableSuccessCriterion: authored.success,
+        requirementLinks: [{ scheme: 'tea-eval-ground-truth', id: authored.requirement }],
+        riskLinks: [{ scheme: 'tea-eval-risk', id: authored.risk }],
+        oracles: [spec.id],
+      });
+    }
+  }
+  behaviors.sort((left, right) => (left.id < right.id ? -1 : 1));
+  for (const behavior of behaviors) behavior.id = behavior.id.replace('O-', 'B-');
+  const claimed = new Set(behaviors.flatMap((behavior) => behavior.oracles));
+  for (const spec of specs) {
+    assert(claimed.has(spec.id), `${spec.id} (${spec.kind}) is stated by no behavior, so nothing would demand it`);
+  }
+
+  const citedFiles = [
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'atdd-eval', 'ground-truth.json'),
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'atdd-eval', 'reservations', 'docs', 'stories', '4-2-reserve-a-locker.md'),
+    // The sensitivity relation's second leg depends on this story stating
+    // ATDD_WITNESS_CRITERION_ID and naming none of the corpus story's own
+    // criteria; an edit to it that broke either property would otherwise
+    // leave sourceSpecDigest, and the contract generated from it, unchanged.
+    path.join(PROJECT_ROOT, 'test', 'fixtures', 'atdd-eval', 'witness', 'docs', 'stories', '9-1-witness-only-story.md'),
+  ];
+  for (const file of citedFiles) assert(fs.existsSync(file), `atdd contract source ${file} does not exist`);
+
+  const witnessMainPrompt = buildAtddPrompt(groundTruth);
+  const witnessStoryPrompt = buildAtddPrompt(groundTruth, {
+    storyRelativePath: path.join('..', 'witness', 'docs', 'stories', '9-1-witness-only-story.md'),
+  });
+
+  return {
+    schemaVersion: EVAL_CONTRACT_SCHEMA_VERSION,
+    parentDigest: null,
+    revisionCount: 0,
+    contractId: 'tea-atdd-behavioral',
+    sourceSpecDigest: digestOf(citedFiles),
+    behaviors,
+    oracles,
+    rubrics: [],
+    waivers: [],
+    permittedInterfaces: [
+      {
+        logicalId: ATDD_INTERFACE,
+        kind: 'cli',
+        operations: [
+          {
+            operationId: ATDD_OPERATION,
+            invocation: { executable: ATDD_INTERFACE, subcommandPath: [] },
+            stateChangeMarker: true,
+            requestShape: ATDD_REQUEST_SHAPE,
+            artifacts: ['scaffold'],
+            // One document, addressed the way nfr's markdown report and
+            // test-design's prose document are: no key set, because a text
+            // artifact has none for the operator vocabulary to declare.
+            descriptorChannel: { kind: 'artifact', artifactId: 'scaffold' },
+            responseDescriptor: {
+              requiredKeys: [],
+              permittedKeys: [],
+              types: {},
+              successIndicator: null,
+              channelRoles: null,
+              collectionLocations: null,
+            },
+            volatilePointers: [],
+            sensitivityWitness: {
+              // The differential is which story {story_file} names. The
+              // corpus's own story states AC-1 through AC-5 and the
+              // witness-only story under test/fixtures/atdd-eval/witness/
+              // states AC-9 alone, so a scaffold generated against one names
+              // a criterion id the other's scaffold does not. That is a true
+              // and checkable claim that the command reads its standard
+              // input, the same reasoning nfr's witness and trace's witness
+              // both record for their own differing prompt value.
+              //
+              // A differential between two different fixture projects would
+              // not do here, because there is only one project this suite
+              // stages; both legs address the same project and differ only
+              // in which story within it the prompt names.
+              witnessId: 'story-file-follows-the-prompt',
+              channel: 'stdin',
+              legs: [
+                {
+                  legId: 'witness-corpus-story',
+                  inputs: witnessInputs(
+                    ATDD_REQUEST_SHAPE,
+                    { option: { agent: ATDD_DEFAULT_AGENT } },
+                    { kind: 'text', value: witnessMainPrompt },
+                  ),
+                },
+                {
+                  legId: 'witness-only-story',
+                  inputs: witnessInputs(
+                    ATDD_REQUEST_SHAPE,
+                    { option: { agent: ATDD_DEFAULT_AGENT } },
+                    { kind: 'text', value: witnessStoryPrompt },
+                  ),
+                },
+              ],
+              relation: {
+                op: 'all',
+                operands: [
+                  contains(`/interactions/witness-corpus-story/artifact/scaffold`, criteria[0].id),
+                  { op: 'not', operands: [contains(`/interactions/witness-only-story/artifact/scaffold`, criteria[0].id)] },
+                  // Absence alone is not evidence of reading the witness story:
+                  // an empty or unrelated scaffold also omits criteria[0].id.
+                  // This is the positive half, naming the one criterion the
+                  // witness story actually states.
+                  contains(`/interactions/witness-only-story/artifact/scaffold`, ATDD_WITNESS_CRITERION_ID),
+                ],
+              },
+            },
+          },
+        ],
+      },
+    ],
+    referenceSets: {},
+    siblingGroups: { operations: [], parameters: [] },
+    interactionPlan: [
+      {
+        stepId: `${ATDD_INTERFACE}-run`,
+        operationId: ATDD_OPERATION,
+        after: null,
+        cardinality: 'exactly-one',
+        inputBinding: {
+          argument: null,
+          option: { agent: { matcher: 'any' } },
+          environment: null,
+          stdin: { prompt: { literal: witnessMainPrompt } },
+        },
+      },
+    ],
+    scopedResources: null,
+    forbiddenInputs: FORBIDDEN_INPUTS,
+    testData: {
+      setup:
+        'The one plan step stages the reservations fixture project into a disposable workspace: its files under ' +
+        `${groundTruth.projectRoot}/, a resolved _bmad/tea/config.yaml, an empty ${groundTruth.testDir}/, and the ` +
+        'bmad-testarch-atdd workflow under skill/. ground-truth.json is never staged, and the harness asserts that ' +
+        'no staged file carries its bytes or its keys before the run. The prompt names the one path generation must ' +
+        `write, ${groundTruth.testDir}/${ATDD_SCAFFOLD_RELATIVE_PATH}, which is what makes the scaffold addressable ` +
+        'at all: a path an agent were free to invent is not one a contract can point at before the run. ' +
+        "The sensitivity witness differs its two legs on {story_file} rather than on any value within the corpus's " +
+        'own story, because both legs stage the one project this suite has; both name the criterion pattern rather ' +
+        'than executing anything, since neither leg is scored by running the scaffold it produces.',
+      cleanup: 'Delete the workspace. Neither leg writes into the fixture itself.',
+      principals: null,
+      resources: null,
+    },
+    // Generation reads the whole story and every step file; twenty minutes
+    // matches the bound test/eval-atdd.js applies to the same run.
+    budgets: { maxToolCalls: 300, maxWallClockMinutes: 20, maxCostUsd: '4.00' },
+    safetyLimits: [
+      `The runner writes only inside the staged workspace, and only under its own ${groundTruth.testDir}/; the harness fails a run that changed the repository or wrote outside that directory.`,
+      'No credential value appears in a prompt, an artifact, a log, or a result file.',
+    ],
+    requiredEvidence: [
+      'The scaffold file each run wrote, in full.',
+      'The exit code of the invocation.',
+      'The digest of the prompt the run was given, so an edit that changed the question is visible in the record.',
+    ],
+    probeStepBound: 3,
     fixtureReset: null,
   };
 }
@@ -4189,6 +4513,7 @@ function firstDifference(expected, actual) {
 
 function targets() {
   return [
+    { relativePath: 'atdd.contract.json', build: buildAtddContract },
     { relativePath: 'nfr.contract.json', build: buildNfrContract },
     { relativePath: 'ci.contract.json', build: buildCiContract },
     ...ROUTING_CONTRACTS.map((spec) => ({ relativePath: spec.relativePath, build: () => buildRoutingContract(spec) })),
@@ -4262,12 +4587,14 @@ module.exports = {
   buildTestReviewContract,
   buildFragmentSelectionContract,
   buildNfrContract,
+  buildAtddContract,
   buildTraceContract,
   nfrOracleSpecs,
   nfrStepId,
   buildCiContract,
   ciOracleSpecs,
   ciStepId,
+  atddOracleSpecs,
   traceOracleSpecs,
   traceStepId,
   render,

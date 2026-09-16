@@ -1,0 +1,60 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: a scaffold that never parses is the defect this suite most needs",
+    "to catch, because Playwright aborts the whole file and no per-test result exists to read."
+  ],
+  "id": "load-error",
+  "suite": "atdd",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "The one spec file carries a syntax error, so tea-atdd-red-check records a loadError and no per-test results for it. No criterion is reached: criteriaCoverage is 0/5 = 0 and redForIntendedReasonRate is unmeasurable (0 mapped tests), which scores as a failure rather than a pass on an empty denominator. usesTestSkip is true: the raw text still carries test.skip() even though the file never parses.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      {
+        "id": "AC-1",
+        "present": false,
+        "outcome": "unmapped"
+      },
+      {
+        "id": "AC-2",
+        "present": false,
+        "outcome": "unmapped"
+      },
+      {
+        "id": "AC-3",
+        "present": false,
+        "outcome": "unmapped"
+      },
+      {
+        "id": "AC-4",
+        "present": false,
+        "outcome": "unmapped"
+      },
+      {
+        "id": "AC-5",
+        "present": false,
+        "outcome": "unmapped"
+      }
+    ],
+    "mappedTestCount": 0,
+    "redForIntendedReasonCount": 0,
+    "redForIntendedReasonRate": null,
+    "criteriaCoverage": 0,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": [],
+    "unmapped": [],
+    "loadErrors": [
+      "tests/api/reservations.spec.ts: SyntaxError: <staged-workspace>/reservations/tests/api/reservations.spec.ts: Unexpected token, expected \",\" (10:2); Error: No tests found."
+    ],
+    "productionMutations": []
+  }
+}

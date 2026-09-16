@@ -30,6 +30,13 @@ name: Quality & Validation
 # name@version and fetches only what is missing, which is what makes running it
 # in `npm test` on every local commit reasonable rather than a network
 # dependency the pre-commit hook cannot avoid.
+#
+# The `validate` job installs `bubblewrap` before it reaches the atdd isolation
+# proof, because that suite runs generated test code and refuses to run
+# unconfined: `bubblewrap` is its linux backend, not preinstalled on this
+# runner image, and a failed install here has to read as "the dependency did
+# not install" rather than surface three steps later as an opaque isolation
+# failure.
 
 "on":
   pull_request:
@@ -173,8 +180,37 @@ jobs:
       - name: Test write-time enforcement hook
         run: npm run test:enforce-hook
 
+      - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+
+      # Ubuntu 24.04+ ships kernel.apparmor_restrict_unprivileged_userns=1, which
+      # blocks bwrap's --unshare-net from bringing up its own loopback interface
+      # (RTM_NEWADDR) inside an unprivileged user namespace unless the bwrap
+      # binary carries an AppArmor profile explicitly granting `userns` — one
+      # this runner image's bubblewrap package does not ship. Disabling the
+      # restriction on this disposable, single-job runner is what every other
+      # project hitting this exact failure on ubuntu-latest (Codex, Claude
+      # Code's own sandboxed Bash tool, VS Code) does; it governs whether bwrap
+      # can create the namespace at all, not what cli/lib/atdd-isolation.js does
+      # once the namespace exists, which is everything this suite actually
+      # tests.
+      - name: Allow bubblewrap to create its own network namespace
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Prove tea-atdd-red-check's isolation backend confines a hostile spec
+        run: npm run test:atdd-isolation
+
+      - name: Prove the in-process net guard refuses what the OS backend cannot
+        run: npm run test:atdd-net-guard
+
+      - name: Prove atdd scoring requires assertion provenance, not just message text
+        run: npm run test:atdd-scoring
+
       - name: Validate fragment-selection eval data
         run: npm run test:eval-data
+
+      - name: Validate ATDD eval corpus
+        run: npm run test:eval-atdd-data
 
       - name: Validate NFR eval corpus
         run: npm run test:eval-nfr-data
@@ -296,6 +332,17 @@ jobs:
           echo "a96d60132afb74536ff2b55cc784d5c55b0b57980d3d49f962f0b3871447d53a  download-actionlint.bash" | sha256sum -c -
           bash download-actionlint.bash
           sudo mv ./actionlint /usr/local/bin/
+
+      # test:cli spawns test/eval-all.js as a real child process, and eval-all
+      # preflights every suite the manifest declares, atdd included since it
+      # is no longer deferred: reaching the CLI test this job actually cares
+      # about requires a working isolation backend to exist first, the same
+      # way the validate job's own atdd isolation proof does.
+      - name: Install bubblewrap (tea-atdd-red-check's linux isolation backend)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+
+      - name: Allow bubblewrap to create its own network namespace
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Test TEA test-review CLI (${{ matrix.shard.name }})
         run: npm run test:cli

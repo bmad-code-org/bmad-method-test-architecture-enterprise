@@ -1,0 +1,17 @@
+{
+  "name": "quay-locker-service",
+  "version": "0.4.1",
+  "private": true,
+  "description": "Parcel locker inventory for the quay pick-up points: locker lookup today, reservations next.",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

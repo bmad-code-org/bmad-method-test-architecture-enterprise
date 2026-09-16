@@ -1,0 +1,59 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: every criterion is covered correctly, plus one extra scaffold",
+    "naming no criterion's id, which a run should report rather than silently drop or silently count",
+    "toward coverage."
+  ],
+  "id": "not-mapped",
+  "suite": "atdd",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "All five criteria are unchanged from the correct run, so redForIntendedReasonRate is 5/5 = 1 and criteriaCoverage is 5/5 = 1. The sixth scaffold, 'smoke check', names no AC-<n> token, so scoreRun reports it as unmapped rather than counting it toward any criterion or toward the mapped-test denominator. usesTestSkip is true: every scaffold, mapped or not, carried test.skip() before activation.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      {
+        "id": "AC-1",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-2",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-3",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-4",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-5",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      }
+    ],
+    "mappedTestCount": 5,
+    "redForIntendedReasonCount": 5,
+    "redForIntendedReasonRate": 1,
+    "criteriaCoverage": 1,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": [],
+    "unmapped": ["tests/api/reservations.spec.ts:smoke check"],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

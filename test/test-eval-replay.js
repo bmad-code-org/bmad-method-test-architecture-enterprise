@@ -202,6 +202,7 @@ const {
   scoreRun: scoreCiRun,
   signatureOf: ciSignatureOf,
 } = require('./eval-ci');
+const { loadGroundTruth: loadAtddGroundTruth, scoreRun: scoreAtddRun, signatureOf: atddSignatureOf } = require('./eval-atdd');
 const { digest, redactArgs } = require('./lib/eval-record');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -211,6 +212,7 @@ const TRACE_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'trace-eval', 'groun
 const TEST_DESIGN_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'test-design-eval', 'ground-truth.json');
 const NFR_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'nfr-eval', 'ground-truth.json');
 const CI_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'ci-eval', 'ground-truth.json');
+const ATDD_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'atdd-eval', 'ground-truth.json');
 
 /**
  * The version of the parsing and scoring behaviour this corpus was recorded
@@ -219,8 +221,9 @@ const CI_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'ci-eval', 'ground-trut
  * readMatrix, scoreRun with the eight scorers it calls, and signatureOf in
  * eval-trace.js, readDesign with scoreRun in eval-test-design.js, readReport,
  * parseReport, scoreRun and signatureOf in eval-nfr.js, readWorkflow, lintWorkflow,
- * parseWorkflow, scoreRun and signatureOf in eval-ci.js, and the five projections
- * in this file, which decide what a stored result records of all of them. It does
+ * parseWorkflow, scoreRun and signatureOf in eval-ci.js, loadGroundTruth, scoreRun
+ * and signatureOf in eval-atdd.js, and the six projections in this file, which
+ * decide what a stored result records of all of them. It does
  * not cover the aggregation those feed or the thresholds it is compared against;
  * see the header for why.
  *
@@ -292,6 +295,20 @@ const CI_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'ci-eval', 'ground-trut
  * oracle restates, which is what separates a section the report never wrote from
  * one it wrote without an answer. No test-review, fragment-selection, test-design
  * or trace case moved.
+ *
+ * 10 is `usesTestSkip` reaching the stored result. `scoreRun` had read it off
+ * `tea-atdd-red-check`'s own report since it entered the corpus, and returned it
+ * as part of the scored answer, but `projectAtddResult` dropped it: a scaffold
+ * whose report lost the workflow's own `test.skip()` marker while every test
+ * status stayed the same would have replayed clean. Every stored atdd result
+ * grew the field at `true`, the only value any of the six carries; nothing else
+ * moved. No test-review, fragment-selection, test-design, trace or nfr case
+ * moved with it.
+ *
+ * 9 is the atdd scorers entering the corpus: scoreRun and signatureOf in eval-atdd.js, and
+ * projectAtddResult in this file. No test-review, fragment-selection, test-design, trace or nfr case
+ * moved with it, so every case recorded at an earlier version reproduces and is reported as a version
+ * stamp only.
  *
  * 8 is the grounding entering the stored result. `citations`, the file-shaped
  * citations each domain's section made in report order, was read by scoreRun and
@@ -542,6 +559,46 @@ function ciScoringInputs(set) {
       return [id, kind, JSON.stringify(canonical(parameters))].join('|');
     }),
   ];
+}
+
+/**
+ * The scoring-relevant half of the atdd ground truth: every criterion's id and
+ * declaredPattern, in the order scoreRun reads them, which is also the order
+ * perCriterion carries into signatureOf. A criterion's title and why, and
+ * every other field ground-truth.json carries, are read by validateCorpus and
+ * by the prompt builder, never by scoreRun, so they stay out: a change to
+ * them cannot move a stored result and does not belong in this digest.
+ *
+ * @param {object} groundTruth
+ * @returns {string[]}
+ */
+function atddScoringInputs(groundTruth) {
+  return (groundTruth.criteria ?? []).map((criterion) => `${criterion.id}|${criterion.declaredPattern}`);
+}
+
+/**
+ * scoreRun's return value for one atdd case, reduced to what a stored result can
+ * hold and a reader can derive by hand: which criteria were reached and how,
+ * the counts behind each ceiling, and the production files touched.
+ *
+ * @param {object} scored One return value of eval-atdd's scoreRun.
+ * @returns {object}
+ */
+function projectAtddResult(scored) {
+  return {
+    usesTestSkip: scored.usesTestSkip,
+    perCriterion: scored.perCriterion.map((entry) => ({ id: entry.id, present: entry.present, outcome: entry.outcome })),
+    mappedTestCount: scored.mappedTestCount,
+    redForIntendedReasonCount: scored.redForIntendedReasonCount,
+    redForIntendedReasonRate: scored.redForIntendedReasonRate,
+    criteriaCoverage: scored.criteriaCoverage,
+    vacuousPass: scored.vacuousPass.map((test) => `${test.file}:${test.title}`),
+    stillSkipped: scored.stillSkipped.map((test) => `${test.file}:${test.title}`),
+    nonAssertion: scored.nonAssertion.map((test) => `${test.file}:${test.title}`),
+    unmapped: scored.unmapped.map((test) => `${test.file}:${test.title}`),
+    loadErrors: scored.loadErrors.map((entry) => `${entry.file}: ${entry.reason.split('\n')[0]}`),
+    productionMutations: scored.productionMutations,
+  };
 }
 
 /** Every case directory under test/replay, suite by suite, in a stable order. */
@@ -940,6 +997,19 @@ async function replayCiCase(item, set) {
   if (!lint.ok) unreadable(`${item.id}: the lint half of a ci case cannot be re-derived: ${lint.reason}`);
   const scored = scoreCiRun(set, workflow.text, lint);
   return { result: projectCiResult(scored), scored };
+}
+
+/**
+ * Read and score one stored atdd case: the red-check report tea-atdd-red-check
+ * produced, replayed through eval-atdd's own scoreRun with no re-execution.
+ *
+ * @returns {{result: object, scored?: object}}
+ */
+function replayAtddCase(item, groundTruth) {
+  const reportPath = path.join(item.directory, 'atdd-red-report.json');
+  const report = readJson(reportPath, `${item.id} atdd red report`);
+  const scored = scoreAtddRun(groundTruth, report, []);
+  return { result: projectAtddResult(scored), scored };
 }
 
 /** Parse and score one stored fragment-selection case. */
@@ -1398,6 +1468,32 @@ function checkCiSignatures(replayed) {
 }
 
 /**
+ * signatureOf held to its own contract over every scored atdd case: two cases
+ * score identically exactly when they sign identically. There is one story in
+ * this corpus rather than nfr's or trace's two bundles, so every pair of stored
+ * cases is compared directly instead of being grouped by set first.
+ *
+ * @param {Array<{id: string, result: object, scored: object}>} replayed
+ */
+function checkAtddSignatures(replayed) {
+  if (replayed.length === 0) return;
+  const disagreements = [];
+  for (const [index, left] of replayed.entries()) {
+    for (const right of replayed.slice(index + 1)) {
+      const sameResult = same(left.result, right.result);
+      const sameSignature = atddSignatureOf(left.scored) === atddSignatureOf(right.scored);
+      if (sameResult === sameSignature) continue;
+      disagreements.push(
+        sameResult
+          ? `${left.id} and ${right.id} score identically and sign differently, so the signature reads something the scorer does not`
+          : `${left.id} and ${right.id} score differently and sign identically, so a scored field is outside the signature`,
+      );
+    }
+  }
+  assert(disagreements.length === 0, 'atdd signatures agree exactly when the scored results agree', disagreements.join('\n  '));
+}
+
+/**
  * Score one stored case the way its suite scores it.
  *
  * A failure here is a reason the case cannot be compared at all, as opposed to a
@@ -1496,6 +1592,22 @@ async function replayCase(item, expected, context) {
       if (replayed.scored) context.ciReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
       return { observed: replayed.result };
     }
+    case 'atdd': {
+      const recordedDigest = expected.inputs?.scoringInputsDigest;
+      const groundTruthDigest = digest(atddScoringInputs(context.atddGroundTruth));
+      if (recordedDigest !== groundTruthDigest) {
+        return {
+          failure:
+            `the ground truth moved. This result was derived against ${recordedDigest ?? '(nothing recorded)'} and ` +
+            `${path.relative(PROJECT_ROOT, ATDD_GROUND_TRUTH)} now digests to ${groundTruthDigest}. A criterion's id, its ` +
+            'declaredPattern, or their order changed, so the expected result has to be re-derived by hand and the digest ' +
+            'updated with it. --accept will not do this one.',
+        };
+      }
+      const replayed = replayAtddCase(item, context.atddGroundTruth);
+      context.atddReplayed.push({ id: item.id, result: replayed.result, scored: replayed.scored });
+      return { observed: replayed.result };
+    }
     case 'trace': {
       const setId = expected.inputs?.fixtureSet;
       const set = context.traceSets.get(setId);
@@ -1554,7 +1666,7 @@ async function replayCase(item, expected, context) {
     }
     default: {
       return {
-        failure: `unknown suite directory "${item.suite}"; expected bmad-tea-routing, test-review, fragment-selection, nfr, ci, test-design or trace`,
+        failure: `unknown suite directory "${item.suite}"; expected atdd, bmad-tea-routing, test-review, fragment-selection, nfr, ci, test-design or trace`,
       };
     }
   }
@@ -1585,6 +1697,8 @@ async function main(argv) {
   const ciGroundTruth = readJson(CI_GROUND_TRUTH, 'ci ground truth');
   const ciSets = new Map((ciGroundTruth.fixtureSets ?? []).map((set) => [set.id, set]));
   const ciReplayed = [];
+  const atddGroundTruth = readJson(ATDD_GROUND_TRUTH, 'atdd ground truth');
+  const atddReplayed = [];
   const cases = findCases();
 
   // A mistyped case id used to be a silent no-op that exited 0, which reads as
@@ -1631,6 +1745,8 @@ async function main(argv) {
       nfrReplayed,
       ciSets,
       ciReplayed,
+      atddGroundTruth,
+      atddReplayed,
     });
     if ('failure' in replayed) {
       assert(false, item.id, replayed.failure);
@@ -1689,6 +1805,7 @@ async function main(argv) {
   checkRoutingSignatures(routingReplayed);
   checkNfrSignatures(nfrReplayed);
   checkCiSignatures(ciReplayed);
+  checkAtddSignatures(atddReplayed);
   checkRecordHygiene();
   checkNfrGateBlockReadings();
 
@@ -1724,6 +1841,7 @@ module.exports = {
   projectTraceResult,
   projectNfrResult,
   projectCiResult,
+  projectAtddResult,
   differences,
   verdictDriftFromReport,
   findCases,

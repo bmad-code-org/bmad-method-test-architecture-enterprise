@@ -82,6 +82,10 @@
         "kind": "module",
         "from": { "module": "test/lib/doc-count-sources.js", "export": "CI_CALLS" }
       },
+      "atddCalls": {
+        "kind": "module",
+        "from": { "module": "test/lib/doc-count-sources.js", "export": "ATDD_CALLS" }
+      },
       "fragmentSelectionCases": {
         "kind": "module",
         "from": { "module": "test/lib/doc-count-sources.js", "export": "FRAGMENT_SELECTION_CASES" }
@@ -112,7 +116,7 @@
         "file": "docs/explanation/eval-quality-roadmap.md",
         "claim": "the per-suite call counts one eval:all run makes",
         "pattern": {
-          "match": "It runs (\\d+) fragment selections, (\\d+) routing intents, (\\d+) complete test designs, (\\d+) complete reviews, (\\d+) complete audits, (\\d+) complete pipelines, and (\\d+) complete traces for one runner\\."
+          "match": "It runs (\\d+) fragment selections, (\\d+) routing intents, (\\d+) complete test designs, (\\d+) complete reviews, (\\d+) complete audits, (\\d+) complete pipelines, (\\d+) complete traces, and (\\d+) generations for one runner\\."
         },
         "counts": [
           "fragmentSelectionCalls",
@@ -121,7 +125,8 @@
           "testReviewCalls",
           "nfrCalls",
           "ciCalls",
-          "traceCalls"
+          "traceCalls",
+          "atddCalls"
         ],
         "rendering": "digits"
       },
@@ -155,7 +160,7 @@
         "file": "docs/explanation/eval-quality-adoption-guide.md",
         "claim": "one eval:all run's total model calls and their per-suite breakdown",
         "pattern": {
-          "match": "One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(18 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(two ci projects at two repetitions\\), and (\\d+) complete traces \\(two cases at two repetitions\\)\\."
+          "match": "One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(18 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(two ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), and (\\d+) complete atdd generations \\(one story at two repetitions\\)\\."
         },
         "counts": [
           "totalCalls",
@@ -165,7 +170,8 @@
           "testReviewCalls",
           "nfrCalls",
           "ciCalls",
-          "traceCalls"
+          "traceCalls",
+          "atddCalls"
         ],
         "rendering": "digits"
       },
@@ -173,7 +179,7 @@
         "file": "README.md",
         "claim": "one eval:all run's total agent calls and all three built-in runners' total",
         "pattern": {
-          "match": "`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, and per `trace` fixture set\\. One runner makes (\\d+) agent calls: (\\d+) fragment selections, (\\d+) routing intents, (\\d+) reviews, (\\d+) audits, (\\d+) pipelines, (\\d+) test designs, and (\\d+) traces\\. All three built-in runners make (\\d+) calls\\."
+          "match": "`eval:all` uses two repetitions per fragment-selection case and per routing intent, three repetitions for `test-review`, and two repetitions per `nfr` evidence bundle, per `ci` project, per `test-design` epic, per `trace` fixture set, and per `atdd` story\\. One runner makes (\\d+) agent calls: (\\d+) fragment selections, (\\d+) routing intents, (\\d+) reviews, (\\d+) audits, (\\d+) pipelines, (\\d+) test designs, (\\d+) traces, and (\\d+) ATDD generations\\. All three built-in runners make (\\d+) calls\\."
         },
         "counts": [
           "totalCalls",
@@ -184,6 +190,7 @@
           "ciCalls",
           "testDesignCalls",
           "traceCalls",
+          "atddCalls",
           "totalCallsThreeRunners"
         ],
         "rendering": "digits"

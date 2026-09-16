@@ -1,0 +1,59 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the story generated correctly, every criterion failing",
+    "for the reason the story itself gives, which is the run every other case is a single deviation",
+    "from."
+  ],
+  "id": "correct-run",
+  "suite": "atdd",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "All five criteria map their own scaffold by carrying AC-<n> in its title, and every scaffold's activated run fails with the exact Expected/Received shape its declared pattern names. redForIntendedReasonRate is 5/5 = 1 and criteriaCoverage is 5/5 = 1. Nothing is vacuous, nothing is skipped, nothing is unmapped, no file failed to load, and no production file changed. usesTestSkip is true: the file carried test.skip() before activation.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      {
+        "id": "AC-1",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-2",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-3",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-4",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-5",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      }
+    ],
+    "mappedTestCount": 5,
+    "redForIntendedReasonCount": 5,
+    "redForIntendedReasonRate": 1,
+    "criteriaCoverage": 1,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": [],
+    "unmapped": [],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

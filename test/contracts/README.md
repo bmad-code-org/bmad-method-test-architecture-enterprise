@@ -9,6 +9,7 @@ against it.
 
 | Contract                                      | Suite                                                    | Cases                                               |
 | --------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------- |
+| `atdd.contract.json`                          | The full behavioral eval for `bmad-testarch-atdd`        | 1 story, 5 acceptance criteria                      |
 | `ci.contract.json`                            | The full behavioral eval for `bmad-testarch-ci`          | 1 full request, 1 minimal request                   |
 | `nfr.contract.json`                           | The full behavioral eval for `bmad-testarch-nfr`         | 1 bundle with known gaps, 1 clean control           |
 | `test-review.contract.json`                   | The full behavioral eval for `bmad-testarch-test-review` | 9 planted defects, 1 clean control, 1 scope control |
@@ -17,7 +18,8 @@ against it.
 | `fragment-selection/<workflow>.contract.json` | Fragment routing for eight workflows                     | 24 cases                                            |
 
 **Every contract here is generated. Do not hand-edit one.** `tools/generate-contracts.js` writes all
-fifteen from their sources: `test-review.contract.json` from
+sixteen from their sources: `atdd.contract.json` from `test/fixtures/atdd-eval/ground-truth.json`, the request shape
+`cli/atdd-runner.js` declares, and the prompt `test/eval-atdd.js` assembles; `test-review.contract.json` from
 `test/fixtures/test-review-eval/ground-truth.json` and `criteria-registry.md`; `trace.contract.json`
 from `test/fixtures/trace-eval/ground-truth.json`, the request shape `cli/trace-runner.js` declares,
 the prompt `test/eval-trace.js` assembles, and the summary literal in the trace workflow's step-05;
@@ -101,7 +103,7 @@ without the located issue list the table below breaks down. The list comes from 
 the renderer. The issues themselves are the same either way; only whether the tool prints them
 differs.
 
-## Fifteen of fifteen compile
+## Sixteen of sixteen compile
 
 `package.json`'s `eval-quality` devDependency moved from `0.2.0` through `0.3.0` to `1.0.0` on 2026-09-08. All 58
 parse issues in the table above, and the `unsupported-interface-kind` rejection behind them, are
@@ -151,6 +153,20 @@ would attribute to the prompt a difference the evidence produced. `custom_nfr_ca
 step-02 adds to the categories it elicits and the report template carries a section for, so a run given
 one names it and a run given none does not, which is a true and checkable claim that the command reads
 its standard input.
+
+`atdd.contract.json` addresses a deliverable neither nfr's nor trace's shape covers: a scaffold file
+with no fixed name in general, since the workflow's own step-04 dispatches an API worker and an E2E
+worker into files they name themselves. Its one plan step's prompt therefore asks generation to write
+into exactly one path, which is what makes the deliverable addressable at all before the run. Its
+oracles are the narrowest of any contract here: `containment` can say whether the scaffold uses the
+workflow's own `test.skip()` call and whether it names each criterion, and nothing more. It cannot say
+whether an activated scaffold fails, or fails for the right reason, or leaves production code alone,
+because those are properties of running the scaffold, which `cli/atdd-red-check.js` and
+`test/eval-atdd.js`'s `scoreRun` do and no oracle over an unexecuted file can. Its witness differs its
+two legs on `{story_file}`, the corpus's own story naming AC-1 through AC-5 against a witness-only
+story under `test/fixtures/atdd-eval/witness/` naming AC-9 alone, so a scaffold generated against one
+names a criterion id the other's does not: a true and checkable claim that the command reads its
+standard input, the same reasoning nfr's and trace's own witnesses record for their differing values.
 
 ## The routing suite is two contracts, and the bound is why
 
@@ -342,7 +358,7 @@ records what its first run found.
 
 The compile check resolves `eval-quality` from `node_modules` and fails closed when it cannot, so the
 deterministic gate stays credential-free and runs with no network. It used to skip: an unresolvable
-package printed a yellow "skipped" and exited 0, which is a green check over fourteen contracts
+package printed a yellow "skipped" and exited 0, which is a green check over fifteen contracts
 nobody looked at, and it was the only check in this repository that answered an absent package with
 a pass. An unresolvable package now exits 2 and says how many contracts went unchecked, and so does
 a tree resolving an `eval-quality` other than the version `package.json` pins, since fourteen
@@ -360,7 +376,7 @@ matched `unknown` on the next run, and the check stayed green over a compiler th
 saying what it refused.
 
 When the compiler is available, the check compares each contract against the status
-`expected-status.json` records for it. All fifteen contracts `compile` today. A baseline is what keeps a
+`expected-status.json` records for it. All sixteen contracts `compile` today. A baseline is what keeps a
 known failure from reading as a passing check, and what makes the day a contract's status moves
 visible instead of silent, so any movement in either direction fails the check until the baseline is
 updated to say so. Regenerate it with `--write` once you have read why something moved.
@@ -371,7 +387,7 @@ status changing.
 
 ## What the generator enforces
 
-`node tools/generate-contracts.js --check` regenerates all fifteen in memory and fails when the bytes on
+`node tools/generate-contracts.js --check` regenerates all sixteen in memory and fails when the bytes on
 disk differ, naming the contract and the first line that moved. It runs in `npm test`, so a fixture
 edit that leaves a contract stale fails the deterministic gate.
 

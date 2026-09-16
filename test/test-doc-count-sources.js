@@ -71,6 +71,7 @@ check('per-suite call counts are caseCount times repetitions, independently reco
   assert.strictEqual(source.NFR_CALLS, suite('nfr').caseCount * suite('nfr').repetitions);
   assert.strictEqual(source.TRACE_CALLS, suite('trace').caseCount * suite('trace').repetitions);
   assert.strictEqual(source.CI_CALLS, suite('ci').caseCount * suite('ci').repetitions);
+  assert.strictEqual(source.ATDD_CALLS, suite('atdd').caseCount * suite('atdd').repetitions);
 });
 
 check("test-review's call count is repetitions alone, since its harness reviews the whole corpus once per repetition", () => {
@@ -82,7 +83,7 @@ check("test-review's call count is repetitions alone, since its harness reviews 
   );
 });
 
-check('TOTAL_CALLS is the sum of all seven per-suite call counts', () => {
+check('TOTAL_CALLS is the sum of all eight per-suite call counts', () => {
   assert.strictEqual(
     source.TOTAL_CALLS,
     source.FRAGMENT_SELECTION_CALLS +
@@ -91,7 +92,8 @@ check('TOTAL_CALLS is the sum of all seven per-suite call counts', () => {
       source.TEST_REVIEW_CALLS +
       source.NFR_CALLS +
       source.TRACE_CALLS +
-      source.CI_CALLS,
+      source.CI_CALLS +
+      source.ATDD_CALLS,
   );
 });
 
@@ -235,6 +237,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'nfrCalls',
     'ciCalls',
     'traceCalls',
+    'atddCalls',
   ]);
 
   const adoptionGuide = entries.find((entry) => entry.file === 'docs/explanation/eval-quality-adoption-guide.md');
@@ -247,6 +250,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'nfrCalls',
     'ciCalls',
     'traceCalls',
+    'atddCalls',
   ]);
 
   const readmeTotals = entries.find((entry) => entry.file === 'README.md' && entry.counts.includes('totalCallsThreeRunners'));
@@ -259,6 +263,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'ciCalls',
     'testDesignCalls',
     'traceCalls',
+    'atddCalls',
     'totalCallsThreeRunners',
   ]);
 });

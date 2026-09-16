@@ -1,0 +1,58 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: AC-4's scaffold uses test.fixme() rather than the workflow's own",
+    "test.skip(), so activation's text replacement does not touch it and it never actually runs."
+  ],
+  "id": "still-skipped",
+  "suite": "atdd",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "AC-4's scaffold status is 'skipped' after activation, which scoreRun classifies as still-skipped rather than red-for-intended-reason. The other four criteria are unchanged from the correct run. redForIntendedReasonRate is 4/5 = 0.8. usesTestSkip is true: hadSkipCall reads the file text before activation, so AC-4's test.fixme() elsewhere does not change it.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      {
+        "id": "AC-1",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-2",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-3",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      },
+      {
+        "id": "AC-4",
+        "present": true,
+        "outcome": "still-skipped"
+      },
+      {
+        "id": "AC-5",
+        "present": true,
+        "outcome": "red-for-intended-reason"
+      }
+    ],
+    "mappedTestCount": 5,
+    "redForIntendedReasonCount": 4,
+    "redForIntendedReasonRate": 0.8,
+    "criteriaCoverage": 1,
+    "vacuousPass": [],
+    "stillSkipped": ["tests/api/reservations.spec.ts:[P2] AC-4 releasing a reservation frees the locker"],
+    "nonAssertion": [],
+    "unmapped": [],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

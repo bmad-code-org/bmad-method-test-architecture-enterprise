@@ -187,6 +187,23 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
  */
 const EXECUTION_TARGETS = [
   {
+    interfaceId: 'tea-atdd-runner',
+    executable: 'tea-atdd-runner',
+    script: path.join('cli', 'atdd-runner.js'),
+    subcommandPaths: [[]],
+    // The one deliverable the atdd eval's own prompt asks generation to write,
+    // at the default location a project without its own override gets. The
+    // harness overrides this per run with the project root and test directory
+    // its ground truth declares, the same way the nfr and trace targets below
+    // are overridden with a bundle's or a fixture set's own project root.
+    artifacts: { scaffold: path.join('tests', 'api', 'reservations.spec.ts') },
+    environmentKeys: vendorEnvironmentNames(),
+    // One minute above RUN_TIMEOUT_MS in test/eval-atdd.js, for the reason the
+    // comment above EXECUTION_TARGETS gives: the inner clock classifies, and
+    // this one only backstops.
+    maxElapsedMs: 21 * 60_000,
+  },
+  {
     interfaceId: 'tea-test-design-runner',
     executable: 'tea-test-design-runner',
     script: path.join('cli', 'test-design-runner.js'),

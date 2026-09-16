@@ -83,6 +83,13 @@ exports.TRACE_CALLS = caseCountOf('trace') * repetitionsOf('trace');
  */
 exports.CI_CALLS = caseCountOf('ci') * repetitionsOf('ci');
 
+/**
+ * The `atdd` suite's call count (README.md:424 and the roadmap sentence).
+ * Added after the roadmap, adoption-guide and `ci` sentences were written, for
+ * the same reason `CI_CALLS` is: held only where a sentence actually names it.
+ */
+exports.ATDD_CALLS = caseCountOf('atdd') * repetitionsOf('atdd');
+
 /** One `eval:all` run's total model calls, for one runner, across every suite. */
 exports.TOTAL_CALLS =
   exports.FRAGMENT_SELECTION_CALLS +
@@ -91,7 +98,8 @@ exports.TOTAL_CALLS =
   exports.TEST_REVIEW_CALLS +
   exports.NFR_CALLS +
   exports.TRACE_CALLS +
-  exports.CI_CALLS;
+  exports.CI_CALLS +
+  exports.ATDD_CALLS;
 
 /** All three built-in runners (`claude`, `codex`, `agy`) making one `eval:all` run each. */
 exports.TOTAL_CALLS_THREE_RUNNERS = exports.TOTAL_CALLS * 3;
