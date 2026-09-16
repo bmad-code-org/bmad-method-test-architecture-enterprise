@@ -60,7 +60,7 @@ const ALLOWLIST_BY_COMMENT = new Map([
   ['fragment-selection corpus, static', 'test:eval-data'],
   ['trace corpus, static', 'test:eval-trace-data'],
   ['manifest against harness constants, and the preflight argv', 'test:eval-schemas'],
-  ['96 stored outputs against the scorers', 'test:eval-replay'],
+  ['108 stored outputs against the scorers', 'test:eval-replay'],
   ['are the contracts what their sources generate?', 'test:contract-sources'],
   ['does the compiler still say what the baseline records?', 'test:contracts'],
   ['does every oracle resolve, and agree with the scorer?', 'test:contract-oracles'],
