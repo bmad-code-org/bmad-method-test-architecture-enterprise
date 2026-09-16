@@ -22,14 +22,14 @@
  * decision needs, `read-only`: the answer is a JSON object on standard output
  * and nothing about it requires a file, so claude runs with no write tool and
  * codex under its read-only sandbox, which is what the suite declares in
- * test/evals/suite-manifest.json.
+ * the eval suite manifest.
  *
  * Two nested wall clocks are in play when this runs behind eval-quality's
  * command-line adapter, and the inner one has to be the shorter of the two:
  * --timeout-ms bounds the vendor call and reports a timeout as exit 5, while the
  * adapter's own maxElapsedMs SIGKILLs this process and reports `budget-exhausted`
  * with no exit code at all. A run that hits the outer bound first loses the
- * classification the inner one would have produced. test/lib/probe-targets.js
+ * classification the inner one would have produced. The probe-targets check
  * sets the outer bound a minute above the harness's own for that reason.
  *
  * Usage:
@@ -57,7 +57,7 @@ const { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNam
 /** The same default the other three commands declare, so this command changes no run that omits `--agent`. */
 const DEFAULT_AGENT = 'claude';
 
-/** Five minutes, matching RUN_TIMEOUT_MS in test/eval-bmad-tea-routing.js, which is the only caller that measures. */
+/** Five minutes, matching RUN_TIMEOUT_MS in the routing eval harness, which is the only caller that measures. */
 const DEFAULT_TIMEOUT_MS = 5 * 60_000;
 
 /** A routing decision is a reply, so the runner needs to write nothing; see the header. */

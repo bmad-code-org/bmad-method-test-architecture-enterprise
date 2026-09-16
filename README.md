@@ -398,7 +398,7 @@ A passing fragment-selection eval means the workflow loaded the right knowledge.
 - `test:doc-counts` runs `eval-quality-gates doc-counts`, which holds a hand-written count on a published page against the source that computes it: the roadmap's per-suite `eval:all` call counts, the knowledge-fragment tier breakdown, this section's own npm-test-chain length, and the fragment-selection case count. A pattern matching no sentence, or more than one, fails the same way a wrong number does, so the entry cannot go stale by drifting out from under its own pattern either.
 - `test:enforce-hook` fails when a new Absolute registry row appears in neither the hook's enforced list nor its deferred list. This prevents a rule from being added without an explicit write-time enforcement decision.
 - `test:eval-data` checks that all 24 fragment-selection cases are structurally usable: their workflow context files exist, every expected fragment exists and is indexed for that workflow, and the required and forbidden sets do not overlap. The expected sets come from the workflow step files. This check does not ask an agent to select anything.
-- `test:eval-schemas` checks `test/evals/suite-manifest.json` against its schema, confirms that every threshold it declares is the threshold the harness actually applies, that the runner capabilities it declares are the ones the harness grants its runner, and that the preflight argv it declares fails on a missing runner and passes on a present one, and fails when a TEA skill has neither a behavioral suite nor a deferred declaration. A suite list that omits a skill reads as coverage, so the omission has to be an error rather than a silence.
+- `test:eval-schemas` checks this repository's own eval suite manifest against its schema, confirms that every threshold it declares is the threshold the harness actually applies, that the runner capabilities it declares are the ones the harness grants its runner, and that the preflight argv it declares fails on a missing runner and passes on a present one, and fails when a TEA skill has neither a behavioral suite nor a deferred declaration. A suite list that omits a skill reads as coverage, so the omission has to be an error rather than a silence.
 - `test:contract-oracles` evaluates every oracle in every eval contract with `eval-quality`'s own evaluator, over the stored replay outputs and over constructed selections for all 24 fragment-selection cases, and fails when an oracle faults or disagrees with the harness scorer on the same evidence. The first run found that every regex oracle in the `test-review` contract was refused by the evaluator before it matched anything.
 
 These checks produce the same answer from the same repository state. They need no agent credential, network call, or model budget. `test:eval-data` runs through `npm test`, the local pre-commit hook, pull-request quality checks, and the publish workflow.
@@ -543,7 +543,7 @@ npm run eval:fragment-selection -- \
 
 ### What Has to Pass
 
-Every row below is a declared gate. The three suites that existed then were measured live for the first time on 2026-09-08 against `claude`/`sonnet`, and `docs/explanation/eval-quality-roadmap.md` records what each one returned; `bmad-tea-routing`, `nfr`, `test-design`, `ci`, and `atdd` have been added since and have never been run live, so their rows are declared targets and nothing more; no result artifact is committed, so quote that section rather than a number from memory. The live thresholds are the ones `test/evals/suite-manifest.json` declares, and `npm run test:eval-schemas` fails when a harness constant and the manifest disagree.
+Every row below is a declared gate. The three suites that existed then were measured live for the first time on 2026-09-08 against `claude`/`sonnet`, and the [Eval Quality and Behavioral Coverage Roadmap](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/explanation/eval-quality-roadmap/) records what each one returned; `bmad-tea-routing`, `nfr`, `test-design`, `ci` and `atdd` have been added since and have never been run live, so their rows are declared targets and nothing more; no result artifact is committed, so quote that section rather than a number from memory. The live thresholds are the ones this repository's own eval suite manifest declares, and `npm run test:eval-schemas` fails when a harness constant and the manifest disagree.
 
 | Eval                              | Declared threshold                                                                                                                                                                                                                                                                                                                                                                                 | Declared volume                                                                                            |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -565,7 +565,7 @@ The non-false-positive rate is the share of reported findings that are not defin
 
 ### The Suite Manifest and Machine-Readable Results
 
-`test/evals/suite-manifest.json` registers every suite `eval:all` runs, with its skills, fixtures, ground truth, contract, thresholds, repetition count, CI tier, and the capabilities its runner needs. It also carries a `deferred` list: one entry per skill with no behavioral suite, naming the owner, the missing evidence, and the condition that retires the entry. `eval:all` reads the suite list from that file and refuses to run when a TEA skill appears in neither list.
+This repository's own eval suite manifest registers every suite `eval:all` runs, with its skills, fixtures, ground truth, contract, thresholds, repetition count, CI tier, and the capabilities its runner needs. It also carries a `deferred` list: one entry per skill with no behavioral suite, naming the owner, the missing evidence, and the condition that retires the entry. `eval:all` reads the suite list from that file and refuses to run when a TEA skill appears in neither list.
 
 Add `--json <path>` to any of the six harnesses to write a result record alongside the console output:
 
@@ -574,7 +574,7 @@ npm run eval:all -- --agent codex --json results/eval-all.json
 npm run eval:test-review -- --agent codex --json results/test-review.json
 ```
 
-The record carries the repository commit, the suite and case IDs, the runner executable and version, the resolved model and parameters, the fixture and prompt digests, the expected and completed repetitions, the measurements, the duration, and the final failure class. `test/schema/eval-result.schema.json` is the generated JSON Schema for it, and every record is validated against the schema before it is written.
+The record carries the repository commit, the suite and case IDs, the runner executable and version, the resolved model and parameters, the fixture and prompt digests, the expected and completed repetitions, the measurements, the duration, and the final failure class. A generated JSON Schema in this repository's own dev tree describes it, and every record is validated against that schema before it is written.
 
 ### CI Usage
 
@@ -607,7 +607,7 @@ Custom workflows are still compatible with TEA, but they are no longer implicitl
 2. Attach it to `bmad-tea` using the agent customization flow.
 3. Reinstall/update BMAD so the new menu item and workflow are registered.
 
-See [Extend TEA with Custom Workflows](docs/how-to/customization/extend-tea-with-custom-workflows.md) and the BMAD customization guide at [BMAD-METHOD/docs/how-to/customize-bmad.md](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/docs/how-to/customize-bmad.md).
+See [Extend TEA with Custom Workflows](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/customization/extend-tea-with-custom-workflows/) and the BMAD customization guide at [BMAD-METHOD/docs/how-to/customize-bmad.md](https://github.com/bmad-code-org/BMAD-METHOD/blob/main/docs/how-to/customize-bmad.md).
 
 ## Contributing
 

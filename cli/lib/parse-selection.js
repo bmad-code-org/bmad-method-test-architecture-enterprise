@@ -1,7 +1,7 @@
 /**
  * The fragment list out of a runner reply.
  *
- * Lifted out of test/eval-fragment-selection.js unchanged when
+ * Lifted out of the fragment-selection eval harness unchanged when
  * cli/fragment-selection-runner.js started producing the reply the harness used
  * to parse inline. Two copies of this would let a fenced-block spelling be
  * accepted by the runner and rejected by the scorer, which is the drift

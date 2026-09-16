@@ -234,7 +234,7 @@ FR30: TEA compares run strength through `compareDominance`, honoring `comparabil
 
 FR31: TEA audits both lockfiles for age and licence, and sets a resolution-time floor in `.npmrc`. TEA's `.npmrc` is one line; `eval-quality` sets `min-release-age=7` and keeps the fail-closed audit beside it because that setting fails open on an already-committed lockfile.
 
-FR32: TEA holds the dependency direction between the trees that have an import graph: `cli/`, `tools/`, `test/` and `src/**/*.cjs`. `src/` holds 725 files of which one is JavaScript, so a gate over `src/` as a whole would be vacuous.
+FR32: TEA holds the dependency direction between the trees that have an import graph: `cli/`, `tools/`, `test/` and `src/**/*.cjs`. `src/` holds 724 files of which one is JavaScript, so a gate over `src/` as a whole would be vacuous.
 
 FR33: TEA holds its package boundary, so nothing the published tarball carries references the repository it was built in. TEA publishes to npm with six `bin` entries and ships `src/workflows/`.
 
@@ -1016,7 +1016,7 @@ So that a violation fails the build rather than surviving review.
 
 **Acceptance Criteria:**
 
-**Given** `src/` holds 725 files of which one is JavaScript, so a gate over it as a whole would be vacuous
+**Given** `src/` holds 724 files of which one is JavaScript, so a gate over it as a whole would be vacuous
 **When** the direction gate from Story 2.5 is configured
 **Then** it covers `cli/`, `tools/`, `test/` and `src/**/*.cjs`, and the declared edges are written down
 **And** the gate reports violations without failing on its first run, so the size of the fix is known before it starts

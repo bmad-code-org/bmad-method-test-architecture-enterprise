@@ -37,6 +37,11 @@ name: Quality & Validation
 # runner image, and a failed install here has to read as "the dependency did
 # not install" rather than surface three steps later as an opaque isolation
 # failure.
+#
+# test:direction, test:boundary, test:lineage, test:guard-publish and
+# test:layering-boundary-lineage are the same kind of exception as
+# test:licences and test:supply-chain: they run in `npm test` and in their own
+# `layering-boundary-lineage` job below, not inside `validate`.
 
 "on":
   pull_request:
@@ -400,6 +405,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          # This job runs npm ci (arbitrary install scripts) and shells out to
+          # a third-party binary; the token persist-credentials would otherwise
+          # leave in .git/config has no business surviving that.
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -421,3 +431,6 @@ jobs:
 
       - name: Seed a token-present, workflow-absent environment and watch the publish guard refuse it
         run: npm run test:guard-publish
+
+      - name: Verify each gate's script name and seed one violation per failing gate
+        run: npm run test:layering-boundary-lineage

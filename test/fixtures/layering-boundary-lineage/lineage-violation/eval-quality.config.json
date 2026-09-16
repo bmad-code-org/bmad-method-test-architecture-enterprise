@@ -1,0 +1,8 @@
+{
+  "field-ownership": {
+    "paths": [{ "path": "tools", "extensions": [".js"] }],
+    "fields": ["schemaVersion"],
+    "declarations": [],
+    "writers": ["tools/generate-probes.js"]
+  }
+}

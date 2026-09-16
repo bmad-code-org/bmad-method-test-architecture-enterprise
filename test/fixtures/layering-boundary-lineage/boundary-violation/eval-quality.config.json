@@ -1,0 +1,12 @@
+{
+  "package-boundary": {
+    "paths": [{ "path": "src" }],
+    "patterns": [
+      {
+        "name": "tea-dev-test-file",
+        "match": "\\btest/test-[\\w-]+\\.js\\b",
+        "reason": "this repository's own dev test file, not part of the published tarball"
+      }
+    ]
+  }
+}

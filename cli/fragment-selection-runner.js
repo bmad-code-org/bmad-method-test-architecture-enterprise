@@ -26,7 +26,7 @@
  * operation needs, `read-only`: the reply is a JSON object on standard output
  * and nothing about it requires a file, so claude runs with no write tool and
  * codex under its read-only sandbox, which is what the fragment-selection suite
- * declares in test/evals/suite-manifest.json.
+ * declares in the eval suite manifest.
  *
  * Two nested wall clocks are in play when this runs behind eval-quality's
  * command-line adapter, and the inner one has to be the shorter of the two:
@@ -57,10 +57,10 @@ const { parseSelection } = require('./lib/parse-selection');
 const { runAgent } = require('./lib/run-agent');
 const { EXIT_CODES, classOfAgentError, failureClassForExit, vendorEnvironmentNames } = require('./lib/runner-exit-codes');
 
-/** The same default `test/eval-fragment-selection.js` applies and `cli/test-review.js` declares, so this command changes no run that omits `--agent`. */
+/** The same default the fragment-selection eval harness applies and `cli/test-review.js` declares, so this command changes no run that omits `--agent`. */
 const DEFAULT_AGENT = 'claude';
 
-/** Five minutes, matching RUN_TIMEOUT_MS in test/eval-fragment-selection.js, which is the only caller that measures. */
+/** Five minutes, matching RUN_TIMEOUT_MS in the fragment-selection eval harness, which is the only caller that measures. */
 const DEFAULT_TIMEOUT_MS = 5 * 60_000;
 
 /** A selection is a reply, so the runner needs to write nothing; see the header. */

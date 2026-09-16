@@ -9,8 +9,9 @@
 #   - An ANTHROPIC_API_KEY repository secret (this template's review step uses
 #     --agent claude, executed by the claude CLI installed below). --agent
 #     codex is also supported (OPENAI_API_KEY instead) — see the --agent flag
-#     in docs/reference/tea-test-review-cli.md and swap the installed package
-#     and secret accordingly.
+#     in the TEA documentation's tea-test-review CLI reference
+#     (https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/tea-test-review-cli/)
+#     and swap the installed package and secret accordingly.
 #   - A vetted version of the bmad-method-test-architecture-enterprise npm
 #     package, pinned exactly (see TEA_VERSION below).
 #

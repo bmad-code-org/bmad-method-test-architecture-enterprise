@@ -231,14 +231,25 @@
         "match": "prefix",
         "path": "src/",
         "label": "src/**/*.cjs",
-        "imports": ["hooks-cjs"]
+        "imports": ["hooks-cjs"],
+        "externals": {
+          "policy": "allow",
+          "modules": ["node:crypto", "node:fs", "node:path"],
+          "rule": "the generated hook must run in a target project that has installed nothing (tea-enforce.cjs's own documented invariant), so it may reach only Node's own builtins and nothing an npm install would need to satisfy"
+        }
       }
     ],
     "commonjs": "check",
     "reportOnly": true
   },
   "package-boundary": {
-    "paths": [{ "path": "src" }, { "path": "cli", "extensions": [".js"] }, { "path": ".claude-plugin", "extensions": [".json"] }],
+    "paths": [
+      { "path": "src" },
+      { "path": "cli" },
+      { "path": ".claude-plugin", "extensions": [".json"] },
+      { "path": "README.md" },
+      { "path": "LICENSE" }
+    ],
     "manifest": {
       "file": "package.json",
       "fields": ["description", "keywords"]
@@ -246,8 +257,13 @@
     "patterns": [
       {
         "name": "tea-dev-test-file",
-        "match": "\\btest/test-[\\w-]+\\.js\\b",
-        "reason": "this repository's own dev test file, not part of the published tarball"
+        "match": "\\btest/[\\w./-]+\\.(?:js|json)\\b",
+        "reason": "a file under this repository's own dev tree, not part of the published tarball"
+      },
+      {
+        "name": "docs-path",
+        "match": "(?<!/)\\bdocs/(?:how-to|reference|explanation)/[\\w./-]+\\b",
+        "reason": "a page under docs/, referenced as a relative path the published tarball does not carry; the built site is the only place it is readable"
       },
       {
         "name": "build-machine-path",
@@ -259,7 +275,6 @@
   "field-ownership": {
     "paths": [{ "path": "tools", "extensions": [".js"] }],
     "fields": ["schemaVersion"],
-    "declarations": [],
     "writers": ["tools/generate-probes.js", "tools/generate-contracts.js"]
   }
 }
