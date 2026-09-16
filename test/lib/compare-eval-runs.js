@@ -1,24 +1,16 @@
 /**
  * Drift between two stored `runSummaryRecord`s.
  *
- * `test/lib/compare-dominance.js` wraps `eval-quality`'s own `compareDominance`
- * for data shaped as a `ComparableResult`: `{outcomes, strength, comparabilityKey}`.
- * Nothing `npm run eval:all` writes is shaped that way. Its nine suites are
- * bespoke scorers that never touch the package's `runScore`/`emit` pipeline
- * (confirmed by grepping `runScore`/`emit` across `test/` and `tools/`: only
- * `test/lib/probe-scoring.js` and its two consumers touch it, and neither is one
- * of `eval:all`'s manifest suites). Calling `compareDominance` on a measurement
- * diff it was never designed to score would produce a verdict that reads as
- * authoritative and is not, which is the mistake this module exists to avoid.
+ * Reports what changed between two `eval:all` runs, suite by suite: a
+ * `failureClass` change, a measurement change, and a suite present in one run
+ * and not the other. This is a measurement diff over `suiteResultRecord`'s own
+ * fields — `failureClass`, `measurements`, `thresholds`, `declaredRepetitions`.
  *
- * So this is a measurement diff, not a dominance comparison: it reports what
- * changed between two runs (`failureClass`, measurements, suites added or
- * removed) rather than which run is stronger. `compareStoredResults` still has a
- * real call site here, gated on a suite's own stored record actually carrying
- * `{outcomes, strength, comparabilityKey}` (none do today — see the module
- * comment above), so the day a suite is reshaped to emit that shape (tracked in
- * `_bmad-output/planning-artifacts/epics.md`, Epic 5) this module already routes
- * it through the one true comparison instead of needing a second design pass.
+ * For a suite whose stored result carries `{outcomes, strength,
+ * comparabilityKey}`, the comparison calls `test/lib/compare-dominance.js`'s
+ * `compareStoredResults` (Story 5.1) directly, so a suite that does produce
+ * `eval-quality`'s `ComparableResult` shape is compared through the package's
+ * own dominance rule rather than through a second, home-grown one.
  *
  * WHAT COUNTS AS "THE SAME SUITE-MANIFEST CONFIGURATION"
  *

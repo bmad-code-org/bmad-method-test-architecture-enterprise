@@ -1123,64 +1123,6 @@ So that the claim rests on a measured run rather than on a green deterministic g
 **Then** it opens a new story rather than extending this one, so this story's size stays known
 **And** the NFR4 obligation to fix it upstream still holds
 
-### Finding (Story 5.2): the seven bespoke-scorer suites still cannot answer "did this run get weaker"
-
-Story 5.1's third acceptance criterion named this gap and deferred it as "a different story"; Story 5.2's
-own design work reached the identical gap from the comparison side and was told to write it up rather
-than close it, since closing it means reshaping a scorer, which both stories' Boundaries name as a
-decision the coordinator makes deliberately rather than one a story backs into. This records that input
-once, precisely, so Story 6.12 or a new story can be scoped from it rather than rediscovered.
-
-**Which suites, and what they produce today.** Seven of `eval:all`'s nine manifest suites are bespoke
-scorers, each returning a report shaped for its own workflow and never `eval-quality`'s `Outcome`/
-`Strength` shape: `atdd` (a red-check report keyed on `redForIntendedReasonRate` and vacuous-pass
-counts), `bmad-tea-routing` (per-intent route/clarify/decline verdicts), `ci` (parse/lint findings
-against requested and forbidden elements), `nfr` (a domain-status table), `test-design` (a risk-table
-scored against the ADR's own arithmetic), `test-review` (per-finding recall and false-positive counts),
-and `trace` (a criterion-by-criterion coverage matrix). Confirmed by grepping `runScore`/`emit` across
-`test/` and `tools/`: the only callers are `test/lib/probe-scoring.js` and its two consumers,
-`test/test-probe-corpus.js` and `eval:contract-strength`/`eval:preflight`, and none of the seven above is
-one of those callers.
-
-Two suites are not part of this gap and are named here so neither is mistaken for one. `fragment-selection`
-measures which knowledge a run loads, a routing decision taken before a workflow produces anything to
-score at all, which is why `test/lib/suite-manifest.js`'s own `unaccountedSkills` already refuses to
-count it as coverage; there is no "Outcome" a fragment-selection case could emit. `transcript` is
-`evalType: infrastructure`: it proves the multi-turn harness mechanism against a scripted stub agent and
-discharges no skill's coverage obligation, so reshaping it would be reshaping a proof of a harness rather
-than a measurement of a skill. `bmad-testarch-automate` is a different gap again (fragment-selection-only
-coverage, tracked in the manifest's own `deferred` array) rather than a suite that exists today and
-produces the wrong shape.
-
-**The contract half is already done.** Every one of the seven already has a `.contract.json` compiled
-under `test/contracts/` (`atdd.contract.json`, `tea-routing-controls.contract.json` and
-`tea-routing-intents.contract.json`, `ci.contract.json`, `nfr.contract.json`, `test-design.contract.json`,
-`test-review.contract.json`, `trace.contract.json`), each carrying the behaviors and oracles
-`test/test-contract-oracles.js` already checks. So the missing piece for each suite is runtime wiring,
-not contract authorship: nothing needs to be designed from scratch, only connected.
-
-**What reshaping one suite concretely requires.** Three steps, the same three for each of the seven:
-map that suite's own pass/fail/severity findings onto `eval-quality`'s `Outcome` type (the suite already
-knows which criterion or requested element passed, failed, or was undecidable — the work is restating
-that judgment in the package's vocabulary rather than discovering it); call `compile`/`runScore` against
-the suite's existing contract to produce a `strength` vector and a `comparabilityKey`; thread the result
-through `suiteResultRecord` so it is stored alongside the bespoke report rather than instead of it, since
-the bespoke report is what a human reads and the `Outcome` shape is what a machine compares. None of
-this touches the suite's own scoring logic or its thresholds — a suite's pass/fail verdict does not
-change, only whether that verdict is also expressed in a shape `compareStoredResults`
-(`test/lib/compare-dominance.js`, Story 5.1) can read.
-
-**What the repository gains once even one suite closes this.** Today `compareStoredResults` only ever
-runs inside `test/test-probe-corpus.js`, over the stored probe corpus. `test/lib/compare-eval-runs.js`
-(this story) has a real call site for it, gated on a suite's stored record actually carrying
-`{outcomes, strength, comparabilityKey}`, and that call site is provably unreachable today because no
-suite's record carries that shape. Reshaping even one of the seven makes it reachable: the first suite to
-close this gap is the first suite for which a drift between two live `eval:all` runs is answered by
-`eval-quality`'s own dominance rule rather than by a human reading two measurement diffs side by side.
-That is the capability this repository does not have today — "did the whole live suite get weaker,"
-answered the same way "did the probe corpus get weaker" already is — and it is what closing this gap for
-all seven would eventually buy in full.
-
 ### Story 5.3: Restate the roadmap against what ships
 
 As a reader deciding what TEA's evaluation covers,
