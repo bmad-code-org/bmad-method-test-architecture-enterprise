@@ -113,7 +113,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 6.2: Prove `bmad-testarch-test-design` grounds its risks](#story-62-prove-bmad-testarch-test-design-grounds-its-risks) ([#166](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/166))
 - [x] [Story 6.3: Prove `bmad-testarch-nfr` refuses an unsupported PASS](#story-63-prove-bmad-testarch-nfr-refuses-an-unsupported-pass) ([#174](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/174))
 - [x] [Story 6.4: Prove `bmad-testarch-ci` emits configuration that parses](#story-64-prove-bmad-testarch-ci-emits-configuration-that-parses) ([#186](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/186))
-- [ ] [Story 6.5: Prove `bmad-testarch-atdd` fails red for the intended reason](#story-65-prove-bmad-testarch-atdd-fails-red-for-the-intended-reason). **Active:** open in [#187](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/187)
+- [x] [Story 6.5: Prove `bmad-testarch-atdd` fails red for the intended reason](#story-65-prove-bmad-testarch-atdd-fails-red-for-the-intended-reason) ([#187](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/187))
 - [ ] [Story 6.6: Build the fixed implementation and qualified regression fixture](#story-66-build-the-fixed-implementation-and-qualified-regression-fixture)
 - [ ] [Story 6.7: Prove `bmad-testarch-automate` catches the qualified regression](#story-67-prove-bmad-testarch-automate-catches-the-qualified-regression)
 - [ ] [Story 6.8: Score the `bmad-testarch-framework` scaffold's contents](#story-68-score-the-bmad-testarch-framework-scaffolds-contents)
