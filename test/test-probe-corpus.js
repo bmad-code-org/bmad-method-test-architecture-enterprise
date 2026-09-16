@@ -39,11 +39,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const prettier = require('prettier');
 
-const { loadEvalQuality, validateArtifact } = require('./lib/eval-quality-inputs');
+const { loadEvalQuality, scoringPolicy, validateArtifact } = require('./lib/eval-quality-inputs');
 const { publishedMember } = require('./lib/vocabularies');
 const { ladderExitCode, ladderVerdict, runSuite, storedProbePort, suites } = require('./lib/probe-scoring');
 const { baselineDifferences, stagedWorkspaceFor } = require('./eval-contract-strength');
 const { digestTree, stageWorkspace } = require('./eval-trace');
+const { compareStoredResults } = require('./lib/compare-dominance');
 
 const BASELINE_PATH = path.join(__dirname, 'probes', 'expected-strength.json');
 
@@ -109,6 +110,25 @@ function probeSummary(entry, registries) {
     basis: basisShapes(entry.result.ladder.basis),
     qualification: qualificationCodes(entry.result.qualification, registries.QUALIFICATION_FAILURES),
     strength: entry.result.artifact?.strength?.vector ?? null,
+    comparableResult: comparableResultOf(entry),
+  };
+}
+
+/**
+ * The `{comparabilityKey, outcomes, strength}` slice `compareDominance` reads
+ * (TEA Story 5.1), or `null` when this probe minted no artifact. `outcomes`
+ * is slimmed to `probeId`/`state`/`severity` rather than stored in full: the
+ * severity-floor override in `compareDominance` reads exactly those three
+ * fields and nothing else, and this baseline's own stated goal is staying
+ * small enough to read in a diff.
+ */
+function comparableResultOf(entry) {
+  const artifact = entry.result.artifact;
+  if (artifact === null) return null;
+  return {
+    comparabilityKey: artifact.comparabilityKey,
+    strength: artifact.strength,
+    outcomes: artifact.outcomes.map((outcome) => ({ probeId: outcome.probeId, state: outcome.state, severity: outcome.severity })),
   };
 }
 
@@ -194,6 +214,106 @@ function comparatorProblems(results, baseline) {
   return problems;
 }
 
+/**
+ * Whether `comparableResult.strength.vector` carries at least one class with
+ * a non-null rate. `compareDominance`'s own `componentComparison` returns
+ * `'incomparable'` the moment neither side contributes a class, which is
+ * correct for the package's own purpose (no evidence means no relation) but
+ * means two byte-identical results with zero contributing classes compare
+ * as `'incomparable'` rather than `'equivalent'` — not a moved baseline,
+ * just a probe class that never measures anything.
+ */
+function hasContributingEvidence(comparableResult) {
+  return Object.values(comparableResult.strength.vector).some((entry) => entry !== null && entry.rate !== null);
+}
+
+/**
+ * `comparatorProblems` above already fails the moment any field in `summary`
+ * moves against the on-disk baseline, including `comparableResult`, so a
+ * scorer change never passes silently. What that literal diff cannot say is
+ * *what kind* of change it is: a probe whose recorded strength fell against
+ * the stored baseline and one whose strength merely got noisier both read as
+ * "these bytes differ." This runs `compareDominance` (TEA Story 5.1) between
+ * each probe's stored `comparableResult` and its freshly measured one and
+ * names the relation, so a scorer change that alters a historical result is
+ * reported as a dominance change and not only as a diff.
+ *
+ * A probe absent from either side, or with no artifact on either side (an
+ * Invalid run mints none), carries no comparison: there is nothing stored to
+ * compare a fresh score against, or nothing measured to compare with. Nor
+ * does a probe where neither side ever contributes a class (see
+ * `hasContributingEvidence`): comparing it against itself would always read
+ * `'incomparable'`, which is a property of the probe, not a finding.
+ */
+async function dominanceProblems(onDiskBaseline, freshSummary, severityFloor) {
+  const problems = [];
+  for (const [suiteId, freshSuite] of Object.entries(freshSummary)) {
+    const storedSuite = onDiskBaseline[suiteId];
+    if (storedSuite === undefined) continue;
+    for (const [probeId, fresh] of Object.entries(freshSuite.probes)) {
+      const stored = storedSuite.probes?.[probeId];
+      if (stored === undefined || stored.comparableResult === null || fresh.comparableResult === null) continue;
+      if (!hasContributingEvidence(stored.comparableResult) && !hasContributingEvidence(fresh.comparableResult)) continue;
+      const compared = await compareStoredResults(stored.comparableResult, fresh.comparableResult, severityFloor);
+      if (!compared.ok) {
+        problems.push(`${suiteId} ${probeId}: dominance comparison refused against the stored baseline: ${compared.reason}`);
+      } else if (compared.relation !== 'equivalent') {
+        problems.push(`${suiteId} ${probeId}: dominance moved to "${compared.relation}" against the stored baseline`);
+      }
+    }
+  }
+  return problems;
+}
+
+/**
+ * `dominanceProblems` driven over one real, unmutated pair (which must
+ * report nothing) and then over the same pair with one side's strength
+ * vector moved to a worse rate (which must report exactly one dominance
+ * change). Proves the check actually runs rather than only existing to be
+ * described, the same discipline `comparatorProblems` above holds itself to.
+ */
+async function dominanceComparatorProblems(summary, severityFloor) {
+  const problems = [];
+  const hasEvidentProbe = (s) =>
+    Object.values(s.probes).some((p) => p.comparableResult !== null && hasContributingEvidence(p.comparableResult));
+  const [suiteId, suite] = Object.entries(summary).find(([, s]) => hasEvidentProbe(s));
+  const [probeId, probe] = Object.entries(suite.probes).find(
+    ([, p]) => p.comparableResult !== null && hasContributingEvidence(p.comparableResult),
+  );
+
+  const clean = await dominanceProblems(summary, summary, severityFloor);
+  if (clean.length > 0) {
+    problems.push(`the dominance comparator reported ${clean.length} change(s) comparing the corpus against itself: ${clean.join('; ')}`);
+  }
+
+  const worsened = {
+    ...summary,
+    [suiteId]: {
+      ...suite,
+      probes: {
+        ...suite.probes,
+        [probeId]: {
+          ...probe,
+          comparableResult: {
+            ...probe.comparableResult,
+            strength: {
+              ...probe.comparableResult.strength,
+              vector: { defect: { caught: 0, exercised: 1, rate: 0 }, gameability: null, 'zero-action': null },
+            },
+          },
+        },
+      },
+    },
+  };
+  const seen = await dominanceProblems(summary, worsened, severityFloor);
+  if (seen.length !== 1) {
+    problems.push(
+      `the dominance comparator reported ${seen.length} change(s) for one probe moved to a worse strength vector, where it must report exactly one`,
+    );
+  }
+  return problems;
+}
+
 function suiteSummary(outcome, registries) {
   const gaps = outcome.scored
     .map((entry) => entry.result.artifact)
@@ -254,6 +374,9 @@ async function main() {
 
   problems.push(...comparatorProblems(liveShaped, summary));
 
+  const policy = await scoringPolicy();
+  problems.push(...(await dominanceComparatorProblems(summary, policy.severityFloor)));
+
   // The live harness's staging, which nothing else in the chain reaches.
   //
   // `test/eval-contract-strength.js` is exposed only as `eval:contract-strength`
@@ -307,6 +430,7 @@ async function main() {
     console.log(`\n${colors.green}wrote${colors.reset} test/probes/expected-strength.json`);
   } else if (fs.existsSync(BASELINE_PATH)) {
     const onDisk = fs.readFileSync(BASELINE_PATH, 'utf8');
+    problems.push(...(await dominanceProblems(JSON.parse(onDisk), summary, policy.severityFloor)));
     if (onDisk !== rendered) {
       const expected = onDisk.split('\n');
       const actual = rendered.split('\n');

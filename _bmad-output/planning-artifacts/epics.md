@@ -102,7 +102,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 
 ### Epic 5 progress: Drift is measured and the upgrade is proven live
 
-- [ ] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance)
+- [x] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance) ([#199](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/199))
 - [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result)
 - [ ] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships)
 - [ ] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page) (**Active:** open in [#200](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/200); the numeric pass after Epic 6 closes and AC3's claim-gate clause, pending Story 4.2, remain)
@@ -1096,8 +1096,8 @@ So that drift across a runner or model change is measured rather than eyeballed 
 **Then** the reported relation equals the fixture's declared relation
 **And** the fixture covers each relation the type declares, including neither-dominates
 
-**Given** the comparison is available
-**When** it runs over the replay corpus in `test:eval-replay`
+**Given** the comparison is available, and `test:eval-replay`'s eight suites carry no `EvidenceArtifact`-shaped data (their scorers are bespoke and never touch `eval-quality`'s `runScore`/`emit` pipeline, and reshaping all eight to produce `Outcome`/`Strength` output is a different story), while `test:probe-corpus` is where TEA already replays every probe corpus against a stored baseline on every run
+**When** it runs over that stored-vs-fresh comparison in `test:probe-corpus`
 **Then** a scorer change that alters a historical result is reported as a dominance change rather than only as a diff
 
 ### Story 5.2: Run the whole suite live and record the result
