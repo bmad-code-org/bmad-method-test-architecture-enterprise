@@ -54,12 +54,12 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 | Epic 1 | 5 / 5 | 0 | 0 | Complete |
 | Epic 2 | 7 / 7 | 0 | 0 | Complete |
 | Epic 3 | 6 / 6 | 0 | 0 | Complete |
-| Epic 4 | 3 / 8 | 0 | 5 | In progress |
+| Epic 4 | 4 / 8 | 0 | 4 | In progress |
 | Epic 5 | 0 / 5 | 0 | 5 | Queued |
-| Epic 6 | 3 / 12 | 0 | 9 | In progress |
+| Epic 6 | 4 / 12 | 1 | 7 | In progress |
 | Epic 7 | 1 / 1 | 0 | 0 | Complete |
 | Epic 8 | 0 / 1 | 0 | 1 | Queued |
-| **Total** | **25 / 45** | **0** | **20** | **56% merged** |
+| **Total** | **27 / 45** | **1** | **17** | **60% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -90,7 +90,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 
 ### Epic 4 progress: TEA's claims, codes and supply chain are machine-held
 
-- [ ] [Story 4.1: Hold every published count against its source](#story-41-hold-every-published-count-against-its-source) ([#188](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/188), open)
+- [x] [Story 4.1: Hold every published count against its source](#story-41-hold-every-published-count-against-its-source) ([#188](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/188), open)
 - [ ] [Story 4.2: Hold every published prose claim against its artifact](#story-42-hold-every-published-prose-claim-against-its-artifact)
 - [ ] [Story 4.3: Execute the fenced commands in the documentation](#story-43-execute-the-fenced-commands-in-the-documentation)
 - [x] [Story 4.4: Narrow faults by type and assert every vocabulary](#story-44-narrow-faults-by-type-and-assert-every-vocabulary) ([#182](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/182))
@@ -113,7 +113,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 6.2: Prove `bmad-testarch-test-design` grounds its risks](#story-62-prove-bmad-testarch-test-design-grounds-its-risks) ([#166](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/166))
 - [x] [Story 6.3: Prove `bmad-testarch-nfr` refuses an unsupported PASS](#story-63-prove-bmad-testarch-nfr-refuses-an-unsupported-pass) ([#174](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/174))
 - [x] [Story 6.4: Prove `bmad-testarch-ci` emits configuration that parses](#story-64-prove-bmad-testarch-ci-emits-configuration-that-parses) ([#186](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/186))
-- [ ] [Story 6.5: Prove `bmad-testarch-atdd` fails red for the intended reason](#story-65-prove-bmad-testarch-atdd-fails-red-for-the-intended-reason)
+- [ ] [Story 6.5: Prove `bmad-testarch-atdd` fails red for the intended reason](#story-65-prove-bmad-testarch-atdd-fails-red-for-the-intended-reason). **Active:** open in [#187](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/187)
 - [ ] [Story 6.6: Build the fixed implementation and qualified regression fixture](#story-66-build-the-fixed-implementation-and-qualified-regression-fixture)
 - [ ] [Story 6.7: Prove `bmad-testarch-automate` catches the qualified regression](#story-67-prove-bmad-testarch-automate-catches-the-qualified-regression)
 - [ ] [Story 6.8: Score the `bmad-testarch-framework` scaffold's contents](#story-68-score-the-bmad-testarch-framework-scaffolds-contents)
