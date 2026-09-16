@@ -69,6 +69,13 @@ if (exports.PLAYWRIGHT_UTILS_ROW_IDS.length === 0) refuse('no criteria-registry 
 const required = () => z.unknown().refine((value) => value !== undefined, { message: 'is required' });
 
 function schemaFromKeys(keys) {
+  // `always` and `conditional` are each a spread from a shared source merged
+  // with hand-listed keys, two different merges into the same two objects, so
+  // nothing already guarantees they're disjoint; building `conditional` after
+  // `always` below would otherwise let an overlapping key silently demote a
+  // required field to optional with no error.
+  const overlap = Object.keys(keys.always).filter((key) => key in keys.conditional);
+  if (overlap.length > 0) refuse(`"${overlap.join(', ')}" is declared both always and conditional`);
   const shape = {};
   for (const key of Object.keys(keys.always)) shape[key] = required();
   for (const key of Object.keys(keys.conditional)) shape[key] = z.unknown().optional();
@@ -90,12 +97,13 @@ exports.EXIT_CODE_STRINGS = Object.values(EXIT).map(String);
 // ---------------------------------------------------------------------------
 
 const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'evals', 'suite-manifest.json'), 'utf8'));
+if (!Array.isArray(manifest.deferred)) refuse('suite-manifest.json has no "deferred" array');
 const deferredSkills = new Set(manifest.deferred.map((entry) => entry.skill));
 
-/** docs/explanation/eval-quality-roadmap.md:181, "The remaining three ... stay visible ... as deferred work." */
+/** docs/explanation/eval-quality-roadmap.md:182, "The remaining three ... stay visible ... as deferred work." */
 exports.THREE_SKILLS_DEFERRED = deferredSkills.size === 3;
 
-/** docs/explanation/eval-quality-adoption-guide.md:377, "two of the eight skills fragment selection spans are still listed as deferred." */
+/** docs/explanation/eval-quality-adoption-guide.md:378, "two of the eight skills fragment selection spans are still listed as deferred." */
 const fragmentSelectionSuite = manifest.suites.find((suite) => suite.id === 'fragment-selection');
 if (fragmentSelectionSuite === undefined) refuse('suite-manifest.json registers no suite with id "fragment-selection"');
 const fragmentSelectionSkills = fragmentSelectionSuite.skills ?? [];
@@ -120,7 +128,7 @@ for (const corpus of Object.values(expectedStrength)) {
 exports.THIRTY_FOUR_CONCERNS = concernsCount === 34;
 
 /**
- * docs/explanation/eval-quality-command-adapter.md:251,269, "as of 1.4.0."
+ * docs/explanation/eval-quality-command-adapter.md:255,273, "as of 1.4.0."
  * The claim is about when a capability arrived, so this compares `>=`, not
  * `==`, against the pin: bumping the pin further keeps the claim true.
  */
@@ -249,6 +257,7 @@ function keyIsUnread(key) {
   const wordBoundary = new RegExp(`\\b${key}\\b`);
   return !readWorkflowFileBodies().some((body) => wordBoundary.test(body));
 }
+exports.keyIsUnread = keyIsUnread;
 
 exports.RISK_THRESHOLD_UNREAD = keyIsUnread('risk_threshold');
 exports.OUTPUT_FOLDER_KEYS_UNREAD = ['test_design_output', 'test_review_output', 'trace_output'].every(keyIsUnread);

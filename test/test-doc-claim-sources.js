@@ -123,7 +123,7 @@ check('FUTURE_KEYS matches an independent walk of module.yaml’s "⏭️ FUTURE
     // follows it, not only the first one: "Test output folders" covers three.
     for (const candidate of lines.slice(index + 1)) {
       if (/⏭️\s*FUTURE/.test(candidate)) break;
-      const match = candidate.match(/^([A-Za-z_][A-Za-z0-9_]*):/);
+      const match = candidate.match(/^([A-Za-z_][A-Za-z0-9_-]*):/);
       if (match === null) continue;
       if (!promptedKeys.has(match[1])) break;
       expected.push(match[1]);
@@ -143,6 +143,17 @@ check('atLeast() compares a real version correctly and refuses a version it cann
 
   const pin = require('../package.json').devDependencies['eval-quality'];
   assert.strictEqual(source.EVAL_QUALITY_PIN_IS_3_2_0, pin === '3.2.0');
+});
+
+check('keyIsUnread reports a genuinely referenced key as read, not just an injected probe as unread', () => {
+  // The word-boundary test below only exercises the "unread" (true) branch via
+  // a staged probe file; a genuinely referenced key proves the "read" (false)
+  // branch actually fires, so a `.some()`→`.every()` typo (an easy mistake,
+  // `.every()` is used one line below on a sibling array in production) cannot
+  // silently make every `*_UNREAD` export stay `true` forever with this file
+  // still green. tea_use_playwright_utils is confirmed referenced under
+  // src/workflows/ by direct grep, so this needs no staged fixture.
+  assert.strictEqual(source.keyIsUnread('tea_use_playwright_utils'), false);
 });
 
 check('keyIsUnread’s word-boundary check finds a real bare-word reference, not only {key} interpolation', () => {
