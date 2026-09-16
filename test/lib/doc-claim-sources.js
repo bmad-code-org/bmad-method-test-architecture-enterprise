@@ -100,15 +100,15 @@ const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'eva
 if (!Array.isArray(manifest.deferred)) refuse('suite-manifest.json has no "deferred" array');
 const deferredSkills = new Set(manifest.deferred.map((entry) => entry.skill));
 
-/** docs/explanation/eval-quality-roadmap.md:182, "The remaining three ... stay visible ... as deferred work." */
-exports.THREE_SKILLS_DEFERRED = deferredSkills.size === 3;
+/** docs/explanation/eval-quality-roadmap.md:182, "The remaining two ... stay visible ... as deferred work." */
+exports.TWO_SKILLS_DEFERRED = deferredSkills.size === 2;
 
-/** docs/explanation/eval-quality-adoption-guide.md:378, "two of the eight skills fragment selection spans are still listed as deferred." */
+/** docs/explanation/eval-quality-adoption-guide.md:385, "one of the eight skills fragment selection spans is still listed as deferred." */
 const fragmentSelectionSuite = manifest.suites.find((suite) => suite.id === 'fragment-selection');
 if (fragmentSelectionSuite === undefined) refuse('suite-manifest.json registers no suite with id "fragment-selection"');
 const fragmentSelectionSkills = fragmentSelectionSuite.skills ?? [];
 if (fragmentSelectionSkills.length === 0) refuse('the fragment-selection suite names no skills');
-exports.TWO_FRAGMENT_SELECTION_SKILLS_DEFERRED = fragmentSelectionSkills.filter((skill) => deferredSkills.has(skill)).length === 2;
+exports.ONE_FRAGMENT_SELECTION_SKILL_DEFERRED = fragmentSelectionSkills.filter((skill) => deferredSkills.has(skill)).length === 1;
 
 /** docs/explanation/eval-quality-roadmap.md:10, "It does not yet prove the complete behavior of every TEA skill." */
 exports.NOT_EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE = deferredSkills.size > 0;
