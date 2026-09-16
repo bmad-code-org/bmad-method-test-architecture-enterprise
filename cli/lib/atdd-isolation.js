@@ -187,24 +187,27 @@ function buildSeatbeltProfile({ workspace }) {
  * `"$@"` the command, so no argument is ever interpolated into shell text.
  *
  * bubblewrap's flags, in the order verified live:
- *   --unshare-user     an unprivileged user namespace, the same mechanism a bare
- *                      `unshare --user` uses, and what lets an ordinary account
- *                      create the namespaces below with no setuid helper
- *   --unshare-net      a fresh network namespace with only loopback, brought up
- *                      already: unlike a bare `unshare --net`, bubblewrap starts
- *                      `lo` itself, so no separate `ip link set lo up` step exists
- *                      to forget
- *   --unshare-pid      a fresh PID namespace, so a generated test cannot see, and
- *                      is not counted among, host or sibling-run process trees
- *   --unshare-ipc      a fresh IPC namespace, so no generated test can reach a
- *                      SysV or POSIX IPC object another process on the host holds
- *   --die-with-parent  the sandboxed process tree is killed if the process that
- *                      started bubblewrap dies first, so an OOM-killed harness
- *                      cannot orphan a still-running sandboxed child
- *   --ro-bind / /      the real filesystem, read-only, so node, Playwright and
- *                      the fixture's own dependencies resolve exactly as they do
- *                      outside the sandbox
- *   --bind ws ws       the one path writable inside that read-only view
+ *   --unshare-user   an unprivileged user namespace, the same mechanism a bare
+ *                    `unshare --user` uses, and what lets an ordinary account
+ *                    create the namespaces below with no setuid helper
+ *   --unshare-net    a fresh network namespace with only loopback, brought up
+ *                    already: unlike a bare `unshare --net`, bubblewrap starts
+ *                    `lo` itself, so no separate `ip link set lo up` step exists
+ *                    to forget
+ *   --ro-bind / /    the real filesystem, read-only, so node, Playwright and
+ *                    the fixture's own dependencies resolve exactly as they do
+ *                    outside the sandbox
+ *   --bind ws ws     the one path writable inside that read-only view
+ *
+ * `--unshare-pid`, `--unshare-ipc` and `--die-with-parent` were tried and
+ * reverted: verified live in a plain `ubuntu:24.04` Docker container, but the
+ * actual `ubuntu-latest` GitHub Actions runner refused to bring up loopback
+ * with them added (`bwrap: loopback: Failed RTM_NEWADDR: Operation not
+ * permitted`), a kernel or AppArmor restriction a generic container did not
+ * reproduce. Discovered by CI itself on this story's own pull request, which
+ * is the story's whole point: a change here that looks right in every local
+ * and containerized test can still be wrong on the one machine, this
+ * runner image, where the suite actually has to run.
  *
  * @param {{backend: string, profilePath?: string, workspace?: string, cpuSeconds: number, command: string, args: string[]}} options
  * @returns {{command: string, args: string[]}}
@@ -230,9 +233,6 @@ function sandboxedCommand({ backend, profilePath, workspace, cpuSeconds, command
         'bwrap',
         '--unshare-user',
         '--unshare-net',
-        '--unshare-pid',
-        '--unshare-ipc',
-        '--die-with-parent',
         '--ro-bind',
         '/',
         '/',
