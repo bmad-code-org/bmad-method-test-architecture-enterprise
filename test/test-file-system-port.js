@@ -480,15 +480,17 @@ async function reviewHarnessCases() {
     // `digestFiles` reads every fixture the manifest names, and pre-flight has
     // already read the same three files to count their lines, so the fixture
     // paths alone prove nothing: they are in the log either way. What locates the
-    // digest is where its reads fall. `finish` reads the manifest, then digests
-    // the fixtures, then writes the record, so the digest's reads are the ones
-    // between the manifest read and the write. With `fs.readFileSync` in
-    // `digestFiles` that window holds no read at all.
+    // digest is where its reads fall. `finish` reads the manifest, digests the
+    // fixtures, reads the suite's one declared contract for its `schemaVersion`
+    // (`contractVersionsFor`, TEA Story 5.2), and then writes the record, so the
+    // four reads between the manifest read and the write are the three fixture
+    // reads plus that one contract read. With `fs.readFileSync` in `digestFiles`
+    // or in `contractVersionsFor` that window would hold fewer reads than this.
     const manifestRead = recorded.calls.indexOf(`read ${SUITE_MANIFEST}`);
     const betweenManifestAndWrite = recorded.calls.slice(manifestRead + 1, recordWrite).filter((line) => line.startsWith('read '));
     assert(
-      manifestRead !== -1 && recordWrite > manifestRead && betweenManifestAndWrite.length === 3,
-      "the fixture digest's three reads are logged as port calls, between the manifest read and the record write",
+      manifestRead !== -1 && recordWrite > manifestRead && betweenManifestAndWrite.length === 4,
+      "the fixture digest's three reads and the suite's one contract read are logged as port calls, between the manifest read and the record write",
       `manifest at ${manifestRead}, write at ${recordWrite}, ${betweenManifestAndWrite.length} read(s) between them`,
     );
   });

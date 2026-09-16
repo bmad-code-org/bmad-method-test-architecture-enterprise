@@ -300,6 +300,9 @@ jobs:
       - name: Prove compareDominance reaches every relation it declares and refuses a comparabilityKey mismatch
         run: npm run test:compare-dominance
 
+      - name: Prove two recorded eval:all runs compare correctly and refuse a version or config mismatch
+        run: npm run test:compare-eval-runs
+
       - name: Prove the automate-eval fixture's seeded regression rolls back live
         run: npm run test:automate-eval-fixture
 

@@ -6,7 +6,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.2.0"
+          "const": "1.3.0"
         },
         "kind": {
           "type": "string",
@@ -438,7 +438,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.2.0"
+          "const": "1.3.0"
         },
         "kind": {
           "type": "string",
@@ -450,6 +450,9 @@
         },
         "repository": {
           "$ref": "#/definitions/EvalResult/properties/repository"
+        },
+        "evalQualityVersion": {
+          "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
         },
         "suites": {
           "type": "array",
@@ -495,6 +498,7 @@
         "kind",
         "generatedAt",
         "repository",
+        "evalQualityVersion",
         "suites",
         "unaccountedSkills",
         "durationMs",
