@@ -97,7 +97,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 4.5: Read diagnostics from the sink and decide the strict rung](#story-45-read-diagnostics-from-the-sink-and-decide-the-strict-rung) ([#175](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/175))
 - [x] [Story 4.6: Hold the supply chain](#story-46-hold-the-supply-chain) ([#180](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/180))
 - [x] [Story 4.7: Hold layering, boundary and lineage](#story-47-hold-layering-boundary-and-lineage) ([#191](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/191))
-- [ ] [Story 4.8: Gate the ungated trees, allowlists, coverage and CI](#story-48-gate-the-ungated-trees-allowlists-coverage-and-ci)
+- [x] [Story 4.8: Gate the ungated trees, allowlists, coverage and CI](#story-48-gate-the-ungated-trees-allowlists-coverage-and-ci) ([#190](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/190))
 
 ### Epic 5 progress: Drift is measured and the upgrade is proven live
 
