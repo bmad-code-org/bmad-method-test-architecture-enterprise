@@ -160,6 +160,8 @@ const CORPUS_HARNESSES = [
     reports: /intents\.json is not valid JSON/,
   },
   {
+    name: 'ci',
+    suiteId: 'ci',
     harness: path.join(PROJECT_ROOT, 'test', 'eval-ci.js'),
     label: 'the ci harness',
     scripted: path.join(PROJECT_ROOT, 'test', 'fixtures', 'ci-eval', 'ground-truth.json'),
