@@ -70,6 +70,7 @@ check('per-suite call counts are caseCount times repetitions, independently reco
   assert.strictEqual(source.TEST_DESIGN_CALLS, suite('test-design').caseCount * suite('test-design').repetitions);
   assert.strictEqual(source.NFR_CALLS, suite('nfr').caseCount * suite('nfr').repetitions);
   assert.strictEqual(source.TRACE_CALLS, suite('trace').caseCount * suite('trace').repetitions);
+  assert.strictEqual(source.CI_CALLS, suite('ci').caseCount * suite('ci').repetitions);
 });
 
 check("test-review's call count is repetitions alone, since its harness reviews the whole corpus once per repetition", () => {
@@ -81,7 +82,7 @@ check("test-review's call count is repetitions alone, since its harness reviews 
   );
 });
 
-check('TOTAL_CALLS is the sum of all six per-suite call counts', () => {
+check('TOTAL_CALLS is the sum of all seven per-suite call counts', () => {
   assert.strictEqual(
     source.TOTAL_CALLS,
     source.FRAGMENT_SELECTION_CALLS +
@@ -89,7 +90,8 @@ check('TOTAL_CALLS is the sum of all six per-suite call counts', () => {
       source.TEST_DESIGN_CALLS +
       source.TEST_REVIEW_CALLS +
       source.NFR_CALLS +
-      source.TRACE_CALLS,
+      source.TRACE_CALLS +
+      source.CI_CALLS,
   );
 });
 
@@ -177,6 +179,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'testDesignCalls',
     'testReviewCalls',
     'nfrCalls',
+    'ciCalls',
     'traceCalls',
   ]);
 
@@ -188,6 +191,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'testDesignCalls',
     'testReviewCalls',
     'nfrCalls',
+    'ciCalls',
     'traceCalls',
   ]);
 
@@ -198,6 +202,7 @@ check("every doc-counts entry's counts array names its sources in the order its 
     'routingIntentCalls',
     'testReviewCalls',
     'nfrCalls',
+    'ciCalls',
     'testDesignCalls',
     'traceCalls',
     'totalCallsThreeRunners',

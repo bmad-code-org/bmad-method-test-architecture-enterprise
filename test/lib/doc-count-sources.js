@@ -75,14 +75,23 @@ exports.TEST_REVIEW_CALLS = repetitionsOf('test-review');
 exports.NFR_CALLS = caseCountOf('nfr') * repetitionsOf('nfr');
 exports.TRACE_CALLS = caseCountOf('trace') * repetitionsOf('trace');
 
-/** One `eval:all` run's total model calls, for one runner, across all six suites. */
+/**
+ * The `ci` suite's call count (README.md:424). Added after the roadmap and
+ * adoption-guide sentences were written, so it is held only where a sentence
+ * actually names it; the six-suite sentences above describe exactly the six
+ * suites they name and are not thereby incomplete.
+ */
+exports.CI_CALLS = caseCountOf('ci') * repetitionsOf('ci');
+
+/** One `eval:all` run's total model calls, for one runner, across every suite. */
 exports.TOTAL_CALLS =
   exports.FRAGMENT_SELECTION_CALLS +
   exports.ROUTING_INTENT_CALLS +
   exports.TEST_DESIGN_CALLS +
   exports.TEST_REVIEW_CALLS +
   exports.NFR_CALLS +
-  exports.TRACE_CALLS;
+  exports.TRACE_CALLS +
+  exports.CI_CALLS;
 
 /** All three built-in runners (`claude`, `codex`, `agy`) making one `eval:all` run each. */
 exports.TOTAL_CALLS_THREE_RUNNERS = exports.TOTAL_CALLS * 3;
