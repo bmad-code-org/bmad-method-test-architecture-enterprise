@@ -562,8 +562,8 @@ async function caseIndex(suites) {
  *
  * @returns {Promise<string[]>}
  */
-async function caseIds() {
-  return (await caseIndex(await loadSuites([]))).map((item) => item.id);
+async function caseIds(workflows = []) {
+  return (await caseIndex(await loadSuites(workflows))).map((item) => item.id);
 }
 
 /**
@@ -597,6 +597,7 @@ async function finish({ options, startedAt, mode, suites, runners, suiteFailureC
         promptDigest: digestPrompts(index),
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -616,7 +617,11 @@ function runnerRecord(
   { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,

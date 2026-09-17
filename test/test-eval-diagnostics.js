@@ -17,6 +17,7 @@ const {
   artifactEvidence,
   suiteResultRecord,
   runSummaryRecord,
+  writeSuiteResult,
 } = require('./lib/eval-record');
 const { compareEvalRuns } = require('./lib/compare-eval-runs');
 const {
@@ -24,6 +25,7 @@ const {
   validateEvalResult,
   validateEvalRun,
   SCHEMA_VERSION,
+  PREVIOUS_SCHEMA_VERSION,
   LEGACY_SCHEMA_VERSION,
   ROOT_CAUSES,
   worstFailureClass,
@@ -74,7 +76,10 @@ function runner(diagnostics, overrides = {}) {
   };
 }
 
-function suiteRecord(runners, cases = [{ id: 'case-a', promptDigest: DIGEST }]) {
+function suiteRecord(runners, cases = [{ id: 'case-a', promptDigest: DIGEST }], requestedRepetitions = null) {
+  const declaredRepetitions =
+    requestedRepetitions ??
+    (runners.length > 0 && cases.length > 0 ? Math.max(...runners.map((entry) => entry.repetitions.expected / cases.length)) : 2);
   return suiteResultRecord({
     generatedAt: '2026-09-17T00:00:00.000Z',
     mode: 'live',
@@ -86,13 +91,14 @@ function suiteRecord(runners, cases = [{ id: 'case-a', promptDigest: DIGEST }]) 
       ciTier: 'deterministic',
       runnerCapabilities: ['read-only'],
       thresholds: { accuracy: 1, maxUnstableCases: 0 },
-      repetitions: 2,
+      repetitions: declaredRepetitions,
     },
     repository: { commit: 'abc123', dirty: false },
     fixtureDigest: DIGEST,
     promptDigest: DIGEST,
     cases,
     runners,
+    declaredRepetitions,
     durationMs: 1,
   });
 }
@@ -100,12 +106,13 @@ function suiteRecord(runners, cases = [{ id: 'case-a', promptDigest: DIGEST }]) 
 function harnessRunnerWriter(id, diagnostics) {
   const options = { agentCmd: process.execPath, agentArgs: [], envPass: [], model: null };
   const versions = { custom: process.version };
+  const diagnosticFailures = [...new Set(diagnostics.flatMap((entry) => entry.mappedFailures ?? []))];
   const payload = {
     expected: diagnostics.length,
     completed: diagnostics.filter((entry) => entry.completionState === 'completed').length,
     measurements: { accuracy: diagnostics.some((entry) => entry.failureClass === 'quality') ? 0 : 1 },
     durationMs: 1,
-    failures: [],
+    failures: diagnosticFailures,
     diagnostics,
     diagnosticClassifier: () => null,
   };
@@ -114,7 +121,7 @@ function harnessRunnerWriter(id, diagnostics) {
       return atdd.runnerRecord('custom', options, versions, payload);
     }
     case 'automate': {
-      return automate.automateRunnerRecord({ scored: payload.measurements, diagnostics, failures: [], durationMs: 1 });
+      return automate.automateRunnerRecord({ scored: payload.measurements, diagnostics, failures: diagnosticFailures, durationMs: 1 });
     }
     case 'bmad-tea-routing': {
       return routing.runnerRecord('custom', options, versions, payload);
@@ -362,6 +369,7 @@ async function main() {
     metricContributions: { accuracy: 0 },
     failureClass: 'environment-timeout',
     reason: 'runner timed out',
+    mappedFailures: ['one repetition timed out'],
   });
   check(environment.signature === null, 'an environment failure carries no stability signature');
   check(Object.keys(environment.metricContributions).length === 0, 'an environment failure carries no quality contribution');
@@ -399,6 +407,9 @@ async function main() {
 
   const secrets = [
     'Authorization: Bearer ghp_exampleSecret',
+    'Authorization: Basic dXNlcjpwYXNzd29yZA==',
+    'Proxy-Authorization: Bearer proxy-bearer-secret',
+    'Proxy-Authorization: Basic proxy-basic-secret',
     'sk-live-abcdef123456',
     'https://example.test/?token=mysecretvalue',
     '{"password":"open-sesame","safe":"visible"}',
@@ -408,10 +419,21 @@ async function main() {
     const redacted = redactSecrets(secret);
     check(redacted.includes('[redacted]'), `secret sanitizer redacts ${secret.split(/[ :=]/)[0]}`);
     check(
-      !/exampleSecret|live-abcdef|mysecretvalue|open-sesame|arbitrary-sensitive-value/.test(redacted),
+      !/exampleSecret|dXNlcjpwYXNzd29yZA|proxy-bearer-secret|proxy-basic-secret|live-abcdef|mysecretvalue|open-sesame|arbitrary-sensitive-value/.test(
+        redacted,
+      ),
       'secret sanitizer removes the complete value',
     );
+    check(redactSecrets(redacted) === redacted, 'secret sanitizer is idempotent after complete-value redaction');
   }
+  check(
+    redactSecrets('Authorization: Bearer top-secret') === 'Authorization: [redacted]',
+    'Authorization redaction leaves one exact marker',
+  );
+  check(
+    redactSecrets('Proxy-Authorization=Basic cHJveHk6c2VjcmV0') === 'Proxy-Authorization=[redacted]',
+    'Proxy-Authorization redaction leaves one exact marker',
+  );
   const sanitizedDiagnostic = diagnosticRecord({
     caseId: 'case-a',
     repetition: 1,
@@ -420,9 +442,28 @@ async function main() {
     evidence: [{ kind: 'summary', value: secrets.join(' ') }],
   });
   check(
-    !/exampleSecret|live-abcdef|mysecretvalue|open-sesame|arbitrary-sensitive-value/.test(JSON.stringify(sanitizedDiagnostic)),
+    !/exampleSecret|dXNlcjpwYXNzd29yZA|proxy-bearer-secret|proxy-basic-secret|live-abcdef|mysecretvalue|open-sesame|arbitrary-sensitive-value/.test(
+      JSON.stringify(sanitizedDiagnostic),
+    ),
     'signature, reason, and evidence share the complete-value sanitizer',
   );
+  const persistedSecretPath = path.join(os.tmpdir(), `eval-secret-diagnostics-${process.pid}.json`);
+  try {
+    const persistedSecretRecord = suiteRecord([runner([first])], undefined, 1);
+    persistedSecretRecord.runners[0].parameters.agentArgs = redactArgs([
+      '--header',
+      'Authorization: Bearer persisted-bearer-secret',
+      '--header=Proxy-Authorization: Basic persisted-basic-secret',
+    ]);
+    await writeSuiteResult(persistedSecretPath, persistedSecretRecord);
+    const persistedBytes = fs.readFileSync(persistedSecretPath, 'utf8');
+    check(
+      !persistedBytes.includes('persisted-bearer-secret') && !persistedBytes.includes('persisted-basic-secret'),
+      'serialized runner parameters remove complete Authorization and Proxy-Authorization credentials',
+    );
+  } finally {
+    fs.rmSync(persistedSecretPath, { force: true });
+  }
 
   for (const rootCause of ROOT_CAUSES) {
     const classified = diagnosticRecord({
@@ -512,6 +553,38 @@ async function main() {
     );
   }
 
+  for (const [phase, measurements] of [
+    ['npm-install', { installAndSmokePassRate: 0, seededDefectDetectionRate: null }],
+    ['smoke-test', { installAndSmokePassRate: 0, seededDefectDetectionRate: null }],
+    ['defect-detection', { installAndSmokePassRate: 1, seededDefectDetectionRate: 0 }],
+  ]) {
+    const outcome = { ok: false, phase, failureClass: 'quality', reason: `${phase} quality fixture` };
+    const diagnostic = framework.frameworkOutcomeDiagnostic(outcome, measurements);
+    const frameworkRunner = framework.runnerRecord(
+      { agentArgs: [], envPass: [] },
+      {
+        durationMs: 1,
+        failureClass: 'quality',
+        failures: [`${phase}: ${outcome.reason}`],
+        measurements,
+        completed: 1,
+        tools: [],
+        diagnostics: [diagnostic],
+      },
+    );
+    const outputPath = path.join(os.tmpdir(), `eval-framework-${phase}-${process.pid}.json`);
+    try {
+      await writeSuiteResult(outputPath, suiteRecord([frameworkRunner], [{ id: framework.CASE_ID, promptDigest: null }], 1));
+      const emitted = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+      check(
+        validateEvalResult(emitted).success && emitted.runners[0].diagnostics[0].triage[0]?.rootCause === 'tea-workflow-defect',
+        `framework ${phase} quality outcome writes a schema-valid triaged artifact`,
+      );
+    } finally {
+      fs.rmSync(outputPath, { force: true });
+    }
+  }
+
   const reviewSignatureFixture = {
     caseId: 'test/fixtures/test-review/seeded/orders.spec.js',
     planted: ['C1:seeded/orders.spec.js:12', 'H1:seeded/orders.spec.js:28'],
@@ -538,6 +611,37 @@ async function main() {
   check(
     review.reviewSignature(reviewSignatureFixture) !== review.reviewSignature({ ...reviewSignatureFixture, score: 80 }),
     'test-review signatures expose score-only variance',
+  );
+  const reviewGroundTruth = JSON.parse(
+    fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval', 'ground-truth.json'), 'utf8'),
+  );
+  const outOfScopeVerdict = JSON.parse(
+    fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'replay', 'test-review', 'out-of-scope-finding', 'verdict.json'), 'utf8'),
+  );
+  const scoredOutOfScope = review.scoreVerdict(outOfScopeVerdict, reviewGroundTruth);
+  const movedOutOfScopeVerdict = structuredClone(outOfScopeVerdict);
+  const movedOutOfScopeFinding = movedOutOfScopeVerdict.findings.find((finding) =>
+    scoredOutOfScope.caseScores[0].outOfScopeFindings.includes(review.canonicalFindingIdentity(finding)),
+  );
+  movedOutOfScopeFinding.line = Number(movedOutOfScopeFinding.line ?? 0) + 7;
+  const movedOutOfScopeScore = review.scoreVerdict(movedOutOfScopeVerdict, reviewGroundTruth);
+  check(
+    review.reviewSignature(scoredOutOfScope.caseScores[0]) !== review.reviewSignature(movedOutOfScopeScore.caseScores[0]),
+    'test-review production signatures distinguish out-of-scope finding identities and locations',
+  );
+  const unlocatedVerdict = JSON.parse(
+    fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'replay', 'test-review', 'row-without-location', 'verdict.json'), 'utf8'),
+  );
+  const scoredUnlocated = review.scoreVerdict(unlocatedVerdict, reviewGroundTruth);
+  const changedUnlocatedVerdict = structuredClone(unlocatedVerdict);
+  const changedUnlocatedFinding = changedUnlocatedVerdict.findings.find(
+    (finding) => typeof finding.file !== 'string' || finding.file.length === 0,
+  );
+  changedUnlocatedFinding.title = `${changedUnlocatedFinding.title} moved`;
+  const changedUnlocatedScore = review.scoreVerdict(changedUnlocatedVerdict, reviewGroundTruth);
+  check(
+    review.reviewSignature(scoredUnlocated.caseScores[0]) !== review.reviewSignature(changedUnlocatedScore.caseScores[0]),
+    'test-review production signatures distinguish unlocated finding identities',
   );
 
   const reviewVarianceDiagnostics = [90, 80].map((score, index) => {
@@ -696,6 +800,103 @@ async function main() {
       validateEvalResult(invalid).success && invalid.suiteDiagnostics[0].failureClass === 'environment-harness',
       'eval-all validates parseable child JSON immediately and records invalid output as a harness failure',
     );
+
+    const wrongSuitePath = path.join(childFixtureDir, 'wrong-suite.json');
+    fs.writeFileSync(wrongSuitePath, `${JSON.stringify(childCrash)}\n`, 'utf8');
+    const wrongSuite = await evalAll.readChildRecord(
+      { jsonPath: wrongSuitePath, label: 'wrong-suite-child', suite: childSuite },
+      { preflightOnly: false },
+      2,
+      1,
+    );
+    check(
+      wrongSuite.suite.id === childSuite.id &&
+        wrongSuite.suiteDiagnostics[0].failureClass === 'environment-harness' &&
+        wrongSuite.suiteDiagnostics[0].reason.includes('another invocation'),
+      'eval-all rejects a schema-valid child record written for another suite',
+    );
+
+    const matchingRecord = await evalAll.placeholderRecord(childSuite, { preflightOnly: false }, 2, 1, 'matching-child');
+    const staleConfiguration = structuredClone(matchingRecord);
+    staleConfiguration.suite.declaredRepetitions = 2;
+    const stalePath = path.join(childFixtureDir, 'stale-configuration.json');
+    fs.writeFileSync(stalePath, `${JSON.stringify(staleConfiguration)}\n`, 'utf8');
+    const stale = await evalAll.readChildRecord(
+      { jsonPath: stalePath, label: 'stale-child', suite: childSuite },
+      { preflightOnly: false },
+      2,
+      1,
+    );
+    check(
+      stale.suiteDiagnostics[0].failureClass === 'environment-harness' && stale.suiteDiagnostics[0].reason.includes('declared repetitions'),
+      'eval-all rejects a child record whose invocation-bound repetition configuration is stale',
+    );
+
+    const matchingPath = path.join(childFixtureDir, 'matching.json');
+    fs.writeFileSync(matchingPath, `${JSON.stringify(matchingRecord)}\n`, 'utf8');
+    const matching = await evalAll.readChildRecord(
+      { jsonPath: matchingPath, label: 'matching-child', suite: childSuite },
+      { preflightOnly: false },
+      2,
+      1,
+    );
+    check(
+      matching.suiteDiagnostics[0].failureClass === 'environment-missing-artifact' &&
+        !matching.suiteDiagnostics[0].reason.includes('another invocation'),
+      'eval-all accepts a schema-valid child record bound to the requested suite and configuration',
+    );
+
+    const previousChild = structuredClone(matchingRecord);
+    previousChild.schemaVersion = PREVIOUS_SCHEMA_VERSION;
+    for (const diagnostic of previousChild.suiteDiagnostics) delete diagnostic.rootCause;
+    const previousPath = path.join(childFixtureDir, 'previous-schema.json');
+    fs.writeFileSync(previousPath, `${JSON.stringify(previousChild)}\n`, 'utf8');
+    const rejectedPrevious = await evalAll.readChildRecord(
+      { jsonPath: previousPath, label: 'previous-schema-child', suite: childSuite },
+      { preflightOnly: false },
+      2,
+      1,
+    );
+    check(
+      rejectedPrevious.schemaVersion === SCHEMA_VERSION &&
+        rejectedPrevious.suiteDiagnostics[0].reason.includes('expected current writer schema'),
+      'eval-all reads frozen 1.4.0 evidence but refuses to fold it into a current run summary',
+    );
+
+    const boundCaseIds = await atdd.caseIds();
+    const caseBoundRecord = structuredClone(matchingRecord);
+    caseBoundRecord.suite.caseIds = boundCaseIds;
+    caseBoundRecord.suite.cases = boundCaseIds.map((id) => ({ id, promptDigest: null }));
+    const exactCaseProblems = await evalAll.childBindingProblems(
+      caseBoundRecord,
+      { suite: childSuite, script: path.join(PROJECT_ROOT, 'test', 'eval-atdd.js') },
+      { preflightOnly: false, agents: [], workflows: [] },
+    );
+    check(
+      !exactCaseProblems.includes('case ids do not match invocation'),
+      'eval-all accepts the harness-declared case grid for an invocation',
+    );
+    const wrongCaseRecord = structuredClone(caseBoundRecord);
+    wrongCaseRecord.suite.caseIds[0] = 'invented-case';
+    wrongCaseRecord.suite.cases[0].id = 'invented-case';
+    const wrongCaseProblems = await evalAll.childBindingProblems(
+      wrongCaseRecord,
+      { suite: childSuite, script: path.join(PROJECT_ROOT, 'test', 'eval-atdd.js') },
+      { preflightOnly: false, agents: [], workflows: [] },
+    );
+    check(wrongCaseProblems.includes('case ids do not match invocation'), 'eval-all rejects a schema-valid invented case grid');
+
+    const wrongRepository = structuredClone(matchingRecord);
+    wrongRepository.repository.commit = 'wrong-commit';
+    const repositoryProblems = await evalAll.childBindingProblems(
+      wrongRepository,
+      { suite: childSuite },
+      { preflightOnly: false, agents: [] },
+    );
+    check(
+      repositoryProblems.includes('repository does not match invocation'),
+      'eval-all binds child evidence to the current repository state',
+    );
   } finally {
     fs.rmSync(childFixtureDir, { recursive: true, force: true });
   }
@@ -753,6 +954,22 @@ async function main() {
     'the protected baseline remains byte-for-byte unchanged',
   );
 
+  const previousResult = structuredClone(quality);
+  previousResult.schemaVersion = PREVIOUS_SCHEMA_VERSION;
+  for (const resultRunner of previousResult.runners) {
+    for (const diagnostic of resultRunner.diagnostics) {
+      delete diagnostic.triage;
+      delete diagnostic.mappedFailures;
+      delete diagnostic.mappedMeasurements;
+      diagnostic.metricContributions = {};
+      diagnostic.evidence = [];
+    }
+  }
+  check(
+    validateEvalResult(previousResult).success,
+    'a stored 1.4.0 suite result validates through the frozen reader without inheriting 1.5.0 requirements',
+  );
+
   const currentRun = runSummaryRecord({
     generatedAt: '2026-09-17T00:00:00.000Z',
     repository: { commit: 'abc123', dirty: false },
@@ -761,6 +978,10 @@ async function main() {
     durationMs: 1,
   });
   check(validateEvalRun(currentRun).success, 'a current run summary containing diagnostics validates');
+  const previousRun = structuredClone(currentRun);
+  previousRun.schemaVersion = PREVIOUS_SCHEMA_VERSION;
+  previousRun.suites = [previousResult];
+  check(validateEvalRun(previousRun).success, 'a stored 1.4.0 run summary validates through the frozen reader');
   const inconsistentRun = structuredClone(currentRun);
   inconsistentRun.failureClass = 'none';
   inconsistentRun.exitCode = 0;
@@ -856,13 +1077,104 @@ async function main() {
   });
   check(!diagnosticSchema.safeParse(emptyEvidence).success, 'completed diagnostics require evidence');
 
-  const zeroGrid = suiteRecord([runner([], { repetitions: { expected: 0, completed: 0 }, measurements: {} })]);
+  const zeroGrid = suiteRecord([runner([], { repetitions: { expected: 0, completed: 0 }, measurements: {} })], undefined, 1);
   check(!validateEvalResult(zeroGrid).success, 'a live writer cannot declare cases with zero effective repetitions');
+  const cleanZeroRunner = suiteRecord([], undefined, 1);
+  check(!validateEvalResult(cleanZeroRunner).success, 'a clean live suite with declared cases cannot omit every runner');
+  const premeasurementFailure = suiteResultRecord({
+    generatedAt: '2026-09-17T00:00:00.000Z',
+    mode: 'live',
+    suite: {
+      id: 'premeasurement-failure',
+      evalType: 'behavioral',
+      skill: 'bmad-testarch-atdd',
+      contracts: [],
+      ciTier: 'deterministic',
+      runnerCapabilities: ['read-only'],
+      thresholds: {},
+      repetitions: 1,
+    },
+    repository: { commit: 'abc123', dirty: false },
+    fixtureDigest: DIGEST,
+    promptDigest: null,
+    cases: [{ id: 'case-a', promptDigest: null }],
+    runners: [],
+    declaredRepetitions: 1,
+    durationMs: 1,
+    suiteDiagnostics: [{ failureClass: 'environment-configuration', reason: 'runner unavailable' }],
+  });
+  check(
+    validateEvalResult(premeasurementFailure).success,
+    'a live premeasurement failure may omit runners when suite evidence explains it',
+  );
+  const zeroRequestedPremeasurement = structuredClone(premeasurementFailure);
+  zeroRequestedPremeasurement.suite.declaredRepetitions = 0;
+  check(
+    !validateEvalResult(zeroRequestedPremeasurement).success,
+    'a live suite cannot erase its requested repetition count when premeasurement evidence exists',
+  );
+  check(!validateEvalResult(suiteRecord([], [], 0)).success, 'a clean live suite cannot validate with no cases and no runners');
+
+  const partialRequestedGrid = suiteRecord([runner([first, second])], undefined, 3);
+  check(!validateEvalResult(partialRequestedGrid).success, 'observed attempts cannot rewrite a larger requested repetition count');
 
   const unmappedFailure = suiteRecord([runner([first, second], { failures: ['aggregate miss'], measurements: { accuracy: 0.5 } })]);
   check(!validateEvalResult(unmappedFailure).success, 'runner failure strings require mapped diagnostic failures');
   const unmappedMeasurement = suiteRecord([runner([first, second], { measurements: { accuracy: null } })]);
   check(!validateEvalResult(unmappedMeasurement).success, 'failed measurements require mapped diagnostic failures');
+  const cleanFailureMapping = suiteRecord([runner([{ ...first, mappedFailures: ['aggregate miss'] }], { failures: ['aggregate miss'] })]);
+  check(!validateEvalResult(cleanFailureMapping).success, 'a clean diagnostic cannot satisfy a failed-threshold mapping');
+  const cleanMeasurementMapping = suiteRecord([
+    runner([{ ...first, mappedMeasurements: ['accuracy'] }], { measurements: { accuracy: null } }),
+  ]);
+  check(!validateEvalResult(cleanMeasurementMapping).success, 'a clean diagnostic cannot satisfy a null-measurement mapping');
+
+  const oneOfTwoMapped = diagnosticRecord({
+    caseId: 'case-a',
+    repetition: 1,
+    signature: 'two-thresholds',
+    metricContributions: { accuracy: 0, restraint: 0 },
+    failureClass: 'quality',
+    rootCause: 'tea-workflow-defect',
+    reason: 'accuracy and restraint',
+    mappedFailures: ['accuracy'],
+    evidence: [{ kind: 'summary', value: 'two threshold fixture' }],
+  });
+  const partiallyMappedThresholds = suiteRecord([
+    runner([oneOfTwoMapped], {
+      measurements: { accuracy: 0, restraint: 0 },
+      failureClass: 'quality',
+      failures: ['accuracy', 'restraint'],
+    }),
+  ]);
+  check(!validateEvalResult(partiallyMappedThresholds).success, 'every failed threshold needs its own diagnostic mapping');
+  const fullyMappedThresholds = structuredClone(partiallyMappedThresholds);
+  fullyMappedThresholds.runners[0].diagnostics[0].mappedFailures.push('restraint');
+  check(validateEvalResult(fullyMappedThresholds).success, 'all failed thresholds validate once each maps to diagnostic evidence');
+
+  const oneOfTwoNullsMapped = diagnosticRecord({
+    caseId: 'case-a',
+    repetition: 1,
+    signature: 'two-nulls',
+    metricContributions: { attempted: 1 },
+    failureClass: 'quality',
+    rootCause: 'harness-defect',
+    reason: 'two measurements unmeasurable',
+    mappedFailures: ['accuracy (unmeasurable)', 'restraint (unmeasurable)'],
+    mappedMeasurements: ['accuracy'],
+    evidence: [{ kind: 'summary', value: 'two null measurement fixture' }],
+  });
+  const partiallyMappedNulls = suiteRecord([
+    runner([oneOfTwoNullsMapped], {
+      measurements: { accuracy: null, restraint: null },
+      failureClass: 'quality',
+      failures: ['accuracy (unmeasurable)', 'restraint (unmeasurable)'],
+    }),
+  ]);
+  check(!validateEvalResult(partiallyMappedNulls).success, 'every non-optional null measurement needs its own diagnostic mapping');
+  const fullyMappedNulls = structuredClone(partiallyMappedNulls);
+  fullyMappedNulls.runners[0].diagnostics[0].mappedMeasurements.push('restraint');
+  check(validateEvalResult(fullyMappedNulls).success, 'all null measurements validate once each maps to diagnostic evidence');
 
   const threeRuns = [1, 2, 3].map((repetition) =>
     diagnosticRecord({
@@ -876,8 +1188,82 @@ async function main() {
   const expandedRunRecord = suiteRecord([runner(threeRuns)]);
   check(
     expandedRunRecord.suite.declaredRepetitions === 3 && validateEvalResult(expandedRunRecord).success,
-    'writers record an above-default effective repetition declaration before schema validation',
+    'writers persist a requested three-repetition declaration and cover its full grid',
   );
+
+  for (const varianceName of ['scoreStdev', 'unstableCases']) {
+    const repeatedNullVariance = suiteRecord([runner([first, second], { measurements: { accuracy: 1, [varianceName]: null } })]);
+    check(!validateEvalResult(repeatedNullVariance).success, `${varianceName} cannot stay null after two completed repetitions`);
+    const singleNullVariance = suiteRecord([runner([first], { measurements: { accuracy: 1, [varianceName]: null } })], undefined, 1);
+    check(validateEvalResult(singleNullVariance).success, `${varianceName} may be null when fewer than two repetitions were requested`);
+  }
+  const optionalWaiverOracle = suiteRecord([runner([first, second], { measurements: { accuracy: 1, waiverOracleAccuracy: null } })]);
+  check(validateEvalResult(optionalWaiverOracle).success, 'waiver oracle variance may remain null when no scored waiver exists');
+  const incompleteVarianceFailure = '1 of 2 declared repetitions completed';
+  const failedVarianceAttempt = diagnosticRecord({
+    caseId: 'case-a',
+    repetition: 2,
+    failureClass: 'environment-timeout',
+    reason: 'second repetition timed out',
+    mappedFailures: [incompleteVarianceFailure],
+    mappedMeasurements: ['scoreStdev', 'unstableCases'],
+  });
+  const mappedIncompleteVariance = suiteRecord([
+    runner([first, failedVarianceAttempt], {
+      repetitions: { expected: 2, completed: 1 },
+      measurements: { accuracy: 1, scoreStdev: null, unstableCases: null },
+      failureClass: 'environment-timeout',
+      failures: [incompleteVarianceFailure],
+    }),
+  ]);
+  check(
+    validateEvalResult(mappedIncompleteVariance).success,
+    'repeated-run null variance validates when failed-attempt diagnostics map the missing measurements',
+  );
+  const derivedIncompleteDiagnostics = classifyDiagnosticQuality(
+    [
+      diagnosticRecord({
+        caseId: 'case-a',
+        repetition: 1,
+        failureClass: 'environment-missing-artifact',
+        reason: 'the requested artifact was not written',
+      }),
+    ],
+    ['accuracy (unmeasurable)', '1 case short of 1 repetition'],
+    () => null,
+    { measurements: { accuracy: null }, expected: 1, completed: 0 },
+  );
+  check(
+    validateEvalResult(
+      suiteRecord(
+        [
+          runner(derivedIncompleteDiagnostics, {
+            measurements: { accuracy: null },
+            failureClass: 'environment-missing-artifact',
+            failures: ['accuracy (unmeasurable)', '1 case short of 1 repetition'],
+          }),
+        ],
+        undefined,
+        1,
+      ),
+    ).success,
+    'a lost repetition maps every unmeasurable threshold and null metric to its failed-attempt evidence',
+  );
+
+  for (const [script, message] of [
+    ['eval-automate.js', 'deterministic automate harness'],
+    ['eval-framework-scaffold.js', 'deterministic framework harness'],
+  ]) {
+    const excessiveRuns = spawnSync(process.execPath, [path.join(PROJECT_ROOT, 'test', script), '--runs', '2'], {
+      cwd: PROJECT_ROOT,
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    check(
+      excessiveRuns.status === 2 && excessiveRuns.stderr.includes(message),
+      `${script} rejects unsupported repetitions before live work starts`,
+    );
+  }
 
   const emptySelectionSignature = JSON.stringify([]);
   const emptySelection = diagnosticRecord({

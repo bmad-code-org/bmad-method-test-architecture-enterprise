@@ -1170,6 +1170,7 @@ async function finish({ options, startedAt, mode, groundTruth, runners, suiteFai
         promptDigest: groundTruth ? digestPrompts(caseIndex(groundTruth)) : null,
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -1182,7 +1183,11 @@ async function finish({ options, startedAt, mode, groundTruth, runners, suiteFai
 
 function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, atddDiagnosticClassifier(diagnostics));
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, atddDiagnosticClassifier(diagnostics), {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,

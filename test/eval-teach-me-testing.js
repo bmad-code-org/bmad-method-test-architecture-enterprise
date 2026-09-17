@@ -921,6 +921,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         promptDigest: null,
         cases: [{ id: CASE_ID, promptDigest: null }],
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
@@ -942,19 +943,31 @@ function teachDiagnosticProjection(outcome) {
   };
 }
 
-function teachDiagnosticClassifier(entry) {
+function teachDiagnosticClassifier(entry, failures = []) {
   const metric = entry.metricContributions;
+  const failureText = failures.join(' ').toLowerCase();
   const reasons = [];
+  const failureTerms = {
+    placement: ['placement'],
+    correction: ['correction phrase'],
+    reTeaching: ['re-teach', 'reteach', 'review content', 'reviewed content'],
+    continuation: ['continuation greeting'],
+  };
   for (const key of ['placement', 'correction', 'reTeaching', 'continuation']) {
-    if (metric[`${key}.numerator`] / metric[`${key}.denominator`] < metric[`${key}.threshold`]) reasons.push(key);
+    const misses = metric[`${key}.numerator`] / metric[`${key}.denominator`] < metric[`${key}.threshold`];
+    if (misses && failureTerms[key].some((term) => failureText.includes(term))) reasons.push(key);
   }
-  if (metric.unearnedMastery > metric.maxUnearnedMastery) reasons.push('unearned mastery');
+  if (metric.unearnedMastery > metric.maxUnearnedMastery && failureText.includes('unearned mastery')) reasons.push('unearned mastery');
   return reasons.length > 0 ? { reasons, rootCause: 'tea-workflow-defect' } : null;
 }
 
 function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, teachDiagnosticClassifier);
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, teachDiagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,

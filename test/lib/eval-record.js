@@ -63,7 +63,7 @@ const SECRET_FLAG_PATTERN = /key|token|secret|password|credential|auth/i;
 // `prefix_github_pat_x` is still caught.
 const SECRET_TOKEN_PATTERN = /(^|[^A-Za-z0-9])(?:sk[-_]|gh[pousr]_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)[A-Za-z0-9._~+/=-]*/g;
 const SENSITIVE_VALUE_PATTERN =
-  /((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|credential|authorization|auth)(?:["']?)\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}&\]]+)/gi;
+  /((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|credential|authorization|auth)(?:["']?)\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[redacted\]|[^\s,;}&\]]+)/gi;
 const REDACTED = '[redacted]';
 const MAX_DIAGNOSTIC_METRICS = 64;
 const MAX_DIAGNOSTIC_METRIC_KEY = 128;
@@ -78,8 +78,8 @@ function boundedDiagnosticText(value, maxLength) {
 
 function redactSecrets(value) {
   return String(value)
+    .replaceAll(/(\b(?:authorization|proxy-authorization)\b\s*[:=]\s*)(?:bearer|basic)\s+[^\s,;"'}]+/gi, `$1${REDACTED}`)
     .replaceAll(SENSITIVE_VALUE_PATTERN, `$1${REDACTED}`)
-    .replaceAll(/(\b(?:authorization|proxy-authorization)\b\s*[:=]\s*(?:bearer|basic)\s+)[^\s,;"'}]+/gi, `$1${REDACTED}`)
     .replaceAll(/([?&](?:api[_-]?key|access[_-]?token|token|secret|password|credential|auth)=)[^&\s]+/gi, `$1${REDACTED}`)
     .replaceAll(SECRET_TOKEN_PATTERN, `$1${REDACTED}`);
 }
@@ -272,6 +272,8 @@ function diagnosticRecord({
   rootCause = null,
   reason = null,
   triage = null,
+  mappedFailures = [],
+  mappedMeasurements = [],
   evidence = [],
 }) {
   const failed = failureClass !== 'none' && failureClass !== 'quality';
@@ -296,6 +298,8 @@ function diagnosticRecord({
       reason: boundedDiagnosticText(redactSecrets(entry.reason), 2048),
       rootCause: entry.rootCause,
     })),
+    mappedFailures: [...new Set(mappedFailures)].slice(0, 64).map((entry) => boundedDiagnosticText(redactSecrets(entry), 2048)),
+    mappedMeasurements: [...new Set(mappedMeasurements)].slice(0, 64).map((entry) => String(entry).slice(0, 128)),
     evidence: evidence.slice(0, 32).map((entry) => ({
       kind: entry.kind,
       value: boundedDiagnosticText(redactSecrets(entry.value), 2048),
@@ -344,33 +348,90 @@ function diagnosticRateMiss(entry, prefix, diagnostics) {
 }
 
 /** Mark only the completed repetitions that contributed to aggregate quality failures. */
-function classifyDiagnosticQuality(diagnostics, failures, classify) {
+function classifyDiagnosticQuality(diagnostics, failures, classify, runnerContext = {}) {
   if (failures.length === 0) return diagnostics;
   if (typeof classify !== 'function') {
     throw new TypeError('classifyDiagnosticQuality requires a case-level classifier when aggregate quality failures exist');
   }
-  return diagnostics.map((entry) => {
+  const classified = diagnostics.map((entry) => {
     if (entry.completionState !== 'completed') return entry;
-    const classification = classify(entry, failures);
-    if (!classification) return entry;
-    const findings = classification.findings ?? classification.reasons?.map((reason) => ({ reason, rootCause: classification.rootCause }));
-    if (!Array.isArray(findings) || findings.length === 0) return entry;
-    if (findings.some((finding) => !finding.rootCause)) {
+    const findings = [];
+    const mappedFailures = new Set(entry.mappedFailures ?? []);
+    for (const failure of failures) {
+      const classification = classify(entry, [failure]);
+      if (!classification) continue;
+      const classifiedFindings =
+        classification.findings ?? classification.reasons?.map((reason) => ({ reason, rootCause: classification.rootCause }));
+      if (!Array.isArray(classifiedFindings) || classifiedFindings.length === 0) continue;
+      findings.push(...classifiedFindings);
+      mappedFailures.add(failure);
+    }
+    if (findings.length === 0) return entry;
+    const uniqueFindings = [...new Map(findings.map((finding) => [`${finding.rootCause}\u0000${finding.reason}`, finding])).values()].slice(
+      0,
+      16,
+    );
+    if (uniqueFindings.some((finding) => !finding.rootCause)) {
       throw new TypeError('case-level quality classifications must name a root cause for every reason');
     }
     return {
       ...entry,
       failureClass: 'quality',
-      rootCause: findings[0].rootCause,
+      rootCause: uniqueFindings[0].rootCause,
       reason:
         entry.reason ??
-        findings
+        uniqueFindings
           .map((finding) => finding.reason)
           .join('; ')
           .slice(0, 2048),
-      triage: findings,
+      triage: uniqueFindings,
+      mappedFailures: [...mappedFailures].slice(0, 64),
     };
   });
+
+  const failedDiagnostics = classified.filter((entry) => entry.completionState === 'failed');
+  const incompleteFailure = /\b(?:short|incomplete|completed|repetition)\b/i;
+  for (const failure of failures) {
+    if (classified.some((entry) => entry.mappedFailures?.includes(failure))) continue;
+    const failureTokens = new Set(
+      String(failure)
+        .toLowerCase()
+        .match(/[a-z][a-z-]{2,}/g) ?? [],
+    );
+    let candidates = failedDiagnostics.filter((entry) =>
+      (
+        String(entry.reason)
+          .toLowerCase()
+          .match(/[a-z][a-z-]{2,}/g) ?? []
+      ).some((token) => failureTokens.has(token)),
+    );
+    if (candidates.length === 0 && incompleteFailure.test(failure)) candidates = failedDiagnostics;
+    if (candidates.length === 0 && runnerContext.completed < runnerContext.expected) candidates = failedDiagnostics;
+    for (const entry of candidates) entry.mappedFailures = [...new Set([...(entry.mappedFailures ?? []), failure])];
+  }
+
+  const measurements = runnerContext.measurements ?? {};
+  for (const [name, value] of Object.entries(measurements)) {
+    if (value !== null) continue;
+    const normalizedName = name.replaceAll(/[^a-z0-9]/gi, '').toLowerCase();
+    let candidates = classified.filter((entry) =>
+      (entry.mappedFailures ?? []).some((failure) =>
+        failure
+          .replaceAll(/[^a-z0-9]/gi, '')
+          .toLowerCase()
+          .includes(normalizedName),
+      ),
+    );
+    if (
+      candidates.length === 0 &&
+      (name === 'scoreStdev' || name === 'unstableCases') &&
+      runnerContext.completed < runnerContext.expected
+    ) {
+      candidates = failedDiagnostics;
+    }
+    for (const entry of candidates) entry.mappedMeasurements = [...new Set([...(entry.mappedMeasurements ?? []), name])];
+  }
+  return classified;
 }
 
 function suiteDiagnosticRecords(entries = []) {
@@ -404,6 +465,7 @@ function suiteResultRecord({
   cases,
   runners,
   durationMs,
+  declaredRepetitions = suite.repetitions,
   suiteFailureClasses = [],
   suiteDiagnostics = [],
   contractVersions = {},
@@ -413,11 +475,6 @@ function suiteResultRecord({
     ...runners.map((runner) => runner.failureClass),
     ...normalizedSuiteDiagnostics.map((entry) => entry.failureClass),
   ]);
-  const attemptedRepetitions = runners
-    .filter(() => cases.length > 0)
-    .map((runner) => runner.repetitions.expected / cases.length)
-    .filter((value) => Number.isInteger(value) && value >= 0);
-  const declaredRepetitions = attemptedRepetitions.length > 0 ? Math.max(...attemptedRepetitions) : suite.repetitions;
   return {
     schemaVersion: SCHEMA_VERSION,
     kind: 'suite-result',

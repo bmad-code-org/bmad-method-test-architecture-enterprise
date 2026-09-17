@@ -30,9 +30,9 @@
  * every registered harness with `--agent custom --agent-cmd <path>` once
  * against a runner that exists and once against one that does not.
  * `--preflight-only` probes the named executable purely to answer that check.
- * `--runs` is parsed and validated and then never read again: every live run
- * is one repetition, because nothing here varies from run to run for a repeat
- * to measure. None of the three is read by the live cycle itself.
+ * `--runs` is fixed at one because nothing here varies from run to run for a
+ * repeat to measure. Other values are rejected before the live cycle starts.
+ * None of the three runner options is read by the live cycle itself.
  *
  * WHAT IS MEASURED
  *
@@ -277,6 +277,7 @@ function parseArgs(argv) {
   }
   if (agent === 'custom' && !agentCmd) fatal(2, '--agent custom requires --agent-cmd');
   if (validateOnly && preflightOnly) fatal(2, '--validate-only and --preflight-only name different modes; pass one');
+  if (runs !== 1) fatal(2, '--runs must be 1 for the deterministic automate harness');
   return { validateOnly, preflightOnly, runs, agent, agentCmd, agentArgs, envPass, model, jsonPath };
 }
 
@@ -971,6 +972,7 @@ async function finish({ options, startedAt, mode, groundTruth, suiteFailureClass
         promptDigest: null,
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
@@ -1086,48 +1088,43 @@ async function main() {
   if (failures.length > 0) console.log(`\n  ${colors.red}below threshold: ${failures.join(', ')}${colors.reset}\n`);
   else console.log(`\n  ${colors.green}all thresholds met${colors.reset}\n`);
 
-  const diagnostics = classifyDiagnosticQuality(
-    scored.cases.map((scoredCase) => {
-      const signature = JSON.stringify({
-        verdict: scoredCase.verdict ?? null,
-        expectedDetectsRegression: scoredCase.expectedDetectsRegression,
-        loadFailure: scoredCase.loadFailure ?? null,
-        classifications: (scoredCase.tests ?? []).map((test) => test.classification),
-      });
-      return diagnosticRecord({
-        caseId: scoredCase.id,
-        repetition: 1,
-        signature: scoredCase.loadError ? null : signature,
-        metricContributions: scoredCase.loadError ? {} : numericContributions(automateDiagnosticProjection(scoredCase)),
-        failureClass: scoredCase.loadFailure?.failureClass ?? 'none',
-        rootCause: scoredCase.loadFailure ? 'harness-defect' : null,
-        reason: scoredCase.loadFailure?.reason ?? null,
-        evidence: scoredCase.loadError
-          ? [{ kind: 'summary', value: `${scoredCase.loadFailure?.failureClass ?? 'environment-harness'}: ${scoredCase.loadError}` }]
-          : [{ kind: 'output-signature', value: signature }],
-      });
-    }),
-    failures,
-    automateDiagnosticClassifier,
-  );
+  const measurements = {
+    loadErrors: measured(scored.loadErrors),
+    undetectedRegressionCases: measured(scored.undetectedRegressionCases),
+    falseRegressionDetections: measured(scored.falseRegressionDetections),
+    unattributedFailures: measured(scored.unattributedFailures),
+    unexpectedOutcomes: measured(scored.unexpectedOutcomes),
+    matchesDeclaredTests: measured(scored.classificationCounts['matches-declared']),
+    vacuousTests: measured(scored.classificationCounts.vacuous),
+    duplicateTests: measured(scored.classificationCounts.duplicate),
+  };
+  const rawDiagnostics = scored.cases.map((scoredCase) => {
+    const signature = JSON.stringify({
+      verdict: scoredCase.verdict ?? null,
+      expectedDetectsRegression: scoredCase.expectedDetectsRegression,
+      loadFailure: scoredCase.loadFailure ?? null,
+      classifications: (scoredCase.tests ?? []).map((test) => test.classification),
+    });
+    return diagnosticRecord({
+      caseId: scoredCase.id,
+      repetition: 1,
+      signature: scoredCase.loadError ? null : signature,
+      metricContributions: scoredCase.loadError ? {} : numericContributions(automateDiagnosticProjection(scoredCase)),
+      failureClass: scoredCase.loadFailure?.failureClass ?? 'none',
+      rootCause: scoredCase.loadFailure ? 'harness-defect' : null,
+      reason: scoredCase.loadFailure?.reason ?? null,
+      evidence: scoredCase.loadError
+        ? [{ kind: 'summary', value: `${scoredCase.loadFailure?.failureClass ?? 'environment-harness'}: ${scoredCase.loadError}` }]
+        : [{ kind: 'output-signature', value: signature }],
+    });
+  });
+  const diagnostics = classifyDiagnosticQuality(rawDiagnostics, failures, automateDiagnosticClassifier, {
+    measurements,
+    expected: rawDiagnostics.length,
+    completed: rawDiagnostics.filter((entry) => entry.completionState === 'completed').length,
+  });
   const runner = automateRunnerRecord({
-    scored: {
-      loadErrors: measured(scored.loadErrors),
-      undetectedRegressionCases: measured(scored.undetectedRegressionCases),
-      falseRegressionDetections: measured(scored.falseRegressionDetections),
-      unattributedFailures: measured(scored.unattributedFailures),
-      unexpectedOutcomes: measured(scored.unexpectedOutcomes),
-      // Every test's classification, so a vacuous or duplicated test's
-      // correct classification is visible in the --json record too, not only
-      // in the printed report. `suiteResultSchema.cases` is `{id,
-      // promptDigest}` and strict, shared by every suite's result record, so
-      // per-test detail cannot live there; these three counts, plus
-      // unattributedFailures and unexpectedOutcomes above, sum to the total
-      // test count across every case that did not end in a load error.
-      matchesDeclaredTests: measured(scored.classificationCounts['matches-declared']),
-      vacuousTests: measured(scored.classificationCounts.vacuous),
-      duplicateTests: measured(scored.classificationCounts.duplicate),
-    },
+    scored: measurements,
     durationMs: await elapsedMsSince(startedAt),
     failures,
     diagnostics,

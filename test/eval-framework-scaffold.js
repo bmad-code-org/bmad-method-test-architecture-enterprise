@@ -31,10 +31,9 @@
  * and never read at all -- no credential is ever probed for one, which is
  * what keeps `test:eval-framework-scaffold-data` (this harness's
  * `--validate-only` mode, in the plain `npm test` chain) credential-free.
- * `--runs` shares that fate for the same reason `repetitions: 1` does: this
- * suite has no stochastic process to repeat, so the value is parsed and
- * validated for CLI uniformity and then never read; a direct invocation with
- * `--runs 5` still runs the install-and-smoke attempt exactly once, silently.
+ * `--runs` is fixed at one for the same reason `repetitions: 1` is declared:
+ * this suite has no stochastic process to repeat. Other values are rejected
+ * before the install-and-smoke attempt starts.
  *
  * ISOLATION
  *
@@ -216,6 +215,26 @@ function frameworkDiagnosticProjection(measurements) {
   };
 }
 
+function frameworkOutcomeDiagnostic(outcome, measurements) {
+  const failure = `${outcome.phase}: ${outcome.reason}`;
+  const isQuality = outcome.failureClass === 'quality';
+  const signature = JSON.stringify({ phase: outcome.phase, measurements });
+  return diagnosticRecord({
+    caseId: CASE_ID,
+    repetition: 1,
+    signature: isQuality ? signature : null,
+    metricContributions: numericContributions(frameworkDiagnosticProjection(measurements)),
+    failureClass: outcome.failureClass,
+    rootCause: isQuality ? 'tea-workflow-defect' : null,
+    reason: failure,
+    mappedFailures: [failure],
+    mappedMeasurements: Object.entries(measurements)
+      .filter(([, value]) => value === null)
+      .map(([name]) => name),
+    evidence: isQuality ? [{ kind: 'output-signature', value: signature }] : [],
+  });
+}
+
 /** Seeded onto a second stub instance to prove the smoke test's status assertion is load-bearing. See DEFECT DETECTION above. */
 const WRONG_BACKEND_STATUS = 500;
 const BACKEND_DEFECT_SIGNATURE = /Received:\s*500/;
@@ -321,6 +340,7 @@ function parseArgs(argv) {
   }
   if (agent === 'custom' && !agentCmd) fatal(2, '--agent custom requires --agent-cmd');
   if (validateOnly && preflightOnly) fatal(2, '--validate-only and --preflight-only name different modes; pass one');
+  if (runs !== 1) fatal(2, '--runs must be 1 for the deterministic framework harness');
   return { agent, agentCmd, agentArgs, envPass, model, runs, validateOnly, preflightOnly, jsonPath };
 }
 
@@ -1112,6 +1132,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         promptDigest: null,
         cases: [{ id: CASE_ID, promptDigest: null }],
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
@@ -1231,16 +1252,7 @@ async function main() {
       installAndSmokePassRate: outcome.phase === 'defect-detection' ? 1 : outcome.failureClass === 'quality' ? 0 : null,
       seededDefectDetectionRate: outcome.phase === 'defect-detection' ? outcome.seededDefectDetectionRate : null,
     };
-    const signature = JSON.stringify({ phase: outcome.phase, measurements });
-    const diagnostic = diagnosticRecord({
-      caseId: CASE_ID,
-      repetition: 1,
-      signature: outcome.failureClass === 'quality' ? signature : null,
-      metricContributions: numericContributions(frameworkDiagnosticProjection(measurements)),
-      failureClass: outcome.failureClass,
-      reason: `${outcome.phase}: ${outcome.reason}`,
-      evidence: outcome.failureClass === 'quality' ? [{ kind: 'output-signature', value: signature }] : [],
-    });
+    const diagnostic = frameworkOutcomeDiagnostic(outcome, measurements);
     await finish({
       options,
       startedAt,
@@ -1309,6 +1321,7 @@ module.exports = {
   stageWorkspace,
   runOnce,
   frameworkDiagnosticProjection,
+  frameworkOutcomeDiagnostic,
   caseIds,
   RUNNER_CAPABILITIES,
   THRESHOLDS,

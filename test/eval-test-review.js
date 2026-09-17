@@ -594,6 +594,17 @@ function namesFile(reported, relativePath) {
  * Returns null when the verdict carries no findings array, which is a verdict
  * written by something other than this CLI, so there is nothing to score.
  */
+function canonicalFindingIdentity(finding) {
+  return JSON.stringify([
+    String(finding.row ?? finding.criterion_id ?? ''),
+    String(finding.file ?? finding.path ?? ''),
+    Number.isFinite(Number(finding.line)) ? Number(finding.line) : null,
+    String(finding.severity ?? ''),
+    String(finding.section ?? ''),
+    String(finding.title ?? ''),
+  ]);
+}
+
 function scoreVerdict(verdict, groundTruth) {
   const tolerance = groundTruth.lineTolerance ?? 0;
   if (!Array.isArray(verdict.findings)) return null;
@@ -605,7 +616,8 @@ function scoreVerdict(verdict, groundTruth) {
   // findings that can be adjudicated at all. Folding it in would dilute the
   // false-positive share with findings nobody can check.
   const reported = verdict.findings.filter((finding) => typeof finding.file === 'string' && finding.file.length > 0);
-  const unlocated = verdict.findings.length - reported.length;
+  const unlocatedFindings = verdict.findings.filter((finding) => typeof finding.file !== 'string' || finding.file.length === 0);
+  const unlocated = unlocatedFindings.length;
   const reviewedPaths = (groundTruth.files ?? []).map((f) => f.path);
   const cleanPaths = (groundTruth.files ?? []).filter((f) => (f.planted ?? []).length === 0).map((f) => f.path);
 
@@ -703,8 +715,10 @@ function scoreVerdict(verdict, groundTruth) {
       reportedCount: fileFindings.length + (fileIndex === 0 ? outOfScope.length : 0),
       falsePositives: fileFalsePositives.length + (fileIndex === 0 ? outOfScope.length : 0),
       outOfScope: fileIndex === 0 ? outOfScope.length : 0,
+      outOfScopeFindings: fileIndex === 0 ? outOfScope.map(canonicalFindingIdentity).sort() : [],
       unattributed: fileUnattributed.length,
       unlocated: fileIndex === 0 ? unlocated : 0,
+      unlocatedFindings: fileIndex === 0 ? unlocatedFindings.map(canonicalFindingIdentity).sort() : [],
     };
   });
 
@@ -760,8 +774,10 @@ function reviewSignature(caseScore) {
     reportedFindings: caseScore.reportedFindings,
     falsePositives: caseScore.falsePositives,
     outOfScope: caseScore.outOfScope,
+    outOfScopeFindings: [...(caseScore.outOfScopeFindings ?? [])].sort(),
     unattributed: caseScore.unattributed,
     unlocated: caseScore.unlocated,
+    unlocatedFindings: [...(caseScore.unlocatedFindings ?? [])].sort(),
     recommendation: caseScore.recommendation,
     score: caseScore.score,
   });
@@ -892,6 +908,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         promptDigest,
         cases: caseIds().map((id) => ({ id, promptDigest })),
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -911,7 +928,11 @@ function runnerRecord(
   { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -1181,6 +1202,7 @@ module.exports = {
   runnerRecord,
   admittedLinesFor,
   scoreVerdict,
+  canonicalFindingIdentity,
   reviewDiagnosticProjection,
   reviewSignature,
   reviewDiagnosticClassifier,

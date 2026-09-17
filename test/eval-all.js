@@ -37,10 +37,12 @@ const { spawnSync } = require('node:child_process');
 
 const { loadSuiteManifest, unaccountedSkills } = require('./lib/suite-manifest');
 const { readJson } = require('./lib/file-system-port');
+const { contractVersionsFor } = require('./lib/contract-versions');
 const { teaSkills } = require('./lib/tea-skills');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
-const { digestFiles, repositoryState, suiteResultRecord, runSummaryRecord, writeRunSummary } = require('./lib/eval-record');
-const { exitCodeForFailureClass, worstFailureClass, validateEvalResult } = require('./schema/eval-result');
+const { digestFiles, repositoryState, redactArgs, suiteResultRecord, runSummaryRecord, writeRunSummary } = require('./lib/eval-record');
+const { resolveModel } = require('../cli/lib/agent-adapters');
+const { exitCodeForFailureClass, worstFailureClass, validateEvalResult, SCHEMA_VERSION } = require('./schema/eval-result');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -288,6 +290,7 @@ async function placeholderRecord(
     promptDigest: null,
     cases: [],
     runners: [],
+    declaredRepetitions: repetitionsFor(suite, options),
     durationMs,
     suiteDiagnostics: [
       {
@@ -298,6 +301,138 @@ async function placeholderRecord(
       },
     ],
   });
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+async function caseIdsForInvocation(invocation, workflows = []) {
+  switch (path.basename(invocation.script ?? '')) {
+    case 'eval-atdd.js': {
+      return await require('./eval-atdd').caseIds();
+    }
+    case 'eval-automate.js': {
+      return await require('./eval-automate').caseIds();
+    }
+    case 'eval-bmad-tea-routing.js': {
+      return await require('./eval-bmad-tea-routing').caseIds();
+    }
+    case 'eval-ci.js': {
+      return await require('./eval-ci').caseIds();
+    }
+    case 'eval-fragment-selection.js': {
+      return await require('./eval-fragment-selection').caseIds(workflows);
+    }
+    case 'eval-framework-scaffold.js': {
+      return await require('./eval-framework-scaffold').caseIds();
+    }
+    case 'eval-nfr.js': {
+      return await require('./eval-nfr').caseIds();
+    }
+    case 'eval-teach-me-testing.js': {
+      return await require('./eval-teach-me-testing').caseIds();
+    }
+    case 'eval-test-design.js': {
+      return await require('./eval-test-design').caseIds();
+    }
+    case 'eval-test-review.js': {
+      return await require('./eval-test-review').caseIds();
+    }
+    case 'eval-trace.js': {
+      return await require('./eval-trace').caseIds();
+    }
+    case 'eval-transcript.js': {
+      return await require('./eval-transcript').caseIds();
+    }
+    default: {
+      return null;
+    }
+  }
+}
+
+async function childBindingProblems(record, invocation, options) {
+  const suite = invocation.suite;
+  const expectedSkills = suite.skills ?? (typeof suite.skill === 'string' ? [suite.skill] : []);
+  const contractVersions = await contractVersionsFor(suite, PROJECT_ROOT);
+  const expectedContracts = (suite.contracts ?? []).map((contractPath) => ({
+    path: contractPath,
+    version: contractVersions[contractPath] ?? null,
+  }));
+  const expected = [
+    ['mode', record.mode, options.preflightOnly ? 'preflight-only' : 'live'],
+    ['repository', record.repository, repositoryState(PROJECT_ROOT)],
+    ['suite id', record.suite.id, suite.id],
+    ['eval type', record.suite.evalType, suite.evalType],
+    ['skills', record.suite.skills, expectedSkills],
+    ['CI tier', record.suite.ciTier, suite.ciTier],
+    ['runner capabilities', record.suite.runnerCapabilities, suite.runnerCapabilities],
+    ['thresholds', record.suite.thresholds, suite.thresholds],
+    ['contracts', record.suite.contracts, expectedContracts],
+    ['declared repetitions', record.suite.declaredRepetitions, repetitionsFor(suite, options)],
+    ['fixture digest', record.suite.fixtureDigest, await digestFiles(PROJECT_ROOT, suite.fixtures)],
+  ];
+  const problems = expected.filter(([, actual, wanted]) => !sameJson(actual, wanted)).map(([name]) => `${name} does not match invocation`);
+
+  const expectedCaseIds = await caseIdsForInvocation(
+    invocation,
+    suite.harnessOptions?.acceptsWorkflowFilter ? (options.workflows ?? []) : [],
+  );
+  if (expectedCaseIds && !sameJson(record.suite.caseIds, expectedCaseIds)) problems.push('case ids do not match invocation');
+
+  const fixedRunners = new Set(['automate', 'framework', 'transcript']);
+  if (!options.preflightOnly && fixedRunners.has(suite.id)) {
+    const fixed = {
+      automate: { agent: 'deterministic', executable: process.execPath, model: null, agentArgs: [], envPassNames: [] },
+      framework: {
+        agent: 'harness',
+        executable: process.execPath,
+        model: null,
+        agentArgs: redactArgs(options.agentArgs ?? []),
+        envPassNames: options.envPass ?? [],
+      },
+      transcript: {
+        agent: 'custom',
+        executable: path.join(PROJECT_ROOT, 'test', 'fixtures', 'transcript-runner', 'stub-agent.js'),
+        model: null,
+        agentArgs: [],
+        envPassNames: ['STUB_TRANSCRIPT_MODE'],
+      },
+    }[suite.id];
+    if (record.runners.length !== 1) problems.push('fixed runner count does not match invocation');
+    const runner = record.runners[0];
+    if (runner) {
+      if (runner.agent !== fixed.agent) problems.push('fixed runner agent does not match invocation');
+      if (runner.executable !== fixed.executable) problems.push('fixed runner executable does not match invocation');
+      if (runner.model !== fixed.model) problems.push('fixed runner model does not match invocation');
+      if (!sameJson(runner.parameters.agentArgs, fixed.agentArgs)) problems.push('fixed runner arguments do not match invocation');
+      if (!sameJson(runner.parameters.envPassNames, fixed.envPassNames)) {
+        problems.push('fixed runner environment names do not match invocation');
+      }
+    }
+  } else if (!options.preflightOnly) {
+    const requestedAgents = options.agents ?? [];
+    const byAgent = new Map(record.runners.map((runner) => [runner.agent, runner]));
+    if (byAgent.size !== record.runners.length) problems.push('runner agents must be unique');
+    if (requestedAgents.length > 0 && !sameJson([...byAgent.keys()].sort(), [...requestedAgents].sort())) {
+      problems.push('runner agents do not match invocation');
+    }
+    for (const agent of requestedAgents) {
+      const runner = byAgent.get(agent);
+      if (!runner) continue;
+      const expectedExecutable = agent === 'custom' ? options.agentCmd : agent;
+      if (runner.executable !== expectedExecutable) problems.push(`runner executable for ${agent} does not match invocation`);
+      if (!sameJson(runner.parameters.agentArgs, redactArgs(options.agentArgs ?? []))) {
+        problems.push(`runner arguments for ${agent} do not match invocation`);
+      }
+      if (!sameJson(runner.parameters.envPassNames, options.envPass ?? [])) {
+        problems.push(`runner environment names for ${agent} do not match invocation`);
+      }
+      const expectedModel = resolveModel(agent, options.model, options.agentArgs ?? []);
+      if (runner.model !== expectedModel) problems.push(`runner model for ${agent} does not match invocation`);
+    }
+  }
+  return problems;
 }
 
 async function readChildRecord(invocation, options, exitStatus, durationMs) {
@@ -336,6 +471,29 @@ async function readChildRecord(invocation, options, exitStatus, durationMs) {
           invocation.label,
           'environment-harness',
           `with an invalid result record: ${validation.error.issues[0]?.message ?? 'schema validation failed'}`,
+        );
+      }
+      if (read.value.schemaVersion !== SCHEMA_VERSION) {
+        return await placeholderRecord(
+          invocation.suite,
+          options,
+          exitStatus,
+          durationMs,
+          invocation.label,
+          'environment-harness',
+          `with result schema ${read.value.schemaVersion}, expected current writer schema ${SCHEMA_VERSION}`,
+        );
+      }
+      const bindingProblems = await childBindingProblems(read.value, invocation, options);
+      if (bindingProblems.length > 0) {
+        return await placeholderRecord(
+          invocation.suite,
+          options,
+          exitStatus,
+          durationMs,
+          invocation.label,
+          'environment-harness',
+          `with a result record from another invocation: ${bindingProblems.join('; ')}`,
         );
       }
       if (read.value.exitCode !== exitStatus) {
@@ -487,5 +645,7 @@ module.exports = {
   repetitionsFor,
   placeholderRecord,
   readChildRecord,
+  childBindingProblems,
+  caseIdsForInvocation,
   USAGE,
 };
