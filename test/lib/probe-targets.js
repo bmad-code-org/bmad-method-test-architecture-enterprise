@@ -703,16 +703,32 @@ const PROBE_RETRY_ATTEMPTS = 3;
  * than a silently clean one — a retry that leaves no trace is the same
  * defect class the rest of this story keeps finding elsewhere.
  *
- * @param {import('eval-quality').EnvironmentProbePort} port
+ * `portOrFactory` may be one port for calls that leave no attempt-owned state,
+ * or an async factory for artifact-producing calls. The factory is invoked once
+ * per attempt, which lets those callers replace the whole workspace and port
+ * before a retry can observe files left by the attempt that timed out.
+ *
+ * @param {import('eval-quality').EnvironmentProbePort|((attempt: number) => Promise<import('eval-quality').EnvironmentProbePort|{ok: false, failureClass: string, reason: string}>)} portOrFactory
  * @param {object} request
  * @param {AbortSignal} signal
  * @returns {Promise<{ok: true, observation: object}|{ok: false, failureClass: string, reason: string}>}
  */
-async function probeCommandWithRetry(port, request, signal) {
+async function probeCommandWithRetry(portOrFactory, request, signal) {
   let result;
   for (let attempt = 1; attempt <= PROBE_RETRY_ATTEMPTS; attempt += 1) {
-    result = await probeCommand(port, request, signal);
-    if (result.ok || !RETRYABLE_FAILURE_CLASSES.has(result.failureClass) || attempt === PROBE_RETRY_ATTEMPTS) break;
+    let prepared;
+    try {
+      prepared = typeof portOrFactory === 'function' ? await portOrFactory(attempt) : portOrFactory;
+    } catch (error) {
+      result = {
+        ok: false,
+        failureClass: 'unexpected-error',
+        reason: `attempt ${attempt} setup failed: ${error?.message ?? String(error)}`,
+      };
+      break;
+    }
+    result = prepared?.ok === false ? prepared : await probeCommand(prepared, request, signal);
+    if (result.ok || !RETRYABLE_FAILURE_CLASSES.has(result.failureClass) || attempt === PROBE_RETRY_ATTEMPTS || signal.aborted) break;
     console.error(
       `    [retry] ${request.interfaceId} ${request.probeId}: attempt ${attempt} failed as ${result.failureClass} (${result.reason}); retrying`,
     );

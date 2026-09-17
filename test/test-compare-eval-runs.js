@@ -22,6 +22,7 @@ const path = require('node:path');
 const { compareEvalRuns, isComparableShaped } = require('./lib/compare-eval-runs');
 const { contractVersionsFor } = require('./lib/contract-versions');
 const { evalResultSchema, evalRunSchema } = require('./schema/eval-result');
+const { portableRunForStorage } = require('../tools/record-eval-run');
 
 const colors = { reset: '[0m', red: '[31m', green: '[32m' };
 
@@ -308,6 +309,72 @@ async function checkContractVersionsFor() {
   }
 }
 
+function checkPortableRecordedExecutables() {
+  const original = runSummary([
+    suiteResult('inside-repository', {
+      runners: [
+        {
+          ...suiteResult('inside-repository').runners[0],
+          executable: path.join(__dirname, 'fixtures', 'transcript-runner', 'stub-agent.js'),
+        },
+      ],
+    }),
+    suiteResult('outside-repository', {
+      runners: [
+        {
+          ...suiteResult('outside-repository').runners[0],
+          executable: path.join(path.parse(__dirname).root, 'private', 'runtime', 'bin', 'node'),
+        },
+      ],
+    }),
+    suiteResult('windows-absolute', {
+      runners: [
+        {
+          ...suiteResult('windows-absolute').runners[0],
+          executable: String.raw`C:\Users\alice\bin\runner.exe`,
+        },
+      ],
+    }),
+    suiteResult('escaping-relative', {
+      runners: [
+        {
+          ...suiteResult('escaping-relative').runners[0],
+          executable: '../../Users/alice/private/runner',
+        },
+      ],
+    }),
+  ]);
+  const portable = portableRunForStorage(original);
+  const expected = structuredClone(original);
+  expected.suites[0].runners[0].executable = 'test/fixtures/transcript-runner/stub-agent.js';
+  expected.suites[1].runners[0].executable = 'node';
+  expected.suites[2].runners[0].executable = 'runner.exe';
+  expected.suites[3].runners[0].executable = 'runner';
+
+  check(
+    portable.suites[0].runners[0].executable === 'test/fixtures/transcript-runner/stub-agent.js',
+    `a repository executable must be stored relative to the repository, got ${portable.suites[0].runners[0].executable}`,
+  );
+  check(
+    portable.suites[1].runners[0].executable === 'node',
+    `an external executable must retain only its basename, got ${portable.suites[1].runners[0].executable}`,
+  );
+  check(
+    portable.suites[2].runners[0].executable === 'runner.exe',
+    `a Windows absolute executable must retain only its basename on every host, got ${portable.suites[2].runners[0].executable}`,
+  );
+  check(
+    portable.suites[3].runners[0].executable === 'runner',
+    `a relative executable escaping the repository must retain only its basename, got ${portable.suites[3].runners[0].executable}`,
+  );
+  check(
+    path.isAbsolute(original.suites[0].runners[0].executable) && path.isAbsolute(original.suites[1].runners[0].executable),
+    'portable storage must not mutate the produced run it was given',
+  );
+  check(JSON.stringify(portable) === JSON.stringify(expected), 'portable storage must change executable identities alone');
+  assertFixtureIsSchemaValid(portable, evalRunSchema, 'portable stored run');
+}
+
 /* -------------------------------------------------------------------------- */
 
 async function main() {
@@ -324,6 +391,7 @@ async function main() {
   await checkDominanceCallSiteFiresOnComparableData();
   await checkEquivalentDominanceIsNotReportedAsDrift();
   await checkContractVersionsFor();
+  checkPortableRecordedExecutables();
 
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} check(s) failed:${colors.reset}`);

@@ -144,7 +144,7 @@
       "runners": [
         {
           "agent": "deterministic",
-          "executable": "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+          "executable": "node",
           "version": "v24.20.0",
           "model": null,
           "parameters": {
@@ -1076,7 +1076,7 @@
       "runners": [
         {
           "agent": "custom",
-          "executable": "/Users/murat/opensource/_wt/tea-s66/test/fixtures/transcript-runner/stub-agent.js",
+          "executable": "test/fixtures/transcript-runner/stub-agent.js",
           "version": "stub-agent 1.0.0",
           "model": null,
           "parameters": {
@@ -1136,7 +1136,7 @@
       "runners": [
         {
           "agent": "harness",
-          "executable": "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+          "executable": "node",
           "version": "v24.20.0",
           "model": null,
           "parameters": {

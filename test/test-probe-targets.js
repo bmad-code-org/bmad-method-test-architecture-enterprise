@@ -1695,6 +1695,70 @@ async function checkProbeRetry() {
     JSON.stringify(recoveredLog),
   );
 
+  // Artifact-producing harnesses supply a factory so each attempt gets a new
+  // port bound to a newly staged workspace. A timed-out attempt can therefore
+  // leave any combination of declared artifacts and progress files behind
+  // without the successful attempt seeing them.
+  const factoryAttempts = [];
+  const portFactory = async (attempt) => {
+    factoryAttempts.push(attempt);
+    return {
+      probe: async () => {
+        if (attempt < PROBE_RETRY_ATTEMPTS) throw fault('port-failure', `attempt ${attempt} lost`);
+        return successObservation;
+      },
+    };
+  };
+  const { result: isolated, lines: isolatedLog } = await withCapturedRetryLog(() =>
+    probeCommandWithRetry(portFactory, request('retry-isolates-attempts'), new AbortController().signal),
+  );
+  assert(
+    JSON.stringify(factoryAttempts) === JSON.stringify([1, 2, 3]),
+    'an artifact-producing retry asks its port factory for a fresh port on every attempt',
+    JSON.stringify(factoryAttempts),
+  );
+  assert(isolated.ok === true, 'the final isolated attempt reports its success', JSON.stringify(isolated));
+  assert(
+    isolatedLog.length === PROBE_RETRY_ATTEMPTS - 1,
+    'isolated retry attempts retain the same visible retry record',
+    `${isolatedLog.length} line(s)`,
+  );
+
+  const setupFailure = await probeCommandWithRetry(
+    async () => {
+      throw new Error('could not stage the workspace');
+    },
+    request('retry-setup-fails'),
+    new AbortController().signal,
+  );
+  assert(
+    !setupFailure.ok &&
+      setupFailure.failureClass === 'unexpected-error' &&
+      setupFailure.reason.includes('attempt 1 setup failed: could not stage the workspace'),
+    'a port-factory failure is returned as a lost run instead of rejecting the whole matrix',
+    JSON.stringify(setupFailure),
+  );
+
+  calls = 0;
+  const cancelled = new AbortController();
+  cancelled.abort();
+  const abortedPort = {
+    probe: async () => {
+      calls += 1;
+      throw fault('aborted', 'the caller cancelled the run');
+    },
+  };
+  const { result: aborted, lines: abortedLog } = await withCapturedRetryLog(() =>
+    probeCommandWithRetry(abortedPort, request('retry-cancelled'), cancelled.signal),
+  );
+  assert(calls === 1, 'an externally aborted probe is attempted once', `${calls} call(s)`);
+  assert(
+    !aborted.ok && aborted.failureClass === 'environment-timeout',
+    'an externally aborted probe retains its timeout classification',
+    JSON.stringify(aborted),
+  );
+  assert(abortedLog.length === 0, 'an externally aborted probe prints no retry line', JSON.stringify(abortedLog));
+
   // A retryable failure that never recovers is attempted exactly the bound and
   // no more, and the exhausted result is still the honest failure: nothing
   // here reports a lost run as a pass.

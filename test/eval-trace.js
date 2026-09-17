@@ -2096,24 +2096,30 @@ function runnerOptions(options) {
  * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
  */
 async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
-  const workspace = await stageWorkspace(set);
+  let workspace = await stageWorkspace(set);
   try {
-    const leaked = await assertGroundTruthAbsent(workspace.dir);
-    if (leaked.length > 0) {
-      return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
-    }
-
     const treeBefore = workingTreeState(PROJECT_ROOT);
-    const { port } = await createProbePort({
-      cwd: workspace.dir,
-      interfaceIds: [TRACE_INTERFACE],
-      artifacts: { [TRACE_INTERFACE]: traceArtifactPaths(set) },
-      // The operator's own pass-through names, so the authorization permits
-      // exactly what the request below declares.
-      environmentKeys: { [TRACE_INTERFACE]: options.envPass },
-    });
+    const portForAttempt = async (attempt) => {
+      if (attempt > 1) {
+        fs.rmSync(workspace.dir, { recursive: true, force: true });
+        workspace = await stageWorkspace(set);
+      }
+      const leaked = await assertGroundTruthAbsent(workspace.dir);
+      if (leaked.length > 0) {
+        return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
+      }
+      const { port } = await createProbePort({
+        cwd: workspace.dir,
+        interfaceIds: [TRACE_INTERFACE],
+        artifacts: { [TRACE_INTERFACE]: traceArtifactPaths(set) },
+        // The operator's own pass-through names, so the authorization permits
+        // exactly what the request below declares.
+        environmentKeys: { [TRACE_INTERFACE]: options.envPass },
+      });
+      return port;
+    };
     const result = await probeCommandWithRetry(
-      port,
+      portForAttempt,
       probeRequest({
         probeId: `${set.id}-run-${runIndex + 1}`,
         interfaceId: TRACE_INTERFACE,
