@@ -101,7 +101,7 @@ For each user journey, create test file in `tests/e2e/[feature].spec.ts`:
 import { test, expect } from '../support/merged-fixtures';
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
-  test.skip('[P0] should complete user registration successfully', async ({ page, interceptNetworkCall }) => {
+  test.skip('[P0] AC-1 should complete user registration successfully', async ({ page, interceptNetworkCall }) => {
     // THIS TEST WILL FAIL - UI not implemented yet
     // Declare the interception BEFORE navigating.
     const registerCall = interceptNetworkCall({ url: '**/api/users/register', method: 'POST' });
@@ -122,7 +122,7 @@ test.describe('[Story Name] E2E User Journey (ATDD)', () => {
 
   // Stubs a 409 on purpose, so it opts out of network monitoring.
   test.skip(
-    '[P1] should show error if email exists',
+    '[P1] AC-2 should show error if email exists',
     { annotation: [{ type: 'skipNetworkMonitoring' }] },
     async ({ page, interceptNetworkCall }) => {
       // THIS TEST WILL FAIL - UI not implemented yet
@@ -154,7 +154,7 @@ Note the selectors: `getByLabel` and `getByRole`, never `[name="email"]` or `but
 import { test, expect } from '@playwright/test';
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
-  test.skip('[P0] should complete user registration successfully', async ({ page }) => {
+  test.skip('[P0] AC-1 should complete user registration successfully', async ({ page }) => {
     await page.route('**/api/users/register', (route) => route.continue());
     await page.goto('/register');
 
@@ -187,6 +187,10 @@ If the merged-fixtures file does not exist yet, generate the import against `../
 **CRITICAL ATDD Requirements:**
 
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
+- ✅ Every leaf `test.skip()` title MUST include exactly one supplied acceptance criterion id in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
+- ✅ Generate one primary scaffold for every supplied acceptance criterion before adding secondary journeys
+- ✅ The criterion-defining assertion MUST be the first assertion that can fail; establish prerequisite state through fixtures, provider state, or unasserted setup actions
+- ✅ For a state-transition criterion, choose the transition-bearing branch for the primary scaffold and assert the newly promised state directly
 - ✅ Write assertions for EXPECTED UI behavior (even though not implemented)
 - ✅ Use resilient selectors: getByRole, getByText, getByLabel (from selector-resilience). Never `[name="..."]`, `button:has-text(...)`, CSS classes, or XPath
 - ✅ Network-first: interception declared before navigation when API calls are involved (from network-first; mechanism per the mandate when enabled)

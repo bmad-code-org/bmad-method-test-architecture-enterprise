@@ -27,7 +27,7 @@ exists to catch, carried by the fixture design rather than stated as a fact abou
 
 ## `cases/`
 
-Six hand-authored scaffold sets, each one deviation from a correct run:
+Nine hand-authored scaffold sets, each one deviation from a correct run:
 
 ```text
 correct-run       all five criteria, each failing with its own declared pattern
@@ -36,6 +36,15 @@ wrong-reason-red  AC-1's scaffold asserts the wrong expected value; still red, w
 load-error        a syntax error; the file never parses and no test in it ever runs
 still-skipped     AC-4 uses test.fixme(), which activation's test.skip() replacement does not touch
 not-mapped        every criterion covered, plus one scaffold naming no criterion's id
+criterion-id-on-describe
+                  every criterion id appears only on a parent describe title, leaving every
+                  executable leaf test unmapped
+setup-assertion-masks-target
+                  AC-2 and AC-4 assert an unimplemented prerequisite before their own promise,
+                  so neither reaches its criterion-defining assertion
+baseline-ac5-branch
+                  AC-5 checks the baseline false branch while the intended red-phase scaffold
+                  exercises the active-reservation transition named by the criterion
 ```
 
 Each is executed once through `cli/atdd-red-check.js` against a fresh copy of `reservations/`,

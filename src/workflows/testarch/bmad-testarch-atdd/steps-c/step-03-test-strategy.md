@@ -39,6 +39,11 @@ Translate acceptance criteria into a prioritized, level-appropriate test plan.
 ## 1. Map Acceptance Criteria
 
 - Convert each acceptance criterion into test scenarios
+- Record the exact supplied acceptance criterion id on every scenario
+- Plan one primary red-phase scaffold for every supplied criterion before adding secondary coverage
+- Identify the one criterion-defining assertion that must fail first
+- Establish prerequisite state through an existing fixture, provider state, or unasserted setup action so an unrelated setup assertion cannot mask the intended failure
+- For state-transition criteria, choose the transition-bearing branch as the primary red-phase scenario
 - Include negative and edge cases where risk is high
 
 ---
@@ -71,6 +76,8 @@ Assign P0–P3 priorities using risk and business impact.
 ## 4. Confirm Red Phase Requirements
 
 Ensure all tests are designed to **fail before implementation** (TDD red phase).
+
+For each supplied criterion, confirm that its primary scaffold reaches the criterion-defining assertion before any other assertion can fail. A criterion describing behavior after a state transition must exercise that transition in its primary scaffold. Baseline branches and additional assertions belong in secondary coverage.
 
 ---
 

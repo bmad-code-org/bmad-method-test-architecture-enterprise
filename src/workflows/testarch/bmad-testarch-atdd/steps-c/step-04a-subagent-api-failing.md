@@ -72,7 +72,7 @@ import { test, expect } from '../support/merged-fixtures';
 import { registrationPayload } from '../support/factories';
 
 test.describe('[Story Name] API Tests (ATDD)', () => {
-  test.skip('[P0] should register new user successfully', async ({ apiRequest }) => {
+  test.skip('[P0] AC-1 should register new user successfully', async ({ apiRequest }) => {
     // THIS TEST WILL FAIL - Endpoint not implemented yet
     const { status, body } = await apiRequest<RegisteredUser>({
       method: 'POST',
@@ -88,7 +88,7 @@ test.describe('[Story Name] API Tests (ATDD)', () => {
     });
   });
 
-  test.skip('[P1] should return 400 if email exists', async ({ apiRequest }) => {
+  test.skip('[P1] AC-2 should return 400 if email exists', async ({ apiRequest }) => {
     // THIS TEST WILL FAIL - Endpoint not implemented yet
     const { status, body } = await apiRequest({
       method: 'POST',
@@ -110,7 +110,7 @@ test.describe('[Story Name] API Tests (ATDD)', () => {
 import { test, expect } from '@playwright/test';
 
 test.describe('[Story Name] API Tests (ATDD)', () => {
-  test.skip('[P0] should register new user successfully', async ({ request }) => {
+  test.skip('[P0] AC-1 should register new user successfully', async ({ request }) => {
     const response = await request.post('/api/users/register', {
       data: { email: 'newuser@example.com', password: 'SecurePass123!' },
     });
@@ -139,6 +139,10 @@ If the merged-fixtures file does not exist yet, generate the import against `../
 **CRITICAL ATDD Requirements:**
 
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
+- ✅ Every leaf `test.skip()` title MUST include exactly one supplied acceptance criterion id in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
+- ✅ Generate one primary scaffold for every supplied acceptance criterion before adding secondary cases
+- ✅ The criterion-defining assertion MUST be the first assertion that can fail; establish prerequisites through fixtures, provider state, or unasserted setup calls
+- ✅ For a state-transition criterion, choose the transition-bearing branch for the primary scaffold and assert the newly promised state directly
 - ✅ Write assertions for EXPECTED behavior (even though not implemented)
 - ✅ Use realistic test data (not placeholder data)
 - ✅ Test both happy path and error scenarios from acceptance criteria
@@ -185,7 +189,7 @@ When generating Pact consumer contract tests in the ATDD red phase, provider scr
  *   - Status: 201 for success, 400 for duplicate email, 422 for validation error
  *   - Response: { id: number, email: string, createdAt: string }
  */
-test.skip('[P0] should generate consumer contract for user registration', async () => {
+test.skip('[P0] AC-1 should generate consumer contract for user registration', async () => {
   await provider
     .given('no users exist')
     .uponReceiving('a request to register a new user')

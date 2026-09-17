@@ -73,6 +73,10 @@ const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
 
 **CRITICAL TDD Validation:**
 
+Extract every leaf `test.skip()` title from both worker outputs and compare its criterion id with the exact ids supplied by the story. Reject any leaf test title that carries zero or multiple supplied criterion ids. Reject aggregation when any supplied acceptance criterion has no leaf test. An id present only on a containing `test.describe()` does not count.
+
+For each criterion's primary scaffold, verify that the criterion-defining assertion is the first assertion that can fail. Prerequisite state may be established through fixtures, provider states, or setup actions without assertions. For a state-transition criterion, verify that the primary scaffold exercises the transition-bearing branch and directly asserts the newly promised state.
+
 **Check API tests:**
 
 ```javascript
@@ -118,6 +122,9 @@ e2eTestsOutput.tests.forEach((test) => {
 ```text
 ✅ TDD Red Phase Validation: PASS
 - All tests use test.skip()
+- Every leaf test maps to exactly one supplied acceptance criterion
+- Every supplied acceptance criterion has a primary scaffold
+- Each primary scaffold reaches its criterion-defining assertion first
 - All tests assert expected behavior (not placeholders)
 - All tests marked as expected_to_fail
 ```

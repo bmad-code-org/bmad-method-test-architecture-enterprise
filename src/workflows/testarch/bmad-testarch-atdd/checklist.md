@@ -95,6 +95,10 @@ Before starting this workflow, verify:
 
 - [ ] All tests use Given-When-Then structure with clear comments
 - [ ] All tests have descriptive names explaining what they test
+- [ ] Every executable leaf title carries exactly one supplied `AC-<n>` id
+- [ ] Every supplied acceptance criterion has one primary scaffold
+- [ ] Criterion-defining assertion is the first assertion that can fail
+- [ ] State-transition criteria exercise the transition-bearing branch first
 - [ ] No duplicate tests (same behavior tested multiple times)
 - [ ] No flaky patterns (race conditions, timing issues)
 - [ ] No test interdependencies (tests can run in any order)

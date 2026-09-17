@@ -1,0 +1,44 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: every criterion id is visible in the parent describe title, while",
+    "every executable leaf title omits its id. The live baseline produced this shape in one repetition."
+  ],
+  "id": "criterion-id-on-describe",
+  "suite": "atdd",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "Playwright reports each leaf title without its parent describe text. None carries AC-<n>, so all five tests are unmapped, every criterion is absent, redForIntendedReasonRate is unmeasurable, and criteriaCoverage is 0. usesTestSkip remains true.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      { "id": "AC-1", "present": false, "outcome": "unmapped" },
+      { "id": "AC-2", "present": false, "outcome": "unmapped" },
+      { "id": "AC-3", "present": false, "outcome": "unmapped" },
+      { "id": "AC-4", "present": false, "outcome": "unmapped" },
+      { "id": "AC-5", "present": false, "outcome": "unmapped" }
+    ],
+    "mappedTestCount": 0,
+    "redForIntendedReasonCount": 0,
+    "redForIntendedReasonRate": null,
+    "criteriaCoverage": 0,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": [],
+    "unmapped": [
+      "tests/api/reservations.spec.ts:[P0] reserving a free locker creates it",
+      "tests/api/reservations.spec.ts:[P1] a reserved locker cannot be reserved again",
+      "tests/api/reservations.spec.ts:[P1] an out-of-range duration is rejected",
+      "tests/api/reservations.spec.ts:[P2] releasing a reservation frees the locker",
+      "tests/api/reservations.spec.ts:[P1] the locker reports it is reserved"
+    ],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

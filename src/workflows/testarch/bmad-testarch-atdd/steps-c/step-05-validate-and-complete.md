@@ -43,6 +43,10 @@ Use `checklist.md` to validate:
 - Test files created correctly
 - Checklist matches acceptance criteria
 - Tests are generated as red-phase scaffolds and marked with `test.skip()`
+- Every executable leaf title carries exactly one supplied acceptance criterion id
+- Every supplied acceptance criterion has a primary scaffold
+- The criterion-defining assertion is the first assertion that can fail
+- State-transition criteria exercise the transition-bearing branch in their primary scaffold
 - Story metadata and handoff paths are captured for downstream workflows
 - [ ] CLI sessions cleaned up (no orphaned browsers)
 - [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
