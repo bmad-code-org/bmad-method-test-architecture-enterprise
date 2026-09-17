@@ -270,7 +270,8 @@ function aggregateExitCodes(codes) {
  * before writing still has to appear in the summary, otherwise the run reads as
  * though that suite was never part of it.
  */
-async function placeholderRecord(suite, options, exitStatus, durationMs) {
+async function placeholderRecord(suite, options, exitStatus, durationMs, label) {
+  const failureClass = exitStatus === 0 ? 'environment-missing-artifact' : failureClassForExitCode(exitStatus);
   return suiteResultRecord({
     generatedAt: await nowIso(),
     mode: options.preflightOnly ? 'preflight-only' : 'live',
@@ -281,7 +282,14 @@ async function placeholderRecord(suite, options, exitStatus, durationMs) {
     cases: [],
     runners: [],
     durationMs,
-    suiteFailureClasses: [failureClassForExitCode(exitStatus)],
+    suiteFailureClasses: [failureClass],
+    suiteDiagnostics: [
+      {
+        failureClass,
+        reason: `${label} exited ${exitStatus ?? 'without a status'} before writing its result record`,
+        evidence: [{ kind: 'summary', value: `child=${label}; exit=${exitStatus ?? 'null'}` }],
+      },
+    ],
   });
 }
 
@@ -300,7 +308,7 @@ async function readChildRecord(invocation, options, exitStatus, durationMs) {
     });
     if (read.present) return read.value;
   }
-  return await placeholderRecord(invocation.suite, options, exitStatus, durationMs);
+  return await placeholderRecord(invocation.suite, options, exitStatus, durationMs, invocation.label);
 }
 
 async function main() {
@@ -428,4 +436,13 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseArgs, sharedRunnerArgs, buildInvocations, aggregateExitCodes, runFailureClass, repetitionsFor, USAGE };
+module.exports = {
+  parseArgs,
+  sharedRunnerArgs,
+  buildInvocations,
+  aggregateExitCodes,
+  runFailureClass,
+  repetitionsFor,
+  placeholderRecord,
+  USAGE,
+};

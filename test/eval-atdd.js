@@ -126,6 +126,7 @@ const {
   redactArgs,
   measured,
   diagnosticRecord,
+  numericContributions,
   classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
@@ -892,6 +893,71 @@ function signatureOf(scored) {
   ]);
 }
 
+function atddDiagnosticProjection(scored) {
+  return {
+    redForIntendedReason: {
+      numerator: scored.redForIntendedReasonCount,
+      denominator: scored.mappedTestCount,
+      threshold: THRESHOLDS.redForIntendedReasonRate,
+    },
+    criteriaCoverage: {
+      numerator: scored.perCriterion.filter((entry) => entry.present).length,
+      denominator: scored.perCriterion.length,
+      threshold: THRESHOLDS.criteriaCoverage,
+    },
+    vacuousPass: scored.vacuousPass.length,
+    maxVacuousPass: THRESHOLDS.maxVacuousPass,
+    stillSkipped: scored.stillSkipped.length,
+    maxStillSkipped: THRESHOLDS.maxStillSkipped,
+    nonAssertionExit: scored.nonAssertion.length,
+    maxNonAssertionExit: THRESHOLDS.maxNonAssertionExit,
+    loadErrors: scored.loadErrors.length,
+    maxLoadErrors: THRESHOLDS.maxLoadErrors,
+    unmapped: scored.unmapped.length,
+    maxUnmappedTests: THRESHOLDS.maxUnmappedTests,
+    productionMutations: scored.productionMutations.length,
+    maxProductionMutations: THRESHOLDS.maxProductionMutations,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function atddDiagnosticClassifier(diagnostics) {
+  const variants = new Set(diagnostics.filter((entry) => entry.completionState === 'completed').map((entry) => entry.signature));
+  return (entry, failures) => {
+    const metric = entry.metricContributions;
+    const failed = failures.join('; ');
+    const reasons = [];
+    if (
+      failed.includes('redForIntendedReasonRate') &&
+      (metric['redForIntendedReason.denominator'] === 0 ||
+        metric['redForIntendedReason.numerator'] / metric['redForIntendedReason.denominator'] < metric['redForIntendedReason.threshold'])
+    )
+      reasons.push('redForIntendedReasonRate');
+    if (
+      failed.includes('criteriaCoverage') &&
+      (metric['criteriaCoverage.denominator'] === 0 ||
+        metric['criteriaCoverage.numerator'] / metric['criteriaCoverage.denominator'] < metric['criteriaCoverage.threshold'])
+    )
+      reasons.push('criteriaCoverage');
+    for (const [needle, value, ceiling] of [
+      ['vacuous pass', 'vacuousPass', 'maxVacuousPass'],
+      ['still-skipped', 'stillSkipped', 'maxStillSkipped'],
+      ['non-assertion exit', 'nonAssertionExit', 'maxNonAssertionExit'],
+      ['load error', 'loadErrors', 'maxLoadErrors'],
+      ['unmapped test', 'unmapped', 'maxUnmappedTests'],
+      ['production mutation', 'productionMutations', 'maxProductionMutations'],
+    ]) {
+      if (failed.includes(needle) && metric[value] > metric[ceiling]) reasons.push(value);
+    }
+    if (failed.includes('unstable case') && variants.size > 1) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* One complete run                                                            */
 /* -------------------------------------------------------------------------- */
@@ -1114,13 +1180,9 @@ async function finish({ options, startedAt, mode, groundTruth, runners, suiteFai
   process.exit(exitCode);
 }
 
-function runnerRecord(
-  agent,
-  options,
-  versions,
-  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
-) {
+function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, atddDiagnosticClassifier(diagnostics));
   return {
     agent,
     executable,
@@ -1136,9 +1198,9 @@ function runnerRecord(
     measurements,
     durationMs,
     usage: null,
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -1285,16 +1347,7 @@ async function main() {
           caseId: CASE_ID,
           repetition: runIndex + 1,
           signature,
-          metricContributions: {
-            redForIntendedReasonRate: outcome.scored.redForIntendedReasonRate,
-            criteriaCoverage: outcome.scored.criteriaCoverage,
-            vacuousPass: outcome.scored.vacuousPass.length,
-            stillSkipped: outcome.scored.stillSkipped.length,
-            nonAssertionExit: outcome.scored.nonAssertion.length,
-            loadErrors: outcome.scored.loadErrors.length,
-            unmapped: outcome.scored.unmapped.length,
-            productionMutations: outcome.scored.productionMutations.length,
-          },
+          metricContributions: numericContributions(atddDiagnosticProjection(outcome.scored)),
           evidence: [{ kind: 'output-signature', value: signature }],
         }),
       );
@@ -1434,6 +1487,8 @@ module.exports = {
   caseIds,
   scoreRun,
   signatureOf,
+  atddDiagnosticProjection,
+  atddDiagnosticClassifier,
   runRedCheck,
   RUNNER_CAPABILITIES,
   THRESHOLDS,

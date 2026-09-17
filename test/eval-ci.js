@@ -181,6 +181,7 @@ const {
   measured,
   diagnosticRecord,
   numericContributions,
+  diagnosticRateMiss,
   classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
@@ -1829,6 +1830,64 @@ function signatureOf(scored, mutations) {
   ]);
 }
 
+function ciDiagnosticProjection(scored, mutations) {
+  const triggers = scored.elements.filter((element) => element.kind === 'trigger');
+  return {
+    parseFailures: scored.parse.ok ? 0 : 1,
+    maxParseFailures: THRESHOLDS.maxParseFailures,
+    lintFindings: scored.lint.findings.length,
+    maxLintFindings: THRESHOLDS.maxLintFindings,
+    requestedElements: {
+      numerator: scored.elements.filter((element) => element.present).length,
+      denominator: scored.elements.length,
+      threshold: THRESHOLDS.requestedElementRecall,
+    },
+    triggers: {
+      numerator: triggers.filter((element) => element.present).length,
+      denominator: triggers.length,
+      threshold: THRESHOLDS.triggerAccuracy,
+    },
+    unrequestedElements: scored.unrequested.length,
+    maxUnrequestedElements: THRESHOLDS.maxUnrequestedElements,
+    workflowRuleViolations: scored.ruleViolations.length,
+    maxWorkflowRuleViolations: THRESHOLDS.maxWorkflowRuleViolations,
+    fixtureMutations: mutations,
+    maxFixtureMutations: THRESHOLDS.maxFixtureMutations,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function ciDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metric = entry.metricContributions;
+    const failed = failures.join('; ');
+    const reasons = [];
+    if (failed.includes('parse failure') && metric.parseFailures > metric.maxParseFailures) reasons.push('parse failure');
+    if (failed.includes('lint finding') && metric.lintFindings > metric.maxLintFindings) reasons.push('lint finding');
+    if (failed.includes('requestedElementRecall') && diagnosticRateMiss(entry, 'requestedElements', diagnostics))
+      reasons.push('requested element miss');
+    if (failed.includes('triggerAccuracy') && diagnosticRateMiss(entry, 'triggers', diagnostics)) reasons.push('trigger miss');
+    if (failed.includes('unrequested element') && metric.unrequestedElements > metric.maxUnrequestedElements)
+      reasons.push('unrequested element');
+    if (failed.includes('workflow rule violation') && metric.workflowRuleViolations > metric.maxWorkflowRuleViolations)
+      reasons.push('workflow rule violation');
+    if (failed.includes('fixture mutations') && metric.fixtureMutations > metric.maxFixtureMutations) reasons.push('fixture mutation');
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Running                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -2031,9 +2090,10 @@ function runnerRecord(
   options,
   versions,
   tools,
-  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
   return {
     agent,
     executable,
@@ -2053,9 +2113,9 @@ function runnerRecord(
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -2194,7 +2254,7 @@ async function main() {
             caseId: set.id,
             repetition: runIndex + 1,
             signature,
-            metricContributions: { ...numericContributions(outcome.scored), mutations: outcome.mutations },
+            metricContributions: numericContributions(ciDiagnosticProjection(outcome.scored, outcome.mutations)),
             evidence: [
               { kind: 'output-signature', value: signature },
               { kind: 'artifact', value: '.github/workflows/test.yml' },
@@ -2310,6 +2370,7 @@ async function main() {
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
           diagnostics,
+          diagnosticClassifier: ciDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -2330,6 +2391,7 @@ async function main() {
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
         diagnostics,
+        diagnosticClassifier: ciDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -2367,6 +2429,8 @@ module.exports = {
   workflowRuleViolations,
   scoreRun,
   signatureOf,
+  ciDiagnosticProjection,
+  ciDiagnosticClassifier,
   ACTIONLINT,
   ELEMENT_KINDS,
   PLATFORM,

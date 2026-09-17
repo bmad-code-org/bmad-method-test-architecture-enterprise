@@ -93,6 +93,7 @@ const {
   probeVersion,
   measured,
   diagnosticRecord,
+  numericContributions,
   classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
@@ -515,8 +516,27 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
   process.exit(exitCode);
 }
 
+function transcriptDiagnosticProjection(cross) {
+  return {
+    crossTurnConsistency: {
+      numerator: cross.holds ? 1 : 0,
+      denominator: 1,
+      threshold: THRESHOLDS.crossTurnConsistencyRate,
+    },
+  };
+}
+
+function transcriptDiagnosticClassifier(entry) {
+  const metric = entry.metricContributions;
+  const misses =
+    metric['crossTurnConsistency.denominator'] === 0 ||
+    metric['crossTurnConsistency.numerator'] / metric['crossTurnConsistency.denominator'] < metric['crossTurnConsistency.threshold'];
+  return misses ? { reasons: [entry.reason ?? 'cross-turn consistency'], rootCause: 'harness-defect' } : null;
+}
+
 /** The one runner record this suite ever produces: the hardcoded stub, never the requested agent. */
-function runnerRecord(version, { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] }) {
+function runnerRecord(version, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, transcriptDiagnosticClassifier);
   return {
     agent: 'custom',
     executable: STUB_AGENT,
@@ -532,9 +552,9 @@ function runnerRecord(version, { expected, completed, measurements, durationMs, 
     measurements,
     durationMs,
     usage: null,
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -658,7 +678,7 @@ async function main() {
           caseId: CASE_ID,
           repetition: runIndex + 1,
           signature,
-          metricContributions: { crossTurnConsistency: cross.holds ? 1 : 0 },
+          metricContributions: numericContributions(transcriptDiagnosticProjection(cross)),
           reason: cross.holds ? null : cross.disagreement,
           evidence: [{ kind: 'output-signature', value: signature }],
         }),
@@ -725,6 +745,8 @@ module.exports = {
   validateCorpus,
   makeBuildTurnPrompt,
   crossTurnHolds,
+  transcriptDiagnosticProjection,
+  transcriptDiagnosticClassifier,
   sessionComplete,
   caseIds,
   RUNNER_CAPABILITIES,

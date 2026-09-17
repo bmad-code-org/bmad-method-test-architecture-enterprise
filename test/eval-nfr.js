@@ -187,7 +187,9 @@ const {
   redactArgs,
   measured,
   diagnosticRecord,
+  artifactEvidence,
   numericContributions,
+  diagnosticRateMiss,
   classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
@@ -1790,7 +1792,7 @@ function reportFromArtifact(artifact) {
       reason: 'nfr-assessment.md declares no section for any of the four audited domains',
     };
   }
-  return { ok: true, report: parsed };
+  return { ok: true, report: parsed, text: artifact.value };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2095,6 +2097,89 @@ function signatureOf(scored, mutations) {
   ]);
 }
 
+function nfrDiagnosticProjection(scored, mutations) {
+  const undecidable = scored.domainResults.filter((item) => item.undecidable);
+  return {
+    domainStatusAccuracy: {
+      numerator: scored.domainResults.filter((item) => item.ok).length,
+      denominator: scored.domainResults.length,
+      threshold: THRESHOLDS.domainStatusAccuracy,
+    },
+    undecidableDomainAccuracy: {
+      numerator: undecidable.filter((item) => item.ok).length,
+      denominator: undecidable.length,
+      threshold: THRESHOLDS.undecidableDomainAccuracy,
+    },
+    thresholdFidelityAccuracy: {
+      numerator: scored.domainResults.filter((item) => item.threshold.ok).length + (scored.unknownThreshold.ok ? 1 : 0),
+      denominator: scored.domainResults.length + 1,
+      threshold: THRESHOLDS.thresholdFidelityAccuracy,
+    },
+    overallStatusAccuracy: { numerator: scored.overall.ok ? 1 : 0, denominator: 1, threshold: THRESHOLDS.overallStatusAccuracy },
+    domainCoverage: { numerator: scored.coverage.present, denominator: scored.coverage.total, threshold: THRESHOLDS.domainCoverage },
+    groundedCitationAccuracy: {
+      numerator: scored.groundedCriteria.hits,
+      denominator: scored.groundedCriteria.total,
+      threshold: THRESHOLDS.groundedCitationAccuracy,
+    },
+    duplicateDomainSections: scored.duplicateDomainSections.length,
+    maxDuplicateDomainSections: THRESHOLDS.maxDuplicateDomainSections,
+    gateDisagreements: scored.gateDisagreements.length,
+    maxGateDisagreements: THRESHOLDS.maxGateDisagreements,
+    unsupportedPass: scored.unsupportedPass.length,
+    maxUnsupportedPass: THRESHOLDS.maxUnsupportedPass,
+    fabricatedEvidence: scored.fabricated.length,
+    maxFabricatedEvidence: THRESHOLDS.maxFabricatedEvidence,
+    cleanFalsePositives: scored.cleanFalsePositives,
+    maxCleanFalsePositives: THRESHOLDS.maxCleanFalsePositives,
+    fixtureMutations: mutations,
+    maxFixtureMutations: THRESHOLDS.maxFixtureMutations,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function nfrDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metric = entry.metricContributions;
+    const failed = failures.join('; ');
+    const reasons = [];
+    for (const key of [
+      'domainStatusAccuracy',
+      'undecidableDomainAccuracy',
+      'thresholdFidelityAccuracy',
+      'overallStatusAccuracy',
+      'domainCoverage',
+      'groundedCitationAccuracy',
+    ]) {
+      if (!failed.includes(key)) continue;
+      if (diagnosticRateMiss(entry, key, diagnostics)) reasons.push(key);
+    }
+    for (const [needle, value, ceiling] of [
+      ['duplicate domain section', 'duplicateDomainSections', 'maxDuplicateDomainSections'],
+      ['gate artifact', 'gateDisagreements', 'maxGateDisagreements'],
+      ['unsupported PASS', 'unsupportedPass', 'maxUnsupportedPass'],
+      ['fabricated evidence', 'fabricatedEvidence', 'maxFabricatedEvidence'],
+      ['clean false positives', 'cleanFalsePositives', 'maxCleanFalsePositives'],
+      ['fixture mutations', 'fixtureMutations', 'maxFixtureMutations'],
+    ]) {
+      if (failed.includes(needle) && metric[value] > metric[ceiling]) reasons.push(value);
+    }
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Running                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -2200,7 +2285,12 @@ async function runCase(set, options, agent, runIndex) {
         !workspace.bundleFiles.includes(relative),
     );
 
-    return { ok: true, scored: scoreRun(set, report.report), mutations: mutations + added.length };
+    return {
+      ok: true,
+      scored: scoreRun(set, report.report),
+      mutations: mutations + added.length,
+      artifactEvidence: artifactEvidence(nfrArtifactPaths(set).report, report.text),
+    };
   } finally {
     fs.rmSync(workspace.dir, { recursive: true, force: true });
   }
@@ -2298,9 +2388,10 @@ function runnerRecord(
   agent,
   options,
   versions,
-  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
   return {
     agent,
     executable,
@@ -2316,9 +2407,9 @@ function runnerRecord(
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -2473,11 +2564,8 @@ async function main() {
             caseId: set.id,
             repetition: runIndex + 1,
             signature,
-            metricContributions: { ...numericContributions(outcome.scored), mutations: outcome.mutations },
-            evidence: [
-              { kind: 'output-signature', value: signature },
-              { kind: 'artifact', value: 'test-artifacts/nfr-assessment.md' },
-            ],
+            metricContributions: numericContributions(nfrDiagnosticProjection(outcome.scored, outcome.mutations)),
+            evidence: [{ kind: 'output-signature', value: signature }, ...outcome.artifactEvidence],
           }),
         );
       }
@@ -2616,6 +2704,7 @@ async function main() {
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
           diagnostics,
+          diagnosticClassifier: nfrDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -2636,6 +2725,7 @@ async function main() {
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
         diagnostics,
+        diagnosticClassifier: nfrDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -2672,6 +2762,8 @@ module.exports = {
   parseReport,
   scoreRun,
   signatureOf,
+  nfrDiagnosticProjection,
+  nfrDiagnosticClassifier,
   DOMAINS,
   DOMAIN_BLOCK_KEY,
   RUNNER_CAPABILITIES,

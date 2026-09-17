@@ -1088,6 +1088,7 @@ function checkNfrHarnessSmoke(runDir) {
     JSON.stringify(runner?.repetitions),
   );
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct audit', JSON.stringify(runner?.failures));
+  assertEmbeddedArtifactEvidence(complete.record, ['test-artifacts/nfr-assessment.md'], 'nfr');
   assert(
     runner?.version === 'stub-agent 1.0.0',
     'the pre-flight recorded the version the stub answered --version with',
@@ -1230,6 +1231,11 @@ function checkTraceHarnessSmoke(runDir) {
     JSON.stringify(runner?.repetitions),
   );
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct run', JSON.stringify(runner?.failures));
+  assertEmbeddedArtifactEvidence(
+    complete.record,
+    ['test-artifacts/e2e-trace-summary.json', 'test-artifacts/traceability-matrix.md'],
+    'trace',
+  );
   assert(
     runner?.version === 'stub-agent 1.0.0',
     'the pre-flight recorded the version the stub answered --version with',
@@ -1269,6 +1275,21 @@ function recordedFailures(result) {
   return result.record?.runners?.[0]?.failures;
 }
 
+function assertEmbeddedArtifactEvidence(record, expectedPaths, label) {
+  const evidence = (record?.runners?.[0]?.diagnostics ?? []).flatMap((entry) => entry.evidence ?? []);
+  for (const expectedPath of expectedPaths) {
+    assert(
+      evidence.some((entry) => entry.kind === 'artifact' && entry.value.endsWith(expectedPath)),
+      `${label} diagnostics record the actual staged ${expectedPath} path`,
+      JSON.stringify(evidence.filter((entry) => entry.kind === 'artifact')),
+    );
+  }
+  assert(
+    evidence.some((entry) => entry.kind === 'summary' && /^sha256:[\da-f]{64} /.test(entry.value)),
+    `${label} diagnostics embed a digest and bounded excerpt before the workspace is deleted`,
+  );
+}
+
 function checkTestDesignHarnessSmoke(runDir) {
   console.log('\nthe test-design harness end to end against the stub');
 
@@ -1285,6 +1306,7 @@ function checkTestDesignHarnessSmoke(runDir) {
     'every declared repetition completed: two sets, two runs each',
     JSON.stringify(runner?.repetitions),
   );
+  assertEmbeddedArtifactEvidence(complete.record, ['test-artifacts/test-design-epic-7.md'], 'test-design');
   assert(runner?.failures?.length === 0, 'every threshold is met on the correct run', JSON.stringify(runner?.failures));
 
   // The gate again, read off the record itself, because the record is what a later

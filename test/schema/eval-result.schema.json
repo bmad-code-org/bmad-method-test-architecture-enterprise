@@ -366,6 +366,7 @@
                   "environment-transport",
                   "environment-authentication",
                   "environment-configuration",
+                  "environment-harness",
                   "unexpected-error"
                 ]
               },
@@ -428,7 +429,25 @@
                         "environment-transport",
                         "environment-authentication",
                         "environment-configuration",
+                        "environment-harness",
                         "unexpected-error"
+                      ]
+                    },
+                    "rootCause": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "enum": [
+                            "tea-workflow-defect",
+                            "model-instability",
+                            "harness-defect",
+                            "corpus-defect",
+                            "oracle-defect"
+                          ]
+                        },
+                        {
+                          "type": "null"
+                        }
                       ]
                     },
                     "reason": {
@@ -478,6 +497,7 @@
                     "signature",
                     "metricContributions",
                     "failureClass",
+                    "rootCause",
                     "reason",
                     "evidence"
                   ],
@@ -502,6 +522,49 @@
             "additionalProperties": false
           }
         },
+        "suiteDiagnostics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "failureClass": {
+                "type": "string",
+                "enum": [
+                  "none",
+                  "quality",
+                  "environment-incomplete-repetitions",
+                  "environment-parser",
+                  "environment-missing-artifact",
+                  "environment-timeout",
+                  "environment-transport",
+                  "environment-authentication",
+                  "environment-configuration",
+                  "environment-harness",
+                  "unexpected-error"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2048
+              },
+              "evidence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/EvalResult/properties/runners/items/properties/diagnostics/items/properties/evidence/items"
+                },
+                "maxItems": 32
+              }
+            },
+            "required": [
+              "failureClass",
+              "reason",
+              "evidence"
+            ],
+            "additionalProperties": false
+          },
+          "default": []
+        },
         "durationMs": {
           "$ref": "#/definitions/EvalResult/properties/suite/properties/declaredRepetitions"
         },
@@ -517,6 +580,7 @@
             "environment-transport",
             "environment-authentication",
             "environment-configuration",
+            "environment-harness",
             "unexpected-error"
           ]
         },
@@ -591,6 +655,7 @@
             "environment-transport",
             "environment-authentication",
             "environment-configuration",
+            "environment-harness",
             "unexpected-error"
           ]
         },

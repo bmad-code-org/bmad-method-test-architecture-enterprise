@@ -122,6 +122,7 @@ const {
   measured,
   diagnosticRecord,
   numericContributions,
+  diagnosticRateMiss,
   classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
@@ -461,6 +462,44 @@ function scoreCase(item, selected) {
   };
 }
 
+function fragmentDiagnosticProjection(scored) {
+  return {
+    requiredRecall: { numerator: scored.hits, denominator: scored.required, threshold: THRESHOLDS.requiredRecall },
+    forbiddenRate: {
+      numerator: scored.forbidden.length,
+      denominator: scored.forbiddenTotal,
+      ceiling: THRESHOLDS.forbiddenRate,
+    },
+    selectedCount: scored.selected,
+    missingCount: scored.missing.length,
+    forbiddenCount: scored.forbidden.length,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function fragmentDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metrics = entry.metricContributions;
+    const failed = failures.join('; ').toLowerCase();
+    const reasons = [];
+    if (failed.includes('required recall') && diagnosticRateMiss(entry, 'requiredRecall', diagnostics)) reasons.push('required recall');
+    if (failed.includes('forbidden rate') && metrics.forbiddenCount > 0) reasons.push('forbidden rate');
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 function preflight({ agents, agentCmd }) {
   const problems = [];
   const versions = {};
@@ -574,9 +613,10 @@ function runnerRecord(
   agent,
   options,
   versions,
-  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
   return {
     agent,
     executable,
@@ -592,9 +632,9 @@ function runnerRecord(
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -812,7 +852,7 @@ async function main() {
             unmeasuredRuns += 1;
             continue;
           }
-          const signature = [...selected].sort().join(',');
+          const signature = JSON.stringify([...selected].sort());
           const scored = scoreCase(item, selected);
           signatures.add(signature);
           caseScores.push(scored);
@@ -821,7 +861,7 @@ async function main() {
               caseId: item.id,
               repetition: runIndex + 1,
               signature,
-              metricContributions: numericContributions(scored),
+              metricContributions: numericContributions(fragmentDiagnosticProjection(scored)),
               evidence: [{ kind: 'output-signature', value: signature }],
             }),
           );
@@ -903,6 +943,7 @@ async function main() {
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
           diagnostics,
+          diagnosticClassifier: fragmentDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -923,6 +964,7 @@ async function main() {
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
         diagnostics,
+        diagnosticClassifier: fragmentDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -945,6 +987,8 @@ module.exports = {
   validateSuites,
   parseSelection,
   scoreCase,
+  fragmentDiagnosticProjection,
+  fragmentDiagnosticClassifier,
   buildPrompt,
   caseIndex,
   caseIds,

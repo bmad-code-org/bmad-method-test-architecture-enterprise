@@ -157,6 +157,7 @@ const {
   measured,
   diagnosticRecord,
   numericContributions,
+  diagnosticRateMiss,
   classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
@@ -665,7 +666,7 @@ function scoreCase(expected, answer, menu, intent = '') {
 
   const actionCorrect = answer.action === expected.expectedAction;
   const routeCase = expected.expectedAction === 'route';
-  return {
+  const scored = {
     action: answer.action,
     menuCode: answer.menuCode,
     workflow: answer.workflow,
@@ -718,6 +719,8 @@ function scoreCase(expected, answer, menu, intent = '') {
     confidentRouteOnAmbiguous: expected.expectedAction === 'clarify' && answer.action === 'route',
     unroutedClearIntent: routeCase && answer.action !== 'route',
   };
+  Object.defineProperty(scored, 'expectedAction', { value: expected.expectedAction, enumerable: false });
+  return scored;
 }
 
 /**
@@ -757,6 +760,69 @@ function signatureOf(score) {
   return score === null
     ? 'unmeasured'
     : [score.action, score.menuCode ?? '', score.workflow ?? '', [...(score.candidateCodesNamed ?? [])].sort().join('+')].join('|');
+}
+
+function routingDiagnosticProjection(score) {
+  return {
+    expectedRoute: score.expectedAction === 'route',
+    expectedClarify: score.expectedAction === 'clarify',
+    expectedDecline: score.expectedAction === 'decline',
+    actionCorrect: score.actionCorrect,
+    menuCorrect: score.menuCorrect,
+    workflowCorrect: score.workflowCorrect,
+    routeCorrect: score.routeCorrect,
+    reasonTokens: { numerator: score.tokensFound, denominator: score.tokens, threshold: THRESHOLDS.reasonTokenRecall },
+    scopeTokens: { numerator: score.scopeFound, denominator: score.scopeTokens, threshold: THRESHOLDS.scopeFidelity },
+    scopeWithinBound: score.scopeWithinBound,
+    scopeOk: score.scopeOk,
+    candidates: { numerator: score.candidatesNamed, denominator: score.candidates },
+    clarifyOk: score.clarifyOk,
+    missingStated: score.missingStated,
+    declineOk: score.declineOk,
+    confidentRouteOnUnservable: score.confidentRouteOnUnservable,
+    confidentRouteOnAmbiguous: score.confidentRouteOnAmbiguous,
+    unroutedClearIntent: score.unroutedClearIntent,
+    routeAccuracyThreshold: THRESHOLDS.routeAccuracy,
+    clarifyRecallThreshold: THRESHOLDS.clarifyRecall,
+    declineRecallThreshold: THRESHOLDS.declineRecall,
+    maxConfidentRoutesOnUnservable: THRESHOLDS.maxConfidentRoutesOnUnservable,
+    maxConfidentRoutesOnAmbiguous: THRESHOLDS.maxConfidentRoutesOnAmbiguous,
+    maxUnroutedClearIntents: THRESHOLDS.maxUnroutedClearIntents,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function routingDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metrics = entry.metricContributions;
+    const failed = failures.join('; ').toLowerCase();
+    const reasons = [];
+    if (failed.includes('route accuracy') && metrics.expectedRoute === 1 && metrics.routeCorrect === 0) reasons.push('route accuracy');
+    if (failed.includes('reason token recall') && diagnosticRateMiss(entry, 'reasonTokens', diagnostics))
+      reasons.push('reason token recall');
+    if (failed.includes('scope fidelity') && diagnosticRateMiss(entry, 'scopeTokens', diagnostics) && metrics.scopeOk === 0)
+      reasons.push('scope fidelity');
+    if (failed.includes('clarification recall') && metrics.expectedClarify === 1 && metrics.clarifyOk === 0)
+      reasons.push('clarification recall');
+    if (failed.includes('decline recall') && metrics.expectedDecline === 1 && metrics.declineOk === 0) reasons.push('decline recall');
+    if (failed.includes('unservable intent') && metrics.confidentRouteOnUnservable === 1)
+      reasons.push('confident route on unservable intent');
+    if (failed.includes('genuinely close') && metrics.confidentRouteOnAmbiguous === 1) reasons.push('confident route on ambiguous intent');
+    if (failed.includes('clear intent') && metrics.unroutedClearIntent === 1) reasons.push('clear intent left unrouted');
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
 }
 
 /**
@@ -949,9 +1015,10 @@ function runnerRecord(
   agent,
   options,
   versions,
-  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
   return {
     agent,
     executable,
@@ -967,9 +1034,9 @@ function runnerRecord(
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -1178,7 +1245,7 @@ async function main() {
             caseId: item.id,
             repetition: runIndex + 1,
             signature,
-            metricContributions: numericContributions(score),
+            metricContributions: numericContributions(routingDiagnosticProjection(score)),
             evidence: [{ kind: 'output-signature', value: signature }],
           }),
         );
@@ -1312,6 +1379,7 @@ async function main() {
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
           diagnostics,
+          diagnosticClassifier: routingDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -1332,6 +1400,7 @@ async function main() {
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
         diagnostics,
+        diagnosticClassifier: routingDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -1365,6 +1434,8 @@ module.exports = {
   parseRouting,
   scoreCase,
   signatureOf,
+  routingDiagnosticProjection,
+  routingDiagnosticClassifier,
   scopeBoundPatternSource,
   tokenPatternSource,
   validateCorpus,

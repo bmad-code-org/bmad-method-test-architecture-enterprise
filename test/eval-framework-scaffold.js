@@ -201,6 +201,21 @@ const RUNNER_CAPABILITIES = ['command-execution'];
  */
 const THRESHOLDS = { installAndSmokePassRate: 1, seededDefectDetectionRate: 1 };
 
+function frameworkDiagnosticProjection(measurements) {
+  return {
+    installAndSmoke: {
+      numerator: measurements.installAndSmokePassRate,
+      denominator: 1,
+      threshold: THRESHOLDS.installAndSmokePassRate,
+    },
+    seededDefectDetection: {
+      numerator: measurements.seededDefectDetectionRate,
+      denominator: 1,
+      threshold: THRESHOLDS.seededDefectDetectionRate,
+    },
+  };
+}
+
 /** Seeded onto a second stub instance to prove the smoke test's status assertion is load-bearing. See DEFECT DETECTION above. */
 const WRONG_BACKEND_STATUS = 500;
 const BACKEND_DEFECT_SIGNATURE = /Received:\s*500/;
@@ -1221,7 +1236,7 @@ async function main() {
       caseId: CASE_ID,
       repetition: 1,
       signature: outcome.failureClass === 'quality' ? signature : null,
-      metricContributions: numericContributions(measurements),
+      metricContributions: numericContributions(frameworkDiagnosticProjection(measurements)),
       failureClass: outcome.failureClass,
       reason: `${outcome.phase}: ${outcome.reason}`,
       evidence: outcome.failureClass === 'quality' ? [{ kind: 'output-signature', value: signature }] : [],
@@ -1266,7 +1281,9 @@ async function main() {
             caseId: CASE_ID,
             repetition: 1,
             signature: JSON.stringify([1, outcome.seededDefectDetectionRate]),
-            metricContributions: { installAndSmokePassRate: 1, seededDefectDetectionRate: outcome.seededDefectDetectionRate },
+            metricContributions: numericContributions(
+              frameworkDiagnosticProjection({ installAndSmokePassRate: 1, seededDefectDetectionRate: outcome.seededDefectDetectionRate }),
+            ),
             evidence: [{ kind: 'summary', value: 'clean smoke passed; seeded backend and fixture defects were detected' }],
           }),
         ],
@@ -1290,6 +1307,7 @@ module.exports = {
   BROWSERS_CACHE_DIR,
   stageWorkspace,
   runOnce,
+  frameworkDiagnosticProjection,
   caseIds,
   RUNNER_CAPABILITIES,
   THRESHOLDS,

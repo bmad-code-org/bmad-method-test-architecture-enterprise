@@ -592,11 +592,28 @@ function stripAnsi(value) {
   return String(value ?? '').replaceAll(ANSI_ESCAPE, '');
 }
 
+function playwrightProcessFailure(result, tail = '') {
+  const timedOut = result.error?.code === 'ETIMEDOUT';
+  const failureClass = timedOut
+    ? 'environment-timeout'
+    : result.error
+      ? 'environment-transport'
+      : result.signal
+        ? 'environment-timeout'
+        : 'environment-missing-artifact';
+  const reason = result.error
+    ? `${timedOut ? 'Playwright timed out' : 'spawn failed'}: ${result.error.message}`
+    : result.signal
+      ? `Playwright was killed by ${result.signal}`
+      : `no JSON report was written (exit ${result.status}); ${tail || 'nothing on stderr'}`;
+  return { failureClass, reason };
+}
+
 /**
  * One case's spec file, run once against one already-running server.
  *
  * @param {{specAbsolute: string, baseUrl: string, cliPath: string}} options
- * @returns {{loadError: string|null, tests: Array<{title: string, status: string, message: string|null}>}}
+ * @returns {{loadError: string|null, loadFailure: {failureClass: string, reason: string}|null, tests: Array<{title: string, status: string, message: string|null}>}}
  */
 function runCaseAgainstServer({ specAbsolute, baseUrl, cliPath }) {
   const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-automate-eval-run-'));
@@ -622,24 +639,20 @@ function runCaseAgainstServer({ specAbsolute, baseUrl, cliPath }) {
         .filter(Boolean)
         .slice(-6)
         .join(' | ');
-      return {
-        loadError: result.error
-          ? `spawn failed: ${result.error.message}`
-          : result.signal
-            ? `killed by ${result.signal}`
-            : `no JSON report was written (exit ${result.status}); ${tail || 'nothing on stderr'}`,
-        tests: [],
-      };
+      const loadFailure = playwrightProcessFailure(result, tail);
+      return { loadError: loadFailure.reason, loadFailure, tests: [] };
     }
 
     let report;
     try {
       report = JSON.parse(fs.readFileSync(jsonOutputPath, 'utf8'));
     } catch (error) {
-      return { loadError: `the JSON report did not parse: ${error.message}`, tests: [] };
+      const reason = `the JSON report did not parse: ${error.message}`;
+      return { loadError: reason, loadFailure: { failureClass: 'environment-parser', reason }, tests: [] };
     }
     if (Array.isArray(report.errors) && report.errors.length > 0) {
-      return { loadError: report.errors.map((entry) => stripAnsi(entry.message ?? entry).split('\n')[0]).join('; '), tests: [] };
+      const reason = report.errors.map((entry) => stripAnsi(entry.message ?? entry).split('\n')[0]).join('; ');
+      return { loadError: reason, loadFailure: { failureClass: 'environment-harness', reason }, tests: [] };
     }
 
     const tests = [];
@@ -657,7 +670,7 @@ function runCaseAgainstServer({ specAbsolute, baseUrl, cliPath }) {
       for (const child of suite.suites ?? []) walk(child);
     };
     for (const suite of report.suites ?? []) walk(suite);
-    return { loadError: null, tests };
+    return { loadError: null, loadFailure: null, tests };
   } finally {
     fs.rmSync(scratchDir, { recursive: true, force: true });
   }
@@ -684,15 +697,21 @@ function findTest(run, title) {
  * reports.
  *
  * @param {object} caseEntry
- * @param {{loadError: string|null, tests: Array<object>}} fixedRun
- * @param {{loadError: string|null, tests: Array<object>}} mutatedRun
+ * @param {{loadError: string|null, loadFailure?: object|null, tests: Array<object>}} fixedRun
+ * @param {{loadError: string|null, loadFailure?: object|null, tests: Array<object>}} mutatedRun
  * @returns {object}
  */
 function scoreCase(caseEntry, fixedRun, mutatedRun) {
   if (fixedRun?.loadError || mutatedRun?.loadError) {
+    const loadFailure = fixedRun?.loadFailure ??
+      mutatedRun?.loadFailure ?? {
+        failureClass: 'environment-harness',
+        reason: fixedRun?.loadError ?? mutatedRun?.loadError,
+      };
     return {
       id: caseEntry.id,
-      loadError: fixedRun?.loadError ?? mutatedRun?.loadError,
+      loadError: loadFailure.reason,
+      loadFailure,
       tests: [],
       detectedRegression: false,
       expectedDetectsRegression: caseEntry.detectsRegression,
@@ -733,6 +752,7 @@ function scoreCase(caseEntry, fixedRun, mutatedRun) {
   return {
     id: caseEntry.id,
     loadError: null,
+    loadFailure: null,
     tests,
     detectedRegression,
     expectedDetectsRegression: caseEntry.detectsRegression,
@@ -788,6 +808,36 @@ function scoreRun(groundTruth, fixedRuns, mutatedRuns) {
     unexpectedOutcomes,
     classificationCounts,
   };
+}
+
+function automateDiagnosticProjection(scoredCase) {
+  const classifications = scoredCase.tests ?? [];
+  return {
+    expectedDetectsRegression: scoredCase.expectedDetectsRegression,
+    detectedRegression: scoredCase.detectedRegression,
+    undetectedRegression: scoredCase.expectedDetectsRegression && !scoredCase.detectedRegression,
+    falseRegressionDetection: !scoredCase.expectedDetectsRegression && scoredCase.detectedRegression,
+    unattributedFailures: classifications.filter((test) => test.classification === 'unattributed-failure').length,
+    unexpectedOutcomes: classifications.filter((test) => test.classification === 'unexpected-outcome').length,
+    matchingOutcomes: classifications.filter((test) => test.classification === 'matches-declared').length,
+    vacuousTests: classifications.filter((test) => test.classification === 'vacuous').length,
+    duplicateTests: classifications.filter((test) => test.classification === 'duplicate').length,
+    maxUndetectedRegressionCases: THRESHOLDS.maxUndetectedRegressionCases,
+    maxFalseRegressionDetections: THRESHOLDS.maxFalseRegressionDetections,
+    maxUnattributedFailures: THRESHOLDS.maxUnattributedFailures,
+    maxUnexpectedOutcomes: THRESHOLDS.maxUnexpectedOutcomes,
+  };
+}
+
+function automateDiagnosticClassifier(entry, failures) {
+  const metrics = entry.metricContributions;
+  const failed = failures.join('; ').toLowerCase();
+  const reasons = [];
+  if (failed.includes('undetected regression') && metrics.undetectedRegression === 1) reasons.push('undetected regression');
+  if (failed.includes('false regression detection') && metrics.falseRegressionDetection === 1) reasons.push('false regression detection');
+  if (failed.includes('unattributed failure') && metrics.unattributedFailures > 0) reasons.push('unattributed failure');
+  if (failed.includes('unexpected outcome') && metrics.unexpectedOutcomes > 0) reasons.push('unexpected outcome');
+  return reasons.length > 0 ? { reasons, rootCause: 'harness-defect' } : null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1006,6 +1056,30 @@ async function main() {
   if (failures.length > 0) console.log(`\n  ${colors.red}below threshold: ${failures.join(', ')}${colors.reset}\n`);
   else console.log(`\n  ${colors.green}all thresholds met${colors.reset}\n`);
 
+  const diagnostics = classifyDiagnosticQuality(
+    scored.cases.map((scoredCase) => {
+      const signature = JSON.stringify({
+        verdict: scoredCase.verdict ?? null,
+        expectedDetectsRegression: scoredCase.expectedDetectsRegression,
+        loadFailure: scoredCase.loadFailure ?? null,
+        classifications: (scoredCase.tests ?? []).map((test) => test.classification),
+      });
+      return diagnosticRecord({
+        caseId: scoredCase.id,
+        repetition: 1,
+        signature: scoredCase.loadError ? null : signature,
+        metricContributions: scoredCase.loadError ? {} : numericContributions(automateDiagnosticProjection(scoredCase)),
+        failureClass: scoredCase.loadFailure?.failureClass ?? 'none',
+        rootCause: scoredCase.loadFailure ? 'harness-defect' : null,
+        reason: scoredCase.loadFailure?.reason ?? null,
+        evidence: scoredCase.loadError
+          ? [{ kind: 'summary', value: `${scoredCase.loadFailure?.failureClass ?? 'environment-harness'}: ${scoredCase.loadError}` }]
+          : [{ kind: 'output-signature', value: signature }],
+      });
+    }),
+    failures,
+    automateDiagnosticClassifier,
+  );
   const runner = {
     agent: 'deterministic',
     executable: process.execPath,
@@ -1035,30 +1109,9 @@ async function main() {
     },
     durationMs: await elapsedMsSince(startedAt),
     usage: null,
-    failureClass: scored.loadErrors > 0 ? 'environment-missing-artifact' : failures.length > 0 ? 'quality' : 'none',
+    failureClass: worstFailureClass(diagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(
-      scored.cases.map((scoredCase) => {
-        const signature = JSON.stringify({
-          verdict: scoredCase.verdict ?? null,
-          expectedDetectsRegression: scoredCase.expectedDetectsRegression,
-          loadError: scoredCase.loadError ?? null,
-          classifications: (scoredCase.tests ?? []).map((test) => test.classification),
-        });
-        return diagnosticRecord({
-          caseId: scoredCase.id,
-          repetition: 1,
-          signature: scoredCase.loadError ? null : signature,
-          metricContributions: scoredCase.loadError ? {} : numericContributions(scoredCase),
-          failureClass: scoredCase.loadError ? 'environment-missing-artifact' : 'none',
-          reason: scoredCase.loadError ?? null,
-          evidence: scoredCase.loadError
-            ? [{ kind: 'artifact', value: 'playwright-report.json' }]
-            : [{ kind: 'output-signature', value: signature }],
-        });
-      }),
-      failures,
-    ),
+    diagnostics,
   };
 
   await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: [], runners: [runner] });
@@ -1077,6 +1130,9 @@ module.exports = {
   validateCorpus,
   scoreRun,
   scoreCase,
+  playwrightProcessFailure,
+  automateDiagnosticProjection,
+  automateDiagnosticClassifier,
   extractTestBlocks,
   caseIds,
   THRESHOLDS,

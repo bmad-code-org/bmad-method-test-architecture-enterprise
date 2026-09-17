@@ -68,8 +68,11 @@ const FAILURE_CLASSES = [
   'environment-transport',
   'environment-authentication',
   'environment-configuration',
+  'environment-harness',
   'unexpected-error',
 ];
+
+const ROOT_CAUSES = ['tea-workflow-defect', 'model-instability', 'harness-defect', 'corpus-defect', 'oracle-defect'];
 
 // live spends model calls; the other two validate data or readiness and measure
 // nothing, so a record from those modes must never read as a passing gate.
@@ -148,6 +151,7 @@ const diagnosticSchema = z
     signature: nonEmptyString.max(4096).nullable(),
     metricContributions: diagnosticMetricMapSchema,
     failureClass: z.enum(FAILURE_CLASSES),
+    rootCause: z.enum(ROOT_CAUSES).nullable(),
     reason: z.string().min(1).max(2048).nullable(),
     evidence: z.array(diagnosticEvidenceSchema).max(32),
   })
@@ -172,8 +176,24 @@ const diagnosticSchema = z
       if (value.failureClass !== 'none' && value.failureClass !== 'quality') {
         ctx.addIssue({ code: 'custom', path: ['failureClass'], message: 'a completed attempt may carry only none or quality' });
       }
+      if (value.failureClass === 'quality' && value.rootCause === null) {
+        ctx.addIssue({ code: 'custom', path: ['rootCause'], message: 'a quality finding must carry its triaged root cause' });
+      }
+      if (value.failureClass === 'none' && value.rootCause !== null) {
+        ctx.addIssue({ code: 'custom', path: ['rootCause'], message: 'a clean attempt cannot carry a root cause' });
+      }
     }
   });
+
+const suiteDiagnosticSchema = z
+  .object({
+    failureClass: z.enum(FAILURE_CLASSES).refine((value) => value !== 'none' && value !== 'quality', {
+      message: 'a suite attempt diagnostic must describe an environment or unexpected failure',
+    }),
+    reason: nonEmptyString.max(2048),
+    evidence: z.array(diagnosticEvidenceSchema).max(32),
+  })
+  .strict();
 
 const runnerResultFields = {
   agent: nonEmptyString,
@@ -280,6 +300,7 @@ function resultSchemaFor(schemaVersion, runnerSchema) {
       repository: repositorySchema,
       suite: suiteResultSchema,
       runners: z.array(runnerSchema),
+      ...(schemaVersion === SCHEMA_VERSION ? { suiteDiagnostics: z.array(suiteDiagnosticSchema).default([]) } : {}),
       durationMs: nonNegativeInteger,
       failureClass: z.enum(FAILURE_CLASSES),
       exitCode: z.union([z.literal(0), z.literal(1), z.literal(2)]),
@@ -296,6 +317,20 @@ function resultSchemaFor(schemaVersion, runnerSchema) {
       }
       if (schemaVersion !== SCHEMA_VERSION) return;
       const caseIds = new Set(value.suite.caseIds);
+      if (caseIds.size !== value.suite.caseIds.length) {
+        ctx.addIssue({ code: 'custom', path: ['suite', 'caseIds'], message: 'suite case ids must be unique' });
+      }
+      const recordedCaseIds = value.suite.cases.map((entry) => entry.id);
+      if (
+        recordedCaseIds.length !== value.suite.caseIds.length ||
+        recordedCaseIds.some((caseId, index) => caseId !== value.suite.caseIds[index])
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['suite', 'cases'],
+          message: 'suite cases must match the declared case ids in order',
+        });
+      }
       for (const [runnerIndex, runner] of value.runners.entries()) {
         for (const [diagnosticIndex, diagnostic] of runner.diagnostics.entries()) {
           if (!caseIds.has(diagnostic.caseId)) {
@@ -313,6 +348,41 @@ function resultSchemaFor(schemaVersion, runnerSchema) {
             });
           }
         }
+        if (caseIds.size === 0 && runner.repetitions.expected !== 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['runners', runnerIndex, 'repetitions', 'expected'],
+            message: 'a runner cannot declare attempts when the suite declares no cases',
+          });
+        }
+        if (caseIds.size > 0 && runner.repetitions.expected % caseIds.size !== 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['runners', runnerIndex, 'repetitions', 'expected'],
+            message: 'runner attempts must form a complete grid across every declared case',
+          });
+        } else if (caseIds.size > 0) {
+          const effectiveRepetitions = runner.repetitions.expected / caseIds.size;
+          if (effectiveRepetitions > value.suite.declaredRepetitions) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['runners', runnerIndex, 'repetitions', 'expected'],
+              message: 'runner attempts exceed the suite repetition declaration',
+            });
+          }
+          const actualPairs = new Set(runner.diagnostics.map((entry) => `${entry.caseId}:${entry.repetition}`));
+          for (const caseId of caseIds) {
+            for (let repetition = 1; repetition <= effectiveRepetitions; repetition += 1) {
+              if (!actualPairs.has(`${caseId}:${repetition}`)) {
+                ctx.addIssue({
+                  code: 'custom',
+                  path: ['runners', runnerIndex, 'diagnostics'],
+                  message: `missing diagnostic for case "${caseId}" repetition ${repetition}`,
+                });
+              }
+            }
+          }
+        }
         const failedDiagnostics = runner.diagnostics.filter((entry) => entry.completionState === 'failed');
         if (runner.failureClass === 'none' && failedDiagnostics.length > 0) {
           ctx.addIssue({
@@ -326,6 +396,14 @@ function resultSchemaFor(schemaVersion, runnerSchema) {
             code: 'custom',
             path: ['runners', runnerIndex, 'diagnostics'],
             message: 'an environment runner must identify a failed diagnostic',
+          });
+        }
+        const diagnosticFailureClass = worstFailureClass(runner.diagnostics.map((entry) => entry.failureClass));
+        if (runner.failureClass !== diagnosticFailureClass) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['runners', runnerIndex, 'failureClass'],
+            message: `runner failure class must be derived from its diagnostics (${diagnosticFailureClass})`,
           });
         }
       }
@@ -455,5 +533,6 @@ module.exports = {
   SCHEMA_VERSION,
   LEGACY_SCHEMA_VERSION,
   FAILURE_CLASSES,
+  ROOT_CAUSES,
   RUN_MODES,
 };

@@ -62,6 +62,9 @@ const SECRET_FLAG_PATTERN = /key|token|secret|password|credential|auth/i;
 // exists to report. `-` and `_` are deliberately outside the boundary set, so
 // `prefix_github_pat_x` is still caught.
 const SECRET_VALUE_PATTERN = /(?<![A-Za-z0-9])(sk-|sk_|ghp_|gho_|ghs_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)/;
+const SECRET_TOKEN_PATTERN = /(^|[^A-Za-z0-9])(?:sk[-_]|gh[pousr]_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)[A-Za-z0-9._~+/=-]*/g;
+const SENSITIVE_VALUE_PATTERN =
+  /((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|credential|authorization|auth)(?:["']?)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}&\]]+)/gi;
 const REDACTED = '[redacted]';
 const MAX_DIAGNOSTIC_METRICS = 64;
 const MAX_DIAGNOSTIC_METRIC_KEY = 128;
@@ -74,10 +77,12 @@ function boundedDiagnosticText(value, maxLength) {
   return `${text.slice(0, maxLength - suffix.length)}${suffix}`;
 }
 
-function redactDiagnosticText(value) {
+function redactSecrets(value) {
   return String(value)
-    .replaceAll(/([?&](?:key|token|secret|password|credential|auth)=)[^&\\s]+/gi, `$1${REDACTED}`)
-    .replaceAll(/(?<![A-Za-z0-9])(sk-|sk_|ghp_|gho_|ghs_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)/g, REDACTED);
+    .replaceAll(/(\b(?:authorization|proxy-authorization)\b\s*[:=]\s*(?:bearer|basic)\s+)[^\s,;"'}]+/gi, `$1${REDACTED}`)
+    .replaceAll(/([?&](?:api[_-]?key|access[_-]?token|token|secret|password|credential|auth)=)[^&\s]+/gi, `$1${REDACTED}`)
+    .replaceAll(SENSITIVE_VALUE_PATTERN, `$1${REDACTED}`)
+    .replaceAll(SECRET_TOKEN_PATTERN, `$1${REDACTED}`);
 }
 
 /**
@@ -263,6 +268,7 @@ function diagnosticRecord({
   signature = null,
   metricContributions = {},
   failureClass = 'none',
+  rootCause = failureClass === 'quality' ? 'tea-workflow-defect' : null,
   reason = null,
   evidence = [],
 }) {
@@ -273,7 +279,7 @@ function diagnosticRecord({
       .slice(0, MAX_DIAGNOSTIC_METRICS)
       .map(([key, value]) => [String(key).slice(0, MAX_DIAGNOSTIC_METRIC_KEY), value]),
   );
-  const boundedSignature = signature === null ? null : boundedDiagnosticText(redactDiagnosticText(signature), 4096);
+  const boundedSignature = signature === null ? null : boundedDiagnosticText(redactSecrets(signature), 4096);
   return {
     caseId,
     repetition,
@@ -281,34 +287,75 @@ function diagnosticRecord({
     signature: failed ? null : boundedSignature,
     metricContributions: failed ? {} : boundedMetrics,
     failureClass,
-    reason: reason === null ? null : boundedDiagnosticText(redactDiagnosticText(reason), 2048),
+    rootCause,
+    reason: reason === null ? null : boundedDiagnosticText(redactSecrets(reason), 2048),
     evidence: evidence.slice(0, 32).map((entry) => ({
       kind: entry.kind,
-      value: boundedDiagnosticText(redactDiagnosticText(entry.value), 2048),
+      value: boundedDiagnosticText(redactSecrets(entry.value), 2048),
     })),
   };
 }
 
-/** Flatten finite numeric scorer fields into a diagnostic contribution map. */
+function artifactEvidence(artifactPath, content) {
+  const text = typeof content === 'string' ? content : JSON.stringify(content);
+  const excerpt = text.replaceAll(/\s+/g, ' ').trim().slice(0, 512) || '[empty artifact]';
+  return [
+    { kind: 'artifact', value: artifactPath },
+    { kind: 'summary', value: `${digest(text)} ${excerpt}` },
+  ];
+}
+
+/** Flatten an explicit scorer projection into bounded numeric contributions. */
 function numericContributions(value, prefix = '', contributions = {}) {
   if (typeof value === 'number') {
     if (Number.isFinite(value) && prefix) contributions[prefix] = value;
     return contributions;
   }
-  if (Array.isArray(value) || value === null || typeof value !== 'object') return contributions;
+  if (typeof value === 'boolean') {
+    if (prefix) contributions[prefix] = value ? 1 : 0;
+    return contributions;
+  }
+  if (Array.isArray(value)) {
+    if (prefix) contributions[`${prefix}.count`] = value.length;
+    return contributions;
+  }
+  if (value === null || typeof value !== 'object') return contributions;
   for (const [key, child] of Object.entries(value)) {
     numericContributions(child, prefix ? `${prefix}.${key}` : key, contributions);
   }
   return contributions;
 }
 
-/** Apply an aggregate quality result to every completed repetition. */
-function classifyDiagnosticQuality(diagnostics, failures) {
+function diagnosticRateMiss(entry, prefix, diagnostics) {
+  const numerator = entry.metricContributions[`${prefix}.numerator`];
+  const denominator = entry.metricContributions[`${prefix}.denominator`];
+  const threshold = entry.metricContributions[`${prefix}.threshold`];
+  if (denominator > 0) return numerator / denominator < threshold;
+  return diagnostics
+    .filter((candidate) => candidate.completionState === 'completed')
+    .every((candidate) => (candidate.metricContributions[`${prefix}.denominator`] ?? 0) === 0);
+}
+
+/** Mark only the completed repetitions that contributed to aggregate quality failures. */
+function classifyDiagnosticQuality(diagnostics, failures, classify) {
   if (failures.length === 0) return diagnostics;
-  const reason = failures.join('; ').slice(0, 2048);
-  return diagnostics.map((entry) =>
-    entry.completionState === 'completed' ? { ...entry, failureClass: 'quality', reason: entry.reason ?? reason } : entry,
-  );
+  if (typeof classify !== 'function') {
+    throw new TypeError('classifyDiagnosticQuality requires a case-level classifier when aggregate quality failures exist');
+  }
+  return diagnostics.map((entry) => {
+    if (entry.completionState !== 'completed') return entry;
+    const classification = classify(entry, failures);
+    if (!classification) return entry;
+    const reasons = Array.isArray(classification) ? classification : classification.reasons;
+    if (!Array.isArray(reasons) || reasons.length === 0) return entry;
+    const rootCause = Array.isArray(classification) ? 'tea-workflow-defect' : classification.rootCause;
+    return {
+      ...entry,
+      failureClass: 'quality',
+      rootCause: rootCause ?? 'tea-workflow-defect',
+      reason: entry.reason ?? reasons.join('; ').slice(0, 2048),
+    };
+  });
 }
 
 /**
@@ -330,6 +377,7 @@ function suiteResultRecord({
   runners,
   durationMs,
   suiteFailureClasses = [],
+  suiteDiagnostics = [],
   contractVersions = {},
 }) {
   const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
@@ -365,6 +413,14 @@ function suiteResultRecord({
       declaredRepetitions: suite.repetitions,
     },
     runners,
+    suiteDiagnostics: suiteDiagnostics.map((entry) => ({
+      failureClass: entry.failureClass,
+      reason: boundedDiagnosticText(redactSecrets(entry.reason), 2048),
+      evidence: (entry.evidence ?? []).slice(0, 32).map((evidence) => ({
+        kind: evidence.kind,
+        value: boundedDiagnosticText(redactSecrets(evidence.value), 2048),
+      })),
+    })),
     durationMs,
     failureClass,
     exitCode: exitCodeForFailureClass(failureClass),
@@ -470,10 +526,13 @@ module.exports = {
   repositoryState,
   probeVersion,
   redactArgs,
+  redactSecrets,
   classifyAgentError,
   measured,
   diagnosticRecord,
+  artifactEvidence,
   numericContributions,
+  diagnosticRateMiss,
   classifyDiagnosticQuality,
   suiteResultRecord,
   runSummaryRecord,

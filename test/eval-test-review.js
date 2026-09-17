@@ -110,6 +110,7 @@ const {
   measured,
   diagnosticRecord,
   numericContributions,
+  diagnosticRateMiss,
   classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
@@ -509,7 +510,7 @@ async function runReview(agent, runIndex, runner = {}) {
 
     if (!result.ok) {
       console.error(`  ${colors.red}run ${runIndex + 1}: ${result.reason}${colors.reset}`);
-      return { ok: false, failureClass: result.failureClass };
+      return { ok: false, failureClass: result.failureClass, reason: result.reason };
     }
 
     const { observation } = result;
@@ -521,11 +522,15 @@ async function runReview(agent, runIndex, runner = {}) {
       // Exit 2 is the CLI's own environment class: a missing skill, an unusable
       // option, or no isolation backend. It never started the agent, so no
       // verdict was ever going to exist.
-      return { ok: false, failureClass: observation.exitCode === 2 ? 'environment-configuration' : 'environment-missing-artifact' };
+      return {
+        ok: false,
+        failureClass: observation.exitCode === 2 ? 'environment-configuration' : 'environment-missing-artifact',
+        reason: `no verdict was written (exit ${observation.exitCode})`,
+      };
     }
     if (verdict.kind !== 'json') {
       console.error(`  ${colors.red}run ${runIndex + 1}: the verdict artifact is not valid JSON${colors.reset}`);
-      return { ok: false, failureClass: 'environment-parser' };
+      return { ok: false, failureClass: 'environment-parser', reason: 'the verdict artifact is not valid JSON' };
     }
     return { ok: true, verdict: verdict.value };
   } finally {
@@ -673,6 +678,35 @@ function scoreVerdict(verdict, groundTruth) {
   const criticalPlanted = planted.filter((p) => p.row.startsWith('C'));
   const criticalHits = hits.filter((p) => p.row.startsWith('C'));
 
+  const caseScores = (groundTruth.files ?? []).map((file, fileIndex) => {
+    const caseId = path.relative(PROJECT_ROOT, path.join(FIXTURE_ROOT, file.path));
+    const expected = planted.filter((item) => item.path === file.path);
+    const found = hits.filter((item) => item.path === file.path);
+    const fileFindings = reported.filter((finding) => namesFile(finding.file, file.path));
+    const fileFalsePositives = falsePositives.filter((finding) => namesFile(finding.file, file.path));
+    const fileUnattributed = unattributed.filter((finding) => namesFile(finding.file, file.path));
+    return {
+      caseId,
+      recommendation: verdict.recommendation ?? 'n/a',
+      score: Number(verdict.qualityScore ?? Number.NaN),
+      planted: expected.map((item) => `${item.row}:${item.path}:${item.line}`).sort(),
+      hits: found.map((item) => `${item.row}:${item.path}:${item.line}`).sort(),
+      misses: expected
+        .filter((item) => !found.includes(item))
+        .map((item) => `${item.row}:${item.path}:${item.line}`)
+        .sort(),
+      criticalPlanted: expected.filter((item) => item.row.startsWith('C')).length,
+      criticalHits: found.filter((item) => item.row.startsWith('C')).length,
+      reportedFindings: fileFindings
+        .map((finding) => `${finding.row ?? finding.criterion_id ?? ''}:${finding.file}:${finding.line ?? ''}`)
+        .sort(),
+      falsePositives: fileFalsePositives.length + (fileIndex === 0 ? outOfScope.length : 0),
+      outOfScope: fileIndex === 0 ? outOfScope.length : 0,
+      unattributed: fileUnattributed.length,
+      unlocated: fileIndex === 0 ? unlocated : 0,
+    };
+  });
+
   return {
     score: Number(verdict.qualityScore ?? Number.NaN),
     recommendation: verdict.recommendation ?? 'n/a',
@@ -687,6 +721,76 @@ function scoreVerdict(verdict, groundTruth) {
     unattributed: unattributed.length,
     knownUnplantedHits: knownUnplantedHits.length,
     unlocated,
+    caseScores,
+  };
+}
+
+function reviewDiagnosticProjection(caseScore) {
+  const planted = caseScore.planted.length;
+  const hits = caseScore.hits.length;
+  const adjudicatedReported = Math.max(0, caseScore.reportedFindings.length - caseScore.unattributed);
+  return {
+    recall: { numerator: hits, denominator: planted, threshold: THRESHOLDS.recall },
+    criticalRecall: {
+      numerator: caseScore.criticalHits,
+      denominator: caseScore.criticalPlanted,
+      threshold: THRESHOLDS.criticalRecall,
+    },
+    nonFalsePositiveRate: {
+      numerator: Math.max(0, adjudicatedReported - caseScore.falsePositives),
+      denominator: adjudicatedReported,
+      threshold: THRESHOLDS.nonFalsePositiveRate,
+    },
+    falsePositives: caseScore.falsePositives,
+    outOfScope: caseScore.outOfScope,
+    unattributed: caseScore.unattributed,
+    unlocated: caseScore.unlocated,
+    score: caseScore.score,
+    scoreStdevCeiling: THRESHOLDS.maxScoreStdev,
+    distinctVerdictsCeiling: THRESHOLDS.maxDistinctVerdicts,
+  };
+}
+
+function reviewSignature(caseScore) {
+  return JSON.stringify({
+    caseId: caseScore.caseId,
+    plantedHits: caseScore.hits,
+    plantedMisses: caseScore.misses,
+    reportedFindings: caseScore.reportedFindings,
+    falsePositives: caseScore.falsePositives,
+    outOfScope: caseScore.outOfScope,
+    unattributed: caseScore.unattributed,
+    unlocated: caseScore.unlocated,
+    recommendation: caseScore.recommendation,
+  });
+}
+
+function reviewDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const reasons = [];
+    const failed = failures.join('; ').toLowerCase();
+    const below = (name) => {
+      return diagnosticRateMiss(entry, name, diagnostics);
+    };
+    if (failed.includes('critical recall') && below('criticalRecall')) reasons.push('CRITICAL recall');
+    if (failed.includes('recall') && below('recall')) reasons.push('recall');
+    if (failed.includes('non-false-positive') && below('nonFalsePositiveRate')) reasons.push('non-false-positive rate');
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('score variance') && unstable) reasons.push('score variance');
+    if (failed.includes('verdict stability') && unstable) reasons.push('verdict stability');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.every((reason) => reason === 'score variance' || reason === 'verdict stability')
+        ? 'model-instability'
+        : 'tea-workflow-defect',
+    };
   };
 }
 
@@ -802,9 +906,10 @@ function runnerRecord(
   agent,
   options,
   versions,
-  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
   return {
     agent,
     executable,
@@ -820,9 +925,9 @@ function runnerRecord(
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -866,14 +971,17 @@ async function main() {
     const results = [];
     const lostRunClasses = [];
     const diagnostics = [];
+    const declaredCaseIds = caseIds();
 
     for (let runIndex = 0; runIndex < runs; runIndex += 1) {
       const outcome = await runReview(agent, runIndex, options);
       if (!outcome.ok) {
         lostRunClasses.push(outcome.failureClass);
-        diagnostics.push(
-          diagnosticRecord({ caseId: SUITE_ID, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
-        );
+        for (const caseId of declaredCaseIds) {
+          diagnostics.push(
+            diagnosticRecord({ caseId, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+          );
+        }
         continue;
       }
       const scored = scoreVerdict(outcome.verdict, groundTruth);
@@ -882,36 +990,31 @@ async function main() {
           `  ${colors.red}run ${runIndex + 1}: the verdict carries no findings array, so nothing could be scored${colors.reset}`,
         );
         lostRunClasses.push('environment-parser');
-        diagnostics.push(
-          diagnosticRecord({
-            caseId: SUITE_ID,
-            repetition: runIndex + 1,
-            failureClass: 'environment-parser',
-            reason: 'the verdict carries no findings array',
-          }),
-        );
+        for (const caseId of declaredCaseIds) {
+          diagnostics.push(
+            diagnosticRecord({
+              caseId,
+              repetition: runIndex + 1,
+              failureClass: 'environment-parser',
+              reason: 'the verdict carries no findings array',
+            }),
+          );
+        }
         continue;
       }
       results.push(scored);
-      const signature = JSON.stringify([
-        scored.score,
-        scored.recommendation,
-        scored.hits,
-        scored.criticalHits,
-        scored.falsePositives,
-        scored.outOfScope,
-        scored.unattributed,
-        scored.unlocated,
-      ]);
-      diagnostics.push(
-        diagnosticRecord({
-          caseId: SUITE_ID,
-          repetition: runIndex + 1,
-          signature,
-          metricContributions: numericContributions(scored),
-          evidence: [{ kind: 'output-signature', value: signature }],
-        }),
-      );
+      for (const caseScore of scored.caseScores) {
+        const signature = reviewSignature(caseScore);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: caseScore.caseId,
+            repetition: runIndex + 1,
+            signature,
+            metricContributions: numericContributions(reviewDiagnosticProjection(caseScore)),
+            evidence: [{ kind: 'output-signature', value: signature }],
+          }),
+        );
+      }
       console.log(
         `  run ${runIndex + 1}: score ${scored.score}, ${scored.recommendation}, ` +
           `recall ${scored.hits}/${scored.planted}, false positives ${scored.falsePositives} (${scored.outOfScope} out of scope), ` +
@@ -923,13 +1026,14 @@ async function main() {
       console.error(`  ${colors.red}no successful runs; nothing was measured for ${agent}${colors.reset}\n`);
       runners.push(
         runnerRecord(agent, options, versions, {
-          expected: runs,
+          expected: declaredCaseIds.length * runs,
           completed: 0,
           measurements: {},
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass: worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']),
           failures: ['no run produced a scorable result'],
           diagnostics,
+          diagnosticClassifier: reviewDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -1005,13 +1109,14 @@ async function main() {
       );
       runners.push(
         runnerRecord(agent, options, versions, {
-          expected: runs,
-          completed: results.length,
+          expected: declaredCaseIds.length * runs,
+          completed: results.length * declaredCaseIds.length,
           measurements,
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [`${results.length} of ${runs} declared repetitions completed`],
           diagnostics,
+          diagnosticClassifier: reviewDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -1042,13 +1147,14 @@ async function main() {
 
     runners.push(
       runnerRecord(agent, options, versions, {
-        expected: runs,
-        completed: results.length,
+        expected: declaredCaseIds.length * runs,
+        completed: results.length * declaredCaseIds.length,
         measurements,
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
         diagnostics,
+        diagnosticClassifier: reviewDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -1072,6 +1178,9 @@ if (require.main === module) {
 module.exports = {
   admittedLinesFor,
   scoreVerdict,
+  reviewDiagnosticProjection,
+  reviewSignature,
+  reviewDiagnosticClassifier,
   missingCredential,
   parseArgs,
   reviewFilePaths,

@@ -931,13 +931,30 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
   process.exit(exitCode);
 }
 
-function runnerRecord(
-  agent,
-  options,
-  versions,
-  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
-) {
+function teachDiagnosticProjection(outcome) {
+  return {
+    placement: { numerator: outcome.placement.holds ? 1 : 0, denominator: 1, threshold: THRESHOLDS.placementAccuracy },
+    correction: { numerator: outcome.correction.holds ? 1 : 0, denominator: 1, threshold: THRESHOLDS.correctionRate },
+    reTeaching: { numerator: outcome.reTeaching.holds ? 1 : 0, denominator: 1, threshold: THRESHOLDS.reTeachingRate },
+    continuation: { numerator: outcome.continuation.holds ? 1 : 0, denominator: 1, threshold: THRESHOLDS.continuationRate },
+    unearnedMastery: outcome.mastery.unearned.length,
+    maxUnearnedMastery: THRESHOLDS.maxUnearnedMastery,
+  };
+}
+
+function teachDiagnosticClassifier(entry) {
+  const metric = entry.metricContributions;
+  const reasons = [];
+  for (const key of ['placement', 'correction', 'reTeaching', 'continuation']) {
+    if (metric[`${key}.numerator`] / metric[`${key}.denominator`] < metric[`${key}.threshold`]) reasons.push(key);
+  }
+  if (metric.unearnedMastery > metric.maxUnearnedMastery) reasons.push('unearned mastery');
+  return reasons.length > 0 ? { reasons, rootCause: 'tea-workflow-defect' } : null;
+}
+
+function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, teachDiagnosticClassifier);
   return {
     agent,
     executable,
@@ -953,9 +970,9 @@ function runnerRecord(
     measurements,
     durationMs,
     usage: null,
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
-    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -1130,13 +1147,7 @@ async function main() {
           caseId: CASE_ID,
           repetition: runIndex + 1,
           signature,
-          metricContributions: numericContributions({
-            placement: outcome.placement.holds ? 1 : 0,
-            correction: outcome.correction.holds ? 1 : 0,
-            reTeaching: outcome.reTeaching.holds ? 1 : 0,
-            continuation: outcome.continuation.holds ? 1 : 0,
-            unearnedMastery: outcome.mastery.unearned.length,
-          }),
+          metricContributions: numericContributions(teachDiagnosticProjection(outcome)),
           evidence: [{ kind: 'output-signature', value: signature }],
         }),
       );
@@ -1230,6 +1241,8 @@ module.exports = {
   reTeachingHolds,
   masteryClaimHolds,
   continuationHolds,
+  teachDiagnosticProjection,
+  teachDiagnosticClassifier,
   caseIds,
   RUNNER_CAPABILITIES,
   THRESHOLDS,
