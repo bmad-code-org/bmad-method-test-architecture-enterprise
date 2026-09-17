@@ -20,6 +20,12 @@
  *   declared `writers` list sets the owned field, naming the file and field.
  * - `dependency-direction` fails at exit 1 on a fixture where a `cli/` file
  *   reaches into `tools/`, a layer its graph does not permit `cli/` to import.
+ * - `dependency-direction`'s `purity` option fails at exit 1 on a fixture
+ *   where the one file it is declared against carries all three seeded
+ *   violations (`await`, an async function, and `new Date`), naming the file
+ *   and each violated rule; this is what turns
+ *   `test/lib/eval-quality-schema-versions.js` staying synchronous from prose
+ *   in `docs/explanation/eval-quality-command-adapter.md` into a check.
  * - `dependency-direction` stays quiet on a fixture whose only construct is a
  *   `require(name) {` method shorthand inside an object literal: this is the
  *   exact shape eval-quality's own scanner used to misread as a `require()`
@@ -193,6 +199,44 @@ function checkDirectionSeed(binary) {
 }
 
 /**
+ * `dependency-direction`'s `purity` option, proven the same way its ordinary
+ * layer rules already are: a fixture whose one purity-scoped file carries all
+ * three seeded violations at once (`async`, `new Date`, `await`), held
+ * against a minimal config declaring exactly that layer and its purity
+ * block. `eval-quality-schema-versions.js`'s own `expectedSchemaVersion`
+ * carries all three here, which is the drift the real layer and purity
+ * block, added to `eval-quality.config.json` alongside
+ * `test/lib/eval-quality-schema-versions.js`, exist to catch. Each rule
+ * fires independently and is asserted by its own specific tag and message,
+ * not by the sentence prefix all three rule strings share.
+ */
+function checkPuritySeed(binary) {
+  const fixture = path.join(FIXTURE_ROOT, 'direction-purity-violation', 'eval-quality.config.json');
+  const { status, output } = runGate(binary, 'dependency-direction', fixture, path.join(FIXTURE_ROOT, 'direction-purity-violation'));
+  check(
+    status === EXIT_GATE_FAILED,
+    `dependency-direction exited ${status} on the seeded purity violations; expected ${EXIT_GATE_FAILED}\n${output}`,
+  );
+  check(output.includes('eval-quality-schema-versions.js'), `dependency-direction did not name the seeded file\n${output}`);
+  check(
+    output.includes('3 violation(s)'),
+    `dependency-direction reported a different violation count than the three seeded purity breaks\n${output}`,
+  );
+  check(
+    output.includes('"async": ') && output.includes('an async function here would break it'),
+    `dependency-direction did not fire the asyncFunctionRule\n${output}`,
+  );
+  check(
+    output.includes('"new Date": ') && output.includes('new Date here would break it'),
+    `dependency-direction did not fire the newDateRule\n${output}`,
+  );
+  check(
+    output.includes('"await": ') && output.includes('an await here would break it'),
+    `dependency-direction did not fire the awaitRule\n${output}`,
+  );
+}
+
+/**
  * eval-quality 3.3.0's `isMethodDefinition` fix, proven directly rather than
  * inferred from an overall clean run. Before 3.3.0 the scanner read any
  * `require(` token sequence as a call site regardless of whether it was a
@@ -231,6 +275,7 @@ function main() {
   checkBoundarySeed(binary);
   checkLineageSeed(binary);
   checkDirectionSeed(binary);
+  checkPuritySeed(binary);
   checkDirectionNoRequireShorthandFalsePositive(binary);
   checkDirectionStillScans(binary);
 

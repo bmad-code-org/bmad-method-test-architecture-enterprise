@@ -1,0 +1,1250 @@
+{
+  "schemaVersion": "1.3.0",
+  "kind": "run-summary",
+  "generatedAt": "2026-09-17T12:23:09.218Z",
+  "repository": {
+    "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+    "dirty": false
+  },
+  "evalQualityVersion": "3.4.0",
+  "suites": [
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T09:44:46.300Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "atdd",
+        "evalType": "behavioral",
+        "skills": ["bmad-testarch-atdd"],
+        "contracts": [
+          {
+            "path": "test/contracts/atdd.contract.json",
+            "version": "5"
+          }
+        ],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["scoped-artifact-writes"],
+        "fixtureDigest": "sha256:885822cfd5be9a8874e05679fefd9bc7dbf80de09aa7914279168cec8ab0be93",
+        "promptDigest": "sha256:83de480469179deacabc7fc104fddc5f6c3f1b9674e0c5a4e6cecd59cb78c5d8",
+        "caseIds": ["reservations"],
+        "cases": [
+          {
+            "id": "reservations",
+            "promptDigest": "sha256:74c9ce53a3c16a88f6b12dfb0ddd9d7a82c37fd8b36b042dbc8af621e8d04224"
+          }
+        ],
+        "thresholds": {
+          "redForIntendedReasonRate": 1,
+          "criteriaCoverage": 1,
+          "maxVacuousPass": 0,
+          "maxStillSkipped": 0,
+          "maxLoadErrors": 0,
+          "maxNonAssertionExit": 0,
+          "maxUnmappedTests": 0,
+          "maxProductionMutations": 0,
+          "maxUnstableCases": 0
+        },
+        "declaredRepetitions": 2
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 1200000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 2,
+            "completed": 2
+          },
+          "measurements": {
+            "redForIntendedReasonRate": 0.625,
+            "criteriaCoverage": 0.5,
+            "vacuousPass": 0,
+            "stillSkipped": 0,
+            "nonAssertionExit": 3,
+            "loadErrors": 0,
+            "unmapped": 8,
+            "productionMutations": 0,
+            "unstableCases": 1,
+            "incompleteCases": 0
+          },
+          "durationMs": 327261,
+          "usage": null,
+          "failureClass": "quality",
+          "failures": [
+            "redForIntendedReasonRate",
+            "criteriaCoverage",
+            "3 non-assertion exit(s)",
+            "8 unmapped test(s)",
+            "1 unstable case(s)"
+          ]
+        }
+      ],
+      "durationMs": 327406,
+      "failureClass": "quality",
+      "exitCode": 1
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T09:44:50.611Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "automate",
+        "evalType": "behavioral",
+        "skills": ["bmad-testarch-automate"],
+        "contracts": [],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["command-execution"],
+        "fixtureDigest": "sha256:fd29266d1073e83d6d51efe83432a23fe8334e1c397c05a6524c57b4e9c5efb7",
+        "promptDigest": null,
+        "caseIds": ["correct-run", "misses-regression", "vacuous-pass", "duplicate"],
+        "cases": [
+          {
+            "id": "correct-run",
+            "promptDigest": null
+          },
+          {
+            "id": "misses-regression",
+            "promptDigest": null
+          },
+          {
+            "id": "vacuous-pass",
+            "promptDigest": null
+          },
+          {
+            "id": "duplicate",
+            "promptDigest": null
+          }
+        ],
+        "thresholds": {
+          "maxLoadErrors": 0,
+          "maxUndetectedRegressionCases": 0,
+          "maxFalseRegressionDetections": 0,
+          "maxUnattributedFailures": 0,
+          "maxUnexpectedOutcomes": 0
+        },
+        "declaredRepetitions": 1
+      },
+      "runners": [
+        {
+          "agent": "deterministic",
+          "executable": "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+          "version": "v24.20.0",
+          "model": null,
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 60000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 1,
+            "completed": 1
+          },
+          "measurements": {
+            "loadErrors": 0,
+            "undetectedRegressionCases": 0,
+            "falseRegressionDetections": 0,
+            "unattributedFailures": 0,
+            "unexpectedOutcomes": 0,
+            "matchesDeclaredTests": 11,
+            "vacuousTests": 1,
+            "duplicateTests": 1
+          },
+          "durationMs": 4186,
+          "usage": null,
+          "failureClass": "none",
+          "failures": []
+        }
+      ],
+      "durationMs": 4222,
+      "failureClass": "none",
+      "exitCode": 0
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T09:46:57.193Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "bmad-tea-routing",
+        "evalType": "behavioral",
+        "skills": ["bmad-tea"],
+        "contracts": [
+          {
+            "path": "test/contracts/tea-routing-controls.contract.json",
+            "version": "5"
+          },
+          {
+            "path": "test/contracts/tea-routing-intents.contract.json",
+            "version": "5"
+          }
+        ],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["read-only"],
+        "fixtureDigest": "sha256:cd3856056f42680cbe4eb861f44bdc2299c68aa27f8051d99e8f766f1b25aaae",
+        "promptDigest": "sha256:d6544163e36520cc614395a095282ee00ed9b1e31c0327c3db3c7db494bacd0d",
+        "caseIds": [
+          "epic-risk-before-tests",
+          "no-framework-yet",
+          "pipeline-quality-gates",
+          "acceptance-tests-before-code",
+          "implemented-feature-no-tests",
+          "review-existing-tests",
+          "nfr-evidence-on-hand",
+          "trace-criteria-to-tests",
+          "learn-testing-properly",
+          "release-gate-sequence",
+          "good-or-covering-what-matters",
+          "measured-some-nfrs-planned-none",
+          "thin-coverage-on-payments",
+          "story-half-done",
+          "run-and-fix-ci-failures",
+          "write-production-code",
+          "penetration-test-staging",
+          "hire-a-qa-lead"
+        ],
+        "cases": [
+          {
+            "id": "epic-risk-before-tests",
+            "promptDigest": "sha256:449e8a6734a6f060d6748882eacd7a5ec1bae7b21e6b37d147dedcc1be2e3ea4"
+          },
+          {
+            "id": "no-framework-yet",
+            "promptDigest": "sha256:5ee9f1b66b300064087ea5338dfc070d1e63793cd53ff2e9dd1743375dff5729"
+          },
+          {
+            "id": "pipeline-quality-gates",
+            "promptDigest": "sha256:cf2be1b370c93d626a3c6b5eb0f0124f9b8390608d0d3f0811498206d8a8d617"
+          },
+          {
+            "id": "acceptance-tests-before-code",
+            "promptDigest": "sha256:bdc2d9cae24a556389456511936b1d4c3d7779b34d795ea5af6efdfc331c3a05"
+          },
+          {
+            "id": "implemented-feature-no-tests",
+            "promptDigest": "sha256:0026773b3a76c8f3ba495eb8b517ef92d502f6cd729b23bd1e9874e8924f01d1"
+          },
+          {
+            "id": "review-existing-tests",
+            "promptDigest": "sha256:b4a2dea295b154818703b19281c375761090ca36a6661f9c55b798cbcffc3eca"
+          },
+          {
+            "id": "nfr-evidence-on-hand",
+            "promptDigest": "sha256:76c568c20a0dfbf7451c81beb0ce768af24f40e3cfb406afc90d603781dbe691"
+          },
+          {
+            "id": "trace-criteria-to-tests",
+            "promptDigest": "sha256:d3cfd213139ac67b517164d7d022be03b1afcbd08fa05d4290b75ade3a5efd03"
+          },
+          {
+            "id": "learn-testing-properly",
+            "promptDigest": "sha256:97832bbbd87a707b3ee639a3e8fbb6d0b1b46ac96b6c42bf2374e46238ffa42f"
+          },
+          {
+            "id": "release-gate-sequence",
+            "promptDigest": "sha256:b477f5c92fc0d906fd1f93035026f0016f33eb6f7fa4c12eb494dbf51ffc7c30"
+          },
+          {
+            "id": "good-or-covering-what-matters",
+            "promptDigest": "sha256:fa192d965733595d0f837154b8941c0a3ed52388aaa59ca305929433199cf246"
+          },
+          {
+            "id": "measured-some-nfrs-planned-none",
+            "promptDigest": "sha256:7702d0acf06c6f40954276bbd2bf1439fb46412e6098e778c40ea5adefb014ff"
+          },
+          {
+            "id": "thin-coverage-on-payments",
+            "promptDigest": "sha256:0af298c94c842b229b58c817a0fb92e475895d5dc1cd8065d5bf972bdf88cd41"
+          },
+          {
+            "id": "story-half-done",
+            "promptDigest": "sha256:316309e5f9dba059c7a28a98d8a347d5c7ec84c18267227c223f74bfd84efb1e"
+          },
+          {
+            "id": "run-and-fix-ci-failures",
+            "promptDigest": "sha256:7b3807810a1a06a8a393dd548d4d844ae70ea11e6e04128cc08b1e59431975e6"
+          },
+          {
+            "id": "write-production-code",
+            "promptDigest": "sha256:9419a0d340d69f61a69d7df1954f470b3b4edc70314abefbe95e3ca14c2a903f"
+          },
+          {
+            "id": "penetration-test-staging",
+            "promptDigest": "sha256:0719070e9f4c9f11aebf5d1fdd9a8f72813ca5bf00bfe98e070e3c8abac5278d"
+          },
+          {
+            "id": "hire-a-qa-lead",
+            "promptDigest": "sha256:c0f2c5f0f06f8579207b3762c84a7babd5d3e78c64ed1f163117a796d4e50c01"
+          }
+        ],
+        "thresholds": {
+          "routeAccuracy": 0.9,
+          "reasonTokenRecall": 0.8,
+          "scopeFidelity": 0.875,
+          "clarifyRecall": 0.75,
+          "declineRecall": 0.75,
+          "maxConfidentRoutesOnUnservable": 0,
+          "maxConfidentRoutesOnAmbiguous": 0,
+          "maxUnroutedClearIntents": 0,
+          "maxUnstableCases": 2
+        },
+        "declaredRepetitions": 2
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 300000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 36,
+            "completed": 36
+          },
+          "measurements": {
+            "routeAccuracy": 1,
+            "reasonTokenRecall": 0.8285714285714286,
+            "scopeFidelity": 0.9375,
+            "clarifyRecall": 0.125,
+            "declineRecall": 1,
+            "confidentRoutesOnUnservable": 0,
+            "confidentRoutesOnAmbiguous": 5,
+            "unroutedClearIntents": 0,
+            "unstableCases": 2,
+            "incompleteCases": 0,
+            "unmeasuredRuns": 0
+          },
+          "durationMs": 126425,
+          "usage": null,
+          "failureClass": "quality",
+          "failures": ["clarification recall", "5 confident route(s) on an intent whose menu items are genuinely close"]
+        }
+      ],
+      "durationMs": 126498,
+      "failureClass": "quality",
+      "exitCode": 1
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T10:24:15.903Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "fragment-selection",
+        "evalType": "fragment-selection",
+        "skills": [
+          "bmad-testarch-atdd",
+          "bmad-testarch-automate",
+          "bmad-testarch-ci",
+          "bmad-testarch-framework",
+          "bmad-testarch-nfr",
+          "bmad-testarch-test-design",
+          "bmad-testarch-test-review",
+          "bmad-testarch-trace"
+        ],
+        "contracts": [
+          {
+            "path": "test/contracts/fragment-selection/bmad-testarch-atdd.contract.json",
+            "version": "5"
+          },
+          {
+            "path": "test/contracts/fragment-selection/bmad-testarch-automate.contract.json",
+            "version": "5"
+          },
+          {
+            "path": "test/contracts/fragment-selection/bmad-testarch-ci.contract.json",
+            "version": "5"
+          },
+          {
+            "path": "test/contracts/fragment-selection/bmad-testarch-framework.contract.json",
+            "version": "5"
+          },
+          {
+            "path": "test/contracts/fragment-selection/bmad-testarch-nfr.contract.json",
+            "version": "5"
+          },
+          {
+            "path": "test/contracts/fragment-selection/bmad-testarch-test-design.contract.json",
+            "version": "5"
+          },
+          {
+            "path": "test/contracts/fragment-selection/bmad-testarch-test-review.contract.json",
+            "version": "5"
+          },
+          {
+            "path": "test/contracts/fragment-selection/bmad-testarch-trace.contract.json",
+            "version": "5"
+          }
+        ],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["read-only"],
+        "fixtureDigest": "sha256:8cc5a5891c78f264076f74a170758aa50957b2e09208cfd56e93e823e6c3c5b5",
+        "promptDigest": "sha256:ab691a6bfed0b746c43579ecf57ee22205dbfacfd0fb6a49cebdef672a3bf8a2",
+        "caseIds": [
+          "bmad-testarch-atdd:atdd-frontend-playwright",
+          "bmad-testarch-atdd:atdd-backend-pytest",
+          "bmad-testarch-atdd:atdd-fullstack-pact",
+          "bmad-testarch-automate:automate-playwright-ui-utils-on",
+          "bmad-testarch-automate:automate-backend-pytest",
+          "bmad-testarch-automate:automate-mobile-maestro",
+          "bmad-testarch-automate:automate-pact-consumer",
+          "bmad-testarch-automate:automate-backend-junit",
+          "bmad-testarch-ci:ci-gitlab-python",
+          "bmad-testarch-ci:ci-pact-consumer-pipeline",
+          "bmad-testarch-framework:framework-mobile-scaffold",
+          "bmad-testarch-framework:framework-greenfield-playwright-utils",
+          "bmad-testarch-framework:framework-python-backend",
+          "bmad-testarch-nfr:nfr-backend-junit-no-browser",
+          "bmad-testarch-nfr:nfr-browser-automation-cli",
+          "bmad-testarch-test-design:test-design-system-level",
+          "bmad-testarch-test-design:test-design-epic-level",
+          "bmad-testarch-test-design:test-design-epic-with-nfrs",
+          "bmad-testarch-test-design:test-design-pact-consumer-is-a-frontend",
+          "bmad-testarch-test-design:test-design-backend-junit",
+          "bmad-testarch-test-review:test-review-maestro-flow-set",
+          "bmad-testarch-test-review:test-review-java-suite",
+          "bmad-testarch-trace:trace-go-service-no-js",
+          "bmad-testarch-trace:trace-mobile-epic"
+        ],
+        "cases": [
+          {
+            "id": "bmad-testarch-atdd:atdd-frontend-playwright",
+            "promptDigest": "sha256:f1dcf0d0faa45bdc1b1bc0a4b65a361b9147d8d17048a5797d4b028e0951250e"
+          },
+          {
+            "id": "bmad-testarch-atdd:atdd-backend-pytest",
+            "promptDigest": "sha256:74f9632fa6de21d4967b4c2c49d43fcfcc9d05191ca0d618010e7c8e477fdb75"
+          },
+          {
+            "id": "bmad-testarch-atdd:atdd-fullstack-pact",
+            "promptDigest": "sha256:aa605e4e270c9e37e1fb0f476922a3c976922fb7072f82de1aeb3b96e86bd9b6"
+          },
+          {
+            "id": "bmad-testarch-automate:automate-playwright-ui-utils-on",
+            "promptDigest": "sha256:d8dce8e52af6a25843deab69d38db1ead88ade81753cc7d89885000562f63a2c"
+          },
+          {
+            "id": "bmad-testarch-automate:automate-backend-pytest",
+            "promptDigest": "sha256:c3728e5d256680075dd93aadab3ceaf9ff60f32cb8b8b87c517b4d00366c2640"
+          },
+          {
+            "id": "bmad-testarch-automate:automate-mobile-maestro",
+            "promptDigest": "sha256:3f8a4e1bc50cf30b4cb4c7f10a082ffc789ca0c152b3539f0bd01f4ce5512b1e"
+          },
+          {
+            "id": "bmad-testarch-automate:automate-pact-consumer",
+            "promptDigest": "sha256:c3ff9646167b0480400e64a5250fcb3bad5cd520680c5fff2ee0cd8b416fd21c"
+          },
+          {
+            "id": "bmad-testarch-automate:automate-backend-junit",
+            "promptDigest": "sha256:81b4cef94e08fee7c2566eb45580cc3fd56a98c264e5a61edcdfc3a0dbb620fe"
+          },
+          {
+            "id": "bmad-testarch-ci:ci-gitlab-python",
+            "promptDigest": "sha256:bb8a164fe91b473a16933f535648c6563fee51adec701a65b8034b7fb114e68c"
+          },
+          {
+            "id": "bmad-testarch-ci:ci-pact-consumer-pipeline",
+            "promptDigest": "sha256:e706c31388fdc816f1e9702bd10d238f878f8ebd7baf2569f59328800e3a81e0"
+          },
+          {
+            "id": "bmad-testarch-framework:framework-mobile-scaffold",
+            "promptDigest": "sha256:e24093811839315eee4331d22246dac2514b58e19b22151b069e4be21a534a03"
+          },
+          {
+            "id": "bmad-testarch-framework:framework-greenfield-playwright-utils",
+            "promptDigest": "sha256:a453b55d418920110e3d2d09946c3274c94a2dfba5b5bcc4c5ccfaaf4c7fb0b8"
+          },
+          {
+            "id": "bmad-testarch-framework:framework-python-backend",
+            "promptDigest": "sha256:f5f45c86f66c3afc4e49d2f61e191f063c83a818272109067dc8b048003a2a47"
+          },
+          {
+            "id": "bmad-testarch-nfr:nfr-backend-junit-no-browser",
+            "promptDigest": "sha256:e9cc4526a158ed899bec27307743c13fb1096d498fe5e05a5a06877d46ab111a"
+          },
+          {
+            "id": "bmad-testarch-nfr:nfr-browser-automation-cli",
+            "promptDigest": "sha256:5bbc1ef3ba4c1e13aa7f02758e24de1514e27648df4f5c06a5edf0b287c9aef0"
+          },
+          {
+            "id": "bmad-testarch-test-design:test-design-system-level",
+            "promptDigest": "sha256:6f901a9dff327260485835725c4c1eb7ea35586d9b6261bc2e9b2c4635f79021"
+          },
+          {
+            "id": "bmad-testarch-test-design:test-design-epic-level",
+            "promptDigest": "sha256:31c067597f15e6f773e73f762e43344d06256e245300f77967b9b9b3e154600c"
+          },
+          {
+            "id": "bmad-testarch-test-design:test-design-epic-with-nfrs",
+            "promptDigest": "sha256:5f02eaac7b6c100ad9e9a3a58ac89f682cbc740ed8e71a359cb4fddc698aa757"
+          },
+          {
+            "id": "bmad-testarch-test-design:test-design-pact-consumer-is-a-frontend",
+            "promptDigest": "sha256:d9423e3f465bd350bed1e881a4dde441b5bccd68b5742008650cc0a39606cd2b"
+          },
+          {
+            "id": "bmad-testarch-test-design:test-design-backend-junit",
+            "promptDigest": "sha256:cb5e2ba31442041e1c38408c41d61219649a74d896c2b4d1ca50b26b4e0d0c3e"
+          },
+          {
+            "id": "bmad-testarch-test-review:test-review-maestro-flow-set",
+            "promptDigest": "sha256:cf2fcf463833c2a8e7587c326f3d4bec78c90c1c52d04ce2891aa1be81f0bdba"
+          },
+          {
+            "id": "bmad-testarch-test-review:test-review-java-suite",
+            "promptDigest": "sha256:c6933bf438d3efb16302fc6385b24fc32fb4ed5af97812823bae26b338154eff"
+          },
+          {
+            "id": "bmad-testarch-trace:trace-go-service-no-js",
+            "promptDigest": "sha256:616282db4ff5471f408dddffba16848fe06198290a22a2b0dfa6daa38141fa06"
+          },
+          {
+            "id": "bmad-testarch-trace:trace-mobile-epic",
+            "promptDigest": "sha256:de93caf9a810af746296bb6c1baf27d246d4c148c6ff4151441e3efc584fbbbf"
+          }
+        ],
+        "thresholds": {
+          "requiredRecall": 0.9,
+          "forbiddenRate": 0.1
+        },
+        "declaredRepetitions": 2
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 300000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 48,
+            "completed": 48
+          },
+          "measurements": {
+            "requiredRecall": 1,
+            "forbiddenRate": 0,
+            "unstableCases": 2,
+            "incompleteCases": 0,
+            "unmeasuredRuns": 0
+          },
+          "durationMs": 2238522,
+          "usage": null,
+          "failureClass": "quality",
+          "failures": ["2 unstable case(s)"]
+        }
+      ],
+      "durationMs": 2238614,
+      "failureClass": "quality",
+      "exitCode": 1
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T10:37:20.041Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "ci",
+        "evalType": "behavioral",
+        "skills": ["bmad-testarch-ci"],
+        "contracts": [
+          {
+            "path": "test/contracts/ci.contract.json",
+            "version": "5"
+          }
+        ],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["scoped-artifact-writes"],
+        "fixtureDigest": "sha256:2b2180234434ba7bc8b2f65d8bba5fd9b6f7bcb134f47cac372b89b362cf0561",
+        "promptDigest": "sha256:7436fe5a648c3c3e1b892ca47ddfd92aef066e03ac694c7c1544f8ed60c8fac0",
+        "caseIds": ["full-meridian-storefront", "minimal-lantern-audit-log"],
+        "cases": [
+          {
+            "id": "full-meridian-storefront",
+            "promptDigest": "sha256:2ba0b6a4f230f8bd0c09f9a963b8e678ea208a54fdfe806fd73aaf5a8d508e3c"
+          },
+          {
+            "id": "minimal-lantern-audit-log",
+            "promptDigest": "sha256:35df4488f4f510c78d8d3bbc365cabc21c9aea6da77e3c9e21842fc2296a833e"
+          }
+        ],
+        "thresholds": {
+          "maxParseFailures": 0,
+          "maxLintFindings": 0,
+          "requestedElementRecall": 0.9,
+          "triggerAccuracy": 1,
+          "maxUnrequestedElements": 0,
+          "maxWorkflowRuleViolations": 0,
+          "maxUnstableCases": 0,
+          "maxFixtureMutations": 0
+        },
+        "declaredRepetitions": 2
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 1200000,
+            "promptTransport": "stdin",
+            "tools": [
+              {
+                "name": "actionlint",
+                "version": "1.7.12",
+                "args": ["-no-color", "-format", "{{json .}}", "-shellcheck=", "-pyflakes="]
+              }
+            ]
+          },
+          "repetitions": {
+            "expected": 4,
+            "completed": 4
+          },
+          "measurements": {
+            "parseFailures": 0,
+            "lintFindings": 0,
+            "requestedElementRecall": 1,
+            "triggerAccuracy": 1,
+            "unrequestedElements": 0,
+            "workflowRuleViolations": 0,
+            "unstableCases": 0,
+            "incompleteCases": 0,
+            "fixtureMutations": 0
+          },
+          "durationMs": 783889,
+          "usage": null,
+          "failureClass": "none",
+          "failures": []
+        }
+      ],
+      "durationMs": 783974,
+      "failureClass": "none",
+      "exitCode": 0
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T10:54:06.564Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "nfr",
+        "evalType": "behavioral",
+        "skills": ["bmad-testarch-nfr"],
+        "contracts": [
+          {
+            "path": "test/contracts/nfr.contract.json",
+            "version": "5"
+          }
+        ],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["scoped-artifact-writes"],
+        "fixtureDigest": "sha256:0cc7e216bf8b377dbd64a5edec96d6779f4d6849c74fa5db061923a8b15ef879",
+        "promptDigest": "sha256:966f9ccaa2a7bb7dbe07c3ce9fd94d87c0bc74aa68715e0c760387989f8597bd",
+        "caseIds": ["gapped-harbor-billing-ledger", "clean-atlas-notification-relay"],
+        "cases": [
+          {
+            "id": "gapped-harbor-billing-ledger",
+            "promptDigest": "sha256:924e8e29f3640f9336ac7a97ce0f9aec7a6e808b5a757a9b79d915ed5972f67f"
+          },
+          {
+            "id": "clean-atlas-notification-relay",
+            "promptDigest": "sha256:ce23e3c69cd4fb7a1cde92a36ba21b051adbfd280ad0f63e8c0d29fc1dde7415"
+          }
+        ],
+        "thresholds": {
+          "domainStatusAccuracy": 0.875,
+          "undecidableDomainAccuracy": 1,
+          "thresholdFidelityAccuracy": 0.9,
+          "overallStatusAccuracy": 1,
+          "domainCoverage": 1,
+          "groundedCitationAccuracy": 1,
+          "maxUnsupportedPass": 0,
+          "maxFabricatedEvidence": 0,
+          "maxCleanFalsePositives": 0,
+          "maxDuplicateDomainSections": 0,
+          "maxGateDisagreements": 0,
+          "maxUnstableCases": 0,
+          "maxFixtureMutations": 0
+        },
+        "declaredRepetitions": 2
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 1200000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 4,
+            "completed": 4
+          },
+          "measurements": {
+            "domainStatusAccuracy": 1,
+            "undecidableDomainAccuracy": 1,
+            "thresholdFidelityAccuracy": 1,
+            "overallStatusAccuracy": 1,
+            "domainCoverage": 1,
+            "groundedCitationAccuracy": 0.9852941176470589,
+            "duplicateDomainSections": 0,
+            "gateDisagreements": 0,
+            "unsupportedPass": 0,
+            "fabricatedEvidence": 22,
+            "cleanFalsePositives": 0,
+            "unstableCases": 2,
+            "incompleteCases": 0,
+            "fixtureMutations": 0
+          },
+          "durationMs": 1006348,
+          "usage": null,
+          "failureClass": "quality",
+          "failures": ["groundedCitationAccuracy", "22 fabricated evidence citation(s)", "2 unstable case(s)"]
+        }
+      ],
+      "durationMs": 1006420,
+      "failureClass": "quality",
+      "exitCode": 1
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T11:22:51.593Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "test-design",
+        "evalType": "behavioral",
+        "skills": ["bmad-testarch-test-design"],
+        "contracts": [
+          {
+            "path": "test/contracts/test-design.contract.json",
+            "version": "5"
+          }
+        ],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["scoped-artifact-writes"],
+        "fixtureDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
+        "promptDigest": "sha256:fdd0f6e259ed16fe3761f77bccfaa3b1ae8835842062ce5c4ca9175781c99be5",
+        "caseIds": ["seeded-offline-order-capture", "clean-last-sync-indicator"],
+        "cases": [
+          {
+            "id": "seeded-offline-order-capture",
+            "promptDigest": "sha256:e01e96905201ae520714eb3f614fb9ffde84015bf7ddc432553c89bbf0ac125b"
+          },
+          {
+            "id": "clean-last-sync-indicator",
+            "promptDigest": "sha256:8be90541010f7b6a94bb4e4dd844e27bda84ec96438c264112068651c285fe27"
+          }
+        ],
+        "thresholds": {
+          "groundedRiskRecall": 0.8,
+          "riskPrecision": 0.8,
+          "scaleComplianceAccuracy": 1,
+          "scoreArithmeticAccuracy": 1,
+          "categoryValidityAccuracy": 1,
+          "bandPlacementAccuracy": 1,
+          "riskIdWellFormedAccuracy": 1,
+          "riskLinkResolutionAccuracy": 1,
+          "priorityOrderingAccuracy": 1,
+          "coverageMappingAccuracy": 0.8,
+          "maxUnscoredRiskTables": 0,
+          "maxUngroundedRisks": 0,
+          "maxTopSeverityMissed": 0,
+          "maxRiskCeilingExcess": 0,
+          "maxUnstableCases": 0,
+          "maxFixtureMutations": 0
+        },
+        "declaredRepetitions": 2
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 1200000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 4,
+            "completed": 4
+          },
+          "measurements": {
+            "groundedRiskRecall": 1,
+            "riskPrecision": 1,
+            "scaleComplianceAccuracy": 1,
+            "scoreArithmeticAccuracy": 1,
+            "categoryValidityAccuracy": 1,
+            "bandPlacementAccuracy": 1,
+            "riskIdWellFormedAccuracy": 1,
+            "riskLinkResolutionAccuracy": 1,
+            "priorityOrderingAccuracy": 1,
+            "coverageMappingAccuracy": 0.5,
+            "ungroundedRisks": 0,
+            "unscoredRiskTables": 0,
+            "topSeverityMissed": 0,
+            "riskCeilingExcess": 11,
+            "unstableCases": 2,
+            "incompleteCases": 0,
+            "fixtureMutations": 0
+          },
+          "durationMs": 1724867,
+          "usage": null,
+          "failureClass": "quality",
+          "failures": ["coverageMappingAccuracy", "11 risk(s) over the declared ceiling", "2 unstable case(s)"]
+        }
+      ],
+      "durationMs": 1724937,
+      "failureClass": "quality",
+      "exitCode": 1
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T11:57:53.983Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "test-review",
+        "evalType": "behavioral",
+        "skills": ["bmad-testarch-test-review"],
+        "contracts": [
+          {
+            "path": "test/contracts/test-review.contract.json",
+            "version": "5"
+          }
+        ],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["scoped-artifact-writes"],
+        "fixtureDigest": "sha256:7cced01d802eea31bf2b4eba6392be4e7cc088762c22963a35f5c1a1dc6dbeee",
+        "promptDigest": "sha256:1a63410b7c1c4c4655f6b6d80677dd823976523a078086ec87241714d8741938",
+        "caseIds": [
+          "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+          "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+          "test/fixtures/test-review-eval/clean/profile.spec.ts"
+        ],
+        "cases": [
+          {
+            "id": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+            "promptDigest": "sha256:1a63410b7c1c4c4655f6b6d80677dd823976523a078086ec87241714d8741938"
+          },
+          {
+            "id": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+            "promptDigest": "sha256:1a63410b7c1c4c4655f6b6d80677dd823976523a078086ec87241714d8741938"
+          },
+          {
+            "id": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+            "promptDigest": "sha256:1a63410b7c1c4c4655f6b6d80677dd823976523a078086ec87241714d8741938"
+          }
+        ],
+        "thresholds": {
+          "criticalRecall": 1,
+          "recall": 0.7,
+          "nonFalsePositiveRate": 0.8,
+          "maxScoreStdev": 3,
+          "maxDistinctVerdicts": 1
+        },
+        "declaredRepetitions": 3
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 900000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 3,
+            "completed": 3
+          },
+          "measurements": {
+            "recall": 1,
+            "criticalRecall": 1,
+            "nonFalsePositiveRate": 1,
+            "unattributedMean": 1,
+            "outOfScopeMean": 0,
+            "unlocatedMean": 0,
+            "scoreStdev": 0.9428090415820634,
+            "distinctVerdicts": 1,
+            "meanScore": 31.666666666666668
+          },
+          "durationMs": 2102150,
+          "usage": null,
+          "failureClass": "none",
+          "failures": []
+        }
+      ],
+      "durationMs": 2102289,
+      "failureClass": "none",
+      "exitCode": 0
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T12:19:08.531Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "trace",
+        "evalType": "behavioral",
+        "skills": ["bmad-testarch-trace"],
+        "contracts": [
+          {
+            "path": "test/contracts/trace.contract.json",
+            "version": "5"
+          }
+        ],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["scoped-artifact-writes"],
+        "fixtureDigest": "sha256:5d2090b39d708de9b56ef5f764a4a6f0f92244c0f0805df3923dc8303851d993",
+        "promptDigest": "sha256:5209d1fb0582b15573f0bea3ecc36dd8be42eda324dd027c4ec96003de8589dc",
+        "caseIds": ["seeded-tenant-data-export", "clean-api-token-lifecycle"],
+        "cases": [
+          {
+            "id": "seeded-tenant-data-export",
+            "promptDigest": "sha256:8a026d95c1716481070581912b83f48e176a5d0c4c7bf9b6d05928f377c4b46d"
+          },
+          {
+            "id": "clean-api-token-lifecycle",
+            "promptDigest": "sha256:ae8708d317ee2160c91460fc8318dbb7410567598d5d06950a8493dcab892ba1"
+          }
+        ],
+        "thresholds": {
+          "criterionStatusAccuracy": 0.9,
+          "discriminatingCriterionAccuracy": 1,
+          "gateAccuracy": 1,
+          "gateCriteriaAccuracy": 1,
+          "coverageArithmeticAccuracy": 1,
+          "oracleResolutionAccuracy": 1,
+          "runMetadataAccuracy": 1,
+          "evidenceCitationPrecision": 0.9,
+          "rejectedEvidenceAccuracy": 1,
+          "waiverOracleAccuracy": 1,
+          "liveEvidenceAccuracy": 1,
+          "maxCleanFalsePositives": 0,
+          "maxInventedCriteria": 0,
+          "maxDuplicateCriteria": 0,
+          "maxUnstableCases": 0,
+          "maxFixtureMutations": 0
+        },
+        "declaredRepetitions": 2
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 1200000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 4,
+            "completed": 4
+          },
+          "measurements": {
+            "criterionStatusAccuracy": 1,
+            "discriminatingCriterionAccuracy": 1,
+            "gateAccuracy": 1,
+            "gateCriteriaAccuracy": 1,
+            "coverageArithmeticAccuracy": 1,
+            "oracleResolutionAccuracy": 1,
+            "runMetadataAccuracy": 0.9,
+            "evidenceCitationPrecision": 0.9696969696969697,
+            "rejectedEvidenceAccuracy": 1,
+            "waiverOracleAccuracy": 1,
+            "liveEvidenceAccuracy": 1,
+            "cleanFalsePositives": 0,
+            "inventedCriteria": 0,
+            "duplicateCriteria": 0,
+            "unstableCases": 1,
+            "incompleteCases": 0,
+            "fixtureMutations": 0,
+            "waiverRunsNotScored": 0
+          },
+          "durationMs": 1274389,
+          "usage": null,
+          "failureClass": "quality",
+          "failures": ["runMetadataAccuracy", "1 unstable case(s)"]
+        }
+      ],
+      "durationMs": 1274454,
+      "failureClass": "quality",
+      "exitCode": 1
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T12:19:08.896Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "transcript",
+        "evalType": "infrastructure",
+        "skills": [],
+        "contracts": [],
+        "ciTier": "deterministic",
+        "runnerCapabilities": ["scoped-artifact-writes"],
+        "fixtureDigest": "sha256:de9e49770912b8cc3376ac32df838fa6217e133bfb077f4f45cced269cf3c073",
+        "promptDigest": null,
+        "caseIds": ["consistent-three-turn-session"],
+        "cases": [
+          {
+            "id": "consistent-three-turn-session",
+            "promptDigest": null
+          }
+        ],
+        "thresholds": {
+          "crossTurnConsistencyRate": 1
+        },
+        "declaredRepetitions": 1
+      },
+      "runners": [
+        {
+          "agent": "custom",
+          "executable": "/Users/murat/opensource/_wt/tea-s66/test/fixtures/transcript-runner/stub-agent.js",
+          "version": "stub-agent 1.0.0",
+          "model": null,
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": ["STUB_TRANSCRIPT_MODE"],
+            "timeoutMs": 60000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 1,
+            "completed": 1
+          },
+          "measurements": {
+            "crossTurnConsistencyRate": 1
+          },
+          "durationMs": 211,
+          "usage": null,
+          "failureClass": "none",
+          "failures": []
+        }
+      ],
+      "durationMs": 274,
+      "failureClass": "none",
+      "exitCode": 0
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T12:19:25.391Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "framework",
+        "evalType": "behavioral",
+        "skills": ["bmad-testarch-framework"],
+        "contracts": [],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["command-execution"],
+        "fixtureDigest": "sha256:1963b459dfa810eb980a0e01fb586654df0647ef5c91c776f7f2c5e24436321a",
+        "promptDigest": null,
+        "caseIds": ["install-and-smoke"],
+        "cases": [
+          {
+            "id": "install-and-smoke",
+            "promptDigest": null
+          }
+        ],
+        "thresholds": {
+          "installAndSmokePassRate": 1,
+          "seededDefectDetectionRate": 1
+        },
+        "declaredRepetitions": 1
+      },
+      "runners": [
+        {
+          "agent": "harness",
+          "executable": "/Users/murat/.nvm/versions/node/v24.20.0/bin/node",
+          "version": "v24.20.0",
+          "model": null,
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 420000,
+            "promptTransport": "argv",
+            "tools": [
+              {
+                "name": "npm",
+                "version": "11.19.0",
+                "args": ["install", "--no-audit", "--no-fund"]
+              },
+              {
+                "name": "@playwright/test",
+                "version": null,
+                "args": ["test", "tests/e2e/api-sample.spec.ts", "--reporter=list"]
+              }
+            ]
+          },
+          "repetitions": {
+            "expected": 1,
+            "completed": 1
+          },
+          "measurements": {
+            "installAndSmokePassRate": 1,
+            "seededDefectDetectionRate": 1
+          },
+          "durationMs": 16037,
+          "usage": null,
+          "failureClass": "none",
+          "failures": []
+        }
+      ],
+      "durationMs": 16419,
+      "failureClass": "none",
+      "exitCode": 0
+    },
+    {
+      "schemaVersion": "1.3.0",
+      "kind": "suite-result",
+      "generatedAt": "2026-09-17T12:23:09.164Z",
+      "mode": "live",
+      "repository": {
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+        "dirty": false
+      },
+      "suite": {
+        "id": "teach-me-testing",
+        "evalType": "behavioral",
+        "skills": ["bmad-teach-me-testing"],
+        "contracts": [],
+        "ciTier": "full-matrix",
+        "runnerCapabilities": ["scoped-artifact-writes"],
+        "fixtureDigest": "sha256:e4613b52d5ad83547001aa9c597f673b929b582245b145f547c093986079db5f",
+        "promptDigest": null,
+        "caseIds": ["session-01-first-run-then-fresh-continuation"],
+        "cases": [
+          {
+            "id": "session-01-first-run-then-fresh-continuation",
+            "promptDigest": null
+          }
+        ],
+        "thresholds": {
+          "placementAccuracy": 1,
+          "correctionRate": 1,
+          "reTeachingRate": 1,
+          "continuationRate": 1,
+          "maxUnearnedMastery": 0
+        },
+        "declaredRepetitions": 1
+      },
+      "runners": [
+        {
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 1200000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 1,
+            "completed": 1
+          },
+          "measurements": {
+            "placementAccuracy": 1,
+            "correctionRate": 1,
+            "reTeachingRate": 1,
+            "continuationRate": 1,
+            "maxUnearnedMastery": 0
+          },
+          "durationMs": 223609,
+          "usage": null,
+          "failureClass": "none",
+          "failures": []
+        }
+      ],
+      "durationMs": 223687,
+      "failureClass": "none",
+      "exitCode": 0
+    }
+  ],
+  "unaccountedSkills": [],
+  "durationMs": 9830418,
+  "failureClass": "quality",
+  "exitCode": 1
+}
