@@ -491,7 +491,7 @@
         "maxDistinctVerdicts": 1
       },
       "repetitions": 3,
-      "caseCount": 3,
+      "caseCount": 4,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["scoped-artifact-writes"]
     },

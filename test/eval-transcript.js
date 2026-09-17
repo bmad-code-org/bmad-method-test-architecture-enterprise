@@ -505,6 +505,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         promptDigest: null,
         cases: [{ id: CASE_ID, promptDigest: null }],
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -526,17 +527,23 @@ function transcriptDiagnosticProjection(cross) {
   };
 }
 
-function transcriptDiagnosticClassifier(entry) {
+function transcriptDiagnosticClassifier(entry, failures = []) {
   const metric = entry.metricContributions;
   const misses =
     metric['crossTurnConsistency.denominator'] === 0 ||
     metric['crossTurnConsistency.numerator'] / metric['crossTurnConsistency.denominator'] < metric['crossTurnConsistency.threshold'];
-  return misses ? { reasons: [entry.reason ?? 'cross-turn consistency'], rootCause: 'harness-defect' } : null;
+  const reason = entry.reason ?? 'cross-turn consistency';
+  const matchesFailure = failures.some((failure) => failure === 'crossTurnConsistencyRate' || failure.includes(reason));
+  return misses && matchesFailure ? { reasons: [reason], rootCause: 'harness-defect' } : null;
 }
 
 /** The one runner record this suite ever produces: the hardcoded stub, never the requested agent. */
 function runnerRecord(version, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, transcriptDiagnosticClassifier);
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, transcriptDiagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent: 'custom',
     executable: STUB_AGENT,

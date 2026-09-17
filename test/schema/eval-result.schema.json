@@ -6,7 +6,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.4.0"
+          "const": "1.5.0"
         },
         "kind": {
           "type": "string",
@@ -492,6 +492,26 @@
                       "maxItems": 16,
                       "default": []
                     },
+                    "mappedFailures": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2048
+                      },
+                      "maxItems": 64,
+                      "default": []
+                    },
+                    "mappedMeasurements": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "maxItems": 64,
+                      "default": []
+                    },
                     "evidence": {
                       "type": "array",
                       "items": {
@@ -653,7 +673,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.4.0"
+          "const": "1.5.0"
         },
         "kind": {
           "type": "string",
