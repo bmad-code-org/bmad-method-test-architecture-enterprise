@@ -2647,7 +2647,7 @@ async function main() {
       unsupportedPass: totals.unsupportedPass,
       fabricatedEvidence: totals.fabricated,
       cleanFalsePositives: totals.cleanFalsePositives,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };

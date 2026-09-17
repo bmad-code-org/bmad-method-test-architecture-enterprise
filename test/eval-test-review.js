@@ -1068,14 +1068,25 @@ async function main() {
 
     if (results.length === 0) {
       console.error(`  ${colors.red}no successful runs; nothing was measured for ${agent}${colors.reset}\n`);
+      const measurements = {
+        recall: null,
+        criticalRecall: null,
+        nonFalsePositiveRate: null,
+        unattributedMean: null,
+        outOfScopeMean: null,
+        unlocatedMean: null,
+        scoreStdev: null,
+        distinctVerdicts: null,
+        meanScore: null,
+      };
       runners.push(
         runnerRecord(agent, options, versions, {
           expected: declaredCaseIds.length * runs,
           completed: 0,
-          measurements: {},
+          measurements,
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass: worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']),
-          failures: ['no run produced a scorable result'],
+          failures: [`0 of ${runs} declared repetitions completed`],
           diagnostics,
           diagnosticClassifier: reviewDiagnosticClassifier(diagnostics),
         }),

@@ -2705,7 +2705,7 @@ async function main() {
       cleanFalsePositives: totals.cleanFalsePositives,
       inventedCriteria: totals.invented,
       duplicateCriteria: totals.duplicates,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       fixtureMutations: totals.mutations,
       waiverRunsNotScored: totals.waiverSkippedRuns,

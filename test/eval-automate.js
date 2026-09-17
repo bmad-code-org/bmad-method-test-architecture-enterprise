@@ -226,8 +226,9 @@ function parseArgs(argv) {
       }
       case '--runs': {
         const value = argv[index + 1] ?? '';
-        if (!/^[1-9]\d*$/.test(value)) fatal(2, '--runs requires a positive integer');
-        runs = Number(value);
+        const parsed = Number(value);
+        if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(parsed)) fatal(2, '--runs requires a positive integer');
+        runs = parsed;
         index += 1;
         break;
       }

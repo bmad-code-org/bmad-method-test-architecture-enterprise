@@ -210,19 +210,38 @@ const diagnosticSchema = z
     }
   });
 
-// Frozen at the shape written by 227b290. Later requirements must never be
-// retroactively applied to stored 1.4.0 evidence.
+// Frozen at the shape written by 227b290. Every nested schema is copied here so
+// later limits on current evidence cannot retroactively invalidate 1.4.0 data.
+const previousUsageSchema = z
+  .object({
+    inputTokens: nonNegativeInteger.nullable(),
+    outputTokens: nonNegativeInteger.nullable(),
+    totalTokens: nonNegativeInteger.nullable(),
+    costUsd: z.number().nonnegative().nullable(),
+  })
+  .strict();
+const previousDiagnosticEvidenceSchema = z
+  .object({
+    kind: z.enum(['output-signature', 'artifact', 'summary']),
+    value: nonEmptyString.max(2048),
+  })
+  .strict();
+const previousDiagnosticMetricMapSchema = z.record(z.string().min(1).max(128), z.number().finite()).superRefine((value, ctx) => {
+  if (Object.keys(value).length > 64) {
+    ctx.addIssue({ code: 'custom', message: 'a diagnostic may carry at most 64 metric contributions' });
+  }
+});
 const previousDiagnosticSchema = z
   .object({
     caseId: nonEmptyString,
     repetition: positiveInteger,
     completionState: z.enum(['completed', 'failed']),
     signature: nonEmptyString.max(4096).nullable(),
-    metricContributions: diagnosticMetricMapSchema,
+    metricContributions: previousDiagnosticMetricMapSchema,
     failureClass: z.enum(FAILURE_CLASSES),
     rootCause: z.enum(ROOT_CAUSES).nullable(),
     reason: z.string().min(1).max(2048).nullable(),
-    evidence: z.array(diagnosticEvidenceSchema).max(32),
+    evidence: z.array(previousDiagnosticEvidenceSchema).max(32),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -269,7 +288,7 @@ const previousSuiteDiagnosticSchema = z
       message: 'a suite attempt diagnostic must describe an environment or unexpected failure',
     }),
     reason: nonEmptyString.max(2048),
-    evidence: z.array(diagnosticEvidenceSchema).max(32),
+    evidence: z.array(previousDiagnosticEvidenceSchema).max(32),
   })
   .strict();
 
@@ -325,12 +344,25 @@ const runnerResultSchema = z
       ctx.addIssue({ code: 'custom', path: ['diagnostics'], message: 'diagnostic case and repetition pairs must be unique' });
     }
     const mappedFailures = new Set(value.diagnostics.flatMap((entry) => entry.mappedFailures));
+    const environmentAggregate = /\b(?:short|incomplete|completed|repetition|unmeasurable)\b/i;
     for (const [failureIndex, failure] of value.failures.entries()) {
       if (!mappedFailures.has(failure)) {
         ctx.addIssue({
           code: 'custom',
           path: ['failures', failureIndex],
           message: 'every runner failure must map to diagnostic evidence',
+        });
+      }
+      const mappings = value.diagnostics.filter((entry) => entry.mappedFailures.includes(failure));
+      const compatible =
+        value.failureClass === 'quality' || !environmentAggregate.test(failure)
+          ? mappings.some((entry) => entry.failureClass === 'quality')
+          : mappings.some((entry) => entry.completionState === 'failed');
+      if (mappings.length > 0 && !compatible) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['failures', failureIndex],
+          message: 'runner failure must map to a class-compatible diagnostic',
         });
       }
     }
@@ -421,7 +453,7 @@ const previousRunnerResultFields = {
     .refine((value) => value.completed <= value.expected, { message: 'completed repetitions cannot exceed the expected count' }),
   measurements: z.record(z.number().nullable()),
   durationMs: nonNegativeInteger,
-  usage: usageSchema.nullable(),
+  usage: previousUsageSchema.nullable(),
   failureClass: z.enum(FAILURE_CLASSES),
   failures: z.array(z.string()),
 };
@@ -535,7 +567,13 @@ const previousSuiteResultSchema = z
     }
   });
 
-function resultSchemaFor(schemaVersion, runnerSchema, suiteDiagnosticsSchema = null, enforcement = 'none', suiteSchema = suiteResultSchema) {
+function resultSchemaFor(
+  schemaVersion,
+  runnerSchema,
+  suiteDiagnosticsSchema = null,
+  enforcement = 'none',
+  suiteSchema = suiteResultSchema,
+) {
   return z
     .object({
       schemaVersion: z.literal(schemaVersion),

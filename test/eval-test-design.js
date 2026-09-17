@@ -2106,7 +2106,7 @@ async function main() {
       riskCeilingExcess: totals.ceilingExcess,
       // Null rather than 0 on a single repetition: a count of zero reads as measured
       // and nothing was measured.
-      unstableCases: repeatedRuns ? unstableCases : null,
+      unstableCases: repeatedRuns && incompleteCases === 0 ? unstableCases : null,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };

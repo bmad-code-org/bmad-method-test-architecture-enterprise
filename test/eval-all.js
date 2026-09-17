@@ -90,8 +90,9 @@ function takeValue(argv, index, flag) {
 }
 
 function positiveInteger(value, flag) {
-  if (!/^[1-9]\d*$/.test(value)) throw usageError(`${flag} requires a positive integer`);
-  return Number(value);
+  const parsed = Number(value);
+  if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(parsed)) throw usageError(`${flag} requires a positive integer`);
+  return parsed;
 }
 
 function parseArgs(argv) {
@@ -373,8 +374,9 @@ async function promptIdentityForInvocation(invocation, workflows = []) {
       const harness = require('./eval-atdd');
       return fromIndex(harness.caseIndex(harness.loadGroundTruth()));
     }
-    case 'eval-automate.js':
+    case 'eval-automate.js': {
       return await nullIdentity(require('./eval-automate'));
+    }
     case 'eval-bmad-tea-routing.js': {
       const harness = require('./eval-bmad-tea-routing');
       return fromIndex(await harness.caseIndex((await harness.loadCorpus()).cases));
@@ -387,14 +389,16 @@ async function promptIdentityForInvocation(invocation, workflows = []) {
       const harness = require('./eval-fragment-selection');
       return fromIndex(await harness.caseIndex(await harness.loadSuites(workflows)));
     }
-    case 'eval-framework-scaffold.js':
+    case 'eval-framework-scaffold.js': {
       return await nullIdentity(require('./eval-framework-scaffold'));
+    }
     case 'eval-nfr.js': {
       const harness = require('./eval-nfr');
       return fromIndex(harness.caseIndex(harness.selectSets(await harness.loadGroundTruth(), [])));
     }
-    case 'eval-teach-me-testing.js':
+    case 'eval-teach-me-testing.js': {
       return await nullIdentity(require('./eval-teach-me-testing'));
+    }
     case 'eval-test-design.js': {
       const harness = require('./eval-test-design');
       return fromIndex(harness.caseIndex(harness.selectSets(await harness.loadGroundTruth(), [])));
@@ -408,10 +412,12 @@ async function promptIdentityForInvocation(invocation, workflows = []) {
       const harness = require('./eval-trace');
       return fromIndex(harness.caseIndex(harness.selectSets(await harness.loadGroundTruth(), [])));
     }
-    case 'eval-transcript.js':
+    case 'eval-transcript.js': {
       return await nullIdentity(require('./eval-transcript'));
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 
@@ -441,7 +447,7 @@ async function childBindingProblems(record, invocation, options) {
   // A valid zero-runner record describes a failure before measurement began.
   // Its original suite diagnostics are the evidence, so runner and prompt
   // bindings that require the unavailable measurement inputs do not replace it.
-  if (record.runners.length === 0 && record.suiteDiagnostics.length > 0) return problems;
+  if (record.runners.length === 0 && (record.suiteDiagnostics ?? []).length > 0) return problems;
 
   const expectedCaseIds = await caseIdsForInvocation(
     invocation,
