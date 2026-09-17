@@ -197,7 +197,14 @@ const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
+const {
+  createProbePort,
+  hostEnvironment,
+  observedText,
+  probeCommandWithRetry,
+  probeRequest,
+  targetProblems,
+} = require('./lib/probe-targets');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'trace-eval');
@@ -2105,7 +2112,7 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
       // exactly what the request below declares.
       environmentKeys: { [TRACE_INTERFACE]: options.envPass },
     });
-    const result = await probeCommand(
+    const result = await probeCommandWithRetry(
       port,
       probeRequest({
         probeId: `${set.id}-run-${runIndex + 1}`,

@@ -132,7 +132,14 @@ const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-re
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
+const {
+  createProbePort,
+  hostEnvironment,
+  observedText,
+  probeCommandWithRetry,
+  probeRequest,
+  targetProblems,
+} = require('./lib/probe-targets');
 const {
   selectBackend,
   sandboxedCommand,
@@ -909,7 +916,7 @@ async function runCase(groundTruth, options, agent, runIndex, backend) {
       artifacts: { [ATDD_INTERFACE]: { scaffold: path.join(groundTruth.projectRoot, groundTruth.testDir, ATDD_SCAFFOLD_RELATIVE_PATH) } },
       environmentKeys: { [ATDD_INTERFACE]: options.envPass },
     });
-    const result = await probeCommand(
+    const result = await probeCommandWithRetry(
       port,
       probeRequest({
         probeId: `${CASE_ID}-run-${runIndex + 1}`,

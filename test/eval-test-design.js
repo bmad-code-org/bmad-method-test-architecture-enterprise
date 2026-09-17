@@ -145,7 +145,14 @@ const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
+const {
+  createProbePort,
+  hostEnvironment,
+  observedText,
+  probeCommandWithRetry,
+  probeRequest,
+  targetProblems,
+} = require('./lib/probe-targets');
 const { readJson, readText, writeText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -1505,7 +1512,7 @@ async function runCase(set, options, agent, runIndex, categories) {
       // authorization does not permit, so the two lists are built from one source.
       environmentKeys: { [TEST_DESIGN_INTERFACE]: options.envPass },
     });
-    const result = await probeCommand(
+    const result = await probeCommandWithRetry(
       port,
       probeRequest({
         probeId: `${set.id}-run-${runIndex + 1}`,

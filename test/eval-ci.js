@@ -186,7 +186,14 @@ const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-re
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
+const {
+  createProbePort,
+  hostEnvironment,
+  observedText,
+  probeCommandWithRetry,
+  probeRequest,
+  targetProblems,
+} = require('./lib/probe-targets');
 const { readBytes, readJson, readText, writeText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -1849,7 +1856,7 @@ async function runCase(set, options, agent, runIndex) {
       artifacts: { [CI_INTERFACE]: ciArtifactPaths(set) },
       environmentKeys: { [CI_INTERFACE]: options.envPass },
     });
-    const result = await probeCommand(
+    const result = await probeCommandWithRetry(
       port,
       probeRequest({
         probeId: `${set.id}-run-${runIndex + 1}`,

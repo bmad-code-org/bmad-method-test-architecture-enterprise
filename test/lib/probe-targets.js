@@ -670,6 +670,57 @@ async function probeCommand(port, request, signal) {
 }
 
 /**
+ * The two failure classes a bounded retry is safe to attempt: a run that
+ * timed out, or a run the port's own transport lost before anything real
+ * happened. Never `environment-configuration` (the same refused request
+ * would be refused again), never `environment-parser` (a shape a second
+ * attempt does not change), and never `unexpected-error` (a defect in TEA,
+ * not a lost run). `probeCommand` never returns any of the other declared
+ * classes as `ok: false` failure classes outside this set.
+ */
+const RETRYABLE_FAILURE_CLASSES = new Set(['environment-timeout', 'environment-transport']);
+
+/** Total attempts a retryable failure gets, the first one included. */
+const PROBE_RETRY_ATTEMPTS = 3;
+
+/**
+ * `probeCommand`, with a bounded retry over `RETRYABLE_FAILURE_CLASSES`.
+ *
+ * A live matrix spends hundreds of calls in one run, and a per-call failure
+ * rate low enough to look rare still makes a fully clean run improbable at
+ * that volume: Story 5.2's own first live run lost the whole matrix to one
+ * `tea-fragment-selection-runner` invocation that hung past its declared
+ * budget and was killed. Its own AC1 requires every declared repetition to
+ * complete, so leaving that outcome to luck means the criterion passes today
+ * and fails next week for a reason nobody changed.
+ *
+ * A scored call is never retried, however it scores: `{ok: true}` already
+ * means a real command answered, and a low score or a non-zero exit is a
+ * measurement, not a lost run. Only `{ok: false}` with a class this module
+ * classifies as retryable gets another attempt, and every attempt beyond the
+ * first prints which interface and probe id it is, which attempt, and what
+ * failed, on `stderr`, so a flaky run reads as one in the transcript rather
+ * than a silently clean one — a retry that leaves no trace is the same
+ * defect class the rest of this story keeps finding elsewhere.
+ *
+ * @param {import('eval-quality').EnvironmentProbePort} port
+ * @param {object} request
+ * @param {AbortSignal} signal
+ * @returns {Promise<{ok: true, observation: object}|{ok: false, failureClass: string, reason: string}>}
+ */
+async function probeCommandWithRetry(port, request, signal) {
+  let result;
+  for (let attempt = 1; attempt <= PROBE_RETRY_ATTEMPTS; attempt += 1) {
+    result = await probeCommand(port, request, signal);
+    if (result.ok || !RETRYABLE_FAILURE_CLASSES.has(result.failureClass) || attempt === PROBE_RETRY_ATTEMPTS) break;
+    console.error(
+      `    [retry] ${request.interfaceId} ${request.probeId}: attempt ${attempt} failed as ${result.failureClass} (${result.reason}); retrying`,
+    );
+  }
+  return result;
+}
+
+/**
  * One observation, narrowed to the member TEA reads.
  *
  * `ProbeObservation` is a three-member union tagged by `kind`, and every reader
@@ -742,6 +793,9 @@ module.exports = {
   observedText,
   permittedEnvironmentKeys,
   probeCommand,
+  probeCommandWithRetry,
+  PROBE_RETRY_ATTEMPTS,
+  RETRYABLE_FAILURE_CLASSES,
   probeRequest,
   readEnvironment,
   targetFor,

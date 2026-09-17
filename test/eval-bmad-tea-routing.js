@@ -161,7 +161,7 @@ const {
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { scratchDirectory, filesWritten, workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
+const { createProbePort, hostEnvironment, observedText, probeCommandWithRetry, probeRequest } = require('./lib/probe-targets');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { readText } = require('./lib/file-system-port');
 
@@ -1080,7 +1080,7 @@ async function main() {
         let treeChanges = [];
         try {
           const { port } = await createProbePort({ cwd: scratch, interfaceIds: [ROUTING_INTERFACE] });
-          result = await probeCommand(
+          result = await probeCommandWithRetry(
             port,
             probeRequest({
               probeId: `${item.id}-run-${runIndex + 1}`,
