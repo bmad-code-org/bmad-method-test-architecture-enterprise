@@ -390,7 +390,7 @@ function classifyDiagnosticQuality(diagnostics, failures, classify, runnerContex
   });
 
   const failedDiagnostics = classified.filter((entry) => entry.completionState === 'failed');
-  const incompleteFailure = /\b(?:short|incomplete|completed|repetition)\b/i;
+  const environmentFailure = /\b(?:short|incomplete|completed|repetition|unmeasurable)\b/i;
   for (const failure of failures) {
     if (classified.some((entry) => entry.mappedFailures?.includes(failure))) continue;
     const failureTokens = new Set(
@@ -405,8 +405,7 @@ function classifyDiagnosticQuality(diagnostics, failures, classify, runnerContex
           .match(/[a-z][a-z-]{2,}/g) ?? []
       ).some((token) => failureTokens.has(token)),
     );
-    if (candidates.length === 0 && incompleteFailure.test(failure)) candidates = failedDiagnostics;
-    if (candidates.length === 0 && runnerContext.completed < runnerContext.expected) candidates = failedDiagnostics;
+    if (candidates.length === 0 && environmentFailure.test(failure)) candidates = failedDiagnostics;
     for (const entry of candidates) entry.mappedFailures = [...new Set([...(entry.mappedFailures ?? []), failure])];
   }
 
@@ -422,11 +421,7 @@ function classifyDiagnosticQuality(diagnostics, failures, classify, runnerContex
           .includes(normalizedName),
       ),
     );
-    if (
-      candidates.length === 0 &&
-      (name === 'scoreStdev' || name === 'unstableCases') &&
-      runnerContext.completed < runnerContext.expected
-    ) {
+    if (candidates.length === 0 && runnerContext.completed < runnerContext.expected) {
       candidates = failedDiagnostics;
     }
     for (const entry of candidates) entry.mappedMeasurements = [...new Set([...(entry.mappedMeasurements ?? []), name])];

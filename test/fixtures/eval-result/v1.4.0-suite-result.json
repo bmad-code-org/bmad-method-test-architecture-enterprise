@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1.4.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-09-17T00:00:00.000Z",
+  "mode": "live",
+  "repository": {
+    "commit": "227b290",
+    "dirty": false
+  },
+  "suite": {
+    "id": "frozen-v1.4-writer-fixture",
+    "evalType": "behavioral",
+    "skills": ["bmad-testarch-atdd"],
+    "contracts": [],
+    "ciTier": "deterministic",
+    "runnerCapabilities": ["read-only"],
+    "fixtureDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "promptDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "caseIds": ["case-a"],
+    "cases": [
+      {
+        "id": "case-a",
+        "promptDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    ],
+    "thresholds": {
+      "accuracy": 0.8
+    },
+    "declaredRepetitions": 1
+  },
+  "runners": [
+    {
+      "agent": "custom",
+      "executable": "fixture-runner",
+      "version": null,
+      "model": null,
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 1,
+        "completed": 1
+      },
+      "measurements": {
+        "accuracy": 0
+      },
+      "durationMs": 1,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": ["accuracy"],
+      "diagnostics": [
+        {
+          "caseId": "case-a",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "old-writer-signature",
+          "metricContributions": {},
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "accuracy",
+          "evidence": []
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 1,
+  "failureClass": "quality",
+  "exitCode": 1
+}

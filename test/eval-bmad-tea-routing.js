@@ -1353,7 +1353,7 @@ async function main() {
       confidentRoutesOnUnservable,
       confidentRoutesOnAmbiguous,
       unroutedClearIntents,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       unmeasuredRuns,
     };

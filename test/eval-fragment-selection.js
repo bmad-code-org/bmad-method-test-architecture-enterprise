@@ -986,7 +986,7 @@ async function main() {
     const measurements = {
       requiredRecall: measured(recall),
       forbiddenRate: measured(forbiddenRate),
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       unmeasuredRuns,
     };

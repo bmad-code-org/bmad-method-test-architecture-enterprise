@@ -2333,7 +2333,7 @@ async function main() {
       triggerAccuracy: measured(ratio(totals.triggerHits, totals.triggerTotal)),
       unrequestedElements: totals.unrequested,
       workflowRuleViolations: totals.ruleViolations,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };
@@ -2424,6 +2424,7 @@ module.exports = {
   runnerRecord,
   parseArgs,
   loadGroundTruth,
+  selectSets,
   validateCorpus,
   stageWorkspace,
   ciArtifactPaths,
