@@ -56,11 +56,11 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 | Epic 2    |       7 / 7 |      0 |         0 | Complete       |
 | Epic 3    |       6 / 6 |      0 |         0 | Complete       |
 | Epic 4    |       8 / 8 |      0 |         0 | Complete       |
-| Epic 5    |       4 / 6 |      1 |         1 | In progress    |
+| Epic 5    |       4 / 6 |      2 |         0 | In progress    |
 | Epic 6    |     12 / 12 |      0 |         0 | Complete       |
 | Epic 7    |       1 / 1 |      0 |         0 | Complete       |
 | Epic 8    |       1 / 1 |      0 |         0 | Complete       |
-| **Total** | **44 / 46** |  **1** |     **1** | **96% merged** |
+| **Total** | **44 / 46** |  **2** |     **0** | **96% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -107,7 +107,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result) (**Active:** [#204](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/204) merged; stage one only, the live run itself remains)
 - [x] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships) (both PRs merged: [#203](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/203) and [#211](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/211))
 - [x] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page) (all three PRs merged: [#200](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/200), [#206](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/206), and [#211](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/211))
-- [ ] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea)
+- [ ] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea) (**Active:** open in [#212](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/212); the changelog entry, the script-coverage audit and the no-`file:`/`link:` check are all done, the release cut and its npm confirmation remain)
 
 ### Epic 6 progress: Every TEA skill is covered by a behavioral suite
 
