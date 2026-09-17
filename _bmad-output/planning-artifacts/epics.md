@@ -55,12 +55,12 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 | Epic 1    |       5 / 5 |      0 |         0 | Complete       |
 | Epic 2    |       7 / 7 |      0 |         0 | Complete       |
 | Epic 3    |       6 / 6 |      0 |         0 | Complete       |
-| Epic 4    |       8 / 9 |      0 |         1 | In progress    |
+| Epic 4    |       8 / 9 |      1 |         0 | In progress    |
 | Epic 5    |       4 / 6 |      2 |         0 | In progress    |
 | Epic 6    |     12 / 12 |      0 |         0 | Complete       |
 | Epic 7    |       1 / 1 |      0 |         0 | Complete       |
 | Epic 8    |       1 / 1 |      0 |         0 | Complete       |
-| **Total** | **44 / 47** |  **2** |     **1** | **94% merged** |
+| **Total** | **44 / 47** |  **3** |     **0** | **94% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -99,7 +99,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 4.6: Hold the supply chain](#story-46-hold-the-supply-chain) ([#180](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/180))
 - [x] [Story 4.7: Hold layering, boundary and lineage](#story-47-hold-layering-boundary-and-lineage) ([#191](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/191))
 - [x] [Story 4.8: Gate the ungated trees, allowlists, coverage and CI](#story-48-gate-the-ungated-trees-allowlists-coverage-and-ci) ([#190](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/190))
-- [ ] [Story 4.9: Hold the synchronous holdout with dependency-direction's purity option](#story-49-hold-the-synchronous-holdout-with-dependency-directions-purity-option)
+- [ ] [Story 4.9: Hold the synchronous holdout with dependency-direction's purity option](#story-49-hold-the-synchronous-holdout-with-dependency-directions-purity-option) (**Active:** open in [#213](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/213))
 
 ### Epic 5 progress: Drift is measured and the upgrade is proven live
 
