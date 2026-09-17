@@ -182,7 +182,7 @@ flowchart TB
 
 ### How It Works at Runtime
 
-**1. Activation.** `/bmad-tea` or `$bmad-tea` loads the agent skill. It resolves its customization block across base, team, and user layers, adopts the persona, loads persistent facts and `_bmad/tea/config.yaml`, greets you, and renders `{agent.menu}` as a numbered table. Naming an intent in your first message ("let's design tests for this epic") skips the menu and dispatches directly.
+**1. Activation.** `/bmad-tea` or `$bmad-tea` loads the agent skill. It resolves its customization block across base, team, and user layers, adopts the persona, loads persistent facts and `_bmad/tea/config.yaml`, greets you, and renders `{agent.menu}` as a numbered table. Naming one clear intent in your first message ("let's design tests for this epic") skips the menu and dispatches directly. A message that supports several menu choices triggers one focused question naming the relevant choices before any workflow starts.
 
 **2. Workflow entry.** Direct workflow commands use the installed skill name, such as `/bmad-testarch-automate` or `$bmad-testarch-automate`, depending on the host's invocation syntax. `TA` is the equivalent agent-menu code, available only once TEA is active. Either way, the workflow's `SKILL.md` resolves its own `[workflow]` customization block and asks which mode to run: Create, Resume, Validate, or Edit. Create and Resume both route into `steps-c/`; Validate into `steps-v/`; Edit into `steps-e/`. `test-review` alone supports `headless: true`, which skips the greeting and the menu and runs Create directly. That is how the CLI drives it in CI.
 

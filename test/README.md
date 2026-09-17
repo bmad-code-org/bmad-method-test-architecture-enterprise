@@ -191,6 +191,13 @@ once you have read a workflow's frontmatter or the knowledge index is not ambigu
 the agent, and scoring it as a clarification would measure a fact the agent was never
 given.
 
+Step 8's routing ambiguity table defines the supported candidate set for each close-menu
+fact pattern. Corpus validation extracts those sets from the shipped skill and compares
+them with every clarification oracle. Removing a boundary, naming an unknown menu code,
+or changing a candidate set fails `test:eval-routing-data` before a model call. Stored
+replays cover all four successful clarification branches through the live parser and
+scorer.
+
 Five metrics and four counts. The metrics are the menu item chosen, whether the stated
 reason names the deciding feature of the message, whether the scope the user named
 survives into the dispatch, whether a genuinely ambiguous intent is asked about by name,

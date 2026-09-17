@@ -1,0 +1,138 @@
+{
+  "$comment": [
+    "The successful ATDD versus Test Automation ambiguity branch. The skill must preserve the story scope and",
+    "ask whether to address the unbuilt or implemented portion before activating a workflow.",
+    "",
+    "The reply is CONSTRUCTED."
+  ],
+  "id": "clarification-atdd-vs-automation",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of the live corpus case, the menu it is scored against, and the user's message.",
+      "These values keep the replay independent from later corpus or menu edits."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: story-half-done",
+    "frozenOn": "2026-09-17",
+    "expected": {
+      "expectedAction": "clarify",
+      "expectedMenuCode": null,
+      "expectedWorkflow": null,
+      "decidingTokens": ["half", "UI"],
+      "scopeTokens": ["12.3"],
+      "candidateCodes": ["AT", "TA"],
+      "rationale": "The API supports automation against implemented behavior while the unbuilt UI supports red-phase acceptance tests, and the message gives no priority."
+    },
+    "intent": "Story 12.3 is half done. The API is built and the UI has not been started. I want tests for it.",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The answer clarifies and leaves menuCode and workflow unset.",
+    "",
+    "The reason contains half and UI, and the scope preserves Story 12.3 within the scorer's length bound.",
+    "",
+    "The question names ATDD and Test Automation with their menu codes, so both candidates resolve."
+  ],
+  "result": {
+    "answer": {
+      "action": "clarify",
+      "menuCode": null,
+      "workflow": null,
+      "scope": "Story 12.3",
+      "reason": "half the story is implemented while the UI is unbuilt",
+      "question": "For Story 12.3, should ATDD (AT) create failing acceptance tests for the unbuilt UI, or should Test Automation (TA) cover the implemented API first?",
+      "missing": null
+    },
+    "score": {
+      "action": "clarify",
+      "menuCode": null,
+      "workflow": null,
+      "actionCorrect": true,
+      "menuCorrect": false,
+      "workflowCorrect": false,
+      "routeCorrect": false,
+      "tokens": 2,
+      "tokensFound": 2,
+      "tokensMissed": [],
+      "scopeTokens": 1,
+      "scopeFound": 1,
+      "scopeWithinBound": true,
+      "scopeOk": true,
+      "candidates": 2,
+      "candidatesNamed": 2,
+      "candidateCodesNamed": ["AT", "TA"],
+      "clarifyOk": true,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
+    }
+  }
+}

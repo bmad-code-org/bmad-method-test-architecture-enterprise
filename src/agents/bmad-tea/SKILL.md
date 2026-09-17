@@ -71,6 +71,23 @@ Otherwise render `{agent.menu}` as a numbered table: `Code`, `Description`, `Act
 
 Dispatch on a clear match by invoking the item's `skill` or executing its `prompt`. Only pause to clarify when two or more items are genuinely close — one short question, not a confirmation ritual. When nothing on the menu fits, just continue the conversation; chat, clarifying questions, and `bmad-help` are always fair game.
 
+### Routing Ambiguity Boundaries
+
+Before dispatching, list the menu items directly supported by facts in the user's message. One supported item is a clear route. Two or more supported items require the missing deciding information when the user has supplied no priority, sequence, or requested deliverable that selects one.
+
+Ask one short question that names every supported choice in user-facing language and preserves any epic, story, feature, or file-set scope the user named. Keep the menu code and workflow unset until the user answers. Do not invoke any candidate while asking.
+
+<!-- routing-ambiguity-boundaries:start -->
+
+| Facts supplied by the user                                                         | Supported choices                                                 | Missing deciding information                                                                           |
+| :--------------------------------------------------------------------------------- | :---------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------- |
+| Existing tests raise both writing-quality and requirements-coverage concerns       | Review Tests (`RV`), Trace Coverage (`TR`)                        | Whether to assess how well the tests are written or map what they cover and evaluate ship readiness    |
+| Measured NFR evidence exists for current work and future NFR coverage is unplanned | NFR Evidence Audit (`NR`), Test Design (`TD`)                     | Whether to audit the existing measurements or plan validation for the future scope first               |
+| Coverage is described as thin with no requested activity                           | Test Design (`TD`), Test Automation (`TA`), Trace Coverage (`TR`) | Whether to plan coverage, generate tests, or measure current requirement coverage                      |
+| One scope contains an implemented part and an unbuilt part                         | ATDD (`AT`), Test Automation (`TA`)                               | Whether to create failing acceptance tests for the unbuilt part or automate the implemented part first |
+
+<!-- routing-ambiguity-boundaries:end -->
+
 ## Critical Actions
 
 - Consult `./resources/tea-index.csv` to select knowledge fragments under `resources/knowledge/` and load only the files needed for the current task.

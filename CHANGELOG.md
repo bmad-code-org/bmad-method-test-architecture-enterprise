@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Live evaluation JSON now records a bounded diagnostic for every attempted case repetition, including the exact stability signature, threshold inputs, completion state, failure class, five-category root-cause triage, reason, and sanitized output or persisted artifact evidence. Schema 1.4.0 requires complete case and repetition grids from current writers while retaining a read-only validation path for stored 1.3.0 results.
 
+### Fixed
+
+- `bmad-tea` now asks one focused question when the supplied facts support several workflows. The routing guidance covers review versus trace, NFR evidence audit versus future test design, thin coverage across planning, automation, and measurement, and partially implemented scope across ATDD and automation. Deterministic corpus validation and stored replays hold every candidate set and preserve clear and unservable routing behavior.
+
 ## [1.27.1] - 2026-09-17
 
 ### Added

@@ -448,7 +448,19 @@ async function validateCorpus({ intents, groundTruth, cases }) {
   const problems = [];
   const menu = await menuItems();
   const byCode = new Map(menu.map((item) => [item.code, item]));
+  const { skill } = await skillSources();
+  const boundarySets = ambiguityBoundaryCandidateSets(skill);
+  const boundarySignatures = new Set(boundarySets.map((codes) => [...codes].sort().join('+')));
   if (menu.length === 0) problems.push('src/agents/bmad-tea/customize.toml declares no [[agent.menu]] item; there is nothing to route to');
+
+  for (const codes of boundarySets) {
+    if (new Set(codes).size !== codes.length) {
+      problems.push(`src/agents/bmad-tea/SKILL.md repeats a menu code in ambiguity boundary ${codes.join(', ')}`);
+    }
+    for (const code of codes) {
+      if (!byCode.has(code)) problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary names unknown menu code "${code}"`);
+    }
+  }
 
   const seen = new Set();
   const answered = new Set(Object.keys(groundTruth.cases ?? {}));
@@ -522,6 +534,10 @@ async function validateCorpus({ intents, groundTruth, cases }) {
       if (candidates.length < 2) problems.push(`${label}: a clarify case needs at least two candidateCodes; one candidate is a route`);
       for (const code of candidates) {
         if (!byCode.has(code)) problems.push(`${label}: candidateCode "${code}" is not a code in src/agents/bmad-tea/customize.toml`);
+      }
+      const signature = [...candidates].sort().join('+');
+      if (!boundarySignatures.has(signature)) {
+        problems.push(`${label}: src/agents/bmad-tea/SKILL.md declares no ambiguity boundary for candidate set ${candidates.join(', ')}`);
       }
     } else if (expected.expectedAction === 'decline' && (expected.candidateCodes ?? []).length > 0) {
       problems.push(`${label}: a decline case declares candidateCodes, and nothing on the menu serves it`);
@@ -860,6 +876,29 @@ async function skillSources() {
   skillText.skill ??= await promptPart(SKILL_FILE);
   skillText.menu ??= await promptPart(MENU_FILE);
   return skillText;
+}
+
+/**
+ * Candidate sets declared by the skill's ambiguity-boundary table.
+ *
+ * The live corpus keeps its answers outside the prompt. This parser provides a
+ * deterministic consistency check between those answers and the routing rules
+ * the agent can actually see. Each table row names the menu choices supported
+ * by one genuinely ambiguous fact pattern. The prose around the codes remains
+ * the skill's user-facing explanation.
+ */
+function ambiguityBoundaryCandidateSets(skill) {
+  const start = '<!-- routing-ambiguity-boundaries:start -->';
+  const end = '<!-- routing-ambiguity-boundaries:end -->';
+  const startIndex = skill.indexOf(start);
+  const endIndex = skill.indexOf(end);
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) return [];
+  return skill
+    .slice(startIndex + start.length, endIndex)
+    .split('\n')
+    .filter((line) => /^\|/.test(line) && !/^\|\s*:?-+/.test(line))
+    .map((line) => [...line.matchAll(/`([A-Z]+)`/g)].map((match) => match[1]))
+    .filter((codes) => codes.length > 0);
 }
 
 /** The prompt one case gets: the skill as it ships, its menu as it ships, and one user message. */
@@ -1429,6 +1468,7 @@ module.exports = {
   runnerRecord,
   assertGroundTruthAbsent,
   buildPrompt,
+  ambiguityBoundaryCandidateSets,
   candidatePatternSource,
   caseIds,
   caseIndex,

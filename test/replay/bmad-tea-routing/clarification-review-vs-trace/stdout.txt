@@ -1,0 +1,1 @@
+{"action":"clarify","menuCode":null,"workflow":null,"scope":null,"reason":"the tests being good and covering what matters are separate concerns","question":"Should Review Tests (RV) assess how well the tests are written, or should Trace Coverage (TR) map what they cover and evaluate ship readiness?","missing":null}
