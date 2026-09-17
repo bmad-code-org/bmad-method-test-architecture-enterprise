@@ -2424,6 +2424,7 @@ module.exports = {
   runnerRecord,
   parseArgs,
   loadGroundTruth,
+  selectSets,
   validateCorpus,
   stageWorkspace,
   ciArtifactPaths,

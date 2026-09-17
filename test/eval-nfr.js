@@ -2758,6 +2758,7 @@ module.exports = {
   runnerRecord,
   parseArgs,
   loadGroundTruth,
+  selectSets,
   validateCorpus,
   stripCriterionAnnotation,
   CRITERION_BULLET_ALIASES,

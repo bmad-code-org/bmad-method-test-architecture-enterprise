@@ -1409,7 +1409,7 @@ async function main() {
       loadErrors: totals.loadErrors,
       unmapped: totals.unmapped,
       productionMutations: totals.productionMutations,
-      unstableCases: complete && !stable ? 1 : 0,
+      unstableCases: complete ? Number(!stable) : null,
       incompleteCases: complete ? 0 : 1,
     };
 

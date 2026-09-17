@@ -2830,6 +2830,7 @@ module.exports = {
   runnerRecord,
   parseArgs,
   loadGroundTruth,
+  selectSets,
   validateCorpus,
   recomputeExpectations,
   deriveGate,

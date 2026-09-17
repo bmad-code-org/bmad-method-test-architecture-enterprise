@@ -406,7 +406,6 @@ function classifyDiagnosticQuality(diagnostics, failures, classify, runnerContex
       ).some((token) => failureTokens.has(token)),
     );
     if (candidates.length === 0 && incompleteFailure.test(failure)) candidates = failedDiagnostics;
-    if (candidates.length === 0 && runnerContext.completed < runnerContext.expected) candidates = failedDiagnostics;
     for (const entry of candidates) entry.mappedFailures = [...new Set([...(entry.mappedFailures ?? []), failure])];
   }
 
@@ -424,7 +423,7 @@ function classifyDiagnosticQuality(diagnostics, failures, classify, runnerContex
     );
     if (
       candidates.length === 0 &&
-      (name === 'scoreStdev' || name === 'unstableCases') &&
+      (name === 'scoreStdev' || name === 'unstableCases' || name === 'distinctVerdicts') &&
       runnerContext.completed < runnerContext.expected
     ) {
       candidates = failedDiagnostics;

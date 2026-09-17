@@ -299,6 +299,12 @@ const runnerResultSchema = z
   })
   .strict()
   .superRefine((value, ctx) => {
+    if (value.failureClass === 'quality' && value.failures.length === 0) {
+      ctx.addIssue({ code: 'custom', path: ['failures'], message: 'a quality runner must name at least one aggregate failure' });
+    }
+    if (value.failureClass === 'quality' && !value.diagnostics.some((entry) => entry.failureClass === 'quality')) {
+      ctx.addIssue({ code: 'custom', path: ['diagnostics'], message: 'a quality runner must identify a quality diagnostic' });
+    }
     if (value.diagnostics.length !== value.repetitions.expected) {
       ctx.addIssue({
         code: 'custom',
@@ -339,6 +345,13 @@ const runnerResultSchema = z
       }
     }
     for (const [diagnosticIndex, entry] of value.diagnostics.entries()) {
+      if (value.failureClass === 'quality' && entry.mappedFailures.length > 0 && entry.failureClass !== 'quality') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['diagnostics', diagnosticIndex, 'mappedFailures'],
+          message: 'a quality runner failure must map to a quality diagnostic',
+        });
+      }
       if (entry.failureClass === 'none' && entry.mappedFailures.length > 0) {
         ctx.addIssue({
           code: 'custom',
@@ -374,9 +387,48 @@ const runnerResultSchema = z
     }
   });
 
+// Frozen copies of every 1.4.0 runner dependency. Current runner fields may
+// evolve without changing the historical reader for artifacts already stored.
+const previousRunnerParametersSchema = z
+  .object({
+    agentArgs: z.array(z.string()),
+    envPassNames: z.array(z.string()),
+    timeoutMs: z.number().int().positive(),
+    promptTransport: z.enum(['stdin', 'argv']),
+    tools: z
+      .array(
+        z
+          .object({
+            name: nonEmptyString,
+            version: z.string().nullable(),
+            args: z.array(z.string()),
+          })
+          .strict(),
+      )
+      .optional(),
+  })
+  .strict();
+
+const previousRunnerResultFields = {
+  agent: nonEmptyString,
+  executable: nonEmptyString,
+  version: z.string().nullable(),
+  model: z.string().nullable(),
+  parameters: previousRunnerParametersSchema,
+  repetitions: z
+    .object({ expected: nonNegativeInteger, completed: nonNegativeInteger })
+    .strict()
+    .refine((value) => value.completed <= value.expected, { message: 'completed repetitions cannot exceed the expected count' }),
+  measurements: z.record(z.number().nullable()),
+  durationMs: nonNegativeInteger,
+  usage: usageSchema.nullable(),
+  failureClass: z.enum(FAILURE_CLASSES),
+  failures: z.array(z.string()),
+};
+
 const previousRunnerResultSchema = z
   .object({
-    ...runnerResultFields,
+    ...previousRunnerResultFields,
     diagnostics: z.array(previousDiagnosticSchema),
   })
   .strict()
@@ -450,7 +502,40 @@ const suiteResultSchema = z
     }
   });
 
-function resultSchemaFor(schemaVersion, runnerSchema, suiteDiagnosticsSchema = null, enforcement = 'none') {
+// Frozen at the exact suite shape accepted by the 1.4.0 writer. This stays
+// structurally independent of suiteResultSchema so current requirements do not
+// retroactively invalidate historical evidence.
+const previousSuiteContractSchema = z.object({ path: nonEmptyString, version: z.string().nullable() }).strict();
+const previousSuiteResultSchema = z
+  .object({
+    id: nonEmptyString,
+    evalType: z.enum(EVAL_TYPES),
+    skills: z.array(nonEmptyString),
+    contracts: z.array(previousSuiteContractSchema),
+    ciTier: z.enum(CI_TIERS),
+    runnerCapabilities: z.array(z.enum(RUNNER_CAPABILITIES)).min(1),
+    fixtureDigest: digestString,
+    promptDigest: digestString.nullable(),
+    caseIds: z.array(nonEmptyString),
+    cases: z.array(z.object({ id: nonEmptyString, promptDigest: digestString.nullable() }).strict()),
+    thresholds: z.record(z.number()),
+    declaredRepetitions: nonNegativeInteger,
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.evalType !== 'infrastructure' && value.skills.length === 0) {
+      ctx.addIssue({ code: 'custom', path: ['skills'], message: `a "${value.evalType}" suite result must name at least one skill` });
+    }
+    if (value.evalType === 'infrastructure' && value.skills.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['skills'],
+        message: 'an "infrastructure" suite result discharges no skill\'s coverage obligation, so it must name none',
+      });
+    }
+  });
+
+function resultSchemaFor(schemaVersion, runnerSchema, suiteDiagnosticsSchema = null, enforcement = 'none', suiteSchema = suiteResultSchema) {
   return z
     .object({
       schemaVersion: z.literal(schemaVersion),
@@ -458,7 +543,7 @@ function resultSchemaFor(schemaVersion, runnerSchema, suiteDiagnosticsSchema = n
       generatedAt: z.string().datetime(),
       mode: z.enum(RUN_MODES),
       repository: repositorySchema,
-      suite: suiteResultSchema,
+      suite: suiteSchema,
       runners: z.array(runnerSchema),
       ...(suiteDiagnosticsSchema ? { suiteDiagnostics: z.array(suiteDiagnosticsSchema).default([]) } : {}),
       durationMs: nonNegativeInteger,
@@ -593,6 +678,37 @@ function resultSchemaFor(schemaVersion, runnerSchema, suiteDiagnosticsSchema = n
         }
         if (enforcement === 'current') {
           const effectiveRepetitions = caseIds.size === 0 ? 0 : runner.repetitions.expected / caseIds.size;
+          if (value.suite.declaredRepetitions >= 2) {
+            const requiredVariance = [
+              Object.hasOwn(value.suite.thresholds, 'maxScoreStdev') && 'scoreStdev',
+              Object.hasOwn(value.suite.thresholds, 'maxUnstableCases') && 'unstableCases',
+            ].filter(Boolean);
+            for (const name of requiredVariance) {
+              if (!Object.hasOwn(runner.measurements, name)) {
+                ctx.addIssue({
+                  code: 'custom',
+                  path: ['runners', runnerIndex, 'measurements'],
+                  message: `a repeated suite must record ${name}`,
+                });
+                continue;
+              }
+              const incomplete = runner.repetitions.completed < runner.repetitions.expected;
+              if (incomplete && runner.measurements[name] !== null) {
+                ctx.addIssue({
+                  code: 'custom',
+                  path: ['runners', runnerIndex, 'measurements', name],
+                  message: `${name} must be null when requested repetitions are incomplete`,
+                });
+              }
+              if (!incomplete && runner.measurements[name] === null) {
+                ctx.addIssue({
+                  code: 'custom',
+                  path: ['runners', runnerIndex, 'measurements', name],
+                  message: `${name} must be measured when every requested repetition completed`,
+                });
+              }
+            }
+          }
           if (effectiveRepetitions >= 2) {
             const mappedMeasurements = new Set(runner.diagnostics.flatMap((entry) => entry.mappedMeasurements));
             for (const name of OPTIONAL_VARIANCE_MEASUREMENTS) {
@@ -628,6 +744,7 @@ const previousEvalResultSchema = resultSchemaFor(
   previousRunnerResultSchema,
   previousSuiteDiagnosticSchema,
   'previous',
+  previousSuiteResultSchema,
 );
 const legacyEvalResultSchema = resultSchemaFor(LEGACY_SCHEMA_VERSION, legacyRunnerResultSchema);
 

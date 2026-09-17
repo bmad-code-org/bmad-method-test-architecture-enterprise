@@ -314,8 +314,9 @@ function parseArgs(argv) {
         break;
       }
       case '--runs': {
-        runs = Number.parseInt(argv[index + 1] ?? '', 10);
-        if (!Number.isInteger(runs) || runs < 1) fatal(2, '--runs requires a positive integer');
+        const value = argv[index + 1] ?? '';
+        if (!/^[1-9]\d*$/.test(value)) fatal(2, '--runs requires a positive integer');
+        runs = Number(value);
         index += 1;
         break;
       }
@@ -901,6 +902,26 @@ function tailOf(text, lines = 6) {
     .join(' | ');
 }
 
+function sandboxedCommandFailure(result, label) {
+  const timedOut = result.error?.code === 'ETIMEDOUT';
+  if (result.error) {
+    return {
+      failureClass: timedOut ? 'environment-timeout' : 'environment-transport',
+      reason: timedOut ? `${label} timed out: ${result.error.message}` : `${label} failed to start: ${result.error.message}`,
+    };
+  }
+  if (result.signal || result.status === null) {
+    return {
+      failureClass: 'environment-harness',
+      reason: `${label} was killed (${result.signal ?? 'without a status'})`,
+    };
+  }
+  return {
+    failureClass: 'quality',
+    reason: `${label} exited ${result.status}: ${tailOf(result.stderr || result.stdout)}`,
+  };
+}
+
 /**
  * One complete attempt: stage, start the stub and proxy, install, smoke
  * test, teardown in `finally` on both the passing and the throwing path.
@@ -949,12 +970,7 @@ async function runOnce({ browsersDir }) {
       timeoutMs: INSTALL_TIMEOUT_MS,
     });
     if (!install.ok) {
-      const reason = install.error
-        ? `npm install failed to start: ${install.error.message}`
-        : install.signal || install.status === null
-          ? `npm install was killed (${install.signal ?? 'timeout'})`
-          : `npm install exited ${install.status}: ${tailOf(install.stderr || install.stdout)}`;
-      return { ok: false, failureClass: 'quality', reason, phase: 'npm-install' };
+      return { ok: false, ...sandboxedCommandFailure(install, 'npm install'), phase: 'npm-install' };
     }
 
     let playwrightCliPath;
@@ -1018,12 +1034,7 @@ async function runOnce({ browsersDir }) {
 
     const smoke = runSmokeAgainst({ baseUrl: stub.url, token: stub.token });
     if (!smoke.ok) {
-      const reason = smoke.error
-        ? `the smoke test failed to start: ${smoke.error.message}`
-        : smoke.signal || smoke.status === null
-          ? `the smoke test was killed (${smoke.signal ?? 'timeout'})`
-          : `the smoke test exited ${smoke.status}: ${tailOf(smoke.stdout || smoke.stderr)}`;
-      return { ok: false, failureClass: 'quality', reason, phase: 'smoke-test' };
+      return { ok: false, ...sandboxedCommandFailure(smoke, 'the smoke test'), phase: 'smoke-test' };
     }
 
     // DEFECT DETECTION (module header): the clean case just passed, so this
@@ -1313,6 +1324,7 @@ if (require.main === module) {
 
 module.exports = {
   runnerRecord,
+  sandboxedCommandFailure,
   parseArgs,
   checkFixturePresence,
   verifiedBackend,

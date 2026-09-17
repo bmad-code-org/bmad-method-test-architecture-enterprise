@@ -125,6 +125,7 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
 const SUITE_ID = 'test-review';
+const BUNDLE_CASE_ID = 'test-review:bundle';
 
 /**
  * Thresholds. Deliberately conservative: this harness exists to detect regression
@@ -427,7 +428,7 @@ function reviewFilePaths() {
  * @returns {string[]}
  */
 function caseIds() {
-  return reviewFilePaths();
+  return [...reviewFilePaths(), BUNDLE_CASE_ID];
 }
 
 /**
@@ -690,7 +691,7 @@ function scoreVerdict(verdict, groundTruth) {
   const criticalPlanted = planted.filter((p) => p.row.startsWith('C'));
   const criticalHits = hits.filter((p) => p.row.startsWith('C'));
 
-  const caseScores = (groundTruth.files ?? []).map((file, fileIndex) => {
+  const caseScores = (groundTruth.files ?? []).map((file) => {
     const caseId = path.relative(PROJECT_ROOT, path.join(FIXTURE_ROOT, file.path));
     const expected = planted.filter((item) => item.path === file.path);
     const found = hits.filter((item) => item.path === file.path);
@@ -699,8 +700,6 @@ function scoreVerdict(verdict, groundTruth) {
     const fileUnattributed = unattributed.filter((finding) => namesFile(finding.file, file.path));
     return {
       caseId,
-      recommendation: verdict.recommendation ?? 'n/a',
-      score: Number(verdict.qualityScore ?? Number.NaN),
       planted: expected.map((item) => `${item.row}:${item.path}:${item.line}`).sort(),
       hits: found.map((item) => `${item.row}:${item.path}:${item.line}`).sort(),
       misses: expected
@@ -712,14 +711,32 @@ function scoreVerdict(verdict, groundTruth) {
       reportedFindings: fileFindings
         .map((finding) => `${finding.row ?? finding.criterion_id ?? ''}:${finding.file}:${finding.line ?? ''}`)
         .sort(),
-      reportedCount: fileFindings.length + (fileIndex === 0 ? outOfScope.length : 0),
-      falsePositives: fileFalsePositives.length + (fileIndex === 0 ? outOfScope.length : 0),
-      outOfScope: fileIndex === 0 ? outOfScope.length : 0,
-      outOfScopeFindings: fileIndex === 0 ? outOfScope.map(canonicalFindingIdentity).sort() : [],
+      reportedCount: fileFindings.length,
+      falsePositives: fileFalsePositives.length,
+      outOfScope: 0,
+      outOfScopeFindings: [],
       unattributed: fileUnattributed.length,
-      unlocated: fileIndex === 0 ? unlocated : 0,
-      unlocatedFindings: fileIndex === 0 ? unlocatedFindings.map(canonicalFindingIdentity).sort() : [],
+      unlocated: 0,
+      unlocatedFindings: [],
     };
+  });
+  caseScores.push({
+    caseId: BUNDLE_CASE_ID,
+    recommendation: verdict.recommendation ?? 'n/a',
+    score: Number(verdict.qualityScore ?? Number.NaN),
+    planted: [],
+    hits: [],
+    misses: [],
+    criticalPlanted: 0,
+    criticalHits: 0,
+    reportedFindings: [],
+    reportedCount: outOfScope.length,
+    falsePositives: outOfScope.length,
+    outOfScope: outOfScope.length,
+    outOfScopeFindings: outOfScope.map(canonicalFindingIdentity).sort(),
+    unattributed: 0,
+    unlocated,
+    unlocatedFindings: unlocatedFindings.map(canonicalFindingIdentity).sort(),
   });
 
   return {
@@ -767,15 +784,19 @@ function reviewDiagnosticProjection(caseScore) {
 }
 
 function reviewSignature(caseScore) {
-  return JSON.stringify({
+  const fileEvidence = {
     caseId: caseScore.caseId,
     plantedHits: caseScore.hits,
     plantedMisses: caseScore.misses,
     reportedFindings: caseScore.reportedFindings,
     falsePositives: caseScore.falsePositives,
+    unattributed: caseScore.unattributed,
+  };
+  if (caseScore.caseId !== BUNDLE_CASE_ID) return JSON.stringify(fileEvidence);
+  return JSON.stringify({
+    ...fileEvidence,
     outOfScope: caseScore.outOfScope,
     outOfScopeFindings: [...(caseScore.outOfScopeFindings ?? [])].sort(),
-    unattributed: caseScore.unattributed,
     unlocated: caseScore.unlocated,
     unlocatedFindings: [...(caseScore.unlocatedFindings ?? [])].sort(),
     recommendation: caseScore.recommendation,
@@ -1108,6 +1129,7 @@ async function main() {
       for (const miss of missed) console.log(`    ${miss.row} ${miss.path}:${miss.line} — ${miss.what}`);
     }
 
+    const complete = results.length === runs;
     const measurements = {
       recall: measured(recall),
       criticalRecall: measured(criticalRecall),
@@ -1115,8 +1137,8 @@ async function main() {
       unattributedMean: measured(unattributedMean),
       outOfScopeMean: measured(outOfScopeMean),
       unlocatedMean: measured(unlocatedMean),
-      scoreStdev: measured(scoreSpread),
-      distinctVerdicts: verdicts.size,
+      scoreStdev: complete ? measured(scoreSpread) : null,
+      distinctVerdicts: complete ? verdicts.size : null,
       meanScore: measured(mean(results.map((r) => r.score))),
     };
 
@@ -1209,8 +1231,10 @@ module.exports = {
   missingCredential,
   parseArgs,
   reviewFilePaths,
+  promptDigestFromCli,
   caseIds,
   RUNNER_CAPABILITIES,
   THRESHOLDS,
   SUITE_ID,
+  BUNDLE_CASE_ID,
 };

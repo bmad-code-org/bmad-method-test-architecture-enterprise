@@ -40,7 +40,16 @@ const { readJson } = require('./lib/file-system-port');
 const { contractVersionsFor } = require('./lib/contract-versions');
 const { teaSkills } = require('./lib/tea-skills');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
-const { digestFiles, repositoryState, redactArgs, suiteResultRecord, runSummaryRecord, writeRunSummary } = require('./lib/eval-record');
+const {
+  digest,
+  digestFiles,
+  digestPrompts,
+  repositoryState,
+  redactArgs,
+  suiteResultRecord,
+  runSummaryRecord,
+  writeRunSummary,
+} = require('./lib/eval-record');
 const { resolveModel } = require('../cli/lib/agent-adapters');
 const { exitCodeForFailureClass, worstFailureClass, validateEvalResult, SCHEMA_VERSION } = require('./schema/eval-result');
 
@@ -81,9 +90,8 @@ function takeValue(argv, index, flag) {
 }
 
 function positiveInteger(value, flag) {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isInteger(parsed) || parsed < 1) throw usageError(`${flag} requires a positive integer`);
-  return parsed;
+  if (!/^[1-9]\d*$/.test(value)) throw usageError(`${flag} requires a positive integer`);
+  return Number(value);
 }
 
 function parseArgs(argv) {
@@ -351,6 +359,62 @@ async function caseIdsForInvocation(invocation, workflows = []) {
   }
 }
 
+async function promptIdentityForInvocation(invocation, workflows = []) {
+  const nullIdentity = async (harness) => ({
+    promptDigest: null,
+    cases: (await harness.caseIds()).map((id) => ({ id, promptDigest: null })),
+  });
+  const fromIndex = (index) => ({
+    promptDigest: digestPrompts(index),
+    cases: index.map((item) => ({ id: item.id, promptDigest: digest(item.prompt) })),
+  });
+  switch (path.basename(invocation.script ?? '')) {
+    case 'eval-atdd.js': {
+      const harness = require('./eval-atdd');
+      return fromIndex(harness.caseIndex(harness.loadGroundTruth()));
+    }
+    case 'eval-automate.js':
+      return await nullIdentity(require('./eval-automate'));
+    case 'eval-bmad-tea-routing.js': {
+      const harness = require('./eval-bmad-tea-routing');
+      return fromIndex(await harness.caseIndex((await harness.loadCorpus()).cases));
+    }
+    case 'eval-ci.js': {
+      const harness = require('./eval-ci');
+      return fromIndex(harness.caseIndex(harness.selectSets(await harness.loadGroundTruth(), [])));
+    }
+    case 'eval-fragment-selection.js': {
+      const harness = require('./eval-fragment-selection');
+      return fromIndex(await harness.caseIndex(await harness.loadSuites(workflows)));
+    }
+    case 'eval-framework-scaffold.js':
+      return await nullIdentity(require('./eval-framework-scaffold'));
+    case 'eval-nfr.js': {
+      const harness = require('./eval-nfr');
+      return fromIndex(harness.caseIndex(harness.selectSets(await harness.loadGroundTruth(), [])));
+    }
+    case 'eval-teach-me-testing.js':
+      return await nullIdentity(require('./eval-teach-me-testing'));
+    case 'eval-test-design.js': {
+      const harness = require('./eval-test-design');
+      return fromIndex(harness.caseIndex(harness.selectSets(await harness.loadGroundTruth(), [])));
+    }
+    case 'eval-test-review.js': {
+      const harness = require('./eval-test-review');
+      const promptDigest = await harness.promptDigestFromCli();
+      return { promptDigest, cases: harness.caseIds().map((id) => ({ id, promptDigest })) };
+    }
+    case 'eval-trace.js': {
+      const harness = require('./eval-trace');
+      return fromIndex(harness.caseIndex(harness.selectSets(await harness.loadGroundTruth(), [])));
+    }
+    case 'eval-transcript.js':
+      return await nullIdentity(require('./eval-transcript'));
+    default:
+      return null;
+  }
+}
+
 async function childBindingProblems(record, invocation, options) {
   const suite = invocation.suite;
   const expectedSkills = suite.skills ?? (typeof suite.skill === 'string' ? [suite.skill] : []);
@@ -374,11 +438,24 @@ async function childBindingProblems(record, invocation, options) {
   ];
   const problems = expected.filter(([, actual, wanted]) => !sameJson(actual, wanted)).map(([name]) => `${name} does not match invocation`);
 
+  // A valid zero-runner record describes a failure before measurement began.
+  // Its original suite diagnostics are the evidence, so runner and prompt
+  // bindings that require the unavailable measurement inputs do not replace it.
+  if (record.runners.length === 0 && record.suiteDiagnostics.length > 0) return problems;
+
   const expectedCaseIds = await caseIdsForInvocation(
     invocation,
     suite.harnessOptions?.acceptsWorkflowFilter ? (options.workflows ?? []) : [],
   );
   if (expectedCaseIds && !sameJson(record.suite.caseIds, expectedCaseIds)) problems.push('case ids do not match invocation');
+  const promptIdentity = await promptIdentityForInvocation(
+    invocation,
+    suite.harnessOptions?.acceptsWorkflowFilter ? (options.workflows ?? []) : [],
+  );
+  if (promptIdentity) {
+    if (record.suite.promptDigest !== promptIdentity.promptDigest) problems.push('suite prompt digest does not match invocation');
+    if (!sameJson(record.suite.cases, promptIdentity.cases)) problems.push('case prompt digests do not match invocation');
+  }
 
   const fixedRunners = new Set(['automate', 'framework', 'transcript']);
   if (!options.preflightOnly && fixedRunners.has(suite.id)) {
@@ -647,5 +724,6 @@ module.exports = {
   readChildRecord,
   childBindingProblems,
   caseIdsForInvocation,
+  promptIdentityForInvocation,
   USAGE,
 };

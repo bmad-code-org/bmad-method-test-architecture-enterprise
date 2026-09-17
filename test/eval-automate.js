@@ -225,8 +225,9 @@ function parseArgs(argv) {
         break;
       }
       case '--runs': {
-        runs = Number.parseInt(argv[index + 1] ?? '', 10);
-        if (!Number.isInteger(runs) || runs < 1) fatal(2, '--runs requires a positive integer');
+        const value = argv[index + 1] ?? '';
+        if (!/^[1-9]\d*$/.test(value)) fatal(2, '--runs requires a positive integer');
+        runs = Number(value);
         index += 1;
         break;
       }
@@ -1002,6 +1003,22 @@ function automateRunnerRecord({ scored, diagnostics, failures, durationMs }) {
   };
 }
 
+function automateMeasurements(scored) {
+  const unmeasurable = scored.cases.some((scoredCase) => scoredCase.loadFailure);
+  return Object.fromEntries(
+    Object.entries({
+      loadErrors: scored.loadErrors,
+      undetectedRegressionCases: scored.undetectedRegressionCases,
+      falseRegressionDetections: scored.falseRegressionDetections,
+      unattributedFailures: scored.unattributedFailures,
+      unexpectedOutcomes: scored.unexpectedOutcomes,
+      matchesDeclaredTests: scored.classificationCounts['matches-declared'],
+      vacuousTests: scored.classificationCounts.vacuous,
+      duplicateTests: scored.classificationCounts.duplicate,
+    }).map(([name, value]) => [name, unmeasurable ? null : measured(value)]),
+  );
+}
+
 async function main() {
   const startedAt = await nowMs();
   const options = parseArgs(process.argv.slice(2));
@@ -1073,31 +1090,24 @@ async function main() {
     `  unexpected outcomes          ${String(scored.unexpectedOutcomes).padStart(4)}   (max ${THRESHOLDS.maxUnexpectedOutcomes})`,
   );
 
+  const hasLoadFailure = scored.cases.some((scoredCase) => scoredCase.loadFailure);
   const failures = [];
-  if (scored.loadErrors > THRESHOLDS.maxLoadErrors) failures.push(`${scored.loadErrors} load error(s)`);
-  if (scored.undetectedRegressionCases > THRESHOLDS.maxUndetectedRegressionCases) {
+  if (!hasLoadFailure && scored.loadErrors > THRESHOLDS.maxLoadErrors) failures.push(`${scored.loadErrors} load error(s)`);
+  if (!hasLoadFailure && scored.undetectedRegressionCases > THRESHOLDS.maxUndetectedRegressionCases) {
     failures.push(`${scored.undetectedRegressionCases} undetected regression case(s)`);
   }
-  if (scored.falseRegressionDetections > THRESHOLDS.maxFalseRegressionDetections) {
+  if (!hasLoadFailure && scored.falseRegressionDetections > THRESHOLDS.maxFalseRegressionDetections) {
     failures.push(`${scored.falseRegressionDetections} false regression detection(s)`);
   }
-  if (scored.unattributedFailures > THRESHOLDS.maxUnattributedFailures)
+  if (!hasLoadFailure && scored.unattributedFailures > THRESHOLDS.maxUnattributedFailures)
     failures.push(`${scored.unattributedFailures} unattributed failure(s)`);
-  if (scored.unexpectedOutcomes > THRESHOLDS.maxUnexpectedOutcomes) failures.push(`${scored.unexpectedOutcomes} unexpected outcome(s)`);
+  if (!hasLoadFailure && scored.unexpectedOutcomes > THRESHOLDS.maxUnexpectedOutcomes)
+    failures.push(`${scored.unexpectedOutcomes} unexpected outcome(s)`);
 
   if (failures.length > 0) console.log(`\n  ${colors.red}below threshold: ${failures.join(', ')}${colors.reset}\n`);
   else console.log(`\n  ${colors.green}all thresholds met${colors.reset}\n`);
 
-  const measurements = {
-    loadErrors: measured(scored.loadErrors),
-    undetectedRegressionCases: measured(scored.undetectedRegressionCases),
-    falseRegressionDetections: measured(scored.falseRegressionDetections),
-    unattributedFailures: measured(scored.unattributedFailures),
-    unexpectedOutcomes: measured(scored.unexpectedOutcomes),
-    matchesDeclaredTests: measured(scored.classificationCounts['matches-declared']),
-    vacuousTests: measured(scored.classificationCounts.vacuous),
-    duplicateTests: measured(scored.classificationCounts.duplicate),
-  };
+  const measurements = automateMeasurements(scored);
   const rawDiagnostics = scored.cases.map((scoredCase) => {
     const signature = JSON.stringify({
       verdict: scoredCase.verdict ?? null,
@@ -1105,6 +1115,7 @@ async function main() {
       loadFailure: scoredCase.loadFailure ?? null,
       classifications: (scoredCase.tests ?? []).map((test) => test.classification),
     });
+    const mappedMeasurements = scoredCase.loadFailure ? Object.keys(measurements).filter((name) => measurements[name] === null) : [];
     return diagnosticRecord({
       caseId: scoredCase.id,
       repetition: 1,
@@ -1113,6 +1124,7 @@ async function main() {
       failureClass: scoredCase.loadFailure?.failureClass ?? 'none',
       rootCause: scoredCase.loadFailure ? 'harness-defect' : null,
       reason: scoredCase.loadFailure?.reason ?? null,
+      mappedMeasurements,
       evidence: scoredCase.loadError
         ? [{ kind: 'summary', value: `${scoredCase.loadFailure?.failureClass ?? 'environment-harness'}: ${scoredCase.loadError}` }]
         : [{ kind: 'output-signature', value: signature }],
@@ -1142,6 +1154,7 @@ if (require.main === module) {
 
 module.exports = {
   automateRunnerRecord,
+  automateMeasurements,
   parseArgs,
   loadGroundTruth,
   validateCorpus,

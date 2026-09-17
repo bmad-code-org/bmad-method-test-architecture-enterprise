@@ -46,6 +46,7 @@ const evalAll = require('./eval-all');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const LEGACY_RESULT = path.join(__dirname, 'results', 'eval-all', 'history', '2026-09-17T12-23-09-218Z.json');
+const PREVIOUS_SUITE_RESULT = path.join(__dirname, 'fixtures', 'eval-result', 'v1.4.0-suite-result.json');
 const DIGEST = `sha256:${'0'.repeat(64)}`;
 const failures = [];
 let checks = 0;
@@ -76,7 +77,12 @@ function runner(diagnostics, overrides = {}) {
   };
 }
 
-function suiteRecord(runners, cases = [{ id: 'case-a', promptDigest: DIGEST }], requestedRepetitions = null) {
+function suiteRecord(
+  runners,
+  cases = [{ id: 'case-a', promptDigest: DIGEST }],
+  requestedRepetitions = null,
+  thresholds = { accuracy: 1 },
+) {
   const declaredRepetitions =
     requestedRepetitions ??
     (runners.length > 0 && cases.length > 0 ? Math.max(...runners.map((entry) => entry.repetitions.expected / cases.length)) : 2);
@@ -90,7 +96,7 @@ function suiteRecord(runners, cases = [{ id: 'case-a', promptDigest: DIGEST }], 
       contracts: [],
       ciTier: 'deterministic',
       runnerCapabilities: ['read-only'],
-      thresholds: { accuracy: 1, maxUnstableCases: 0 },
+      thresholds,
       repetitions: declaredRepetitions,
     },
     repository: { commit: 'abc123', dirty: false },
@@ -609,8 +615,14 @@ async function main() {
     'test-review signatures distinguish equal-count findings with different identities and locations',
   );
   check(
-    review.reviewSignature(reviewSignatureFixture) !== review.reviewSignature({ ...reviewSignatureFixture, score: 80 }),
-    'test-review signatures expose score-only variance',
+    review.reviewSignature(reviewSignatureFixture) ===
+      review.reviewSignature({ ...reviewSignatureFixture, recommendation: 'approve', score: 80 }),
+    'test-review file signatures contain only file-attributable evidence',
+  );
+  const bundleSignatureFixture = { ...reviewSignatureFixture, caseId: review.BUNDLE_CASE_ID };
+  check(
+    review.reviewSignature(bundleSignatureFixture) !== review.reviewSignature({ ...bundleSignatureFixture, score: 80 }),
+    'test-review bundle signatures expose score-only variance',
   );
   const reviewGroundTruth = JSON.parse(
     fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'fixtures', 'test-review-eval', 'ground-truth.json'), 'utf8'),
@@ -620,14 +632,22 @@ async function main() {
   );
   const scoredOutOfScope = review.scoreVerdict(outOfScopeVerdict, reviewGroundTruth);
   const movedOutOfScopeVerdict = structuredClone(outOfScopeVerdict);
+  const outOfScopeBundle = scoredOutOfScope.caseScores.find((entry) => entry.caseId === review.BUNDLE_CASE_ID);
   const movedOutOfScopeFinding = movedOutOfScopeVerdict.findings.find((finding) =>
-    scoredOutOfScope.caseScores[0].outOfScopeFindings.includes(review.canonicalFindingIdentity(finding)),
+    outOfScopeBundle.outOfScopeFindings.includes(review.canonicalFindingIdentity(finding)),
   );
   movedOutOfScopeFinding.line = Number(movedOutOfScopeFinding.line ?? 0) + 7;
   const movedOutOfScopeScore = review.scoreVerdict(movedOutOfScopeVerdict, reviewGroundTruth);
+  const movedOutOfScopeBundle = movedOutOfScopeScore.caseScores.find((entry) => entry.caseId === review.BUNDLE_CASE_ID);
   check(
-    review.reviewSignature(scoredOutOfScope.caseScores[0]) !== review.reviewSignature(movedOutOfScopeScore.caseScores[0]),
+    review.reviewSignature(outOfScopeBundle) !== review.reviewSignature(movedOutOfScopeBundle),
     'test-review production signatures distinguish out-of-scope finding identities and locations',
+  );
+  check(
+    scoredOutOfScope.caseScores
+      .filter((entry) => entry.caseId !== review.BUNDLE_CASE_ID)
+      .every((entry) => entry.outOfScope === 0 && entry.unlocated === 0),
+    'test-review keeps global findings out of file-attributable cases',
   );
   const unlocatedVerdict = JSON.parse(
     fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'replay', 'test-review', 'row-without-location', 'verdict.json'), 'utf8'),
@@ -639,13 +659,22 @@ async function main() {
   );
   changedUnlocatedFinding.title = `${changedUnlocatedFinding.title} moved`;
   const changedUnlocatedScore = review.scoreVerdict(changedUnlocatedVerdict, reviewGroundTruth);
+  const unlocatedBundle = scoredUnlocated.caseScores.find((entry) => entry.caseId === review.BUNDLE_CASE_ID);
+  const changedUnlocatedBundle = changedUnlocatedScore.caseScores.find((entry) => entry.caseId === review.BUNDLE_CASE_ID);
   check(
-    review.reviewSignature(scoredUnlocated.caseScores[0]) !== review.reviewSignature(changedUnlocatedScore.caseScores[0]),
+    review.reviewSignature(unlocatedBundle) !== review.reviewSignature(changedUnlocatedBundle),
     'test-review production signatures distinguish unlocated finding identities',
   );
 
   const reviewVarianceDiagnostics = [90, 80].map((score, index) => {
-    const caseScore = { ...reviewSignatureFixture, score, criticalPlanted: 1, criticalHits: 1, reportedCount: 1 };
+    const caseScore = {
+      ...reviewSignatureFixture,
+      caseId: review.BUNDLE_CASE_ID,
+      score,
+      criticalPlanted: 0,
+      criticalHits: 0,
+      reportedCount: 1,
+    };
     const signature = review.reviewSignature(caseScore);
     return diagnosticRecord({
       caseId: caseScore.caseId,
@@ -667,8 +696,9 @@ async function main() {
 
   const outOfScopeScore = {
     ...reviewSignatureFixture,
-    criticalPlanted: 1,
-    criticalHits: 1,
+    caseId: review.BUNDLE_CASE_ID,
+    criticalPlanted: 0,
+    criticalHits: 0,
     reportedFindings: [],
     reportedCount: 1,
     falsePositives: 1,
@@ -1038,6 +1068,15 @@ async function main() {
   for (const [failure, expectedClass] of processFailures) {
     check(failure.failureClass === expectedClass, `automate preserves ${expectedClass} at the Playwright process boundary`);
   }
+  const frameworkProcessFailures = [
+    [framework.sandboxedCommandFailure({ error: { code: 'ETIMEDOUT', message: 'deadline' } }, 'npm install'), 'environment-timeout'],
+    [framework.sandboxedCommandFailure({ error: { code: 'ENOENT', message: 'missing' } }, 'npm install'), 'environment-transport'],
+    [framework.sandboxedCommandFailure({ signal: 'SIGSEGV', status: null }, 'smoke test'), 'environment-harness'],
+    [framework.sandboxedCommandFailure({ signal: null, status: 1, stderr: 'assertion failed' }, 'smoke test'), 'quality'],
+  ];
+  for (const [failure, expectedClass] of frameworkProcessFailures) {
+    check(failure.failureClass === expectedClass, `framework preserves ${expectedClass} at the sandboxed process boundary`);
+  }
   for (const expectedClass of ['environment-parser', 'environment-harness']) {
     const scored = automate.scoreCase(
       { id: expectedClass, detectsRegression: true, tests: [] },
@@ -1046,6 +1085,24 @@ async function main() {
     );
     check(scored.loadFailure.failureClass === expectedClass, `automate preserves ${expectedClass} through case scoring`);
   }
+  const automateLoadFailure = automate.scoreRun(
+    { cases: [{ id: 'load-failure', detectsRegression: true, tests: [] }] },
+    new Map([
+      [
+        'load-failure',
+        {
+          loadError: 'Playwright did not load',
+          loadFailure: { failureClass: 'environment-harness', reason: 'Playwright did not load' },
+          tests: [],
+        },
+      ],
+    ]),
+    new Map([['load-failure', { loadError: null, loadFailure: null, tests: [] }]]),
+  );
+  check(
+    Object.values(automate.automateMeasurements(automateLoadFailure)).every((value) => value === null),
+    'automate records no low quality aggregate when a case is unmeasurable',
+  );
 
   const escapedSecrets = [String.raw`password="alpha\"omega-secret"`, String.raw`token='alpha\'omega-secret'`];
   for (const secret of escapedSecrets) {
