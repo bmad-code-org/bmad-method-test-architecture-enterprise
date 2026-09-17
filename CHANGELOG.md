@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Live evaluation JSON now records a bounded diagnostic for every attempted case repetition, including the exact stability signature, direct metric contributions, completion state, failure class, reason, and output or artifact evidence. Schema 1.4.0 requires diagnostics from current writers while retaining a read-only validation path for stored 1.3.0 results.
+
 ## [1.27.1] - 2026-09-17
 
 ### Added

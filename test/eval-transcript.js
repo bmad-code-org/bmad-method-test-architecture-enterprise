@@ -87,7 +87,16 @@ const { failureClassForExit } = require('../cli/transcript-runner');
 const { runTranscript } = require('./lib/transcript-harness');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const { contractVersionsFor } = require('./lib/contract-versions');
-const { digestFiles, repositoryState, probeVersion, measured, suiteResultRecord, writeSuiteResult } = require('./lib/eval-record');
+const {
+  digestFiles,
+  repositoryState,
+  probeVersion,
+  measured,
+  diagnosticRecord,
+  classifyDiagnosticQuality,
+  suiteResultRecord,
+  writeSuiteResult,
+} = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
@@ -507,7 +516,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
 }
 
 /** The one runner record this suite ever produces: the hardcoded stub, never the requested agent. */
-function runnerRecord(version, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(version, { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] }) {
   return {
     agent: 'custom',
     executable: STUB_AGENT,
@@ -525,6 +534,7 @@ function runnerRecord(version, { expected, completed, measurements, durationMs, 
     usage: null,
     failureClass,
     failures,
+    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
   };
 }
 
@@ -598,6 +608,7 @@ async function main() {
   let consistent = 0;
   const failures = [];
   const lostClasses = [];
+  const diagnostics = [];
 
   for (let runIndex = 0; runIndex < runs; runIndex += 1) {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-transcript-eval-'));
@@ -621,6 +632,14 @@ async function main() {
           `  ${colors.red}run ${runIndex + 1}: turn ${(lost?.turnIndex ?? 0) + 1} did not complete (${lost?.reason ?? `exit ${lost?.exitCode}`})${colors.reset}`,
         );
         lostClasses.push(failureClass);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: CASE_ID,
+            repetition: runIndex + 1,
+            failureClass,
+            reason: lost?.reason ?? `turn ${(lost?.turnIndex ?? 0) + 1} did not complete`,
+          }),
+        );
         continue;
       }
 
@@ -633,6 +652,17 @@ async function main() {
         failures.push(`run ${runIndex + 1}: ${cross.disagreement}`);
         console.log(`  ${colors.red}✗${colors.reset} run ${runIndex + 1}: ${cross.disagreement}`);
       }
+      const signature = JSON.stringify({ crossTurnConsistency: cross.holds, disagreement: cross.disagreement ?? null });
+      diagnostics.push(
+        diagnosticRecord({
+          caseId: CASE_ID,
+          repetition: runIndex + 1,
+          signature,
+          metricContributions: { crossTurnConsistency: cross.holds ? 1 : 0 },
+          reason: cross.holds ? null : cross.disagreement,
+          evidence: [{ kind: 'output-signature', value: signature }],
+        }),
+      );
     } finally {
       fs.rmSync(workspace, { recursive: true, force: true });
     }
@@ -658,6 +688,7 @@ async function main() {
         durationMs: await elapsedMsSince(startedAt),
         failureClass,
         failures: [...failures, `${runs - completed} run(s) short of ${runs} repetitions`],
+        diagnostics,
       }),
     );
   } else {
@@ -673,6 +704,7 @@ async function main() {
         durationMs: await elapsedMsSince(startedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
       }),
     );
   }

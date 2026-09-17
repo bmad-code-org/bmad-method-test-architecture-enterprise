@@ -108,6 +108,9 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -795,7 +798,12 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
   return {
     agent,
@@ -814,6 +822,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
     failureClass,
     failures,
+    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
   };
 }
 
@@ -856,11 +865,15 @@ async function main() {
     const agentStartedAt = await nowMs();
     const results = [];
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (let runIndex = 0; runIndex < runs; runIndex += 1) {
       const outcome = await runReview(agent, runIndex, options);
       if (!outcome.ok) {
         lostRunClasses.push(outcome.failureClass);
+        diagnostics.push(
+          diagnosticRecord({ caseId: SUITE_ID, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+        );
         continue;
       }
       const scored = scoreVerdict(outcome.verdict, groundTruth);
@@ -869,9 +882,36 @@ async function main() {
           `  ${colors.red}run ${runIndex + 1}: the verdict carries no findings array, so nothing could be scored${colors.reset}`,
         );
         lostRunClasses.push('environment-parser');
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: SUITE_ID,
+            repetition: runIndex + 1,
+            failureClass: 'environment-parser',
+            reason: 'the verdict carries no findings array',
+          }),
+        );
         continue;
       }
       results.push(scored);
+      const signature = JSON.stringify([
+        scored.score,
+        scored.recommendation,
+        scored.hits,
+        scored.criticalHits,
+        scored.falsePositives,
+        scored.outOfScope,
+        scored.unattributed,
+        scored.unlocated,
+      ]);
+      diagnostics.push(
+        diagnosticRecord({
+          caseId: SUITE_ID,
+          repetition: runIndex + 1,
+          signature,
+          metricContributions: numericContributions(scored),
+          evidence: [{ kind: 'output-signature', value: signature }],
+        }),
+      );
       console.log(
         `  run ${runIndex + 1}: score ${scored.score}, ${scored.recommendation}, ` +
           `recall ${scored.hits}/${scored.planted}, false positives ${scored.falsePositives} (${scored.outOfScope} out of scope), ` +
@@ -889,6 +929,7 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass: worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']),
           failures: ['no run produced a scorable result'],
+          diagnostics,
         }),
       );
       continue;
@@ -970,6 +1011,7 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [`${results.length} of ${runs} declared repetitions completed`],
+          diagnostics,
         }),
       );
       continue;
@@ -1006,6 +1048,7 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
       }),
     );
   }

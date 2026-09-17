@@ -293,6 +293,9 @@ jobs:
       - name: Validate the eval suite manifest and result schema
         run: npm run test:eval-schemas
 
+      - name: Prove case-level and repetition-level eval diagnostics
+        run: npm run test:eval-diagnostics
+
       - name: Replay stored eval outputs against the scorers
         run: npm run test:eval-replay
 

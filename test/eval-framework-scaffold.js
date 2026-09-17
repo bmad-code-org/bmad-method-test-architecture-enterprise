@@ -155,7 +155,16 @@ const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
-const { digestFiles, repositoryState, probeVersion, redactArgs, suiteResultRecord, writeSuiteResult } = require('./lib/eval-record');
+const {
+  digestFiles,
+  repositoryState,
+  probeVersion,
+  redactArgs,
+  diagnosticRecord,
+  numericContributions,
+  suiteResultRecord,
+  writeSuiteResult,
+} = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
@@ -1097,7 +1106,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
   process.exit(exitCode);
 }
 
-function runnerRecord(options, { durationMs, failureClass, failures, measurements, completed, tools }) {
+function runnerRecord(options, { durationMs, failureClass, failures, measurements, completed, tools, diagnostics }) {
   return {
     agent: 'harness',
     executable: process.execPath,
@@ -1116,6 +1125,7 @@ function runnerRecord(options, { durationMs, failureClass, failures, measurement
     usage: null,
     failureClass,
     failures,
+    diagnostics,
   };
 }
 
@@ -1206,6 +1216,16 @@ async function main() {
       installAndSmokePassRate: outcome.phase === 'defect-detection' ? 1 : outcome.failureClass === 'quality' ? 0 : null,
       seededDefectDetectionRate: outcome.phase === 'defect-detection' ? outcome.seededDefectDetectionRate : null,
     };
+    const signature = JSON.stringify({ phase: outcome.phase, measurements });
+    const diagnostic = diagnosticRecord({
+      caseId: CASE_ID,
+      repetition: 1,
+      signature: outcome.failureClass === 'quality' ? signature : null,
+      metricContributions: numericContributions(measurements),
+      failureClass: outcome.failureClass,
+      reason: `${outcome.phase}: ${outcome.reason}`,
+      evidence: outcome.failureClass === 'quality' ? [{ kind: 'output-signature', value: signature }] : [],
+    });
     await finish({
       options,
       startedAt,
@@ -1218,6 +1238,7 @@ async function main() {
           measurements,
           completed: outcome.failureClass === 'quality' ? 1 : 0,
           tools,
+          diagnostics: [diagnostic],
         }),
       ],
     });
@@ -1240,6 +1261,15 @@ async function main() {
         measurements: { installAndSmokePassRate: 1, seededDefectDetectionRate: outcome.seededDefectDetectionRate },
         completed: 1,
         tools,
+        diagnostics: [
+          diagnosticRecord({
+            caseId: CASE_ID,
+            repetition: 1,
+            signature: JSON.stringify([1, outcome.seededDefectDetectionRate]),
+            metricContributions: { installAndSmokePassRate: 1, seededDefectDetectionRate: outcome.seededDefectDetectionRate },
+            evidence: [{ kind: 'summary', value: 'clean smoke passed; seeded backend and fixture defects were detected' }],
+          }),
+        ],
       }),
     ],
   });

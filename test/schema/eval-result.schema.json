@@ -6,7 +6,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.3.0"
+          "const": "1.4.0"
         },
         "kind": {
           "type": "string",
@@ -374,6 +374,115 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "diagnostics": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "caseId": {
+                      "$ref": "#/definitions/EvalResult/properties/suite/properties/id"
+                    },
+                    "repetition": {
+                      "type": "integer",
+                      "exclusiveMinimum": 0
+                    },
+                    "completionState": {
+                      "type": "string",
+                      "enum": [
+                        "completed",
+                        "failed"
+                      ]
+                    },
+                    "signature": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 4096
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "metricContributions": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "number"
+                      },
+                      "propertyNames": {
+                        "minLength": 1,
+                        "maxLength": 128
+                      }
+                    },
+                    "failureClass": {
+                      "type": "string",
+                      "enum": [
+                        "none",
+                        "quality",
+                        "environment-incomplete-repetitions",
+                        "environment-parser",
+                        "environment-missing-artifact",
+                        "environment-timeout",
+                        "environment-transport",
+                        "environment-authentication",
+                        "environment-configuration",
+                        "unexpected-error"
+                      ]
+                    },
+                    "reason": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 2048
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "output-signature",
+                              "artifact",
+                              "summary"
+                            ]
+                          },
+                          "value": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2048
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "value"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 32
+                    }
+                  },
+                  "required": [
+                    "caseId",
+                    "repetition",
+                    "completionState",
+                    "signature",
+                    "metricContributions",
+                    "failureClass",
+                    "reason",
+                    "evidence"
+                  ],
+                  "additionalProperties": false
+                }
               }
             },
             "required": [
@@ -387,7 +496,8 @@
               "durationMs",
               "usage",
               "failureClass",
-              "failures"
+              "failures",
+              "diagnostics"
             ],
             "additionalProperties": false
           }
@@ -438,7 +548,7 @@
       "properties": {
         "schemaVersion": {
           "type": "string",
-          "const": "1.3.0"
+          "const": "1.4.0"
         },
         "kind": {
           "type": "string",

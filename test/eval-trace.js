@@ -190,6 +190,9 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -2288,7 +2291,12 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
   return {
     agent,
@@ -2307,6 +2315,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
     failureClass,
     failures,
+    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
   };
 }
 
@@ -2474,6 +2483,7 @@ async function main() {
     // Every environment failure across every case, so the runner's class is the worst
     // of them rather than the last one printed.
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const set of sets) {
       const signatures = new Set();
@@ -2483,11 +2493,28 @@ async function main() {
         if (!outcome.ok) {
           console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
           lostRunClasses.push(outcome.failureClass);
+          diagnostics.push(
+            diagnosticRecord({ caseId: set.id, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+          );
           continue;
         }
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
-        signatures.add(signatureOf(outcome.scored, outcome.mutations));
+        const signature = signatureOf(outcome.scored, outcome.mutations);
+        signatures.add(signature);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: set.id,
+            repetition: runIndex + 1,
+            signature,
+            metricContributions: { ...numericContributions(outcome.scored), mutations: outcome.mutations },
+            evidence: [
+              { kind: 'output-signature', value: signature },
+              { kind: 'artifact', value: 'test-artifacts/e2e-trace-summary.json' },
+              { kind: 'artifact', value: 'test-artifacts/traceability-matrix.md' },
+            ],
+          }),
+        );
       }
 
       completedRuns += caseScores.length;
@@ -2657,6 +2684,7 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
         }),
       );
       continue;
@@ -2676,6 +2704,7 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
       }),
     );
   }

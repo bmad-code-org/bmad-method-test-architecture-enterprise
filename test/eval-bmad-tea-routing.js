@@ -155,6 +155,9 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -942,7 +945,12 @@ async function finish({ options, startedAt, mode, cases, runners, suiteFailureCl
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
   return {
     agent,
@@ -961,6 +969,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
     failureClass,
     failures,
+    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
   };
 }
 
@@ -1063,6 +1072,7 @@ async function main() {
     let unstableCases = 0;
     let incompleteCases = 0;
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const item of corpus.cases) {
       const prompt = await buildPrompt(item);
@@ -1101,6 +1111,9 @@ async function main() {
         if (!result.ok) {
           console.error(`  ${colors.red}${item.id} run ${runIndex + 1}: ${result.reason}${colors.reset}`);
           lostRunClasses.push(result.failureClass);
+          diagnostics.push(
+            diagnosticRecord({ caseId: item.id, repetition: runIndex + 1, failureClass: result.failureClass, reason: result.reason }),
+          );
           unmeasuredRuns += 1;
           continue;
         }
@@ -1110,6 +1123,14 @@ async function main() {
             `  ${colors.red}${item.id} run ${runIndex + 1}: the runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration${colors.reset}`,
           );
           lostRunClasses.push('environment-configuration');
+          diagnostics.push(
+            diagnosticRecord({
+              caseId: item.id,
+              repetition: runIndex + 1,
+              failureClass: 'environment-configuration',
+              reason: `runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration`,
+            }),
+          );
           unmeasuredRuns += 1;
           continue;
         }
@@ -1119,6 +1140,14 @@ async function main() {
           const stderr = observedText(observation.stderr);
           console.error(`  ${colors.red}${item.id} run ${runIndex + 1}: ${stderr.trim() || `exit ${observation.exitCode}`}${colors.reset}`);
           lostRunClasses.push(failureClassForExit(observation.exitCode));
+          diagnostics.push(
+            diagnosticRecord({
+              caseId: item.id,
+              repetition: runIndex + 1,
+              failureClass: failureClassForExit(observation.exitCode),
+              reason: stderr.trim() || `exit ${observation.exitCode}`,
+            }),
+          );
           unmeasuredRuns += 1;
           continue;
         }
@@ -1130,11 +1159,29 @@ async function main() {
         if (score === null) {
           console.error(`  ${colors.red}${item.id} run ${runIndex + 1}: no routing answer in the runner's reply${colors.reset}`);
           lostRunClasses.push('environment-parser');
+          diagnostics.push(
+            diagnosticRecord({
+              caseId: item.id,
+              repetition: runIndex + 1,
+              failureClass: 'environment-parser',
+              reason: 'no routing answer in the runner reply',
+            }),
+          );
           unmeasuredRuns += 1;
           continue;
         }
-        signatures.add(signatureOf(score));
+        const signature = signatureOf(score);
+        signatures.add(signature);
         caseScores.push(score);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: item.id,
+            repetition: runIndex + 1,
+            signature,
+            metricContributions: numericContributions(score),
+            evidence: [{ kind: 'output-signature', value: signature }],
+          }),
+        );
       }
 
       completedRuns += caseScores.length;
@@ -1264,6 +1311,7 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
         }),
       );
       continue;
@@ -1283,6 +1331,7 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
       }),
     );
   }

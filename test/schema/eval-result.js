@@ -35,7 +35,11 @@ const { EVAL_TYPES, CI_TIERS, RUNNER_CAPABILITIES } = require('./suite-manifest'
 // 1.3.0 added `evalQualityVersion` to the run summary, so a stored run names the
 // installed `eval-quality` it was measured against instead of leaving a reader
 // to infer it from the commit alone.
-const SCHEMA_VERSION = '1.3.0';
+// 1.4.0 adds one diagnostic per attempted case repetition. The 1.3.0 schemas
+// remain accepted by the readers below because the committed baseline is
+// historical evidence. New writers always emit 1.4.0.
+const SCHEMA_VERSION = '1.4.0';
+const LEGACY_SCHEMA_VERSION = '1.3.0';
 
 /**
  * Failure classes in ascending severity. `worstFailureClass` picks the highest
@@ -75,6 +79,7 @@ const digestString = z.string().regex(/^sha256:[\da-f]{64}$/, 'digest must be "s
 
 const nonEmptyString = z.string().min(1);
 const nonNegativeInteger = z.number().int().nonnegative();
+const positiveInteger = z.number().int().positive();
 
 const usageSchema = z
   .object({
@@ -122,26 +127,102 @@ const runnerParametersSchema = z
   })
   .strict();
 
-const runnerResultSchema = z
+const diagnosticEvidenceSchema = z
   .object({
-    agent: nonEmptyString,
-    executable: nonEmptyString,
-    // Whatever `<executable> --version` printed. Null when the probe failed.
-    version: z.string().nullable(),
-    model: z.string().nullable(),
-    parameters: runnerParametersSchema,
-    repetitions: z
-      .object({ expected: nonNegativeInteger, completed: nonNegativeInteger })
-      .strict()
-      .refine((value) => value.completed <= value.expected, { message: 'completed repetitions cannot exceed the expected count' }),
-    // Null is an unmeasurable metric, which is a failure rather than a pass.
-    measurements: z.record(z.number().nullable()),
-    durationMs: nonNegativeInteger,
-    usage: usageSchema.nullable(),
-    failureClass: z.enum(FAILURE_CLASSES),
-    failures: z.array(z.string()),
+    kind: z.enum(['output-signature', 'artifact', 'summary']),
+    value: nonEmptyString.max(2048),
   })
   .strict();
+
+const diagnosticMetricMapSchema = z.record(z.string().min(1).max(128), z.number().finite()).superRefine((value, ctx) => {
+  if (Object.keys(value).length > 64) {
+    ctx.addIssue({ code: 'custom', message: 'a diagnostic may carry at most 64 metric contributions' });
+  }
+});
+
+const diagnosticSchema = z
+  .object({
+    caseId: nonEmptyString,
+    repetition: positiveInteger,
+    completionState: z.enum(['completed', 'failed']),
+    signature: nonEmptyString.max(4096).nullable(),
+    metricContributions: diagnosticMetricMapSchema,
+    failureClass: z.enum(FAILURE_CLASSES),
+    reason: z.string().min(1).max(2048).nullable(),
+    evidence: z.array(diagnosticEvidenceSchema).max(32),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.completionState === 'failed') {
+      if (value.signature !== null) ctx.addIssue({ code: 'custom', path: ['signature'], message: 'a failed attempt has no signature' });
+      if (Object.keys(value.metricContributions).length > 0) {
+        ctx.addIssue({ code: 'custom', path: ['metricContributions'], message: 'an environment failure has no metric contribution' });
+      }
+      if (value.failureClass === 'none' || value.failureClass === 'quality') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['failureClass'],
+          message: 'a failed attempt must carry an environment or unexpected-error class',
+        });
+      }
+      if (value.reason === null) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'a failed attempt must carry a reason' });
+    } else {
+      if (value.signature === null)
+        ctx.addIssue({ code: 'custom', path: ['signature'], message: 'a completed attempt must carry a signature' });
+      if (value.failureClass !== 'none' && value.failureClass !== 'quality') {
+        ctx.addIssue({ code: 'custom', path: ['failureClass'], message: 'a completed attempt may carry only none or quality' });
+      }
+    }
+  });
+
+const runnerResultFields = {
+  agent: nonEmptyString,
+  executable: nonEmptyString,
+  // Whatever `<executable> --version` printed. Null when the probe failed.
+  version: z.string().nullable(),
+  model: z.string().nullable(),
+  parameters: runnerParametersSchema,
+  repetitions: z
+    .object({ expected: nonNegativeInteger, completed: nonNegativeInteger })
+    .strict()
+    .refine((value) => value.completed <= value.expected, { message: 'completed repetitions cannot exceed the expected count' }),
+  // Null is an unmeasurable metric, which is a failure rather than a pass.
+  measurements: z.record(z.number().nullable()),
+  durationMs: nonNegativeInteger,
+  usage: usageSchema.nullable(),
+  failureClass: z.enum(FAILURE_CLASSES),
+  failures: z.array(z.string()),
+};
+
+const runnerResultSchema = z
+  .object({
+    ...runnerResultFields,
+    diagnostics: z.array(diagnosticSchema),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.diagnostics.length !== value.repetitions.expected) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['diagnostics'],
+        message: `expected one diagnostic for each of ${value.repetitions.expected} attempted repetitions`,
+      });
+    }
+    const completed = value.diagnostics.filter((entry) => entry.completionState === 'completed').length;
+    if (completed !== value.repetitions.completed) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['diagnostics'],
+        message: `diagnostics contain ${completed} completed repetitions, runner reports ${value.repetitions.completed}`,
+      });
+    }
+    const pairs = value.diagnostics.map((entry) => `${entry.caseId}:${entry.repetition}`);
+    if (new Set(pairs).size !== pairs.length) {
+      ctx.addIssue({ code: 'custom', path: ['diagnostics'], message: 'diagnostic case and repetition pairs must be unique' });
+    }
+  });
+
+const legacyRunnerResultSchema = z.object(runnerResultFields).strict();
 
 // One entry per eval contract the suite is expressed as. `version` is the
 // contract's own revision once something reads one; null says nothing has.
@@ -189,30 +270,70 @@ const suiteResultSchema = z
     }
   });
 
-const evalResultSchema = z
-  .object({
-    schemaVersion: z.literal(SCHEMA_VERSION),
-    kind: z.literal('suite-result'),
-    generatedAt: z.string().datetime(),
-    mode: z.enum(RUN_MODES),
-    repository: repositorySchema,
-    suite: suiteResultSchema,
-    runners: z.array(runnerResultSchema),
-    durationMs: nonNegativeInteger,
-    failureClass: z.enum(FAILURE_CLASSES),
-    exitCode: z.union([z.literal(0), z.literal(1), z.literal(2)]),
-  })
-  .strict()
-  .superRefine((value, ctx) => {
-    const expected = exitCodeForFailureClass(value.failureClass);
-    if (value.exitCode !== expected) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['exitCode'],
-        message: `failureClass "${value.failureClass}" must exit ${expected}, not ${value.exitCode}`,
-      });
-    }
-  });
+function resultSchemaFor(schemaVersion, runnerSchema) {
+  return z
+    .object({
+      schemaVersion: z.literal(schemaVersion),
+      kind: z.literal('suite-result'),
+      generatedAt: z.string().datetime(),
+      mode: z.enum(RUN_MODES),
+      repository: repositorySchema,
+      suite: suiteResultSchema,
+      runners: z.array(runnerSchema),
+      durationMs: nonNegativeInteger,
+      failureClass: z.enum(FAILURE_CLASSES),
+      exitCode: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+      const expected = exitCodeForFailureClass(value.failureClass);
+      if (value.exitCode !== expected) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['exitCode'],
+          message: `failureClass "${value.failureClass}" must exit ${expected}, not ${value.exitCode}`,
+        });
+      }
+      if (schemaVersion !== SCHEMA_VERSION) return;
+      const caseIds = new Set(value.suite.caseIds);
+      for (const [runnerIndex, runner] of value.runners.entries()) {
+        for (const [diagnosticIndex, diagnostic] of runner.diagnostics.entries()) {
+          if (!caseIds.has(diagnostic.caseId)) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['runners', runnerIndex, 'diagnostics', diagnosticIndex, 'caseId'],
+              message: 'diagnostic names an undeclared case',
+            });
+          }
+          if (diagnostic.repetition > value.suite.declaredRepetitions) {
+            ctx.addIssue({
+              code: 'custom',
+              path: ['runners', runnerIndex, 'diagnostics', diagnosticIndex, 'repetition'],
+              message: 'diagnostic repetition exceeds the suite declaration',
+            });
+          }
+        }
+        const failedDiagnostics = runner.diagnostics.filter((entry) => entry.completionState === 'failed');
+        if (runner.failureClass === 'none' && failedDiagnostics.length > 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['runners', runnerIndex, 'failureClass'],
+            message: 'a clean runner cannot contain failed diagnostics',
+          });
+        }
+        if (runner.failureClass.startsWith('environment-') && failedDiagnostics.length === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['runners', runnerIndex, 'diagnostics'],
+            message: 'an environment runner must identify a failed diagnostic',
+          });
+        }
+      }
+    });
+}
+
+const evalResultSchema = resultSchemaFor(SCHEMA_VERSION, runnerResultSchema);
+const legacyEvalResultSchema = resultSchemaFor(LEGACY_SCHEMA_VERSION, legacyRunnerResultSchema);
 
 const evalRunSchema = z
   .object({
@@ -229,6 +350,31 @@ const evalRunSchema = z
     suites: z.array(evalResultSchema),
     // Skills with neither a behavioral suite nor a deferred declaration. A
     // non-empty list is an environment failure, not a finding to read past.
+    unaccountedSkills: z.array(nonEmptyString),
+    durationMs: nonNegativeInteger,
+    failureClass: z.enum(FAILURE_CLASSES),
+    exitCode: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    const expected = exitCodeForFailureClass(value.failureClass);
+    if (value.exitCode !== expected) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['exitCode'],
+        message: `failureClass "${value.failureClass}" must exit ${expected}, not ${value.exitCode}`,
+      });
+    }
+  });
+
+const legacyEvalRunSchema = z
+  .object({
+    schemaVersion: z.literal(LEGACY_SCHEMA_VERSION),
+    kind: z.literal('run-summary'),
+    generatedAt: z.string().datetime(),
+    repository: repositorySchema,
+    evalQualityVersion: nonEmptyString,
+    suites: z.array(legacyEvalResultSchema),
     unaccountedSkills: z.array(nonEmptyString),
     durationMs: nonNegativeInteger,
     failureClass: z.enum(FAILURE_CLASSES),
@@ -283,7 +429,7 @@ function worstFailureClass(classes) {
  * @returns {import('zod').SafeParseReturnType<unknown, unknown>}
  */
 function validateEvalResult(record) {
-  return evalResultSchema.safeParse(record);
+  return z.union([evalResultSchema, legacyEvalResultSchema]).safeParse(record);
 }
 
 /**
@@ -293,7 +439,7 @@ function validateEvalResult(record) {
  * @returns {import('zod').SafeParseReturnType<unknown, unknown>}
  */
 function validateEvalRun(record) {
-  return evalRunSchema.safeParse(record);
+  return z.union([evalRunSchema, legacyEvalRunSchema]).safeParse(record);
 }
 
 module.exports = {
@@ -301,9 +447,13 @@ module.exports = {
   validateEvalRun,
   evalResultSchema,
   evalRunSchema,
+  legacyEvalResultSchema,
+  legacyEvalRunSchema,
+  diagnosticSchema,
   exitCodeForFailureClass,
   worstFailureClass,
   SCHEMA_VERSION,
+  LEGACY_SCHEMA_VERSION,
   FAILURE_CLASSES,
   RUN_MODES,
 };

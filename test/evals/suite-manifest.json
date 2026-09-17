@@ -254,7 +254,8 @@
       ],
       "thresholds": {
         "requiredRecall": 0.9,
-        "forbiddenRate": 0.1
+        "forbiddenRate": 0.1,
+        "maxUnstableCases": 0
       },
       "repetitions": 2,
       "caseCount": 24,

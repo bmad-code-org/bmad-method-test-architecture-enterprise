@@ -120,6 +120,9 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -155,6 +158,7 @@ const RUNNER_CAPABILITIES = ['read-only'];
 const THRESHOLDS = {
   requiredRecall: 0.9,
   forbiddenRate: 0.1,
+  maxUnstableCases: 0,
 };
 
 const colors = {
@@ -566,7 +570,12 @@ async function finish({ options, startedAt, mode, suites, runners, suiteFailureC
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
   return {
     agent,
@@ -585,6 +594,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
     failureClass,
     failures,
+    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
   };
 }
 
@@ -683,6 +693,7 @@ async function main() {
     // Every environment failure seen across every case, so the runner's class is
     // the worst of them rather than the last one printed.
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const suite of suites) {
       console.log(`  ${colors.dim}${suite.data.workflow}${colors.reset}`);
@@ -733,6 +744,9 @@ async function main() {
           if (!result.ok) {
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: ${result.reason}${colors.reset}`);
             lostRunClasses.push(result.failureClass);
+            diagnostics.push(
+              diagnosticRecord({ caseId: item.id, repetition: runIndex + 1, failureClass: result.failureClass, reason: result.reason }),
+            );
             unmeasuredRuns += 1;
             continue;
           }
@@ -745,6 +759,14 @@ async function main() {
               `    ${colors.red}${item.id} run ${runIndex + 1}: the runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration${colors.reset}`,
             );
             lostRunClasses.push('environment-configuration');
+            diagnostics.push(
+              diagnosticRecord({
+                caseId: item.id,
+                repetition: runIndex + 1,
+                failureClass: 'environment-configuration',
+                reason: `runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration`,
+              }),
+            );
             unmeasuredRuns += 1;
             continue;
           }
@@ -759,6 +781,14 @@ async function main() {
               `    ${colors.red}${item.id} run ${runIndex + 1}: ${stderr.trim() || `exit ${observation.exitCode}`}${colors.reset}`,
             );
             lostRunClasses.push(failureClassForExit(observation.exitCode));
+            diagnostics.push(
+              diagnosticRecord({
+                caseId: item.id,
+                repetition: runIndex + 1,
+                failureClass: failureClassForExit(observation.exitCode),
+                reason: stderr.trim() || `exit ${observation.exitCode}`,
+              }),
+            );
             unmeasuredRuns += 1;
             continue;
           }
@@ -771,11 +801,30 @@ async function main() {
           if (!Array.isArray(selected)) {
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: no fragment list in the runner's reply${colors.reset}`);
             lostRunClasses.push('environment-parser');
+            diagnostics.push(
+              diagnosticRecord({
+                caseId: item.id,
+                repetition: runIndex + 1,
+                failureClass: 'environment-parser',
+                reason: 'no fragment list in the runner reply',
+              }),
+            );
             unmeasuredRuns += 1;
             continue;
           }
-          signatures.add([...selected].sort().join(','));
-          caseScores.push(scoreCase(item, selected));
+          const signature = [...selected].sort().join(',');
+          const scored = scoreCase(item, selected);
+          signatures.add(signature);
+          caseScores.push(scored);
+          diagnostics.push(
+            diagnosticRecord({
+              caseId: item.id,
+              repetition: runIndex + 1,
+              signature,
+              metricContributions: numericContributions(scored),
+              evidence: [{ kind: 'output-signature', value: signature }],
+            }),
+          );
         }
 
         completedRuns += caseScores.length;
@@ -838,7 +887,7 @@ async function main() {
     if (Number.isNaN(recall)) failures.push('required recall (unmeasurable)');
     else if (recall < THRESHOLDS.requiredRecall) failures.push('required recall');
     if (!Number.isNaN(forbiddenRate) && forbiddenRate > THRESHOLDS.forbiddenRate) failures.push('forbidden rate');
-    if (unstableCases > 0) failures.push(`${unstableCases} unstable case(s)`);
+    if (unstableCases > THRESHOLDS.maxUnstableCases) failures.push(`${unstableCases} unstable case(s)`);
 
     if (incompleteCases > 0) {
       const failureClass = worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']);
@@ -853,6 +902,7 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
         }),
       );
       continue;
@@ -872,6 +922,7 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
       }),
     );
   }

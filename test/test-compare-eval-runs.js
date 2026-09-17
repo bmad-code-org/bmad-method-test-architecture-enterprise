@@ -44,7 +44,7 @@ const DIGEST = `sha256:${'0'.repeat(64)}`;
 function suiteResult(id, overrides = {}) {
   const { suite: suiteOverrides, ...rest } = overrides;
   return {
-    schemaVersion: '1.3.0',
+    schemaVersion: '1.4.0',
     kind: 'suite-result',
     generatedAt: '2026-09-16T00:00:00.000Z',
     mode: 'live',
@@ -58,8 +58,8 @@ function suiteResult(id, overrides = {}) {
       runnerCapabilities: ['read-only'],
       fixtureDigest: DIGEST,
       promptDigest: null,
-      caseIds: [],
-      cases: [],
+      caseIds: ['case-1'],
+      cases: [{ id: 'case-1', promptDigest: null }],
       thresholds: { accuracy: 0.9 },
       declaredRepetitions: 2,
       ...suiteOverrides,
@@ -77,6 +77,28 @@ function suiteResult(id, overrides = {}) {
         usage: null,
         failureClass: 'none',
         failures: [],
+        diagnostics: [
+          {
+            caseId: 'case-1',
+            repetition: 1,
+            completionState: 'completed',
+            signature: 'stable-answer',
+            metricContributions: { accuracy: 0.9 },
+            failureClass: 'none',
+            reason: null,
+            evidence: [{ kind: 'output-signature', value: 'stable-answer' }],
+          },
+          {
+            caseId: 'case-1',
+            repetition: 2,
+            completionState: 'completed',
+            signature: 'stable-answer',
+            metricContributions: { accuracy: 0.9 },
+            failureClass: 'none',
+            reason: null,
+            evidence: [{ kind: 'output-signature', value: 'stable-answer' }],
+          },
+        ],
       },
     ],
     durationMs: 100,
@@ -89,7 +111,7 @@ function suiteResult(id, overrides = {}) {
 /** One run-summary record, schema-shaped. */
 function runSummary(suites, overrides = {}) {
   return {
-    schemaVersion: '1.3.0',
+    schemaVersion: '1.4.0',
     kind: 'run-summary',
     generatedAt: '2026-09-16T00:00:00.000Z',
     repository: { commit: 'abc123', dirty: false },

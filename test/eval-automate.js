@@ -104,7 +104,16 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { boundedProbe } = require('./lib/bounded-probe');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
-const { digestFiles, repositoryState, measured, suiteResultRecord, writeSuiteResult } = require('./lib/eval-record');
+const {
+  digestFiles,
+  repositoryState,
+  measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
+  suiteResultRecord,
+  writeSuiteResult,
+} = require('./lib/eval-record');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 
@@ -1003,7 +1012,10 @@ async function main() {
     version: process.version,
     model: null,
     parameters: { agentArgs: [], envPassNames: [], timeoutMs: PLAYWRIGHT_TIMEOUT_MS, promptTransport: 'stdin' },
-    repetitions: { expected: 1, completed: 1 },
+    repetitions: {
+      expected: scored.cases.length,
+      completed: scored.cases.filter((scoredCase) => !scoredCase.loadError).length,
+    },
     measurements: {
       loadErrors: measured(scored.loadErrors),
       undetectedRegressionCases: measured(scored.undetectedRegressionCases),
@@ -1023,8 +1035,30 @@ async function main() {
     },
     durationMs: await elapsedMsSince(startedAt),
     usage: null,
-    failureClass: failures.length > 0 ? 'quality' : 'none',
+    failureClass: scored.loadErrors > 0 ? 'environment-missing-artifact' : failures.length > 0 ? 'quality' : 'none',
     failures,
+    diagnostics: classifyDiagnosticQuality(
+      scored.cases.map((scoredCase) => {
+        const signature = JSON.stringify({
+          verdict: scoredCase.verdict ?? null,
+          expectedDetectsRegression: scoredCase.expectedDetectsRegression,
+          loadError: scoredCase.loadError ?? null,
+          classifications: (scoredCase.tests ?? []).map((test) => test.classification),
+        });
+        return diagnosticRecord({
+          caseId: scoredCase.id,
+          repetition: 1,
+          signature: scoredCase.loadError ? null : signature,
+          metricContributions: scoredCase.loadError ? {} : numericContributions(scoredCase),
+          failureClass: scoredCase.loadError ? 'environment-missing-artifact' : 'none',
+          reason: scoredCase.loadError ?? null,
+          evidence: scoredCase.loadError
+            ? [{ kind: 'artifact', value: 'playwright-report.json' }]
+            : [{ kind: 'output-signature', value: signature }],
+        });
+      }),
+      failures,
+    ),
   };
 
   await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: [], runners: [runner] });

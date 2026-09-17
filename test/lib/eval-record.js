@@ -63,6 +63,22 @@ const SECRET_FLAG_PATTERN = /key|token|secret|password|credential|auth/i;
 // `prefix_github_pat_x` is still caught.
 const SECRET_VALUE_PATTERN = /(?<![A-Za-z0-9])(sk-|sk_|ghp_|gho_|ghs_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)/;
 const REDACTED = '[redacted]';
+const MAX_DIAGNOSTIC_METRICS = 64;
+const MAX_DIAGNOSTIC_METRIC_KEY = 128;
+
+function boundedDiagnosticText(value, maxLength) {
+  const text = String(value);
+  if (text.length <= maxLength) return text;
+  const digest = createHash('sha256').update(text).digest('hex');
+  const suffix = `…sha256:${digest}`;
+  return `${text.slice(0, maxLength - suffix.length)}${suffix}`;
+}
+
+function redactDiagnosticText(value) {
+  return String(value)
+    .replaceAll(/([?&](?:key|token|secret|password|credential|auth)=)[^&\\s]+/gi, `$1${REDACTED}`)
+    .replaceAll(/(?<![A-Za-z0-9])(sk-|sk_|ghp_|gho_|ghs_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)/g, REDACTED);
+}
 
 /**
  * sha256 over canonical bytes.
@@ -237,6 +253,65 @@ function measured(value) {
 }
 
 /**
+ * Build one bounded, secret-free diagnostic for an attempted repetition.
+ * Harnesses pass scorer projections or artifact paths, never unrestricted model
+ * text. The schema supplies the second line of defence for size and shape.
+ */
+function diagnosticRecord({
+  caseId,
+  repetition,
+  signature = null,
+  metricContributions = {},
+  failureClass = 'none',
+  reason = null,
+  evidence = [],
+}) {
+  const failed = failureClass !== 'none' && failureClass !== 'quality';
+  const boundedMetrics = Object.fromEntries(
+    Object.entries(metricContributions)
+      .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+      .slice(0, MAX_DIAGNOSTIC_METRICS)
+      .map(([key, value]) => [String(key).slice(0, MAX_DIAGNOSTIC_METRIC_KEY), value]),
+  );
+  const boundedSignature = signature === null ? null : boundedDiagnosticText(redactDiagnosticText(signature), 4096);
+  return {
+    caseId,
+    repetition,
+    completionState: failed ? 'failed' : 'completed',
+    signature: failed ? null : boundedSignature,
+    metricContributions: failed ? {} : boundedMetrics,
+    failureClass,
+    reason: reason === null ? null : boundedDiagnosticText(redactDiagnosticText(reason), 2048),
+    evidence: evidence.slice(0, 32).map((entry) => ({
+      kind: entry.kind,
+      value: boundedDiagnosticText(redactDiagnosticText(entry.value), 2048),
+    })),
+  };
+}
+
+/** Flatten finite numeric scorer fields into a diagnostic contribution map. */
+function numericContributions(value, prefix = '', contributions = {}) {
+  if (typeof value === 'number') {
+    if (Number.isFinite(value) && prefix) contributions[prefix] = value;
+    return contributions;
+  }
+  if (Array.isArray(value) || value === null || typeof value !== 'object') return contributions;
+  for (const [key, child] of Object.entries(value)) {
+    numericContributions(child, prefix ? `${prefix}.${key}` : key, contributions);
+  }
+  return contributions;
+}
+
+/** Apply an aggregate quality result to every completed repetition. */
+function classifyDiagnosticQuality(diagnostics, failures) {
+  if (failures.length === 0) return diagnostics;
+  const reason = failures.join('; ').slice(0, 2048);
+  return diagnostics.map((entry) =>
+    entry.completionState === 'completed' ? { ...entry, failureClass: 'quality', reason: entry.reason ?? reason } : entry,
+  );
+}
+
+/**
  * Assemble one suite result record. The failure class is derived from the
  * runners plus any suite-level environment failure, and the exit code is
  * derived from that, so the three can never disagree.
@@ -397,6 +472,9 @@ module.exports = {
   redactArgs,
   classifyAgentError,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   runSummaryRecord,
   writeSuiteResult,

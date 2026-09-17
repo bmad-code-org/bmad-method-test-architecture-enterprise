@@ -125,6 +125,8 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -1112,7 +1114,12 @@ async function finish({ options, startedAt, mode, groundTruth, runners, suiteFai
   process.exit(exitCode);
 }
 
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failureClass, failures, diagnostics = [] },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
   return {
     agent,
@@ -1131,6 +1138,7 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     usage: null,
     failureClass,
     failures,
+    diagnostics: classifyDiagnosticQuality(diagnostics, failureClass === 'quality' ? failures : []),
   };
 }
 
@@ -1257,16 +1265,39 @@ async function main() {
     const caseScores = [];
     const signatures = new Set();
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (let runIndex = 0; runIndex < runs; runIndex += 1) {
       const outcome = await runCase(groundTruth, options, agent, runIndex, backend);
       if (!outcome.ok) {
         console.error(`  ${colors.red}run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
         lostRunClasses.push(outcome.failureClass);
+        diagnostics.push(
+          diagnosticRecord({ caseId: CASE_ID, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+        );
         continue;
       }
       caseScores.push(outcome.scored);
-      signatures.add(signatureOf(outcome.scored));
+      const signature = signatureOf(outcome.scored);
+      signatures.add(signature);
+      diagnostics.push(
+        diagnosticRecord({
+          caseId: CASE_ID,
+          repetition: runIndex + 1,
+          signature,
+          metricContributions: {
+            redForIntendedReasonRate: outcome.scored.redForIntendedReasonRate,
+            criteriaCoverage: outcome.scored.criteriaCoverage,
+            vacuousPass: outcome.scored.vacuousPass.length,
+            stillSkipped: outcome.scored.stillSkipped.length,
+            nonAssertionExit: outcome.scored.nonAssertion.length,
+            loadErrors: outcome.scored.loadErrors.length,
+            unmapped: outcome.scored.unmapped.length,
+            productionMutations: outcome.scored.productionMutations.length,
+          },
+          evidence: [{ kind: 'output-signature', value: signature }],
+        }),
+      );
 
       if (!Number.isNaN(outcome.scored.redForIntendedReasonRate ?? Number.NaN)) {
         totals.redForIntendedReasonRateSum += outcome.scored.redForIntendedReasonRate;
@@ -1360,6 +1391,7 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `short of ${runs} repetitions`],
+          diagnostics,
         }),
       );
       continue;
@@ -1376,6 +1408,7 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
       }),
     );
   }
