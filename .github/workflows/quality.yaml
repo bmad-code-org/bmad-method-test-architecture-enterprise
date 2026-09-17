@@ -287,6 +287,9 @@ jobs:
       - name: Prove routing ambiguity boundaries reject drift and over-clarification
         run: npm run test:eval-routing-boundaries
 
+      - name: Validate the committed Story 1.3 routing evidence
+        run: npm run test:eval-routing-evidence
+
       - name: Validate transcript eval corpus
         run: npm run test:eval-transcript-data
 
