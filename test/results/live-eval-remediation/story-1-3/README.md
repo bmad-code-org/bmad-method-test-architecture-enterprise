@@ -14,6 +14,10 @@ the runner decision and the chronology around those captures.
 - `post-fix-routing-codex.json` is generated from the clean corrected implementation
   commit named by its repository provenance. It contains the same eighteen cases and two
   repetitions under the unchanged fixture, oracle, repetition count, and thresholds.
+- `development-attempt-1-routing-codex-b78fc67.json` preserves the first post-fix
+  verification attempt. One repetition of `run-and-fix-ci-failures` routed to Review
+  Tests, which violated the zero-confident-route control. That finding produced the
+  explicit unservable-request boundary before the final run.
 
 The remediation plan requested Claude with the resolved Sonnet model. The coordinator
 confirmed that the Claude account had reached its weekly usage limit before this delivery

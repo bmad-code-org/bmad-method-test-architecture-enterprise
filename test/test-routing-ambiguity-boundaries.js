@@ -1,4 +1,4 @@
-/** Mutation checks for the routing ambiguity table's oracle binding. */
+/** Mutation checks for the routing boundary tables and their oracle binding. */
 
 'use strict';
 
@@ -31,11 +31,53 @@ function includes(problems, fragment, description) {
   );
 }
 
+function unservableBoundaryRows(skill) {
+  const start = '<!-- routing-unservable-boundaries:start -->';
+  const end = '<!-- routing-unservable-boundaries:end -->';
+  const block = skill.slice(skill.indexOf(start) + start.length, skill.indexOf(end));
+  return block
+    .split('\n')
+    .filter((line) => /^\| `/.test(line))
+    .map((line) => line.match(/^\| `([^`]+)`\s+\|\s+([^|]+)\|\s+([^|]+)\|\s+([^|]+)\|$/))
+    .filter(Boolean)
+    .map((match) => ({ sourceCase: match[1], result: match[2].trim(), boundary: match[3].trim(), missing: match[4].trim() }));
+}
+
+function validateUnservableBoundaries(corpus, skill) {
+  const problems = [];
+  const rows = unservableBoundaryRows(skill);
+  const byCase = new Map(rows.map((row) => [row.sourceCase, row]));
+  const declineCases = corpus.cases.filter((item) => item.expected?.expectedAction === 'decline');
+
+  if (byCase.size !== rows.length) problems.push('src/agents/bmad-tea/SKILL.md repeats an unservable boundary source case');
+
+  for (const item of declineCases) {
+    const row = byCase.get(item.id);
+    if (!row) {
+      problems.push(`src/agents/bmad-tea/SKILL.md declares no unservable boundary for "${item.id}"`);
+      continue;
+    }
+    if (!row.result || !row.boundary || !row.missing) {
+      problems.push(`src/agents/bmad-tea/SKILL.md carries an incomplete unservable boundary for "${item.id}"`);
+    }
+  }
+  for (const row of rows) {
+    const item = corpus.cases.find((candidate) => candidate.id === row.sourceCase);
+    if (!item) problems.push(`src/agents/bmad-tea/SKILL.md unservable boundary "${row.sourceCase}" is orphaned from the intent corpus`);
+    else if (item.expected?.expectedAction !== 'decline') {
+      problems.push(`src/agents/bmad-tea/SKILL.md unservable boundary "${row.sourceCase}" references a servable case`);
+    }
+  }
+  return problems;
+}
+
 async function main() {
   const corpus = await loadCorpus();
   const skill = fs.readFileSync(SKILL_FILE, 'utf8');
   const clean = await validateCorpus(corpus, { skill });
   check(clean.length === 0, `the shipped ambiguity table is invalid:\n${clean.join('\n')}`);
+  const cleanUnservable = validateUnservableBoundaries(corpus, skill);
+  check(cleanUnservable.length === 0, `the shipped unservable table is invalid:\n${cleanUnservable.join('\n')}`);
 
   const factDrift = skill.replace(
     'Existing tests raise both writing-quality and requirements-coverage concerns',
@@ -73,6 +115,28 @@ async function main() {
   const row = skill.split('\n').find((line) => line.startsWith('| `good-or-covering-what-matters`'));
   const duplicate = skill.replace(row, `${row}\n${row}`);
   includes(await validateMutation(corpus, duplicate, 'duplicate boundary'), 'repeats ambiguity boundary source case', 'duplicate boundary');
+
+  const missingUnservable = skill.replace('| `run-and-fix-ci-failures`', '| `missing-run-and-fix-ci-failures`');
+  includes(
+    validateUnservableBoundaries(corpus, missingUnservable),
+    'declares no unservable boundary for "run-and-fix-ci-failures"',
+    'missing unservable boundary',
+  );
+
+  const servableInUnservableTable = skill.replace('| `run-and-fix-ci-failures`', '| `review-existing-tests`');
+  includes(
+    validateUnservableBoundaries(corpus, servableInUnservableTable),
+    'unservable boundary "review-existing-tests" references a servable case',
+    'servable unservable boundary',
+  );
+
+  const unservableRow = skill.split('\n').find((line) => line.startsWith('| `run-and-fix-ci-failures`'));
+  const duplicateUnservable = skill.replace(unservableRow, `${unservableRow}\n${unservableRow}`);
+  includes(
+    validateUnservableBoundaries(corpus, duplicateUnservable),
+    'repeats an unservable boundary source case',
+    'duplicate unservable boundary',
+  );
 
   if (failures.length > 0) {
     console.error(`routing ambiguity boundaries: ${failures.length} failure(s) across ${checks} checks`);

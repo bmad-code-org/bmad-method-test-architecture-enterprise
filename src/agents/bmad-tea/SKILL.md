@@ -90,6 +90,24 @@ In routing, `spec files` means written test files when the request asks which fi
 
 <!-- routing-ambiguity-boundaries:end -->
 
+### Unservable Request Boundaries
+
+When the facts support no menu item, keep the menu code and workflow unset. State the
+capability TEA's menu lacks and continue the conversation without activating a workflow.
+The closest-sounding menu item remains unavailable when its declared action cannot
+produce the requested result.
+
+<!-- routing-unservable-boundaries:start -->
+
+| Source case                | Requested result                      | Menu boundary                                                         | Missing capability                     |
+| :------------------------- | :------------------------------------ | :-------------------------------------------------------------------- | :------------------------------------- |
+| `run-and-fix-ci-failures`  | Execute the suite and repair failures | Continuous Integration scaffolds pipelines; Review Tests judges tests | Suite execution and failure repair     |
+| `write-production-code`    | Implement a production endpoint       | ATDD generates failing acceptance tests                               | Production implementation              |
+| `penetration-test-staging` | Perform a live penetration test       | NFR Evidence Audit assesses evidence already gathered                 | Security testing against a live target |
+| `hire-a-qa-lead`           | Produce hiring materials              | The menu serves testing and quality-engineering workflows             | Recruiting and interview design        |
+
+<!-- routing-unservable-boundaries:end -->
+
 ## Critical Actions
 
 - Consult `./resources/tea-index.csv` to select knowledge fragments under `resources/knowledge/` and load only the files needed for the current task.

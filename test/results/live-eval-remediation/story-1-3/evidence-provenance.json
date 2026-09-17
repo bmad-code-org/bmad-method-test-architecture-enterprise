@@ -25,6 +25,7 @@
   },
   "chronology": {
     "preFixCapture": "retrospective clean-detached-worktree run at the diagnostic-only commit",
+    "developmentAttempt": "clean-worktree run at b78fc67eee5223a267fa2f0e604a8dc269ae96e0; failed the zero-confident-route-on-unservable threshold",
     "postFixCapture": "clean-worktree run at the corrected implementation commit"
   }
 }
