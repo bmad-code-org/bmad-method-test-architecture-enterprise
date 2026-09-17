@@ -97,6 +97,10 @@ If none of the four oracle types can be resolved, **HALT** and request the small
 
 From `{knowledgeIndex}` load:
 
+### Deterministic Knowledge Selection
+
+The fragment list for this step is a closed set. Start empty and add every fragment in the list below. Do not add fragments from tier labels, index descriptions, nearby mentions elsewhere in this step, general usefulness, or possible future need. Deduplicate while preserving the order below. Identical facts and config must produce an identical list.
+
 - `test-priorities-matrix.md`
 - `risk-governance.md`
 - `probability-impact.md`

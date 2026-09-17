@@ -162,6 +162,33 @@ const THRESHOLDS = {
   maxUnstableCases: 0,
 };
 
+const SELECTION_CONTRACT_HEADING = '### Deterministic Knowledge Selection';
+const CONTRACT_RELEVANCE_RULE =
+  'Contract testing is relevant only when repository facts show existing Pact artifacts, dependencies, configuration, or broker variables, or when the task explicitly requests contract testing. A service count or target-state architecture alone does not open a contract branch.';
+const AMBIGUOUS_SELECTION_RULES = [
+  {
+    name: 'tier-wide loading',
+    pattern: /\*\*(?:Core tier|Extended tier|Specialized tier)\*\*/,
+  },
+  {
+    name: 'flag-only Playwright Utils gate',
+    pattern:
+      /\*\*(?:If `tea_use_playwright_utils` is enabled|If Playwright Utils enabled|Playwright Utils \(if enabled\))\*\*[^\n]{0,80}\bload\b/,
+  },
+  {
+    name: 'flag-only Pact MCP gate',
+    pattern: /\*\*(?:If Pact MCP enabled|Pact MCP \(if tea_pact_mcp is "mcp"\))\*\*/,
+  },
+  {
+    name: 'unnamed Playwright Utils core set',
+    pattern: /plus all Playwright Utils core fragments/i,
+  },
+  {
+    name: 'nearby fragment reference',
+    pattern: /Per `evidence-integrity\.md`/,
+  },
+];
+
 const colors = {
   reset: '[0m',
   red: '[31m',
@@ -303,6 +330,27 @@ async function loadSuites(requested) {
 }
 
 /**
+ * Reject the exact instruction shapes that made one context admit several valid
+ * selections. The workflow step remains the source of truth; this only requires
+ * it to state a closed rule and refuses the open-ended forms observed in
+ * live evidence.
+ */
+function selectionInstructionProblems(context) {
+  const problems = [];
+  const headingCount = context.split(SELECTION_CONTRACT_HEADING).length - 1;
+  if (headingCount !== 1) {
+    problems.push(`expected exactly one ${SELECTION_CONTRACT_HEADING} heading; found ${headingCount}`);
+  }
+  for (const rule of AMBIGUOUS_SELECTION_RULES) {
+    if (rule.pattern.test(context)) problems.push(`${rule.name} leaves fragment selection open-ended`);
+  }
+  if (/contract testing is relevant/i.test(context) && !context.includes(CONTRACT_RELEVANCE_RULE)) {
+    problems.push('implicit contract relevance leaves fragment selection open-ended');
+  }
+  return problems;
+}
+
+/**
  * Static validation. This is the part CI runs, and it is what keeps the eval data
  * from rotting into a set of assertions about fragments that no longer exist:
  * every name below is checked against the workflow's shipped knowledge directory
@@ -325,13 +373,23 @@ async function validateSuites(suites) {
       continue;
     }
 
+    const contextSections = [];
     for (const relative of contextFiles ?? []) {
-      if (!fs.existsSync(path.join(workflowDir, relative))) {
+      const contextPath = path.join(workflowDir, relative);
+      if (!fs.existsSync(contextPath)) {
         problems.push(`${label}: contextFile ${relative} does not exist in the workflow`);
+        continue;
       }
+      const contextRead = await readText(contextPath);
+      if (contextRead.present) contextSections.push(contextRead.text);
+      else problems.push(`${label}: contextFile ${relative} could not be read from the workflow`);
     }
     if ((contextFiles ?? []).length === 0)
       problems.push(`${label}: no contextFiles; the runner would have no ground-truth step file to show the agent`);
+    const selectionContext = contextSections.join('\n\n');
+    if (contextSections.length > 0) {
+      for (const problem of selectionInstructionProblems(selectionContext)) problems.push(`${label}: ${problem}`);
+    }
 
     const knowledgeDir = path.join(workflowDir, 'resources', 'knowledge');
     const indexPath = path.join(workflowDir, 'resources', 'tea-index.csv');
@@ -384,6 +442,9 @@ async function validateSuites(suites) {
         if (indexed.size > 0 && !indexed.has(fragment)) {
           problems.push(`${caseLabel}: ${fragment} is not indexed in ${suite.dir}/resources/tea-index.csv, so it can never be selected`);
         }
+        if (mustLoad.includes(fragment) && selectionContext && !selectionContext.includes(fragment)) {
+          problems.push(`${caseLabel}: ${fragment} is not named by a contextFile, so the oracle is not derived from the workflow step`);
+        }
       }
 
       const overlap = mustLoad.filter((fragment) => mustNotLoad.includes(fragment));
@@ -424,6 +485,7 @@ async function buildPrompt(suite, item) {
     `You are running the TEA workflow \`${suite.data.workflow}\`. Below are the workflow's own knowledge-loading rules and its fragment index.`,
     '',
     'Decide which knowledge fragments this run must load, following those rules exactly. Do not load a fragment the rules do not call for: over-loading costs context and mixes patterns from stacks the project does not use.',
+    "Follow the workflow step's Deterministic Knowledge Selection contract. The fragment index is reference data; its tiers, tags, and descriptions never select a fragment by themselves.",
     '',
     context,
     '',
@@ -743,6 +805,7 @@ async function main() {
     for (const suite of suites) {
       console.log(`  ${colors.dim}${suite.data.workflow}${colors.reset}`);
       for (const item of suite.data.cases) {
+        const caseId = `${suite.dir}:${item.id}`;
         const prompt = await buildPrompt(suite, item);
         const signatures = new Set();
         const caseScores = [];
@@ -790,7 +853,7 @@ async function main() {
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: ${result.reason}${colors.reset}`);
             lostRunClasses.push(result.failureClass);
             diagnostics.push(
-              diagnosticRecord({ caseId: item.id, repetition: runIndex + 1, failureClass: result.failureClass, reason: result.reason }),
+              diagnosticRecord({ caseId, repetition: runIndex + 1, failureClass: result.failureClass, reason: result.reason }),
             );
             unmeasuredRuns += 1;
             continue;
@@ -806,7 +869,7 @@ async function main() {
             lostRunClasses.push('environment-configuration');
             diagnostics.push(
               diagnosticRecord({
-                caseId: item.id,
+                caseId,
                 repetition: runIndex + 1,
                 failureClass: 'environment-configuration',
                 reason: `runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration`,
@@ -828,7 +891,7 @@ async function main() {
             lostRunClasses.push(failureClassForExit(observation.exitCode));
             diagnostics.push(
               diagnosticRecord({
-                caseId: item.id,
+                caseId,
                 repetition: runIndex + 1,
                 failureClass: failureClassForExit(observation.exitCode),
                 reason: stderr.trim() || `exit ${observation.exitCode}`,
@@ -848,7 +911,7 @@ async function main() {
             lostRunClasses.push('environment-parser');
             diagnostics.push(
               diagnosticRecord({
-                caseId: item.id,
+                caseId,
                 repetition: runIndex + 1,
                 failureClass: 'environment-parser',
                 reason: 'no fragment list in the runner reply',
@@ -863,7 +926,7 @@ async function main() {
           caseScores.push(scored);
           diagnostics.push(
             diagnosticRecord({
-              caseId: item.id,
+              caseId,
               repetition: runIndex + 1,
               signature,
               metricContributions: numericContributions(fragmentDiagnosticProjection(scored)),
@@ -995,6 +1058,7 @@ module.exports = {
   scoreCase,
   fragmentDiagnosticProjection,
   fragmentDiagnosticClassifier,
+  selectionInstructionProblems,
   buildPrompt,
   caseIndex,
   caseIds,
