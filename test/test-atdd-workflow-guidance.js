@@ -168,7 +168,7 @@ function main() {
   assert(declaredTitleCriterion('[P0] AC-9 undeclared', new Set(['AC-1'])) === null, 'title guard rejects an undeclared id');
 
   const e2eTitles = literalSkipTitles(sources.e2e);
-  const e2eFailureBoundaries = sources.e2e.match(/await expect\(\(async \(\) => \{/g) ?? [];
+  const e2eFailureBoundaries = sources.e2e.match(/await expect\(\s*\(async \(\) => \{/g) ?? [];
   assert(
     e2eFailureBoundaries.length === e2eTitles.length,
     'every E2E example starts its journey inside one criterion-owned assertion boundary',
