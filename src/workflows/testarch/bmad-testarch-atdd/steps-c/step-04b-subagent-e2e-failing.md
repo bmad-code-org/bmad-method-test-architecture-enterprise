@@ -104,18 +104,20 @@ test.describe('[Story Name] E2E User Journey (ATDD)', () => {
   test.skip('[P0] AC-1 should complete user registration successfully', async ({ page, interceptNetworkCall }) => {
     // The outer assertion is the first potentially failing operation. It owns
     // every navigation, interaction, network, and outcome failure in this AC.
-    await expect(async () => {
-      const registerCall = interceptNetworkCall({ url: '**/api/users/register', method: 'POST' });
-      await page.goto('/register');
-      await page.getByLabel('Email').fill('newuser@example.com');
-      await page.getByLabel('Password').fill('SecurePass123!');
-      await page.getByRole('button', { name: 'Register' }).click();
+    await expect(
+      (async () => {
+        const registerCall = interceptNetworkCall({ url: '**/api/users/register', method: 'POST' });
+        await page.goto('/register');
+        await page.getByLabel('Email').fill('newuser@example.com');
+        await page.getByLabel('Password').fill('SecurePass123!');
+        await page.getByRole('button', { name: 'Register' }).click();
 
-      const { status } = await registerCall;
-      expect(status).toBe(201);
-      await expect(page.getByText('Registration successful!')).toBeVisible();
-      await page.waitForURL('/dashboard');
-    }).toPass({ intervals: [0], timeout: 0 });
+        const { status } = await registerCall;
+        expect(status).toBe(201);
+        await expect(page.getByText('Registration successful!')).toBeVisible();
+        await page.waitForURL('/dashboard');
+      })(),
+    ).resolves.toBeUndefined();
   });
 
   // Stubs a 409 on purpose, so it opts out of network monitoring.
@@ -123,20 +125,22 @@ test.describe('[Story Name] E2E User Journey (ATDD)', () => {
     '[P1] AC-2 should show error if email exists',
     { annotation: [{ type: 'skipNetworkMonitoring' }] },
     async ({ page, interceptNetworkCall }) => {
-      await expect(async () => {
-        const conflictCall = interceptNetworkCall({
-          url: '**/api/users/register',
-          method: 'POST',
-          fulfillResponse: { status: 409, body: { message: 'Email already exists' } },
-        });
-        await page.goto('/register');
-        await page.getByLabel('Email').fill('existing@example.com');
-        await page.getByLabel('Password').fill('SecurePass123!');
-        await page.getByRole('button', { name: 'Register' }).click();
+      await expect(
+        (async () => {
+          const conflictCall = interceptNetworkCall({
+            url: '**/api/users/register',
+            method: 'POST',
+            fulfillResponse: { status: 409, body: { message: 'Email already exists' } },
+          });
+          await page.goto('/register');
+          await page.getByLabel('Email').fill('existing@example.com');
+          await page.getByLabel('Password').fill('SecurePass123!');
+          await page.getByRole('button', { name: 'Register' }).click();
 
-        await conflictCall;
-        await expect(page.getByText('Email already exists')).toBeVisible();
-      }).toPass({ intervals: [0], timeout: 0 });
+          await conflictCall;
+          await expect(page.getByText('Email already exists')).toBeVisible();
+        })(),
+      ).resolves.toBeUndefined();
     },
   );
 });
@@ -151,14 +155,16 @@ import { test, expect } from '@playwright/test';
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
   test.skip('[P0] AC-1 should complete user registration successfully', async ({ page }) => {
-    await expect(async () => {
-      await page.route('**/api/users/register', (route) => route.continue());
-      await page.goto('/register');
-      await page.getByLabel('Email').fill('newuser@example.com');
-      await page.getByLabel('Password').fill('SecurePass123!');
-      await page.getByRole('button', { name: 'Register' }).click();
-      await expect(page.getByText('Registration successful!')).toBeVisible();
-    }).toPass({ intervals: [0], timeout: 0 });
+    await expect(
+      (async () => {
+        await page.route('**/api/users/register', (route) => route.continue());
+        await page.goto('/register');
+        await page.getByLabel('Email').fill('newuser@example.com');
+        await page.getByLabel('Password').fill('SecurePass123!');
+        await page.getByRole('button', { name: 'Register' }).click();
+        await expect(page.getByText('Registration successful!')).toBeVisible();
+      })(),
+    ).resolves.toBeUndefined();
   });
 });
 ```
@@ -185,7 +191,7 @@ If the merged-fixtures file does not exist yet, generate the import against `../
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
 - ✅ Every leaf `test.skip()` title MUST include exactly one declared acceptance criterion id from the Step 1 registry in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
 - ✅ Generate exactly one red-phase leaf scaffold for every declared acceptance criterion. Record secondary journeys as green-phase checklist work; do not emit additional `test.skip()` leaves for the same criterion
-- ✅ The criterion-defining assertion MUST be the first potentially failing operation. Wrap the complete browser journey in one immediate `expect(async () => { ... }).toPass({ intervals: [0], timeout: 0 })` assertion so navigation, locator, interaction, network, and outcome failures retain criterion provenance
+- ✅ The criterion-defining assertion MUST be the first potentially failing operation. Wrap the complete browser journey in one `expect((async () => { ... })()).resolves.toBeUndefined()` assertion so navigation, locator, interaction, network, and outcome failures retain criterion provenance without retrying stateful steps
 - ✅ For a state-transition criterion, choose the transition-bearing branch for the primary scaffold and assert the newly promised state directly
 - ✅ Write assertions for EXPECTED UI behavior (even though not implemented)
 - ✅ Use resilient selectors: getByRole, getByText, getByLabel (from selector-resilience). Never `[name="..."]`, `button:has-text(...)`, CSS classes, or XPath

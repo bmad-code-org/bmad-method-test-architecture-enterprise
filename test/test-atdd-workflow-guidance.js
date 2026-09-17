@@ -168,12 +168,23 @@ function main() {
   assert(declaredTitleCriterion('[P0] AC-9 undeclared', new Set(['AC-1'])) === null, 'title guard rejects an undeclared id');
 
   const e2eTitles = literalSkipTitles(sources.e2e);
-  const e2eFailureBoundaries = sources.e2e.match(/await expect\(async \(\) => \{/g) ?? [];
+  const e2eFailureBoundaries = sources.e2e.match(/await expect\(\(async \(\) => \{/g) ?? [];
   assert(
     e2eFailureBoundaries.length === e2eTitles.length,
     'every E2E example starts its journey inside one criterion-owned assertion boundary',
     `${e2eFailureBoundaries.length} boundaries for ${e2eTitles.length} examples`,
   );
+  assert(!sources.e2e.includes('.toPass(') && !sources.docs.includes('.toPass('), 'E2E examples do not retry stateful browser journeys');
+  const documentedRuns = [...sources.docs.matchAll(/```text\nRunning (\d+) tests([\s\S]*?)\n```/g)];
+  assert(documentedRuns.length === 2, 'docs carry skipped and passing run transcripts');
+  for (const [, declaredCount, run] of documentedRuns) {
+    const ids = run.match(/\bAC-\d+\b/g) ?? [];
+    assert(
+      Number(declaredCount) === ids.length && new Set(ids).size === ids.length,
+      'each documented run keeps one leaf per criterion',
+      `${declaredCount} declared tests with ids ${ids.join(',')}`,
+    );
+  }
 
   const diagnostics = JSON.parse(fs.readFileSync(PRE_CHANGE_DIAGNOSTICS, 'utf8'));
   const baseline = diagnostics.provenance.protectedBaseline;
