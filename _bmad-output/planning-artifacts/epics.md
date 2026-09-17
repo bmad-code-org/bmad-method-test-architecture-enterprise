@@ -48,19 +48,19 @@ This document is the epic and story breakdown for upgrading TEA from `eval-quali
 
 ## Delivery Progress
 
-Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-enterprise` and `bmad-eval-quality`. A checked story has all of its work merged to the relevant repository's `main`. An unchecked story marked **Active** has work in merged or open pull requests and still has acceptance criteria left. Every other unchecked story has no pull request recorded here.
+Last reconciled with GitHub on 2026-09-17 across `bmad-method-test-architecture-enterprise` and `bmad-eval-quality`. A checked story has all of its work merged to the relevant repository's `main`. An unchecked story marked **Active** has work in merged or open pull requests and still has acceptance criteria left. Every other unchecked story has no pull request recorded here.
 
 | Epic      |      Merged | Active | Remaining | State          |
 | --------- | ----------: | -----: | --------: | -------------- |
 | Epic 1    |       5 / 5 |      0 |         0 | Complete       |
 | Epic 2    |       7 / 7 |      0 |         0 | Complete       |
 | Epic 3    |       6 / 6 |      0 |         0 | Complete       |
-| Epic 4    |       8 / 9 |      1 |         0 | In progress    |
-| Epic 5    |       4 / 6 |      2 |         0 | In progress    |
+| Epic 4    |       9 / 9 |      0 |         0 | Complete       |
+| Epic 5    |       5 / 6 |      1 |         0 | In progress    |
 | Epic 6    |     12 / 12 |      0 |         0 | Complete       |
 | Epic 7    |       1 / 1 |      0 |         0 | Complete       |
 | Epic 8    |       1 / 1 |      0 |         0 | Complete       |
-| **Total** | **44 / 47** |  **3** |     **0** | **94% merged** |
+| **Total** | **46 / 47** |  **1** |     **0** | **98% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -99,16 +99,16 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 4.6: Hold the supply chain](#story-46-hold-the-supply-chain) ([#180](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/180))
 - [x] [Story 4.7: Hold layering, boundary and lineage](#story-47-hold-layering-boundary-and-lineage) ([#191](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/191))
 - [x] [Story 4.8: Gate the ungated trees, allowlists, coverage and CI](#story-48-gate-the-ungated-trees-allowlists-coverage-and-ci) ([#190](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/190))
-- [ ] [Story 4.9: Hold the synchronous holdout with dependency-direction's purity option](#story-49-hold-the-synchronous-holdout-with-dependency-directions-purity-option) (**Active:** open in [#213](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/213))
+- [x] [Story 4.9: Hold the synchronous holdout with dependency-direction's purity option](#story-49-hold-the-synchronous-holdout-with-dependency-directions-purity-option) ([#213](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/213))
 
 ### Epic 5 progress: Drift is measured and the upgrade is proven live
 
 - [x] [Story 5.0: Repair the publish workflow](#story-50-repair-the-publish-workflow) ([#209](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/209))
 - [x] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance) ([#199](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/199))
-- [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result) (**Active:** [#204](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/204) merged; stage one only, the live run itself remains)
+- [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result) (**Active:** implementation merged in [#204](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/204); final evidence recorded on 2026-09-17 and awaiting merge in [#214](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/214))
 - [x] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships) (both PRs merged: [#203](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/203) and [#211](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/211))
 - [x] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page) (all three PRs merged: [#200](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/200), [#206](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/206), and [#211](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/211))
-- [ ] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea) (**Active:** open in [#212](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/212); the changelog entry, the script-coverage audit and the no-`file:`/`link:` check are all done, the release cut and its npm confirmation remain)
+- [x] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea) ([#212](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/212))
 
 ### Epic 6 progress: Every TEA skill is covered by a behavioral suite
 

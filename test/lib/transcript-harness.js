@@ -28,7 +28,7 @@
 
 'use strict';
 
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./probe-targets');
+const { createProbePort, hostEnvironment, observedText, probeCommandWithRetry, probeRequest } = require('./probe-targets');
 
 /** The interface `test/lib/probe-targets.js` registers this engine's runner under. */
 const TRANSCRIPT_INTERFACE = 'tea-transcript-runner';
@@ -116,7 +116,7 @@ async function runTranscript({ workspace, buildTurnPrompt, turnCount, runnerOpti
     const prompt = buildTurnPrompt(turnIndex, turns, workspace);
     const option = turnOption(runnerOptions);
     if (agent !== undefined) option.agent = agent;
-    const result = await probeCommand(
+    const result = await probeCommandWithRetry(
       port,
       probeRequest({
         probeId: `turn-${turnIndex + 1}`,

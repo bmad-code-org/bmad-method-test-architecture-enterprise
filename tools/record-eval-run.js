@@ -94,6 +94,49 @@ function schemaIssues(result) {
 }
 
 /**
+ * Keep runner identity useful without storing the machine and worktree that
+ * produced the run. Repository executables retain their repository-relative
+ * path. Other absolute executables retain only their basename.
+ *
+ * @param {string} executable
+ * @returns {string}
+ */
+function portableExecutable(executable) {
+  const flavor = path.win32.isAbsolute(executable) ? path.win32 : path.posix.isAbsolute(executable) ? path.posix : null;
+  if (flavor === null) {
+    if (!executable.includes('/') && !executable.includes('\\')) return executable;
+    if (executable.includes('\\') && path.sep !== '\\') return path.win32.basename(executable);
+    return portableExecutable(path.resolve(PROJECT_ROOT, executable));
+  }
+
+  if (flavor.isAbsolute(PROJECT_ROOT)) {
+    const relative = flavor.relative(PROJECT_ROOT, executable);
+    if (relative !== '' && !relative.startsWith(`..${flavor.sep}`) && relative !== '..' && !flavor.isAbsolute(relative)) {
+      return relative.split(flavor.sep).join('/');
+    }
+  }
+  return flavor.basename(executable);
+}
+
+/**
+ * A validated run summary with portable runner executable identities.
+ * Measurements and every other field remain byte-for-byte equivalent once
+ * serialized.
+ *
+ * @param {object} record
+ * @returns {object}
+ */
+function portableRunForStorage(record) {
+  return {
+    ...record,
+    suites: record.suites.map((suite) => ({
+      ...suite,
+      runners: suite.runners.map((runner) => ({ ...runner, executable: portableExecutable(runner.executable) })),
+    })),
+  };
+}
+
+/**
  * The run-summary record `--from` names, validated against the same schema
  * `eval-all.js` writes to. A record that does not validate is refused here
  * rather than compared or stored: a comparison against, or a storage of, a
@@ -108,7 +151,7 @@ async function loadProducedRun(fromPath) {
   if (!read.present) throw new Error(`--from ${fromPath} does not exist`);
   const result = validateEvalRun(read.value);
   if (!result.success) throw new Error(`--from ${fromPath} is not a valid run-summary record:\n${schemaIssues(result)}`);
-  return result.data;
+  return portableRunForStorage(result.data);
 }
 
 /**
@@ -126,7 +169,7 @@ async function loadStoredRun() {
       `${path.relative(PROJECT_ROOT, LATEST_PATH)} does not match its own schema, so it cannot be compared against:\n${schemaIssues(result)}`,
     );
   }
-  return result.data;
+  return portableRunForStorage(result.data);
 }
 
 /** A run-summary's own `generatedAt`, made safe for a filename. */
@@ -217,4 +260,13 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseArgs, historyFileName, loadProducedRun, loadStoredRun, printComparison, USAGE };
+module.exports = {
+  parseArgs,
+  historyFileName,
+  loadProducedRun,
+  loadStoredRun,
+  portableExecutable,
+  portableRunForStorage,
+  printComparison,
+  USAGE,
+};

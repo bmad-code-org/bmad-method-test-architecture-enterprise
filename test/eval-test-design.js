@@ -145,7 +145,14 @@ const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
+const {
+  createProbePort,
+  hostEnvironment,
+  observedText,
+  probeCommandWithRetry,
+  probeRequest,
+  targetProblems,
+} = require('./lib/probe-targets');
 const { readJson, readText, writeText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -735,6 +742,15 @@ function configYaml() {
  */
 async function stageWorkspace(set) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-test-design-eval-'));
+  try {
+    return await stageIntoWorkspace(dir, set);
+  } catch (error) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function stageIntoWorkspace(dir, set) {
   const projectDir = path.join(dir, projectRootOf(set));
   const setRoot = path.join(FIXTURE_ROOT, set.root);
 
@@ -1488,25 +1504,31 @@ function runnerOptions(options) {
  * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
  */
 async function runCase(set, options, agent, runIndex, categories) {
-  const workspace = await stageWorkspace(set);
+  let workspace = await stageWorkspace(set);
   try {
-    const leaked = await assertGroundTruthAbsent(workspace.dir);
-    if (leaked.length > 0) {
-      return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
-    }
-
     const treeBefore = workingTreeState(PROJECT_ROOT);
-    const { port } = await createProbePort({
-      cwd: workspace.dir,
-      interfaceIds: [TEST_DESIGN_INTERFACE],
-      artifacts: { [TEST_DESIGN_INTERFACE]: designArtifactPaths(set) },
-      // The operator's own --env-pass, which widens this one authorization by the
-      // names it asks for and nothing else. The adapter refuses a request key the
-      // authorization does not permit, so the two lists are built from one source.
-      environmentKeys: { [TEST_DESIGN_INTERFACE]: options.envPass },
-    });
-    const result = await probeCommand(
-      port,
+    const portForAttempt = async (attempt) => {
+      if (attempt > 1) {
+        fs.rmSync(workspace.dir, { recursive: true, force: true });
+        workspace = await stageWorkspace(set);
+      }
+      const leaked = await assertGroundTruthAbsent(workspace.dir);
+      if (leaked.length > 0) {
+        return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
+      }
+      const { port } = await createProbePort({
+        cwd: workspace.dir,
+        interfaceIds: [TEST_DESIGN_INTERFACE],
+        artifacts: { [TEST_DESIGN_INTERFACE]: designArtifactPaths(set) },
+        // The operator's own --env-pass, which widens this one authorization by the
+        // names it asks for and nothing else. The adapter refuses a request key the
+        // authorization does not permit, so the two lists are built from one source.
+        environmentKeys: { [TEST_DESIGN_INTERFACE]: options.envPass },
+      });
+      return port;
+    };
+    const result = await probeCommandWithRetry(
+      portForAttempt,
       probeRequest({
         probeId: `${set.id}-run-${runIndex + 1}`,
         interfaceId: TEST_DESIGN_INTERFACE,

@@ -113,7 +113,7 @@ const {
 } = require('./lib/eval-record');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest } = require('./lib/probe-targets');
+const { createProbePort, hostEnvironment, observedText, probeCommandWithRetry, probeRequest } = require('./lib/probe-targets');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { readText } = require('./lib/file-system-port');
 
@@ -492,7 +492,7 @@ async function runReview(agent, runIndex, runner = {}) {
     if ((runner.agentArgs ?? []).length > 0) option['agent-arg'] = [...runner.agentArgs];
     if ((runner.envPass ?? []).length > 0) option['env-pass'] = [...runner.envPass];
 
-    const result = await probeCommand(
+    const result = await probeCommandWithRetry(
       port,
       probeRequest({
         probeId: `review-run-${runIndex + 1}`,
@@ -719,7 +719,7 @@ async function promptDigestFromCli() {
       artifacts: { 'tea-test-review': { report: path.join(probeDir, 'test-review.md') } },
       budgets: { 'tea-test-review': { maxElapsedMs: 120_000 } },
     });
-    const result = await probeCommand(
+    const result = await probeCommandWithRetry(
       port,
       probeRequest({
         probeId: 'prompt-digest',

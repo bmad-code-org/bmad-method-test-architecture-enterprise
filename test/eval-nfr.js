@@ -193,7 +193,14 @@ const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-re
 const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
-const { createProbePort, hostEnvironment, observedText, probeCommand, probeRequest, targetProblems } = require('./lib/probe-targets');
+const {
+  createProbePort,
+  hostEnvironment,
+  observedText,
+  probeCommandWithRetry,
+  probeRequest,
+  targetProblems,
+} = require('./lib/probe-targets');
 const { readBytes, readJson, readText, writeText } = require('./lib/file-system-port');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -1046,6 +1053,15 @@ function configYaml(set) {
  */
 async function stageWorkspace(set) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-nfr-eval-'));
+  try {
+    return await stageIntoWorkspace(dir, set);
+  } catch (error) {
+    fs.rmSync(dir, { recursive: true, force: true });
+    throw error;
+  }
+}
+
+async function stageIntoWorkspace(dir, set) {
   const projectDir = path.join(dir, set.projectRoot);
   const setRoot = path.join(FIXTURE_ROOT, set.root);
 
@@ -2110,24 +2126,30 @@ function runnerOptions(options) {
  * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
  */
 async function runCase(set, options, agent, runIndex) {
-  const workspace = await stageWorkspace(set);
+  let workspace = await stageWorkspace(set);
   try {
-    const leaked = await assertGroundTruthAbsent(workspace.dir);
-    if (leaked.length > 0) {
-      return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
-    }
-
     const treeBefore = workingTreeState(PROJECT_ROOT);
-    const { port } = await createProbePort({
-      cwd: workspace.dir,
-      interfaceIds: [NFR_INTERFACE],
-      artifacts: { [NFR_INTERFACE]: nfrArtifactPaths(set) },
-      // The operator's own pass-through names, so the authorization permits
-      // exactly what the request below declares.
-      environmentKeys: { [NFR_INTERFACE]: options.envPass },
-    });
-    const result = await probeCommand(
-      port,
+    const portForAttempt = async (attempt) => {
+      if (attempt > 1) {
+        fs.rmSync(workspace.dir, { recursive: true, force: true });
+        workspace = await stageWorkspace(set);
+      }
+      const leaked = await assertGroundTruthAbsent(workspace.dir);
+      if (leaked.length > 0) {
+        return { ok: false, failureClass: 'environment-configuration', reason: leaked.join('; ') };
+      }
+      const { port } = await createProbePort({
+        cwd: workspace.dir,
+        interfaceIds: [NFR_INTERFACE],
+        artifacts: { [NFR_INTERFACE]: nfrArtifactPaths(set) },
+        // The operator's own pass-through names, so the authorization permits
+        // exactly what the request below declares.
+        environmentKeys: { [NFR_INTERFACE]: options.envPass },
+      });
+      return port;
+    };
+    const result = await probeCommandWithRetry(
+      portForAttempt,
       probeRequest({
         probeId: `${set.id}-run-${runIndex + 1}`,
         interfaceId: NFR_INTERFACE,
