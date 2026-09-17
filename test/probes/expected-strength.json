@@ -3034,7 +3034,7 @@
   },
   "fragment-selection/bmad-testarch-atdd": {
     "contractId": "tea-fragment-selection-atdd",
-    "corpusDigest": "sha256:9595131ec0e9cde7458a4e38e4baa2232524b02c014501eca0073463ed23788f",
+    "corpusDigest": "sha256:f7c6f842993e66607544ff95b6b26626e3eca12617dccb272a4caf62a8eff72a",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -3185,7 +3185,7 @@
   },
   "fragment-selection/bmad-testarch-automate": {
     "contractId": "tea-fragment-selection-automate",
-    "corpusDigest": "sha256:89d71c25ae651e92c6c74cc56a5dc80eed599296514b73ec9e53f41709a81575",
+    "corpusDigest": "sha256:ec739616218751e44a2363c99c01e9e63460825b97aeef3d7e59d2aac29f873e",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -3376,7 +3376,7 @@
   },
   "fragment-selection/bmad-testarch-ci": {
     "contractId": "tea-fragment-selection-ci",
-    "corpusDigest": "sha256:43215ad3892b982cbc14dadc8cc3919b8d321059d31cfcc6e6587cc6cb357fd6",
+    "corpusDigest": "sha256:7aad679a0d407b1e0172003477dc2c38da598cdbda11b55f67fd2c2659e600ce",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -3507,7 +3507,7 @@
   },
   "fragment-selection/bmad-testarch-framework": {
     "contractId": "tea-fragment-selection-framework",
-    "corpusDigest": "sha256:143204fc6216c64b43ee4614e0618de793fcc37e889a4ff3a9f7d23adc0043a9",
+    "corpusDigest": "sha256:4b9ddbd6ecb717dda2d61dac8c6ed3069a4a9de32a1a7275de33d8dfb104396a",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -3658,7 +3658,7 @@
   },
   "fragment-selection/bmad-testarch-nfr": {
     "contractId": "tea-fragment-selection-nfr",
-    "corpusDigest": "sha256:751c58ab710d5ee730a5eb74689d5408beac318ffc640b51b6dd3e6abbe4d4fb",
+    "corpusDigest": "sha256:019a84f3902a23056cb4b5565f22ec87042dee4a14f8848c0727e250918ce87d",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -3789,7 +3789,7 @@
   },
   "fragment-selection/bmad-testarch-test-design": {
     "contractId": "tea-fragment-selection-test-design",
-    "corpusDigest": "sha256:7bd049ceec96e5592460bed8223cd4d379c20a039ae223d5fb1a6ae37f98661d",
+    "corpusDigest": "sha256:4a143e3ba1792a5b87a52bdfe70c1b57dff89847b63b8c3848e3885f069ab593",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -3980,7 +3980,7 @@
   },
   "fragment-selection/bmad-testarch-test-review": {
     "contractId": "tea-fragment-selection-test-review",
-    "corpusDigest": "sha256:fe9cf37cab4ee4c40da4413e3821753ce1a9751a08fafece6985f56d28ffe661",
+    "corpusDigest": "sha256:b1171b27bb752d3c31a5eca30a2be7d2102614e325bbfbd4d06de966e05710e6",
     "probeCount": 2,
     "strength": {
       "defect": null,
@@ -4111,7 +4111,7 @@
   },
   "fragment-selection/bmad-testarch-trace": {
     "contractId": "tea-fragment-selection-trace",
-    "corpusDigest": "sha256:d99edc90f7f19e94a91145edf47cfde2bf2b051307f63742561fc777b8e016f2",
+    "corpusDigest": "sha256:509a15f4285216016a03c7b1044266324fb9c4c9eba8af2880e8ef25ebfed97c",
     "probeCount": 2,
     "strength": {
       "defect": null,

@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-fragment-selection-bmad-testarch-test-design",
-    "implementationDigest": "sha256:ed154b8d5058f10b7925453b100fbcb4e28adcbccb57735ea8d05bb950d801bb",
+    "implementationDigest": "sha256:c178d28531f7ff080aea51bae0f4c26f6353e2ef858f2a186fed915ba50d57f4",
     "artifactDigest": "sha256:e20c0af1a7788c833f66358f6ce2c72fd3a09da74e6a35e1d48f918c1ebce6f6",
-    "commitDigest": "sha256:ed154b8d5058f10b7925453b100fbcb4e28adcbccb57735ea8d05bb950d801bb",
+    "commitDigest": "sha256:c178d28531f7ff080aea51bae0f4c26f6353e2ef858f2a186fed915ba50d57f4",
     "rationale": "A run that names every fragment in the index satisfies O-001 for test-design-system-level, because every mandated fragment is in the list, and violates O-002, because so is every forbidden one. The containment oracle alone cannot tell that reply from a correct selection, and the exclusion oracle can.",
     "qualification": {
       "route": "gameability",
@@ -86,9 +86,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-001",
     "systemId": "tea-fragment-selection-bmad-testarch-test-design",
-    "implementationDigest": "sha256:ed154b8d5058f10b7925453b100fbcb4e28adcbccb57735ea8d05bb950d801bb",
+    "implementationDigest": "sha256:c178d28531f7ff080aea51bae0f4c26f6353e2ef858f2a186fed915ba50d57f4",
     "artifactDigest": "sha256:e20c0af1a7788c833f66358f6ce2c72fd3a09da74e6a35e1d48f918c1ebce6f6",
-    "commitDigest": "sha256:ed154b8d5058f10b7925453b100fbcb4e28adcbccb57735ea8d05bb950d801bb",
+    "commitDigest": "sha256:c178d28531f7ff080aea51bae0f4c26f6353e2ef858f2a186fed915ba50d57f4",
     "rationale": "test-design-system-level declares the exact set the step files mandate and the exact set they exclude, so a selection naming the first and none of the second is the run this contract exists to confirm.",
     "qualification": {
       "route": "clean-control",
@@ -98,7 +98,7 @@
         "privateRef": null,
         "digest": "sha256:e20c0af1a7788c833f66358f6ce2c72fd3a09da74e6a35e1d48f918c1ebce6f6"
       },
-      "revisionCommitDigest": "sha256:ed154b8d5058f10b7925453b100fbcb4e28adcbccb57735ea8d05bb950d801bb",
+      "revisionCommitDigest": "sha256:c178d28531f7ff080aea51bae0f4c26f6353e2ef858f2a186fed915ba50d57f4",
       "noKnownDefectStatement": "test-design-system-level's expected selection is derived from the bmad-testarch-test-design step files themselves, and npm run test:criteria-fragments fails when a fragment it names has left the index."
     },
     "expectedClean": true,
