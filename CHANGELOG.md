@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.27.1] - 2026-09-17
+
 ### Added
 
 - `test/lib/probe-targets.js`'s `probeCommandWithRetry` (TEA Story 5.2, stage two), a bounded retry over `probeCommand` for the two failure classes an ordinary network or CLI hiccup produces, `environment-timeout` and `environment-transport`. The retry set excludes `environment-configuration`, because the identical request has already been refused, and excludes `environment-parser` and `unexpected-error`, because another attempt cannot repair either condition. Found in the story's own first live run: one `tea-fragment-selection-runner` invocation hung past its declared budget and was killed, which lost the whole matrix even though the other hundreds of calls that run made all answered. At that volume, a per-call failure rate low enough to look rare still makes a fully clean run improbable, so Story 5.2's own AC1 ("every declared repetition completes") was gated on luck rather than reproducible.
