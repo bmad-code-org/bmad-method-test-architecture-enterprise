@@ -2449,7 +2449,14 @@ async function main() {
     // a model call, so it keeps the exit 1 the sibling harnesses give the same case.
     // No sets are handed to the record: building prompts out of data that just failed
     // validation is how a reporting path turns into a second crash.
-    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      sets: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const criteriaCount = sets.reduce((sum, set) => sum + (set.criteria ?? []).length, 0);
@@ -2522,7 +2529,7 @@ async function main() {
       mode: staticMode,
       sets,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -2815,6 +2822,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   validateCorpus,

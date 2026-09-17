@@ -700,6 +700,7 @@ function scoreVerdict(verdict, groundTruth) {
       reportedFindings: fileFindings
         .map((finding) => `${finding.row ?? finding.criterion_id ?? ''}:${finding.file}:${finding.line ?? ''}`)
         .sort(),
+      reportedCount: fileFindings.length + (fileIndex === 0 ? outOfScope.length : 0),
       falsePositives: fileFalsePositives.length + (fileIndex === 0 ? outOfScope.length : 0),
       outOfScope: fileIndex === 0 ? outOfScope.length : 0,
       unattributed: fileUnattributed.length,
@@ -728,7 +729,7 @@ function scoreVerdict(verdict, groundTruth) {
 function reviewDiagnosticProjection(caseScore) {
   const planted = caseScore.planted.length;
   const hits = caseScore.hits.length;
-  const adjudicatedReported = Math.max(0, caseScore.reportedFindings.length - caseScore.unattributed);
+  const reportedCount = caseScore.reportedCount ?? caseScore.reportedFindings.length + caseScore.outOfScope;
   return {
     recall: { numerator: hits, denominator: planted, threshold: THRESHOLDS.recall },
     criticalRecall: {
@@ -737,8 +738,8 @@ function reviewDiagnosticProjection(caseScore) {
       threshold: THRESHOLDS.criticalRecall,
     },
     nonFalsePositiveRate: {
-      numerator: Math.max(0, adjudicatedReported - caseScore.falsePositives),
-      denominator: adjudicatedReported,
+      numerator: Math.max(0, reportedCount - caseScore.falsePositives),
+      denominator: reportedCount,
       threshold: THRESHOLDS.nonFalsePositiveRate,
     },
     falsePositives: caseScore.falsePositives,
@@ -762,6 +763,7 @@ function reviewSignature(caseScore) {
     unattributed: caseScore.unattributed,
     unlocated: caseScore.unlocated,
     recommendation: caseScore.recommendation,
+    score: caseScore.score,
   });
 }
 
@@ -773,24 +775,24 @@ function reviewDiagnosticClassifier(diagnostics) {
     variants.get(entry.caseId).add(entry.signature);
   }
   return (entry, failures) => {
-    const reasons = [];
+    const findings = [];
     const failed = failures.join('; ').toLowerCase();
     const below = (name) => {
       return diagnosticRateMiss(entry, name, diagnostics);
     };
-    if (failed.includes('critical recall') && below('criticalRecall')) reasons.push('CRITICAL recall');
-    if (failed.includes('recall') && below('recall')) reasons.push('recall');
-    if (failed.includes('non-false-positive') && below('nonFalsePositiveRate')) reasons.push('non-false-positive rate');
+    if (failed.includes('critical recall') && below('criticalRecall'))
+      findings.push({ reason: 'CRITICAL recall', rootCause: 'tea-workflow-defect' });
+    if (failed.includes('recall') && below('recall')) findings.push({ reason: 'recall', rootCause: 'tea-workflow-defect' });
+    if (failed.includes('non-false-positive') && below('nonFalsePositiveRate')) {
+      findings.push({
+        reason: 'non-false-positive rate',
+        rootCause: entry.metricContributions['nonFalsePositiveRate.denominator'] === 0 ? 'oracle-defect' : 'tea-workflow-defect',
+      });
+    }
     const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
-    if (failed.includes('score variance') && unstable) reasons.push('score variance');
-    if (failed.includes('verdict stability') && unstable) reasons.push('verdict stability');
-    if (reasons.length === 0) return null;
-    return {
-      reasons,
-      rootCause: reasons.every((reason) => reason === 'score variance' || reason === 'verdict stability')
-        ? 'model-instability'
-        : 'tea-workflow-defect',
-    };
+    if (failed.includes('score variance') && unstable) findings.push({ reason: 'score variance', rootCause: 'model-instability' });
+    if (failed.includes('verdict stability') && unstable) findings.push({ reason: 'verdict stability', rootCause: 'model-instability' });
+    return findings.length > 0 ? { findings } : null;
   };
 }
 
@@ -950,7 +952,7 @@ async function main() {
       startedAt,
       mode: preflightOnly ? 'preflight-only' : 'live',
       runners: [],
-      suiteFailureClasses: problems.map((problem) => problem.failureClass),
+      suiteFailureClasses: problems,
     });
   }
   if (preflightOnly) {
@@ -1176,6 +1178,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   admittedLinesFor,
   scoreVerdict,
   reviewDiagnosticProjection,

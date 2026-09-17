@@ -1859,7 +1859,14 @@ async function main() {
     console.error('');
     // An inconsistent corpus is a real finding about the repository, measured without
     // a model call, so it keeps the exit 1 the sibling harnesses give the same case.
-    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      sets: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const materialCount = sets.reduce((sum, set) => sum + (set.materialRisks ?? []).length, 0);
@@ -1915,7 +1922,7 @@ async function main() {
       mode: staticMode,
       sets,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -2211,6 +2218,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   selectSets,

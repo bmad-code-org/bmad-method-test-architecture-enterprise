@@ -12,6 +12,7 @@ const {
   diagnosticRecord,
   numericContributions,
   classifyDiagnosticQuality,
+  redactArgs,
   redactSecrets,
   artifactEvidence,
   suiteResultRecord,
@@ -25,6 +26,7 @@ const {
   SCHEMA_VERSION,
   LEGACY_SCHEMA_VERSION,
   ROOT_CAUSES,
+  worstFailureClass,
 } = require('./schema/eval-result');
 const atdd = require('./eval-atdd');
 const automate = require('./eval-automate');
@@ -93,6 +95,65 @@ function suiteRecord(runners, cases = [{ id: 'case-a', promptDigest: DIGEST }]) 
     runners,
     durationMs: 1,
   });
+}
+
+function harnessRunnerWriter(id, diagnostics) {
+  const options = { agentCmd: process.execPath, agentArgs: [], envPass: [], model: null };
+  const versions = { custom: process.version };
+  const payload = {
+    expected: diagnostics.length,
+    completed: diagnostics.filter((entry) => entry.completionState === 'completed').length,
+    measurements: { accuracy: diagnostics.some((entry) => entry.failureClass === 'quality') ? 0 : 1 },
+    durationMs: 1,
+    failures: [],
+    diagnostics,
+    diagnosticClassifier: () => null,
+  };
+  switch (id) {
+    case 'atdd': {
+      return atdd.runnerRecord('custom', options, versions, payload);
+    }
+    case 'automate': {
+      return automate.automateRunnerRecord({ scored: payload.measurements, diagnostics, failures: [], durationMs: 1 });
+    }
+    case 'bmad-tea-routing': {
+      return routing.runnerRecord('custom', options, versions, payload);
+    }
+    case 'ci': {
+      return ci.runnerRecord('custom', options, versions, [], payload);
+    }
+    case 'fragment-selection': {
+      return fragment.runnerRecord('custom', options, versions, payload);
+    }
+    case 'framework-scaffold': {
+      return framework.runnerRecord(options, {
+        ...payload,
+        failureClass: worstFailureClass(diagnostics.map((entry) => entry.failureClass)),
+        tools: [],
+      });
+    }
+    case 'nfr': {
+      return nfr.runnerRecord('custom', options, versions, payload);
+    }
+    case 'teach-me-testing': {
+      return teach.runnerRecord('custom', options, versions, payload);
+    }
+    case 'test-design': {
+      return design.runnerRecord('custom', options, versions, payload);
+    }
+    case 'test-review': {
+      return review.runnerRecord('custom', options, versions, payload);
+    }
+    case 'trace': {
+      return trace.runnerRecord('custom', options, versions, payload);
+    }
+    case 'transcript': {
+      return transcript.runnerRecord(process.version, payload);
+    }
+    default: {
+      throw new Error(`no deterministic writer fixture for ${id}`);
+    }
+  }
 }
 
 function harnessProjectionFixtures() {
@@ -386,8 +447,18 @@ async function main() {
       Object.keys(metrics).some((key) => key.endsWith('.threshold') || key.startsWith('max') || key.endsWith('Ceiling')),
       `${fixture.id} projects the threshold or ceiling that interprets its contribution`,
     );
-    const success = diagnosticRecord({ caseId: fixture.id, repetition: 1, signature: 'stable', metricContributions: metrics });
+    const success = diagnosticRecord({
+      caseId: fixture.id,
+      repetition: 1,
+      signature: 'stable',
+      metricContributions: metrics,
+      evidence: [{ kind: 'output-signature', value: 'stable' }],
+    });
     check(diagnosticSchema.safeParse(success).success, `${fixture.id} builds a valid success diagnostic`);
+    check(
+      validateEvalResult(suiteRecord([harnessRunnerWriter(fixture.id, [success])], [{ id: fixture.id, promptDigest: DIGEST }])).success,
+      `${fixture.id} writes a schema-valid deterministic success result`,
+    );
     const [qualityFinding] = classifyDiagnosticQuality([success], ['fixture miss'], () => ({
       reasons: ['fixture miss'],
       rootCause: 'tea-workflow-defect',
@@ -395,6 +466,11 @@ async function main() {
     check(
       diagnosticSchema.safeParse(qualityFinding).success && qualityFinding.failureClass === 'quality',
       `${fixture.id} builds a valid case-level quality diagnostic`,
+    );
+    check(
+      validateEvalResult(suiteRecord([harnessRunnerWriter(fixture.id, [qualityFinding])], [{ id: fixture.id, promptDigest: DIGEST }]))
+        .success,
+      `${fixture.id} writes a schema-valid deterministic quality result`,
     );
     const environmentFinding = diagnosticRecord({
       caseId: fixture.id,
@@ -407,8 +483,22 @@ async function main() {
       diagnosticSchema.safeParse(environmentFinding).success && environmentFinding.completionState === 'failed',
       `${fixture.id} builds a valid environment diagnostic`,
     );
+    check(
+      validateEvalResult(suiteRecord([harnessRunnerWriter(fixture.id, [environmentFinding])], [{ id: fixture.id, promptDigest: DIGEST }]))
+        .success,
+      `${fixture.id} writes a schema-valid deterministic environment result`,
+    );
     const unstablePair = classifyDiagnosticQuality(
-      [success, diagnosticRecord({ caseId: fixture.id, repetition: 2, signature: 'changed', metricContributions: metrics })],
+      [
+        success,
+        diagnosticRecord({
+          caseId: fixture.id,
+          repetition: 2,
+          signature: 'changed',
+          metricContributions: metrics,
+          evidence: [{ kind: 'output-signature', value: 'changed' }],
+        }),
+      ],
       ['unstable case'],
       () => ({ reasons: ['unstable case'], rootCause: 'model-instability' }),
     );
@@ -416,10 +506,15 @@ async function main() {
       unstablePair.every((entry) => entry.failureClass === 'quality' && entry.rootCause === 'model-instability'),
       `${fixture.id} preserves both signatures in an instability finding`,
     );
+    check(
+      validateEvalResult(suiteRecord([harnessRunnerWriter(fixture.id, unstablePair)], [{ id: fixture.id, promptDigest: DIGEST }])).success,
+      `${fixture.id} writes a schema-valid deterministic instability result`,
+    );
   }
 
   const reviewSignatureFixture = {
     caseId: 'test/fixtures/test-review/seeded/orders.spec.js',
+    planted: ['C1:seeded/orders.spec.js:12', 'H1:seeded/orders.spec.js:28'],
     hits: ['C1:seeded/orders.spec.js:12'],
     misses: ['H1:seeded/orders.spec.js:28'],
     reportedFindings: ['C1:seeded/orders.spec.js:12'],
@@ -428,6 +523,7 @@ async function main() {
     unattributed: 0,
     unlocated: 0,
     recommendation: 'changes-requested',
+    score: 90,
   };
   const movedReviewFinding = {
     ...reviewSignatureFixture,
@@ -438,6 +534,76 @@ async function main() {
   check(
     review.reviewSignature(reviewSignatureFixture) !== review.reviewSignature(movedReviewFinding),
     'test-review signatures distinguish equal-count findings with different identities and locations',
+  );
+  check(
+    review.reviewSignature(reviewSignatureFixture) !== review.reviewSignature({ ...reviewSignatureFixture, score: 80 }),
+    'test-review signatures expose score-only variance',
+  );
+
+  const reviewVarianceDiagnostics = [90, 80].map((score, index) => {
+    const caseScore = { ...reviewSignatureFixture, score, criticalPlanted: 1, criticalHits: 1, reportedCount: 1 };
+    const signature = review.reviewSignature(caseScore);
+    return diagnosticRecord({
+      caseId: caseScore.caseId,
+      repetition: index + 1,
+      signature,
+      metricContributions: numericContributions(review.reviewDiagnosticProjection(caseScore)),
+      evidence: [{ kind: 'output-signature', value: signature }],
+    });
+  });
+  const classifiedReviewVariance = classifyDiagnosticQuality(
+    reviewVarianceDiagnostics,
+    ['score variance'],
+    review.reviewDiagnosticClassifier(reviewVarianceDiagnostics),
+  );
+  check(
+    classifiedReviewVariance.every((entry) => entry.rootCause === 'model-instability'),
+    'test-review maps score-only repeated-run variance to model instability',
+  );
+
+  const outOfScopeScore = {
+    ...reviewSignatureFixture,
+    criticalPlanted: 1,
+    criticalHits: 1,
+    reportedFindings: [],
+    reportedCount: 1,
+    falsePositives: 1,
+    outOfScope: 1,
+  };
+  const outOfScopeMetrics = numericContributions(review.reviewDiagnosticProjection(outOfScopeScore));
+  const outOfScopeDiagnostic = diagnosticRecord({
+    caseId: outOfScopeScore.caseId,
+    repetition: 1,
+    signature: review.reviewSignature(outOfScopeScore),
+    metricContributions: outOfScopeMetrics,
+    evidence: [{ kind: 'output-signature', value: 'out-of-scope-only' }],
+  });
+  const [classifiedOutOfScope] = classifyDiagnosticQuality(
+    [outOfScopeDiagnostic],
+    ['non-false-positive rate'],
+    review.reviewDiagnosticClassifier([outOfScopeDiagnostic]),
+  );
+  check(
+    outOfScopeMetrics['nonFalsePositiveRate.denominator'] === 1 && classifiedOutOfScope.failureClass === 'quality',
+    'test-review assigns out-of-scope findings to the same case numerator and denominator used by the aggregate',
+  );
+
+  const mixedRootCauseDiagnostic = diagnosticRecord({
+    caseId: 'automate-mixed-root-cause',
+    repetition: 1,
+    signature: 'mixed',
+    metricContributions: { undetectedRegression: 1, unexpectedOutcomes: 1 },
+    evidence: [{ kind: 'summary', value: 'deterministic classifier fixture' }],
+  });
+  const [mixedRootCause] = classifyDiagnosticQuality(
+    [mixedRootCauseDiagnostic],
+    ['undetected regression', 'unexpected outcome'],
+    automate.automateDiagnosticClassifier,
+  );
+  check(
+    mixedRootCause.triage.some((entry) => entry.rootCause === 'harness-defect') &&
+      mixedRootCause.triage.some((entry) => entry.rootCause === 'oracle-defect'),
+    'production classifiers preserve distinct reason and root-cause pairs for mixed findings',
   );
 
   const embeddedArtifact = artifactEvidence('staged/test-artifacts/report.md', '# Report\nsecret-free evidence');
@@ -466,6 +632,111 @@ async function main() {
     childCrash.suiteDiagnostics[0]?.failureClass === 'environment-missing-artifact' && childCrash.suiteDiagnostics[0]?.reason,
     'eval-all records the child failure class and reason in a suite-attempt diagnostic',
   );
+  const childExitOne = await evalAll.placeholderRecord(
+    {
+      id: 'child-exit-one',
+      evalType: 'behavioral',
+      skill: 'bmad-testarch-atdd',
+      contracts: [],
+      ciTier: 'deterministic',
+      runnerCapabilities: ['read-only'],
+      fixtures: [],
+      thresholds: {},
+      repetitions: 1,
+    },
+    { preflightOnly: false },
+    1,
+    1,
+    'child-exit-one',
+  );
+  check(
+    validateEvalResult(childExitOne).success && childExitOne.failureClass === 'environment-missing-artifact',
+    'eval-all treats a missing child result at exit 1 as an environment failure',
+  );
+
+  const childFixtureDir = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-all-child-record-'));
+  const childSuite = {
+    id: 'child-record',
+    evalType: 'behavioral',
+    skill: 'bmad-testarch-atdd',
+    contracts: [],
+    ciTier: 'deterministic',
+    runnerCapabilities: ['read-only'],
+    fixtures: [],
+    thresholds: {},
+    repetitions: 1,
+  };
+  try {
+    const unreadablePath = path.join(childFixtureDir, 'unreadable.json');
+    fs.writeFileSync(unreadablePath, '{broken json', 'utf8');
+    const unreadable = await evalAll.readChildRecord(
+      { jsonPath: unreadablePath, label: 'unreadable-child', suite: childSuite },
+      { preflightOnly: false },
+      2,
+      1,
+    );
+    check(
+      validateEvalResult(unreadable).success && unreadable.suiteDiagnostics[0].failureClass === 'environment-parser',
+      'eval-all converts unreadable child JSON into a parser diagnostic',
+    );
+    check(
+      unreadable.suiteDiagnostics[0].evidence[0].value.includes('exit=2'),
+      'unreadable child diagnostics preserve child status evidence',
+    );
+
+    const invalidPath = path.join(childFixtureDir, 'invalid.json');
+    fs.writeFileSync(invalidPath, '{}\n', 'utf8');
+    const invalid = await evalAll.readChildRecord(
+      { jsonPath: invalidPath, label: 'invalid-child', suite: childSuite },
+      { preflightOnly: false },
+      1,
+      1,
+    );
+    check(
+      validateEvalResult(invalid).success && invalid.suiteDiagnostics[0].failureClass === 'environment-harness',
+      'eval-all validates parseable child JSON immediately and records invalid output as a harness failure',
+    );
+  } finally {
+    fs.rmSync(childFixtureDir, { recursive: true, force: true });
+  }
+
+  const corpusFailure = suiteResultRecord({
+    generatedAt: '2026-09-17T00:00:00.000Z',
+    mode: 'validate-only',
+    suite: childSuite,
+    repository: { commit: 'abc123', dirty: false },
+    fixtureDigest: DIGEST,
+    promptDigest: null,
+    cases: [],
+    runners: [],
+    durationMs: 1,
+    suiteFailureClasses: [{ failureClass: 'quality', message: 'fixture oracle names an unknown case' }],
+  });
+  check(
+    validateEvalResult(corpusFailure).success && corpusFailure.suiteDiagnostics[0].rootCause === 'corpus-defect',
+    'corpus validation failures emit production suite diagnostics classified as corpus defects',
+  );
+  const preflightFailure = suiteResultRecord({
+    generatedAt: '2026-09-17T00:00:00.000Z',
+    mode: 'preflight-only',
+    suite: childSuite,
+    repository: { commit: 'abc123', dirty: false },
+    fixtureDigest: DIGEST,
+    promptDigest: null,
+    cases: [],
+    runners: [],
+    durationMs: 1,
+    suiteFailureClasses: [{ failureClass: 'environment-configuration', message: 'runner is unavailable' }],
+  });
+  check(
+    validateEvalResult(preflightFailure).success && preflightFailure.suiteDiagnostics[0].reason === 'runner is unavailable',
+    'preflight failures emit suite diagnostics with their reason',
+  );
+
+  const inconsistentSuite = structuredClone(preflightFailure);
+  inconsistentSuite.failureClass = 'none';
+  inconsistentSuite.exitCode = 0;
+  check(!validateEvalResult(inconsistentSuite).success, 'suite severity must be derived from runner and suite diagnostic evidence');
 
   const mismatchedSeverity = structuredClone(environmentResult);
   mismatchedSeverity.runners[0].failureClass = 'quality';
@@ -490,6 +761,10 @@ async function main() {
     durationMs: 1,
   });
   check(validateEvalRun(currentRun).success, 'a current run summary containing diagnostics validates');
+  const inconsistentRun = structuredClone(currentRun);
+  inconsistentRun.failureClass = 'none';
+  inconsistentRun.exitCode = 0;
+  check(!validateEvalRun(inconsistentRun).success, 'run-summary severity must be derived from child suite evidence');
 
   const legacyPair = structuredClone(currentRun);
   legacyPair.schemaVersion = LEGACY_SCHEMA_VERSION;
@@ -536,7 +811,7 @@ async function main() {
   const processFailures = [
     [automate.playwrightProcessFailure({ error: { code: 'ETIMEDOUT', message: 'timed out' } }), 'environment-timeout'],
     [automate.playwrightProcessFailure({ error: { code: 'ENOENT', message: 'missing executable' } }), 'environment-transport'],
-    [automate.playwrightProcessFailure({ signal: 'SIGKILL' }), 'environment-timeout'],
+    [automate.playwrightProcessFailure({ signal: 'SIGSEGV' }), 'environment-harness'],
     [automate.playwrightProcessFailure({ status: 0 }, 'empty output'), 'environment-missing-artifact'],
   ];
   for (const [failure, expectedClass] of processFailures) {
@@ -550,6 +825,69 @@ async function main() {
     );
     check(scored.loadFailure.failureClass === expectedClass, `automate preserves ${expectedClass} through case scoring`);
   }
+
+  const escapedSecrets = [String.raw`password="alpha\"omega-secret"`, String.raw`token='alpha\'omega-secret'`];
+  for (const secret of escapedSecrets) {
+    const sanitized = redactSecrets(secret);
+    check(sanitized.endsWith('[redacted]'), 'secret sanitizer consumes escaped quotes inside quoted values');
+    check(!sanitized.includes('omega-secret'), 'secret sanitizer removes suffixes after escaped quotes');
+  }
+  const sanitizedArgs = redactArgs([
+    'Authorization: Bearer arbitrary-sensitive-value',
+    '--header=Authorization: Bearer another-sensitive-value',
+    '--label=safe-value',
+  ]);
+  check(!sanitizedArgs.join(' ').includes('arbitrary-sensitive-value'), 'retained Authorization arguments pass through the sanitizer');
+  check(!sanitizedArgs.join(' ').includes('another-sensitive-value'), '--flag=value values pass through the sanitizer');
+  check(sanitizedArgs.includes('--label=safe-value'), 'ordinary retained arguments preserve their value');
+
+  const emptyMetrics = diagnosticRecord({
+    caseId: 'empty-metrics',
+    repetition: 1,
+    signature: 'stable',
+    evidence: [{ kind: 'summary', value: 'bounded' }],
+  });
+  check(!diagnosticSchema.safeParse(emptyMetrics).success, 'completed diagnostics require metric contributions');
+  const emptyEvidence = diagnosticRecord({
+    caseId: 'empty-evidence',
+    repetition: 1,
+    signature: 'stable',
+    metricContributions: { score: 1 },
+  });
+  check(!diagnosticSchema.safeParse(emptyEvidence).success, 'completed diagnostics require evidence');
+
+  const zeroGrid = suiteRecord([runner([], { repetitions: { expected: 0, completed: 0 }, measurements: {} })]);
+  check(!validateEvalResult(zeroGrid).success, 'a live writer cannot declare cases with zero effective repetitions');
+
+  const unmappedFailure = suiteRecord([runner([first, second], { failures: ['aggregate miss'], measurements: { accuracy: 0.5 } })]);
+  check(!validateEvalResult(unmappedFailure).success, 'runner failure strings require mapped diagnostic failures');
+  const unmappedMeasurement = suiteRecord([runner([first, second], { measurements: { accuracy: null } })]);
+  check(!validateEvalResult(unmappedMeasurement).success, 'failed measurements require mapped diagnostic failures');
+
+  const threeRuns = [1, 2, 3].map((repetition) =>
+    diagnosticRecord({
+      caseId: 'case-a',
+      repetition,
+      signature: 'stable',
+      metricContributions: { accuracy: 1 },
+      evidence: [{ kind: 'output-signature', value: 'stable' }],
+    }),
+  );
+  const expandedRunRecord = suiteRecord([runner(threeRuns)]);
+  check(
+    expandedRunRecord.suite.declaredRepetitions === 3 && validateEvalResult(expandedRunRecord).success,
+    'writers record an above-default effective repetition declaration before schema validation',
+  );
+
+  const emptySelectionSignature = JSON.stringify([]);
+  const emptySelection = diagnosticRecord({
+    caseId: 'fragment-empty-selection',
+    repetition: 1,
+    signature: emptySelectionSignature,
+    metricContributions: numericContributions(fragment.fragmentDiagnosticProjection(fragment.scoreCase({ expect: {} }, []))),
+    evidence: [{ kind: 'output-signature', value: emptySelectionSignature }],
+  });
+  check(diagnosticSchema.safeParse(emptySelection).success, 'fragment writer records an empty selection with the canonical [] signature');
 
   const reviewOutput = path.join(os.tmpdir(), `eval-review-diagnostics-${process.pid}.json`);
   try {

@@ -2147,7 +2147,14 @@ async function main() {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
     for (const problem of problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
     console.error('');
-    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      sets: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const elementCount = sets.reduce((sum, set) => sum + (set.expectedElements ?? []).length, 0);
@@ -2198,7 +2205,7 @@ async function main() {
       mode: staticMode,
       sets,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -2409,6 +2416,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   validateCorpus,

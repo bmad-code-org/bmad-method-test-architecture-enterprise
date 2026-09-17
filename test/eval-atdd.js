@@ -1232,7 +1232,14 @@ async function main() {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
     for (const problem of problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
     console.error('');
-    await finish({ options, startedAt, mode: staticMode, groundTruth, runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      groundTruth,
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
   console.log(
     `${colors.green}✓${colors.reset} ${groundTruth.criteria.length} criterion(s) declared; every cited rule resolves and the story states every id`,
@@ -1288,7 +1295,7 @@ async function main() {
       mode: staticMode,
       groundTruth,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -1477,6 +1484,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   validateCorpus,

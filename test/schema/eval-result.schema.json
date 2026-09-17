@@ -462,6 +462,36 @@
                         }
                       ]
                     },
+                    "triage": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 2048
+                          },
+                          "rootCause": {
+                            "type": "string",
+                            "enum": [
+                              "tea-workflow-defect",
+                              "model-instability",
+                              "harness-defect",
+                              "corpus-defect",
+                              "oracle-defect"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "reason",
+                          "rootCause"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 16,
+                      "default": []
+                    },
                     "evidence": {
                       "type": "array",
                       "items": {
@@ -543,6 +573,16 @@
                   "unexpected-error"
                 ]
               },
+              "rootCause": {
+                "type": "string",
+                "enum": [
+                  "tea-workflow-defect",
+                  "model-instability",
+                  "harness-defect",
+                  "corpus-defect",
+                  "oracle-defect"
+                ]
+              },
               "reason": {
                 "type": "string",
                 "minLength": 1,
@@ -558,6 +598,7 @@
             },
             "required": [
               "failureClass",
+              "rootCause",
               "reason",
               "evidence"
             ],

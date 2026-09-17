@@ -599,7 +599,7 @@ function playwrightProcessFailure(result, tail = '') {
     : result.error
       ? 'environment-transport'
       : result.signal
-        ? 'environment-timeout'
+        ? 'environment-harness'
         : 'environment-missing-artifact';
   const reason = result.error
     ? `${timedOut ? 'Playwright timed out' : 'spawn failed'}: ${result.error.message}`
@@ -832,12 +832,16 @@ function automateDiagnosticProjection(scoredCase) {
 function automateDiagnosticClassifier(entry, failures) {
   const metrics = entry.metricContributions;
   const failed = failures.join('; ').toLowerCase();
-  const reasons = [];
-  if (failed.includes('undetected regression') && metrics.undetectedRegression === 1) reasons.push('undetected regression');
-  if (failed.includes('false regression detection') && metrics.falseRegressionDetection === 1) reasons.push('false regression detection');
-  if (failed.includes('unattributed failure') && metrics.unattributedFailures > 0) reasons.push('unattributed failure');
-  if (failed.includes('unexpected outcome') && metrics.unexpectedOutcomes > 0) reasons.push('unexpected outcome');
-  return reasons.length > 0 ? { reasons, rootCause: 'harness-defect' } : null;
+  const findings = [];
+  if (failed.includes('undetected regression') && metrics.undetectedRegression === 1)
+    findings.push({ reason: 'undetected regression', rootCause: 'harness-defect' });
+  if (failed.includes('false regression detection') && metrics.falseRegressionDetection === 1)
+    findings.push({ reason: 'false regression detection', rootCause: 'harness-defect' });
+  if (failed.includes('unattributed failure') && metrics.unattributedFailures > 0)
+    findings.push({ reason: 'unattributed failure', rootCause: 'oracle-defect' });
+  if (failed.includes('unexpected outcome') && metrics.unexpectedOutcomes > 0)
+    findings.push({ reason: 'unexpected outcome', rootCause: 'oracle-defect' });
+  return findings.length > 0 ? { findings } : null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -976,6 +980,26 @@ async function finish({ options, startedAt, mode, groundTruth, suiteFailureClass
   process.exit(exitCode);
 }
 
+function automateRunnerRecord({ scored, diagnostics, failures, durationMs }) {
+  return {
+    agent: 'deterministic',
+    executable: process.execPath,
+    version: process.version,
+    model: null,
+    parameters: { agentArgs: [], envPassNames: [], timeoutMs: PLAYWRIGHT_TIMEOUT_MS, promptTransport: 'stdin' },
+    repetitions: {
+      expected: diagnostics.length,
+      completed: diagnostics.filter((entry) => entry.completionState === 'completed').length,
+    },
+    measurements: scored,
+    durationMs,
+    usage: null,
+    failureClass: worstFailureClass(diagnostics.map((entry) => entry.failureClass)),
+    failures,
+    diagnostics,
+  };
+}
+
 async function main() {
   const startedAt = await nowMs();
   const options = parseArgs(process.argv.slice(2));
@@ -997,7 +1021,13 @@ async function main() {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
     for (const problem of corpusProblems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
     console.error('');
-    await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode,
+      groundTruth,
+      suiteFailureClasses: corpusProblems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
     return;
   }
   console.log(`${colors.green}✓${colors.reset} ${groundTruth.cases.length} case(s) declared; every test resolves in its own spec file`);
@@ -1007,7 +1037,7 @@ async function main() {
     if (readiness.length > 0) {
       console.error(`${colors.red}eval pre-flight failed:${colors.reset}`);
       for (const problem of readiness) console.error(`  - ${problem.message}`);
-      await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: readiness.map((problem) => problem.failureClass) });
+      await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: readiness });
       return;
     }
     console.log(`${colors.green}✓${colors.reset} the corpus is in place and Playwright resolves`);
@@ -1080,17 +1110,8 @@ async function main() {
     failures,
     automateDiagnosticClassifier,
   );
-  const runner = {
-    agent: 'deterministic',
-    executable: process.execPath,
-    version: process.version,
-    model: null,
-    parameters: { agentArgs: [], envPassNames: [], timeoutMs: PLAYWRIGHT_TIMEOUT_MS, promptTransport: 'stdin' },
-    repetitions: {
-      expected: scored.cases.length,
-      completed: scored.cases.filter((scoredCase) => !scoredCase.loadError).length,
-    },
-    measurements: {
+  const runner = automateRunnerRecord({
+    scored: {
       loadErrors: measured(scored.loadErrors),
       undetectedRegressionCases: measured(scored.undetectedRegressionCases),
       falseRegressionDetections: measured(scored.falseRegressionDetections),
@@ -1108,11 +1129,9 @@ async function main() {
       duplicateTests: measured(scored.classificationCounts.duplicate),
     },
     durationMs: await elapsedMsSince(startedAt),
-    usage: null,
-    failureClass: worstFailureClass(diagnostics.map((entry) => entry.failureClass)),
     failures,
     diagnostics,
-  };
+  });
 
   await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: [], runners: [runner] });
 }
@@ -1125,6 +1144,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  automateRunnerRecord,
   parseArgs,
   loadGroundTruth,
   validateCorpus,

@@ -122,10 +122,6 @@ TEA users can rely on every shipped skill meeting its declared behavioral thresh
 
 **FRs covered:** FR1 through FR17.
 
-## Epic 1: Close and Explain TEA's Live Quality Baseline
-
-TEA users can rely on every shipped skill meeting its declared behavioral thresholds, with reproducible evidence and clear public documentation of how TEA is tested.
-
 ### Story 1.1: Make live evaluation failures diagnosable
 
 As a TEA maintainer,

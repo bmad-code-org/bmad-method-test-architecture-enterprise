@@ -40,7 +40,7 @@ const { readJson } = require('./lib/file-system-port');
 const { teaSkills } = require('./lib/tea-skills');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { digestFiles, repositoryState, suiteResultRecord, runSummaryRecord, writeRunSummary } = require('./lib/eval-record');
-const { exitCodeForFailureClass, worstFailureClass } = require('./schema/eval-result');
+const { exitCodeForFailureClass, worstFailureClass, validateEvalResult } = require('./schema/eval-result');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
@@ -270,8 +270,15 @@ function aggregateExitCodes(codes) {
  * before writing still has to appear in the summary, otherwise the run reads as
  * though that suite was never part of it.
  */
-async function placeholderRecord(suite, options, exitStatus, durationMs, label) {
-  const failureClass = exitStatus === 0 ? 'environment-missing-artifact' : failureClassForExitCode(exitStatus);
+async function placeholderRecord(
+  suite,
+  options,
+  exitStatus,
+  durationMs,
+  label,
+  failureClass = 'environment-missing-artifact',
+  detail = 'before writing its result record',
+) {
   return suiteResultRecord({
     generatedAt: await nowIso(),
     mode: options.preflightOnly ? 'preflight-only' : 'live',
@@ -282,12 +289,12 @@ async function placeholderRecord(suite, options, exitStatus, durationMs, label) 
     cases: [],
     runners: [],
     durationMs,
-    suiteFailureClasses: [failureClass],
     suiteDiagnostics: [
       {
         failureClass,
-        reason: `${label} exited ${exitStatus ?? 'without a status'} before writing its result record`,
-        evidence: [{ kind: 'summary', value: `child=${label}; exit=${exitStatus ?? 'null'}` }],
+        rootCause: 'harness-defect',
+        reason: `${label} exited ${exitStatus ?? 'without a status'} ${detail}`,
+        evidence: [{ kind: 'summary', value: `child=${label}; exit=${exitStatus ?? 'null'}; detail=${detail}` }],
       },
     ],
   });
@@ -302,11 +309,48 @@ async function readChildRecord(invocation, options, exitStatus, durationMs) {
     // throw here would lose every other child's. `existsSync` answered false for
     // a permission error too, so that case used to reach the placeholder in
     // silence and is named now.
-    const read = await readJson(invocation.jsonPath).catch((error) => {
+    let read;
+    try {
+      read = await readJson(invocation.jsonPath);
+    } catch (error) {
       console.error(`eval:all: ${invocation.label} wrote an unreadable result record: ${error.message}`);
-      return { present: false };
-    });
-    if (read.present) return read.value;
+      const parserFailure = error instanceof SyntaxError || /json/i.test(error.message);
+      return await placeholderRecord(
+        invocation.suite,
+        options,
+        exitStatus,
+        durationMs,
+        invocation.label,
+        parserFailure ? 'environment-parser' : 'environment-harness',
+        `with an unreadable result record: ${error.message}`,
+      );
+    }
+    if (read.present) {
+      const validation = validateEvalResult(read.value);
+      if (!validation.success) {
+        return await placeholderRecord(
+          invocation.suite,
+          options,
+          exitStatus,
+          durationMs,
+          invocation.label,
+          'environment-harness',
+          `with an invalid result record: ${validation.error.issues[0]?.message ?? 'schema validation failed'}`,
+        );
+      }
+      if (read.value.exitCode !== exitStatus) {
+        return await placeholderRecord(
+          invocation.suite,
+          options,
+          exitStatus,
+          durationMs,
+          invocation.label,
+          'environment-harness',
+          `with result exit ${read.value.exitCode}, which disagrees with child exit ${exitStatus ?? 'null'}`,
+        );
+      }
+      return read.value;
+    }
   }
   return await placeholderRecord(invocation.suite, options, exitStatus, durationMs, invocation.label);
 }
@@ -357,7 +401,6 @@ async function main() {
           suites: [],
           unaccountedSkills: unaccounted,
           durationMs: await elapsedMsSince(startedAt),
-          runFailureClasses: ['environment-configuration'],
         }),
       );
     }
@@ -408,9 +451,8 @@ async function main() {
       suites: children.map((child) => child.record).filter(Boolean),
       unaccountedSkills: [],
       durationMs: await elapsedMsSince(startedAt),
-      runFailureClasses: children.map((child) => childFailureClass(child.record, child.exitCode)),
     });
-    aggregate = summary.exitCode;
+    aggregate = options.jsonPath ? summary.exitCode : aggregateExitCodes(children.map((child) => child.exitCode));
 
     if (options.jsonPath) {
       await writeRunSummary(options.jsonPath, summary);
@@ -444,5 +486,6 @@ module.exports = {
   runFailureClass,
   repetitionsFor,
   placeholderRecord,
+  readChildRecord,
   USAGE,
 };

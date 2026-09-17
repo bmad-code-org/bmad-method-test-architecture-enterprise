@@ -668,7 +668,7 @@ async function main() {
       mode: staticMode,
       suites: [],
       runners: [],
-      suiteFailureClasses: ['quality'],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
     });
   }
 
@@ -692,7 +692,7 @@ async function main() {
       mode: staticMode,
       suites,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -983,6 +983,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   loadSuites,
   validateSuites,
   parseSelection,

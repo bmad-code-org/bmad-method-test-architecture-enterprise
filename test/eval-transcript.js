@@ -582,7 +582,13 @@ async function main() {
     // An inconsistent corpus is a real finding about the repository, measured
     // without a model call, so it keeps the exit 1 the sibling harnesses give
     // the same case.
-    await finish({ options, startedAt, mode: staticMode, runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   console.log(
@@ -604,7 +610,7 @@ async function main() {
       startedAt,
       mode: staticMode,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -740,6 +746,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   validateCorpus,

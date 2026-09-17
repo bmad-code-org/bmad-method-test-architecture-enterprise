@@ -1066,7 +1066,14 @@ async function main() {
     // with no model call. No cases are handed to the record, because building a
     // prompt out of data that just failed validation is how a reporting path
     // turns into a second crash.
-    await finish({ options, startedAt, mode: staticMode, cases: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      cases: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const menu = await menuItems();
@@ -1095,7 +1102,7 @@ async function main() {
       mode: staticMode,
       cases: corpus.cases,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -1419,6 +1426,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   assertGroundTruthAbsent,
   buildPrompt,
   candidatePatternSource,

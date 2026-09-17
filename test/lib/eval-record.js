@@ -61,10 +61,9 @@ const SECRET_FLAG_PATTERN = /key|token|secret|password|credential|auth/i;
 // inside "risk-based" and "task-runner" and erase the runner arguments the record
 // exists to report. `-` and `_` are deliberately outside the boundary set, so
 // `prefix_github_pat_x` is still caught.
-const SECRET_VALUE_PATTERN = /(?<![A-Za-z0-9])(sk-|sk_|ghp_|gho_|ghs_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)/;
 const SECRET_TOKEN_PATTERN = /(^|[^A-Za-z0-9])(?:sk[-_]|gh[pousr]_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)[A-Za-z0-9._~+/=-]*/g;
 const SENSITIVE_VALUE_PATTERN =
-  /((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|credential|authorization|auth)(?:["']?)\s*[:=]\s*)("[^"]*"|'[^']*'|[^\s,;}&\]]+)/gi;
+  /((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|credential|authorization|auth)(?:["']?)\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}&\]]+)/gi;
 const REDACTED = '[redacted]';
 const MAX_DIAGNOSTIC_METRICS = 64;
 const MAX_DIAGNOSTIC_METRIC_KEY = 128;
@@ -79,9 +78,9 @@ function boundedDiagnosticText(value, maxLength) {
 
 function redactSecrets(value) {
   return String(value)
+    .replaceAll(SENSITIVE_VALUE_PATTERN, `$1${REDACTED}`)
     .replaceAll(/(\b(?:authorization|proxy-authorization)\b\s*[:=]\s*(?:bearer|basic)\s+)[^\s,;"'}]+/gi, `$1${REDACTED}`)
     .replaceAll(/([?&](?:api[_-]?key|access[_-]?token|token|secret|password|credential|auth)=)[^&\s]+/gi, `$1${REDACTED}`)
-    .replaceAll(SENSITIVE_VALUE_PATTERN, `$1${REDACTED}`)
     .replaceAll(SECRET_TOKEN_PATTERN, `$1${REDACTED}`);
 }
 
@@ -220,8 +219,9 @@ function redactArgs(args = []) {
       // The value half is tested too. `--extra=sk-live-abc` names nothing
       // credential-shaped, so the flag test alone let a real token through into a
       // file CI uploads, which is the one thing this function exists to stop.
-      const leaks = SECRET_FLAG_PATTERN.test(flag) || SECRET_VALUE_PATTERN.test(argument.slice(separator + 1));
-      redacted.push(leaks ? `${flag}=${REDACTED}` : argument);
+      const value = argument.slice(separator + 1);
+      const sanitized = redactSecrets(value);
+      redacted.push(`${flag}=${SECRET_FLAG_PATTERN.test(flag) || sanitized !== value ? REDACTED : value}`);
       continue;
     }
     if (argument.startsWith('-') && SECRET_FLAG_PATTERN.test(argument)) {
@@ -229,7 +229,8 @@ function redactArgs(args = []) {
       dropNextValue = true;
       continue;
     }
-    redacted.push(SECRET_VALUE_PATTERN.test(argument) ? REDACTED : argument);
+    const sanitized = redactSecrets(argument);
+    redacted.push(sanitized === argument ? argument : REDACTED);
   }
   return redacted;
 }
@@ -268,8 +269,9 @@ function diagnosticRecord({
   signature = null,
   metricContributions = {},
   failureClass = 'none',
-  rootCause = failureClass === 'quality' ? 'tea-workflow-defect' : null,
+  rootCause = null,
   reason = null,
+  triage = null,
   evidence = [],
 }) {
   const failed = failureClass !== 'none' && failureClass !== 'quality';
@@ -280,6 +282,7 @@ function diagnosticRecord({
       .map(([key, value]) => [String(key).slice(0, MAX_DIAGNOSTIC_METRIC_KEY), value]),
   );
   const boundedSignature = signature === null ? null : boundedDiagnosticText(redactSecrets(signature), 4096);
+  const normalizedTriage = triage ?? (failureClass === 'quality' && rootCause ? [{ reason: reason ?? rootCause, rootCause }] : []);
   return {
     caseId,
     repetition,
@@ -289,6 +292,10 @@ function diagnosticRecord({
     failureClass,
     rootCause,
     reason: reason === null ? null : boundedDiagnosticText(redactSecrets(reason), 2048),
+    triage: normalizedTriage.slice(0, 16).map((entry) => ({
+      reason: boundedDiagnosticText(redactSecrets(entry.reason), 2048),
+      rootCause: entry.rootCause,
+    })),
     evidence: evidence.slice(0, 32).map((entry) => ({
       kind: entry.kind,
       value: boundedDiagnosticText(redactSecrets(entry.value), 2048),
@@ -346,14 +353,35 @@ function classifyDiagnosticQuality(diagnostics, failures, classify) {
     if (entry.completionState !== 'completed') return entry;
     const classification = classify(entry, failures);
     if (!classification) return entry;
-    const reasons = Array.isArray(classification) ? classification : classification.reasons;
-    if (!Array.isArray(reasons) || reasons.length === 0) return entry;
-    const rootCause = Array.isArray(classification) ? 'tea-workflow-defect' : classification.rootCause;
+    const findings = classification.findings ?? classification.reasons?.map((reason) => ({ reason, rootCause: classification.rootCause }));
+    if (!Array.isArray(findings) || findings.length === 0) return entry;
+    if (findings.some((finding) => !finding.rootCause)) {
+      throw new TypeError('case-level quality classifications must name a root cause for every reason');
+    }
     return {
       ...entry,
       failureClass: 'quality',
-      rootCause: rootCause ?? 'tea-workflow-defect',
-      reason: entry.reason ?? reasons.join('; ').slice(0, 2048),
+      rootCause: findings[0].rootCause,
+      reason:
+        entry.reason ??
+        findings
+          .map((finding) => finding.reason)
+          .join('; ')
+          .slice(0, 2048),
+      triage: findings,
+    };
+  });
+}
+
+function suiteDiagnosticRecords(entries = []) {
+  return entries.map((entry) => {
+    const value = typeof entry === 'string' ? { failureClass: entry } : entry;
+    const rootCause = value.rootCause ?? (value.failureClass === 'quality' ? 'corpus-defect' : 'harness-defect');
+    return {
+      failureClass: value.failureClass,
+      rootCause,
+      reason: value.reason ?? value.message ?? `pre-measurement ${value.failureClass} failure`,
+      evidence: value.evidence ?? [{ kind: 'summary', value: value.message ?? value.reason ?? value.failureClass }],
     };
   });
 }
@@ -380,7 +408,16 @@ function suiteResultRecord({
   suiteDiagnostics = [],
   contractVersions = {},
 }) {
-  const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
+  const normalizedSuiteDiagnostics = suiteDiagnosticRecords([...suiteFailureClasses, ...suiteDiagnostics]);
+  const failureClass = worstFailureClass([
+    ...runners.map((runner) => runner.failureClass),
+    ...normalizedSuiteDiagnostics.map((entry) => entry.failureClass),
+  ]);
+  const attemptedRepetitions = runners
+    .filter(() => cases.length > 0)
+    .map((runner) => runner.repetitions.expected / cases.length)
+    .filter((value) => Number.isInteger(value) && value >= 0);
+  const declaredRepetitions = attemptedRepetitions.length > 0 ? Math.max(...attemptedRepetitions) : suite.repetitions;
   return {
     schemaVersion: SCHEMA_VERSION,
     kind: 'suite-result',
@@ -410,11 +447,12 @@ function suiteResultRecord({
       caseIds: cases.map((item) => item.id),
       cases: cases.map((item) => ({ id: item.id, promptDigest: item.promptDigest ?? null })),
       thresholds: suite.thresholds,
-      declaredRepetitions: suite.repetitions,
+      declaredRepetitions,
     },
     runners,
-    suiteDiagnostics: suiteDiagnostics.map((entry) => ({
+    suiteDiagnostics: normalizedSuiteDiagnostics.map((entry) => ({
       failureClass: entry.failureClass,
+      rootCause: entry.rootCause,
       reason: boundedDiagnosticText(redactSecrets(entry.reason), 2048),
       evidence: (entry.evidence ?? []).slice(0, 32).map((evidence) => ({
         kind: evidence.kind,
@@ -433,8 +471,11 @@ function suiteResultRecord({
  * @param {object} input
  * @returns {object} A record shaped for evalRunSchema.
  */
-function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, durationMs, runFailureClasses = [] }) {
-  const failureClass = worstFailureClass([...suites.map((suite) => suite.failureClass), ...runFailureClasses]);
+function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, durationMs }) {
+  const failureClass = worstFailureClass([
+    ...suites.map((suite) => suite.failureClass),
+    ...(unaccountedSkills.length > 0 ? ['environment-configuration'] : []),
+  ]);
   return {
     schemaVersion: SCHEMA_VERSION,
     kind: 'run-summary',
@@ -534,6 +575,7 @@ module.exports = {
   numericContributions,
   diagnosticRateMiss,
   classifyDiagnosticQuality,
+  suiteDiagnosticRecords,
   suiteResultRecord,
   runSummaryRecord,
   writeSuiteResult,

@@ -1134,7 +1134,7 @@ function runnerRecord(options, { durationMs, failureClass, failures, measurement
       promptTransport: 'argv',
       tools,
     },
-    repetitions: { expected: 1, completed },
+    repetitions: { expected: diagnostics.length, completed },
     measurements,
     durationMs,
     usage: null,
@@ -1191,7 +1191,7 @@ async function main() {
       startedAt,
       mode: staticMode,
       runners: [],
-      suiteFailureClasses: agentProblems.map((problem) => problem.failureClass),
+      suiteFailureClasses: agentProblems,
     });
     return;
   }
@@ -1300,6 +1300,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   checkFixturePresence,
   verifiedBackend,

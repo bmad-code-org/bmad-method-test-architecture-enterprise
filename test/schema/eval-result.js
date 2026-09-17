@@ -73,6 +73,7 @@ const FAILURE_CLASSES = [
 ];
 
 const ROOT_CAUSES = ['tea-workflow-defect', 'model-instability', 'harness-defect', 'corpus-defect', 'oracle-defect'];
+const OPTIONAL_VARIANCE_MEASUREMENTS = new Set(['scoreStdev', 'unstableCases']);
 
 // live spends model calls; the other two validate data or readiness and measure
 // nothing, so a record from those modes must never read as a passing gate.
@@ -153,6 +154,10 @@ const diagnosticSchema = z
     failureClass: z.enum(FAILURE_CLASSES),
     rootCause: z.enum(ROOT_CAUSES).nullable(),
     reason: z.string().min(1).max(2048).nullable(),
+    triage: z
+      .array(z.object({ reason: nonEmptyString.max(2048), rootCause: z.enum(ROOT_CAUSES) }).strict())
+      .max(16)
+      .default([]),
     evidence: z.array(diagnosticEvidenceSchema).max(32),
   })
   .strict()
@@ -173,23 +178,37 @@ const diagnosticSchema = z
     } else {
       if (value.signature === null)
         ctx.addIssue({ code: 'custom', path: ['signature'], message: 'a completed attempt must carry a signature' });
+      if (Object.keys(value.metricContributions).length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['metricContributions'], message: 'a completed attempt must carry metric contributions' });
+      }
+      if (value.evidence.length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['evidence'], message: 'a completed attempt must carry bounded evidence' });
+      }
       if (value.failureClass !== 'none' && value.failureClass !== 'quality') {
         ctx.addIssue({ code: 'custom', path: ['failureClass'], message: 'a completed attempt may carry only none or quality' });
       }
       if (value.failureClass === 'quality' && value.rootCause === null) {
         ctx.addIssue({ code: 'custom', path: ['rootCause'], message: 'a quality finding must carry its triaged root cause' });
       }
+      if (value.failureClass === 'quality' && value.triage.length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['triage'], message: 'a quality finding must carry at least one reason and root-cause pair' });
+      }
+      if (value.failureClass === 'quality' && value.triage[0]?.rootCause !== value.rootCause) {
+        ctx.addIssue({ code: 'custom', path: ['rootCause'], message: 'root cause must match the first triage finding' });
+      }
       if (value.failureClass === 'none' && value.rootCause !== null) {
         ctx.addIssue({ code: 'custom', path: ['rootCause'], message: 'a clean attempt cannot carry a root cause' });
+      }
+      if (value.failureClass === 'none' && value.triage.length > 0) {
+        ctx.addIssue({ code: 'custom', path: ['triage'], message: 'a clean attempt cannot carry triage findings' });
       }
     }
   });
 
 const suiteDiagnosticSchema = z
   .object({
-    failureClass: z.enum(FAILURE_CLASSES).refine((value) => value !== 'none' && value !== 'quality', {
-      message: 'a suite attempt diagnostic must describe an environment or unexpected failure',
-    }),
+    failureClass: z.enum(FAILURE_CLASSES).refine((value) => value !== 'none', { message: 'a suite diagnostic must describe a failure' }),
+    rootCause: z.enum(ROOT_CAUSES),
     reason: nonEmptyString.max(2048),
     evidence: z.array(diagnosticEvidenceSchema).max(32),
   })
@@ -239,6 +258,17 @@ const runnerResultSchema = z
     const pairs = value.diagnostics.map((entry) => `${entry.caseId}:${entry.repetition}`);
     if (new Set(pairs).size !== pairs.length) {
       ctx.addIssue({ code: 'custom', path: ['diagnostics'], message: 'diagnostic case and repetition pairs must be unique' });
+    }
+    const failedMeasurements = Object.entries(value.measurements).some(
+      ([name, measurement]) => measurement === null && !OPTIONAL_VARIANCE_MEASUREMENTS.has(name),
+    );
+    const mappedFailures = value.diagnostics.some((entry) => entry.failureClass !== 'none');
+    if ((value.failures.length > 0 || failedMeasurements) && !mappedFailures) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['diagnostics'],
+        message: 'runner failures and unmeasurable metrics must be mapped to a diagnostic',
+      });
     }
   });
 
@@ -355,7 +385,13 @@ function resultSchemaFor(schemaVersion, runnerSchema) {
             message: 'a runner cannot declare attempts when the suite declares no cases',
           });
         }
-        if (caseIds.size > 0 && runner.repetitions.expected % caseIds.size !== 0) {
+        if (value.mode === 'live' && caseIds.size > 0 && runner.repetitions.expected === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['runners', runnerIndex, 'repetitions', 'expected'],
+            message: 'a live runner with declared cases must attempt at least one complete repetition',
+          });
+        } else if (caseIds.size > 0 && runner.repetitions.expected % caseIds.size !== 0) {
           ctx.addIssue({
             code: 'custom',
             path: ['runners', runnerIndex, 'repetitions', 'expected'],
@@ -407,6 +443,17 @@ function resultSchemaFor(schemaVersion, runnerSchema) {
           });
         }
       }
+      const derivedFailureClass = worstFailureClass([
+        ...value.runners.map((runner) => runner.failureClass),
+        ...value.suiteDiagnostics.map((entry) => entry.failureClass),
+      ]);
+      if (value.failureClass !== derivedFailureClass) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['failureClass'],
+          message: `suite failure class must be derived from runner and suite diagnostics (${derivedFailureClass})`,
+        });
+      }
     });
 }
 
@@ -441,6 +488,17 @@ const evalRunSchema = z
         code: 'custom',
         path: ['exitCode'],
         message: `failureClass "${value.failureClass}" must exit ${expected}, not ${value.exitCode}`,
+      });
+    }
+    const derivedFailureClass = worstFailureClass([
+      ...value.suites.map((suite) => suite.failureClass),
+      ...(value.unaccountedSkills.length > 0 ? ['environment-configuration'] : []),
+    ]);
+    if (value.failureClass !== derivedFailureClass) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['failureClass'],
+        message: `run failure class must be derived from suite evidence (${derivedFailureClass})`,
       });
     }
   });
@@ -494,8 +552,9 @@ function exitCodeForFailureClass(failureClass) {
 function worstFailureClass(classes) {
   let worst = 'none';
   for (const candidate of classes) {
-    if (!FAILURE_CLASSES.includes(candidate)) throw new Error(`unknown failure class: ${candidate}`);
-    if (FAILURE_CLASSES.indexOf(candidate) > FAILURE_CLASSES.indexOf(worst)) worst = candidate;
+    const failureClass = typeof candidate === 'string' ? candidate : candidate?.failureClass;
+    if (!FAILURE_CLASSES.includes(failureClass)) throw new Error(`unknown failure class: ${failureClass}`);
+    if (FAILURE_CLASSES.indexOf(failureClass) > FAILURE_CLASSES.indexOf(worst)) worst = failureClass;
   }
   return worst;
 }
