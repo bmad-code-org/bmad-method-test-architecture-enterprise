@@ -43,9 +43,11 @@ Use `checklist.md` to validate:
 - Test files created correctly
 - Checklist matches acceptance criteria
 - Tests are generated as red-phase scaffolds and marked with `test.skip()`
-- Every executable leaf title carries exactly one supplied acceptance criterion id
-- Every supplied acceptance criterion has a primary scaffold
+- Preflight preserved supplied criterion ids and assigned stable, collision-free ids to unnamed criteria
+- Every executable leaf title carries exactly one id from the persisted criterion registry
+- Every declared acceptance criterion has a primary scaffold
 - The criterion-defining assertion is the first assertion that can fail
+- Each E2E primary scaffold begins with the criterion-defining assertion as its first potentially failing operation
 - State-transition criteria exercise the transition-bearing branch in their primary scaffold
 - Story metadata and handoff paths are captured for downstream workflows
 - [ ] CLI sessions cleaned up (no orphaned browsers)

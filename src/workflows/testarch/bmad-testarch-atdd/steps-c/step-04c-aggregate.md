@@ -66,6 +66,7 @@ const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
 - Check `apiTestsOutput.success === true`
 - Check `e2eTestsOutput.success === true`
 - If either failed, report error and stop (don't proceed)
+- Require both workers' `criterion_registry` to match the persisted Step 1 registry exactly, including order, ids, `idSource`, and text
 
 ---
 
@@ -73,9 +74,19 @@ const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
 
 **CRITICAL TDD Validation:**
 
-Extract every leaf `test.skip()` title from both worker outputs and compare its criterion id with the exact ids supplied by the story. Reject any leaf test title that carries zero or multiple supplied criterion ids. Reject aggregation when any supplied acceptance criterion has no leaf test. An id present only on a containing `test.describe()` does not count.
+Load the exact criterion registry persisted by Step 1. For every leaf `test.skip()` title from both worker outputs, extract all tokens matching `\bAC-\d+\b`. Require exactly one token, then require that token to be a member of the registry. Reject titles with zero ids, multiple ids, repeated copies of one id, or an undeclared id. Reject aggregation when any declared acceptance criterion has no leaf test. An id present only on a containing `test.describe()` does not count.
 
-For each criterion's primary scaffold, verify that the criterion-defining assertion is the first assertion that can fail. Prerequisite state may be established through fixtures, provider states, or setup actions without assertions. For a state-transition criterion, verify that the primary scaffold exercises the transition-bearing branch and directly asserts the newly promised state.
+For each criterion's primary scaffold, verify that the criterion-defining assertion is the first assertion that can fail. In E2E scaffolds it must also be the first potentially failing operation and must own the complete browser journey. For a state-transition criterion, verify that the primary scaffold exercises the transition-bearing branch and directly asserts the newly promised state.
+
+Use this title guard as written:
+
+```javascript
+const declaredIds = new Set(criterionRegistry.map(({ id }) => id));
+const ids = title.match(/\bAC-\d+\b/g) ?? [];
+if (ids.length !== 1 || !declaredIds.has(ids[0])) {
+  throw new Error(`ATDD ERROR: leaf title must carry exactly one declared criterion id: ${title}`);
+}
+```
 
 **Check API tests:**
 
@@ -122,8 +133,8 @@ e2eTestsOutput.tests.forEach((test) => {
 ```text
 ✅ TDD Red Phase Validation: PASS
 - All tests use test.skip()
-- Every leaf test maps to exactly one supplied acceptance criterion
-- Every supplied acceptance criterion has a primary scaffold
+- Every leaf test maps to exactly one declared acceptance criterion
+- Every declared acceptance criterion has a primary scaffold
 - Each primary scaffold reaches its criterion-defining assertion first
 - All tests assert expected behavior (not placeholders)
 - All tests marked as expected_to_fail

@@ -20,6 +20,8 @@ Before starting this workflow, verify:
 
 - [ ] Story markdown file loaded and parsed successfully
 - [ ] All acceptance criteria identified and extracted
+- [ ] Supplied criterion ids preserved; unnamed criteria assigned the lowest unused `AC-<n>` ids in source order
+- [ ] Criterion registry persisted with `id`, `idSource`, and criterion text
 - [ ] Affected systems and components identified
 - [ ] Technical constraints documented
 - [ ] Framework configuration loaded (playwright.config.ts or cypress.config.ts)
@@ -95,9 +97,10 @@ Before starting this workflow, verify:
 
 - [ ] All tests use Given-When-Then structure with clear comments
 - [ ] All tests have descriptive names explaining what they test
-- [ ] Every executable leaf title carries exactly one supplied `AC-<n>` id
-- [ ] Every supplied acceptance criterion has one primary scaffold
+- [ ] Every executable leaf title carries exactly one declared `AC-<n>` id from the criterion registry
+- [ ] Every declared acceptance criterion has one primary scaffold
 - [ ] Criterion-defining assertion is the first assertion that can fail
+- [ ] E2E criterion-defining assertion is the first potentially failing operation and owns the browser journey
 - [ ] State-transition criteria exercise the transition-bearing branch first
 - [ ] No duplicate tests (same behavior tested multiple times)
 - [ ] No flaky patterns (race conditions, timing issues)

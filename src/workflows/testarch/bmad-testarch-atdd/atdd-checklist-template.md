@@ -34,11 +34,13 @@ inputDocuments: []
 
 ## Acceptance Criteria
 
-{List all testable acceptance criteria from the story}
+{List the persisted criterion registry. Preserve supplied ids. For unnamed criteria, assign the lowest unused `AC-<n>` id in source order.}
 
-1. {Acceptance criterion 1}
-2. {Acceptance criterion 2}
-3. {Acceptance criterion 3}
+| ID   | ID source          | Acceptance criterion     |
+| ---- | ------------------ | ------------------------ |
+| AC-1 | supplied/generated | {Acceptance criterion 1} |
+| AC-2 | supplied/generated | {Acceptance criterion 2} |
+| AC-3 | supplied/generated | {Acceptance criterion 3} |
 
 ---
 

@@ -369,7 +369,7 @@ const ATDD_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'atdd-eval', 'ground-
  * so every case recorded at an earlier version reproduces and is reported as a
  * version stamp only.
  */
-const SCORER_VERSION = 10;
+const SCORER_VERSION = 11;
 
 const colors = {
   reset: '[0m',

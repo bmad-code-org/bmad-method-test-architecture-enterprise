@@ -27,7 +27,7 @@ exists to catch, carried by the fixture design rather than stated as a fact abou
 
 ## `cases/`
 
-Nine hand-authored scaffold sets, each one deviation from a correct run:
+Ten hand-authored scaffold sets, each one deviation from a correct run:
 
 ```text
 correct-run       all five criteria, each failing with its own declared pattern
@@ -45,6 +45,9 @@ setup-assertion-masks-target
 baseline-ac5-branch
                   AC-5 checks the baseline false branch while the intended red-phase scaffold
                   exercises the active-reservation transition named by the criterion
+e2e-operation-masks-target
+                  a real browser interaction times out before the criterion-defining assertion,
+                  producing a deterministic non-assertion exit
 ```
 
 Each is executed once through `cli/atdd-red-check.js` against a fresh copy of `reservations/`,

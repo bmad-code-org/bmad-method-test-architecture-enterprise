@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "kind": "story-1.2-pre-change-diagnostics",
+  "provenance": {
+    "protectedBaseline": {
+      "path": "test/results/eval-all/history/2026-09-17T12-23-09-218Z.json",
+      "sha256": "201138d028e6c5612dc5786a1617025c6b9d01cf0de2d34e00f37cff8c8c7631",
+      "repositoryCommit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
+      "generatedAt": "2026-09-17T12:23:09.218Z",
+      "suiteGeneratedAt": "2026-09-17T09:44:46.300Z",
+      "agent": "claude",
+      "model": "sonnet"
+    },
+    "protectedInputs": [
+      {
+        "path": "test/fixtures/atdd-eval/ground-truth.json",
+        "sha256": "60b409daa9c98e2881bbda463daee8327f88303ffccab9cb433a4353d65d41ca"
+      },
+      {
+        "path": "test/contracts/atdd.contract.json",
+        "sha256": "32f46b0faad578c666f846e0fdd55c6f9a65fb6ffd1b3a9894a1f5c4ae1760bd"
+      }
+    ],
+    "diagnosticWitnesses": [
+      {
+        "path": "test/replay/atdd/setup-assertion-masks-target/atdd-red-report.json",
+        "sha256": "785924b7d4b6e126d3976c220e454d272b30147725f406e9b4a0ed7eee3a8dbb"
+      },
+      {
+        "path": "test/replay/atdd/baseline-ac5-branch/atdd-red-report.json",
+        "sha256": "97efa15553fd1da27cef04a819c34fb8155c83a788837c48e153c5fa44e52578"
+      },
+      {
+        "path": "test/replay/atdd/criterion-id-on-describe/atdd-red-report.json",
+        "sha256": "2b0700f6db57b26b0fe411a8e9ea243eaf6ccc3bd4bd799ab8c21888f0029e03"
+      }
+    ]
+  },
+  "rootCauseTaxonomy": ["tea-workflow-defect", "model-instability", "harness-defect", "corpus-defect", "oracle-defect"],
+  "aggregate": {
+    "repetitions": { "expected": 2, "completed": 2 },
+    "measurements": {
+      "redForIntendedReasonRate": 0.625,
+      "criteriaCoverage": 0.5,
+      "vacuousPass": 0,
+      "stillSkipped": 0,
+      "nonAssertionExit": 3,
+      "loadErrors": 0,
+      "unmapped": 8,
+      "productionMutations": 0,
+      "unstableCases": 1,
+      "incompleteCases": 0
+    },
+    "failingContributions": [
+      { "metric": "redForIntendedReasonRate", "actual": 0.625, "threshold": 1, "rootCause": "tea-workflow-defect" },
+      { "metric": "criteriaCoverage", "actual": 0.5, "threshold": 1, "rootCause": "tea-workflow-defect" },
+      { "metric": "nonAssertionExit", "actual": 3, "maximum": 0, "rootCause": "tea-workflow-defect" },
+      { "metric": "unmapped", "actual": 8, "maximum": 0, "rootCause": "tea-workflow-defect" },
+      { "metric": "unstableCases", "actual": 1, "maximum": 0, "rootCause": "model-instability" }
+    ]
+  },
+  "diagnostics": [
+    {
+      "caseId": "reservations",
+      "repetition": 1,
+      "completionState": "completed",
+      "observed": {
+        "mappedTestCount": 8,
+        "redForIntendedReasonCount": 5,
+        "criteriaPresent": 5,
+        "criteriaDeclared": 5,
+        "nonAssertionExit": 3,
+        "unmapped": 0
+      },
+      "failingContributions": [
+        {
+          "metric": "redForIntendedReasonRate",
+          "numerator": 5,
+          "denominator": 8,
+          "threshold": 1,
+          "rootCause": "tea-workflow-defect",
+          "reason": "Three primary scaffolds failed before the criterion-defining red assertion."
+        },
+        {
+          "metric": "nonAssertionExit",
+          "actual": 3,
+          "maximum": 0,
+          "rootCause": "tea-workflow-defect",
+          "reason": "AC-2 and AC-4 asserted unimplemented setup. AC-5 exercised the baseline branch before its transition-bearing state."
+        }
+      ]
+    },
+    {
+      "caseId": "reservations",
+      "repetition": 2,
+      "completionState": "completed",
+      "observed": {
+        "mappedTestCount": 0,
+        "redForIntendedReasonCount": 0,
+        "criteriaPresent": 0,
+        "criteriaDeclared": 5,
+        "nonAssertionExit": 0,
+        "unmapped": 8
+      },
+      "failingContributions": [
+        {
+          "metric": "redForIntendedReasonRate",
+          "numerator": 0,
+          "denominator": 0,
+          "measurementState": "unmeasurable",
+          "rootCause": "tea-workflow-defect",
+          "reason": "All criterion ids appeared outside executable leaf titles."
+        },
+        {
+          "metric": "criteriaCoverage",
+          "numerator": 0,
+          "denominator": 5,
+          "threshold": 1,
+          "rootCause": "tea-workflow-defect",
+          "reason": "No executable leaf mapped to a declared criterion."
+        },
+        {
+          "metric": "unmapped",
+          "actual": 8,
+          "maximum": 0,
+          "rootCause": "tea-workflow-defect",
+          "reason": "Eight executable leaf titles omitted their criterion ids."
+        }
+      ]
+    },
+    {
+      "caseId": "reservations",
+      "repetitions": [1, 2],
+      "completionState": "completed",
+      "failingContributions": [
+        {
+          "metric": "unstableCases",
+          "actual": 1,
+          "maximum": 0,
+          "rootCause": "model-instability",
+          "reason": "The two completed repetitions produced different scoring signatures."
+        }
+      ]
+    }
+  ],
+  "classificationStatus": {
+    "harness-defect": "excluded by deterministic scorer replays",
+    "corpus-defect": "excluded by protected fixture and ground-truth validation",
+    "oracle-defect": "excluded by contract-oracle validation",
+    "tea-workflow-defect": "assigned to deterministic generation-rule misses",
+    "model-instability": "assigned only to cross-repetition signature variance"
+  }
+}

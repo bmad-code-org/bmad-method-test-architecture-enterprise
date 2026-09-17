@@ -240,8 +240,14 @@ const ATDD_OPERATION = 'generate-red-phase-tests';
  */
 const ATDD_SCAFFOLD_RELATIVE_PATH = path.join('api', 'reservations.spec.ts');
 
-/** A test maps to the criterion whose id it carries in its title, the workflow's own scaffold convention. */
-const CRITERION_ID = /\bAC-(\d+)\b/;
+/** Criterion tokens carried by a leaf title, the workflow's own scaffold convention. */
+const CRITERION_ID = /\bAC-\d+\b/g;
+
+/** A leaf maps only when its title carries exactly one declared criterion id. */
+function declaredCriterionId(title, declaredIds) {
+  const ids = String(title ?? '').match(CRITERION_ID) ?? [];
+  return ids.length === 1 && declaredIds.has(ids[0]) ? ids[0] : null;
+}
 
 /**
  * Every failure Playwright's own `expect()` library raises names the matcher
@@ -800,6 +806,7 @@ async function runRedCheck(projectDir, reportPath, backend) {
 function scoreRun(groundTruth, report, productionMutatedFromGeneration = []) {
   const criteria = groundTruth.criteria ?? [];
   const byCriterion = new Map(criteria.map((criterion) => [criterion.id, { criterion, tests: [] }]));
+  const declaredIds = new Set(byCriterion.keys());
   const unmapped = [];
   const loadErrors = [];
 
@@ -809,9 +816,8 @@ function scoreRun(groundTruth, report, productionMutatedFromGeneration = []) {
       continue;
     }
     for (const test of file.tests ?? []) {
-      const match = CRITERION_ID.exec(test.title);
-      const criterionId = match ? `AC-${match[1]}` : null;
-      if (criterionId && byCriterion.has(criterionId)) {
+      const criterionId = declaredCriterionId(test.title, declaredIds);
+      if (criterionId) {
         byCriterion.get(criterionId).tests.push({ file: file.file, ...test });
       } else {
         unmapped.push({ file: file.file, title: test.title });
@@ -1506,5 +1512,6 @@ module.exports = {
   ATDD_OPERATION,
   RED_CHECK_PATH,
   CRITERION_ID,
+  declaredCriterionId,
   ATDD_SCAFFOLD_RELATIVE_PATH,
 };

@@ -20,7 +20,7 @@
 
 'use strict';
 
-const { loadGroundTruth, scoreRun } = require('./eval-atdd');
+const { declaredCriterionId, loadGroundTruth, scoreRun } = require('./eval-atdd');
 
 const colors = { reset: '[0m', red: '[31m', green: '[32m', dim: '[2m' };
 let failures = 0;
@@ -59,6 +59,12 @@ function main() {
   }
 
   const realAssertion = 'Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 404';
+  const declaredIds = new Set(groundTruth.criteria.map(({ id }) => id));
+  assert(declaredCriterionId('[P0] AC-1 one criterion', declaredIds) === 'AC-1', 'one declared criterion id maps');
+  assert(declaredCriterionId('[P0] no criterion', declaredIds) === null, 'a title with no criterion id does not map');
+  assert(declaredCriterionId('[P0] AC-1 AC-2 two criteria', declaredIds) === null, 'a title with multiple criterion ids does not map');
+  assert(declaredCriterionId('[P0] AC-1 AC-1 repeated criterion', declaredIds) === null, 'a repeated criterion id does not map');
+  assert(declaredCriterionId('[P0] AC-999 undeclared criterion', declaredIds) === null, 'an undeclared criterion id does not map');
   const scoredReal = scoreRun(groundTruth, reportFor(realAssertion), []);
   const ac1Real = scoredReal.perCriterion.find((entry) => entry.id === 'AC-1');
   assert(

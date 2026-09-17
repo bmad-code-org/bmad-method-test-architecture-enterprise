@@ -13,7 +13,7 @@ This is an **isolated subagent** running in parallel with E2E red-phase test gen
 
 **What you have from parent workflow:**
 
-- Story acceptance criteria from Step 1
+- Story acceptance criterion registry from Step 1, including preserved supplied ids and deterministic ids for unnamed criteria
 - Test strategy and scenarios from Step 3
 - Knowledge fragments loaded: playwright-utils-mandate, overview, api-request, recurse, log, auth-session, data-factories, api-testing-patterns
 - Config: test framework, `use_playwright_utils` (default `true`), Pact.js Utils enabled/disabled (`use_pactjs_utils`), Pact MCP mode (`pact_mcp`)
@@ -139,8 +139,8 @@ If the merged-fixtures file does not exist yet, generate the import against `../
 **CRITICAL ATDD Requirements:**
 
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
-- ✅ Every leaf `test.skip()` title MUST include exactly one supplied acceptance criterion id in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
-- ✅ Generate one primary scaffold for every supplied acceptance criterion before adding secondary cases
+- ✅ Every leaf `test.skip()` title MUST include exactly one declared acceptance criterion id from the Step 1 registry in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
+- ✅ Generate one primary scaffold for every declared acceptance criterion before adding secondary cases
 - ✅ The criterion-defining assertion MUST be the first assertion that can fail; establish prerequisites through fixtures, provider state, or unasserted setup calls
 - ✅ For a state-transition criterion, choose the transition-bearing branch for the primary scaffold and assert the newly promised state directly
 - ✅ Write assertions for EXPECTED behavior (even though not implemented)
@@ -242,6 +242,10 @@ Write JSON to temp file: `/tmp/tea-atdd-api-tests-{{timestamp}}.json`
 {
   "success": true,
   "subagent": "atdd-api-tests",
+  "criterion_registry": [
+    { "id": "AC-1", "idSource": "supplied", "text": "A new user can register" },
+    { "id": "AC-2", "idSource": "generated", "text": "A duplicate email is rejected" }
+  ],
   "tests": [
     {
       "file": "tests/api/user-registration.spec.ts",
