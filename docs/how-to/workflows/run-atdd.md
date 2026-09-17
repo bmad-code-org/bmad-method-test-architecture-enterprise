@@ -74,7 +74,7 @@ And changes are not saved
 
 TEA builds a criterion registry before it generates tests. Existing `AC-<n>` ids remain unchanged. For criteria without ids, TEA reserves the supplied ids, visits unnamed criteria in source order, and assigns each the lowest unused `AC-<n>` id. Every executable test title carries exactly one id from that registry.
 
-Each primary scaffold puts one direct criterion assertion first. That assertion isolates the exact newly promised status, scalar, or property before broad object, schema, or secondary checks. API setup calls to unimplemented endpoints keep their responses opaque until this assertion runs. E2E scaffolds place the complete browser journey inside the first potentially failing assertion boundary.
+TEA emits exactly one red-phase leaf scaffold per declared criterion. Secondary branches and journeys remain implementation-checklist work until green-phase automation. Each scaffold puts one direct criterion assertion first. That assertion isolates the exact newly promised status, scalar, or property before broad object, schema, or secondary checks. API setup calls to unimplemented endpoints keep their responses opaque until this assertion runs. E2E scaffolds place the complete browser journey inside the first potentially failing assertion boundary.
 
 **Reference Documents** (optional):
 

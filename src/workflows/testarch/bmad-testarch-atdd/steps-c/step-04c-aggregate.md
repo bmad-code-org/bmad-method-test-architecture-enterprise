@@ -74,7 +74,7 @@ const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
 
 **CRITICAL TDD Validation:**
 
-Load the exact criterion registry persisted by Step 1. For every leaf `test.skip()` title from both worker outputs, extract all tokens matching `\bAC-\d+\b`. Require exactly one token, then require that token to be a member of the registry. Reject titles with zero ids, multiple ids, repeated copies of one id, or an undeclared id. Reject aggregation when any declared acceptance criterion has no leaf test. An id present only on a containing `test.describe()` does not count.
+Load the exact criterion registry persisted by Step 1. For every leaf `test.skip()` title from both worker outputs, extract all tokens matching `\bAC-\d+\b`. Require exactly one token, then require that token to be a member of the registry. Reject titles with zero ids, multiple ids, repeated copies of one id, or an undeclared id. Count mapped leaf titles per criterion across both worker outputs. Require exactly one red-phase leaf for every declared criterion. An id present only on a containing `test.describe()` does not count. Record secondary branches and journeys in the implementation checklist for green-phase automation.
 
 For each criterion's primary scaffold, verify that the criterion-defining assertion is the first assertion that can fail and directly isolates the exact newly promised status, scalar, or property. Broad object, schema, and secondary assertions must follow it. An API setup call to an unimplemented endpoint must remain opaque before this assertion: no body parsing, result branching, explicit throw, status assertion, or cleanup-data derivation. In E2E scaffolds the criterion assertion must also be the first potentially failing operation and must own the complete browser journey. For a state-transition criterion, verify that the primary scaffold exercises the transition-bearing branch and directly asserts the newly promised state.
 
@@ -134,7 +134,7 @@ e2eTestsOutput.tests.forEach((test) => {
 ✅ TDD Red Phase Validation: PASS
 - All tests use test.skip()
 - Every leaf test maps to exactly one declared acceptance criterion
-- Every declared acceptance criterion has a primary scaffold
+- Every declared acceptance criterion has exactly one red-phase leaf scaffold
 - Each primary scaffold reaches a direct, exact criterion-defining assertion first
 - All tests assert expected behavior (not placeholders)
 - All tests marked as expected_to_fail

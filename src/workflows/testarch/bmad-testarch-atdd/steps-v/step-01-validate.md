@@ -59,7 +59,7 @@ Read `{validationChecklist}` and list all criteria.
 
 Evaluate outputs against each checklist item.
 
-For ATDD test artifacts, reconstruct the criterion registry from the selected checklist. Confirm supplied ids were preserved and generated ids follow the lowest-unused `AC-<n>` rule in source order. Extract all `\bAC-\d+\b` tokens from every executable leaf title. Require exactly one token and require it to exist in the registry. For every primary scaffold, confirm the first assertion directly isolates the exact newly promised status, scalar, or property. Confirm API setup responses from unimplemented endpoints remain opaque before that assertion. For each E2E primary scaffold, confirm the criterion-defining assertion is the first potentially failing operation and owns the complete browser journey.
+For ATDD test artifacts, reconstruct the criterion registry from the selected checklist. Confirm supplied ids were preserved and generated ids follow the lowest-unused `AC-<n>` rule in source order. Extract all `\bAC-\d+\b` tokens from every executable leaf title. Require exactly one token and require it to exist in the registry. Require exactly one red-phase leaf per declared criterion. For every scaffold, confirm the first assertion directly isolates the exact newly promised status, scalar, or property. Confirm API setup responses from unimplemented endpoints remain opaque before that assertion. For each E2E scaffold, confirm the criterion-defining assertion is the first potentially failing operation and owns the complete browser journey.
 
 ### 4. Write Report
 

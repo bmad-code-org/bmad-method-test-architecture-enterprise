@@ -184,7 +184,7 @@ If the merged-fixtures file does not exist yet, generate the import against `../
 
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
 - ✅ Every leaf `test.skip()` title MUST include exactly one declared acceptance criterion id from the Step 1 registry in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
-- ✅ Generate one primary scaffold for every declared acceptance criterion before adding secondary journeys
+- ✅ Generate exactly one red-phase leaf scaffold for every declared acceptance criterion. Record secondary journeys as green-phase checklist work; do not emit additional `test.skip()` leaves for the same criterion
 - ✅ The criterion-defining assertion MUST be the first potentially failing operation. Wrap the complete browser journey in one immediate `expect(async () => { ... }).toPass({ intervals: [0], timeout: 0 })` assertion so navigation, locator, interaction, network, and outcome failures retain criterion provenance
 - ✅ For a state-transition criterion, choose the transition-bearing branch for the primary scaffold and assert the newly promised state directly
 - ✅ Write assertions for EXPECTED UI behavior (even though not implemented)

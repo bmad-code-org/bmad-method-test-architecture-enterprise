@@ -140,7 +140,7 @@ If the merged-fixtures file does not exist yet, generate the import against `../
 
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
 - ✅ Every leaf `test.skip()` title MUST include exactly one declared acceptance criterion id from the Step 1 registry in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
-- ✅ Generate one primary scaffold for every declared acceptance criterion before adding secondary cases
+- ✅ Generate exactly one red-phase leaf scaffold for every declared acceptance criterion. Record secondary branches and edge cases as green-phase checklist work; do not emit additional `test.skip()` leaves for the same criterion
 - ✅ The criterion-defining assertion MUST be the first assertion that can fail and MUST isolate the exact newly promised status, scalar, or property with a direct matcher. Put broad object, schema, and secondary assertions after it
 - ✅ Establish prerequisites through fixtures, provider state, or unasserted setup calls. Treat an unimplemented setup response as opaque before the criterion assertion: do not parse its body, branch on its result, throw from it, assert its status, or derive cleanup data from it. Use inputs known before the setup call and perform cleanup after the criterion assertion or in fixture teardown
 - ✅ For a state-transition criterion, choose the transition-bearing branch for the primary scaffold and assert the newly promised state directly

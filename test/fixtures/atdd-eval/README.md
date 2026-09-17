@@ -27,7 +27,7 @@ exists to catch, carried by the fixture design rather than stated as a fact abou
 
 ## `cases/`
 
-Eleven hand-authored scaffold sets, each one deviation from a correct run:
+Twelve hand-authored scaffold sets, each one deviation from a correct run:
 
 ```text
 correct-run       all five criteria, each failing with its own declared pattern
@@ -51,6 +51,9 @@ e2e-operation-masks-target
 broad-object-assertion-masks-target
                   AC-5 compares the complete locker object before directly asserting the new
                   reserved property, so the object diff cannot match the criterion's exact promise
+secondary-branch-dilutes-intended-rate
+                  AC-5 has a correct transition-bearing primary plus a second baseline branch whose
+                  different first failure lowers the all-generated-tests intended-reason rate
 ```
 
 Each is executed once through `cli/atdd-red-check.js` against a fresh copy of `reservations/`,
