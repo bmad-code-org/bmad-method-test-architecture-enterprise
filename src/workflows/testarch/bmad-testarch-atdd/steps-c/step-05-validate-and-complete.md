@@ -46,7 +46,8 @@ Use `checklist.md` to validate:
 - Preflight preserved supplied criterion ids and assigned stable, collision-free ids to unnamed criteria
 - Every executable leaf title carries exactly one id from the persisted criterion registry
 - Every declared acceptance criterion has a primary scaffold
-- The criterion-defining assertion is the first assertion that can fail
+- The criterion-defining assertion is the first assertion that can fail and directly isolates the exact newly promised status, scalar, or property
+- API setup responses from unimplemented endpoints remain opaque before the criterion assertion
 - Each E2E primary scaffold begins with the criterion-defining assertion as its first potentially failing operation
 - State-transition criteria exercise the transition-bearing branch in their primary scaffold
 - Story metadata and handoff paths are captured for downstream workflows

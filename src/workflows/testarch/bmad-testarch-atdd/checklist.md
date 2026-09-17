@@ -99,7 +99,8 @@ Before starting this workflow, verify:
 - [ ] All tests have descriptive names explaining what they test
 - [ ] Every executable leaf title carries exactly one declared `AC-<n>` id from the criterion registry
 - [ ] Every declared acceptance criterion has one primary scaffold
-- [ ] Criterion-defining assertion is the first assertion that can fail
+- [ ] Criterion-defining assertion is the first assertion that can fail and directly isolates the exact newly promised status, scalar, or property
+- [ ] API setup responses from unimplemented endpoints remain opaque before the criterion assertion
 - [ ] E2E criterion-defining assertion is the first potentially failing operation and owns the browser journey
 - [ ] State-transition criteria exercise the transition-bearing branch first
 - [ ] No duplicate tests (same behavior tested multiple times)

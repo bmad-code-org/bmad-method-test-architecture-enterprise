@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- ATDD red-phase generation now preserves supplied criterion ids, assigns stable collision-free ids to unnamed criteria, validates exactly one declared id per executable leaf, gives E2E journeys a criterion-owned first failure boundary, and exercises transition-bearing state branches as primary scenarios.
+- ATDD red-phase generation now preserves supplied criterion ids, assigns stable collision-free ids to unnamed criteria, validates exactly one declared id per executable leaf, isolates each API criterion with a direct first assertion, keeps unimplemented setup responses opaque until that assertion, gives E2E journeys a criterion-owned first failure boundary, and exercises transition-bearing state branches as primary scenarios.
 
 ## [1.27.1] - 2026-09-17
 
