@@ -338,11 +338,23 @@
         "imports": ["tools", "cli", "test"]
       },
       {
+        "name": "eval-quality-schema-versions",
+        "match": "exact",
+        "path": "test/lib/eval-quality-schema-versions.js",
+        "label": "test/lib/eval-quality-schema-versions.js",
+        "imports": [],
+        "externals": {
+          "policy": "allow",
+          "modules": ["eval-quality"],
+          "rule": "this file's whole purpose is a synchronous require('eval-quality'); reaching any other external module here would be new, unreviewed surface on the one file the purity block holds to staying synchronous"
+        }
+      },
+      {
         "name": "test",
         "match": "prefix",
         "path": "test/",
         "label": "test/",
-        "imports": ["test", "cli", "tools", "hooks-cjs"]
+        "imports": ["test", "cli", "tools", "hooks-cjs", "eval-quality-schema-versions"]
       },
       {
         "name": "hooks-cjs",
@@ -357,6 +369,12 @@
         }
       }
     ],
+    "purity": {
+      "layers": ["eval-quality-schema-versions"],
+      "awaitRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; docs/explanation/eval-quality-command-adapter.md documents the invariant and an await here would break it",
+      "asyncFunctionRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; docs/explanation/eval-quality-command-adapter.md documents the invariant and an async function here would break it",
+      "newDateRule": "test/lib/eval-quality-schema-versions.js holds TEA's one synchronous reading of eval-quality's schema-version constants; docs/explanation/eval-quality-command-adapter.md documents the invariant and new Date here would break it"
+    },
     "commonjs": "check",
     "reportOnly": false
   },
