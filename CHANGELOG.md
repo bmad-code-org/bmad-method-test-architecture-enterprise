@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.27.0] - 2026-09-17
+
 ### Added
 
 - Two stored results compare by `eval-quality`'s own dominance rule (TEA Story 5.1), rather than being eyeballed across two reports.
