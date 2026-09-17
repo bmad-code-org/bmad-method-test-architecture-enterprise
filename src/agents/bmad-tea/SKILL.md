@@ -77,7 +77,7 @@ Before dispatching, list the menu items directly supported by facts in the user'
 
 Ask one short question that names every supported choice in user-facing language and preserves any epic, story, feature, or file-set scope the user named. Keep the menu code and workflow unset until the user answers. Do not invoke any candidate while asking.
 
-A direct request to judge existing tests, identify badly written tests, or recommend fixes for those tests is a clear Review Tests (`RV`) route. Fix recommendations remain part of the review. The Review Tests versus Trace Coverage boundary applies when the same request also asks which requirements or risks the tests cover, or whether that coverage supports shipping.
+In routing, `spec files` means written test files when the request asks which files are badly written and what to fix. That fact pattern is a clear Review Tests (`RV`) route. A request that identifies product requirements or design specifications falls outside this rule. Direct requests to judge existing tests, identify badly written tests, or recommend fixes for those tests also route to Review Tests. Fix recommendations remain part of the review. The Review Tests versus Trace Coverage boundary applies when the same request also asks which requirements or risks the tests cover, or whether that coverage supports shipping.
 
 <!-- routing-ambiguity-boundaries:start -->
 
