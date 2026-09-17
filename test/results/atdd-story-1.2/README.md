@@ -19,3 +19,10 @@ completed. Criteria coverage reached 1 and intended-reason rate improved to 0.94
 One secondary AC-5 available-state scaffold still produced a non-assertion exit, which also left
 one unstable case. The result confirms that red-phase secondary branches must wait until the
 criterion's transition-bearing primary scaffold turns green.
+
+`post-fix-codex-efd992e037f1c83cf7fca7d6885642ebccb0b943.json` is the immutable live
+acceptance measurement of clean commit `efd992e037f1c83cf7fca7d6885642ebccb0b943`. Both
+repetitions completed with identical signatures. Intended-reason rate and criteria coverage both
+reached 1. Vacuous passes, still-skipped tests, non-assertion exits, load errors, unmapped tests,
+production mutations, unstable cases, and incomplete cases were all 0. Every Story 1.2 live
+threshold passed.
