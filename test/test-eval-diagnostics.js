@@ -904,6 +904,22 @@ async function main() {
       workflows: [],
     });
     check(exactCaseProblems.length === 0, `eval-all accepts invocation-bound case and prompt digests: ${exactCaseProblems.join('; ')}`);
+    const reviewInvocation = { suite: childSuite, script: path.join(PROJECT_ROOT, 'test', 'eval-test-review.js') };
+    const reviewCaseIds = await evalAll.caseIdsForInvocation(reviewInvocation, []);
+    const preflightBoundRecord = structuredClone(caseBoundRecord);
+    preflightBoundRecord.mode = 'preflight-only';
+    preflightBoundRecord.suite.caseIds = reviewCaseIds;
+    preflightBoundRecord.suite.promptDigest = null;
+    preflightBoundRecord.suite.cases = reviewCaseIds.map((id) => ({ id, promptDigest: null }));
+    const preflightProblems = await evalAll.childBindingProblems(preflightBoundRecord, reviewInvocation, {
+      preflightOnly: true,
+      agents: [],
+      workflows: [],
+    });
+    check(
+      preflightProblems.length === 0,
+      `eval-all accepts null prompt digests from a bound preflight record: ${preflightProblems.join('; ')}`,
+    );
     const wrongCaseRecord = structuredClone(caseBoundRecord);
     wrongCaseRecord.suite.caseIds[0] = 'invented-case';
     wrongCaseRecord.suite.cases[0].id = 'invented-case';

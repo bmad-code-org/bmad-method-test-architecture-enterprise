@@ -1359,7 +1359,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "431c815686cd435e3e6f2c5f7f0f8de60b3b68b61917f2bf4dd852996d738346"
+            "hash": "475e4941cb1eb3fe833f0f8845db576c4fe1da2df772cf90977fd8aaa58c7e41"
           }
         },
         {

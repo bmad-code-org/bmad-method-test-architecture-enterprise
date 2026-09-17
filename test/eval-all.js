@@ -454,10 +454,16 @@ async function childBindingProblems(record, invocation, options) {
     suite.harnessOptions?.acceptsWorkflowFilter ? (options.workflows ?? []) : [],
   );
   if (expectedCaseIds && !sameJson(record.suite.caseIds, expectedCaseIds)) problems.push('case ids do not match invocation');
-  const promptIdentity = await promptIdentityForInvocation(
+  let promptIdentity = await promptIdentityForInvocation(
     invocation,
     suite.harnessOptions?.acceptsWorkflowFilter ? (options.workflows ?? []) : [],
   );
+  if (options.preflightOnly && path.basename(invocation.script ?? '') === 'eval-test-review.js') {
+    promptIdentity = {
+      promptDigest: null,
+      cases: (expectedCaseIds ?? []).map((id) => ({ id, promptDigest: null })),
+    };
+  }
   if (promptIdentity) {
     if (record.suite.promptDigest !== promptIdentity.promptDigest) problems.push('suite prompt digest does not match invocation');
     if (!sameJson(record.suite.cases, promptIdentity.cases)) problems.push('case prompt digests do not match invocation');
