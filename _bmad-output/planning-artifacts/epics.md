@@ -55,12 +55,12 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 | Epic 1    |       5 / 5 |      0 |         0 | Complete       |
 | Epic 2    |       7 / 7 |      0 |         0 | Complete       |
 | Epic 3    |       6 / 6 |      0 |         0 | Complete       |
-| Epic 4    |       8 / 8 |      0 |         0 | Complete       |
+| Epic 4    |       8 / 9 |      1 |         0 | In progress    |
 | Epic 5    |       4 / 6 |      2 |         0 | In progress    |
 | Epic 6    |     12 / 12 |      0 |         0 | Complete       |
 | Epic 7    |       1 / 1 |      0 |         0 | Complete       |
 | Epic 8    |       1 / 1 |      0 |         0 | Complete       |
-| **Total** | **44 / 46** |  **2** |     **0** | **96% merged** |
+| **Total** | **44 / 47** |  **3** |     **0** | **94% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -99,6 +99,7 @@ Last reconciled with GitHub on 2026-09-16 across `bmad-method-test-architecture-
 - [x] [Story 4.6: Hold the supply chain](#story-46-hold-the-supply-chain) ([#180](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/180))
 - [x] [Story 4.7: Hold layering, boundary and lineage](#story-47-hold-layering-boundary-and-lineage) ([#191](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/191))
 - [x] [Story 4.8: Gate the ungated trees, allowlists, coverage and CI](#story-48-gate-the-ungated-trees-allowlists-coverage-and-ci) ([#190](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/190))
+- [ ] [Story 4.9: Hold the synchronous holdout with dependency-direction's purity option](#story-49-hold-the-synchronous-holdout-with-dependency-directions-purity-option) (**Active:** open in [#213](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/213))
 
 ### Epic 5 progress: Drift is measured and the upgrade is proven live
 
@@ -1072,6 +1073,34 @@ So that a suppression is a decision rather than an inheritance.
 **Given** Epic 4 is otherwise complete
 **When** `npm test`, `tools/validate-ci-coverage.js` and every `quality.yaml` job run
 **Then** all pass
+
+### Story 4.9: Hold the synchronous holdout with dependency-direction's purity option
+
+As a TEA maintainer,
+I want the one deliberately synchronous cluster in `eval-quality-inputs.js` machine-held to staying synchronous,
+So that a future edit cannot add an `await` there and pass every existing check.
+
+FR32 already covers this story: it names the `dependency-direction` gate over TEA's JavaScript trees generally, and `purity` is one of that same gate's own declared options.
+
+**Acceptance Criteria:**
+
+**Given** `docs/explanation/eval-quality-command-adapter.md` states the schema-version constants as the one place this integration reads synchronously, and nothing machine-checks that it stays that way
+**When** the genuinely synchronous cluster (`packageVersions`, `UNSTAMPED_KINDS`, `SCHEMA_VERSIONS`, `expectedSchemaVersion`, `schemaVersionProblems`) moves out of `test/lib/eval-quality-inputs.js` into `test/lib/eval-quality-schema-versions.js`, and `eval-quality.config.json` declares a new exact-match `dependency-direction` layer over that one file with a `purity` block naming it
+**Then** `npm run test:direction` run against the real repository passes at 0 violations
+
+**Given** a fixture's copy of the extracted file carries all three seeded violations (`await`, an async function, and `new Date`)
+**When** the gate runs against that fixture's own minimal configuration
+**Then** it exits 1 with 3 violations, and the output names the seeded file and each of the three violated purity rules individually, not by a shared prefix the three rule messages happen to share
+
+**Given** the extraction is a pure code move, with `test/lib/eval-quality-inputs.js` requiring the new module and re-exporting `SCHEMA_VERSIONS`, `expectedSchemaVersion` and `schemaVersionProblems` under the same names
+**When** the full `npm test` chain runs
+**Then** every test that previously passed still passes, `test/test-schema-versions.js` included, with no behavior change at any of the thirteen existing `require('./eval-quality-inputs')` call sites
+
+**Given** `docs/explanation/eval-quality-command-adapter.md` is read after this change
+**When** its synchronous-reading sentence is checked against the new layer and purity block
+**Then** it names `test/lib/eval-quality-schema-versions.js` and the `dependency-direction` purity block that now holds it
+
+**Review:** `/bmad-code-review` ran three layers (Blind Hunter, Edge Case Hunter, Verification Gap Reviewer; Acceptance Auditor skipped, no-spec mode) against the working-tree diff. Verification Gap Reviewer found nothing. Edge Case Hunter and Blind Hunter both independently found the fixture seeded only the async-function violation, leaving `awaitRule`/`newDateRule` unproven; fixed by seeding all three in one function and asserting each by its specific tag. Blind Hunter found seven more, all fixed: `checkPuritySeed`'s rule-message assertion checked the sentence prefix all three rules share rather than the firing rule; no violation-count assertion (sibling `checkBoundarySeed` has one); the new layer's `externals` was left at the default `unrestricted` rather than scoped to `eval-quality`, the file's only real external dependency; `docs/explanation/eval-quality-command-adapter.md`'s own surface-inventory table row and a matching row in `docs/explanation/eval-quality-adoption-guide.md` (a file this diff had not otherwise touched) still named `eval-quality-inputs.js` as the reader after the extraction; the fixture's purity rule strings were paraphrased rather than copied verbatim from the real config, unlike the sibling `boundary-violation` fixture's own pattern strings; and "roughly fifteen" existing consumers overstated a grepped, exact count of thirteen (also corrected in this story's own AC3 and in the CHANGELOG entry). `npm test`'s full chain re-run clean after every fix.
 
 ## Epic 5: Drift is measured and the upgrade is proven live
 
