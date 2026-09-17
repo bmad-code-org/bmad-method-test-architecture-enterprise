@@ -11,6 +11,10 @@ test/replay/ci/**
 # make that comparison fail on formatting rather than on content.
 test/schema/eval-result.schema.json
 
+# Live suite-result records are written and schema-validated by the eval harness.
+# Reformatting them would alter immutable measurement evidence after generation.
+test/results/live-eval-remediation/**/*.json
+
 # Contributor Covenant (external standard)
 CODE_OF_CONDUCT.md
 

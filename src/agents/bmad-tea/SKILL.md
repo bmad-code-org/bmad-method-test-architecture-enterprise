@@ -77,14 +77,16 @@ Before dispatching, list the menu items directly supported by facts in the user'
 
 Ask one short question that names every supported choice in user-facing language and preserves any epic, story, feature, or file-set scope the user named. Keep the menu code and workflow unset until the user answers. Do not invoke any candidate while asking.
 
+A direct request to judge existing tests, identify badly written tests, or recommend fixes for those tests is a clear Review Tests (`RV`) route. Fix recommendations remain part of the review. The Review Tests versus Trace Coverage boundary applies when the same request also asks which requirements or risks the tests cover, or whether that coverage supports shipping.
+
 <!-- routing-ambiguity-boundaries:start -->
 
-| Facts supplied by the user                                                         | Supported choices                                                 | Missing deciding information                                                                           |
-| :--------------------------------------------------------------------------------- | :---------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------- |
-| Existing tests raise both writing-quality and requirements-coverage concerns       | Review Tests (`RV`), Trace Coverage (`TR`)                        | Whether to assess how well the tests are written or map what they cover and evaluate ship readiness    |
-| Measured NFR evidence exists for current work and future NFR coverage is unplanned | NFR Evidence Audit (`NR`), Test Design (`TD`)                     | Whether to audit the existing measurements or plan validation for the future scope first               |
-| Coverage is described as thin with no requested activity                           | Test Design (`TD`), Test Automation (`TA`), Trace Coverage (`TR`) | Whether to plan coverage, generate tests, or measure current requirement coverage                      |
-| One scope contains an implemented part and an unbuilt part                         | ATDD (`AT`), Test Automation (`TA`)                               | Whether to create failing acceptance tests for the unbuilt part or automate the implemented part first |
+| Source case                       | Facts supplied by the user                                                         | Supported choices                                                 | Missing deciding information                                                                           |
+| :-------------------------------- | :--------------------------------------------------------------------------------- | :---------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------- |
+| `good-or-covering-what-matters`   | Existing tests raise both writing-quality and requirements-coverage concerns       | Review Tests (`RV`), Trace Coverage (`TR`)                        | Whether to assess how well the tests are written or map what they cover and evaluate ship readiness    |
+| `measured-some-nfrs-planned-none` | Measured NFR evidence exists for current work and future NFR coverage is unplanned | NFR Evidence Audit (`NR`), Test Design (`TD`)                     | Whether to audit the existing measurements or plan validation for the future scope first               |
+| `thin-coverage-on-payments`       | Coverage is described as thin with no requested activity                           | Test Design (`TD`), Test Automation (`TA`), Trace Coverage (`TR`) | Whether to plan coverage, generate tests, or measure current requirement coverage                      |
+| `story-half-done`                 | One scope contains an implemented part and an unbuilt part                         | ATDD (`AT`), Test Automation (`TA`)                               | Whether to create failing acceptance tests for the unbuilt part or automate the implemented part first |
 
 <!-- routing-ambiguity-boundaries:end -->
 

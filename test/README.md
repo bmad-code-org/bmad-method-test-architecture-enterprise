@@ -191,12 +191,14 @@ once you have read a workflow's frontmatter or the knowledge index is not ambigu
 the agent, and scoring it as a clarification would measure a fact the agent was never
 given.
 
-Step 8's routing ambiguity table defines the supported candidate set for each close-menu
-fact pattern. Corpus validation extracts those sets from the shipped skill and compares
-them with every clarification oracle. Removing a boundary, naming an unknown menu code,
-or changing a candidate set fails `test:eval-routing-data` before a model call. Stored
-replays cover all four successful clarification branches through the live parser and
-scorer.
+Step 8's routing ambiguity table binds each close-menu fact pattern to its source case.
+Corpus validation compares the facts, supported candidate codes, and missing deciding
+information with that case's hidden oracle. Missing, duplicate, orphaned, or drifted
+rows fail before a model call. `test:eval-routing-boundaries` mutates each field and also
+proves that a clear intent cannot be added to the table. Stored replays cover all four
+successful clarification branches through the live parser and scorer. A clear-control
+replay also pins a direct request to judge existing tests and recommend fixes to Review
+Tests (`RV`).
 
 Five metrics and four counts. The metrics are the menu item chosen, whether the stated
 reason names the deciding feature of the message, whether the scope the user named

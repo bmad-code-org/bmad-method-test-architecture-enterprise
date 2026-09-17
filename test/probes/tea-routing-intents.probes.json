@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-routing-intents-behavioral",
-    "implementationDigest": "sha256:c8b22cac4086cedc594e20eea5133af47f1b98c47a48a3e96b71aed24c8358f9",
-    "artifactDigest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899",
-    "commitDigest": "sha256:c8b22cac4086cedc594e20eea5133af47f1b98c47a48a3e96b71aed24c8358f9",
+    "implementationDigest": "sha256:e7f32fdd8084c941ae363146e3eaab154ee7f93b1a22c3d90030eaa0500e19aa",
+    "artifactDigest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda",
+    "commitDigest": "sha256:e7f32fdd8084c941ae363146e3eaab154ee7f93b1a22c3d90030eaa0500e19aa",
     "rationale": "A reply that quotes the user's own message back as its reason satisfies O-004 for epic-risk-before-tests, because the deciding tokens are words from that message, and violates O-002, because the menu code it names is not the one the intent points at. The reason oracle alone cannot tell that reply from one that actually read the message, and the decision oracle can.",
     "qualification": {
       "route": "gameability",
@@ -18,13 +18,13 @@
         "storage": "public",
         "path": "test/fixtures/tea-routing-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899"
+        "digest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda"
       },
       "disciplinedOracleRejectedEvidence": {
         "storage": "public",
         "path": "test/fixtures/tea-routing-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899"
+        "digest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda"
       }
     },
     "expectedClean": false,
@@ -85,9 +85,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-004",
     "systemId": "tea-routing-intents-behavioral",
-    "implementationDigest": "sha256:c8b22cac4086cedc594e20eea5133af47f1b98c47a48a3e96b71aed24c8358f9",
-    "artifactDigest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899",
-    "commitDigest": "sha256:c8b22cac4086cedc594e20eea5133af47f1b98c47a48a3e96b71aed24c8358f9",
+    "implementationDigest": "sha256:e7f32fdd8084c941ae363146e3eaab154ee7f93b1a22c3d90030eaa0500e19aa",
+    "artifactDigest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda",
+    "commitDigest": "sha256:e7f32fdd8084c941ae363146e3eaab154ee7f93b1a22c3d90030eaa0500e19aa",
     "rationale": "epic-risk-before-tests declares the action, the deciding tokens and the scope the skill's own Step 8 implies for it, so an answer carrying all three is the run this contract exists to confirm rather than a defect to catch.",
     "qualification": {
       "route": "clean-control",
@@ -95,9 +95,9 @@
         "storage": "public",
         "path": "test/fixtures/tea-routing-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:6e6d6a318cf05ef630be8afc77efafd763c9d2c8179c76093a8399e131ac5899"
+        "digest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda"
       },
-      "revisionCommitDigest": "sha256:c8b22cac4086cedc594e20eea5133af47f1b98c47a48a3e96b71aed24c8358f9",
+      "revisionCommitDigest": "sha256:e7f32fdd8084c941ae363146e3eaab154ee7f93b1a22c3d90030eaa0500e19aa",
       "noKnownDefectStatement": "epic-risk-before-tests's expected answer is derived from src/agents/bmad-tea/SKILL.md and its menu, and node test/eval-bmad-tea-routing.js --validate-only fails when a menu code the corpus names has left customize.toml."
     },
     "expectedClean": true,
