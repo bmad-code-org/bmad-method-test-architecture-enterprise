@@ -1785,6 +1785,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -1804,7 +1805,11 @@ function runnerRecord(
   { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -2101,7 +2106,7 @@ async function main() {
       riskCeilingExcess: totals.ceilingExcess,
       // Null rather than 0 on a single repetition: a count of zero reads as measured
       // and nothing was measured.
-      unstableCases: repeatedRuns ? unstableCases : null,
+      unstableCases: repeatedRuns && incompleteCases === 0 ? unstableCases : null,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };

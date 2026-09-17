@@ -125,6 +125,7 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const FIXTURE_ROOT = path.join(__dirname, 'fixtures', 'test-review-eval');
 const GROUND_TRUTH = path.join(FIXTURE_ROOT, 'ground-truth.json');
 const SUITE_ID = 'test-review';
+const BUNDLE_CASE_ID = 'test-review:bundle';
 
 /**
  * Thresholds. Deliberately conservative: this harness exists to detect regression
@@ -427,7 +428,7 @@ function reviewFilePaths() {
  * @returns {string[]}
  */
 function caseIds() {
-  return reviewFilePaths();
+  return [...reviewFilePaths(), BUNDLE_CASE_ID];
 }
 
 /**
@@ -594,6 +595,17 @@ function namesFile(reported, relativePath) {
  * Returns null when the verdict carries no findings array, which is a verdict
  * written by something other than this CLI, so there is nothing to score.
  */
+function canonicalFindingIdentity(finding) {
+  return JSON.stringify([
+    String(finding.row ?? finding.criterion_id ?? ''),
+    String(finding.file ?? finding.path ?? ''),
+    Number.isFinite(Number(finding.line)) ? Number(finding.line) : null,
+    String(finding.severity ?? ''),
+    String(finding.section ?? ''),
+    String(finding.title ?? ''),
+  ]);
+}
+
 function scoreVerdict(verdict, groundTruth) {
   const tolerance = groundTruth.lineTolerance ?? 0;
   if (!Array.isArray(verdict.findings)) return null;
@@ -605,7 +617,8 @@ function scoreVerdict(verdict, groundTruth) {
   // findings that can be adjudicated at all. Folding it in would dilute the
   // false-positive share with findings nobody can check.
   const reported = verdict.findings.filter((finding) => typeof finding.file === 'string' && finding.file.length > 0);
-  const unlocated = verdict.findings.length - reported.length;
+  const unlocatedFindings = verdict.findings.filter((finding) => typeof finding.file !== 'string' || finding.file.length === 0);
+  const unlocated = unlocatedFindings.length;
   const reviewedPaths = (groundTruth.files ?? []).map((f) => f.path);
   const cleanPaths = (groundTruth.files ?? []).filter((f) => (f.planted ?? []).length === 0).map((f) => f.path);
 
@@ -678,7 +691,7 @@ function scoreVerdict(verdict, groundTruth) {
   const criticalPlanted = planted.filter((p) => p.row.startsWith('C'));
   const criticalHits = hits.filter((p) => p.row.startsWith('C'));
 
-  const caseScores = (groundTruth.files ?? []).map((file, fileIndex) => {
+  const caseScores = (groundTruth.files ?? []).map((file) => {
     const caseId = path.relative(PROJECT_ROOT, path.join(FIXTURE_ROOT, file.path));
     const expected = planted.filter((item) => item.path === file.path);
     const found = hits.filter((item) => item.path === file.path);
@@ -687,8 +700,6 @@ function scoreVerdict(verdict, groundTruth) {
     const fileUnattributed = unattributed.filter((finding) => namesFile(finding.file, file.path));
     return {
       caseId,
-      recommendation: verdict.recommendation ?? 'n/a',
-      score: Number(verdict.qualityScore ?? Number.NaN),
       planted: expected.map((item) => `${item.row}:${item.path}:${item.line}`).sort(),
       hits: found.map((item) => `${item.row}:${item.path}:${item.line}`).sort(),
       misses: expected
@@ -700,12 +711,32 @@ function scoreVerdict(verdict, groundTruth) {
       reportedFindings: fileFindings
         .map((finding) => `${finding.row ?? finding.criterion_id ?? ''}:${finding.file}:${finding.line ?? ''}`)
         .sort(),
-      reportedCount: fileFindings.length + (fileIndex === 0 ? outOfScope.length : 0),
-      falsePositives: fileFalsePositives.length + (fileIndex === 0 ? outOfScope.length : 0),
-      outOfScope: fileIndex === 0 ? outOfScope.length : 0,
+      reportedCount: fileFindings.length,
+      falsePositives: fileFalsePositives.length,
+      outOfScope: 0,
+      outOfScopeFindings: [],
       unattributed: fileUnattributed.length,
-      unlocated: fileIndex === 0 ? unlocated : 0,
+      unlocated: 0,
+      unlocatedFindings: [],
     };
+  });
+  caseScores.push({
+    caseId: BUNDLE_CASE_ID,
+    recommendation: verdict.recommendation ?? 'n/a',
+    score: Number(verdict.qualityScore ?? Number.NaN),
+    planted: [],
+    hits: [],
+    misses: [],
+    criticalPlanted: 0,
+    criticalHits: 0,
+    reportedFindings: [],
+    reportedCount: outOfScope.length,
+    falsePositives: outOfScope.length,
+    outOfScope: outOfScope.length,
+    outOfScopeFindings: outOfScope.map(canonicalFindingIdentity).sort(),
+    unattributed: 0,
+    unlocated,
+    unlocatedFindings: unlocatedFindings.map(canonicalFindingIdentity).sort(),
   });
 
   return {
@@ -753,15 +784,21 @@ function reviewDiagnosticProjection(caseScore) {
 }
 
 function reviewSignature(caseScore) {
-  return JSON.stringify({
+  const fileEvidence = {
     caseId: caseScore.caseId,
     plantedHits: caseScore.hits,
     plantedMisses: caseScore.misses,
     reportedFindings: caseScore.reportedFindings,
     falsePositives: caseScore.falsePositives,
-    outOfScope: caseScore.outOfScope,
     unattributed: caseScore.unattributed,
+  };
+  if (caseScore.caseId !== BUNDLE_CASE_ID) return JSON.stringify(fileEvidence);
+  return JSON.stringify({
+    ...fileEvidence,
+    outOfScope: caseScore.outOfScope,
+    outOfScopeFindings: [...(caseScore.outOfScopeFindings ?? [])].sort(),
     unlocated: caseScore.unlocated,
+    unlocatedFindings: [...(caseScore.unlocatedFindings ?? [])].sort(),
     recommendation: caseScore.recommendation,
     score: caseScore.score,
   });
@@ -892,6 +929,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         promptDigest,
         cases: caseIds().map((id) => ({ id, promptDigest })),
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -911,7 +949,11 @@ function runnerRecord(
   { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -1026,14 +1068,25 @@ async function main() {
 
     if (results.length === 0) {
       console.error(`  ${colors.red}no successful runs; nothing was measured for ${agent}${colors.reset}\n`);
+      const measurements = {
+        recall: null,
+        criticalRecall: null,
+        nonFalsePositiveRate: null,
+        unattributedMean: null,
+        outOfScopeMean: null,
+        unlocatedMean: null,
+        scoreStdev: null,
+        distinctVerdicts: null,
+        meanScore: null,
+      };
       runners.push(
         runnerRecord(agent, options, versions, {
           expected: declaredCaseIds.length * runs,
           completed: 0,
-          measurements: {},
+          measurements,
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass: worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']),
-          failures: ['no run produced a scorable result'],
+          failures: [`0 of ${runs} declared repetitions completed`],
           diagnostics,
           diagnosticClassifier: reviewDiagnosticClassifier(diagnostics),
         }),
@@ -1087,6 +1140,7 @@ async function main() {
       for (const miss of missed) console.log(`    ${miss.row} ${miss.path}:${miss.line} — ${miss.what}`);
     }
 
+    const complete = results.length === runs;
     const measurements = {
       recall: measured(recall),
       criticalRecall: measured(criticalRecall),
@@ -1094,8 +1148,8 @@ async function main() {
       unattributedMean: measured(unattributedMean),
       outOfScopeMean: measured(outOfScopeMean),
       unlocatedMean: measured(unlocatedMean),
-      scoreStdev: measured(scoreSpread),
-      distinctVerdicts: verdicts.size,
+      scoreStdev: complete ? measured(scoreSpread) : null,
+      distinctVerdicts: complete ? verdicts.size : null,
       meanScore: measured(mean(results.map((r) => r.score))),
     };
 
@@ -1181,14 +1235,17 @@ module.exports = {
   runnerRecord,
   admittedLinesFor,
   scoreVerdict,
+  canonicalFindingIdentity,
   reviewDiagnosticProjection,
   reviewSignature,
   reviewDiagnosticClassifier,
   missingCredential,
   parseArgs,
   reviewFilePaths,
+  promptDigestFromCli,
   caseIds,
   RUNNER_CAPABILITIES,
   THRESHOLDS,
   SUITE_ID,
+  BUNDLE_CASE_ID,
 };

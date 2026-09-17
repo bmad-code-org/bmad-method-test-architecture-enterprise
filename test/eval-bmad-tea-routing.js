@@ -1117,6 +1117,7 @@ async function finish({ options, startedAt, mode, cases, runners, suiteFailureCl
         promptDigest: digestPrompts(index),
         cases: index.map((item) => ({ id: item.id, promptDigest: digest(item.prompt) })),
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -1136,7 +1137,11 @@ function runnerRecord(
   { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
 ) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier);
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -1466,7 +1471,7 @@ async function main() {
       confidentRoutesOnUnservable,
       confidentRoutesOnAmbiguous,
       unroutedClearIntents,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       unmeasuredRuns,
     };

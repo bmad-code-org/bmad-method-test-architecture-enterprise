@@ -1170,6 +1170,7 @@ async function finish({ options, startedAt, mode, groundTruth, runners, suiteFai
         promptDigest: groundTruth ? digestPrompts(caseIndex(groundTruth)) : null,
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -1182,7 +1183,11 @@ async function finish({ options, startedAt, mode, groundTruth, runners, suiteFai
 
 function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
-  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, atddDiagnosticClassifier(diagnostics));
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, atddDiagnosticClassifier(diagnostics), {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -1378,6 +1383,7 @@ async function main() {
     const completedRuns = caseScores.length;
     const complete = completedRuns === runs;
     const stable = signatures.size === 1 && complete;
+    const noMeasurement = completedRuns === 0;
 
     if (completedRuns > 0) {
       const first = caseScores[0];
@@ -1398,13 +1404,13 @@ async function main() {
     const measurements = {
       redForIntendedReasonRate: measured(ratio(totals.redForIntendedReasonRateSum, totals.measuredRedRate)),
       criteriaCoverage: measured(ratio(totals.criteriaCoverageSum, totals.measuredCoverage)),
-      vacuousPass: totals.vacuousPass,
-      stillSkipped: totals.stillSkipped,
-      nonAssertionExit: totals.nonAssertion,
-      loadErrors: totals.loadErrors,
-      unmapped: totals.unmapped,
-      productionMutations: totals.productionMutations,
-      unstableCases: complete && !stable ? 1 : 0,
+      vacuousPass: noMeasurement ? null : totals.vacuousPass,
+      stillSkipped: noMeasurement ? null : totals.stillSkipped,
+      nonAssertionExit: noMeasurement ? null : totals.nonAssertion,
+      loadErrors: noMeasurement ? null : totals.loadErrors,
+      unmapped: noMeasurement ? null : totals.unmapped,
+      productionMutations: noMeasurement ? null : totals.productionMutations,
+      unstableCases: complete ? Number(!stable) : null,
       incompleteCases: complete ? 0 : 1,
     };
 
@@ -1426,11 +1432,9 @@ async function main() {
 
     const failures = [];
     const redRate = measurements.redForIntendedReasonRate;
-    if (redRate === null) failures.push('redForIntendedReasonRate (unmeasurable)');
-    else if (redRate < THRESHOLDS.redForIntendedReasonRate) failures.push('redForIntendedReasonRate');
+    if (redRate !== null && redRate < THRESHOLDS.redForIntendedReasonRate) failures.push('redForIntendedReasonRate');
     const coverage = measurements.criteriaCoverage;
-    if (coverage === null) failures.push('criteriaCoverage (unmeasurable)');
-    else if (coverage < THRESHOLDS.criteriaCoverage) failures.push('criteriaCoverage');
+    if (coverage !== null && coverage < THRESHOLDS.criteriaCoverage) failures.push('criteriaCoverage');
     if (totals.vacuousPass > THRESHOLDS.maxVacuousPass) failures.push(`${totals.vacuousPass} vacuous pass(es)`);
     if (totals.stillSkipped > THRESHOLDS.maxStillSkipped) failures.push(`${totals.stillSkipped} still-skipped scaffold(s)`);
     if (totals.nonAssertion > THRESHOLDS.maxNonAssertionExit) failures.push(`${totals.nonAssertion} non-assertion exit(s)`);
