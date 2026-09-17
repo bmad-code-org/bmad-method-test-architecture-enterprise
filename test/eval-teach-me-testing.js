@@ -136,6 +136,9 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -918,6 +921,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         promptDigest: null,
         cases: [{ id: CASE_ID, promptDigest: null }],
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
@@ -928,8 +932,42 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
   process.exit(exitCode);
 }
 
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function teachDiagnosticProjection(outcome) {
+  return {
+    placement: { numerator: outcome.placement.holds ? 1 : 0, denominator: 1, threshold: THRESHOLDS.placementAccuracy },
+    correction: { numerator: outcome.correction.holds ? 1 : 0, denominator: 1, threshold: THRESHOLDS.correctionRate },
+    reTeaching: { numerator: outcome.reTeaching.holds ? 1 : 0, denominator: 1, threshold: THRESHOLDS.reTeachingRate },
+    continuation: { numerator: outcome.continuation.holds ? 1 : 0, denominator: 1, threshold: THRESHOLDS.continuationRate },
+    unearnedMastery: outcome.mastery.unearned.length,
+    maxUnearnedMastery: THRESHOLDS.maxUnearnedMastery,
+  };
+}
+
+function teachDiagnosticClassifier(entry, failures = []) {
+  const metric = entry.metricContributions;
+  const failureText = failures.join(' ').toLowerCase();
+  const reasons = [];
+  const failureTerms = {
+    placement: ['placement'],
+    correction: ['correction phrase'],
+    reTeaching: ['re-teach', 'reteach', 'review content', 'reviewed content'],
+    continuation: ['continuation greeting'],
+  };
+  for (const key of ['placement', 'correction', 'reTeaching', 'continuation']) {
+    const misses = metric[`${key}.numerator`] / metric[`${key}.denominator`] < metric[`${key}.threshold`];
+    if (misses && failureTerms[key].some((term) => failureText.includes(term))) reasons.push(key);
+  }
+  if (metric.unearnedMastery > metric.maxUnearnedMastery && failureText.includes('unearned mastery')) reasons.push('unearned mastery');
+  return reasons.length > 0 ? { reasons, rootCause: 'tea-workflow-defect' } : null;
+}
+
+function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, teachDiagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -945,8 +983,9 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     measurements,
     durationMs,
     usage: null,
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -1029,7 +1068,13 @@ async function main() {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
     for (const problem of problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
     console.error('');
-    await finish({ options, startedAt, mode: staticMode, runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
   console.log(
     `${colors.green}✓${colors.reset} one scripted two-turn session for ${groundTruth.sessionId}; every phrase this corpus cites ` +
@@ -1051,7 +1096,7 @@ async function main() {
       startedAt,
       mode: staticMode,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -1075,12 +1120,16 @@ async function main() {
     let continuationHits = 0;
     const lostClasses = [];
     const failures = [];
+    const diagnostics = [];
 
     for (let runIndex = 0; runIndex < runs; runIndex += 1) {
       const outcome = await runCase(groundTruth, options, agent, runIndex);
       if (!outcome.ok) {
         console.error(`  ${colors.red}run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
         lostClasses.push(outcome.failureClass);
+        diagnostics.push(
+          diagnosticRecord({ caseId: CASE_ID, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+        );
         continue;
       }
       completed += 1;
@@ -1104,6 +1153,22 @@ async function main() {
           `placement ${outcome.placement.holds ? 'ok' : 'MISS'}, correction ${outcome.correction.holds ? 'ok' : 'MISS'}, ` +
           `re-teaching ${outcome.reTeaching.holds ? 'ok' : 'MISS'}, continuation ${outcome.continuation.holds ? 'ok' : 'MISS'}, ` +
           `mastery ${outcome.mastery.holds ? 'ok' : `MISS (${outcome.mastery.unearned.join(', ')})`}`,
+      );
+      const signature = JSON.stringify([
+        outcome.placement.holds,
+        outcome.correction.holds,
+        outcome.reTeaching.holds,
+        outcome.continuation.holds,
+        outcome.mastery.unearned,
+      ]);
+      diagnostics.push(
+        diagnosticRecord({
+          caseId: CASE_ID,
+          repetition: runIndex + 1,
+          signature,
+          metricContributions: numericContributions(teachDiagnosticProjection(outcome)),
+          evidence: [{ kind: 'output-signature', value: signature }],
+        }),
       );
     }
 
@@ -1146,6 +1211,7 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${runs - completed} run(s) short of ${runs} repetitions`],
+          diagnostics,
         }),
       );
       continue;
@@ -1160,8 +1226,9 @@ async function main() {
         completed,
         measurements,
         durationMs: await elapsedMsSince(agentStartedAt),
-        failureClass: failures.length > 0 ? 'quality' : 'none',
-        failures,
+        failureClass: failures.length > 0 || thresholdFailures.length > 0 ? 'quality' : 'none',
+        failures: [...failures, ...thresholdFailures],
+        diagnostics,
       }),
     );
   }
@@ -1177,6 +1244,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   validateCorpus,
@@ -1193,6 +1261,8 @@ module.exports = {
   reTeachingHolds,
   masteryClaimHolds,
   continuationHolds,
+  teachDiagnosticProjection,
+  teachDiagnosticClassifier,
   caseIds,
   RUNNER_CAPABILITIES,
   THRESHOLDS,

@@ -120,6 +120,10 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  diagnosticRateMiss,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -155,6 +159,7 @@ const RUNNER_CAPABILITIES = ['read-only'];
 const THRESHOLDS = {
   requiredRecall: 0.9,
   forbiddenRate: 0.1,
+  maxUnstableCases: 0,
 };
 
 const colors = {
@@ -457,6 +462,44 @@ function scoreCase(item, selected) {
   };
 }
 
+function fragmentDiagnosticProjection(scored) {
+  return {
+    requiredRecall: { numerator: scored.hits, denominator: scored.required, threshold: THRESHOLDS.requiredRecall },
+    forbiddenRate: {
+      numerator: scored.forbidden.length,
+      denominator: scored.forbiddenTotal,
+      ceiling: THRESHOLDS.forbiddenRate,
+    },
+    selectedCount: scored.selected,
+    missingCount: scored.missing.length,
+    forbiddenCount: scored.forbidden.length,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function fragmentDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metrics = entry.metricContributions;
+    const failed = failures.join('; ').toLowerCase();
+    const reasons = [];
+    if (failed.includes('required recall') && diagnosticRateMiss(entry, 'requiredRecall', diagnostics)) reasons.push('required recall');
+    if (failed.includes('forbidden rate') && metrics.forbiddenCount > 0) reasons.push('forbidden rate');
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 function preflight({ agents, agentCmd }) {
   const problems = [];
   const versions = {};
@@ -519,8 +562,8 @@ async function caseIndex(suites) {
  *
  * @returns {Promise<string[]>}
  */
-async function caseIds() {
-  return (await caseIndex(await loadSuites([]))).map((item) => item.id);
+async function caseIds(workflows = []) {
+  return (await caseIndex(await loadSuites(workflows))).map((item) => item.id);
 }
 
 /**
@@ -554,6 +597,7 @@ async function finish({ options, startedAt, mode, suites, runners, suiteFailureC
         promptDigest: digestPrompts(index),
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -566,8 +610,18 @@ async function finish({ options, startedAt, mode, suites, runners, suiteFailureC
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -583,8 +637,9 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -618,7 +673,7 @@ async function main() {
       mode: staticMode,
       suites: [],
       runners: [],
-      suiteFailureClasses: ['quality'],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
     });
   }
 
@@ -642,7 +697,7 @@ async function main() {
       mode: staticMode,
       suites,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -683,6 +738,7 @@ async function main() {
     // Every environment failure seen across every case, so the runner's class is
     // the worst of them rather than the last one printed.
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const suite of suites) {
       console.log(`  ${colors.dim}${suite.data.workflow}${colors.reset}`);
@@ -733,6 +789,9 @@ async function main() {
           if (!result.ok) {
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: ${result.reason}${colors.reset}`);
             lostRunClasses.push(result.failureClass);
+            diagnostics.push(
+              diagnosticRecord({ caseId: item.id, repetition: runIndex + 1, failureClass: result.failureClass, reason: result.reason }),
+            );
             unmeasuredRuns += 1;
             continue;
           }
@@ -745,6 +804,14 @@ async function main() {
               `    ${colors.red}${item.id} run ${runIndex + 1}: the runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration${colors.reset}`,
             );
             lostRunClasses.push('environment-configuration');
+            diagnostics.push(
+              diagnosticRecord({
+                caseId: item.id,
+                repetition: runIndex + 1,
+                failureClass: 'environment-configuration',
+                reason: `runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration`,
+              }),
+            );
             unmeasuredRuns += 1;
             continue;
           }
@@ -759,6 +826,14 @@ async function main() {
               `    ${colors.red}${item.id} run ${runIndex + 1}: ${stderr.trim() || `exit ${observation.exitCode}`}${colors.reset}`,
             );
             lostRunClasses.push(failureClassForExit(observation.exitCode));
+            diagnostics.push(
+              diagnosticRecord({
+                caseId: item.id,
+                repetition: runIndex + 1,
+                failureClass: failureClassForExit(observation.exitCode),
+                reason: stderr.trim() || `exit ${observation.exitCode}`,
+              }),
+            );
             unmeasuredRuns += 1;
             continue;
           }
@@ -771,11 +846,30 @@ async function main() {
           if (!Array.isArray(selected)) {
             console.error(`    ${colors.red}${item.id} run ${runIndex + 1}: no fragment list in the runner's reply${colors.reset}`);
             lostRunClasses.push('environment-parser');
+            diagnostics.push(
+              diagnosticRecord({
+                caseId: item.id,
+                repetition: runIndex + 1,
+                failureClass: 'environment-parser',
+                reason: 'no fragment list in the runner reply',
+              }),
+            );
             unmeasuredRuns += 1;
             continue;
           }
-          signatures.add([...selected].sort().join(','));
-          caseScores.push(scoreCase(item, selected));
+          const signature = JSON.stringify([...selected].sort());
+          const scored = scoreCase(item, selected);
+          signatures.add(signature);
+          caseScores.push(scored);
+          diagnostics.push(
+            diagnosticRecord({
+              caseId: item.id,
+              repetition: runIndex + 1,
+              signature,
+              metricContributions: numericContributions(fragmentDiagnosticProjection(scored)),
+              evidence: [{ kind: 'output-signature', value: signature }],
+            }),
+          );
         }
 
         completedRuns += caseScores.length;
@@ -829,7 +923,7 @@ async function main() {
     const measurements = {
       requiredRecall: measured(recall),
       forbiddenRate: measured(forbiddenRate),
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       unmeasuredRuns,
     };
@@ -838,7 +932,7 @@ async function main() {
     if (Number.isNaN(recall)) failures.push('required recall (unmeasurable)');
     else if (recall < THRESHOLDS.requiredRecall) failures.push('required recall');
     if (!Number.isNaN(forbiddenRate) && forbiddenRate > THRESHOLDS.forbiddenRate) failures.push('forbidden rate');
-    if (unstableCases > 0) failures.push(`${unstableCases} unstable case(s)`);
+    if (unstableCases > THRESHOLDS.maxUnstableCases) failures.push(`${unstableCases} unstable case(s)`);
 
     if (incompleteCases > 0) {
       const failureClass = worstFailureClass([...lostRunClasses, 'environment-incomplete-repetitions']);
@@ -853,6 +947,8 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
+          diagnosticClassifier: fragmentDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -872,6 +968,8 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
+        diagnosticClassifier: fragmentDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -890,10 +988,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   loadSuites,
   validateSuites,
   parseSelection,
   scoreCase,
+  fragmentDiagnosticProjection,
+  fragmentDiagnosticClassifier,
   buildPrompt,
   caseIndex,
   caseIds,

@@ -155,6 +155,10 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  diagnosticRateMiss,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -662,7 +666,7 @@ function scoreCase(expected, answer, menu, intent = '') {
 
   const actionCorrect = answer.action === expected.expectedAction;
   const routeCase = expected.expectedAction === 'route';
-  return {
+  const scored = {
     action: answer.action,
     menuCode: answer.menuCode,
     workflow: answer.workflow,
@@ -715,6 +719,8 @@ function scoreCase(expected, answer, menu, intent = '') {
     confidentRouteOnAmbiguous: expected.expectedAction === 'clarify' && answer.action === 'route',
     unroutedClearIntent: routeCase && answer.action !== 'route',
   };
+  Object.defineProperty(scored, 'expectedAction', { value: expected.expectedAction, enumerable: false });
+  return scored;
 }
 
 /**
@@ -754,6 +760,69 @@ function signatureOf(score) {
   return score === null
     ? 'unmeasured'
     : [score.action, score.menuCode ?? '', score.workflow ?? '', [...(score.candidateCodesNamed ?? [])].sort().join('+')].join('|');
+}
+
+function routingDiagnosticProjection(score) {
+  return {
+    expectedRoute: score.expectedAction === 'route',
+    expectedClarify: score.expectedAction === 'clarify',
+    expectedDecline: score.expectedAction === 'decline',
+    actionCorrect: score.actionCorrect,
+    menuCorrect: score.menuCorrect,
+    workflowCorrect: score.workflowCorrect,
+    routeCorrect: score.routeCorrect,
+    reasonTokens: { numerator: score.tokensFound, denominator: score.tokens, threshold: THRESHOLDS.reasonTokenRecall },
+    scopeTokens: { numerator: score.scopeFound, denominator: score.scopeTokens, threshold: THRESHOLDS.scopeFidelity },
+    scopeWithinBound: score.scopeWithinBound,
+    scopeOk: score.scopeOk,
+    candidates: { numerator: score.candidatesNamed, denominator: score.candidates },
+    clarifyOk: score.clarifyOk,
+    missingStated: score.missingStated,
+    declineOk: score.declineOk,
+    confidentRouteOnUnservable: score.confidentRouteOnUnservable,
+    confidentRouteOnAmbiguous: score.confidentRouteOnAmbiguous,
+    unroutedClearIntent: score.unroutedClearIntent,
+    routeAccuracyThreshold: THRESHOLDS.routeAccuracy,
+    clarifyRecallThreshold: THRESHOLDS.clarifyRecall,
+    declineRecallThreshold: THRESHOLDS.declineRecall,
+    maxConfidentRoutesOnUnservable: THRESHOLDS.maxConfidentRoutesOnUnservable,
+    maxConfidentRoutesOnAmbiguous: THRESHOLDS.maxConfidentRoutesOnAmbiguous,
+    maxUnroutedClearIntents: THRESHOLDS.maxUnroutedClearIntents,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function routingDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metrics = entry.metricContributions;
+    const failed = failures.join('; ').toLowerCase();
+    const reasons = [];
+    if (failed.includes('route accuracy') && metrics.expectedRoute === 1 && metrics.routeCorrect === 0) reasons.push('route accuracy');
+    if (failed.includes('reason token recall') && diagnosticRateMiss(entry, 'reasonTokens', diagnostics))
+      reasons.push('reason token recall');
+    if (failed.includes('scope fidelity') && diagnosticRateMiss(entry, 'scopeTokens', diagnostics) && metrics.scopeOk === 0)
+      reasons.push('scope fidelity');
+    if (failed.includes('clarification recall') && metrics.expectedClarify === 1 && metrics.clarifyOk === 0)
+      reasons.push('clarification recall');
+    if (failed.includes('decline recall') && metrics.expectedDecline === 1 && metrics.declineOk === 0) reasons.push('decline recall');
+    if (failed.includes('unservable intent') && metrics.confidentRouteOnUnservable === 1)
+      reasons.push('confident route on unservable intent');
+    if (failed.includes('genuinely close') && metrics.confidentRouteOnAmbiguous === 1) reasons.push('confident route on ambiguous intent');
+    if (failed.includes('clear intent') && metrics.unroutedClearIntent === 1) reasons.push('clear intent left unrouted');
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
 }
 
 /**
@@ -930,6 +999,7 @@ async function finish({ options, startedAt, mode, cases, runners, suiteFailureCl
         promptDigest: digestPrompts(index),
         cases: index.map((item) => ({ id: item.id, promptDigest: digest(item.prompt) })),
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -942,8 +1012,18 @@ async function finish({ options, startedAt, mode, cases, runners, suiteFailureCl
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -959,8 +1039,9 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -990,7 +1071,14 @@ async function main() {
     // with no model call. No cases are handed to the record, because building a
     // prompt out of data that just failed validation is how a reporting path
     // turns into a second crash.
-    await finish({ options, startedAt, mode: staticMode, cases: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      cases: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const menu = await menuItems();
@@ -1019,7 +1107,7 @@ async function main() {
       mode: staticMode,
       cases: corpus.cases,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -1063,6 +1151,7 @@ async function main() {
     let unstableCases = 0;
     let incompleteCases = 0;
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const item of corpus.cases) {
       const prompt = await buildPrompt(item);
@@ -1101,6 +1190,9 @@ async function main() {
         if (!result.ok) {
           console.error(`  ${colors.red}${item.id} run ${runIndex + 1}: ${result.reason}${colors.reset}`);
           lostRunClasses.push(result.failureClass);
+          diagnostics.push(
+            diagnosticRecord({ caseId: item.id, repetition: runIndex + 1, failureClass: result.failureClass, reason: result.reason }),
+          );
           unmeasuredRuns += 1;
           continue;
         }
@@ -1110,6 +1202,14 @@ async function main() {
             `  ${colors.red}${item.id} run ${runIndex + 1}: the runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration${colors.reset}`,
           );
           lostRunClasses.push('environment-configuration');
+          diagnostics.push(
+            diagnosticRecord({
+              caseId: item.id,
+              repetition: runIndex + 1,
+              failureClass: 'environment-configuration',
+              reason: `runner wrote ${[...written, ...treeChanges].join(', ')} under a read-only declaration`,
+            }),
+          );
           unmeasuredRuns += 1;
           continue;
         }
@@ -1119,6 +1219,14 @@ async function main() {
           const stderr = observedText(observation.stderr);
           console.error(`  ${colors.red}${item.id} run ${runIndex + 1}: ${stderr.trim() || `exit ${observation.exitCode}`}${colors.reset}`);
           lostRunClasses.push(failureClassForExit(observation.exitCode));
+          diagnostics.push(
+            diagnosticRecord({
+              caseId: item.id,
+              repetition: runIndex + 1,
+              failureClass: failureClassForExit(observation.exitCode),
+              reason: stderr.trim() || `exit ${observation.exitCode}`,
+            }),
+          );
           unmeasuredRuns += 1;
           continue;
         }
@@ -1130,11 +1238,29 @@ async function main() {
         if (score === null) {
           console.error(`  ${colors.red}${item.id} run ${runIndex + 1}: no routing answer in the runner's reply${colors.reset}`);
           lostRunClasses.push('environment-parser');
+          diagnostics.push(
+            diagnosticRecord({
+              caseId: item.id,
+              repetition: runIndex + 1,
+              failureClass: 'environment-parser',
+              reason: 'no routing answer in the runner reply',
+            }),
+          );
           unmeasuredRuns += 1;
           continue;
         }
-        signatures.add(signatureOf(score));
+        const signature = signatureOf(score);
+        signatures.add(signature);
         caseScores.push(score);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: item.id,
+            repetition: runIndex + 1,
+            signature,
+            metricContributions: numericContributions(routingDiagnosticProjection(score)),
+            evidence: [{ kind: 'output-signature', value: signature }],
+          }),
+        );
       }
 
       completedRuns += caseScores.length;
@@ -1227,7 +1353,7 @@ async function main() {
       confidentRoutesOnUnservable,
       confidentRoutesOnAmbiguous,
       unroutedClearIntents,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       unmeasuredRuns,
     };
@@ -1264,6 +1390,8 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
+          diagnosticClassifier: routingDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -1283,6 +1411,8 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
+        diagnosticClassifier: routingDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -1301,6 +1431,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   assertGroundTruthAbsent,
   buildPrompt,
   candidatePatternSource,
@@ -1316,6 +1447,8 @@ module.exports = {
   parseRouting,
   scoreCase,
   signatureOf,
+  routingDiagnosticProjection,
+  routingDiagnosticClassifier,
   scopeBoundPatternSource,
   tokenPatternSource,
   validateCorpus,

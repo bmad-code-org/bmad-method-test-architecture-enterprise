@@ -190,6 +190,11 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  artifactEvidence,
+  numericContributions,
+  diagnosticRateMiss,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -2058,6 +2063,88 @@ function signatureOf(scored, mutations) {
   ]);
 }
 
+function traceDiagnosticProjection(scored, mutations) {
+  const ratioProjection = (checks, threshold) => ({
+    numerator: checks.filter((check) => check.ok).length,
+    denominator: checks.length,
+    threshold,
+  });
+  const discriminating = scored.statusResults.filter((item) => item.discriminating);
+  return {
+    criterionStatusAccuracy: ratioProjection(scored.statusResults, THRESHOLDS.criterionStatusAccuracy),
+    discriminatingCriterionAccuracy: ratioProjection(discriminating, THRESHOLDS.discriminatingCriterionAccuracy),
+    gateAccuracy: { numerator: scored.gate.ok ? 1 : 0, denominator: 1, threshold: THRESHOLDS.gateAccuracy },
+    gateCriteriaAccuracy: ratioProjection(scored.gateCriteria, THRESHOLDS.gateCriteriaAccuracy),
+    coverageArithmeticAccuracy: ratioProjection(scored.arithmetic, THRESHOLDS.coverageArithmeticAccuracy),
+    oracleResolutionAccuracy: ratioProjection(scored.oracleResolution, THRESHOLDS.oracleResolutionAccuracy),
+    runMetadataAccuracy: ratioProjection(scored.runMetadata, THRESHOLDS.runMetadataAccuracy),
+    evidenceCitationPrecision: {
+      numerator: scored.citations.resolved,
+      denominator: scored.citations.total,
+      threshold: THRESHOLDS.evidenceCitationPrecision,
+    },
+    rejectedEvidenceAccuracy: ratioProjection(scored.rejectedEvidence, THRESHOLDS.rejectedEvidenceAccuracy),
+    waiverOracleAccuracy: scored.waivers.scored
+      ? ratioProjection(scored.waivers.checks, THRESHOLDS.waiverOracleAccuracy)
+      : { numerator: 0, denominator: 0, threshold: THRESHOLDS.waiverOracleAccuracy },
+    liveEvidenceAccuracy: ratioProjection(scored.live, THRESHOLDS.liveEvidenceAccuracy),
+    cleanFalsePositives: scored.cleanFalsePositives,
+    maxCleanFalsePositives: THRESHOLDS.maxCleanFalsePositives,
+    inventedCriteria: scored.invented.length,
+    maxInventedCriteria: THRESHOLDS.maxInventedCriteria,
+    duplicateCriteria: scored.duplicates.length,
+    maxDuplicateCriteria: THRESHOLDS.maxDuplicateCriteria,
+    fixtureMutations: mutations,
+    maxFixtureMutations: THRESHOLDS.maxFixtureMutations,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function traceDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metric = entry.metricContributions;
+    const failed = failures.join('; ');
+    const reasons = [];
+    for (const key of [
+      'criterionStatusAccuracy',
+      'discriminatingCriterionAccuracy',
+      'gateAccuracy',
+      'gateCriteriaAccuracy',
+      'coverageArithmeticAccuracy',
+      'oracleResolutionAccuracy',
+      'runMetadataAccuracy',
+      'evidenceCitationPrecision',
+      'rejectedEvidenceAccuracy',
+      'waiverOracleAccuracy',
+      'liveEvidenceAccuracy',
+    ]) {
+      if (!failed.includes(key)) continue;
+      if (diagnosticRateMiss(entry, key, diagnostics)) reasons.push(key);
+    }
+    for (const [needle, value, ceiling] of [
+      ['clean false positives', 'cleanFalsePositives', 'maxCleanFalsePositives'],
+      ['invented criterion', 'inventedCriteria', 'maxInventedCriteria'],
+      ['duplicate criterion', 'duplicateCriteria', 'maxDuplicateCriteria'],
+      ['fixture mutations', 'fixtureMutations', 'maxFixtureMutations'],
+    ]) {
+      if (failed.includes(needle) && metric[value] > metric[ceiling]) reasons.push(value);
+    }
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Running                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -2192,7 +2279,13 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
         !workspace.corpusFiles.includes(relative),
     );
 
-    return { ok: true, scored: scoreRun(set, summary.summary, matrix, tolerance, pctTolerance), mutations: mutations + added.length };
+    const paths = traceArtifactPaths(set);
+    return {
+      ok: true,
+      scored: scoreRun(set, summary.summary, matrix, tolerance, pctTolerance),
+      mutations: mutations + added.length,
+      artifactEvidence: [...artifactEvidence(paths.summary, summary.summary), ...artifactEvidence(paths.matrix, matrixArtifact.value)],
+    };
   } finally {
     fs.rmSync(workspace.dir, { recursive: true, force: true });
   }
@@ -2276,6 +2369,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -2288,8 +2382,18 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -2305,8 +2409,9 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -2349,7 +2454,14 @@ async function main() {
     // a model call, so it keeps the exit 1 the sibling harnesses give the same case.
     // No sets are handed to the record: building prompts out of data that just failed
     // validation is how a reporting path turns into a second crash.
-    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      sets: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const criteriaCount = sets.reduce((sum, set) => sum + (set.criteria ?? []).length, 0);
@@ -2422,7 +2534,7 @@ async function main() {
       mode: staticMode,
       sets,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -2474,6 +2586,7 @@ async function main() {
     // Every environment failure across every case, so the runner's class is the worst
     // of them rather than the last one printed.
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const set of sets) {
       const signatures = new Set();
@@ -2483,11 +2596,24 @@ async function main() {
         if (!outcome.ok) {
           console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
           lostRunClasses.push(outcome.failureClass);
+          diagnostics.push(
+            diagnosticRecord({ caseId: set.id, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+          );
           continue;
         }
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
-        signatures.add(signatureOf(outcome.scored, outcome.mutations));
+        const signature = signatureOf(outcome.scored, outcome.mutations);
+        signatures.add(signature);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: set.id,
+            repetition: runIndex + 1,
+            signature,
+            metricContributions: numericContributions(traceDiagnosticProjection(outcome.scored, outcome.mutations)),
+            evidence: [{ kind: 'output-signature', value: signature }, ...outcome.artifactEvidence],
+          }),
+        );
       }
 
       completedRuns += caseScores.length;
@@ -2579,7 +2705,7 @@ async function main() {
       cleanFalsePositives: totals.cleanFalsePositives,
       inventedCriteria: totals.invented,
       duplicateCriteria: totals.duplicates,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       fixtureMutations: totals.mutations,
       waiverRunsNotScored: totals.waiverSkippedRuns,
@@ -2657,6 +2783,8 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
+          diagnosticClassifier: traceDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -2676,6 +2804,8 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
+        diagnosticClassifier: traceDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -2697,8 +2827,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
+  selectSets,
   validateCorpus,
   recomputeExpectations,
   deriveGate,
@@ -2716,6 +2848,8 @@ module.exports = {
   parseMatrix,
   scoreRun,
   signatureOf,
+  traceDiagnosticProjection,
+  traceDiagnosticClassifier,
   RUNNER_CAPABILITIES,
   SUMMARY_SCHEMA_MAJOR_MINOR,
   THRESHOLDS,

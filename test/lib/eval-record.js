@@ -61,8 +61,28 @@ const SECRET_FLAG_PATTERN = /key|token|secret|password|credential|auth/i;
 // inside "risk-based" and "task-runner" and erase the runner arguments the record
 // exists to report. `-` and `_` are deliberately outside the boundary set, so
 // `prefix_github_pat_x` is still caught.
-const SECRET_VALUE_PATTERN = /(?<![A-Za-z0-9])(sk-|sk_|ghp_|gho_|ghs_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)/;
+const SECRET_TOKEN_PATTERN = /(^|[^A-Za-z0-9])(?:sk[-_]|gh[pousr]_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)[A-Za-z0-9._~+/=-]*/g;
+const SENSITIVE_VALUE_PATTERN =
+  /((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|credential|authorization|auth)(?:["']?)\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[redacted\]|[^\s,;}&\]]+)/gi;
 const REDACTED = '[redacted]';
+const MAX_DIAGNOSTIC_METRICS = 64;
+const MAX_DIAGNOSTIC_METRIC_KEY = 128;
+
+function boundedDiagnosticText(value, maxLength) {
+  const text = String(value);
+  if (text.length <= maxLength) return text;
+  const digest = createHash('sha256').update(text).digest('hex');
+  const suffix = `…sha256:${digest}`;
+  return `${text.slice(0, maxLength - suffix.length)}${suffix}`;
+}
+
+function redactSecrets(value) {
+  return String(value)
+    .replaceAll(/(\b(?:authorization|proxy-authorization)\b\s*[:=]\s*)(?:bearer|basic)\s+[^\s,;"'}]+/gi, `$1${REDACTED}`)
+    .replaceAll(SENSITIVE_VALUE_PATTERN, `$1${REDACTED}`)
+    .replaceAll(/([?&](?:api[_-]?key|access[_-]?token|token|secret|password|credential|auth)=)[^&\s]+/gi, `$1${REDACTED}`)
+    .replaceAll(SECRET_TOKEN_PATTERN, `$1${REDACTED}`);
+}
 
 /**
  * sha256 over canonical bytes.
@@ -199,8 +219,9 @@ function redactArgs(args = []) {
       // The value half is tested too. `--extra=sk-live-abc` names nothing
       // credential-shaped, so the flag test alone let a real token through into a
       // file CI uploads, which is the one thing this function exists to stop.
-      const leaks = SECRET_FLAG_PATTERN.test(flag) || SECRET_VALUE_PATTERN.test(argument.slice(separator + 1));
-      redacted.push(leaks ? `${flag}=${REDACTED}` : argument);
+      const value = argument.slice(separator + 1);
+      const sanitized = redactSecrets(value);
+      redacted.push(`${flag}=${SECRET_FLAG_PATTERN.test(flag) || sanitized !== value ? REDACTED : value}`);
       continue;
     }
     if (argument.startsWith('-') && SECRET_FLAG_PATTERN.test(argument)) {
@@ -208,7 +229,8 @@ function redactArgs(args = []) {
       dropNextValue = true;
       continue;
     }
-    redacted.push(SECRET_VALUE_PATTERN.test(argument) ? REDACTED : argument);
+    const sanitized = redactSecrets(argument);
+    redacted.push(sanitized === argument ? argument : REDACTED);
   }
   return redacted;
 }
@@ -237,6 +259,190 @@ function measured(value) {
 }
 
 /**
+ * Build one bounded, secret-free diagnostic for an attempted repetition.
+ * Harnesses pass scorer projections or artifact paths, never unrestricted model
+ * text. The schema supplies the second line of defence for size and shape.
+ */
+function diagnosticRecord({
+  caseId,
+  repetition,
+  signature = null,
+  metricContributions = {},
+  failureClass = 'none',
+  rootCause = null,
+  reason = null,
+  triage = null,
+  mappedFailures = [],
+  mappedMeasurements = [],
+  evidence = [],
+}) {
+  const failed = failureClass !== 'none' && failureClass !== 'quality';
+  const boundedMetrics = Object.fromEntries(
+    Object.entries(metricContributions)
+      .filter(([, value]) => typeof value === 'number' && Number.isFinite(value))
+      .slice(0, MAX_DIAGNOSTIC_METRICS)
+      .map(([key, value]) => [String(key).slice(0, MAX_DIAGNOSTIC_METRIC_KEY), value]),
+  );
+  const boundedSignature = signature === null ? null : boundedDiagnosticText(redactSecrets(signature), 4096);
+  const normalizedTriage = triage ?? (failureClass === 'quality' && rootCause ? [{ reason: reason ?? rootCause, rootCause }] : []);
+  return {
+    caseId,
+    repetition,
+    completionState: failed ? 'failed' : 'completed',
+    signature: failed ? null : boundedSignature,
+    metricContributions: failed ? {} : boundedMetrics,
+    failureClass,
+    rootCause,
+    reason: reason === null ? null : boundedDiagnosticText(redactSecrets(reason), 2048),
+    triage: normalizedTriage.slice(0, 16).map((entry) => ({
+      reason: boundedDiagnosticText(redactSecrets(entry.reason), 2048),
+      rootCause: entry.rootCause,
+    })),
+    mappedFailures: [...new Set(mappedFailures)].slice(0, 64).map((entry) => boundedDiagnosticText(redactSecrets(entry), 2048)),
+    mappedMeasurements: [...new Set(mappedMeasurements)].slice(0, 64).map((entry) => String(entry).slice(0, 128)),
+    evidence: evidence.slice(0, 32).map((entry) => ({
+      kind: entry.kind,
+      value: boundedDiagnosticText(redactSecrets(entry.value), 2048),
+    })),
+  };
+}
+
+function artifactEvidence(artifactPath, content) {
+  const text = typeof content === 'string' ? content : JSON.stringify(content);
+  const excerpt = text.replaceAll(/\s+/g, ' ').trim().slice(0, 512) || '[empty artifact]';
+  return [
+    { kind: 'artifact', value: artifactPath },
+    { kind: 'summary', value: `${digest(text)} ${excerpt}` },
+  ];
+}
+
+/** Flatten an explicit scorer projection into bounded numeric contributions. */
+function numericContributions(value, prefix = '', contributions = {}) {
+  if (typeof value === 'number') {
+    if (Number.isFinite(value) && prefix) contributions[prefix] = value;
+    return contributions;
+  }
+  if (typeof value === 'boolean') {
+    if (prefix) contributions[prefix] = value ? 1 : 0;
+    return contributions;
+  }
+  if (Array.isArray(value)) {
+    if (prefix) contributions[`${prefix}.count`] = value.length;
+    return contributions;
+  }
+  if (value === null || typeof value !== 'object') return contributions;
+  for (const [key, child] of Object.entries(value)) {
+    numericContributions(child, prefix ? `${prefix}.${key}` : key, contributions);
+  }
+  return contributions;
+}
+
+function diagnosticRateMiss(entry, prefix, diagnostics) {
+  const numerator = entry.metricContributions[`${prefix}.numerator`];
+  const denominator = entry.metricContributions[`${prefix}.denominator`];
+  const threshold = entry.metricContributions[`${prefix}.threshold`];
+  if (denominator > 0) return numerator / denominator < threshold;
+  return diagnostics
+    .filter((candidate) => candidate.completionState === 'completed')
+    .every((candidate) => (candidate.metricContributions[`${prefix}.denominator`] ?? 0) === 0);
+}
+
+/** Mark only the completed repetitions that contributed to aggregate quality failures. */
+function classifyDiagnosticQuality(diagnostics, failures, classify, runnerContext = {}) {
+  if (failures.length === 0) return diagnostics;
+  if (typeof classify !== 'function') {
+    throw new TypeError('classifyDiagnosticQuality requires a case-level classifier when aggregate quality failures exist');
+  }
+  const classified = diagnostics.map((entry) => {
+    if (entry.completionState !== 'completed') return entry;
+    const findings = [];
+    const mappedFailures = new Set(entry.mappedFailures ?? []);
+    for (const failure of failures) {
+      const classification = classify(entry, [failure]);
+      if (!classification) continue;
+      const classifiedFindings =
+        classification.findings ?? classification.reasons?.map((reason) => ({ reason, rootCause: classification.rootCause }));
+      if (!Array.isArray(classifiedFindings) || classifiedFindings.length === 0) continue;
+      findings.push(...classifiedFindings);
+      mappedFailures.add(failure);
+    }
+    if (findings.length === 0) return entry;
+    const uniqueFindings = [...new Map(findings.map((finding) => [`${finding.rootCause}\u0000${finding.reason}`, finding])).values()].slice(
+      0,
+      16,
+    );
+    if (uniqueFindings.some((finding) => !finding.rootCause)) {
+      throw new TypeError('case-level quality classifications must name a root cause for every reason');
+    }
+    return {
+      ...entry,
+      failureClass: 'quality',
+      rootCause: uniqueFindings[0].rootCause,
+      reason:
+        entry.reason ??
+        uniqueFindings
+          .map((finding) => finding.reason)
+          .join('; ')
+          .slice(0, 2048),
+      triage: uniqueFindings,
+      mappedFailures: [...mappedFailures].slice(0, 64),
+    };
+  });
+
+  const failedDiagnostics = classified.filter((entry) => entry.completionState === 'failed');
+  const environmentFailure = /\b(?:short|incomplete|completed|repetition|unmeasurable)\b/i;
+  for (const failure of failures) {
+    if (classified.some((entry) => entry.mappedFailures?.includes(failure))) continue;
+    const failureTokens = new Set(
+      String(failure)
+        .toLowerCase()
+        .match(/[a-z][a-z-]{2,}/g) ?? [],
+    );
+    let candidates = failedDiagnostics.filter((entry) =>
+      (
+        String(entry.reason)
+          .toLowerCase()
+          .match(/[a-z][a-z-]{2,}/g) ?? []
+      ).some((token) => failureTokens.has(token)),
+    );
+    if (candidates.length === 0 && environmentFailure.test(failure)) candidates = failedDiagnostics;
+    for (const entry of candidates) entry.mappedFailures = [...new Set([...(entry.mappedFailures ?? []), failure])];
+  }
+
+  const measurements = runnerContext.measurements ?? {};
+  for (const [name, value] of Object.entries(measurements)) {
+    if (value !== null) continue;
+    const normalizedName = name.replaceAll(/[^a-z0-9]/gi, '').toLowerCase();
+    let candidates = classified.filter((entry) =>
+      (entry.mappedFailures ?? []).some((failure) =>
+        failure
+          .replaceAll(/[^a-z0-9]/gi, '')
+          .toLowerCase()
+          .includes(normalizedName),
+      ),
+    );
+    if (candidates.length === 0 && runnerContext.completed < runnerContext.expected) {
+      candidates = failedDiagnostics;
+    }
+    for (const entry of candidates) entry.mappedMeasurements = [...new Set([...(entry.mappedMeasurements ?? []), name])];
+  }
+  return classified;
+}
+
+function suiteDiagnosticRecords(entries = []) {
+  return entries.map((entry) => {
+    const value = typeof entry === 'string' ? { failureClass: entry } : entry;
+    const rootCause = value.rootCause ?? (value.failureClass === 'quality' ? 'corpus-defect' : 'harness-defect');
+    return {
+      failureClass: value.failureClass,
+      rootCause,
+      reason: value.reason ?? value.message ?? `pre-measurement ${value.failureClass} failure`,
+      evidence: value.evidence ?? [{ kind: 'summary', value: value.message ?? value.reason ?? value.failureClass }],
+    };
+  });
+}
+
+/**
  * Assemble one suite result record. The failure class is derived from the
  * runners plus any suite-level environment failure, and the exit code is
  * derived from that, so the three can never disagree.
@@ -254,10 +460,16 @@ function suiteResultRecord({
   cases,
   runners,
   durationMs,
+  declaredRepetitions = suite.repetitions,
   suiteFailureClasses = [],
+  suiteDiagnostics = [],
   contractVersions = {},
 }) {
-  const failureClass = worstFailureClass([...runners.map((runner) => runner.failureClass), ...suiteFailureClasses]);
+  const normalizedSuiteDiagnostics = suiteDiagnosticRecords([...suiteFailureClasses, ...suiteDiagnostics]);
+  const failureClass = worstFailureClass([
+    ...runners.map((runner) => runner.failureClass),
+    ...normalizedSuiteDiagnostics.map((entry) => entry.failureClass),
+  ]);
   return {
     schemaVersion: SCHEMA_VERSION,
     kind: 'suite-result',
@@ -287,9 +499,18 @@ function suiteResultRecord({
       caseIds: cases.map((item) => item.id),
       cases: cases.map((item) => ({ id: item.id, promptDigest: item.promptDigest ?? null })),
       thresholds: suite.thresholds,
-      declaredRepetitions: suite.repetitions,
+      declaredRepetitions,
     },
     runners,
+    suiteDiagnostics: normalizedSuiteDiagnostics.map((entry) => ({
+      failureClass: entry.failureClass,
+      rootCause: entry.rootCause,
+      reason: boundedDiagnosticText(redactSecrets(entry.reason), 2048),
+      evidence: (entry.evidence ?? []).slice(0, 32).map((evidence) => ({
+        kind: evidence.kind,
+        value: boundedDiagnosticText(redactSecrets(evidence.value), 2048),
+      })),
+    })),
     durationMs,
     failureClass,
     exitCode: exitCodeForFailureClass(failureClass),
@@ -302,8 +523,11 @@ function suiteResultRecord({
  * @param {object} input
  * @returns {object} A record shaped for evalRunSchema.
  */
-function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, durationMs, runFailureClasses = [] }) {
-  const failureClass = worstFailureClass([...suites.map((suite) => suite.failureClass), ...runFailureClasses]);
+function runSummaryRecord({ generatedAt, repository, suites, unaccountedSkills, durationMs }) {
+  const failureClass = worstFailureClass([
+    ...suites.map((suite) => suite.failureClass),
+    ...(unaccountedSkills.length > 0 ? ['environment-configuration'] : []),
+  ]);
   return {
     schemaVersion: SCHEMA_VERSION,
     kind: 'run-summary',
@@ -395,8 +619,15 @@ module.exports = {
   repositoryState,
   probeVersion,
   redactArgs,
+  redactSecrets,
   classifyAgentError,
   measured,
+  diagnosticRecord,
+  artifactEvidence,
+  numericContributions,
+  diagnosticRateMiss,
+  classifyDiagnosticQuality,
+  suiteDiagnosticRecords,
   suiteResultRecord,
   runSummaryRecord,
   writeSuiteResult,

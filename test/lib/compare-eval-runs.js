@@ -51,6 +51,14 @@ function sameThresholds(a, b) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function comparableThresholds(result) {
+  const thresholds = { ...result.suite.thresholds };
+  if (result.suite.id === 'fragment-selection' && result.schemaVersion === '1.3.0' && !Object.hasOwn(thresholds, 'maxUnstableCases')) {
+    thresholds.maxUnstableCases = 0;
+  }
+  return thresholds;
+}
+
 /**
  * One run's suites, keyed by suite id.
  *
@@ -81,9 +89,11 @@ function configMismatches(previousSuites, currentSuites) {
         `suite "${id}" declares ${previousSuite.declaredRepetitions} repetition(s) in the earlier run and ${currentSuite.declaredRepetitions} in this one`,
       );
     }
-    if (!sameThresholds(previousSuite.thresholds, currentSuite.thresholds)) {
+    const previousThresholds = comparableThresholds(previousResult);
+    const currentThresholds = comparableThresholds(currentResult);
+    if (!sameThresholds(previousThresholds, currentThresholds)) {
       reasons.push(
-        `suite "${id}" declares different thresholds between the two runs: ${JSON.stringify(previousSuite.thresholds)} vs ${JSON.stringify(currentSuite.thresholds)}`,
+        `suite "${id}" declares different thresholds between the two runs: ${JSON.stringify(previousThresholds)} vs ${JSON.stringify(currentThresholds)}`,
       );
     }
   }

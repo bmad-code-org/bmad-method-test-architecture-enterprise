@@ -87,7 +87,17 @@ const { failureClassForExit } = require('../cli/transcript-runner');
 const { runTranscript } = require('./lib/transcript-harness');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
 const { contractVersionsFor } = require('./lib/contract-versions');
-const { digestFiles, repositoryState, probeVersion, measured, suiteResultRecord, writeSuiteResult } = require('./lib/eval-record');
+const {
+  digestFiles,
+  repositoryState,
+  probeVersion,
+  measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
+  suiteResultRecord,
+  writeSuiteResult,
+} = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
@@ -495,6 +505,7 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
         promptDigest: null,
         cases: [{ id: CASE_ID, promptDigest: null }],
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -506,8 +517,33 @@ async function finish({ options, startedAt, mode, runners, suiteFailureClasses =
   process.exit(exitCode);
 }
 
+function transcriptDiagnosticProjection(cross) {
+  return {
+    crossTurnConsistency: {
+      numerator: cross.holds ? 1 : 0,
+      denominator: 1,
+      threshold: THRESHOLDS.crossTurnConsistencyRate,
+    },
+  };
+}
+
+function transcriptDiagnosticClassifier(entry, failures = []) {
+  const metric = entry.metricContributions;
+  const misses =
+    metric['crossTurnConsistency.denominator'] === 0 ||
+    metric['crossTurnConsistency.numerator'] / metric['crossTurnConsistency.denominator'] < metric['crossTurnConsistency.threshold'];
+  const reason = entry.reason ?? 'cross-turn consistency';
+  const matchesFailure = failures.some((failure) => failure === 'crossTurnConsistencyRate' || failure.includes(reason));
+  return misses && matchesFailure ? { reasons: [reason], rootCause: 'harness-defect' } : null;
+}
+
 /** The one runner record this suite ever produces: the hardcoded stub, never the requested agent. */
-function runnerRecord(version, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(version, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, transcriptDiagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent: 'custom',
     executable: STUB_AGENT,
@@ -523,8 +559,9 @@ function runnerRecord(version, { expected, completed, measurements, durationMs, 
     measurements,
     durationMs,
     usage: null,
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -552,7 +589,13 @@ async function main() {
     // An inconsistent corpus is a real finding about the repository, measured
     // without a model call, so it keeps the exit 1 the sibling harnesses give
     // the same case.
-    await finish({ options, startedAt, mode: staticMode, runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   console.log(
@@ -574,7 +617,7 @@ async function main() {
       startedAt,
       mode: staticMode,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -598,6 +641,7 @@ async function main() {
   let consistent = 0;
   const failures = [];
   const lostClasses = [];
+  const diagnostics = [];
 
   for (let runIndex = 0; runIndex < runs; runIndex += 1) {
     const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-transcript-eval-'));
@@ -621,6 +665,14 @@ async function main() {
           `  ${colors.red}run ${runIndex + 1}: turn ${(lost?.turnIndex ?? 0) + 1} did not complete (${lost?.reason ?? `exit ${lost?.exitCode}`})${colors.reset}`,
         );
         lostClasses.push(failureClass);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: CASE_ID,
+            repetition: runIndex + 1,
+            failureClass,
+            reason: lost?.reason ?? `turn ${(lost?.turnIndex ?? 0) + 1} did not complete`,
+          }),
+        );
         continue;
       }
 
@@ -633,6 +685,17 @@ async function main() {
         failures.push(`run ${runIndex + 1}: ${cross.disagreement}`);
         console.log(`  ${colors.red}✗${colors.reset} run ${runIndex + 1}: ${cross.disagreement}`);
       }
+      const signature = JSON.stringify({ crossTurnConsistency: cross.holds, disagreement: cross.disagreement ?? null });
+      diagnostics.push(
+        diagnosticRecord({
+          caseId: CASE_ID,
+          repetition: runIndex + 1,
+          signature,
+          metricContributions: numericContributions(transcriptDiagnosticProjection(cross)),
+          reason: cross.holds ? null : cross.disagreement,
+          evidence: [{ kind: 'output-signature', value: signature }],
+        }),
+      );
     } finally {
       fs.rmSync(workspace, { recursive: true, force: true });
     }
@@ -658,6 +721,7 @@ async function main() {
         durationMs: await elapsedMsSince(startedAt),
         failureClass,
         failures: [...failures, `${runs - completed} run(s) short of ${runs} repetitions`],
+        diagnostics,
       }),
     );
   } else {
@@ -673,6 +737,7 @@ async function main() {
         durationMs: await elapsedMsSince(startedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
       }),
     );
   }
@@ -688,11 +753,14 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   validateCorpus,
   makeBuildTurnPrompt,
   crossTurnHolds,
+  transcriptDiagnosticProjection,
+  transcriptDiagnosticClassifier,
   sessionComplete,
   caseIds,
   RUNNER_CAPABILITIES,

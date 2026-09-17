@@ -30,9 +30,9 @@
  * every registered harness with `--agent custom --agent-cmd <path>` once
  * against a runner that exists and once against one that does not.
  * `--preflight-only` probes the named executable purely to answer that check.
- * `--runs` is parsed and validated and then never read again: every live run
- * is one repetition, because nothing here varies from run to run for a repeat
- * to measure. None of the three is read by the live cycle itself.
+ * `--runs` is fixed at one because nothing here varies from run to run for a
+ * repeat to measure. Other values are rejected before the live cycle starts.
+ * None of the three runner options is read by the live cycle itself.
  *
  * WHAT IS MEASURED
  *
@@ -104,7 +104,16 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { boundedProbe } = require('./lib/bounded-probe');
 const { loadSuiteManifest, suiteById } = require('./lib/suite-manifest');
-const { digestFiles, repositoryState, measured, suiteResultRecord, writeSuiteResult } = require('./lib/eval-record');
+const {
+  digestFiles,
+  repositoryState,
+  measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
+  suiteResultRecord,
+  writeSuiteResult,
+} = require('./lib/eval-record');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
 
@@ -216,8 +225,10 @@ function parseArgs(argv) {
         break;
       }
       case '--runs': {
-        runs = Number.parseInt(argv[index + 1] ?? '', 10);
-        if (!Number.isInteger(runs) || runs < 1) fatal(2, '--runs requires a positive integer');
+        const value = argv[index + 1] ?? '';
+        const parsed = Number(value);
+        if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(parsed)) fatal(2, '--runs requires a positive integer');
+        runs = parsed;
         index += 1;
         break;
       }
@@ -268,6 +279,7 @@ function parseArgs(argv) {
   }
   if (agent === 'custom' && !agentCmd) fatal(2, '--agent custom requires --agent-cmd');
   if (validateOnly && preflightOnly) fatal(2, '--validate-only and --preflight-only name different modes; pass one');
+  if (runs !== 1) fatal(2, '--runs must be 1 for the deterministic automate harness');
   return { validateOnly, preflightOnly, runs, agent, agentCmd, agentArgs, envPass, model, jsonPath };
 }
 
@@ -583,11 +595,28 @@ function stripAnsi(value) {
   return String(value ?? '').replaceAll(ANSI_ESCAPE, '');
 }
 
+function playwrightProcessFailure(result, tail = '') {
+  const timedOut = result.error?.code === 'ETIMEDOUT';
+  const failureClass = timedOut
+    ? 'environment-timeout'
+    : result.error
+      ? 'environment-transport'
+      : result.signal
+        ? 'environment-harness'
+        : 'environment-missing-artifact';
+  const reason = result.error
+    ? `${timedOut ? 'Playwright timed out' : 'spawn failed'}: ${result.error.message}`
+    : result.signal
+      ? `Playwright was killed by ${result.signal}`
+      : `no JSON report was written (exit ${result.status}); ${tail || 'nothing on stderr'}`;
+  return { failureClass, reason };
+}
+
 /**
  * One case's spec file, run once against one already-running server.
  *
  * @param {{specAbsolute: string, baseUrl: string, cliPath: string}} options
- * @returns {{loadError: string|null, tests: Array<{title: string, status: string, message: string|null}>}}
+ * @returns {{loadError: string|null, loadFailure: {failureClass: string, reason: string}|null, tests: Array<{title: string, status: string, message: string|null}>}}
  */
 function runCaseAgainstServer({ specAbsolute, baseUrl, cliPath }) {
   const scratchDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-automate-eval-run-'));
@@ -613,24 +642,20 @@ function runCaseAgainstServer({ specAbsolute, baseUrl, cliPath }) {
         .filter(Boolean)
         .slice(-6)
         .join(' | ');
-      return {
-        loadError: result.error
-          ? `spawn failed: ${result.error.message}`
-          : result.signal
-            ? `killed by ${result.signal}`
-            : `no JSON report was written (exit ${result.status}); ${tail || 'nothing on stderr'}`,
-        tests: [],
-      };
+      const loadFailure = playwrightProcessFailure(result, tail);
+      return { loadError: loadFailure.reason, loadFailure, tests: [] };
     }
 
     let report;
     try {
       report = JSON.parse(fs.readFileSync(jsonOutputPath, 'utf8'));
     } catch (error) {
-      return { loadError: `the JSON report did not parse: ${error.message}`, tests: [] };
+      const reason = `the JSON report did not parse: ${error.message}`;
+      return { loadError: reason, loadFailure: { failureClass: 'environment-parser', reason }, tests: [] };
     }
     if (Array.isArray(report.errors) && report.errors.length > 0) {
-      return { loadError: report.errors.map((entry) => stripAnsi(entry.message ?? entry).split('\n')[0]).join('; '), tests: [] };
+      const reason = report.errors.map((entry) => stripAnsi(entry.message ?? entry).split('\n')[0]).join('; ');
+      return { loadError: reason, loadFailure: { failureClass: 'environment-harness', reason }, tests: [] };
     }
 
     const tests = [];
@@ -648,7 +673,7 @@ function runCaseAgainstServer({ specAbsolute, baseUrl, cliPath }) {
       for (const child of suite.suites ?? []) walk(child);
     };
     for (const suite of report.suites ?? []) walk(suite);
-    return { loadError: null, tests };
+    return { loadError: null, loadFailure: null, tests };
   } finally {
     fs.rmSync(scratchDir, { recursive: true, force: true });
   }
@@ -675,15 +700,21 @@ function findTest(run, title) {
  * reports.
  *
  * @param {object} caseEntry
- * @param {{loadError: string|null, tests: Array<object>}} fixedRun
- * @param {{loadError: string|null, tests: Array<object>}} mutatedRun
+ * @param {{loadError: string|null, loadFailure?: object|null, tests: Array<object>}} fixedRun
+ * @param {{loadError: string|null, loadFailure?: object|null, tests: Array<object>}} mutatedRun
  * @returns {object}
  */
 function scoreCase(caseEntry, fixedRun, mutatedRun) {
   if (fixedRun?.loadError || mutatedRun?.loadError) {
+    const loadFailure = fixedRun?.loadFailure ??
+      mutatedRun?.loadFailure ?? {
+        failureClass: 'environment-harness',
+        reason: fixedRun?.loadError ?? mutatedRun?.loadError,
+      };
     return {
       id: caseEntry.id,
-      loadError: fixedRun?.loadError ?? mutatedRun?.loadError,
+      loadError: loadFailure.reason,
+      loadFailure,
       tests: [],
       detectedRegression: false,
       expectedDetectsRegression: caseEntry.detectsRegression,
@@ -724,6 +755,7 @@ function scoreCase(caseEntry, fixedRun, mutatedRun) {
   return {
     id: caseEntry.id,
     loadError: null,
+    loadFailure: null,
     tests,
     detectedRegression,
     expectedDetectsRegression: caseEntry.detectsRegression,
@@ -779,6 +811,40 @@ function scoreRun(groundTruth, fixedRuns, mutatedRuns) {
     unexpectedOutcomes,
     classificationCounts,
   };
+}
+
+function automateDiagnosticProjection(scoredCase) {
+  const classifications = scoredCase.tests ?? [];
+  return {
+    expectedDetectsRegression: scoredCase.expectedDetectsRegression,
+    detectedRegression: scoredCase.detectedRegression,
+    undetectedRegression: scoredCase.expectedDetectsRegression && !scoredCase.detectedRegression,
+    falseRegressionDetection: !scoredCase.expectedDetectsRegression && scoredCase.detectedRegression,
+    unattributedFailures: classifications.filter((test) => test.classification === 'unattributed-failure').length,
+    unexpectedOutcomes: classifications.filter((test) => test.classification === 'unexpected-outcome').length,
+    matchingOutcomes: classifications.filter((test) => test.classification === 'matches-declared').length,
+    vacuousTests: classifications.filter((test) => test.classification === 'vacuous').length,
+    duplicateTests: classifications.filter((test) => test.classification === 'duplicate').length,
+    maxUndetectedRegressionCases: THRESHOLDS.maxUndetectedRegressionCases,
+    maxFalseRegressionDetections: THRESHOLDS.maxFalseRegressionDetections,
+    maxUnattributedFailures: THRESHOLDS.maxUnattributedFailures,
+    maxUnexpectedOutcomes: THRESHOLDS.maxUnexpectedOutcomes,
+  };
+}
+
+function automateDiagnosticClassifier(entry, failures) {
+  const metrics = entry.metricContributions;
+  const failed = failures.join('; ').toLowerCase();
+  const findings = [];
+  if (failed.includes('undetected regression') && metrics.undetectedRegression === 1)
+    findings.push({ reason: 'undetected regression', rootCause: 'harness-defect' });
+  if (failed.includes('false regression detection') && metrics.falseRegressionDetection === 1)
+    findings.push({ reason: 'false regression detection', rootCause: 'harness-defect' });
+  if (failed.includes('unattributed failure') && metrics.unattributedFailures > 0)
+    findings.push({ reason: 'unattributed failure', rootCause: 'oracle-defect' });
+  if (failed.includes('unexpected outcome') && metrics.unexpectedOutcomes > 0)
+    findings.push({ reason: 'unexpected outcome', rootCause: 'oracle-defect' });
+  return findings.length > 0 ? { findings } : null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -908,6 +974,7 @@ async function finish({ options, startedAt, mode, groundTruth, suiteFailureClass
         promptDigest: null,
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
       }),
@@ -915,6 +982,42 @@ async function finish({ options, startedAt, mode, groundTruth, suiteFailureClass
     console.log(`${colors.dim}result written to ${options.jsonPath}${colors.reset}`);
   }
   process.exit(exitCode);
+}
+
+function automateRunnerRecord({ scored, diagnostics, failures, durationMs }) {
+  return {
+    agent: 'deterministic',
+    executable: process.execPath,
+    version: process.version,
+    model: null,
+    parameters: { agentArgs: [], envPassNames: [], timeoutMs: PLAYWRIGHT_TIMEOUT_MS, promptTransport: 'stdin' },
+    repetitions: {
+      expected: diagnostics.length,
+      completed: diagnostics.filter((entry) => entry.completionState === 'completed').length,
+    },
+    measurements: scored,
+    durationMs,
+    usage: null,
+    failureClass: worstFailureClass(diagnostics.map((entry) => entry.failureClass)),
+    failures,
+    diagnostics,
+  };
+}
+
+function automateMeasurements(scored) {
+  const unmeasurable = scored.cases.some((scoredCase) => scoredCase.loadFailure);
+  return Object.fromEntries(
+    Object.entries({
+      loadErrors: scored.loadErrors,
+      undetectedRegressionCases: scored.undetectedRegressionCases,
+      falseRegressionDetections: scored.falseRegressionDetections,
+      unattributedFailures: scored.unattributedFailures,
+      unexpectedOutcomes: scored.unexpectedOutcomes,
+      matchesDeclaredTests: scored.classificationCounts['matches-declared'],
+      vacuousTests: scored.classificationCounts.vacuous,
+      duplicateTests: scored.classificationCounts.duplicate,
+    }).map(([name, value]) => [name, unmeasurable ? null : measured(value)]),
+  );
 }
 
 async function main() {
@@ -938,7 +1041,13 @@ async function main() {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
     for (const problem of corpusProblems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
     console.error('');
-    await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode,
+      groundTruth,
+      suiteFailureClasses: corpusProblems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
     return;
   }
   console.log(`${colors.green}✓${colors.reset} ${groundTruth.cases.length} case(s) declared; every test resolves in its own spec file`);
@@ -948,7 +1057,7 @@ async function main() {
     if (readiness.length > 0) {
       console.error(`${colors.red}eval pre-flight failed:${colors.reset}`);
       for (const problem of readiness) console.error(`  - ${problem.message}`);
-      await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: readiness.map((problem) => problem.failureClass) });
+      await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: readiness });
       return;
     }
     console.log(`${colors.green}✓${colors.reset} the corpus is in place and Playwright resolves`);
@@ -982,50 +1091,57 @@ async function main() {
     `  unexpected outcomes          ${String(scored.unexpectedOutcomes).padStart(4)}   (max ${THRESHOLDS.maxUnexpectedOutcomes})`,
   );
 
+  const hasLoadFailure = scored.cases.some((scoredCase) => scoredCase.loadFailure);
   const failures = [];
-  if (scored.loadErrors > THRESHOLDS.maxLoadErrors) failures.push(`${scored.loadErrors} load error(s)`);
-  if (scored.undetectedRegressionCases > THRESHOLDS.maxUndetectedRegressionCases) {
+  if (!hasLoadFailure && scored.loadErrors > THRESHOLDS.maxLoadErrors) failures.push(`${scored.loadErrors} load error(s)`);
+  if (!hasLoadFailure && scored.undetectedRegressionCases > THRESHOLDS.maxUndetectedRegressionCases) {
     failures.push(`${scored.undetectedRegressionCases} undetected regression case(s)`);
   }
-  if (scored.falseRegressionDetections > THRESHOLDS.maxFalseRegressionDetections) {
+  if (!hasLoadFailure && scored.falseRegressionDetections > THRESHOLDS.maxFalseRegressionDetections) {
     failures.push(`${scored.falseRegressionDetections} false regression detection(s)`);
   }
-  if (scored.unattributedFailures > THRESHOLDS.maxUnattributedFailures)
+  if (!hasLoadFailure && scored.unattributedFailures > THRESHOLDS.maxUnattributedFailures)
     failures.push(`${scored.unattributedFailures} unattributed failure(s)`);
-  if (scored.unexpectedOutcomes > THRESHOLDS.maxUnexpectedOutcomes) failures.push(`${scored.unexpectedOutcomes} unexpected outcome(s)`);
+  if (!hasLoadFailure && scored.unexpectedOutcomes > THRESHOLDS.maxUnexpectedOutcomes)
+    failures.push(`${scored.unexpectedOutcomes} unexpected outcome(s)`);
 
   if (failures.length > 0) console.log(`\n  ${colors.red}below threshold: ${failures.join(', ')}${colors.reset}\n`);
   else console.log(`\n  ${colors.green}all thresholds met${colors.reset}\n`);
 
-  const runner = {
-    agent: 'deterministic',
-    executable: process.execPath,
-    version: process.version,
-    model: null,
-    parameters: { agentArgs: [], envPassNames: [], timeoutMs: PLAYWRIGHT_TIMEOUT_MS, promptTransport: 'stdin' },
-    repetitions: { expected: 1, completed: 1 },
-    measurements: {
-      loadErrors: measured(scored.loadErrors),
-      undetectedRegressionCases: measured(scored.undetectedRegressionCases),
-      falseRegressionDetections: measured(scored.falseRegressionDetections),
-      unattributedFailures: measured(scored.unattributedFailures),
-      unexpectedOutcomes: measured(scored.unexpectedOutcomes),
-      // Every test's classification, so a vacuous or duplicated test's
-      // correct classification is visible in the --json record too, not only
-      // in the printed report. `suiteResultSchema.cases` is `{id,
-      // promptDigest}` and strict, shared by every suite's result record, so
-      // per-test detail cannot live there; these three counts, plus
-      // unattributedFailures and unexpectedOutcomes above, sum to the total
-      // test count across every case that did not end in a load error.
-      matchesDeclaredTests: measured(scored.classificationCounts['matches-declared']),
-      vacuousTests: measured(scored.classificationCounts.vacuous),
-      duplicateTests: measured(scored.classificationCounts.duplicate),
-    },
+  const measurements = automateMeasurements(scored);
+  const rawDiagnostics = scored.cases.map((scoredCase) => {
+    const signature = JSON.stringify({
+      verdict: scoredCase.verdict ?? null,
+      expectedDetectsRegression: scoredCase.expectedDetectsRegression,
+      loadFailure: scoredCase.loadFailure ?? null,
+      classifications: (scoredCase.tests ?? []).map((test) => test.classification),
+    });
+    const mappedMeasurements = scoredCase.loadFailure ? Object.keys(measurements).filter((name) => measurements[name] === null) : [];
+    return diagnosticRecord({
+      caseId: scoredCase.id,
+      repetition: 1,
+      signature: scoredCase.loadError ? null : signature,
+      metricContributions: scoredCase.loadError ? {} : numericContributions(automateDiagnosticProjection(scoredCase)),
+      failureClass: scoredCase.loadFailure?.failureClass ?? 'none',
+      rootCause: scoredCase.loadFailure ? 'harness-defect' : null,
+      reason: scoredCase.loadFailure?.reason ?? null,
+      mappedMeasurements,
+      evidence: scoredCase.loadError
+        ? [{ kind: 'summary', value: `${scoredCase.loadFailure?.failureClass ?? 'environment-harness'}: ${scoredCase.loadError}` }]
+        : [{ kind: 'output-signature', value: signature }],
+    });
+  });
+  const diagnostics = classifyDiagnosticQuality(rawDiagnostics, failures, automateDiagnosticClassifier, {
+    measurements,
+    expected: rawDiagnostics.length,
+    completed: rawDiagnostics.filter((entry) => entry.completionState === 'completed').length,
+  });
+  const runner = automateRunnerRecord({
+    scored: measurements,
     durationMs: await elapsedMsSince(startedAt),
-    usage: null,
-    failureClass: failures.length > 0 ? 'quality' : 'none',
     failures,
-  };
+    diagnostics,
+  });
 
   await finish({ options, startedAt, mode, groundTruth, suiteFailureClasses: [], runners: [runner] });
 }
@@ -1038,11 +1154,16 @@ if (require.main === module) {
 }
 
 module.exports = {
+  automateRunnerRecord,
+  automateMeasurements,
   parseArgs,
   loadGroundTruth,
   validateCorpus,
   scoreRun,
   scoreCase,
+  playwrightProcessFailure,
+  automateDiagnosticProjection,
+  automateDiagnosticClassifier,
   extractTestBlocks,
   caseIds,
   THRESHOLDS,

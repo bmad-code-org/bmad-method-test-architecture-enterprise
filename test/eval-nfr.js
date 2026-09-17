@@ -186,6 +186,11 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  artifactEvidence,
+  numericContributions,
+  diagnosticRateMiss,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -1787,7 +1792,7 @@ function reportFromArtifact(artifact) {
       reason: 'nfr-assessment.md declares no section for any of the four audited domains',
     };
   }
-  return { ok: true, report: parsed };
+  return { ok: true, report: parsed, text: artifact.value };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2092,6 +2097,89 @@ function signatureOf(scored, mutations) {
   ]);
 }
 
+function nfrDiagnosticProjection(scored, mutations) {
+  const undecidable = scored.domainResults.filter((item) => item.undecidable);
+  return {
+    domainStatusAccuracy: {
+      numerator: scored.domainResults.filter((item) => item.ok).length,
+      denominator: scored.domainResults.length,
+      threshold: THRESHOLDS.domainStatusAccuracy,
+    },
+    undecidableDomainAccuracy: {
+      numerator: undecidable.filter((item) => item.ok).length,
+      denominator: undecidable.length,
+      threshold: THRESHOLDS.undecidableDomainAccuracy,
+    },
+    thresholdFidelityAccuracy: {
+      numerator: scored.domainResults.filter((item) => item.threshold.ok).length + (scored.unknownThreshold.ok ? 1 : 0),
+      denominator: scored.domainResults.length + 1,
+      threshold: THRESHOLDS.thresholdFidelityAccuracy,
+    },
+    overallStatusAccuracy: { numerator: scored.overall.ok ? 1 : 0, denominator: 1, threshold: THRESHOLDS.overallStatusAccuracy },
+    domainCoverage: { numerator: scored.coverage.present, denominator: scored.coverage.total, threshold: THRESHOLDS.domainCoverage },
+    groundedCitationAccuracy: {
+      numerator: scored.groundedCriteria.hits,
+      denominator: scored.groundedCriteria.total,
+      threshold: THRESHOLDS.groundedCitationAccuracy,
+    },
+    duplicateDomainSections: scored.duplicateDomainSections.length,
+    maxDuplicateDomainSections: THRESHOLDS.maxDuplicateDomainSections,
+    gateDisagreements: scored.gateDisagreements.length,
+    maxGateDisagreements: THRESHOLDS.maxGateDisagreements,
+    unsupportedPass: scored.unsupportedPass.length,
+    maxUnsupportedPass: THRESHOLDS.maxUnsupportedPass,
+    fabricatedEvidence: scored.fabricated.length,
+    maxFabricatedEvidence: THRESHOLDS.maxFabricatedEvidence,
+    cleanFalsePositives: scored.cleanFalsePositives,
+    maxCleanFalsePositives: THRESHOLDS.maxCleanFalsePositives,
+    fixtureMutations: mutations,
+    maxFixtureMutations: THRESHOLDS.maxFixtureMutations,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function nfrDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metric = entry.metricContributions;
+    const failed = failures.join('; ');
+    const reasons = [];
+    for (const key of [
+      'domainStatusAccuracy',
+      'undecidableDomainAccuracy',
+      'thresholdFidelityAccuracy',
+      'overallStatusAccuracy',
+      'domainCoverage',
+      'groundedCitationAccuracy',
+    ]) {
+      if (!failed.includes(key)) continue;
+      if (diagnosticRateMiss(entry, key, diagnostics)) reasons.push(key);
+    }
+    for (const [needle, value, ceiling] of [
+      ['duplicate domain section', 'duplicateDomainSections', 'maxDuplicateDomainSections'],
+      ['gate artifact', 'gateDisagreements', 'maxGateDisagreements'],
+      ['unsupported PASS', 'unsupportedPass', 'maxUnsupportedPass'],
+      ['fabricated evidence', 'fabricatedEvidence', 'maxFabricatedEvidence'],
+      ['clean false positives', 'cleanFalsePositives', 'maxCleanFalsePositives'],
+      ['fixture mutations', 'fixtureMutations', 'maxFixtureMutations'],
+    ]) {
+      if (failed.includes(needle) && metric[value] > metric[ceiling]) reasons.push(value);
+    }
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Running                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -2197,7 +2285,12 @@ async function runCase(set, options, agent, runIndex) {
         !workspace.bundleFiles.includes(relative),
     );
 
-    return { ok: true, scored: scoreRun(set, report.report), mutations: mutations + added.length };
+    return {
+      ok: true,
+      scored: scoreRun(set, report.report),
+      mutations: mutations + added.length,
+      artifactEvidence: artifactEvidence(nfrArtifactPaths(set).report, report.text),
+    };
   } finally {
     fs.rmSync(workspace.dir, { recursive: true, force: true });
   }
@@ -2279,6 +2372,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -2291,8 +2385,18 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -2308,8 +2412,9 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -2344,7 +2449,14 @@ async function main() {
     // An inconsistent corpus is a real finding about the repository, measured
     // without a model call, so it keeps the exit 1 the sibling harnesses give the
     // same case.
-    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      sets: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const domainCount = sets.length * DOMAINS.length;
@@ -2401,7 +2513,7 @@ async function main() {
       mode: staticMode,
       sets,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -2440,6 +2552,7 @@ async function main() {
     let unstableCases = 0;
     let incompleteCases = 0;
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const set of sets) {
       const signatures = new Set();
@@ -2449,11 +2562,24 @@ async function main() {
         if (!outcome.ok) {
           console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
           lostRunClasses.push(outcome.failureClass);
+          diagnostics.push(
+            diagnosticRecord({ caseId: set.id, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+          );
           continue;
         }
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
-        signatures.add(signatureOf(outcome.scored, outcome.mutations));
+        const signature = signatureOf(outcome.scored, outcome.mutations);
+        signatures.add(signature);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: set.id,
+            repetition: runIndex + 1,
+            signature,
+            metricContributions: numericContributions(nfrDiagnosticProjection(outcome.scored, outcome.mutations)),
+            evidence: [{ kind: 'output-signature', value: signature }, ...outcome.artifactEvidence],
+          }),
+        );
       }
 
       completedRuns += caseScores.length;
@@ -2521,7 +2647,7 @@ async function main() {
       unsupportedPass: totals.unsupportedPass,
       fabricatedEvidence: totals.fabricated,
       cleanFalsePositives: totals.cleanFalsePositives,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };
@@ -2589,6 +2715,8 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
+          diagnosticClassifier: nfrDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -2608,6 +2736,8 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
+        diagnosticClassifier: nfrDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -2625,8 +2755,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
+  selectSets,
   validateCorpus,
   stripCriterionAnnotation,
   CRITERION_BULLET_ALIASES,
@@ -2644,6 +2776,8 @@ module.exports = {
   parseReport,
   scoreRun,
   signatureOf,
+  nfrDiagnosticProjection,
+  nfrDiagnosticClassifier,
   DOMAINS,
   DOMAIN_BLOCK_KEY,
   RUNNER_CAPABILITIES,

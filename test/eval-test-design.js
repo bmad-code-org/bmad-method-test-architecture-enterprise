@@ -138,6 +138,11 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  artifactEvidence,
+  numericContributions,
+  diagnosticRateMiss,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -1477,6 +1482,118 @@ function signatureOf(scored, mutations) {
   ]);
 }
 
+function testDesignDiagnosticProjection(scored, mutations) {
+  const ordering = scored.orderingChecks.filter((check) => check.resolvable);
+  return {
+    groundedRiskRecall: {
+      numerator: scored.grounding.matched,
+      denominator: scored.grounding.declared,
+      threshold: THRESHOLDS.groundedRiskRecall,
+    },
+    riskPrecision: {
+      numerator: scored.shape.rows - scored.ungrounded.length,
+      denominator: scored.shape.rows,
+      threshold: THRESHOLDS.riskPrecision,
+    },
+    scaleComplianceAccuracy: {
+      numerator: scored.shape.inScale,
+      denominator: scored.shape.rows,
+      threshold: THRESHOLDS.scaleComplianceAccuracy,
+    },
+    scoreArithmeticAccuracy: {
+      numerator: scored.shape.arithmeticOk,
+      denominator: scored.shape.arithmeticTotal,
+      threshold: THRESHOLDS.scoreArithmeticAccuracy,
+    },
+    categoryValidityAccuracy: {
+      numerator: scored.shape.validCategories,
+      denominator: scored.shape.rows,
+      threshold: THRESHOLDS.categoryValidityAccuracy,
+    },
+    bandPlacementAccuracy: {
+      numerator: scored.shape.bandOk,
+      denominator: scored.shape.banded,
+      threshold: THRESHOLDS.bandPlacementAccuracy,
+    },
+    riskIdWellFormedAccuracy: {
+      numerator: scored.shape.wellFormedIds,
+      denominator: scored.shape.rows,
+      threshold: THRESHOLDS.riskIdWellFormedAccuracy,
+    },
+    riskLinkResolutionAccuracy: {
+      numerator: scored.links.resolved,
+      denominator: scored.links.total,
+      threshold: THRESHOLDS.riskLinkResolutionAccuracy,
+    },
+    priorityOrderingAccuracy: {
+      numerator: scored.flattenedPriorities ? 0 : ordering.filter((check) => check.ok).length,
+      denominator: scored.flattenedPriorities ? 0 : ordering.length,
+      threshold: THRESHOLDS.priorityOrderingAccuracy,
+    },
+    coverageMappingAccuracy: {
+      numerator: scored.coverageChecks.filter((check) => check.ok).length,
+      denominator: scored.coverageChecks.length,
+      threshold: THRESHOLDS.coverageMappingAccuracy,
+    },
+    ungroundedRisks: scored.ungrounded.length,
+    maxUngroundedRisks: THRESHOLDS.maxUngroundedRisks,
+    unscoredRiskTables: scored.unscoredRiskTables.length,
+    maxUnscoredRiskTables: THRESHOLDS.maxUnscoredRiskTables,
+    topSeverityMissed: scored.grounding.topSeverityMissed,
+    maxTopSeverityMissed: THRESHOLDS.maxTopSeverityMissed,
+    riskCeilingExcess: scored.ceiling?.excess ?? 0,
+    maxRiskCeilingExcess: THRESHOLDS.maxRiskCeilingExcess,
+    fixtureMutations: mutations,
+    maxFixtureMutations: THRESHOLDS.maxFixtureMutations,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function testDesignDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metric = entry.metricContributions;
+    const failed = failures.join('; ');
+    const reasons = [];
+    for (const key of [
+      'groundedRiskRecall',
+      'riskPrecision',
+      'scaleComplianceAccuracy',
+      'scoreArithmeticAccuracy',
+      'categoryValidityAccuracy',
+      'bandPlacementAccuracy',
+      'riskIdWellFormedAccuracy',
+      'riskLinkResolutionAccuracy',
+      'priorityOrderingAccuracy',
+      'coverageMappingAccuracy',
+    ]) {
+      if (!failed.includes(key)) continue;
+      if (diagnosticRateMiss(entry, key, diagnostics)) reasons.push(key);
+    }
+    for (const [needle, value, ceiling] of [
+      ['risk table', 'unscoredRiskTables', 'maxUnscoredRiskTables'],
+      ['risk(s) the epic rules out', 'ungroundedRisks', 'maxUngroundedRisks'],
+      ['most severe risk', 'topSeverityMissed', 'maxTopSeverityMissed'],
+      ['over the declared ceiling', 'riskCeilingExcess', 'maxRiskCeilingExcess'],
+      ['fixture mutations', 'fixtureMutations', 'maxFixtureMutations'],
+    ]) {
+      if (failed.includes(needle) && metric[value] > metric[ceiling]) reasons.push(value);
+    }
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Running                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -1581,7 +1698,12 @@ async function runCase(set, options, agent, runIndex, categories) {
         !workspace.corpusFiles.includes(relative),
     );
 
-    return { ok: true, scored: scoreRun(set, design.design, categories), mutations: mutations + added.length };
+    return {
+      ok: true,
+      scored: scoreRun(set, design.design, categories),
+      mutations: mutations + added.length,
+      artifactEvidence: artifactEvidence(designArtifactPaths(set).design, design.design.text),
+    };
   } finally {
     fs.rmSync(workspace.dir, { recursive: true, force: true });
   }
@@ -1663,6 +1785,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -1675,8 +1798,18 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -1692,8 +1825,9 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -1730,7 +1864,14 @@ async function main() {
     console.error('');
     // An inconsistent corpus is a real finding about the repository, measured without
     // a model call, so it keeps the exit 1 the sibling harnesses give the same case.
-    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      sets: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const materialCount = sets.reduce((sum, set) => sum + (set.materialRisks ?? []).length, 0);
@@ -1786,7 +1927,7 @@ async function main() {
       mode: staticMode,
       sets,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -1830,6 +1971,7 @@ async function main() {
     // Every environment failure across every case, so the runner's class is the worst
     // of them rather than the last one printed.
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const set of sets) {
       const signatures = new Set();
@@ -1848,11 +1990,24 @@ async function main() {
         if (!outcome.ok) {
           console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
           lostRunClasses.push(outcome.failureClass);
+          diagnostics.push(
+            diagnosticRecord({ caseId: set.id, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+          );
           continue;
         }
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
-        signatures.add(signatureOf(outcome.scored, outcome.mutations));
+        const signature = signatureOf(outcome.scored, outcome.mutations);
+        signatures.add(signature);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: set.id,
+            repetition: runIndex + 1,
+            signature,
+            metricContributions: numericContributions(testDesignDiagnosticProjection(outcome.scored, outcome.mutations)),
+            evidence: [{ kind: 'output-signature', value: signature }, ...outcome.artifactEvidence],
+          }),
+        );
       }
 
       completedRuns += caseScores.length;
@@ -1951,7 +2106,7 @@ async function main() {
       riskCeilingExcess: totals.ceilingExcess,
       // Null rather than 0 on a single repetition: a count of zero reads as measured
       // and nothing was measured.
-      unstableCases: repeatedRuns ? unstableCases : null,
+      unstableCases: repeatedRuns && incompleteCases === 0 ? unstableCases : null,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };
@@ -2024,6 +2179,8 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
+          diagnosticClassifier: testDesignDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -2043,6 +2200,8 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
+        diagnosticClassifier: testDesignDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -2064,6 +2223,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   selectSets,
@@ -2086,6 +2246,8 @@ module.exports = {
   scoreRun,
   documentMentions,
   signatureOf,
+  testDesignDiagnosticProjection,
+  testDesignDiagnosticClassifier,
   PRIORITY_RANK,
   RISK_ID_PATTERN,
   RUNNER_CAPABILITIES,

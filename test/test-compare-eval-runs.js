@@ -21,7 +21,7 @@ const path = require('node:path');
 
 const { compareEvalRuns, isComparableShaped } = require('./lib/compare-eval-runs');
 const { contractVersionsFor } = require('./lib/contract-versions');
-const { evalResultSchema, evalRunSchema } = require('./schema/eval-result');
+const { evalResultSchema, evalRunSchema, SCHEMA_VERSION } = require('./schema/eval-result');
 const { portableRunForStorage } = require('../tools/record-eval-run');
 
 const colors = { reset: '[0m', red: '[31m', green: '[32m' };
@@ -44,7 +44,7 @@ const DIGEST = `sha256:${'0'.repeat(64)}`;
 function suiteResult(id, overrides = {}) {
   const { suite: suiteOverrides, ...rest } = overrides;
   return {
-    schemaVersion: '1.3.0',
+    schemaVersion: SCHEMA_VERSION,
     kind: 'suite-result',
     generatedAt: '2026-09-16T00:00:00.000Z',
     mode: 'live',
@@ -58,8 +58,8 @@ function suiteResult(id, overrides = {}) {
       runnerCapabilities: ['read-only'],
       fixtureDigest: DIGEST,
       promptDigest: null,
-      caseIds: [],
-      cases: [],
+      caseIds: ['case-1'],
+      cases: [{ id: 'case-1', promptDigest: null }],
       thresholds: { accuracy: 0.9 },
       declaredRepetitions: 2,
       ...suiteOverrides,
@@ -77,8 +77,33 @@ function suiteResult(id, overrides = {}) {
         usage: null,
         failureClass: 'none',
         failures: [],
+        diagnostics: [
+          {
+            caseId: 'case-1',
+            repetition: 1,
+            completionState: 'completed',
+            signature: 'stable-answer',
+            metricContributions: { accuracy: 0.9 },
+            failureClass: 'none',
+            rootCause: null,
+            reason: null,
+            evidence: [{ kind: 'output-signature', value: 'stable-answer' }],
+          },
+          {
+            caseId: 'case-1',
+            repetition: 2,
+            completionState: 'completed',
+            signature: 'stable-answer',
+            metricContributions: { accuracy: 0.9 },
+            failureClass: 'none',
+            rootCause: null,
+            reason: null,
+            evidence: [{ kind: 'output-signature', value: 'stable-answer' }],
+          },
+        ],
       },
     ],
+    suiteDiagnostics: [],
     durationMs: 100,
     failureClass: 'none',
     exitCode: 0,
@@ -89,7 +114,7 @@ function suiteResult(id, overrides = {}) {
 /** One run-summary record, schema-shaped. */
 function runSummary(suites, overrides = {}) {
   return {
-    schemaVersion: '1.3.0',
+    schemaVersion: SCHEMA_VERSION,
     kind: 'run-summary',
     generatedAt: '2026-09-16T00:00:00.000Z',
     repository: { commit: 'abc123', dirty: false },

@@ -254,7 +254,8 @@
       ],
       "thresholds": {
         "requiredRecall": 0.9,
-        "forbiddenRate": 0.1
+        "forbiddenRate": 0.1,
+        "maxUnstableCases": 0
       },
       "repetitions": 2,
       "caseCount": 24,
@@ -490,7 +491,7 @@
         "maxDistinctVerdicts": 1
       },
       "repetitions": 3,
-      "caseCount": 3,
+      "caseCount": 4,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["scoped-artifact-writes"]
     },

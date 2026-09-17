@@ -179,6 +179,10 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  diagnosticRateMiss,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -1826,6 +1830,64 @@ function signatureOf(scored, mutations) {
   ]);
 }
 
+function ciDiagnosticProjection(scored, mutations) {
+  const triggers = scored.elements.filter((element) => element.kind === 'trigger');
+  return {
+    parseFailures: scored.parse.ok ? 0 : 1,
+    maxParseFailures: THRESHOLDS.maxParseFailures,
+    lintFindings: scored.lint.findings.length,
+    maxLintFindings: THRESHOLDS.maxLintFindings,
+    requestedElements: {
+      numerator: scored.elements.filter((element) => element.present).length,
+      denominator: scored.elements.length,
+      threshold: THRESHOLDS.requestedElementRecall,
+    },
+    triggers: {
+      numerator: triggers.filter((element) => element.present).length,
+      denominator: triggers.length,
+      threshold: THRESHOLDS.triggerAccuracy,
+    },
+    unrequestedElements: scored.unrequested.length,
+    maxUnrequestedElements: THRESHOLDS.maxUnrequestedElements,
+    workflowRuleViolations: scored.ruleViolations.length,
+    maxWorkflowRuleViolations: THRESHOLDS.maxWorkflowRuleViolations,
+    fixtureMutations: mutations,
+    maxFixtureMutations: THRESHOLDS.maxFixtureMutations,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function ciDiagnosticClassifier(diagnostics) {
+  const variants = new Map();
+  for (const entry of diagnostics) {
+    if (entry.completionState !== 'completed') continue;
+    if (!variants.has(entry.caseId)) variants.set(entry.caseId, new Set());
+    variants.get(entry.caseId).add(entry.signature);
+  }
+  return (entry, failures) => {
+    const metric = entry.metricContributions;
+    const failed = failures.join('; ');
+    const reasons = [];
+    if (failed.includes('parse failure') && metric.parseFailures > metric.maxParseFailures) reasons.push('parse failure');
+    if (failed.includes('lint finding') && metric.lintFindings > metric.maxLintFindings) reasons.push('lint finding');
+    if (failed.includes('requestedElementRecall') && diagnosticRateMiss(entry, 'requestedElements', diagnostics))
+      reasons.push('requested element miss');
+    if (failed.includes('triggerAccuracy') && diagnosticRateMiss(entry, 'triggers', diagnostics)) reasons.push('trigger miss');
+    if (failed.includes('unrequested element') && metric.unrequestedElements > metric.maxUnrequestedElements)
+      reasons.push('unrequested element');
+    if (failed.includes('workflow rule violation') && metric.workflowRuleViolations > metric.maxWorkflowRuleViolations)
+      reasons.push('workflow rule violation');
+    if (failed.includes('fixture mutations') && metric.fixtureMutations > metric.maxFixtureMutations) reasons.push('fixture mutation');
+    const unstable = (variants.get(entry.caseId)?.size ?? 0) > 1;
+    if (failed.includes('unstable case') && unstable) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* Running                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -2011,6 +2073,7 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
         promptDigest: digestPrompts(caseIndex(sets)),
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -2023,8 +2086,19 @@ async function finish({ options, startedAt, mode, sets, runners, suiteFailureCla
 }
 
 /** The per-runner half of the result record. */
-function runnerRecord(agent, options, versions, tools, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(
+  agent,
+  options,
+  versions,
+  tools,
+  { expected, completed, measurements, durationMs, failures, diagnostics = [], diagnosticClassifier },
+) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, diagnosticClassifier, {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -2044,8 +2118,9 @@ function runnerRecord(agent, options, versions, tools, { expected, completed, me
     measurements,
     durationMs,
     usage: null, // No built-in adapter reports tokens or cost yet; a zero would be a claim.
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -2077,7 +2152,14 @@ async function main() {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
     for (const problem of problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
     console.error('');
-    await finish({ options, startedAt, mode: staticMode, sets: [], runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      sets: [],
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
 
   const elementCount = sets.reduce((sum, set) => sum + (set.expectedElements ?? []).length, 0);
@@ -2128,7 +2210,7 @@ async function main() {
       mode: staticMode,
       sets,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -2160,6 +2242,7 @@ async function main() {
     let unstableCases = 0;
     let incompleteCases = 0;
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (const set of sets) {
       const signatures = new Set();
@@ -2169,11 +2252,27 @@ async function main() {
         if (!outcome.ok) {
           console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
           lostRunClasses.push(outcome.failureClass);
+          diagnostics.push(
+            diagnosticRecord({ caseId: set.id, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+          );
           continue;
         }
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
-        signatures.add(signatureOf(outcome.scored, outcome.mutations));
+        const signature = signatureOf(outcome.scored, outcome.mutations);
+        signatures.add(signature);
+        diagnostics.push(
+          diagnosticRecord({
+            caseId: set.id,
+            repetition: runIndex + 1,
+            signature,
+            metricContributions: numericContributions(ciDiagnosticProjection(outcome.scored, outcome.mutations)),
+            evidence: [
+              { kind: 'output-signature', value: signature },
+              { kind: 'artifact', value: '.github/workflows/test.yml' },
+            ],
+          }),
+        );
       }
 
       completedRuns += caseScores.length;
@@ -2234,7 +2333,7 @@ async function main() {
       triggerAccuracy: measured(ratio(totals.triggerHits, totals.triggerTotal)),
       unrequestedElements: totals.unrequested,
       workflowRuleViolations: totals.ruleViolations,
-      unstableCases,
+      unstableCases: incompleteCases > 0 ? null : unstableCases,
       incompleteCases,
       fixtureMutations: totals.mutations,
     };
@@ -2282,6 +2381,8 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `${incompleteCases} case(s) short of ${runs} repetitions`],
+          diagnostics,
+          diagnosticClassifier: ciDiagnosticClassifier(diagnostics),
         }),
       );
       continue;
@@ -2301,6 +2402,8 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
+        diagnosticClassifier: ciDiagnosticClassifier(diagnostics),
       }),
     );
   }
@@ -2318,8 +2421,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
+  selectSets,
   validateCorpus,
   stageWorkspace,
   ciArtifactPaths,
@@ -2338,6 +2443,8 @@ module.exports = {
   workflowRuleViolations,
   scoreRun,
   signatureOf,
+  ciDiagnosticProjection,
+  ciDiagnosticClassifier,
   ACTIONLINT,
   ELEMENT_KINDS,
   PLATFORM,

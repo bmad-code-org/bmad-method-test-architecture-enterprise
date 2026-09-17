@@ -125,6 +125,9 @@ const {
   probeVersion,
   redactArgs,
   measured,
+  diagnosticRecord,
+  numericContributions,
+  classifyDiagnosticQuality,
   suiteResultRecord,
   writeSuiteResult,
 } = require('./lib/eval-record');
@@ -890,6 +893,71 @@ function signatureOf(scored) {
   ]);
 }
 
+function atddDiagnosticProjection(scored) {
+  return {
+    redForIntendedReason: {
+      numerator: scored.redForIntendedReasonCount,
+      denominator: scored.mappedTestCount,
+      threshold: THRESHOLDS.redForIntendedReasonRate,
+    },
+    criteriaCoverage: {
+      numerator: scored.perCriterion.filter((entry) => entry.present).length,
+      denominator: scored.perCriterion.length,
+      threshold: THRESHOLDS.criteriaCoverage,
+    },
+    vacuousPass: scored.vacuousPass.length,
+    maxVacuousPass: THRESHOLDS.maxVacuousPass,
+    stillSkipped: scored.stillSkipped.length,
+    maxStillSkipped: THRESHOLDS.maxStillSkipped,
+    nonAssertionExit: scored.nonAssertion.length,
+    maxNonAssertionExit: THRESHOLDS.maxNonAssertionExit,
+    loadErrors: scored.loadErrors.length,
+    maxLoadErrors: THRESHOLDS.maxLoadErrors,
+    unmapped: scored.unmapped.length,
+    maxUnmappedTests: THRESHOLDS.maxUnmappedTests,
+    productionMutations: scored.productionMutations.length,
+    maxProductionMutations: THRESHOLDS.maxProductionMutations,
+    maxUnstableCases: THRESHOLDS.maxUnstableCases,
+  };
+}
+
+function atddDiagnosticClassifier(diagnostics) {
+  const variants = new Set(diagnostics.filter((entry) => entry.completionState === 'completed').map((entry) => entry.signature));
+  return (entry, failures) => {
+    const metric = entry.metricContributions;
+    const failed = failures.join('; ');
+    const reasons = [];
+    if (
+      failed.includes('redForIntendedReasonRate') &&
+      (metric['redForIntendedReason.denominator'] === 0 ||
+        metric['redForIntendedReason.numerator'] / metric['redForIntendedReason.denominator'] < metric['redForIntendedReason.threshold'])
+    )
+      reasons.push('redForIntendedReasonRate');
+    if (
+      failed.includes('criteriaCoverage') &&
+      (metric['criteriaCoverage.denominator'] === 0 ||
+        metric['criteriaCoverage.numerator'] / metric['criteriaCoverage.denominator'] < metric['criteriaCoverage.threshold'])
+    )
+      reasons.push('criteriaCoverage');
+    for (const [needle, value, ceiling] of [
+      ['vacuous pass', 'vacuousPass', 'maxVacuousPass'],
+      ['still-skipped', 'stillSkipped', 'maxStillSkipped'],
+      ['non-assertion exit', 'nonAssertionExit', 'maxNonAssertionExit'],
+      ['load error', 'loadErrors', 'maxLoadErrors'],
+      ['unmapped test', 'unmapped', 'maxUnmappedTests'],
+      ['production mutation', 'productionMutations', 'maxProductionMutations'],
+    ]) {
+      if (failed.includes(needle) && metric[value] > metric[ceiling]) reasons.push(value);
+    }
+    if (failed.includes('unstable case') && variants.size > 1) reasons.push('unstable case');
+    if (reasons.length === 0) return null;
+    return {
+      reasons,
+      rootCause: reasons.length === 1 && reasons[0] === 'unstable case' ? 'model-instability' : 'tea-workflow-defect',
+    };
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /* One complete run                                                            */
 /* -------------------------------------------------------------------------- */
@@ -1102,6 +1170,7 @@ async function finish({ options, startedAt, mode, groundTruth, runners, suiteFai
         promptDigest: groundTruth ? digestPrompts(caseIndex(groundTruth)) : null,
         cases,
         runners,
+        declaredRepetitions: options.runs,
         durationMs: await elapsedMsSince(startedAt),
         suiteFailureClasses,
         contractVersions: await contractVersionsFor(suite, PROJECT_ROOT),
@@ -1112,8 +1181,13 @@ async function finish({ options, startedAt, mode, groundTruth, runners, suiteFai
   process.exit(exitCode);
 }
 
-function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failureClass, failures }) {
+function runnerRecord(agent, options, versions, { expected, completed, measurements, durationMs, failures, diagnostics = [] }) {
   const executable = agent === 'custom' ? options.agentCmd : agent;
+  const classifiedDiagnostics = classifyDiagnosticQuality(diagnostics, failures, atddDiagnosticClassifier(diagnostics), {
+    measurements,
+    expected,
+    completed,
+  });
   return {
     agent,
     executable,
@@ -1129,8 +1203,9 @@ function runnerRecord(agent, options, versions, { expected, completed, measureme
     measurements,
     durationMs,
     usage: null,
-    failureClass,
+    failureClass: worstFailureClass(classifiedDiagnostics.map((entry) => entry.failureClass)),
     failures,
+    diagnostics: classifiedDiagnostics,
   };
 }
 
@@ -1162,7 +1237,14 @@ async function main() {
     console.error(`${colors.red}the corpus is inconsistent:${colors.reset}`);
     for (const problem of problems) console.error(`  ${colors.red}✗${colors.reset} ${problem}`);
     console.error('');
-    await finish({ options, startedAt, mode: staticMode, groundTruth, runners: [], suiteFailureClasses: ['quality'] });
+    await finish({
+      options,
+      startedAt,
+      mode: staticMode,
+      groundTruth,
+      runners: [],
+      suiteFailureClasses: problems.map((message) => ({ failureClass: 'quality', rootCause: 'corpus-defect', message })),
+    });
   }
   console.log(
     `${colors.green}✓${colors.reset} ${groundTruth.criteria.length} criterion(s) declared; every cited rule resolves and the story states every id`,
@@ -1218,7 +1300,7 @@ async function main() {
       mode: staticMode,
       groundTruth,
       runners: [],
-      suiteFailureClasses: readiness.map((problem) => problem.failureClass),
+      suiteFailureClasses: readiness,
     });
   }
   if (preflightOnly) {
@@ -1257,16 +1339,30 @@ async function main() {
     const caseScores = [];
     const signatures = new Set();
     const lostRunClasses = [];
+    const diagnostics = [];
 
     for (let runIndex = 0; runIndex < runs; runIndex += 1) {
       const outcome = await runCase(groundTruth, options, agent, runIndex, backend);
       if (!outcome.ok) {
         console.error(`  ${colors.red}run ${runIndex + 1}: ${outcome.reason}${colors.reset}`);
         lostRunClasses.push(outcome.failureClass);
+        diagnostics.push(
+          diagnosticRecord({ caseId: CASE_ID, repetition: runIndex + 1, failureClass: outcome.failureClass, reason: outcome.reason }),
+        );
         continue;
       }
       caseScores.push(outcome.scored);
-      signatures.add(signatureOf(outcome.scored));
+      const signature = signatureOf(outcome.scored);
+      signatures.add(signature);
+      diagnostics.push(
+        diagnosticRecord({
+          caseId: CASE_ID,
+          repetition: runIndex + 1,
+          signature,
+          metricContributions: numericContributions(atddDiagnosticProjection(outcome.scored)),
+          evidence: [{ kind: 'output-signature', value: signature }],
+        }),
+      );
 
       if (!Number.isNaN(outcome.scored.redForIntendedReasonRate ?? Number.NaN)) {
         totals.redForIntendedReasonRateSum += outcome.scored.redForIntendedReasonRate;
@@ -1287,6 +1383,7 @@ async function main() {
     const completedRuns = caseScores.length;
     const complete = completedRuns === runs;
     const stable = signatures.size === 1 && complete;
+    const noMeasurement = completedRuns === 0;
 
     if (completedRuns > 0) {
       const first = caseScores[0];
@@ -1307,13 +1404,13 @@ async function main() {
     const measurements = {
       redForIntendedReasonRate: measured(ratio(totals.redForIntendedReasonRateSum, totals.measuredRedRate)),
       criteriaCoverage: measured(ratio(totals.criteriaCoverageSum, totals.measuredCoverage)),
-      vacuousPass: totals.vacuousPass,
-      stillSkipped: totals.stillSkipped,
-      nonAssertionExit: totals.nonAssertion,
-      loadErrors: totals.loadErrors,
-      unmapped: totals.unmapped,
-      productionMutations: totals.productionMutations,
-      unstableCases: complete && !stable ? 1 : 0,
+      vacuousPass: noMeasurement ? null : totals.vacuousPass,
+      stillSkipped: noMeasurement ? null : totals.stillSkipped,
+      nonAssertionExit: noMeasurement ? null : totals.nonAssertion,
+      loadErrors: noMeasurement ? null : totals.loadErrors,
+      unmapped: noMeasurement ? null : totals.unmapped,
+      productionMutations: noMeasurement ? null : totals.productionMutations,
+      unstableCases: complete ? Number(!stable) : null,
       incompleteCases: complete ? 0 : 1,
     };
 
@@ -1335,11 +1432,9 @@ async function main() {
 
     const failures = [];
     const redRate = measurements.redForIntendedReasonRate;
-    if (redRate === null) failures.push('redForIntendedReasonRate (unmeasurable)');
-    else if (redRate < THRESHOLDS.redForIntendedReasonRate) failures.push('redForIntendedReasonRate');
+    if (redRate !== null && redRate < THRESHOLDS.redForIntendedReasonRate) failures.push('redForIntendedReasonRate');
     const coverage = measurements.criteriaCoverage;
-    if (coverage === null) failures.push('criteriaCoverage (unmeasurable)');
-    else if (coverage < THRESHOLDS.criteriaCoverage) failures.push('criteriaCoverage');
+    if (coverage !== null && coverage < THRESHOLDS.criteriaCoverage) failures.push('criteriaCoverage');
     if (totals.vacuousPass > THRESHOLDS.maxVacuousPass) failures.push(`${totals.vacuousPass} vacuous pass(es)`);
     if (totals.stillSkipped > THRESHOLDS.maxStillSkipped) failures.push(`${totals.stillSkipped} still-skipped scaffold(s)`);
     if (totals.nonAssertion > THRESHOLDS.maxNonAssertionExit) failures.push(`${totals.nonAssertion} non-assertion exit(s)`);
@@ -1360,6 +1455,7 @@ async function main() {
           durationMs: await elapsedMsSince(agentStartedAt),
           failureClass,
           failures: [...failures, `short of ${runs} repetitions`],
+          diagnostics,
         }),
       );
       continue;
@@ -1376,6 +1472,7 @@ async function main() {
         durationMs: await elapsedMsSince(agentStartedAt),
         failureClass: failures.length > 0 ? 'quality' : 'none',
         failures,
+        diagnostics,
       }),
     );
   }
@@ -1391,6 +1488,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  runnerRecord,
   parseArgs,
   loadGroundTruth,
   validateCorpus,
@@ -1401,6 +1499,8 @@ module.exports = {
   caseIds,
   scoreRun,
   signatureOf,
+  atddDiagnosticProjection,
+  atddDiagnosticClassifier,
   runRedCheck,
   RUNNER_CAPABILITIES,
   THRESHOLDS,
