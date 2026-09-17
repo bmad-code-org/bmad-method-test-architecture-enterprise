@@ -222,7 +222,7 @@ jobs:
             echo "::warning::No CHANGELOG.md entry for $TAG — falling back to auto-generated notes"
             gh release create "$TAG" --generate-notes
           else
-            gh release create "$TAG" --notes "$BODY"
+            gh release create "$TAG" --notes-file - <<< "$BODY"
           fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

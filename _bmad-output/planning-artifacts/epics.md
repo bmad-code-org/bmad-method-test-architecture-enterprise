@@ -50,17 +50,17 @@ This document is the epic and story breakdown for upgrading TEA from `eval-quali
 
 Last reconciled with GitHub on 2026-09-17 across `bmad-method-test-architecture-enterprise` and `bmad-eval-quality`. A checked story has all of its work merged to the relevant repository's `main`. An unchecked story marked **Active** has work in merged or open pull requests and still has acceptance criteria left. Every other unchecked story has no pull request recorded here.
 
-| Epic      |      Merged | Active | Remaining | State          |
-| --------- | ----------: | -----: | --------: | -------------- |
-| Epic 1    |       5 / 5 |      0 |         0 | Complete       |
-| Epic 2    |       7 / 7 |      0 |         0 | Complete       |
-| Epic 3    |       6 / 6 |      0 |         0 | Complete       |
-| Epic 4    |       9 / 9 |      0 |         0 | Complete       |
-| Epic 5    |       5 / 6 |      1 |         0 | In progress    |
-| Epic 6    |     12 / 12 |      0 |         0 | Complete       |
-| Epic 7    |       1 / 1 |      0 |         0 | Complete       |
-| Epic 8    |       1 / 1 |      0 |         0 | Complete       |
-| **Total** | **46 / 47** |  **1** |     **0** | **98% merged** |
+| Epic      |      Merged | Active | Remaining | State           |
+| --------- | ----------: | -----: | --------: | --------------- |
+| Epic 1    |       5 / 5 |      0 |         0 | Complete        |
+| Epic 2    |       7 / 7 |      0 |         0 | Complete        |
+| Epic 3    |       6 / 6 |      0 |         0 | Complete        |
+| Epic 4    |       9 / 9 |      0 |         0 | Complete        |
+| Epic 5    |       6 / 6 |      0 |         0 | Complete        |
+| Epic 6    |     12 / 12 |      0 |         0 | Complete        |
+| Epic 7    |       1 / 1 |      0 |         0 | Complete        |
+| Epic 8    |       1 / 1 |      0 |         0 | Complete        |
+| **Total** | **47 / 47** |  **0** |     **0** | **100% merged** |
 
 ### Epic 1 progress: TEA runs on `eval-quality` 3.0.0
 
@@ -105,7 +105,7 @@ Last reconciled with GitHub on 2026-09-17 across `bmad-method-test-architecture-
 
 - [x] [Story 5.0: Repair the publish workflow](#story-50-repair-the-publish-workflow) ([#209](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/209))
 - [x] [Story 5.1: Compare run strength through `compareDominance`](#story-51-compare-run-strength-through-comparedominance) ([#199](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/199))
-- [ ] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result) (**Active:** implementation merged in [#204](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/204); final evidence recorded on 2026-09-17 and awaiting merge in [#214](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/214))
+- [x] [Story 5.2: Run the whole suite live and record the result](#story-52-run-the-whole-suite-live-and-record-the-result) ([#204](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/204) and [#214](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/214))
 - [x] [Story 5.3: Restate the roadmap against what ships](#story-53-restate-the-roadmap-against-what-ships) (both PRs merged: [#203](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/203) and [#211](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/211))
 - [x] [Story 5.4: Update the adoption guide and the command-adapter page](#story-54-update-the-adoption-guide-and-the-command-adapter-page) (all three PRs merged: [#200](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/200), [#206](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/206), and [#211](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/211))
 - [x] [Story 5.5: Record the change and release TEA](#story-55-record-the-change-and-release-tea) ([#212](https://github.com/bmad-code-org/bmad-method-test-architecture-enterprise/pull/212))
