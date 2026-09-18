@@ -180,6 +180,9 @@ const diagnosticSchema = z
         });
       }
       if (value.reason === null) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'a failed attempt must carry a reason' });
+      if (value.triage.length > 0) {
+        ctx.addIssue({ code: 'custom', path: ['triage'], message: 'a failed attempt cannot carry triage findings' });
+      }
     } else {
       if (value.signature === null)
         ctx.addIssue({ code: 'custom', path: ['signature'], message: 'a completed attempt must carry a signature' });
@@ -210,8 +213,9 @@ const diagnosticSchema = z
     }
   });
 
-// Frozen at the shape written by 227b290. Every nested schema is copied here so
-// later limits on current evidence cannot retroactively invalidate 1.4.0 data.
+// Frozen at the shapes written during the 1.4.0 lifetime. Triage was added to
+// the 1.4.0 writer before the version advanced, so the historical reader accepts
+// both the earlier records without it and the later records that carry it.
 const previousUsageSchema = z
   .object({
     inputTokens: nonNegativeInteger.nullable(),
@@ -241,6 +245,10 @@ const previousDiagnosticSchema = z
     failureClass: z.enum(FAILURE_CLASSES),
     rootCause: z.enum(ROOT_CAUSES).nullable(),
     reason: z.string().min(1).max(2048).nullable(),
+    triage: z
+      .array(z.object({ reason: nonEmptyString.max(2048), rootCause: z.enum(ROOT_CAUSES) }).strict())
+      .max(16)
+      .optional(),
     evidence: z.array(previousDiagnosticEvidenceSchema).max(32),
   })
   .strict()
@@ -258,6 +266,9 @@ const previousDiagnosticSchema = z
         });
       }
       if (value.reason === null) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'a failed attempt must carry a reason' });
+      if (value.triage !== undefined && value.triage.length > 0) {
+        ctx.addIssue({ code: 'custom', path: ['triage'], message: 'a failed attempt cannot carry triage findings' });
+      }
     } else {
       if (value.signature === null)
         ctx.addIssue({ code: 'custom', path: ['signature'], message: 'a completed attempt must carry a signature' });
@@ -267,8 +278,17 @@ const previousDiagnosticSchema = z
       if (value.failureClass === 'quality' && value.rootCause === null) {
         ctx.addIssue({ code: 'custom', path: ['rootCause'], message: 'a quality finding must carry its triaged root cause' });
       }
+      if (value.failureClass === 'quality' && value.triage !== undefined && value.triage.length === 0) {
+        ctx.addIssue({ code: 'custom', path: ['triage'], message: 'a present quality triage must carry at least one finding' });
+      }
+      if (value.failureClass === 'quality' && value.triage !== undefined && value.triage[0]?.rootCause !== value.rootCause) {
+        ctx.addIssue({ code: 'custom', path: ['rootCause'], message: 'root cause must match the first triage finding' });
+      }
       if (value.failureClass === 'none' && value.rootCause !== null) {
         ctx.addIssue({ code: 'custom', path: ['rootCause'], message: 'a clean attempt cannot carry a root cause' });
+      }
+      if (value.failureClass === 'none' && value.triage !== undefined && value.triage.length > 0) {
+        ctx.addIssue({ code: 'custom', path: ['triage'], message: 'a clean attempt cannot carry triage findings' });
       }
     }
   });

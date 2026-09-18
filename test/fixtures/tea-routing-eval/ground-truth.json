@@ -34,7 +34,7 @@
     "`candidateCodes` is the set a clarifying question has to name. Asking 'which did you mean?' without saying between",
     "what is not a clarification, it is a stall."
   ],
-  "groundTruthVersion": 2,
+  "groundTruthVersion": 3,
   "menuSource": "src/agents/bmad-tea/customize.toml",
   "skillSource": "src/agents/bmad-tea/SKILL.md",
   "cases": {
@@ -135,6 +135,8 @@
       "decidingTokens": ["good", "cover"],
       "scopeTokens": [],
       "candidateCodes": ["RV", "TR"],
+      "boundaryFacts": "Existing tests raise both writing-quality and requirements-coverage concerns",
+      "missingDecidingInformation": "Whether to assess how well the tests are written or map what they cover and evaluate ship readiness",
       "rationale": "The message asks two different questions in one breath and says both worry the user. Whether the tests are any good is the review item's sentence and whether they cover what matters is the trace item's, both readable off the menu, and nothing in the message says which to do first."
     },
     "measured-some-nfrs-planned-none": {
@@ -144,6 +146,8 @@
       "decidingTokens": ["measured", "planned"],
       "scopeTokens": ["checkout"],
       "candidateCodes": ["NR", "TD"],
+      "boundaryFacts": "Measured NFR evidence exists for current work and future NFR coverage is unplanned",
+      "missingDecidingInformation": "Whether to audit the existing measurements or plan validation for the future scope first",
       "rationale": "One half of the message is measured evidence, which is the NFR audit's row, and the other half is nothing planned for the next epic, which is test design's NFR planning. The user asks outright which to take first, so answering either without asking picks for them."
     },
     "thin-coverage-on-payments": {
@@ -153,6 +157,8 @@
       "decidingTokens": ["coverage", "thin"],
       "scopeTokens": ["payments"],
       "candidateCodes": ["TD", "TA", "TR"],
+      "boundaryFacts": "Coverage is described as thin with no requested activity",
+      "missingDecidingInformation": "Whether to plan coverage, generate tests, or measure current requirement coverage",
       "rationale": "Thin coverage is planning it, writing it, or measuring how thin it actually is, and three menu items each own one of those. The feature is named and has to survive the question."
     },
     "story-half-done": {
@@ -162,6 +168,8 @@
       "decidingTokens": ["half", "UI"],
       "scopeTokens": ["12.3"],
       "candidateCodes": ["AT", "TA"],
+      "boundaryFacts": "One scope contains an implemented part and an unbuilt part",
+      "missingDecidingInformation": "Whether to create failing acceptance tests for the unbuilt part or automate the implemented part first",
       "rationale": "Half the story is built and half is not, and the menu has one item for tests written ahead of an implementation and one for tests written against it. The message supports both at once, which is the definition of two items being genuinely close."
     },
     "run-and-fix-ci-failures": {

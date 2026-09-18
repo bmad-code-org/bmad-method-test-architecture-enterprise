@@ -1,0 +1,1 @@
+{"action":"clarify","menuCode":null,"workflow":null,"scope":"Story 12.3","reason":"half the story is implemented while the UI is unbuilt","question":"For Story 12.3, should ATDD (AT) create failing acceptance tests for the unbuilt UI, or should Test Automation (TA) cover the implemented API first?","missing":null}

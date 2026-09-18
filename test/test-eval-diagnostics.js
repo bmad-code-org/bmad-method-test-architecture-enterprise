@@ -385,6 +385,11 @@ async function main() {
   ]);
   check(validateEvalResult(environmentResult).success, 'an environment failure and the completed quality measurement validate together');
   check(environmentResult.runners[0].measurements.accuracy === 1, 'an environment failure does not lower the aggregate quality metric');
+  const environmentResultWithTriage = structuredClone(environmentResult);
+  environmentResultWithTriage.runners[0].diagnostics[1].triage = [
+    { reason: 'triage cannot describe an incomplete attempt', rootCause: 'harness-defect' },
+  ];
+  check(!validateEvalResult(environmentResultWithTriage).success, 'a current failed diagnostic rejects non-empty triage');
 
   const extraField = structuredClone(quality);
   extraField.runners[0].diagnostics[0].rawOutput = 'unbounded output';
@@ -1044,6 +1049,51 @@ async function main() {
     validateEvalResult(frozenPreviousResult).success,
     'the checked-in artifact emitted by the 1.4.0 writer validates through its frozen reader',
   );
+  const previousResultWithTriage = structuredClone(frozenPreviousResult);
+  for (const resultRunner of previousResultWithTriage.runners) {
+    for (const diagnostic of resultRunner.diagnostics) {
+      diagnostic.triage = diagnostic.failureClass === 'quality' ? [{ reason: diagnostic.reason, rootCause: diagnostic.rootCause }] : [];
+    }
+  }
+  check(validateEvalResult(previousResultWithTriage).success, 'a later 1.4.0 artifact carrying triage validates through the frozen reader');
+  previousResultWithTriage.runners[0].diagnostics[0].triage = [{ reason: 'wrong historical triage', rootCause: 'oracle-defect' }];
+  check(
+    !validateEvalResult(previousResultWithTriage).success,
+    'the frozen reader rejects 1.4.0 triage that contradicts its diagnostic root cause',
+  );
+  const previousCleanResult = structuredClone(frozenPreviousResult);
+  previousCleanResult.runners[0].failureClass = 'none';
+  previousCleanResult.runners[0].failures = [];
+  previousCleanResult.runners[0].diagnostics[0].failureClass = 'none';
+  previousCleanResult.runners[0].diagnostics[0].rootCause = null;
+  previousCleanResult.runners[0].diagnostics[0].reason = null;
+  previousCleanResult.runners[0].diagnostics[0].triage = [];
+  previousCleanResult.failureClass = 'none';
+  previousCleanResult.exitCode = 0;
+  check(validateEvalResult(previousCleanResult).success, 'a clean later 1.4.0 diagnostic accepts an empty triage');
+  previousCleanResult.runners[0].diagnostics[0].triage = [{ reason: 'contradicts clean failure class', rootCause: 'tea-workflow-defect' }];
+  check(
+    !validateEvalResult(previousCleanResult).success,
+    'the frozen reader rejects 1.4.0 triage that contradicts a clean diagnostic failure class',
+  );
+  const previousFailedResult = structuredClone(environmentResult);
+  previousFailedResult.schemaVersion = PREVIOUS_SCHEMA_VERSION;
+  for (const resultRunner of previousFailedResult.runners) {
+    for (const diagnostic of resultRunner.diagnostics) {
+      delete diagnostic.triage;
+      delete diagnostic.mappedFailures;
+      delete diagnostic.mappedMeasurements;
+      diagnostic.metricContributions = {};
+      diagnostic.evidence = [];
+    }
+  }
+  check(validateEvalResult(previousFailedResult).success, 'a frozen 1.4.0 failed diagnostic accepts omitted triage');
+  previousFailedResult.runners[0].diagnostics[1].triage = [];
+  check(validateEvalResult(previousFailedResult).success, 'a frozen 1.4.0 failed diagnostic accepts empty triage');
+  previousFailedResult.runners[0].diagnostics[1].triage = [
+    { reason: 'triage cannot describe an incomplete attempt', rootCause: 'harness-defect' },
+  ];
+  check(!validateEvalResult(previousFailedResult).success, 'a frozen 1.4.0 failed diagnostic rejects non-empty triage');
   const previousResult = structuredClone(quality);
   previousResult.schemaVersion = PREVIOUS_SCHEMA_VERSION;
   for (const resultRunner of previousResult.runners) {
