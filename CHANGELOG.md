@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.27.2] - 2026-09-18
+
 ### Added
 
 - Live evaluation JSON now records a bounded diagnostic for every attempted case repetition, including the exact stability signature, threshold inputs, completion state, failure class, five-category root-cause triage, reason, and sanitized output or persisted artifact evidence. Schema 1.5.0 binds complete requested grids and aggregate failures to their diagnostic evidence while retaining frozen read-only validation paths for stored 1.4.0 and 1.3.0 results.
