@@ -26,3 +26,11 @@ repetitions completed with identical signatures. Intended-reason rate and criter
 reached 1. Vacuous passes, still-skipped tests, non-assertion exits, load errors, unmapped tests,
 production mutations, unstable cases, and incomplete cases were all 0. Every Story 1.2 live
 threshold passed.
+
+`post-fix-codex-f4e12cdb0666609ac2cf4d18c6f33c0fcc2cb1c2.json` is the immutable live
+acceptance measurement after replacing retrying, stateful E2E assertion boundaries with
+single-shot promise assertions. The repository provenance records clean commit
+`f4e12cdb0666609ac2cf4d18c6f33c0fcc2cb1c2`. Both repetitions completed with identical
+signatures. Intended-reason rate and criteria coverage both reached 1. Vacuous passes,
+still-skipped tests, non-assertion exits, load errors, unmapped tests, production mutations,
+unstable cases, and incomplete cases were all 0. Every Story 1.2 live threshold passed.

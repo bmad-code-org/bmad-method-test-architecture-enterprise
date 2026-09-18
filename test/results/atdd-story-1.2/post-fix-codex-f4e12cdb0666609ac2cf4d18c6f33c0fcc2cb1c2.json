@@ -1,0 +1,168 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-09-18T00:00:40.291Z",
+  "mode": "live",
+  "repository": {
+    "commit": "f4e12cdb0666609ac2cf4d18c6f33c0fcc2cb1c2",
+    "dirty": false
+  },
+  "suite": {
+    "id": "atdd",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-atdd"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/atdd.contract.json",
+        "version": "5"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:885822cfd5be9a8874e05679fefd9bc7dbf80de09aa7914279168cec8ab0be93",
+    "promptDigest": "sha256:83de480469179deacabc7fc104fddc5f6c3f1b9674e0c5a4e6cecd59cb78c5d8",
+    "caseIds": [
+      "reservations"
+    ],
+    "cases": [
+      {
+        "id": "reservations",
+        "promptDigest": "sha256:74c9ce53a3c16a88f6b12dfb0ddd9d7a82c37fd8b36b042dbc8af621e8d04224"
+      }
+    ],
+    "thresholds": {
+      "redForIntendedReasonRate": 1,
+      "criteriaCoverage": 1,
+      "maxVacuousPass": 0,
+      "maxStillSkipped": 0,
+      "maxLoadErrors": 0,
+      "maxNonAssertionExit": 0,
+      "maxUnmappedTests": 0,
+      "maxProductionMutations": 0,
+      "maxUnstableCases": 0
+    },
+    "declaredRepetitions": 2
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.154.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 2,
+        "completed": 2
+      },
+      "measurements": {
+        "redForIntendedReasonRate": 1,
+        "criteriaCoverage": 1,
+        "vacuousPass": 0,
+        "stillSkipped": 0,
+        "nonAssertionExit": 0,
+        "loadErrors": 0,
+        "unmapped": 0,
+        "productionMutations": 0,
+        "unstableCases": 0,
+        "incompleteCases": 0
+      },
+      "durationMs": 546669,
+      "usage": null,
+      "failureClass": "none",
+      "failures": [],
+      "diagnostics": [
+        {
+          "caseId": "reservations",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[[[\"AC-1\",\"red-for-intended-reason\"],[\"AC-2\",\"red-for-intended-reason\"],[\"AC-3\",\"red-for-intended-reason\"],[\"AC-4\",\"red-for-intended-reason\"],[\"AC-5\",\"red-for-intended-reason\"]],5,5,[],[],[],[],[],[]]",
+          "metricContributions": {
+            "redForIntendedReason.numerator": 5,
+            "redForIntendedReason.denominator": 5,
+            "redForIntendedReason.threshold": 1,
+            "criteriaCoverage.numerator": 5,
+            "criteriaCoverage.denominator": 5,
+            "criteriaCoverage.threshold": 1,
+            "vacuousPass": 0,
+            "maxVacuousPass": 0,
+            "stillSkipped": 0,
+            "maxStillSkipped": 0,
+            "nonAssertionExit": 0,
+            "maxNonAssertionExit": 0,
+            "loadErrors": 0,
+            "maxLoadErrors": 0,
+            "unmapped": 0,
+            "maxUnmappedTests": 0,
+            "productionMutations": 0,
+            "maxProductionMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "mappedFailures": [],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[[[\"AC-1\",\"red-for-intended-reason\"],[\"AC-2\",\"red-for-intended-reason\"],[\"AC-3\",\"red-for-intended-reason\"],[\"AC-4\",\"red-for-intended-reason\"],[\"AC-5\",\"red-for-intended-reason\"]],5,5,[],[],[],[],[],[]]"
+            }
+          ]
+        },
+        {
+          "caseId": "reservations",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[[[\"AC-1\",\"red-for-intended-reason\"],[\"AC-2\",\"red-for-intended-reason\"],[\"AC-3\",\"red-for-intended-reason\"],[\"AC-4\",\"red-for-intended-reason\"],[\"AC-5\",\"red-for-intended-reason\"]],5,5,[],[],[],[],[],[]]",
+          "metricContributions": {
+            "redForIntendedReason.numerator": 5,
+            "redForIntendedReason.denominator": 5,
+            "redForIntendedReason.threshold": 1,
+            "criteriaCoverage.numerator": 5,
+            "criteriaCoverage.denominator": 5,
+            "criteriaCoverage.threshold": 1,
+            "vacuousPass": 0,
+            "maxVacuousPass": 0,
+            "stillSkipped": 0,
+            "maxStillSkipped": 0,
+            "nonAssertionExit": 0,
+            "maxNonAssertionExit": 0,
+            "loadErrors": 0,
+            "maxLoadErrors": 0,
+            "unmapped": 0,
+            "maxUnmappedTests": 0,
+            "productionMutations": 0,
+            "maxProductionMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "mappedFailures": [],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[[[\"AC-1\",\"red-for-intended-reason\"],[\"AC-2\",\"red-for-intended-reason\"],[\"AC-3\",\"red-for-intended-reason\"],[\"AC-4\",\"red-for-intended-reason\"],[\"AC-5\",\"red-for-intended-reason\"]],5,5,[],[],[],[],[],[]]"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 546809,
+  "failureClass": "none",
+  "exitCode": 0
+}
