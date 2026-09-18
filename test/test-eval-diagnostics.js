@@ -46,6 +46,8 @@ const evalAll = require('./eval-all');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const LEGACY_RESULT = path.join(__dirname, 'results', 'eval-all', 'history', '2026-09-17T12-23-09-218Z.json');
+const CURRENT_RESULT = path.join(__dirname, 'results', 'eval-all', 'latest.json');
+const CURRENT_HISTORY_ROOT = path.join(__dirname, 'results', 'eval-all', 'history');
 const PREVIOUS_SUITE_RESULT = path.join(__dirname, 'fixtures', 'eval-result', 'v1.4.0-suite-result.json');
 const DIGEST = `sha256:${'0'.repeat(64)}`;
 const failures = [];
@@ -1043,6 +1045,16 @@ async function main() {
       '201138d028e6c5612dc5786a1617025c6b9d01cf0de2d34e00f37cff8c8c7631',
     'the protected baseline remains byte-for-byte unchanged',
   );
+
+  const current = JSON.parse(fs.readFileSync(CURRENT_RESULT, 'utf8'));
+  const currentHistory = path.join(CURRENT_HISTORY_ROOT, `${current.generatedAt.replaceAll(/[:.]/g, '-')}.json`);
+  check(fs.existsSync(currentHistory), 'the latest run has a timestamp-matched history record');
+  check(
+    fs.existsSync(currentHistory) && fs.readFileSync(CURRENT_RESULT).equals(fs.readFileSync(currentHistory)),
+    'latest.json and its timestamp-matched history record preserve identical bytes',
+  );
+  check(validateEvalRun(current).success, 'the current recorded run remains schema-valid');
+  check(!Object.hasOwn(current, 'qualityScore'), 'the current environment-only run makes no quality-score claim');
 
   const frozenPreviousResult = JSON.parse(fs.readFileSync(PREVIOUS_SUITE_RESULT, 'utf8'));
   check(

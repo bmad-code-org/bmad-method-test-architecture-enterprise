@@ -15,6 +15,7 @@ Nothing here is generated from a source file and regenerated on demand the way `
 would erase the thing it exists to prove happened, which is why `tools/record-eval-run.js` always adds
 a new `history/` entry alongside replacing `latest.json` rather than only doing the latter.
 
-This directory carries no run yet. Story 5.2 built the recording and comparison machinery
-(`tools/record-eval-run.js`, `test/lib/compare-eval-runs.js`) without spending a live agent call; the
-first file here lands once that tool is actually run against a live `eval:all --json` output.
+The first complete Story 1.8 rerun is recorded in
+`history/2026-09-18T13-23-35-961Z.json` and mirrored by `latest.json`. Claude transport and harness
+failures left the affected quality measurements unmeasurable, so this record makes no quality-score
+claim. The deterministic suites that completed remain recorded with their measured results.
