@@ -131,7 +131,7 @@ workaround. Risk score is supporting evidence and is not a required condition.
 | {requirement} | E2E        | R-001     | 3          | QA    | {notes} |
 | {requirement} | API        | R-002     | 5          | QA    | {notes} |
 
-Use the exact `Risk ID` from the risk assessment in `Risk Link`. Every material risk must appear in at least one coverage row at a test level that can establish it.
+Use the exact `Risk ID` from the risk assessment in `Risk Link`. Select `Test Level` using `test-levels-framework.md`; explain the suitability in `Notes` when the level is not obvious. Every material risk must appear in at least one coverage row at a test level that can establish it.
 
 **Total P0**: {p0_count} tests, {p0_hours} hours
 

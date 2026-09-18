@@ -46,7 +46,7 @@ For each requirement or risk-driven scenario:
 - Assign priorities (P0–P3) using `test-priorities-matrix.md`
 - Map NFR-derived risks to planned validation scenarios and evidence sources
 - Use the exact `Risk ID` assigned in the risk register in every `Risk Link` cell. A prose description alone is not a traceable mapping.
-- Give every material risk at least one coverage row whose `Test Level` is suitable for that risk and admitted by the risk's stated evidence plan. Preserve the risk ID when rows are split across priorities or test levels.
+- Give every material risk at least one coverage row whose `Test Level` is suitable for that risk under `test-levels-framework.md`. Explain the suitability in the row notes when the level is not obvious. Preserve the risk ID when rows are split across priorities or test levels.
 
 **Priority rules:** decide each priority on business impact, user reach, and workaround
 availability. Risk score is supporting evidence and is not a required condition for any priority.

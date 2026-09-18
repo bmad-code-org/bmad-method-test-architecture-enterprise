@@ -18,13 +18,13 @@
 
 ### Low-Priority Risks (Score 1-2)
 
-| Risk ID | Category | Description                                                                                         | Probability | Impact | Score |
-| ------- | -------- | --------------------------------------------------------------------------------------------------- | ----------- | ------ | ----- |
-| R-006   | TECH     | The client cache may use an inefficient serialization format during routine synchronization.        | 1           | 2      | 2     |
-| R-007   | OPS      | A diagnostic log may grow without a retention limit during routine synchronization.                 | 1           | 2      | 2     |
-| R-008   | BUS      | A technician may prefer a different ordering of the offline queue entries.                          | 1           | 1      | 1     |
-| R-009   | DATA     | A future export may use a different field naming convention.                                        | 1           | 1      | 1     |
-| R-005   | OPS      | There is no feature flag, so a bad release cannot be turned off without shipping a new store build. | 1           | 2      | 2     |
+| Risk ID | Category | Description                                                                                                           | Probability | Impact | Score |
+| ------- | -------- | --------------------------------------------------------------------------------------------------------------------- | ----------- | ------ | ----- |
+| R-006   | DATA     | The server applies queued edits by arrival with no timestamp check, so a later arrival can replace an earlier edit.   | 1           | 2      | 2     |
+| R-007   | TECH     | A rejected payload has no dead-letter path, so the application needs a defined destination for work it cannot accept. | 1           | 2      | 2     |
+| R-008   | OPS      | The release has no staged rollout, so operators need a controlled way to observe the feature before broad deployment. | 1           | 1      | 1     |
+| R-009   | PERF     | A full backlog must finish syncing within the stated budget, so throughput needs a representative workload check.     | 1           | 1      | 1     |
+| R-005   | OPS      | There is no feature flag, so a bad release cannot be turned off without shipping a new store build.                   | 1           | 2      | 2     |
 
 ## Test Coverage Plan
 
