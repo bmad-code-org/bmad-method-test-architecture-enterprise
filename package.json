@@ -127,7 +127,7 @@
     "test:eval-routing-evidence": "node test/test-routing-evidence.js",
     "test:eval-schemas": "node tools/validate-eval-schemas.js",
     "test:eval-teach-me-testing-data": "node test/eval-teach-me-testing.js --validate-only",
-    "test:eval-test-design-data": "node test/eval-test-design.js --validate-only",
+    "test:eval-test-design-data": "node test/eval-test-design.js --validate-only && node test/test-test-design-grounding.js",
     "test:eval-trace-data": "node test/eval-trace.js --validate-only",
     "test:eval-transcript-data": "node test/eval-transcript.js --validate-only",
     "test:file-system-conformance": "node test/test-file-system-conformance.js",

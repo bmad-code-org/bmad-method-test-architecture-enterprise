@@ -60,6 +60,8 @@ Also identify **ASRs** (Architecturally Significant Requirements):
 Using `risk-governance.md` and `probability-impact.md` (if loaded):
 
 - Identify real risks (not just features)
+- Ground every risk in an explicit statement from the supplied epic or a named artifact loaded for this run. Record the supporting statement in the risk description or mitigation notes so another reader can trace the row.
+- Keep the register bounded by the scope supported by the supplied epic or a named artifact loaded for this run. Do not add plausible risks merely because they are common in other systems. If a concern has no supporting statement, record it as an assumption or clarification outside the risk register.
 - Classify by category: TECH / SEC / PERF / DATA / BUS / OPS
 - Score Probability (1–3) and Impact (1–3)
 - Calculate Risk Score (P × I)

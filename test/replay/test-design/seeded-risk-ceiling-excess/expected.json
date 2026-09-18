@@ -1,0 +1,54 @@
+{
+  "$comment": [
+    "A fully grounded seeded design with four additional plausible rows.",
+    "The added rows preserve every shape, link, grounding, coverage and ordering metric while exceeding the declared ceiling of eight."
+  ],
+  "id": "seeded-risk-ceiling-excess",
+  "suite": "test-design",
+  "scorerVersion": 7,
+  "storedOutput": {
+    "origin": "constructed",
+    "design": "design.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/test-design-eval/ground-truth.json",
+    "fixtureSet": "seeded-offline-order-capture",
+    "scoringInputsDigest": "sha256:963962660c273f960aff6e4c02361691190a06c7f824dd78deca3382e85ac0c9"
+  },
+  "derivation": [
+    "The first five rows reproduce the seeded correct run.",
+    "Four additional valid risk rows raise the register to nine against maxRisks 8.",
+    "All existing quality dimensions remain satisfied, so only ceiling excess moves to 1."
+  ],
+  "result": {
+    "mentions": {
+      "sec-unencrypted-offline-queue": true,
+      "data-sync-conflict-overwrite": true,
+      "tech-uncapped-retry-loop": true,
+      "perf-backlog-sync-budget": true,
+      "ops-no-release-kill-switch": true,
+      "payment-gateway-failure": false,
+      "cross-tenant-data-leak": false,
+      "browser-and-accessibility-regression": false,
+      "data-residency-compliance": false
+    },
+    "shape": {
+      "rows": 9,
+      "wellFormedIds": 9,
+      "validCategories": 9,
+      "inScale": 9,
+      "arithmeticOk": 9,
+      "banded": 9,
+      "bandOk": 9,
+      "arithmeticTotal": 9
+    },
+    "shapeFailures": [],
+    "links": { "total": 5, "resolved": 5, "dangling": [] },
+    "grounding": { "declared": 5, "matched": 5, "missed": [], "topSeverityMissed": 0 },
+    "ungrounded": [],
+    "ceiling": { "maxRisks": 8, "excess": 1 },
+    "unscoredRiskTables": [],
+    "coverage": { "evaluated": 5, "satisfied": 5, "failures": [] },
+    "ordering": { "pairs": 9, "resolvable": 9, "satisfied": 9, "flattened": false, "failures": [] }
+  }
+}
