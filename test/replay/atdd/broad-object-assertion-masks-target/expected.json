@@ -1,0 +1,38 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: AC-5 compares the complete locker object before directly",
+    "asserting its new reserved property, so the broad diff masks the exact promised mismatch."
+  ],
+  "id": "broad-object-assertion-masks-target",
+  "suite": "atdd",
+  "scorerVersion": 11,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "The AC-5 leaf reaches a broad object equality assertion first. Its diff identifies a missing property within the object and does not produce the direct Expected: true / Received: undefined shape declared for AC-5. The test is mapped and red, yet its first failure is not the criterion's exact promised mismatch.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      { "id": "AC-1", "present": false, "outcome": "unmapped" },
+      { "id": "AC-2", "present": false, "outcome": "unmapped" },
+      { "id": "AC-3", "present": false, "outcome": "unmapped" },
+      { "id": "AC-4", "present": false, "outcome": "unmapped" },
+      { "id": "AC-5", "present": true, "outcome": "non-assertion-exit" }
+    ],
+    "mappedTestCount": 1,
+    "redForIntendedReasonCount": 0,
+    "redForIntendedReasonRate": 0,
+    "criteriaCoverage": 0.2,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": ["tests/api/reservations.spec.ts:[P1] AC-5 the locker reports it is reserved"],
+    "unmapped": [],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

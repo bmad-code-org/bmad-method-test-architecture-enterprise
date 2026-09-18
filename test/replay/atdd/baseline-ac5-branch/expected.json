@@ -1,0 +1,38 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: AC-5 describes a state transition, and this scaffold chooses its",
+    "unchanged baseline branch. The live baseline made the same choice and missed the intended failure."
+  ],
+  "id": "baseline-ac5-branch",
+  "suite": "atdd",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "AC-5 fails with Expected: false and Received: undefined, outside its transition-bearing Expected: true pattern. Four of five mapped tests fail for the intended reason, so redForIntendedReasonRate is 0.8 and criteriaCoverage is 1. usesTestSkip remains true.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      { "id": "AC-1", "present": true, "outcome": "red-for-intended-reason" },
+      { "id": "AC-2", "present": true, "outcome": "red-for-intended-reason" },
+      { "id": "AC-3", "present": true, "outcome": "red-for-intended-reason" },
+      { "id": "AC-4", "present": true, "outcome": "red-for-intended-reason" },
+      { "id": "AC-5", "present": true, "outcome": "non-assertion-exit" }
+    ],
+    "mappedTestCount": 5,
+    "redForIntendedReasonCount": 4,
+    "redForIntendedReasonRate": 0.8,
+    "criteriaCoverage": 1,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": ["tests/api/reservations.spec.ts:[P1] AC-5 the locker reports it is not reserved"],
+    "unmapped": [],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

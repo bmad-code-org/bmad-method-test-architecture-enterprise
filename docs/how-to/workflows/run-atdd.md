@@ -72,6 +72,10 @@ Then I see an error message
 And changes are not saved
 ```
 
+TEA builds a criterion registry before it generates tests. Existing `AC-<n>` ids remain unchanged. For criteria without ids, TEA reserves the supplied ids, visits unnamed criteria in source order, and assigns each the lowest unused `AC-<n>` id. Every executable test title carries exactly one id from that registry.
+
+TEA emits exactly one red-phase leaf scaffold per declared criterion. Secondary branches and journeys remain implementation-checklist work until green-phase automation. Each scaffold puts one direct criterion assertion first. That assertion isolates the exact newly promised status, scalar, or property before broad object, schema, or secondary checks. API setup calls to unimplemented endpoints keep their responses opaque until this assertion runs. E2E scaffolds place the complete browser journey inside the first potentially failing assertion boundary.
+
 **Reference Documents** (optional):
 
 - Point to your story file
@@ -120,7 +124,7 @@ TEA generates **red-phase test scaffolds** in appropriate directories:
 import { test, expect } from '@playwright/test';
 
 test.describe('Profile API', () => {
-  test.skip('should fetch user profile', async ({ request }) => {
+  test.skip('[P0] AC-1 should fetch user profile', async ({ request }) => {
     const response = await request.get('/api/profile');
 
     expect(response.status()).toBe(200);
@@ -130,7 +134,7 @@ test.describe('Profile API', () => {
     expect(profile).toHaveProperty('avatarUrl');
   });
 
-  test.skip('should update user profile', async ({ request }) => {
+  test.skip('[P0] AC-2 should update user profile', async ({ request }) => {
     const response = await request.patch('/api/profile', {
       data: {
         name: 'Updated Name',
@@ -144,7 +148,7 @@ test.describe('Profile API', () => {
     expect(updated.email).toBe('updated@example.com');
   });
 
-  test.skip('should validate email format', async ({ request }) => {
+  test.skip('[P1] AC-4 should validate email format', async ({ request }) => {
     const response = await request.patch('/api/profile', {
       data: {
         email: 'invalid-email',
@@ -172,19 +176,19 @@ const ProfileSchema = z.object({
 });
 
 test.describe('Profile API', () => {
-  test.skip('should fetch user profile', async ({ apiRequest }) => {
+  test.skip('[P0] AC-1 should fetch user profile', async ({ apiRequest }) => {
     const { status, body } = await apiRequest({
       method: 'GET',
       path: '/api/profile',
-    }).validateSchema(ProfileSchema); // Chained validation
+    });
 
     expect(status).toBe(200);
-    // Schema already validated, type-safe access
-    expect(body.name).toBeDefined();
-    expect(body.email).toContain('@');
+    const profile = ProfileSchema.parse(body);
+    expect(profile.name).toBeDefined();
+    expect(profile.email).toContain('@');
   });
 
-  test.skip('should update user profile', async ({ apiRequest }) => {
+  test.skip('[P0] AC-2 should update user profile', async ({ apiRequest }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
       path: '/api/profile',
@@ -192,14 +196,15 @@ test.describe('Profile API', () => {
         name: 'Updated Name',
         email: 'updated@example.com',
       },
-    }).validateSchema(ProfileSchema); // Chained validation
+    });
 
     expect(status).toBe(200);
-    expect(body.name).toBe('Updated Name');
-    expect(body.email).toBe('updated@example.com');
+    const updated = ProfileSchema.parse(body);
+    expect(updated.name).toBe('Updated Name');
+    expect(updated.email).toBe('updated@example.com');
   });
 
-  test.skip('should validate email format', async ({ apiRequest }) => {
+  test.skip('[P1] AC-4 should validate email format', async ({ apiRequest }) => {
     const { status, body } = await apiRequest({
       method: 'PATCH',
       path: '/api/profile',
@@ -225,27 +230,26 @@ test.describe('Profile API', () => {
 ```typescript
 import { test, expect } from '@playwright/test';
 
-test.skip('should edit and save profile', async ({ page }) => {
-  // Login first
-  await page.goto('/login');
-  await page.getByLabel('Email').fill('test@example.com');
-  await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Sign in' }).click();
-
-  // Navigate to profile
-  await page.goto('/profile');
-
-  // Edit profile
-  await page.getByRole('button', { name: 'Edit Profile' }).click();
-  await page.getByLabel('Name').fill('Updated Name');
-  await page.getByRole('button', { name: 'Save' }).click();
-
-  // Verify success
-  await expect(page.getByText('Profile updated')).toBeVisible();
+test.skip('[P0] AC-3 should edit and save profile', async ({ page }) => {
+  // This assertion is the first potentially failing operation. Every browser
+  // failure in the journey retains AC-3 provenance.
+  await expect(
+    (async () => {
+      await page.goto('/login');
+      await page.getByLabel('Email').fill('test@example.com');
+      await page.getByLabel('Password').fill('password123');
+      await page.getByRole('button', { name: 'Sign in' }).click();
+      await page.goto('/profile');
+      await page.getByRole('button', { name: 'Edit Profile' }).click();
+      await page.getByLabel('Name').fill('Updated Name');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByText('Profile updated')).toBeVisible();
+    })(),
+  ).resolves.toBeUndefined();
 });
 ```
 
-TEA generates additional E2E tests for display, validation errors, etc. based on acceptance criteria.
+TEA records additional display, validation-error, and other secondary E2E journeys in the implementation checklist for green-phase automation.
 
 #### Implementation Checklist
 
@@ -296,16 +300,14 @@ npx cypress run
 Initial output with scaffolds still skipped:
 
 ```text
-Running 6 tests using 1 worker
+Running 4 tests using 1 worker
 
-  - tests/api/profile.spec.ts:3:3 › should fetch user profile
-  - tests/api/profile.spec.ts:15:3 › should update user profile
-  - tests/api/profile.spec.ts:30:3 › should validate email format
-  - tests/e2e/profile.spec.ts:10:3 › should display current profile
-  - tests/e2e/profile.spec.ts:18:3 › should edit and save profile
-  - tests/e2e/profile.spec.ts:35:3 › should show validation error
+  - tests/api/profile.spec.ts:3:3 › [P0] AC-1 should fetch user profile
+  - tests/api/profile.spec.ts:15:3 › [P0] AC-2 should update user profile
+  - tests/api/profile.spec.ts:30:3 › [P1] AC-4 should validate email format
+  - tests/e2e/profile.spec.ts:18:3 › [P0] AC-3 should edit and save profile
 
-  6 skipped
+  4 skipped
 ```
 
 After you remove `test.skip()` from the task you are implementing, that activated test should fail first. This confirms:
@@ -343,16 +345,14 @@ npx cypress run
 Expected output:
 
 ```text
-Running 6 tests using 1 worker
+Running 4 tests using 1 worker
 
-  ✓ tests/api/profile.spec.ts:3:3 › should fetch user profile (850ms)
-  ✓ tests/api/profile.spec.ts:15:3 › should update user profile (1.2s)
-  ✓ tests/api/profile.spec.ts:30:3 › should validate email format (650ms)
-  ✓ tests/e2e/profile.spec.ts:10:3 › should display current profile (2.1s)
-  ✓ tests/e2e/profile.spec.ts:18:3 › should edit and save profile (3.2s)
-  ✓ tests/e2e/profile.spec.ts:35:3 › should show validation error (1.8s)
+  ✓ tests/api/profile.spec.ts:3:3 › [P0] AC-1 should fetch user profile (850ms)
+  ✓ tests/api/profile.spec.ts:15:3 › [P0] AC-2 should update user profile (1.2s)
+  ✓ tests/api/profile.spec.ts:30:3 › [P1] AC-4 should validate email format (650ms)
+  ✓ tests/e2e/profile.spec.ts:18:3 › [P0] AC-3 should edit and save profile (3.2s)
 
-  6 passed (9.8s)
+  4 passed (5.9s)
 ```
 
 That completes the red → green → refactor cycle for the generated scaffolds.

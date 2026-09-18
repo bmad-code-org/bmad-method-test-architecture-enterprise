@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "<staged-workspace>/reservations",
+  "testDir": "tests",
+  "specFileCount": 1,
+  "productionFilesTouched": [],
+  "files": [
+    {
+      "file": "tests/e2e/reservations.spec.ts",
+      "hadSkipCall": true,
+      "loadError": null,
+      "tests": [
+        {
+          "title": "[P0] AC-1 reserving a free locker creates it",
+          "status": "failed",
+          "message": "TimeoutError: locator.click: Timeout 100ms exceeded.\nCall log:\n  - waiting for getByRole('button', { name: 'Reserve locker' })\n"
+        }
+      ]
+    }
+  ]
+}

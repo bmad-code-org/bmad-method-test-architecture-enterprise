@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "<staged-workspace>/reservations",
+  "testDir": "tests",
+  "specFileCount": 1,
+  "productionFilesTouched": [],
+  "files": [
+    {
+      "file": "tests/api/reservations.spec.ts",
+      "hadSkipCall": true,
+      "loadError": null,
+      "tests": [
+        {
+          "title": "[P0] reserving a free locker creates it",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 404"
+        },
+        {
+          "title": "[P1] a reserved locker cannot be reserved again",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 409\nReceived: 404"
+        },
+        {
+          "title": "[P1] an out-of-range duration is rejected",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 422\nReceived: 404"
+        },
+        {
+          "title": "[P2] releasing a reservation frees the locker",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 204\nReceived: 404"
+        },
+        {
+          "title": "[P1] the locker reports it is reserved",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: undefined"
+        }
+      ]
+    }
+  ]
+}

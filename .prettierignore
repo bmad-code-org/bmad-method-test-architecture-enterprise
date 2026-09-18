@@ -6,6 +6,9 @@ test/fixtures/**
 # reformatting them would fail the check they exist to be scored against.
 test/replay/ci/**
 
+# Immutable Story 1.2 live outputs stay byte-identical to the runner artifacts.
+test/results/atdd-story-1.2/post-fix-*.json
+
 # Generated from test/schema/eval-result.js by tools/validate-eval-schemas.js,
 # which compares it byte for byte to catch drift. Reformatting it here would
 # make that comparison fail on formatting rather than on content.
