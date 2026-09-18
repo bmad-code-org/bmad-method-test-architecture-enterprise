@@ -1470,6 +1470,32 @@ async function main() {
       `${fixture} deterministically exposes ${expectedProblem}`,
     );
   }
+  const applicablePlaywrightCase = {
+    repoFacts: ['package.json depends on @playwright/test and @seontechnologies/playwright-utils', 'tests contain browser specs'],
+    config: { test_stack_type: 'frontend', tea_use_playwright_utils: true },
+  };
+  check(
+    fragment
+      .mustLoadApplicabilityProblems(
+        'bmad-testarch-atdd',
+        applicablePlaywrightCase,
+        instructionFixture('negative-only-oracle.md'),
+        'playwright-utils-mandate.md',
+      )
+      .some((problem) => problem.includes('positive load rule')),
+    'a negative-only fragment reference cannot establish a required oracle fragment',
+  );
+  check(
+    fragment
+      .mustLoadApplicabilityProblems(
+        'bmad-testarch-atdd',
+        { ...applicablePlaywrightCase, config: { test_stack_type: 'frontend', tea_use_playwright_utils: false } },
+        instructionFixture('unmet-conditional-oracle.md'),
+        'playwright-utils-mandate.md',
+      )
+      .some((problem) => problem.includes('tea_use_playwright_utils=true')),
+    'a positive fragment rule whose config condition is unmet cannot establish a required oracle fragment',
+  );
 
   const fragmentOutput = path.join(os.tmpdir(), `eval-fragment-diagnostics-${process.pid}.json`);
   try {

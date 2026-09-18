@@ -189,6 +189,33 @@ const AMBIGUOUS_SELECTION_RULES = [
   },
 ];
 
+const PLAYWRIGHT_UTILS_FRAGMENTS = new Set([
+  'playwright-utils-mandate.md',
+  'overview.md',
+  'api-request.md',
+  'network-recorder.md',
+  'auth-session.md',
+  'intercept-network-call.md',
+  'recurse.md',
+  'log.md',
+  'file-utils.md',
+  'burn-in.md',
+  'network-error-monitor.md',
+  'fixtures-composition.md',
+]);
+const PACTJS_UTILS_FRAGMENTS = new Set([
+  'pactjs-utils-mandate.md',
+  'pactjs-utils-overview.md',
+  'pactjs-utils-consumer-helpers.md',
+  'pactjs-utils-provider-verifier.md',
+  'pactjs-utils-request-filter.md',
+  'pactjs-utils-zod-to-pact.md',
+  'pact-consumer-di.md',
+  'pact-consumer-framework-setup.md',
+  'pact-broker-webhooks.md',
+]);
+const MOBILE_FRAGMENTS = new Set(['mobile-test-strategy.md', 'maestro-flows.md', 'mobile-ci-device-lab.md']);
+
 const colors = {
   reset: '[0m',
   red: '[31m',
@@ -350,6 +377,84 @@ function selectionInstructionProblems(context) {
   return problems;
 }
 
+/** True when a repository fact affirms a token without negating it in the same fact. */
+function hasPositiveRepoFact(item, token) {
+  const loweredToken = token.toLowerCase();
+  return (item.repoFacts ?? []).some((fact) => {
+    const lowered = fact.toLowerCase();
+    if (!lowered.includes(loweredToken)) return false;
+    const beforeToken = lowered.slice(0, lowered.indexOf(loweredToken));
+    return !/(?:\bno\b|\bwithout\b|\bmissing\b|\babsent\b)[^.;]{0,100}$/.test(beforeToken);
+  });
+}
+
+/** Find a positive list rule that names the fragment, excluding prose and exclusion lists. */
+function hasPositiveLoadRule(selectionContext, fragment) {
+  const lines = selectionContext.split('\n');
+  let ruleHeading = '';
+  for (const line of lines) {
+    const heading = line.match(/^\*\*(.+):\*\*$/);
+    if (heading) ruleHeading = heading[1];
+    if (!/^\s*-\s/.test(line) || !line.includes(`\`${fragment}\``)) continue;
+    if (/\b(?:do not|never|skip|exclude|forbidden)\b/i.test(`${ruleHeading} ${line}`)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Validate conditional required fragments against the current case. This is
+ * independent of the model: a library or mobile fragment becomes required only
+ * when the case facts open its complete positive rule.
+ */
+function mustLoadApplicabilityProblems(suiteDir, item, selectionContext, fragment) {
+  const problems = [];
+  const conditional =
+    PLAYWRIGHT_UTILS_FRAGMENTS.has(fragment) ||
+    PACTJS_UTILS_FRAGMENTS.has(fragment) ||
+    MOBILE_FRAGMENTS.has(fragment) ||
+    fragment === 'playwright-cli.md';
+  if (!conditional) return problems;
+  if (!hasPositiveLoadRule(selectionContext, fragment)) {
+    problems.push(`${fragment} is not named by a positive load rule`);
+    return problems;
+  }
+
+  const config = item.config ?? {};
+  const stack = config.test_stack_type;
+  if (PLAYWRIGHT_UTILS_FRAGMENTS.has(fragment)) {
+    if (config.tea_use_playwright_utils !== true) problems.push(`${fragment} requires tea_use_playwright_utils=true`);
+    if (!hasPositiveRepoFact(item, '@seontechnologies/playwright-utils')) {
+      problems.push(`${fragment} requires @seontechnologies/playwright-utils in package.json`);
+    }
+    const runnerApplies = suiteDir === 'bmad-testarch-framework' || hasPositiveRepoFact(item, '@playwright/test');
+    if (!runnerApplies) problems.push(`${fragment} requires the Playwright runner`);
+    if (!['frontend', 'fullstack'].includes(stack) && suiteDir === 'bmad-testarch-atdd') {
+      problems.push(`${fragment} requires an ATDD frontend or fullstack run`);
+    }
+  }
+  if (PACTJS_UTILS_FRAGMENTS.has(fragment)) {
+    if (config.tea_use_pactjs_utils !== true) problems.push(`${fragment} requires tea_use_pactjs_utils=true`);
+    if (!hasPositiveRepoFact(item, '@seontechnologies/pactjs-utils')) {
+      problems.push(`${fragment} requires @seontechnologies/pactjs-utils in package.json`);
+    }
+    const contractRelevant =
+      hasPositiveRepoFact(item, '@pact-foundation/pact') ||
+      hasPositiveRepoFact(item, '.pacttest') ||
+      hasPositiveRepoFact(item, 'tests/contract/') ||
+      hasPositiveRepoFact(item, 'pact_broker');
+    if (!contractRelevant) problems.push(`${fragment} requires repository evidence that contract testing is relevant`);
+  }
+  if (MOBILE_FRAGMENTS.has(fragment) && stack !== 'mobile' && !hasPositiveRepoFact(item, '.maestro/')) {
+    problems.push(`${fragment} requires a mobile stack or Maestro flow set`);
+  }
+  if (fragment === 'playwright-cli.md') {
+    if (!['cli', 'auto'].includes(config.tea_browser_automation)) problems.push(`${fragment} requires browser automation mode cli or auto`);
+    if (!hasPositiveRepoFact(item, '@playwright/test')) problems.push(`${fragment} requires the Playwright runner`);
+  }
+  return problems;
+}
+
 /**
  * Static validation. This is the part CI runs, and it is what keeps the eval data
  * from rotting into a set of assertions about fragments that no longer exist:
@@ -444,6 +549,11 @@ async function validateSuites(suites) {
         }
         if (mustLoad.includes(fragment) && selectionContext && !selectionContext.includes(fragment)) {
           problems.push(`${caseLabel}: ${fragment} is not named by a contextFile, so the oracle is not derived from the workflow step`);
+        }
+        if (mustLoad.includes(fragment) && selectionContext) {
+          for (const problem of mustLoadApplicabilityProblems(suite.dir, item, selectionContext, fragment)) {
+            problems.push(`${caseLabel}: ${problem}`);
+          }
         }
       }
 
@@ -1059,6 +1169,7 @@ module.exports = {
   fragmentDiagnosticProjection,
   fragmentDiagnosticClassifier,
   selectionInstructionProblems,
+  mustLoadApplicabilityProblems,
   buildPrompt,
   caseIndex,
   caseIds,

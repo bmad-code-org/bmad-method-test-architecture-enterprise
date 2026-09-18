@@ -163,11 +163,11 @@ Use `{knowledgeIndex}` to select and load only relevant fragments.
 
 - (existing MCP-related fragments, if any are added in future)
 
-**Pact.js Utils (if enabled and contract testing is relevant, in either mode):**
+**Pact.js Utils (if enabled, `@seontechnologies/pactjs-utils` is in `package.json`, and contract testing is relevant, in either mode):**
 
 - `pactjs-utils-mandate.md`, `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`
 
-**Contract Testing (if pactjs-utils disabled but relevant):**
+**Contract Testing (if Pact.js Utils is disabled or not installed, and contract testing is relevant):**
 
 - `contract-testing.md`
 

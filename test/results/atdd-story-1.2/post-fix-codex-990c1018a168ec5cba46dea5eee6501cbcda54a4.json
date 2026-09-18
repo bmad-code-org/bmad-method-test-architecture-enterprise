@@ -1,0 +1,194 @@
+{
+  "schemaVersion": "1.4.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-09-17T22:53:50.301Z",
+  "mode": "live",
+  "repository": {
+    "commit": "990c1018a168ec5cba46dea5eee6501cbcda54a4",
+    "dirty": false
+  },
+  "suite": {
+    "id": "atdd",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-atdd"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/atdd.contract.json",
+        "version": "5"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:885822cfd5be9a8874e05679fefd9bc7dbf80de09aa7914279168cec8ab0be93",
+    "promptDigest": "sha256:83de480469179deacabc7fc104fddc5f6c3f1b9674e0c5a4e6cecd59cb78c5d8",
+    "caseIds": [
+      "reservations"
+    ],
+    "cases": [
+      {
+        "id": "reservations",
+        "promptDigest": "sha256:74c9ce53a3c16a88f6b12dfb0ddd9d7a82c37fd8b36b042dbc8af621e8d04224"
+      }
+    ],
+    "thresholds": {
+      "redForIntendedReasonRate": 1,
+      "criteriaCoverage": 1,
+      "maxVacuousPass": 0,
+      "maxStillSkipped": 0,
+      "maxLoadErrors": 0,
+      "maxNonAssertionExit": 0,
+      "maxUnmappedTests": 0,
+      "maxProductionMutations": 0,
+      "maxUnstableCases": 0
+    },
+    "declaredRepetitions": 2
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.154.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 2,
+        "completed": 2
+      },
+      "measurements": {
+        "redForIntendedReasonRate": 0.8263888888888888,
+        "criteriaCoverage": 1,
+        "vacuousPass": 0,
+        "stillSkipped": 0,
+        "nonAssertionExit": 3,
+        "loadErrors": 0,
+        "unmapped": 0,
+        "productionMutations": 0,
+        "unstableCases": 1,
+        "incompleteCases": 0
+      },
+      "durationMs": 600658,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "redForIntendedReasonRate",
+        "3 non-assertion exit(s)",
+        "1 unstable case(s)"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "reservations",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[[[\"AC-1\",\"red-for-intended-reason\"],[\"AC-2\",\"red-for-intended-reason\"],[\"AC-3\",\"red-for-intended-reason\"],[\"AC-4\",\"red-for-intended-reason\"],[\"AC-5\",\"non-assertion-exit\"]],7,9,[],[],[\"tests/api/reservations.spec.ts:[P1] AC-5 reports an actively reserved locker as reserved\",\"tests/api/reservations.spec.ts:[P1] AC-5 reports an available locker as not reserved\"],[],[],[]]",
+          "metricContributions": {
+            "redForIntendedReason.numerator": 7,
+            "redForIntendedReason.denominator": 9,
+            "redForIntendedReason.threshold": 1,
+            "criteriaCoverage.numerator": 5,
+            "criteriaCoverage.denominator": 5,
+            "criteriaCoverage.threshold": 1,
+            "vacuousPass": 0,
+            "maxVacuousPass": 0,
+            "stillSkipped": 0,
+            "maxStillSkipped": 0,
+            "nonAssertionExit": 2,
+            "maxNonAssertionExit": 0,
+            "loadErrors": 0,
+            "maxLoadErrors": 0,
+            "unmapped": 0,
+            "maxUnmappedTests": 0,
+            "productionMutations": 0,
+            "maxProductionMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "redForIntendedReasonRate; nonAssertionExit; unstable case",
+          "triage": [
+            {
+              "reason": "redForIntendedReasonRate",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "nonAssertionExit",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "unstable case",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[[[\"AC-1\",\"red-for-intended-reason\"],[\"AC-2\",\"red-for-intended-reason\"],[\"AC-3\",\"red-for-intended-reason\"],[\"AC-4\",\"red-for-intended-reason\"],[\"AC-5\",\"non-assertion-exit\"]],7,9,[],[],[\"tests/api/reservations.spec.ts:[P1] AC-5 reports an actively reserved locker as reserved\",\"tests/api/reservations.spec.ts:[P1] AC-5 reports an available locker as not reserved\"],[],[],[]]"
+            }
+          ]
+        },
+        {
+          "caseId": "reservations",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[[[\"AC-1\",\"red-for-intended-reason\"],[\"AC-2\",\"red-for-intended-reason\"],[\"AC-3\",\"red-for-intended-reason\"],[\"AC-4\",\"red-for-intended-reason\"],[\"AC-5\",\"non-assertion-exit\"]],7,8,[],[],[\"tests/api/reservations.spec.ts:[P1] AC-5 reports reserved state through the locker endpoint\"],[],[],[]]",
+          "metricContributions": {
+            "redForIntendedReason.numerator": 7,
+            "redForIntendedReason.denominator": 8,
+            "redForIntendedReason.threshold": 1,
+            "criteriaCoverage.numerator": 5,
+            "criteriaCoverage.denominator": 5,
+            "criteriaCoverage.threshold": 1,
+            "vacuousPass": 0,
+            "maxVacuousPass": 0,
+            "stillSkipped": 0,
+            "maxStillSkipped": 0,
+            "nonAssertionExit": 1,
+            "maxNonAssertionExit": 0,
+            "loadErrors": 0,
+            "maxLoadErrors": 0,
+            "unmapped": 0,
+            "maxUnmappedTests": 0,
+            "productionMutations": 0,
+            "maxProductionMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "redForIntendedReasonRate; nonAssertionExit; unstable case",
+          "triage": [
+            {
+              "reason": "redForIntendedReasonRate",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "nonAssertionExit",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "unstable case",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[[[\"AC-1\",\"red-for-intended-reason\"],[\"AC-2\",\"red-for-intended-reason\"],[\"AC-3\",\"red-for-intended-reason\"],[\"AC-4\",\"red-for-intended-reason\"],[\"AC-5\",\"non-assertion-exit\"]],7,8,[],[],[\"tests/api/reservations.spec.ts:[P1] AC-5 reports reserved state through the locker endpoint\"],[],[],[]]"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 600860,
+  "failureClass": "quality",
+  "exitCode": 1
+}

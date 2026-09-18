@@ -1,0 +1,38 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: a real browser scaffold performs a fallible locator action",
+    "before its criterion-defining assertion, so the action timeout masks the intended red failure."
+  ],
+  "id": "e2e-operation-masks-target",
+  "suite": "atdd",
+  "scorerVersion": 11,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "The AC-1 leaf reaches page.goto, then its Reserve locker click times out before the criterion assertion. The failure has no Playwright assertion marker and becomes one non-assertion exit. AC-1 is present, giving criteriaCoverage 1/5, while redForIntendedReasonRate is 0/1.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      { "id": "AC-1", "present": true, "outcome": "non-assertion-exit" },
+      { "id": "AC-2", "present": false, "outcome": "unmapped" },
+      { "id": "AC-3", "present": false, "outcome": "unmapped" },
+      { "id": "AC-4", "present": false, "outcome": "unmapped" },
+      { "id": "AC-5", "present": false, "outcome": "unmapped" }
+    ],
+    "mappedTestCount": 1,
+    "redForIntendedReasonCount": 0,
+    "redForIntendedReasonRate": 0,
+    "criteriaCoverage": 0.2,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": ["tests/e2e/reservations.spec.ts:[P0] AC-1 reserving a free locker creates it"],
+    "unmapped": [],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

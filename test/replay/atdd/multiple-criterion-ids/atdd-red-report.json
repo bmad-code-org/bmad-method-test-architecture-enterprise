@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "<staged-workspace>/reservations",
+  "testDir": "tests",
+  "specFileCount": 1,
+  "productionFilesTouched": [],
+  "files": [
+    {
+      "file": "tests/api/reservations.spec.ts",
+      "hadSkipCall": true,
+      "loadError": null,
+      "tests": [
+        {
+          "title": "[P0] AC-1 AC-2 reserving a free locker creates it",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 201\nReceived: 404"
+        }
+      ]
+    }
+  ]
+}

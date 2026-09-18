@@ -138,23 +138,23 @@ Use `{knowledgeIndex}` and load only what is required.
 - `maestro-flows.md`
 - `mobile-ci-device-lab.md`
 
-**Playwright Utils (if enabled and the test files run on the Playwright runner):**
+**Playwright Utils (if enabled, `@seontechnologies/playwright-utils` is in `package.json`, and the test files run on the Playwright runner):**
 
 - `playwright-utils-mandate.md` (load first — it governs how the fragments below are applied)
 - `overview.md`, `api-request.md`, `network-recorder.md`, `auth-session.md`, `intercept-network-call.md`, `recurse.md`, `log.md`, `file-utils.md`, `burn-in.md`, `network-error-monitor.md`, `fixtures-composition.md`
 - `fixture-architecture.md` and `network-first.md` for their principles only. Under the mandate the mechanism comes from the playwright-utils fragments: interception is `interceptNetworkCall` declared before `page.goto`, and composition is `mergeTests`.
 
-**Traditional Patterns (if Playwright Utils is disabled and the test files run on the Playwright runner):**
+**Traditional Patterns (if the Playwright Utils applicability gate above did not open and the test files run on the Playwright runner):**
 
 - `fixture-architecture.md`
 - `network-first.md`
 
-**Pact.js Utils (if enabled and contract testing is relevant):**
+**Pact.js Utils (if enabled, `@seontechnologies/pactjs-utils` is in `package.json`, and contract testing is relevant):**
 
 - `pactjs-utils-mandate.md` (load first — it governs how the fragments below are applied)
 - `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `pactjs-utils-zod-to-pact.md`
 
-**Contract Testing (if pactjs-utils disabled but relevant):**
+**Contract Testing (if Pact.js Utils is disabled or not installed, and contract testing is relevant):**
 
 - `contract-testing.md`
 

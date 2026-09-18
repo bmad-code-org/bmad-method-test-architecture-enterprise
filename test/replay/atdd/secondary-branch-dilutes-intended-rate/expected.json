@@ -1,0 +1,38 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: AC-5 has one correct transition-bearing primary scaffold",
+    "plus a baseline secondary whose different failure lowers the all-generated-tests rate."
+  ],
+  "id": "secondary-branch-dilutes-intended-rate",
+  "suite": "atdd",
+  "scorerVersion": 11,
+  "storedOutput": {
+    "origin": "captured",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "The first AC-5 leaf fails with the declared Expected: true / Received: undefined pattern. The secondary baseline leaf fails with Expected: false / Received: undefined, so one of two mapped tests is red for the intended reason. AC-5 remains present and its criterion outcome follows the first mapped leaf, while the generated-test rate falls to 0.5 and the secondary appears as one non-assertion exit.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      { "id": "AC-1", "present": false, "outcome": "unmapped" },
+      { "id": "AC-2", "present": false, "outcome": "unmapped" },
+      { "id": "AC-3", "present": false, "outcome": "unmapped" },
+      { "id": "AC-4", "present": false, "outcome": "unmapped" },
+      { "id": "AC-5", "present": true, "outcome": "red-for-intended-reason" }
+    ],
+    "mappedTestCount": 2,
+    "redForIntendedReasonCount": 1,
+    "redForIntendedReasonRate": 0.5,
+    "criteriaCoverage": 0.2,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": ["tests/api/reservations.spec.ts:[P1] AC-5 the available locker reports not reserved"],
+    "unmapped": [],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

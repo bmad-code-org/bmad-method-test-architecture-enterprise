@@ -109,11 +109,11 @@ Without these, a flow is reviewed against browser predicates that cannot match i
 
 - (existing MCP-related fragments, if any are added in future)
 
-**Pact.js Utils (if enabled and contract tests in review scope):**
+**Pact.js Utils (if enabled, `@seontechnologies/pactjs-utils` is in `package.json`, and contract tests are in review scope):**
 
 - `pactjs-utils-overview.md`, `pactjs-utils-consumer-helpers.md`, `pactjs-utils-provider-verifier.md`, `pactjs-utils-request-filter.md`, `pact-consumer-di.md`, `pact-consumer-framework-setup.md`, `pact-broker-webhooks.md`
 
-**Contract Testing (if pactjs-utils disabled but contract tests in review scope):**
+**Contract Testing (if Pact.js Utils is disabled or not installed, and contract tests are in review scope):**
 
 - `contract-testing.md`
 

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "<staged-workspace>/reservations",
+  "testDir": "tests",
+  "specFileCount": 1,
+  "productionFilesTouched": [],
+  "files": [
+    {
+      "file": "tests/api/reservations.spec.ts",
+      "hadSkipCall": true,
+      "loadError": null,
+      "tests": [
+        {
+          "title": "[P1] AC-5 the locker reports it is reserved",
+          "status": "failed",
+          "message": "Error: expect(received).toEqual(expected) // deep equality\n\n- Expected  - 1\n+ Received  + 0\n\n  Object {\n    \"id\": \"L-104\",\n    \"location\": \"Pier 4, bay 1\",\n-   \"reserved\": true,\n    \"size\": \"medium\",\n  }"
+        }
+      ]
+    }
+  ]
+}
