@@ -13,7 +13,7 @@ This is an **isolated subagent** running in parallel with API red-phase test gen
 
 **What you have from parent workflow:**
 
-- Story acceptance criteria from Step 1
+- Story acceptance criterion registry from Step 1, including preserved supplied ids and deterministic ids for unnamed criteria
 - Test strategy and user journey scenarios from Step 3
 - Knowledge fragments loaded: playwright-utils-mandate, overview, intercept-network-call, network-error-monitor, fixtures-composition, log, auth-session, fixture-architecture, network-first, selector-resilience
 - Config: test framework, `use_playwright_utils` (default `true`)
@@ -101,46 +101,46 @@ For each user journey, create test file in `tests/e2e/[feature].spec.ts`:
 import { test, expect } from '../support/merged-fixtures';
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
-  test.skip('[P0] should complete user registration successfully', async ({ page, interceptNetworkCall }) => {
-    // THIS TEST WILL FAIL - UI not implemented yet
-    // Declare the interception BEFORE navigating.
-    const registerCall = interceptNetworkCall({ url: '**/api/users/register', method: 'POST' });
+  test.skip('[P0] AC-1 should complete user registration successfully', async ({ page, interceptNetworkCall }) => {
+    // The outer assertion is the first potentially failing operation. It owns
+    // every navigation, interaction, network, and outcome failure in this AC.
+    await expect(
+      (async () => {
+        const registerCall = interceptNetworkCall({ url: '**/api/users/register', method: 'POST' });
+        await page.goto('/register');
+        await page.getByLabel('Email').fill('newuser@example.com');
+        await page.getByLabel('Password').fill('SecurePass123!');
+        await page.getByRole('button', { name: 'Register' }).click();
 
-    await page.goto('/register');
-
-    // Expect registration form but will get 404 or missing elements
-    await page.getByLabel('Email').fill('newuser@example.com');
-    await page.getByLabel('Password').fill('SecurePass123!');
-    await page.getByRole('button', { name: 'Register' }).click();
-
-    const { status } = await registerCall;
-    expect(status).toBe(201);
-
-    await expect(page.getByText('Registration successful!')).toBeVisible();
-    await page.waitForURL('/dashboard');
+        const { status } = await registerCall;
+        expect(status).toBe(201);
+        await expect(page.getByText('Registration successful!')).toBeVisible();
+        await page.waitForURL('/dashboard');
+      })(),
+    ).resolves.toBeUndefined();
   });
 
   // Stubs a 409 on purpose, so it opts out of network monitoring.
   test.skip(
-    '[P1] should show error if email exists',
+    '[P1] AC-2 should show error if email exists',
     { annotation: [{ type: 'skipNetworkMonitoring' }] },
     async ({ page, interceptNetworkCall }) => {
-      // THIS TEST WILL FAIL - UI not implemented yet
-      // Stub the conflict instead of depending on backend state.
-      const conflictCall = interceptNetworkCall({
-        url: '**/api/users/register',
-        method: 'POST',
-        fulfillResponse: { status: 409, body: { message: 'Email already exists' } },
-      });
+      await expect(
+        (async () => {
+          const conflictCall = interceptNetworkCall({
+            url: '**/api/users/register',
+            method: 'POST',
+            fulfillResponse: { status: 409, body: { message: 'Email already exists' } },
+          });
+          await page.goto('/register');
+          await page.getByLabel('Email').fill('existing@example.com');
+          await page.getByLabel('Password').fill('SecurePass123!');
+          await page.getByRole('button', { name: 'Register' }).click();
 
-      await page.goto('/register');
-
-      await page.getByLabel('Email').fill('existing@example.com');
-      await page.getByLabel('Password').fill('SecurePass123!');
-      await page.getByRole('button', { name: 'Register' }).click();
-
-      await conflictCall;
-      await expect(page.getByText('Email already exists')).toBeVisible();
+          await conflictCall;
+          await expect(page.getByText('Email already exists')).toBeVisible();
+        })(),
+      ).resolves.toBeUndefined();
     },
   );
 });
@@ -154,15 +154,17 @@ Note the selectors: `getByLabel` and `getByRole`, never `[name="email"]` or `but
 import { test, expect } from '@playwright/test';
 
 test.describe('[Story Name] E2E User Journey (ATDD)', () => {
-  test.skip('[P0] should complete user registration successfully', async ({ page }) => {
-    await page.route('**/api/users/register', (route) => route.continue());
-    await page.goto('/register');
-
-    await page.getByLabel('Email').fill('newuser@example.com');
-    await page.getByLabel('Password').fill('SecurePass123!');
-    await page.getByRole('button', { name: 'Register' }).click();
-
-    await expect(page.getByText('Registration successful!')).toBeVisible();
+  test.skip('[P0] AC-1 should complete user registration successfully', async ({ page }) => {
+    await expect(
+      (async () => {
+        await page.route('**/api/users/register', (route) => route.continue());
+        await page.goto('/register');
+        await page.getByLabel('Email').fill('newuser@example.com');
+        await page.getByLabel('Password').fill('SecurePass123!');
+        await page.getByRole('button', { name: 'Register' }).click();
+        await expect(page.getByText('Registration successful!')).toBeVisible();
+      })(),
+    ).resolves.toBeUndefined();
   });
 });
 ```
@@ -187,6 +189,10 @@ If the merged-fixtures file does not exist yet, generate the import against `../
 **CRITICAL ATDD Requirements:**
 
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
+- ✅ Every leaf `test.skip()` title MUST include exactly one declared acceptance criterion id from the Step 1 registry in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
+- ✅ Generate exactly one red-phase leaf scaffold for every declared acceptance criterion. Record secondary journeys as green-phase checklist work; do not emit additional `test.skip()` leaves for the same criterion
+- ✅ The criterion-defining assertion MUST be the first potentially failing operation. Wrap the complete browser journey in one `expect((async () => { ... })()).resolves.toBeUndefined()` assertion so navigation, locator, interaction, network, and outcome failures retain criterion provenance without retrying stateful steps
+- ✅ For a state-transition criterion, choose the transition-bearing branch for the primary scaffold and assert the newly promised state directly
 - ✅ Write assertions for EXPECTED UI behavior (even though not implemented)
 - ✅ Use resilient selectors: getByRole, getByText, getByLabel (from selector-resilience). Never `[name="..."]`, `button:has-text(...)`, CSS classes, or XPath
 - ✅ Network-first: interception declared before navigation when API calls are involved (from network-first; mechanism per the mandate when enabled)
@@ -222,6 +228,10 @@ Write JSON to temp file: `/tmp/tea-atdd-e2e-tests-{{timestamp}}.json`
 {
   "success": true,
   "subagent": "atdd-e2e-tests",
+  "criterion_registry": [
+    { "id": "AC-1", "idSource": "supplied", "text": "A new user can register" },
+    { "id": "AC-2", "idSource": "generated", "text": "A duplicate email is rejected" }
+  ],
   "tests": [
     {
       "file": "tests/e2e/user-registration.spec.ts",

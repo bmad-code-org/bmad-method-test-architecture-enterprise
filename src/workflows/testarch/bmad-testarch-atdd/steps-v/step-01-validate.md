@@ -59,6 +59,8 @@ Read `{validationChecklist}` and list all criteria.
 
 Evaluate outputs against each checklist item.
 
+For ATDD test artifacts, reconstruct the criterion registry from the selected checklist. Confirm supplied ids were preserved and generated ids follow the lowest-unused `AC-<n>` rule in source order. Extract all `\bAC-\d+\b` tokens from every executable leaf title. Require exactly one token and require it to exist in the registry. Require exactly one red-phase leaf per declared criterion. For every scaffold, confirm the first assertion directly isolates the exact newly promised status, scalar, or property. Confirm API setup responses from unimplemented endpoints remain opaque before that assertion. For each E2E scaffold, confirm the criterion-defining assertion is the first potentially failing operation and owns the complete browser journey.
+
 ### 4. Write Report
 
 Replace the `IN_PROGRESS` body in this run's reserved `{outputFile}` with the final validation report. Include PASS/WARN/FAIL per section plus the original `validation_scope`, `run_timestamp`, and `validated_artifacts` metadata. Record every selected artifact using its exact project-relative path.

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "projectRoot": "<staged-workspace>/reservations",
+  "testDir": "tests",
+  "specFileCount": 1,
+  "productionFilesTouched": [],
+  "files": [
+    {
+      "file": "tests/api/reservations.spec.ts",
+      "hadSkipCall": true,
+      "loadError": null,
+      "tests": [
+        {
+          "title": "[P1] AC-5 the active locker reports reserved",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: undefined"
+        },
+        {
+          "title": "[P1] AC-5 the available locker reports not reserved",
+          "status": "failed",
+          "message": "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: false\nReceived: undefined"
+        }
+      ]
+    }
+  ]
+}

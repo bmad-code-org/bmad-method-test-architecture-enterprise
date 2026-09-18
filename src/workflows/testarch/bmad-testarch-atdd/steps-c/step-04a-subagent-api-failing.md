@@ -13,7 +13,7 @@ This is an **isolated subagent** running in parallel with E2E red-phase test gen
 
 **What you have from parent workflow:**
 
-- Story acceptance criteria from Step 1
+- Story acceptance criterion registry from Step 1, including preserved supplied ids and deterministic ids for unnamed criteria
 - Test strategy and scenarios from Step 3
 - Knowledge fragments loaded: playwright-utils-mandate, overview, api-request, recurse, log, auth-session, data-factories, api-testing-patterns
 - Config: test framework, `use_playwright_utils` (default `true`), Pact.js Utils enabled/disabled (`use_pactjs_utils`), Pact MCP mode (`pact_mcp`)
@@ -72,7 +72,7 @@ import { test, expect } from '../support/merged-fixtures';
 import { registrationPayload } from '../support/factories';
 
 test.describe('[Story Name] API Tests (ATDD)', () => {
-  test.skip('[P0] should register new user successfully', async ({ apiRequest }) => {
+  test.skip('[P0] AC-1 should register new user successfully', async ({ apiRequest }) => {
     // THIS TEST WILL FAIL - Endpoint not implemented yet
     const { status, body } = await apiRequest<RegisteredUser>({
       method: 'POST',
@@ -88,7 +88,7 @@ test.describe('[Story Name] API Tests (ATDD)', () => {
     });
   });
 
-  test.skip('[P1] should return 400 if email exists', async ({ apiRequest }) => {
+  test.skip('[P1] AC-2 should return 400 if email exists', async ({ apiRequest }) => {
     // THIS TEST WILL FAIL - Endpoint not implemented yet
     const { status, body } = await apiRequest({
       method: 'POST',
@@ -110,7 +110,7 @@ test.describe('[Story Name] API Tests (ATDD)', () => {
 import { test, expect } from '@playwright/test';
 
 test.describe('[Story Name] API Tests (ATDD)', () => {
-  test.skip('[P0] should register new user successfully', async ({ request }) => {
+  test.skip('[P0] AC-1 should register new user successfully', async ({ request }) => {
     const response = await request.post('/api/users/register', {
       data: { email: 'newuser@example.com', password: 'SecurePass123!' },
     });
@@ -139,6 +139,11 @@ If the merged-fixtures file does not exist yet, generate the import against `../
 **CRITICAL ATDD Requirements:**
 
 - ✅ Use `test.skip()` to mark tests as red-phase scaffolds
+- ✅ Every leaf `test.skip()` title MUST include exactly one declared acceptance criterion id from the Step 1 registry in the form `[P#] AC-<n> description`; an id on `test.describe()` does not map the leaf test
+- ✅ Generate exactly one red-phase leaf scaffold for every declared acceptance criterion. Record secondary branches and edge cases as green-phase checklist work; do not emit additional `test.skip()` leaves for the same criterion
+- ✅ The criterion-defining assertion MUST be the first assertion that can fail and MUST isolate the exact newly promised status, scalar, or property with a direct matcher. Put broad object, schema, and secondary assertions after it
+- ✅ Establish prerequisites through fixtures, provider state, or unasserted setup calls. Treat an unimplemented setup response as opaque before the criterion assertion: do not parse its body, branch on its result, throw from it, assert its status, or derive cleanup data from it. Use inputs known before the setup call and perform cleanup after the criterion assertion or in fixture teardown
+- ✅ For a state-transition criterion, choose the transition-bearing branch for the primary scaffold and assert the newly promised state directly
 - ✅ Write assertions for EXPECTED behavior (even though not implemented)
 - ✅ Use realistic test data (not placeholder data)
 - ✅ Test both happy path and error scenarios from acceptance criteria
@@ -185,7 +190,7 @@ When generating Pact consumer contract tests in the ATDD red phase, provider scr
  *   - Status: 201 for success, 400 for duplicate email, 422 for validation error
  *   - Response: { id: number, email: string, createdAt: string }
  */
-test.skip('[P0] should generate consumer contract for user registration', async () => {
+test.skip('[P0] AC-1 should generate consumer contract for user registration', async () => {
   await provider
     .given('no users exist')
     .uponReceiving('a request to register a new user')
@@ -238,6 +243,10 @@ Write JSON to temp file: `/tmp/tea-atdd-api-tests-{{timestamp}}.json`
 {
   "success": true,
   "subagent": "atdd-api-tests",
+  "criterion_registry": [
+    { "id": "AC-1", "idSource": "supplied", "text": "A new user can register" },
+    { "id": "AC-2", "idSource": "generated", "text": "A duplicate email is rejected" }
+  ],
   "tests": [
     {
       "file": "tests/api/user-registration.spec.ts",

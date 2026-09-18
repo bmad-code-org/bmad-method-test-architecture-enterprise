@@ -1,0 +1,38 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: a valid-looking title prefix used to map to AC-1 even when",
+    "the same leaf title also named AC-2. A leaf must carry exactly one declared criterion id."
+  ],
+  "id": "multiple-criterion-ids",
+  "suite": "atdd",
+  "scorerVersion": 11,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "atdd-red-report.json"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/atdd-eval/ground-truth.json",
+    "scoringInputsDigest": "sha256:ead3f35312409efb0e70edb333b39f897257361ad2cca069ab769aafeb366244"
+  },
+  "derivation": "The only leaf title contains AC-1 and AC-2. Exact-one title validation rejects it, leaving zero mapped tests, one unmapped test, zero intended reds, and zero criteria coverage.",
+  "result": {
+    "usesTestSkip": true,
+    "perCriterion": [
+      { "id": "AC-1", "present": false, "outcome": "unmapped" },
+      { "id": "AC-2", "present": false, "outcome": "unmapped" },
+      { "id": "AC-3", "present": false, "outcome": "unmapped" },
+      { "id": "AC-4", "present": false, "outcome": "unmapped" },
+      { "id": "AC-5", "present": false, "outcome": "unmapped" }
+    ],
+    "mappedTestCount": 0,
+    "redForIntendedReasonCount": 0,
+    "redForIntendedReasonRate": null,
+    "criteriaCoverage": 0,
+    "vacuousPass": [],
+    "stillSkipped": [],
+    "nonAssertion": [],
+    "unmapped": ["tests/api/reservations.spec.ts:[P0] AC-1 AC-2 reserving a free locker creates it"],
+    "loadErrors": [],
+    "productionMutations": []
+  }
+}

@@ -72,7 +72,11 @@ If any are missing: **HALT** and notify the user.
 ## 3. Load Story Context
 
 - Read story markdown from `{story_file}` (or ask user if not provided)
-- Extract acceptance criteria and constraints
+- Extract acceptance criteria and constraints into a criterion registry in source order
+- Preserve every supplied criterion id that matches `AC-<positive integer>` exactly
+- Reject duplicate supplied ids
+- Assign ids to unnamed criteria deterministically. Reserve all supplied ids first, then visit unnamed criteria in source order and assign the lowest unused `AC-<positive integer>` id
+- Persist each registry row as `{ id, idSource: supplied | generated, text }` and persist the exact ordered id set as `{criterion_ids}`. The same story content must always produce the same registry
 - Identify affected components and integrations
 - Derive and store `story_key` from the story filename when available (for BMM stories, this is the filename without `.md`, e.g. `1-2-user-authentication`)
 - Derive and store `story_id` from story metadata, the H1 heading, or the filename when available (for BMM stories, this is typically `{epic_num}.{story_num}`)
@@ -241,6 +245,7 @@ Summarize loaded inputs and confirm with the user. Then proceed.
 - Set `atddChecklistPath` to `{outputFile}`
 - Initialize `generatedTestFiles` to `[]`
 - Set `inputDocuments` to the list of artifact paths loaded in this step (e.g., knowledge fragments, test design documents, configuration files)
+- Set `acceptanceCriteria` to the persisted criterion registry, including generated ids and `idSource`
 
 Load next step: `{nextStepFile}`
 
