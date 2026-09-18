@@ -18,15 +18,15 @@ flowchart TD
   end
 
   subgraph TIER2["Tier 2: Behavioral Evaluations & Execution Suites (eval:all)"]
-    B1[Headless CLI runner invocation]
+    B1[Live-agent runners where applicable]
     B2[Staged, isolated workspaces]
-    B3[Clean controls: zero false alarms]
-    B4[Seeded defects: verified detection]
+    B3[Clean / negative controls]
+    B4[Seeded / positive cases]
     B5[Gameability probes: anti-spoofing]
   end
 
   subgraph TIER3["Tier 3: Live Evidence & Provenance"]
-    E1[Repeated runs: stability signatures]
+    E1[Repetition & stability where applicable]
     E2[Three exit classes: 0 pass / 1 quality / 2 env]
     E3[Recorded JSON results & measurement comparison]
   end
@@ -95,10 +95,10 @@ Evaluation harnesses include protections against accidental shortcuts:
 ### 5. Repeated Live Runs and Stability
 
 Language model outputs vary across runs, so suites declare repetition counts and stability ceilings suited to their task.
-For example, `bmad-tea-routing` allows up to two unstable cases across repeated runs; `test-review` permits score standard deviation up to 3 while requiring a distinct verdict; `teach-me-testing` evaluates session persistence across a two-turn session.
+For example, `bmad-tea-routing` allows up to two unstable cases across repeated runs; `test-review` permits score standard deviation up to 3 while requiring a single stable verdict; `teach-me-testing` evaluates session persistence across a two-turn session.
 
 - **Stability signatures:** After each run, the harness extracts a deterministic signature covering scored judgments, citations, and domain statuses.
-- **Suite-specific ceilings:** The suite manifest declares the maximum allowable unstable cases for each evaluation.
+- **Suite-specific ceilings:** The suite manifest declares each suite's repetition and stability thresholds.
 
 ### 6. The Three Exit Classes
 
@@ -147,7 +147,7 @@ TEA supplies the execution harnesses, domain-specific scorers, fixtures, oracles
 
 ## Proposed Future Work: Evaluate
 
-The **Evaluate skill** is currently **planned work**.
+The **Evaluate skill** is proposed future work.
 
 An Evaluate skill has been proposed to help users build evaluations on top of `eval-quality`.
 Its exact scope and execution responsibilities remain to be defined.

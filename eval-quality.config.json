@@ -1305,12 +1305,6 @@
           "reason": "a claim about the absence of a feature; nothing in the tree can decide whether an extension surface was deliberately never built"
         },
         {
-          "file": "docs/explanation/how-tea-is-tested.md",
-          "key": "currently **planned work**",
-          "settles": "read",
-          "reason": "the Evaluate skill is planned work and has not yet shipped"
-        },
-        {
           "file": "README.md",
           "key": "`risk_threshold` \u2014 risk cutoff for mandatory testing",
           "settles": {
