@@ -164,7 +164,7 @@ Include stages:
 
 - lint
 - test (parallel shards)
-- contract-test (if `tea_use_pactjs_utils` enabled)
+- contract-test (if `tea_use_pactjs_utils` is enabled and Step 1 found contract testing relevant)
 - burn-in (flaky detection)
 - report (aggregate + publish)
 
@@ -197,9 +197,9 @@ Write the selected pipeline configuration to the resolved output path from step 
   - **Artifacts**: upload the per-step statuses, hierarchy dumps, screenshots, video, AND device logs on failure, resolving the newest run directory rather than globbing a flat filename that recent versions no longer write. The hierarchy dump captured at failure is what identifies a selector break; the failure screenshot is taken after teardown and frequently shows the launcher, so do not lead with it.
   - **Cache**: Gradle or CocoaPods plus the JS toolchain for React Native and Expo.
 
-### Contract Testing Pipeline (if `tea_use_pactjs_utils` enabled)
+### Contract Testing Pipeline (if `tea_use_pactjs_utils` is enabled and Step 1 found contract testing relevant)
 
-**If `tea_use_pactjs_utils` is enabled**, use `{knowledgeIndex}` to load:
+**If `tea_use_pactjs_utils` is enabled and Step 1 found contract testing relevant**, use `{knowledgeIndex}` to load:
 
 - `pact-consumer-framework-setup.md` — determinism gate, `jq -S` publish normalization, PR-only provider branch detection, additive branch-aware `can-i-deploy`, 1:1 local/CI parity
 - `pactjs-utils-consumer-helpers.md` — one-interaction-per-`it()` determinism rule
@@ -207,7 +207,7 @@ Write the selected pipeline configuration to the resolved output path from step 
 - `pactjs-utils-request-filter.md` — `createRequestFilter` auth injection patterns for CI pipeline auth setup
 - `pact-broker-webhooks.md` — PactFlow → GitHub webhook auth, exact registered provider target checkout, rotation runbook, and staleness monitoring
 
-When `tea_use_pactjs_utils` is enabled, add a `contract-test` stage after `test`:
+When `tea_use_pactjs_utils` is enabled and Step 1 found contract testing relevant, add a `contract-test` stage after `test`:
 
 **Required env block** (add to the generated pipeline):
 
@@ -256,7 +256,7 @@ env:
 
 Required CI secrets: `PACT_BROKER_BASE_URL`, `PACT_BROKER_TOKEN`
 
-**If `tea_pact_mcp` is `"mcp"`:** Reference the SmartBear MCP `Can I Deploy` and `Matrix` tools for pipeline guidance in `pact-mcp.md`.
+**If `tea_pact_mcp` is `"mcp"` and contract testing is relevant:** Reference the SmartBear MCP `Can I Deploy` and `Matrix` tools for pipeline guidance in `pact-mcp.md`.
 
 **`tea_pact_mcp` defaults to `"mcp"`, and Pact artifacts are gated on relevance, not on this flag.** Follow `pact-mcp.md` § _When the Tools Are Not Reachable_: the probe is a tool-list check and never a broker call, its result is recorded once per run as `pact_mcp_reachable`, and the fallback order is provider source, then an OpenAPI spec, then `confidence-gate.md`. Report the outcome once and continue; never block, never retry, never present inferred provider states as broker data.
 
@@ -290,7 +290,7 @@ For this step, treat these work units as parallelizable when `resolvedMode` is `
 
 - Worker A: resolve platform path/template and produce base pipeline skeleton (section 1)
 - Worker B: construct stage definitions and test execution blocks (sections 2-3)
-- Worker C: contract-testing block (only when `tea_use_pactjs_utils` is true)
+- Worker C: contract-testing block (only when `tea_use_pactjs_utils` is true and Step 1 found contract testing relevant)
 
 If `resolvedMode` is `sequential`, execute sections 1→4 in order.
 

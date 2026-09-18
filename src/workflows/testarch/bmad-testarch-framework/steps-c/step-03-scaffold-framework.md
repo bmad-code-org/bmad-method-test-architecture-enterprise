@@ -236,6 +236,12 @@ Create the idiomatic version file for the detected language:
 
 Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{detected_stack}`:
 
+### Deterministic Knowledge Selection
+
+The fragment list for this step is a closed set. Start empty, evaluate the complete conditions in this section, and add every fragment from each matching list. A config flag opens a branch only when every stack, runner, package, and relevance condition on that branch also matches. Do not add fragments from tier labels, index descriptions, nearby mentions elsewhere in this step, general usefulness, or possible future need. Deduplicate while preserving the order below. Identical facts and config must produce an identical list.
+
+Contract testing is relevant only when repository facts show existing Pact artifacts, dependencies, configuration, or broker variables, or when the task explicitly requests contract testing. A service count or target-state architecture alone does not open a contract branch.
+
 **If `{detected_stack}` is `mobile`:**
 
 - `mobile-test-strategy.md` (CRITICAL: load this first — it decides which behaviors become device flows at all, and most should not)
@@ -289,7 +295,7 @@ Read `{config_source}` and use `{knowledgeIndex}` to load fragments based on `{d
 
 - `contract-testing.md`
 
-**If Pact MCP enabled** (`config.tea_pact_mcp` is `"mcp"`):
+**If Pact MCP is enabled and the relevance gate in section 1 opened** (`config.tea_pact_mcp` is `"mcp"`):
 
 - `pact-mcp.md`
 

@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-002",
     "systemId": "tea-fragment-selection-bmad-testarch-ci",
-    "implementationDigest": "sha256:ed5eb309d01fc5e262184d87455a4f03bf8910092db783768ab4a0d4e7602a4b",
+    "implementationDigest": "sha256:04a9d5bba97398436fe8d55a4c18c8e4012da5d863754a60fcc373741951ee6e",
     "artifactDigest": "sha256:75de12a6e8a2a0a0e90379b0ac08f988fb666b279fd98167d8148877d7f8ad65",
-    "commitDigest": "sha256:ed5eb309d01fc5e262184d87455a4f03bf8910092db783768ab4a0d4e7602a4b",
+    "commitDigest": "sha256:04a9d5bba97398436fe8d55a4c18c8e4012da5d863754a60fcc373741951ee6e",
     "rationale": "A run that names every fragment in the index satisfies O-001 for ci-gitlab-python, because every mandated fragment is in the list, and violates O-002, because so is every forbidden one. The containment oracle alone cannot tell that reply from a correct selection, and the exclusion oracle can.",
     "qualification": {
       "route": "gameability",
@@ -93,9 +93,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-001",
     "systemId": "tea-fragment-selection-bmad-testarch-ci",
-    "implementationDigest": "sha256:ed5eb309d01fc5e262184d87455a4f03bf8910092db783768ab4a0d4e7602a4b",
+    "implementationDigest": "sha256:04a9d5bba97398436fe8d55a4c18c8e4012da5d863754a60fcc373741951ee6e",
     "artifactDigest": "sha256:75de12a6e8a2a0a0e90379b0ac08f988fb666b279fd98167d8148877d7f8ad65",
-    "commitDigest": "sha256:ed5eb309d01fc5e262184d87455a4f03bf8910092db783768ab4a0d4e7602a4b",
+    "commitDigest": "sha256:04a9d5bba97398436fe8d55a4c18c8e4012da5d863754a60fcc373741951ee6e",
     "rationale": "ci-gitlab-python declares the exact set the step files mandate and the exact set they exclude, so a selection naming the first and none of the second is the run this contract exists to confirm.",
     "qualification": {
       "route": "clean-control",
@@ -105,7 +105,7 @@
         "privateRef": null,
         "digest": "sha256:75de12a6e8a2a0a0e90379b0ac08f988fb666b279fd98167d8148877d7f8ad65"
       },
-      "revisionCommitDigest": "sha256:ed5eb309d01fc5e262184d87455a4f03bf8910092db783768ab4a0d4e7602a4b",
+      "revisionCommitDigest": "sha256:04a9d5bba97398436fe8d55a4c18c8e4012da5d863754a60fcc373741951ee6e",
       "noKnownDefectStatement": "ci-gitlab-python's expected selection is derived from the bmad-testarch-ci step files themselves, and npm run test:criteria-fragments fails when a fragment it names has left the index."
     },
     "expectedClean": true,

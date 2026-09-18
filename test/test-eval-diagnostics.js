@@ -1501,6 +1501,100 @@ async function main() {
   });
   check(diagnosticSchema.safeParse(emptySelection).success, 'fragment writer records an empty selection with the canonical [] signature');
 
+  const instructionFixtureRoot = path.join(__dirname, 'fixtures', 'fragment-selection-instructions');
+  const instructionFixture = (name) => fs.readFileSync(path.join(instructionFixtureRoot, name), 'utf8');
+  check(
+    fragment.selectionInstructionProblems(instructionFixture('deterministic.md')).length === 0,
+    'a closed fragment-selection instruction contract passes deterministic validation',
+  );
+  for (const [fixture, expectedProblem] of [
+    ['ambiguous-tier.md', 'tier-wide loading'],
+    ['flag-only-library-gate.md', 'flag-only Playwright Utils gate'],
+    ['flag-only-pact-mcp-gate.md', 'flag-only Pact MCP gate'],
+    ['unnamed-library-set.md', 'unnamed Playwright Utils core set'],
+    ['nearby-fragment-reference.md', 'nearby fragment reference'],
+    ['implicit-contract-relevance.md', 'implicit contract relevance'],
+  ]) {
+    check(
+      fragment.selectionInstructionProblems(instructionFixture(fixture)).some((problem) => problem.includes(expectedProblem)),
+      `${fixture} deterministically exposes ${expectedProblem}`,
+    );
+  }
+  const applicablePlaywrightCase = {
+    repoFacts: ['package.json depends on @playwright/test and @seontechnologies/playwright-utils', 'tests contain browser specs'],
+    config: { test_stack_type: 'frontend', tea_use_playwright_utils: true },
+  };
+  check(
+    fragment
+      .mustLoadApplicabilityProblems(
+        'bmad-testarch-atdd',
+        applicablePlaywrightCase,
+        instructionFixture('negative-only-oracle.md'),
+        'playwright-utils-mandate.md',
+      )
+      .some((problem) => problem.includes('positive load rule')),
+    'a negative-only fragment reference cannot establish a required oracle fragment',
+  );
+  check(
+    fragment
+      .mustLoadApplicabilityProblems(
+        'bmad-testarch-atdd',
+        { ...applicablePlaywrightCase, config: { test_stack_type: 'frontend', tea_use_playwright_utils: false } },
+        instructionFixture('unmet-conditional-oracle.md'),
+        'playwright-utils-mandate.md',
+      )
+      .some((problem) => problem.includes('tea_use_playwright_utils=true')),
+    'a positive fragment rule whose config condition is unmet cannot establish a required oracle fragment',
+  );
+
+  const fragmentOutput = path.join(os.tmpdir(), `eval-fragment-diagnostics-${process.pid}.json`);
+  try {
+    const fragmentRun = spawnSync(
+      process.execPath,
+      [
+        path.join(PROJECT_ROOT, 'test', 'eval-fragment-selection.js'),
+        '--agent',
+        'custom',
+        '--agent-cmd',
+        path.join(PROJECT_ROOT, 'test', 'fixtures', 'fragment-selection-runner', 'stub-agent.js'),
+        '--env-pass',
+        'STUB_MODE',
+        '--env-pass',
+        'STUB_FRAGMENTS',
+        '--workflow',
+        'bmad-testarch-framework',
+        '--runs',
+        '1',
+        '--json',
+        fragmentOutput,
+      ],
+      {
+        cwd: PROJECT_ROOT,
+        encoding: 'utf8',
+        env: { ...process.env, STUB_MODE: 'fragments', STUB_FRAGMENTS: 'test-quality.md,data-factories.md' },
+        timeout: 60_000,
+      },
+    );
+    check(fragmentRun.status === 1, `deterministic fragment-selection quality fixture exited ${fragmentRun.status}: ${fragmentRun.stderr}`);
+    if (fs.existsSync(fragmentOutput)) {
+      const emitted = JSON.parse(fs.readFileSync(fragmentOutput, 'utf8'));
+      check(validateEvalResult(emitted).success, 'workflow-filtered fragment-selection JSON validates with a complete case grid');
+      const emittedRunner = emitted.runners[0];
+      check(
+        emittedRunner.diagnostics.length === emitted.suite.caseIds.length,
+        'workflow-filtered fragment selection emits one diagnostic per declared case',
+      );
+      check(
+        emittedRunner.diagnostics.every(
+          (entry) => entry.caseId.startsWith('bmad-testarch-framework:') && emitted.suite.caseIds.includes(entry.caseId),
+        ),
+        'workflow-filtered fragment diagnostics use qualified manifest case ids',
+      );
+    }
+  } finally {
+    fs.rmSync(fragmentOutput, { force: true });
+  }
+
   const reviewOutput = path.join(os.tmpdir(), `eval-review-diagnostics-${process.pid}.json`);
   try {
     const reviewRun = spawnSync(
