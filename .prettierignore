@@ -18,6 +18,10 @@ test/schema/eval-result.schema.json
 # Reformatting them would alter immutable measurement evidence after generation.
 test/results/live-eval-remediation/**/*.json
 
+# Complete eval:all records preserve the runner's unedited JSON serialization.
+test/results/eval-all/*.json
+test/results/eval-all/history/*.json
+
 # Contributor Covenant (external standard)
 CODE_OF_CONDUCT.md
 
