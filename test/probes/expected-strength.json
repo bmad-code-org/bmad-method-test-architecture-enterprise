@@ -2807,7 +2807,7 @@
   },
   "trace": {
     "contractId": "tea-trace-behavioral",
-    "corpusDigest": "sha256:8d1784cad59bb32ca44b931835484ddc65dc9e89e7c2f8098d69c47cd959f5b5",
+    "corpusDigest": "sha256:f6a5bb0c159b9f89ecf0ebc86810e9f76ca5ab94cd1e651ef1ccf1df67ea79ea",
     "probeCount": 4,
     "strength": {
       "defect": {

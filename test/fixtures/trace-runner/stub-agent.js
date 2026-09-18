@@ -113,6 +113,9 @@ if (mode === 'invalid-json') {
   fs.writeFileSync(summaryPath, '{"schema_version": "0.3.0", "gate_status": FAIL\n', 'utf8');
 } else {
   fs.copyFileSync(path.join(source, 'e2e-trace-summary.json'), summaryPath);
+  const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
+  summary.links.trace_report_path = path.relative(process.cwd(), matrixPath);
+  fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 }
 
 if (mode === 'mutate') {

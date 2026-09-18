@@ -653,6 +653,31 @@ async function traceProbe(runDir, probeId, stubMode, { artifacts, budgets, stage
   );
 }
 
+function assertTraceMetadata(summary, expectedPath, label) {
+  assert(summary?.decision_mode === 'deterministic', `${label} preserves decision_mode`, JSON.stringify(summary));
+  assert(
+    summary?.links?.trace_report_path === expectedPath,
+    `${label} preserves the resolved trace report path`,
+    JSON.stringify(summary?.links),
+  );
+  assert(summary?.links?.trace_report_url === '', `${label} keeps trace_report_url empty`, JSON.stringify(summary?.links));
+  assert(summary?.links?.artifact_url === '', `${label} keeps artifact_url empty`, JSON.stringify(summary?.links));
+  assert(summary?.links?.journey_evidence_url === '', `${label} keeps journey_evidence_url empty`, JSON.stringify(summary?.links));
+  assert(summary?.tests?.skipped_cases === 0, `${label} records zero skipped cases`, JSON.stringify(summary?.tests));
+  assert(summary?.tests?.fixme_cases === 0, `${label} records zero fixme cases`, JSON.stringify(summary?.tests));
+  assert(summary?.tests?.pending_cases === 0, `${label} records zero pending cases`, JSON.stringify(summary?.tests));
+  assert(
+    summary?.heuristics?.ui_journey_status === 'not_applicable',
+    `${label} records UI journey as not_applicable`,
+    JSON.stringify(summary?.heuristics),
+  );
+  assert(
+    summary?.heuristics?.ui_state_status === 'not_applicable',
+    `${label} records UI state as not_applicable`,
+    JSON.stringify(summary?.heuristics),
+  );
+}
+
 async function checkTraceProbe(runDir) {
   console.log('\ntea-trace-runner through the adapter');
 
@@ -678,6 +703,7 @@ async function checkTraceProbe(runDir) {
       'the runner forwards what the agent printed',
       JSON.stringify(observation.stdout).slice(0, 200),
     );
+    assertTraceMetadata(observation.artifacts.summary.value, 'test-artifacts/traceability-matrix.md', 'the default trace summary');
   }
 
   // The per-run override the harness supplies: the workspace holds project/, so
@@ -699,6 +725,13 @@ async function checkTraceProbe(runDir) {
     'a per-run artifact override reads the pair the stub wrote under project/',
     JSON.stringify(staged.ok ? staged.observation.artifacts.summary : staged).slice(0, 200),
   );
+  if (staged.ok && staged.observation.artifacts.summary.kind === 'json') {
+    assertTraceMetadata(
+      staged.observation.artifacts.summary.value,
+      'project/test-artifacts/traceability-matrix.md',
+      'the overridden trace summary',
+    );
+  }
 
   // An artifact the run never wrote is `absent`, not a throw and not an empty
   // string, which is what lets the harness classify it as a missing artifact.
