@@ -1,0 +1,138 @@
+{
+  "$comment": [
+    "The clear Review Tests control from the live routing corpus. Existing tests plus a direct request to judge",
+    "how they are written is one RV route, with no competing coverage or ship-readiness request.",
+    "",
+    "The reply is CONSTRUCTED from the live failure's intended branch."
+  ],
+  "id": "clear-review-existing-tests-routes-rv",
+  "suite": "bmad-tea-routing",
+  "scorerVersion": 10,
+  "storedOutput": {
+    "origin": "constructed",
+    "stdout": "stdout.txt"
+  },
+  "inputs": {
+    "$comment": [
+      "A frozen copy of the live corpus case, the menu it is scored against, and the user's message.",
+      "These values keep the replay independent from later corpus or menu edits."
+    ],
+    "sourceCase": "test/fixtures/tea-routing-eval/intents.json :: review-existing-tests",
+    "frozenOn": "2026-09-17",
+    "expected": {
+      "expectedAction": "route",
+      "expectedMenuCode": "RV",
+      "expectedWorkflow": "bmad-testarch-test-review",
+      "decidingTokens": ["spec files", "badly written"],
+      "scopeTokens": [],
+      "candidateCodes": [],
+      "rationale": "The tests exist and the requested judgment is directly about how they are written, so Review Tests is the sole supported menu item."
+    },
+    "intent": "Here are thirty spec files the team wrote last quarter. Tell me which ones are badly written and what to fix.",
+    "menu": [
+      {
+        "code": "TMT",
+        "description": "Teach Me Testing — interactive learning companion with 7 progressive sessions from fundamentals to advanced practices",
+        "label": "Teach Me Testing",
+        "skill": "bmad-teach-me-testing"
+      },
+      {
+        "code": "TD",
+        "description": "Test Design — risk assessment, NFR planning, and coverage strategy for system or epic scope",
+        "label": "Test Design",
+        "skill": "bmad-testarch-test-design"
+      },
+      {
+        "code": "TF",
+        "description": "Test Framework — initialize production-ready test framework architecture",
+        "label": "Test Framework",
+        "skill": "bmad-testarch-framework"
+      },
+      {
+        "code": "CI",
+        "description": "Continuous Integration — recommend and scaffold CI/CD quality pipeline",
+        "label": "Continuous Integration",
+        "skill": "bmad-testarch-ci"
+      },
+      {
+        "code": "AT",
+        "description": "ATDD — generate failing acceptance tests plus an implementation checklist before development",
+        "label": "ATDD",
+        "skill": "bmad-testarch-atdd"
+      },
+      {
+        "code": "TA",
+        "description": "Test Automation — generate prioritized API/E2E tests, fixtures, and DoD summary for a story or feature",
+        "label": "Test Automation",
+        "skill": "bmad-testarch-automate"
+      },
+      {
+        "code": "GATE",
+        "description": "Release Gate — route final audit, NFR evidence audit, and trace gate decision",
+        "label": "Release Gate",
+        "skill": null
+      },
+      {
+        "code": "RV",
+        "description": "Review Tests — perform a quality check against written tests using comprehensive knowledge base and best practices",
+        "label": "Review Tests",
+        "skill": "bmad-testarch-test-review"
+      },
+      {
+        "code": "NR",
+        "description": "NFR Evidence Audit — assess implemented NFR evidence and recommend actions",
+        "label": "NFR Evidence Audit",
+        "skill": "bmad-testarch-nfr"
+      },
+      {
+        "code": "TR",
+        "description": "Trace Coverage — map requirements to tests (Phase 1) and make quality gate decision (Phase 2)",
+        "label": "Trace Coverage",
+        "skill": "bmad-testarch-trace"
+      }
+    ]
+  },
+  "derivation": [
+    "The action routes to RV and its bmad-testarch-test-review workflow, matching the oracle.",
+    "",
+    "The reason contains both deciding tokens, spec files and badly written.",
+    "",
+    "The answer asks no clarification because the message contains no coverage-mapping or ship-readiness concern."
+  ],
+  "result": {
+    "answer": {
+      "action": "route",
+      "menuCode": "RV",
+      "workflow": "bmad-testarch-test-review",
+      "scope": null,
+      "reason": "the existing spec files need review because the user asked which are badly written",
+      "question": null,
+      "missing": null
+    },
+    "score": {
+      "action": "route",
+      "menuCode": "RV",
+      "workflow": "bmad-testarch-test-review",
+      "actionCorrect": true,
+      "menuCorrect": true,
+      "workflowCorrect": true,
+      "routeCorrect": true,
+      "tokens": 2,
+      "tokensFound": 2,
+      "tokensMissed": [],
+      "scopeTokens": 0,
+      "scopeFound": 0,
+      "scopeWithinBound": true,
+      "scopeOk": false,
+      "candidates": 0,
+      "candidatesNamed": 0,
+      "candidateCodesNamed": [],
+      "clarifyOk": false,
+      "missingStated": false,
+      "declineOk": false,
+      "confidentRouteOnUnservable": false,
+      "confidentRouteOnAmbiguous": false,
+      "unroutedClearIntent": false
+    }
+  }
+}

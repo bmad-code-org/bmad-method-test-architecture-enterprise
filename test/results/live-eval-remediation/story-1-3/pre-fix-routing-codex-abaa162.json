@@ -1,0 +1,1967 @@
+{
+  "schemaVersion": "1.4.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-09-17T21:31:36.999Z",
+  "mode": "live",
+  "repository": {
+    "commit": "abaa1622419b0bbd95a0a40b3899c888e3550581",
+    "dirty": false
+  },
+  "suite": {
+    "id": "bmad-tea-routing",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-tea"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/tea-routing-controls.contract.json",
+        "version": "5"
+      },
+      {
+        "path": "test/contracts/tea-routing-intents.contract.json",
+        "version": "5"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "read-only"
+    ],
+    "fixtureDigest": "sha256:cd3856056f42680cbe4eb861f44bdc2299c68aa27f8051d99e8f766f1b25aaae",
+    "promptDigest": "sha256:d6544163e36520cc614395a095282ee00ed9b1e31c0327c3db3c7db494bacd0d",
+    "caseIds": [
+      "epic-risk-before-tests",
+      "no-framework-yet",
+      "pipeline-quality-gates",
+      "acceptance-tests-before-code",
+      "implemented-feature-no-tests",
+      "review-existing-tests",
+      "nfr-evidence-on-hand",
+      "trace-criteria-to-tests",
+      "learn-testing-properly",
+      "release-gate-sequence",
+      "good-or-covering-what-matters",
+      "measured-some-nfrs-planned-none",
+      "thin-coverage-on-payments",
+      "story-half-done",
+      "run-and-fix-ci-failures",
+      "write-production-code",
+      "penetration-test-staging",
+      "hire-a-qa-lead"
+    ],
+    "cases": [
+      {
+        "id": "epic-risk-before-tests",
+        "promptDigest": "sha256:449e8a6734a6f060d6748882eacd7a5ec1bae7b21e6b37d147dedcc1be2e3ea4"
+      },
+      {
+        "id": "no-framework-yet",
+        "promptDigest": "sha256:5ee9f1b66b300064087ea5338dfc070d1e63793cd53ff2e9dd1743375dff5729"
+      },
+      {
+        "id": "pipeline-quality-gates",
+        "promptDigest": "sha256:cf2be1b370c93d626a3c6b5eb0f0124f9b8390608d0d3f0811498206d8a8d617"
+      },
+      {
+        "id": "acceptance-tests-before-code",
+        "promptDigest": "sha256:bdc2d9cae24a556389456511936b1d4c3d7779b34d795ea5af6efdfc331c3a05"
+      },
+      {
+        "id": "implemented-feature-no-tests",
+        "promptDigest": "sha256:0026773b3a76c8f3ba495eb8b517ef92d502f6cd729b23bd1e9874e8924f01d1"
+      },
+      {
+        "id": "review-existing-tests",
+        "promptDigest": "sha256:b4a2dea295b154818703b19281c375761090ca36a6661f9c55b798cbcffc3eca"
+      },
+      {
+        "id": "nfr-evidence-on-hand",
+        "promptDigest": "sha256:76c568c20a0dfbf7451c81beb0ce768af24f40e3cfb406afc90d603781dbe691"
+      },
+      {
+        "id": "trace-criteria-to-tests",
+        "promptDigest": "sha256:d3cfd213139ac67b517164d7d022be03b1afcbd08fa05d4290b75ade3a5efd03"
+      },
+      {
+        "id": "learn-testing-properly",
+        "promptDigest": "sha256:97832bbbd87a707b3ee639a3e8fbb6d0b1b46ac96b6c42bf2374e46238ffa42f"
+      },
+      {
+        "id": "release-gate-sequence",
+        "promptDigest": "sha256:b477f5c92fc0d906fd1f93035026f0016f33eb6f7fa4c12eb494dbf51ffc7c30"
+      },
+      {
+        "id": "good-or-covering-what-matters",
+        "promptDigest": "sha256:fa192d965733595d0f837154b8941c0a3ed52388aaa59ca305929433199cf246"
+      },
+      {
+        "id": "measured-some-nfrs-planned-none",
+        "promptDigest": "sha256:7702d0acf06c6f40954276bbd2bf1439fb46412e6098e778c40ea5adefb014ff"
+      },
+      {
+        "id": "thin-coverage-on-payments",
+        "promptDigest": "sha256:0af298c94c842b229b58c817a0fb92e475895d5dc1cd8065d5bf972bdf88cd41"
+      },
+      {
+        "id": "story-half-done",
+        "promptDigest": "sha256:316309e5f9dba059c7a28a98d8a347d5c7ec84c18267227c223f74bfd84efb1e"
+      },
+      {
+        "id": "run-and-fix-ci-failures",
+        "promptDigest": "sha256:7b3807810a1a06a8a393dd548d4d844ae70ea11e6e04128cc08b1e59431975e6"
+      },
+      {
+        "id": "write-production-code",
+        "promptDigest": "sha256:9419a0d340d69f61a69d7df1954f470b3b4edc70314abefbe95e3ca14c2a903f"
+      },
+      {
+        "id": "penetration-test-staging",
+        "promptDigest": "sha256:0719070e9f4c9f11aebf5d1fdd9a8f72813ca5bf00bfe98e070e3c8abac5278d"
+      },
+      {
+        "id": "hire-a-qa-lead",
+        "promptDigest": "sha256:c0f2c5f0f06f8579207b3762c84a7babd5d3e78c64ed1f163117a796d4e50c01"
+      }
+    ],
+    "thresholds": {
+      "routeAccuracy": 0.9,
+      "reasonTokenRecall": 0.8,
+      "scopeFidelity": 0.875,
+      "clarifyRecall": 0.75,
+      "declineRecall": 0.75,
+      "maxConfidentRoutesOnUnservable": 0,
+      "maxConfidentRoutesOnAmbiguous": 0,
+      "maxUnroutedClearIntents": 0,
+      "maxUnstableCases": 2
+    },
+    "declaredRepetitions": 2
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.154.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 300000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 36,
+        "completed": 36
+      },
+      "measurements": {
+        "routeAccuracy": 0.9,
+        "reasonTokenRecall": 0.9428571428571428,
+        "scopeFidelity": 1,
+        "clarifyRecall": 0.375,
+        "declineRecall": 1,
+        "confidentRoutesOnUnservable": 0,
+        "confidentRoutesOnAmbiguous": 5,
+        "unroutedClearIntents": 2,
+        "unstableCases": 1,
+        "incompleteCases": 0,
+        "unmeasuredRuns": 0
+      },
+      "durationMs": 264305,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "clarification recall",
+        "5 confident route(s) on an intent whose menu items are genuinely close",
+        "2 clear intent(s) left unrouted"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "epic-risk-before-tests",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|TD|bmad-testarch-test-design|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TD|bmad-testarch-test-design|"
+            }
+          ]
+        },
+        {
+          "caseId": "epic-risk-before-tests",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|TD|bmad-testarch-test-design|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TD|bmad-testarch-test-design|"
+            }
+          ]
+        },
+        {
+          "caseId": "no-framework-yet",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|TF|bmad-testarch-framework|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 0,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TF|bmad-testarch-framework|"
+            }
+          ]
+        },
+        {
+          "caseId": "no-framework-yet",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|TF|bmad-testarch-framework|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TF|bmad-testarch-framework|"
+            }
+          ]
+        },
+        {
+          "caseId": "pipeline-quality-gates",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|CI|bmad-testarch-ci|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|CI|bmad-testarch-ci|"
+            }
+          ]
+        },
+        {
+          "caseId": "pipeline-quality-gates",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|CI|bmad-testarch-ci|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|CI|bmad-testarch-ci|"
+            }
+          ]
+        },
+        {
+          "caseId": "acceptance-tests-before-code",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|AT|bmad-testarch-atdd|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|AT|bmad-testarch-atdd|"
+            }
+          ]
+        },
+        {
+          "caseId": "acceptance-tests-before-code",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|AT|bmad-testarch-atdd|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|AT|bmad-testarch-atdd|"
+            }
+          ]
+        },
+        {
+          "caseId": "implemented-feature-no-tests",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|TA|bmad-testarch-automate|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TA|bmad-testarch-automate|"
+            }
+          ]
+        },
+        {
+          "caseId": "implemented-feature-no-tests",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|TA|bmad-testarch-automate|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TA|bmad-testarch-automate|"
+            }
+          ]
+        },
+        {
+          "caseId": "review-existing-tests",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 0,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 1,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "clear intent left unrouted",
+          "triage": [
+            {
+              "reason": "clear intent left unrouted",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "review-existing-tests",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 0,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 1,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "clear intent left unrouted",
+          "triage": [
+            {
+              "reason": "clear intent left unrouted",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "nfr-evidence-on-hand",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|NR|bmad-testarch-nfr|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 3,
+            "reasonTokens.denominator": 3,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|NR|bmad-testarch-nfr|"
+            }
+          ]
+        },
+        {
+          "caseId": "nfr-evidence-on-hand",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|NR|bmad-testarch-nfr|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 3,
+            "reasonTokens.denominator": 3,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|NR|bmad-testarch-nfr|"
+            }
+          ]
+        },
+        {
+          "caseId": "trace-criteria-to-tests",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|TR|bmad-testarch-trace|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TR|bmad-testarch-trace|"
+            }
+          ]
+        },
+        {
+          "caseId": "trace-criteria-to-tests",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|TR|bmad-testarch-trace|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TR|bmad-testarch-trace|"
+            }
+          ]
+        },
+        {
+          "caseId": "learn-testing-properly",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|TMT|bmad-teach-me-testing|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TMT|bmad-teach-me-testing|"
+            }
+          ]
+        },
+        {
+          "caseId": "learn-testing-properly",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|TMT|bmad-teach-me-testing|",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TMT|bmad-teach-me-testing|"
+            }
+          ]
+        },
+        {
+          "caseId": "release-gate-sequence",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|GATE||",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|GATE||"
+            }
+          ]
+        },
+        {
+          "caseId": "release-gate-sequence",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|GATE||",
+          "metricContributions": {
+            "expectedRoute": 1,
+            "expectedClarify": 0,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 1,
+            "workflowCorrect": 1,
+            "routeCorrect": 1,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|GATE||"
+            }
+          ]
+        },
+        {
+          "caseId": "good-or-covering-what-matters",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "clarify|||RV+TR",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 1,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 2,
+            "candidates.denominator": 2,
+            "clarifyOk": 1,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "clarify|||RV+TR"
+            }
+          ]
+        },
+        {
+          "caseId": "good-or-covering-what-matters",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "clarify|||RV+TR",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 1,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 2,
+            "candidates.denominator": 2,
+            "clarifyOk": 1,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "clarify|||RV+TR"
+            }
+          ]
+        },
+        {
+          "caseId": "measured-some-nfrs-planned-none",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "clarify|||NR+TD",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 1,
+            "expectedDecline": 0,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 2,
+            "candidates.denominator": 2,
+            "clarifyOk": 1,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "clarify|||NR+TD"
+            }
+          ]
+        },
+        {
+          "caseId": "measured-some-nfrs-planned-none",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|TD|bmad-testarch-test-design|",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 1,
+            "expectedDecline": 0,
+            "actionCorrect": 0,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 2,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 1,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "clarification recall; confident route on ambiguous intent",
+          "triage": [
+            {
+              "reason": "clarification recall",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "confident route on ambiguous intent",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TD|bmad-testarch-test-design|"
+            }
+          ]
+        },
+        {
+          "caseId": "thin-coverage-on-payments",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|TA|bmad-testarch-automate|",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 1,
+            "expectedDecline": 0,
+            "actionCorrect": 0,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 3,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 1,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "clarification recall; confident route on ambiguous intent",
+          "triage": [
+            {
+              "reason": "clarification recall",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "confident route on ambiguous intent",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TA|bmad-testarch-automate|"
+            }
+          ]
+        },
+        {
+          "caseId": "thin-coverage-on-payments",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|TA|bmad-testarch-automate|",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 1,
+            "expectedDecline": 0,
+            "actionCorrect": 0,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 3,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 1,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "clarification recall; confident route on ambiguous intent",
+          "triage": [
+            {
+              "reason": "clarification recall",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "confident route on ambiguous intent",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TA|bmad-testarch-automate|"
+            }
+          ]
+        },
+        {
+          "caseId": "story-half-done",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "route|TA|bmad-testarch-automate|",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 1,
+            "expectedDecline": 0,
+            "actionCorrect": 0,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 1,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 2,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 1,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "clarification recall; confident route on ambiguous intent",
+          "triage": [
+            {
+              "reason": "clarification recall",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "confident route on ambiguous intent",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TA|bmad-testarch-automate|"
+            }
+          ]
+        },
+        {
+          "caseId": "story-half-done",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "route|TA|bmad-testarch-automate|",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 1,
+            "expectedDecline": 0,
+            "actionCorrect": 0,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 1,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 1,
+            "scopeTokens.denominator": 1,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 1,
+            "candidates.numerator": 0,
+            "candidates.denominator": 2,
+            "clarifyOk": 0,
+            "missingStated": 0,
+            "declineOk": 0,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 1,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "clarification recall; confident route on ambiguous intent",
+          "triage": [
+            {
+              "reason": "clarification recall",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "confident route on ambiguous intent",
+              "rootCause": "tea-workflow-defect"
+            }
+          ],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "route|TA|bmad-testarch-automate|"
+            }
+          ]
+        },
+        {
+          "caseId": "run-and-fix-ci-failures",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 0,
+            "expectedDecline": 1,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 1,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "run-and-fix-ci-failures",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 0,
+            "expectedDecline": 1,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 1,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "write-production-code",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 0,
+            "expectedDecline": 1,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 1,
+            "reasonTokens.denominator": 1,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 1,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "write-production-code",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 0,
+            "expectedDecline": 1,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 1,
+            "reasonTokens.denominator": 1,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 1,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "penetration-test-staging",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 0,
+            "expectedDecline": 1,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 1,
+            "reasonTokens.denominator": 1,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 1,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "penetration-test-staging",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 0,
+            "expectedDecline": 1,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 1,
+            "reasonTokens.denominator": 1,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 1,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "hire-a-qa-lead",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 0,
+            "expectedDecline": 1,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 1,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        },
+        {
+          "caseId": "hire-a-qa-lead",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "decline|||",
+          "metricContributions": {
+            "expectedRoute": 0,
+            "expectedClarify": 0,
+            "expectedDecline": 1,
+            "actionCorrect": 1,
+            "menuCorrect": 0,
+            "workflowCorrect": 0,
+            "routeCorrect": 0,
+            "reasonTokens.numerator": 2,
+            "reasonTokens.denominator": 2,
+            "reasonTokens.threshold": 0.8,
+            "scopeTokens.numerator": 0,
+            "scopeTokens.denominator": 0,
+            "scopeTokens.threshold": 0.875,
+            "scopeWithinBound": 1,
+            "scopeOk": 0,
+            "candidates.numerator": 0,
+            "candidates.denominator": 0,
+            "clarifyOk": 0,
+            "missingStated": 1,
+            "declineOk": 1,
+            "confidentRouteOnUnservable": 0,
+            "confidentRouteOnAmbiguous": 0,
+            "unroutedClearIntent": 0,
+            "routeAccuracyThreshold": 0.9,
+            "clarifyRecallThreshold": 0.75,
+            "declineRecallThreshold": 0.75,
+            "maxConfidentRoutesOnUnservable": 0,
+            "maxConfidentRoutesOnAmbiguous": 0,
+            "maxUnroutedClearIntents": 0,
+            "maxUnstableCases": 2
+          },
+          "failureClass": "none",
+          "rootCause": null,
+          "reason": null,
+          "triage": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "decline|||"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 264376,
+  "failureClass": "quality",
+  "exitCode": 1
+}

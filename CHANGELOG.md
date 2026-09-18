@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `bmad-tea` now asks one focused question when the supplied facts support several workflows. The routing guidance covers review versus trace, NFR evidence audit versus future test design, thin coverage across planning, automation, and measurement, and partially implemented scope across ATDD and automation. Direct requests to judge existing tests and recommend fixes route to Review Tests. Source-bound corpus validation, mutation checks, stored replays, and provenance-complete live evidence hold every ambiguity boundary and preserve clear and unservable routing behavior.
+- The frozen schema 1.4.0 reader accepts later 1.4.0 diagnostics that emitted triage before the version advanced, while enforcing agreement with each diagnostic's failure class and root cause.
 - ATDD red-phase generation now preserves supplied criterion ids, assigns stable collision-free ids to unnamed criteria, validates exactly one declared id per executable leaf, emits one transition-bearing red-phase leaf per criterion, defers secondary branches to green-phase automation, isolates each API criterion with a direct first assertion, keeps unimplemented setup responses opaque until that assertion, and gives E2E journeys a criterion-owned first failure boundary.
 
 ## [1.27.1] - 2026-09-17

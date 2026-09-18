@@ -1,0 +1,221 @@
+{
+  "version": 1,
+  "caseIds": [
+    "epic-risk-before-tests",
+    "no-framework-yet",
+    "pipeline-quality-gates",
+    "acceptance-tests-before-code",
+    "implemented-feature-no-tests",
+    "review-existing-tests",
+    "nfr-evidence-on-hand",
+    "trace-criteria-to-tests",
+    "learn-testing-properly",
+    "release-gate-sequence",
+    "good-or-covering-what-matters",
+    "measured-some-nfrs-planned-none",
+    "thin-coverage-on-payments",
+    "story-half-done",
+    "run-and-fix-ci-failures",
+    "write-production-code",
+    "penetration-test-staging",
+    "hire-a-qa-lead"
+  ],
+  "fixtureDigest": "sha256:5b71831e38998dcb4653dc6b25ec81865dd2a90a93b273c2531459717ca8c8fa",
+  "recordFixtureDigest": "sha256:cd3856056f42680cbe4eb861f44bdc2299c68aa27f8051d99e8f766f1b25aaae",
+  "thresholds": {
+    "routeAccuracy": 0.9,
+    "reasonTokenRecall": 0.8,
+    "scopeFidelity": 0.875,
+    "clarifyRecall": 0.75,
+    "declineRecall": 0.75,
+    "maxConfidentRoutesOnUnservable": 0,
+    "maxConfidentRoutesOnAmbiguous": 0,
+    "maxUnroutedClearIntents": 0,
+    "maxUnstableCases": 2
+  },
+  "runner": {
+    "agent": "codex",
+    "executable": "codex",
+    "version": "codex-cli 0.154.0",
+    "model": "gpt-5.6-sol",
+    "parameters": {
+      "agentArgs": [],
+      "envPassNames": [],
+      "timeoutMs": 300000,
+      "promptTransport": "stdin"
+    }
+  },
+  "records": {
+    "pre-fix-routing-codex-abaa162.json": {
+      "generatedAt": "2026-09-17T21:31:36.999Z",
+      "repository": {
+        "commit": "abaa1622419b0bbd95a0a40b3899c888e3550581",
+        "dirty": false
+      },
+      "suitePromptDigest": "sha256:d6544163e36520cc614395a095282ee00ed9b1e31c0327c3db3c7db494bacd0d",
+      "casePromptDigests": [
+        "sha256:449e8a6734a6f060d6748882eacd7a5ec1bae7b21e6b37d147dedcc1be2e3ea4",
+        "sha256:5ee9f1b66b300064087ea5338dfc070d1e63793cd53ff2e9dd1743375dff5729",
+        "sha256:cf2be1b370c93d626a3c6b5eb0f0124f9b8390608d0d3f0811498206d8a8d617",
+        "sha256:bdc2d9cae24a556389456511936b1d4c3d7779b34d795ea5af6efdfc331c3a05",
+        "sha256:0026773b3a76c8f3ba495eb8b517ef92d502f6cd729b23bd1e9874e8924f01d1",
+        "sha256:b4a2dea295b154818703b19281c375761090ca36a6661f9c55b798cbcffc3eca",
+        "sha256:76c568c20a0dfbf7451c81beb0ce768af24f40e3cfb406afc90d603781dbe691",
+        "sha256:d3cfd213139ac67b517164d7d022be03b1afcbd08fa05d4290b75ade3a5efd03",
+        "sha256:97832bbbd87a707b3ee639a3e8fbb6d0b1b46ac96b6c42bf2374e46238ffa42f",
+        "sha256:b477f5c92fc0d906fd1f93035026f0016f33eb6f7fa4c12eb494dbf51ffc7c30",
+        "sha256:fa192d965733595d0f837154b8941c0a3ed52388aaa59ca305929433199cf246",
+        "sha256:7702d0acf06c6f40954276bbd2bf1439fb46412e6098e778c40ea5adefb014ff",
+        "sha256:0af298c94c842b229b58c817a0fb92e475895d5dc1cd8065d5bf972bdf88cd41",
+        "sha256:316309e5f9dba059c7a28a98d8a347d5c7ec84c18267227c223f74bfd84efb1e",
+        "sha256:7b3807810a1a06a8a393dd548d4d844ae70ea11e6e04128cc08b1e59431975e6",
+        "sha256:9419a0d340d69f61a69d7df1954f470b3b4edc70314abefbe95e3ca14c2a903f",
+        "sha256:0719070e9f4c9f11aebf5d1fdd9a8f72813ca5bf00bfe98e070e3c8abac5278d",
+        "sha256:c0f2c5f0f06f8579207b3762c84a7babd5d3e78c64ed1f163117a796d4e50c01"
+      ],
+      "measurements": {
+        "routeAccuracy": 0.9,
+        "reasonTokenRecall": 0.9428571428571428,
+        "scopeFidelity": 1,
+        "clarifyRecall": 0.375,
+        "declineRecall": 1,
+        "confidentRoutesOnUnservable": 0,
+        "confidentRoutesOnAmbiguous": 5,
+        "unroutedClearIntents": 2,
+        "unstableCases": 1,
+        "incompleteCases": 0,
+        "unmeasuredRuns": 0
+      },
+      "failureClass": "quality",
+      "failures": [
+        "clarification recall",
+        "5 confident route(s) on an intent whose menu items are genuinely close",
+        "2 clear intent(s) left unrouted"
+      ],
+      "qualityDiagnostics": [
+        ["review-existing-tests", 1, "decline|||", "clear intent left unrouted"],
+        ["review-existing-tests", 2, "decline|||", "clear intent left unrouted"],
+        [
+          "measured-some-nfrs-planned-none",
+          2,
+          "route|TD|bmad-testarch-test-design|",
+          "clarification recall; confident route on ambiguous intent"
+        ],
+        [
+          "thin-coverage-on-payments",
+          1,
+          "route|TA|bmad-testarch-automate|",
+          "clarification recall; confident route on ambiguous intent"
+        ],
+        [
+          "thin-coverage-on-payments",
+          2,
+          "route|TA|bmad-testarch-automate|",
+          "clarification recall; confident route on ambiguous intent"
+        ],
+        [
+          "story-half-done",
+          1,
+          "route|TA|bmad-testarch-automate|",
+          "clarification recall; confident route on ambiguous intent"
+        ],
+        [
+          "story-half-done",
+          2,
+          "route|TA|bmad-testarch-automate|",
+          "clarification recall; confident route on ambiguous intent"
+        ]
+      ]
+    },
+    "development-attempt-1-routing-codex-b78fc67.json": {
+      "generatedAt": "2026-09-17T22:49:03.509Z",
+      "repository": {
+        "commit": "b78fc67eee5223a267fa2f0e604a8dc269ae96e0",
+        "dirty": false
+      },
+      "suitePromptDigest": "sha256:3773df51a4294aec9a1abc4cfaa0d2f48a0ff657a6c25e20a8a777842ee5b2bb",
+      "casePromptDigests": [
+        "sha256:088e0a879b50ef22b187b92354027a1ab34baf6dfca9e318601c25d444c5a900",
+        "sha256:e9f94803729360ef2a2a1eaf062a6e6a27df4b032ba0c2a852fd07de267f429e",
+        "sha256:3b170872a23e05cc57fb35f28400bdaa1a73920e54c0c5930e0b26a0f8440abf",
+        "sha256:fe0ff68eafe7d0f6b1a2fabb2f7bf66cbc18f73f22132353f01a7197e3dc3fff",
+        "sha256:36c648bd7c7e4e03f69e434bb42a26c45aa244746c186576f19b1246538354e8",
+        "sha256:dc8de29f2d3ca574825f3fd6d8f9b15d6cb87ebe8112106e3e4001cde0d3ad86",
+        "sha256:72e833ac7d3f19523a3a9915851d364f8a20efdd44b68dab65ae17e1a1542246",
+        "sha256:54c5373249112a16b91b10148871fafc06e68a850722be331dfa9d42878943e3",
+        "sha256:270f21cedf65d63527784e06e34e796f364aad0eebf8161f169af630964e6b03",
+        "sha256:64153121cd36acaf5f5267c4f1c04b2234ab824d92414c922475485dd6efa623",
+        "sha256:3e471a39a003be1f3405f91a4d413984b321fee77b370bf257eb3a23e57db99f",
+        "sha256:90129d8fcec8851cebf032de65d2e388d9003f52b3992a39976a5328129a5d03",
+        "sha256:f9c65ea659aece2e24b93b5b41e66144c55fe1a68d9fa68984ba2ab4e9345a67",
+        "sha256:a3544346a8a4fd066ae1d284eec4ecff34b3f3fc49b49ea3a2fb354d77e3486d",
+        "sha256:ede7d33a778dd8e440047ce21c7d3054964b94a665d229c27e4b6ea7b16bc52e",
+        "sha256:759ec8c04ca4c42e10d856c91c1f93963aaa2fd8e7eb6ed906cea4bf9ea9d753",
+        "sha256:b85cb9b5066f22b63c77b9048a9b4b2f58fcec7362dd235a271cabb75d380fdc",
+        "sha256:1f63322880f14da9d5ad6ecc0781aeee8fb565220ec798af23e71ae6eb79bf08"
+      ],
+      "measurements": {
+        "routeAccuracy": 1,
+        "reasonTokenRecall": 0.9142857142857143,
+        "scopeFidelity": 1,
+        "clarifyRecall": 0.875,
+        "declineRecall": 0.875,
+        "confidentRoutesOnUnservable": 1,
+        "confidentRoutesOnAmbiguous": 0,
+        "unroutedClearIntents": 0,
+        "unstableCases": 2,
+        "incompleteCases": 0,
+        "unmeasuredRuns": 0
+      },
+      "failureClass": "quality",
+      "failures": ["1 confident route(s) on an unservable intent"],
+      "qualityDiagnostics": [
+        ["run-and-fix-ci-failures", 1, "route|RV|bmad-testarch-test-review|", "confident route on unservable intent"]
+      ]
+    },
+    "post-fix-routing-codex.json": {
+      "generatedAt": "2026-09-17T22:55:18.200Z",
+      "repository": {
+        "commit": "6c6db041141469f7b503ef258029f00b13478910",
+        "dirty": false
+      },
+      "suitePromptDigest": "sha256:5f0c3f9d98a815627a913afbaf09edc2371b083d427dbd9f9d63611fc6f10753",
+      "casePromptDigests": [
+        "sha256:7248f52ec3c31d2b6e5e5ad933235c07c1578fe7d82064d8369b59d7f7e2754f",
+        "sha256:5fe7e4346b09fa7bce3a6b65f3f8ae179bd2727a92cbcd3c183f1d39c373b699",
+        "sha256:c26214e5b411957d31be24811463f66cb7741cffe17cbff17b3c56a2e90a3664",
+        "sha256:d3b41fe263a456a3ca79fd0447d5786c02aafae6535de98e40505f86e55fd8d4",
+        "sha256:6e09ec4014ea34f7cb88d56b389c2c6e71591fd148997b83b173111e7c76e009",
+        "sha256:53013f346588ca05e25c16f46e73348408f5b65f5e0a33bc2f0f106b94181ee0",
+        "sha256:f37457acac8d1e274bdf2ae959f45555360577526b103775a2f9c181f117d28f",
+        "sha256:12eda4712eae3a08c38a08afb1e264db7fdda349e5f196d0bd26cdc7f18c662f",
+        "sha256:cb51ca6556a4bb84e71084ec4d9ea0cef0d4d588c8450a8e89ca41873d1f0655",
+        "sha256:1a921afee68b168edcb7b603e4ed47263822e7aee530761c33bfaec7b23c62c9",
+        "sha256:c718bac51cc27e7e4bff8e783ecd9dcf6f52728056fdfb0a240b3d83fed804d8",
+        "sha256:3a0ead1e5876c06e5eaf2f113a4742b962cccc18303957303efc37782cefe108",
+        "sha256:3f85e8cf494c222d7b8619ea2e2fb2a33847aa991eab8ddd201158cb78ca17b8",
+        "sha256:daa0ed7f6de42a2556c859684d76b8a92cfd4eb720b981e725626e6f154acf3f",
+        "sha256:603e038dabc537045a0eeda3f10cd8136fb1785c803d3a660767bd8f5e1ba63f",
+        "sha256:585a922b42f0e4a5c98b1ff8eca70e67d930ed545e5747f06268a7b8f5638050",
+        "sha256:24f1eddf84c5e748e4c698ea908b93ac66663c8016d54fdaefc98b7045eeb035",
+        "sha256:0f4e2869350f33cec75cd27530818e4256106601f9f505096ac25d9af3c9303e"
+      ],
+      "measurements": {
+        "routeAccuracy": 1,
+        "reasonTokenRecall": 0.9428571428571428,
+        "scopeFidelity": 1,
+        "clarifyRecall": 0.875,
+        "declineRecall": 1,
+        "confidentRoutesOnUnservable": 0,
+        "confidentRoutesOnAmbiguous": 0,
+        "unroutedClearIntents": 0,
+        "unstableCases": 1,
+        "incompleteCases": 0,
+        "unmeasuredRuns": 0
+      },
+      "failureClass": "none",
+      "failures": [],
+      "qualityDiagnostics": []
+    }
+  }
+}

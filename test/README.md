@@ -191,6 +191,15 @@ once you have read a workflow's frontmatter or the knowledge index is not ambigu
 the agent, and scoring it as a clarification would measure a fact the agent was never
 given.
 
+Step 8's routing ambiguity table binds each close-menu fact pattern to its source case.
+Corpus validation compares the facts, supported candidate codes, and missing deciding
+information with that case's hidden oracle. Missing, duplicate, orphaned, or drifted
+rows fail before a model call. `test:eval-routing-boundaries` mutates each field and also
+proves that a clear intent cannot be added to the table. Stored replays cover all four
+successful clarification branches through the live parser and scorer. A clear-control
+replay also pins a direct request to judge existing tests and recommend fixes to Review
+Tests (`RV`).
+
 Five metrics and four counts. The metrics are the menu item chosen, whether the stated
 reason names the deciding feature of the message, whether the scope the user named
 survives into the dispatch, whether a genuinely ambiguous intent is asked about by name,
@@ -290,17 +299,15 @@ deliberate bump of that constant followed by `--accept`, which rewrites only the
 cases whose numbers actually moved.
 
 The same caveat the CLI parser fixtures carry applies here and applies harder.
-Every case that produces a number was written by hand to be parsed, so a green
-run proves the scorers are deterministic and reproduce history, and proves
-nothing about whether they handle real agent output correctly. Ninety of the
-ninety-six cases produce a number and eighty-eight of those are constructed. Two carry
-real captured bytes, both borrowed from `fixtures/test-review-cli/`, and both
-score zero recall: their reports document no finding at all. The live runs of
-2026-09-08 produced real numbers for the three suites that existed then, and none
-of their output was committed; `nfr`, `test-design`, `ci` and `bmad-tea-routing` have
-never been run live at all. So this repository still holds no captured output the
-replay suite can turn into a number a vendor earned, and every `trace`, every
-`nfr`, every `test-design`, every `ci` and every `bmad-tea-routing` case is constructed.
+Every constructed case that produces a number was written by hand to be parsed, so a
+green run proves the scorers are deterministic and reproduce history. It proves nothing
+about whether they handle real agent output correctly. One hundred twelve of the one
+hundred eighteen cases produce a number and ninety-eight of those are constructed.
+Fourteen carry captured bytes: twelve from the ATDD fixture corpus and two from
+`fixtures/test-review-cli/`. The two test-review captures score zero recall because
+their reports document no finding. Stored routing replays include all four successful
+clarification branches, and every `bmad-tea-routing` replay remains constructed. The
+live Story 1.3 routing evidence is validated separately by `test:eval-routing-evidence`.
 
 The suite also runs the `test/lib/eval-record.js` checks that need no stored
 case, because it is the only entry point in the pull-request gate that executes

@@ -1,0 +1,31 @@
+{
+  "story": "1.3",
+  "requestedRunner": {
+    "agent": "claude",
+    "model": "sonnet"
+  },
+  "runnerAvailability": {
+    "status": "unavailable",
+    "boundary": "confirmed weekly usage limit",
+    "reportedBy": "delivery coordinator",
+    "additionalCallsAttempted": 0
+  },
+  "substituteRunner": {
+    "agent": "codex",
+    "model": "gpt-5.6-sol"
+  },
+  "comparability": {
+    "sameCorpus": true,
+    "sameGroundTruth": true,
+    "sameThresholds": true,
+    "sameRepetitions": true,
+    "sameRunner": false,
+    "sameModel": false,
+    "claim": "focused remediation evidence with a disclosed runner substitution"
+  },
+  "chronology": {
+    "preFixCapture": "retrospective clean-detached-worktree run at the diagnostic-only commit",
+    "developmentAttempt": "clean-worktree run at b78fc67eee5223a267fa2f0e604a8dc269ae96e0; failed the zero-confident-route-on-unservable threshold",
+    "postFixCapture": "clean-worktree run at the corrected implementation commit"
+  }
+}

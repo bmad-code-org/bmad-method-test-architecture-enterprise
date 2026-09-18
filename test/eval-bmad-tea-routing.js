@@ -203,8 +203,10 @@ const GROUND_TRUTH_ONLY_KEYS = [
   'decidingTokens',
   'scopeTokens',
   'candidateCodes',
+  'boundaryFacts',
+  'missingDecidingInformation',
   // `rationale` is prose and it spells the answer out in sentences, which makes
-  // it the most damaging key of the seven to leak and the easiest to forget: the
+  // it the most damaging key of the nine to leak and the easiest to forget: the
   // whole-file byte search only catches a verbatim paste of the entire oracle,
   // so a prompt assembled from the wrong object would carry this one and pass.
   'rationale',
@@ -444,11 +446,52 @@ async function loadCorpus() {
  * workflow against the menu item that names it, so a renamed skill or a dropped
  * menu row fails here rather than as a mysterious routing miss later.
  */
-async function validateCorpus({ intents, groundTruth, cases }) {
+async function validateCorpus({ intents, groundTruth, cases }, overrides = {}) {
   const problems = [];
-  const menu = await menuItems();
+  const menu = overrides.menu ?? (await menuItems());
   const byCode = new Map(menu.map((item) => [item.code, item]));
+  const { skill: shippedSkill } = await skillSources();
+  const skill = overrides.skill ?? shippedSkill;
+  const boundaries = ambiguityBoundaryRows(skill);
+  const boundariesByCase = new Map();
+  const boundaryFacts = new Set();
   if (menu.length === 0) problems.push('src/agents/bmad-tea/customize.toml declares no [[agent.menu]] item; there is nothing to route to');
+
+  for (const boundary of boundaries) {
+    const { sourceCase, facts, missing, candidateCodes: codes, columnCount } = boundary;
+    if (columnCount !== 4) {
+      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary row has ${columnCount} columns; expected 4`);
+    }
+    if (sourceCase === null) {
+      problems.push('src/agents/bmad-tea/SKILL.md ambiguity boundary carries no backticked source case id');
+      continue;
+    }
+    if (boundariesByCase.has(sourceCase)) {
+      problems.push(`src/agents/bmad-tea/SKILL.md repeats ambiguity boundary source case "${sourceCase}"`);
+    } else {
+      boundariesByCase.set(sourceCase, boundary);
+    }
+    const normalizedFacts = normalizeBoundaryText(facts);
+    if (boundaryFacts.has(normalizedFacts)) {
+      problems.push(`src/agents/bmad-tea/SKILL.md repeats ambiguity boundary facts ${JSON.stringify(facts)}`);
+    }
+    boundaryFacts.add(normalizedFacts);
+    if (normalizedFacts.length === 0) {
+      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" names no supplied facts`);
+    }
+    if (codes.length < 2) {
+      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" needs at least two candidate codes`);
+    }
+    if (new Set(codes).size !== codes.length) {
+      problems.push(`src/agents/bmad-tea/SKILL.md repeats a menu code in ambiguity boundary ${codes.join(', ')}`);
+    }
+    for (const code of codes) {
+      if (!byCode.has(code)) problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary names unknown menu code "${code}"`);
+    }
+    if (normalizeBoundaryText(missing).length === 0) {
+      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary for "${sourceCase}" names no missing deciding information`);
+    }
+  }
 
   const seen = new Set();
   const answered = new Set(Object.keys(groundTruth.cases ?? {}));
@@ -523,8 +566,37 @@ async function validateCorpus({ intents, groundTruth, cases }) {
       for (const code of candidates) {
         if (!byCode.has(code)) problems.push(`${label}: candidateCode "${code}" is not a code in src/agents/bmad-tea/customize.toml`);
       }
+      const boundary = boundariesByCase.get(item.id);
+      if (boundary === undefined) {
+        problems.push(`${label}: src/agents/bmad-tea/SKILL.md declares no ambiguity boundary for this source case`);
+      } else {
+        const actualCandidates = [...boundary.candidateCodes].sort().join('+');
+        const expectedCandidates = [...candidates].sort().join('+');
+        if (actualCandidates !== expectedCandidates) {
+          problems.push(
+            `${label}: ambiguity boundary candidate codes drifted from ${candidates.join(', ')} to ${boundary.candidateCodes.join(', ')}`,
+          );
+        }
+        if (normalizeBoundaryText(boundary.facts) !== normalizeBoundaryText(expected.boundaryFacts)) {
+          problems.push(`${label}: ambiguity boundary facts drifted from the oracle`);
+        }
+        if (normalizeBoundaryText(boundary.missing) !== normalizeBoundaryText(expected.missingDecidingInformation)) {
+          problems.push(`${label}: ambiguity boundary missing deciding information drifted from the oracle`);
+        }
+      }
     } else if (expected.expectedAction === 'decline' && (expected.candidateCodes ?? []).length > 0) {
       problems.push(`${label}: a decline case declares candidateCodes, and nothing on the menu serves it`);
+    }
+  }
+
+  for (const [sourceCase] of boundariesByCase) {
+    const item = cases.find((candidate) => candidate.id === sourceCase);
+    if (item === undefined) {
+      problems.push(`src/agents/bmad-tea/SKILL.md ambiguity boundary "${sourceCase}" is orphaned from the intent corpus`);
+    } else if (item.expected?.expectedAction !== 'clarify') {
+      problems.push(
+        `src/agents/bmad-tea/SKILL.md ambiguity boundary "${sourceCase}" references a ${item.expected?.expectedAction ?? 'missing'} case; clear and unservable intents must not be over-clarified`,
+      );
     }
   }
 
@@ -860,6 +932,52 @@ async function skillSources() {
   skillText.skill ??= await promptPart(SKILL_FILE);
   skillText.menu ??= await promptPart(MENU_FILE);
   return skillText;
+}
+
+/** Collapse presentation-only differences before comparing boundary prose. */
+function normalizeBoundaryText(value) {
+  return typeof value === 'string' ? value.trim().replaceAll(/\s+/g, ' ').toLowerCase() : '';
+}
+
+/**
+ * Structured rows declared by the skill's ambiguity-boundary table.
+ *
+ * The source id binds each user-facing rule to one hidden-oracle case. Facts,
+ * candidate codes, and missing deciding information can then drift
+ * independently and still produce a deterministic validation failure.
+ */
+function ambiguityBoundaryRows(skill) {
+  const start = '<!-- routing-ambiguity-boundaries:start -->';
+  const end = '<!-- routing-ambiguity-boundaries:end -->';
+  const startIndex = skill.indexOf(start);
+  const endIndex = skill.indexOf(end);
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) return [];
+  return skill
+    .slice(startIndex + start.length, endIndex)
+    .split('\n')
+    .filter((line) => /^\|/.test(line))
+    .map((line) =>
+      line
+        .slice(1, line.endsWith('|') ? -1 : undefined)
+        .split('|')
+        .map((cell) => cell.trim()),
+    )
+    .filter((cells) => cells[0] !== 'Source case' && !/^:?-+/.test(cells[0]))
+    .map((cells) => {
+      const [source = '', facts = '', choices = '', missing = ''] = cells;
+      return {
+        columnCount: cells.length,
+        sourceCase: /^`([^`]+)`$/.exec(source)?.[1] ?? null,
+        facts,
+        candidateCodes: [...choices.matchAll(/`([A-Z]+)`/g)].map((match) => match[1]),
+        missing,
+      };
+    });
+}
+
+/** Candidate sets retained as a small public projection for existing callers. */
+function ambiguityBoundaryCandidateSets(skill) {
+  return ambiguityBoundaryRows(skill).map((row) => row.candidateCodes);
 }
 
 /** The prompt one case gets: the skill as it ships, its menu as it ships, and one user message. */
@@ -1434,6 +1552,8 @@ module.exports = {
   runnerRecord,
   assertGroundTruthAbsent,
   buildPrompt,
+  ambiguityBoundaryCandidateSets,
+  ambiguityBoundaryRows,
   candidatePatternSource,
   caseIds,
   caseIndex,
@@ -1443,6 +1563,7 @@ module.exports = {
   loadCorpus,
   menuItems,
   namesCandidate,
+  normalizeBoundaryText,
   parseArgs,
   parseRouting,
   scoreCase,
