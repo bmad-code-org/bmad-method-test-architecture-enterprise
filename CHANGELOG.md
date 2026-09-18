@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added public explanation `docs/explanation/how-tea-is-tested.md` detailing deterministic checks, behavioral evaluations, clean and seeded fixture controls, gameability probes, repeated live runs, recorded results, exit classes, the TEA vs `eval-quality` boundary, and the planned Evaluate skill. Reconciled existing documentation to reflect full behavioral coverage across all ten skills.
 - Live evaluation JSON now records a bounded diagnostic for every attempted case repetition, including the exact stability signature, threshold inputs, completion state, failure class, five-category root-cause triage, reason, and sanitized output or persisted artifact evidence. Schema 1.5.0 binds complete requested grids and aggregate failures to their diagnostic evidence while retaining frozen read-only validation paths for stored 1.4.0 and 1.3.0 results.
 
 ### Changed

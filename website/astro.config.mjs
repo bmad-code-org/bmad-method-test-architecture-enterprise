@@ -127,6 +127,7 @@ export default defineConfig({
           items: [
             { label: 'Testing as Engineering', slug: 'explanation/testing-as-engineering' },
             { label: 'Verification Architecture', slug: 'explanation/verification-architecture' },
+            { label: 'How TEA Is Tested', slug: 'explanation/how-tea-is-tested' },
             { label: 'Engagement Models', slug: 'explanation/engagement-models' },
             { label: 'Risk-Based Testing', slug: 'explanation/risk-based-testing' },
             { label: 'Test Quality Standards', slug: 'explanation/test-quality-standards' },
