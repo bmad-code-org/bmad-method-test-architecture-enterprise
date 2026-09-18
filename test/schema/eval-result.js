@@ -180,6 +180,9 @@ const diagnosticSchema = z
         });
       }
       if (value.reason === null) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'a failed attempt must carry a reason' });
+      if (value.triage.length > 0) {
+        ctx.addIssue({ code: 'custom', path: ['triage'], message: 'a failed attempt cannot carry triage findings' });
+      }
     } else {
       if (value.signature === null)
         ctx.addIssue({ code: 'custom', path: ['signature'], message: 'a completed attempt must carry a signature' });
@@ -263,6 +266,9 @@ const previousDiagnosticSchema = z
         });
       }
       if (value.reason === null) ctx.addIssue({ code: 'custom', path: ['reason'], message: 'a failed attempt must carry a reason' });
+      if (value.triage !== undefined && value.triage.length > 0) {
+        ctx.addIssue({ code: 'custom', path: ['triage'], message: 'a failed attempt cannot carry triage findings' });
+      }
     } else {
       if (value.signature === null)
         ctx.addIssue({ code: 'custom', path: ['signature'], message: 'a completed attempt must carry a signature' });

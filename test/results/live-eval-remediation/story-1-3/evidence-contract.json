@@ -20,7 +20,8 @@
     "penetration-test-staging",
     "hire-a-qa-lead"
   ],
-  "fixtureDigest": "sha256:cd3856056f42680cbe4eb861f44bdc2299c68aa27f8051d99e8f766f1b25aaae",
+  "fixtureDigest": "sha256:5b71831e38998dcb4653dc6b25ec81865dd2a90a93b273c2531459717ca8c8fa",
+  "recordFixtureDigest": "sha256:cd3856056f42680cbe4eb861f44bdc2299c68aa27f8051d99e8f766f1b25aaae",
   "thresholds": {
     "routeAccuracy": 0.9,
     "reasonTokenRecall": 0.8,

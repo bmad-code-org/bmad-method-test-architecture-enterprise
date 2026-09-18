@@ -385,6 +385,11 @@ async function main() {
   ]);
   check(validateEvalResult(environmentResult).success, 'an environment failure and the completed quality measurement validate together');
   check(environmentResult.runners[0].measurements.accuracy === 1, 'an environment failure does not lower the aggregate quality metric');
+  const environmentResultWithTriage = structuredClone(environmentResult);
+  environmentResultWithTriage.runners[0].diagnostics[1].triage = [
+    { reason: 'triage cannot describe an incomplete attempt', rootCause: 'harness-defect' },
+  ];
+  check(!validateEvalResult(environmentResultWithTriage).success, 'a current failed diagnostic rejects non-empty triage');
 
   const extraField = structuredClone(quality);
   extraField.runners[0].diagnostics[0].rawOutput = 'unbounded output';
@@ -1071,6 +1076,24 @@ async function main() {
     !validateEvalResult(previousCleanResult).success,
     'the frozen reader rejects 1.4.0 triage that contradicts a clean diagnostic failure class',
   );
+  const previousFailedResult = structuredClone(environmentResult);
+  previousFailedResult.schemaVersion = PREVIOUS_SCHEMA_VERSION;
+  for (const resultRunner of previousFailedResult.runners) {
+    for (const diagnostic of resultRunner.diagnostics) {
+      delete diagnostic.triage;
+      delete diagnostic.mappedFailures;
+      delete diagnostic.mappedMeasurements;
+      diagnostic.metricContributions = {};
+      diagnostic.evidence = [];
+    }
+  }
+  check(validateEvalResult(previousFailedResult).success, 'a frozen 1.4.0 failed diagnostic accepts omitted triage');
+  previousFailedResult.runners[0].diagnostics[1].triage = [];
+  check(validateEvalResult(previousFailedResult).success, 'a frozen 1.4.0 failed diagnostic accepts empty triage');
+  previousFailedResult.runners[0].diagnostics[1].triage = [
+    { reason: 'triage cannot describe an incomplete attempt', rootCause: 'harness-defect' },
+  ];
+  check(!validateEvalResult(previousFailedResult).success, 'a frozen 1.4.0 failed diagnostic rejects non-empty triage');
   const previousResult = structuredClone(quality);
   previousResult.schemaVersion = PREVIOUS_SCHEMA_VERSION;
   for (const resultRunner of previousResult.runners) {

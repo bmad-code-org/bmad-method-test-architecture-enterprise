@@ -12,7 +12,8 @@ const { validateEvalResult } = require('./schema/eval-result');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVIDENCE_ROOT = path.join(__dirname, 'results', 'live-eval-remediation', 'story-1-3');
-const FIXTURES = ['test/fixtures/tea-routing-eval/intents.json'];
+const RECORD_FIXTURES = ['test/fixtures/tea-routing-eval/intents.json'];
+const FIXTURES = [...RECORD_FIXTURES, 'test/fixtures/tea-routing-eval/ground-truth.json'];
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(path.join(EVIDENCE_ROOT, file), 'utf8'));
@@ -92,6 +93,7 @@ async function main() {
     'live corpus case ids',
   );
   checkEqual(failures, await digestFiles(PROJECT_ROOT, FIXTURES), contract.fixtureDigest, 'live fixture digest');
+  checkEqual(failures, await digestFiles(PROJECT_ROOT, RECORD_FIXTURES), contract.recordFixtureDigest, 'record fixture digest');
 
   const expectedGrid = contract.caseIds.flatMap((caseId) => [
     [caseId, 1],
@@ -107,7 +109,7 @@ async function main() {
     checkEqual(failures, record.mode, 'live', `${file} run mode`);
     checkEqual(failures, record.repository, expected.repository, `${file} repository provenance`);
     checkEqual(failures, record.suite.id, 'bmad-tea-routing', `${file} suite id`);
-    checkEqual(failures, record.suite.fixtureDigest, contract.fixtureDigest, `${file} fixture digest`);
+    checkEqual(failures, record.suite.fixtureDigest, contract.recordFixtureDigest, `${file} fixture digest`);
     checkEqual(failures, record.suite.promptDigest, expected.suitePromptDigest, `${file} suite prompt digest`);
     checkEqual(failures, record.suite.caseIds, contract.caseIds, `${file} case ids`);
     checkEqual(

@@ -34,7 +34,10 @@ function includes(problems, fragment, description) {
 function unservableBoundaryRows(skill) {
   const start = '<!-- routing-unservable-boundaries:start -->';
   const end = '<!-- routing-unservable-boundaries:end -->';
-  const block = skill.slice(skill.indexOf(start) + start.length, skill.indexOf(end));
+  const startIndex = skill.indexOf(start);
+  const endIndex = skill.indexOf(end);
+  if (startIndex === -1 || endIndex === -1 || endIndex <= startIndex) return [];
+  const block = skill.slice(startIndex + start.length, endIndex);
   return block
     .split('\n')
     .filter((line) => /^\| `/.test(line))
@@ -122,6 +125,20 @@ async function main() {
     'declares no unservable boundary for "run-and-fix-ci-failures"',
     'missing unservable boundary',
   );
+
+  for (const [description, malformed] of [
+    ['missing unservable start marker', skill.replace('<!-- routing-unservable-boundaries:start -->', '')],
+    ['missing unservable end marker', skill.replace('<!-- routing-unservable-boundaries:end -->', '')],
+    [
+      'reversed unservable markers',
+      skill
+        .replace('<!-- routing-unservable-boundaries:start -->', '<!-- routing-unservable-boundaries:temporary -->')
+        .replace('<!-- routing-unservable-boundaries:end -->', '<!-- routing-unservable-boundaries:start -->')
+        .replace('<!-- routing-unservable-boundaries:temporary -->', '<!-- routing-unservable-boundaries:end -->'),
+    ],
+  ]) {
+    includes(validateUnservableBoundaries(corpus, malformed), 'declares no unservable boundary for "run-and-fix-ci-failures"', description);
+  }
 
   const servableInUnservableTable = skill.replace('| `run-and-fix-ci-failures`', '| `review-existing-tests`');
   includes(

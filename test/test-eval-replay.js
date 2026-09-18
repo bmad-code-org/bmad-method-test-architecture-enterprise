@@ -97,17 +97,14 @@
  * the parser, so a green run here proves nothing about what a live agent emits."
  * The same sentence applies here, and harder. This suite proves the scorers are
  * deterministic and that they reproduce recorded history. It proves nothing about
- * whether they handle real agent output correctly, because every case that
- * produces a number was written by hand to be parsed. Eighty-six of the
- * ninety cases produce a number and all but two of those are constructed. Two
- * carry real captured bytes borrowed from the CLI parser fixtures, and both now
- * score as a measured miss rather than as unmeasurable: their reports document
- * no finding at all, and a verdict whose findings array is empty is a reviewer
- * that named nothing. The live runs of 2026-09-08 measured the three suites that
- * existed then and none of their output was committed, so this repository still
- * holds no captured output that this suite can turn into a number a vendor
- * actually earned, and the trace, nfr, ci, test-design and bmad-tea-routing suites
- * in particular have no real capture at all.
+ * whether they handle real agent output correctly. One hundred twelve of the one
+ * hundred eighteen cases produce a number and ninety-eight of those are constructed.
+ * Fourteen carry captured bytes: twelve from the ATDD fixture corpus and two from
+ * the CLI parser fixtures. The test-review captures score as measured misses because
+ * their reports document no finding. A verdict whose findings array is empty is a
+ * reviewer that named nothing. The routing replay corpus also preserves all four
+ * successful clarification branches, and every routing replay remains constructed.
+ * Live Story 1.3 routing evidence is validated by test:eval-routing-evidence.
  *
  * Two more things sit outside what a green run covers:
  *
