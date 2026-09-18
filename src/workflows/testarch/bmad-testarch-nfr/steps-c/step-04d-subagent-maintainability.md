@@ -13,35 +13,26 @@ This is an **isolated subagent** running in parallel with other NFR domain evide
 
 **Your task:** Assess MAINTAINABILITY NFR domain only.
 
+Use only exact paths and supported observations from
+`subagentContext.supplied_evidence_ledger`. When the ledger cannot support a
+declared criterion, report CONCERNS and add the missing observation to
+`evidence_gaps`. Emit exactly one finding per item in
+`subagentContext.declared_nfr_criteria.maintainability`, in declared order.
+Omit generic maintainability topics absent from that scope. Keep requirements
+and threshold sources out of `evidence`. Never cite remembered files, examples,
+or inferred facts.
+
 ---
 
 ## SUBAGENT TASK
 
-### 1. Maintainability Evidence Audit Categories
+### 1. Maintainability Evidence Audit Scope
 
-**A) Test Coverage:**
-
-- Overall coverage percentage (from CI coverage report)
-- Coverage trend (improving/flat/declining)
-- Critical paths left uncovered
-
-**B) Code Duplication:**
-
-- Duplicated block percentage (from jscpd CI job)
-- Largest duplicated regions
-- Refactor candidates identified
-
-**C) Dependency & Vulnerability Health:**
-
-- Critical/high vulnerabilities (from `npm audit` CI job)
-- Outdated or unmaintained dependencies
-- Time-to-remediate for known issues
-
-**D) Observability:**
-
-- Structured logging validated from a structured log sample, documented schema, or automated format assertion
-- Error tracking configured (Sentry/monitoring integration)
-- Log levels and error context sufficient for debugging
+Read the maintainability array from `subagentContext.declared_nfr_criteria`.
+Assess only those entries and preserve their exact IDs, labels, and order.
+General maintainability topics are discovery knowledge only. They create no
+finding, recommendation, gap, or status impact unless a supplied requirement
+declares them.
 
 ---
 
@@ -51,51 +42,61 @@ For each category, determine status. Load
 `{skill-root}/steps-c/nfr-status-definitions.md` for what PASS, CONCERNS, FAIL,
 and N/A mean and are shared across all four NFR domain workers.
 
+Assign the finding status solely by comparing the supplied implementation
+observation with that criterion's declared threshold. A result allowed by the
+threshold remains PASS. For example, a moderate-only dependency finding remains
+PASS when the declared threshold prohibits critical and high findings. Descriptive
+severity outside the threshold's prohibited set cannot lower the finding or
+domain status.
+
+For each criterion, select every ledger observation whose `criterion_id` equals
+that criterion's stable ID. Cite all of them, de-duplicated and sorted by `path`
+then `supports`. Omitting any bound observation is invalid. When no observation
+is bound, emit exactly one gap object with that `criterion_id` and the fixed
+message `${criterion.label}: no supplied implementation evidence`. Emit no
+narrower, broader, or free-form gap for that criterion.
+
 ---
 
 ## OUTPUT FORMAT
 
+The following is a schema-only shape. Braced tokens are placeholders and are
+never evidence or default values.
+
 ```json
 {
   "domain": "maintainability",
-  "risk_level": "MEDIUM",
+  "risk_level": "{RISK_LEVEL}",
   "findings": [
     {
-      "category": "Test Coverage",
-      "status": "PASS",
-      "description": "Coverage at 84%, meets 80% threshold",
-      "evidence": ["CI coverage report - coverage/lcov-report/index.html"],
-      "recommendations": []
-    },
-    {
-      "category": "Code Duplication",
-      "status": "CONCERNS",
-      "description": "Duplication at 6%, above the 5% threshold",
-      "evidence": ["jscpd report - reports/jscpd/jscpd-report.json"],
-      "recommendations": ["Extract shared helper for the duplicated fixture setup", "Track duplication trend per PR"]
-    },
-    {
-      "category": "Observability",
-      "status": "CONCERNS",
-      "description": "Structured log format is documented but has no automated assertion",
-      "evidence": ["Structured logging schema - docs/observability/log-schema.json"],
-      "recommendations": ["Add an automated assertion for the structured log schema"]
+      "criterion_id": "{STABLE_CRITERION_ID_FROM_DECLARED_SCOPE}",
+      "category": "{MAINTAINABILITY_CRITERION}",
+      "status": "{STATUS}",
+      "description": "{EVIDENCE_BACKED_FINDING}",
+      "evidence": [
+        {
+          "path": "{PROJECT_RELATIVE_PATH_FROM_LEDGER}",
+          "supports": "{OBSERVATION_FROM_LEDGER}"
+        }
+      ],
+      "recommendations": ["{ACTION_IF_NEEDED}"]
     }
   ],
-  "compliance": {
-    "coverage_80pct": "PASS",
-    "duplication_5pct": "CONCERNS",
-    "vulnerability_scan": "PASS",
-    "observability": "CONCERNS"
-  },
-  "priority_actions": [
-    "Reduce fixture-setup duplication below 5%",
-    "Add an automated structured-log format assertion",
-    "Confirm error tracking captures unhandled promise rejections"
+  "evidence_gaps": [
+    {
+      "criterion_id": "{STABLE_CRITERION_ID_FROM_DECLARED_SCOPE}",
+      "message": "{CRITERION_LABEL}: no supplied implementation evidence"
+    }
   ],
-  "summary": "Coverage and vulnerability scan clean; duplication and observability need follow-up"
+  "compliance": { "{MAINTAINABILITY_COMMITMENT}": "{STATUS}" },
+  "priority_actions": ["{PRIORITY_ACTION}"],
+  "summary": "{EVIDENCE_BACKED_SUMMARY}"
 }
 ```
+
+Use each ledger path exactly as stored. De-duplicate and sort evidence by
+`path`, then `supports`. Keep the threshold source in a separate
+`threshold_source` field when needed; never copy it into `evidence`.
 
 ---
 

@@ -1,0 +1,405 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-09-18T03:54:01.604Z",
+  "mode": "live",
+  "repository": {
+    "commit": "9f03cc0d02b4731a4860cdeea64b917737831d70",
+    "dirty": true
+  },
+  "suite": {
+    "id": "nfr",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-nfr"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/nfr.contract.json",
+        "version": "5"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:0cc7e216bf8b377dbd64a5edec96d6779f4d6849c74fa5db061923a8b15ef879",
+    "promptDigest": "sha256:966f9ccaa2a7bb7dbe07c3ce9fd94d87c0bc74aa68715e0c760387989f8597bd",
+    "caseIds": [
+      "gapped-harbor-billing-ledger",
+      "clean-atlas-notification-relay"
+    ],
+    "cases": [
+      {
+        "id": "gapped-harbor-billing-ledger",
+        "promptDigest": "sha256:924e8e29f3640f9336ac7a97ce0f9aec7a6e808b5a757a9b79d915ed5972f67f"
+      },
+      {
+        "id": "clean-atlas-notification-relay",
+        "promptDigest": "sha256:ce23e3c69cd4fb7a1cde92a36ba21b051adbfd280ad0f63e8c0d29fc1dde7415"
+      }
+    ],
+    "thresholds": {
+      "domainStatusAccuracy": 0.875,
+      "undecidableDomainAccuracy": 1,
+      "thresholdFidelityAccuracy": 0.9,
+      "overallStatusAccuracy": 1,
+      "domainCoverage": 1,
+      "groundedCitationAccuracy": 1,
+      "maxUnsupportedPass": 0,
+      "maxFabricatedEvidence": 0,
+      "maxCleanFalsePositives": 0,
+      "maxDuplicateDomainSections": 0,
+      "maxGateDisagreements": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 2
+  },
+  "runners": [
+    {
+      "agent": "codex",
+      "executable": "codex",
+      "version": "codex-cli 0.154.0",
+      "model": "gpt-5.6-sol",
+      "parameters": {
+        "agentArgs": [
+          "-c",
+          "model_reasoning_effort=low"
+        ],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 4,
+        "completed": 4
+      },
+      "measurements": {
+        "domainStatusAccuracy": 0.9375,
+        "undecidableDomainAccuracy": 1,
+        "thresholdFidelityAccuracy": 1,
+        "overallStatusAccuracy": 0.75,
+        "domainCoverage": 1,
+        "groundedCitationAccuracy": 0.0425531914893617,
+        "duplicateDomainSections": 0,
+        "gateDisagreements": 0,
+        "unsupportedPass": 0,
+        "fabricatedEvidence": 0,
+        "cleanFalsePositives": 1,
+        "unstableCases": 2,
+        "incompleteCases": 0,
+        "fixtureMutations": 0
+      },
+      "durationMs": 1737545,
+      "usage": null,
+      "failureClass": "quality",
+      "failures": [
+        "overallStatusAccuracy",
+        "groundedCitationAccuracy",
+        "clean false positives",
+        "2 unstable case(s)"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "gapped-harbor-billing-ledger",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"gapped-harbor-billing-ledger\",[\"performance=CONCERNS/CONCERNS/true/true\",\"security=PASS/PASS/true/true\",\"reliability=FAIL/FAIL/true/true\",\"maintainability=CONCERNS/CONCERNS/true/true\"],{\"performance\":[\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\"],\"security\":[\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/dependency-scan-2026-08-30.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\"],\"reliability\":[\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\"],\"maintainability\":[\"harbor-billing-ledger/docs/tech-spec.md\",\"harbor-billing-ledger/docs/tech-spec.md\",\"config/logging.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"config/logging.json\",\"harbor-billing-ledger/docs/tech-spec.md\"]},4,4,true,[],[],[],[],{\"hits\":1,\"total\":10},[\"performance: Response Time (p95) -> harbor-billing-ledger/docs/tech-spec.md\",\"performance: Throughput -> harbor-billing-ledger/docs/tech-spec.md\",\"security: Data Protection -> harbor-billing-ledger/docs/tech-spec.md\",\"security: Vulnerability Management -> harbor-billing-ledger/docs/tech-spec.md\",\"reliability: Availability (Uptime) -> harbor-billing-ledger/docs/tech-spec.md\",\"reliability: Error Rate -> harbor-billing-ledger/docs/tech-spec.md\",\"reliability: MTTR -> harbor-billing-ledger/docs/tech-spec.md\",\"reliability: Fault Tolerance -> harbor-billing-ledger/docs/tech-spec.md\",\"reliability: CI Burn-In -> harbor-billing-ledger/docs/tech-spec.md\"],[\"Ledger-write retry behavior\",\"Statement test coverage\",\"Code duplication result\"],\"FAIL\",true,0,0]",
+          "metricContributions": {
+            "domainStatusAccuracy.numerator": 4,
+            "domainStatusAccuracy.denominator": 4,
+            "domainStatusAccuracy.threshold": 0.875,
+            "undecidableDomainAccuracy.numerator": 2,
+            "undecidableDomainAccuracy.denominator": 2,
+            "undecidableDomainAccuracy.threshold": 1,
+            "thresholdFidelityAccuracy.numerator": 5,
+            "thresholdFidelityAccuracy.denominator": 5,
+            "thresholdFidelityAccuracy.threshold": 0.9,
+            "overallStatusAccuracy.numerator": 1,
+            "overallStatusAccuracy.denominator": 1,
+            "overallStatusAccuracy.threshold": 1,
+            "domainCoverage.numerator": 4,
+            "domainCoverage.denominator": 4,
+            "domainCoverage.threshold": 1,
+            "groundedCitationAccuracy.numerator": 1,
+            "groundedCitationAccuracy.denominator": 10,
+            "groundedCitationAccuracy.threshold": 1,
+            "duplicateDomainSections": 0,
+            "maxDuplicateDomainSections": 0,
+            "gateDisagreements": 0,
+            "maxGateDisagreements": 0,
+            "unsupportedPass": 0,
+            "maxUnsupportedPass": 0,
+            "fabricatedEvidence": 0,
+            "maxFabricatedEvidence": 0,
+            "cleanFalsePositives": 0,
+            "maxCleanFalsePositives": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "groundedCitationAccuracy; unstable case",
+          "triage": [
+            {
+              "reason": "groundedCitationAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "groundedCitationAccuracy",
+            "2 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"gapped-harbor-billing-ledger\",[\"performance=CONCERNS/CONCERNS/true/true\",\"security=PASS/PASS/true/true\",\"reliability=FAIL/FAIL/true/true\",\"maintainability=CONCERNS/CONCERNS/true/true\"],{\"performance\":[\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\"],\"security\":[\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/dependency-scan-2026-08-30.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\"],\"reliability\":[\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"evidence/reliability-2026-08.json\"],\"maintainability\":[\"harbor-billing-ledger/docs/tech-spec.md\",\"harbor-billing-ledger/docs/tech-spec.md\",\"config/logging.json\",\"harbor-billing-ledger/docs/tech-spec.md\",\"config/logging.json\",\"harbor-billing-ledger/docs/tech-spec.md\"]},4,4,true,[],[],[],[],{\"hits\":1,\"total\":10},[\"performance: Response Time (p95) -> harbor-billing-ledger/docs/tech-spec.md\",\"performance: Throughput -> harbor-billing-ledger/docs/tech-spec.md\",\"security: Data Protection -> harbor-billing-ledger/docs/tech-spec.md\",\"security: Vulnerability Management -> harbor-billing-ledger/docs/tech-spec.md\",\"reliability: Availability (Uptime) -> harbor-billing-ledger/docs/tech-spec.md\",\"reliability: Error Rate -> harbor-billing-l…sha256:920723d90658146b9ad0d6dc9bd4143a31e6d6865a9f2aa0f7976609084c66b2"
+            },
+            {
+              "kind": "artifact",
+              "value": "harbor-billing-ledger/test-artifacts/nfr-assessment.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:4b84621d6d8a017e6c700fb981646d76ee81536d18374017571f2486b46f67c4 --- stepsCompleted: ['step-01-load-context', 'step-02-define-thresholds', 'step-03-gather-evidence', 'step-04e-aggregate-nfr', 'step-05-generate-report'] lastStep: 'step-05-generate-report' lastSaved: '2026-09-17' workflowType: 'testarch-nfr-assess' inputDocuments: - 'harbor-billing-ledger/_bmad/tea/config.yaml' - 'harbor-billing-ledger/docs/tech-spec.md' - 'skill/resources/knowledge/adr-quality-readiness-checklist.md' - 'skill/resources/knowledge/ci-burn-in.md' - 'skill/resources/knowledge/test-quality.md'"
+            }
+          ]
+        },
+        {
+          "caseId": "gapped-harbor-billing-ledger",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[\"gapped-harbor-billing-ledger\",[\"performance=CONCERNS/CONCERNS/true/true\",\"security=PASS/PASS/true/true\",\"reliability=FAIL/FAIL/true/true\",\"maintainability=CONCERNS/CONCERNS/true/true\"],{\"performance\":[\"evidence/load-test-2026-08-28.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\",\"docs/tech-spec.md\"],\"security\":[\"evidence/security-review-2026-08-29.md\",\"docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"docs/tech-spec.md\",\"evidence/dependency-scan-2026-08-30.json\",\"docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"docs/tech-spec.md\"],\"reliability\":[\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\"],\"maintainability\":[\"docs/tech-spec.md\",\"config/logging.json\",\"docs/tech-spec.md\",\"config/logging.json\",\"docs/tech-spec.md\",\"docs/tech-spec.md\"]},4,4,true,[],[],[],[],{\"hits\":1,\"total\":11},[\"performance: Response Time (p95) -> docs/tech-spec.md\",\"performance: Throughput -> docs/tech-spec.md\",\"security: Data Protection -> docs/tech-spec.md\",\"security: Vulnerability Management -> docs/tech-spec.md\",\"reliability: Availability (Uptime) -> docs/tech-spec.md\",\"reliability: Error Rate -> docs/tech-spec.md\",\"reliability: MTTR -> docs/tech-spec.md\",\"reliability: Fault Tolerance -> docs/tech-spec.md\",\"reliability: CI Burn-In -> docs/tech-spec.md\",\"reliability: Disaster Recovery -> docs/tech-spec.md\"],[\"Ledger-write retry behavior\",\"Statement coverage\",\"Code duplication\"],\"FAIL\",true,0,0]",
+          "metricContributions": {
+            "domainStatusAccuracy.numerator": 4,
+            "domainStatusAccuracy.denominator": 4,
+            "domainStatusAccuracy.threshold": 0.875,
+            "undecidableDomainAccuracy.numerator": 2,
+            "undecidableDomainAccuracy.denominator": 2,
+            "undecidableDomainAccuracy.threshold": 1,
+            "thresholdFidelityAccuracy.numerator": 5,
+            "thresholdFidelityAccuracy.denominator": 5,
+            "thresholdFidelityAccuracy.threshold": 0.9,
+            "overallStatusAccuracy.numerator": 1,
+            "overallStatusAccuracy.denominator": 1,
+            "overallStatusAccuracy.threshold": 1,
+            "domainCoverage.numerator": 4,
+            "domainCoverage.denominator": 4,
+            "domainCoverage.threshold": 1,
+            "groundedCitationAccuracy.numerator": 1,
+            "groundedCitationAccuracy.denominator": 11,
+            "groundedCitationAccuracy.threshold": 1,
+            "duplicateDomainSections": 0,
+            "maxDuplicateDomainSections": 0,
+            "gateDisagreements": 0,
+            "maxGateDisagreements": 0,
+            "unsupportedPass": 0,
+            "maxUnsupportedPass": 0,
+            "fabricatedEvidence": 0,
+            "maxFabricatedEvidence": 0,
+            "cleanFalsePositives": 0,
+            "maxCleanFalsePositives": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "groundedCitationAccuracy; unstable case",
+          "triage": [
+            {
+              "reason": "groundedCitationAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "groundedCitationAccuracy",
+            "2 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"gapped-harbor-billing-ledger\",[\"performance=CONCERNS/CONCERNS/true/true\",\"security=PASS/PASS/true/true\",\"reliability=FAIL/FAIL/true/true\",\"maintainability=CONCERNS/CONCERNS/true/true\"],{\"performance\":[\"evidence/load-test-2026-08-28.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-08-28.json\",\"docs/tech-spec.md\"],\"security\":[\"evidence/security-review-2026-08-29.md\",\"docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"docs/tech-spec.md\",\"evidence/dependency-scan-2026-08-30.json\",\"docs/tech-spec.md\",\"evidence/security-review-2026-08-29.md\",\"docs/tech-spec.md\"],\"reliability\":[\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-08.json\",\"docs/tech-spec.md\"],\"maintainability\":[\"docs/tech-spec.md\",\"config/logging.json\",\"docs/tech-spec.md\",\"config/logging.json\",\"docs/tech-spec.md\",\"docs/tech-spec.md\"]},4,4,true,[],[],[],[],{\"hits\":1,\"total\":11},[\"performance: Response Time (p95) -> docs/tech-spec.md\",\"performance: Throughput -> docs/tech-spec.md\",\"security: Data Protection -> docs/tech-spec.md\",\"security: Vulnerability Management -> docs/tech-spec.md\",\"reliability: Availability (Uptime) -> docs/tech-spec.md\",\"reliability: Error Rate -> docs/tech-spec.md\",\"reliability: MTTR -> docs/tech-spec.md\",\"reliability: Fault Tolerance -> docs/tech-spec.md\",\"reliability: CI Burn-In -> docs/tech-spec.md\",\"reliability: Disaster Recovery -> docs/tech-spec.md\"],[\"Ledger-write retry behavior\",\"Statement coverage\",\"Code duplication\"],\"FAIL\",true,0,0]"
+            },
+            {
+              "kind": "artifact",
+              "value": "harbor-billing-ledger/test-artifacts/nfr-assessment.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:2f208bdd344cf8c9a83ffe99f6a3def3787b646a37a2a04e8ba7692d0b66a5f1 --- stepsCompleted: ['step-01-load-context', 'step-02-define-thresholds', 'step-03-gather-evidence', 'step-04e-aggregate-nfr', 'step-05-generate-report'] lastStep: 'step-05-generate-report' lastSaved: '2026-09-17' workflowType: 'testarch-nfr-assess' inputDocuments: - 'harbor-billing-ledger/_bmad/tea/config.yaml' - 'harbor-billing-ledger/docs/tech-spec.md' - 'harbor-billing-ledger/config/logging.json' - 'harbor-billing-ledger/evidence/dependency-scan-2026-08-30.json' - 'harbor-billing-ledger/evidence/load-te"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-atlas-notification-relay",
+          "repetition": 1,
+          "completionState": "completed",
+          "signature": "[\"clean-atlas-notification-relay\",[\"performance=PASS/PASS/true/true\",\"security=FAIL/FAIL/true/true\",\"reliability=PASS/PASS/true/true\",\"maintainability=PASS/PASS/true/true\"],{\"performance\":[\"evidence/load-test-2026-09-02.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"atlas-notification-relay/docs/tech-spec.md\"],\"security\":[\"evidence/security-review-2026-09-01.md\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/dependency-scan-2026-09-01.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"atlas-notification-relay/docs/tech-spec.md\"],\"reliability\":[\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\"],\"maintainability\":[\"evidence/coverage-summary-2026-09-01.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/duplication-report-2026-09-01.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/dependency-scan-2026-09-01.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"config/logging.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"config/logging.json\",\"atlas-notification-relay/docs/tech-spec.md\"]},4,4,true,[],[],[],[],{\"hits\":0,\"total\":13},[\"performance: Response Time (p95) -> atlas-notification-relay/docs/tech-spec.md\",\"performance: Throughput -> atlas-notification-relay/docs/tech-spec.md\",\"security: Data Protection -> atlas-notification-relay/docs/tech-spec.md\",\"security: Vulnerability Management -> atlas-notification-relay/docs/tech-spec.md\",\"security: Compliance -> atlas-notification-relay/docs/tech-spec.md\",\"reliability: Availability (Uptime) -> atlas-notification-relay/docs/tech-spec.md\",\"reliability: Error Rate -> atlas-notification-relay/docs/tech-spec.md\",\"reliability: MTTR -> atlas-notification-relay/docs/tech-spec.md\",\"reliability: Fault Tolerance -> atlas-notification-relay/docs/tech-spec.md\",\"reliability: CI Burn-In -> atlas-notification-relay/docs/tech-spec.md\",\"reliability: Disaster Recovery -> atlas-notification-relay/docs/tech-spec.md\",\"maintainability: Test Coverage -> atlas-notification-relay/docs/tech-spec.md\",\"maintainability: Code Duplication -> atlas-notification-relay/docs/tech-spec.md\"],[],\"FAIL\",false,1,0]",
+          "metricContributions": {
+            "domainStatusAccuracy.numerator": 3,
+            "domainStatusAccuracy.denominator": 4,
+            "domainStatusAccuracy.threshold": 0.875,
+            "undecidableDomainAccuracy.numerator": 0,
+            "undecidableDomainAccuracy.denominator": 0,
+            "undecidableDomainAccuracy.threshold": 1,
+            "thresholdFidelityAccuracy.numerator": 5,
+            "thresholdFidelityAccuracy.denominator": 5,
+            "thresholdFidelityAccuracy.threshold": 0.9,
+            "overallStatusAccuracy.numerator": 0,
+            "overallStatusAccuracy.denominator": 1,
+            "overallStatusAccuracy.threshold": 1,
+            "domainCoverage.numerator": 4,
+            "domainCoverage.denominator": 4,
+            "domainCoverage.threshold": 1,
+            "groundedCitationAccuracy.numerator": 0,
+            "groundedCitationAccuracy.denominator": 13,
+            "groundedCitationAccuracy.threshold": 1,
+            "duplicateDomainSections": 0,
+            "maxDuplicateDomainSections": 0,
+            "gateDisagreements": 0,
+            "maxGateDisagreements": 0,
+            "unsupportedPass": 0,
+            "maxUnsupportedPass": 0,
+            "fabricatedEvidence": 0,
+            "maxFabricatedEvidence": 0,
+            "cleanFalsePositives": 1,
+            "maxCleanFalsePositives": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "overallStatusAccuracy; groundedCitationAccuracy; cleanFalsePositives; unstable case",
+          "triage": [
+            {
+              "reason": "overallStatusAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "groundedCitationAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "cleanFalsePositives",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "overallStatusAccuracy",
+            "groundedCitationAccuracy",
+            "clean false positives",
+            "2 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-atlas-notification-relay\",[\"performance=PASS/PASS/true/true\",\"security=FAIL/FAIL/true/true\",\"reliability=PASS/PASS/true/true\",\"maintainability=PASS/PASS/true/true\"],{\"performance\":[\"evidence/load-test-2026-09-02.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"atlas-notification-relay/docs/tech-spec.md\"],\"security\":[\"evidence/security-review-2026-09-01.md\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/dependency-scan-2026-09-01.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"atlas-notification-relay/docs/tech-spec.md\"],\"reliability\":[\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"atlas-notification-relay/docs/tech-spec.md\"],\"maintainability\":[\"evidence/coverage-summary-2026-09-01.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/duplication-report-2026-09-01.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"evidence/dependency-scan-2026-09-01.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"config/logging.json\",\"atlas-notification-relay/docs/tech-spec.md\",\"config/logging.json\",\"atlas-notification-relay/docs/tech-spec.md\"]},4,4,true,[],[],[],[],{\"hits\":0,\"total\":13},[\"performance: Response Time (p95) -> atlas-n…sha256:6d8490747d583546bfa96c6da2e1309fc108aa47f372dc6d8d7cc5567faaadf2"
+            },
+            {
+              "kind": "artifact",
+              "value": "atlas-notification-relay/test-artifacts/nfr-assessment.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:12fe953e6e1939dd15534b1700e3d2adb7c3c181bf1131faf6d5af2702efe81c --- stepsCompleted: ['step-01-load-context', 'step-02-define-thresholds', 'step-03-gather-evidence', 'step-04e-aggregate-nfr', 'step-05-generate-report'] lastStep: 'step-05-generate-report' lastSaved: '2026-09-17' workflowType: 'testarch-nfr-assess' inputDocuments: - 'atlas-notification-relay/_bmad/tea/config.yaml' - 'atlas-notification-relay/docs/tech-spec.md' - 'atlas-notification-relay/config/logging.json' - 'atlas-notification-relay/evidence/coverage-summary-2026-09-01.json' - 'atlas-notification-relay/"
+            }
+          ]
+        },
+        {
+          "caseId": "clean-atlas-notification-relay",
+          "repetition": 2,
+          "completionState": "completed",
+          "signature": "[\"clean-atlas-notification-relay\",[\"performance=PASS/PASS/true/true\",\"security=PASS/PASS/true/true\",\"reliability=PASS/PASS/true/true\",\"maintainability=PASS/PASS/true/true\"],{\"performance\":[\"evidence/load-test-2026-09-02.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"docs/tech-spec.md\"],\"security\":[\"evidence/security-review-2026-09-01.md\",\"docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"docs/tech-spec.md\",\"evidence/dependency-scan-2026-09-01.json\",\"docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"evidence/security-review-2026-09-01.md\",\"docs/tech-spec.md\"],\"reliability\":[\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\"],\"maintainability\":[\"evidence/coverage-summary-2026-09-01.json\",\"docs/tech-spec.md\",\"evidence/duplication-report-2026-09-01.json\",\"docs/tech-spec.md\",\"evidence/dependency-scan-2026-09-01.json\",\"docs/tech-spec.md\",\"config/logging.json\",\"docs/tech-spec.md\",\"config/logging.json\",\"docs/tech-spec.md\"]},4,4,true,[],[],[],[],{\"hits\":0,\"total\":13},[\"performance: Response Time (p95) -> docs/tech-spec.md\",\"performance: Throughput -> docs/tech-spec.md\",\"security: Data Protection -> docs/tech-spec.md\",\"security: Vulnerability Management -> docs/tech-spec.md\",\"security: Compliance -> docs/tech-spec.md\",\"reliability: Availability (Uptime) -> docs/tech-spec.md\",\"reliability: Error Rate -> docs/tech-spec.md\",\"reliability: MTTR -> docs/tech-spec.md\",\"reliability: Fault Tolerance -> docs/tech-spec.md\",\"reliability: CI Burn-In -> docs/tech-spec.md\",\"reliability: Disaster Recovery -> docs/tech-spec.md\",\"maintainability: Test Coverage -> docs/tech-spec.md\",\"maintainability: Code Duplication -> docs/tech-spec.md\"],[],\"PASS\",false,0,0]",
+          "metricContributions": {
+            "domainStatusAccuracy.numerator": 4,
+            "domainStatusAccuracy.denominator": 4,
+            "domainStatusAccuracy.threshold": 0.875,
+            "undecidableDomainAccuracy.numerator": 0,
+            "undecidableDomainAccuracy.denominator": 0,
+            "undecidableDomainAccuracy.threshold": 1,
+            "thresholdFidelityAccuracy.numerator": 5,
+            "thresholdFidelityAccuracy.denominator": 5,
+            "thresholdFidelityAccuracy.threshold": 0.9,
+            "overallStatusAccuracy.numerator": 1,
+            "overallStatusAccuracy.denominator": 1,
+            "overallStatusAccuracy.threshold": 1,
+            "domainCoverage.numerator": 4,
+            "domainCoverage.denominator": 4,
+            "domainCoverage.threshold": 1,
+            "groundedCitationAccuracy.numerator": 0,
+            "groundedCitationAccuracy.denominator": 13,
+            "groundedCitationAccuracy.threshold": 1,
+            "duplicateDomainSections": 0,
+            "maxDuplicateDomainSections": 0,
+            "gateDisagreements": 0,
+            "maxGateDisagreements": 0,
+            "unsupportedPass": 0,
+            "maxUnsupportedPass": 0,
+            "fabricatedEvidence": 0,
+            "maxFabricatedEvidence": 0,
+            "cleanFalsePositives": 0,
+            "maxCleanFalsePositives": 0,
+            "fixtureMutations": 0,
+            "maxFixtureMutations": 0,
+            "maxUnstableCases": 0
+          },
+          "failureClass": "quality",
+          "rootCause": "tea-workflow-defect",
+          "reason": "groundedCitationAccuracy; unstable case",
+          "triage": [
+            {
+              "reason": "groundedCitationAccuracy",
+              "rootCause": "tea-workflow-defect"
+            },
+            {
+              "reason": "unstable case",
+              "rootCause": "model-instability"
+            }
+          ],
+          "mappedFailures": [
+            "groundedCitationAccuracy",
+            "2 unstable case(s)"
+          ],
+          "mappedMeasurements": [],
+          "evidence": [
+            {
+              "kind": "output-signature",
+              "value": "[\"clean-atlas-notification-relay\",[\"performance=PASS/PASS/true/true\",\"security=PASS/PASS/true/true\",\"reliability=PASS/PASS/true/true\",\"maintainability=PASS/PASS/true/true\"],{\"performance\":[\"evidence/load-test-2026-09-02.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"docs/tech-spec.md\",\"evidence/load-test-2026-09-02.json\",\"docs/tech-spec.md\"],\"security\":[\"evidence/security-review-2026-09-01.md\",\"docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"docs/tech-spec.md\",\"evidence/dependency-scan-2026-09-01.json\",\"docs/tech-spec.md\",\"evidence/security-review-2026-09-01.md\",\"evidence/security-review-2026-09-01.md\",\"docs/tech-spec.md\"],\"reliability\":[\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\",\"evidence/reliability-2026-09.json\",\"docs/tech-spec.md\"],\"maintainability\":[\"evidence/coverage-summary-2026-09-01.json\",\"docs/tech-spec.md\",\"evidence/duplication-report-2026-09-01.json\",\"docs/tech-spec.md\",\"evidence/dependency-scan-2026-09-01.json\",\"docs/tech-spec.md\",\"config/logging.json\",\"docs/tech-spec.md\",\"config/logging.json\",\"docs/tech-spec.md\"]},4,4,true,[],[],[],[],{\"hits\":0,\"total\":13},[\"performance: Response Time (p95) -> docs/tech-spec.md\",\"performance: Throughput -> docs/tech-spec.md\",\"security: Data Protection -> docs/tech-spec.md\",\"security: Vulnerability Management -> docs/tech-spec.md\",\"security: Compliance -> docs/tech-spec.md\",\"reliability: Availability (Uptime) -> docs/tech-spec.md\",\"reliability: Error Rate -> docs/tech-spec.md\",\"reliability: MTTR -> docs/tech-spec.md\",\"reliability: Fault Tolerance -> docs/tech-spec.md\",\"reliability: CI Burn-In -> docs/tech-spec.md\",\"rel…sha256:c8f9aa354b92fc62fe14b665ab7a5f2b167967858f9392ced951cc47761ac933"
+            },
+            {
+              "kind": "artifact",
+              "value": "atlas-notification-relay/test-artifacts/nfr-assessment.md"
+            },
+            {
+              "kind": "summary",
+              "value": "sha256:72c89e2d17252655ad9ef7d8bb5f2737c849a1cb34e4d3a5d4560bafd3f828ce --- stepsCompleted: ['step-01-load-context', 'step-02-define-thresholds', 'step-03-gather-evidence', 'step-04e-aggregate-nfr', 'step-05-generate-report'] lastStep: 'step-05-generate-report' lastSaved: '2026-09-17' workflowType: 'testarch-nfr-assess' inputDocuments: - 'atlas-notification-relay/_bmad/tea/config.yaml' - 'atlas-notification-relay/docs/tech-spec.md' - 'atlas-notification-relay/config/logging.json' - 'atlas-notification-relay/evidence/coverage-summary-2026-09-01.json' - 'atlas-notification-relay/"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 1737605,
+  "failureClass": "quality",
+  "exitCode": 1
+}

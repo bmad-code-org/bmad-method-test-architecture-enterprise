@@ -55,7 +55,11 @@ const parseBooleanFlag = (value, defaultValue = true) => {
 const subagentContext = {
   system_context: /* from Step 1 */,
   nfr_thresholds: /* from Step 2 */,
+  declared_nfr_criteria: /* ordered, explicit assessment scope from Step 2 */,
   evidence_gathered: /* from Step 3 */,
+  supplied_project_root: /* audited project root from Step 3 */,
+  supplied_evidence_ledger: /* canonical ledger from Step 3 */,
+  evidence_gaps: /* explicit gaps from Step 3 */,
   config: {
     execution_mode: config.tea_execution_mode || 'auto',  // "auto" | "subagent" | "agent-team" | "sequential"
     capability_probe: parseBooleanFlag(config.tea_capability_probe, true),  // supports booleans and "false"/"true" strings
@@ -140,6 +144,22 @@ If probing is disabled, honor the requested mode strictly. If that mode cannot b
 ---
 
 ### 3. Dispatch 4 NFR Workers
+
+Every worker receives the complete `supplied_evidence_ledger` and
+`evidence_gaps`, plus the ordered `declared_nfr_criteria` scope. A worker emits
+exactly one finding for each declared criterion in its domain, in declared
+source order. It must omit every broad checklist or worker category absent from
+that scope; omitted categories create no gap and cannot affect domain status.
+A worker may cite only an exact `path` from the implementation-evidence ledger
+and may state only an observation listed in that entry's `supports` array.
+Threshold sources remain separate and never appear in a finding's `evidence`
+array. A declared criterion with no matching implementation support cannot
+receive PASS. The worker must emit CONCERNS, or the workflow's declared
+undecidable state, and add the missing observation to the evidence gaps.
+
+Before writing output, de-duplicate and sort every finding's evidence by
+`path`, then `supports`; de-duplicate gaps while preserving declared criterion
+order. These rules apply in every execution mode.
 
 #### Subagent A: Security Evidence Audit
 

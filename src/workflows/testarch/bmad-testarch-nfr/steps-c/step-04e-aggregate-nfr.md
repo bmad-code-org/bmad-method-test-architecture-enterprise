@@ -41,43 +41,211 @@ domains.forEach((domain) => {
 
 ### 1a. Enforce the Undefined-Threshold Default
 
-Step 2 (Define Thresholds) marks a category **UNKNOWN** when no threshold was
-found in any source, and states the plan to report **CONCERNS** for it (see
-`{skill-root}/steps-c/nfr-status-definitions.md`). This is where that plan is
-checked, not just stated: a worker cannot silently report PASS for a domain
-whose threshold was never established.
+#### Normalize Findings to the Declared Scope
+
+The ordered `declared_nfr_criteria` map is the complete assessment scope. Drop
+worker findings and gaps for generic checklist categories absent from that map.
+For each declared criterion, keep exactly one finding identified by
+`criterion_id`. If a worker omitted it, create one CONCERNS finding. Step 1b
+derives the complete gap list from ledger support, so worker-authored gap labels
+never enter the report. Keep findings in declared source order.
 
 ```javascript
-const domainThresholdKnown = (domain) => {
-  const threshold = subagentContext.nfr_thresholds?.[domain];
-  return threshold !== undefined && threshold !== 'UNKNOWN';
-};
-
 domains.forEach((domain) => {
-  if (domainThresholdKnown(domain)) return;
-  assessments[domain].findings.forEach((finding) => {
-    if (finding.status === 'PASS') {
-      finding.status = 'CONCERNS';
-      finding.description = `${finding.description} (downgraded from PASS: threshold was UNKNOWN at Step 2; an unmeasured target cannot pass).`;
+  const declared = subagentContext.declared_nfr_criteria[domain] || [];
+  const returned = new Map();
+  (assessments[domain].findings || []).forEach((finding) => {
+    if (!finding || typeof finding.criterion_id !== 'string' || finding.criterion_id.length === 0) {
+      throw new Error(`${domain} worker returned a malformed finding`);
     }
+    if (returned.has(finding.criterion_id)) {
+      throw new Error(`${domain} worker returned duplicate criterion_id: ${finding.criterion_id}`);
+    }
+    returned.set(finding.criterion_id, finding);
   });
-  Object.entries(assessments[domain].compliance || {}).forEach(([standard, status]) => {
-    if (status === 'PASS') assessments[domain].compliance[standard] = 'CONCERNS';
+  assessments[domain].findings = declared.map((criterion) => {
+    const finding = returned.get(criterion.id);
+    if (finding) {
+      return {
+        ...finding,
+        criterion_id: criterion.id,
+        category: criterion.label,
+        recommendations: Array.isArray(finding.recommendations) ? finding.recommendations : [],
+      };
+    }
+    return {
+      criterion_id: criterion.id,
+      category: criterion.label,
+      status: 'CONCERNS',
+      description: 'No assessment was returned for this declared criterion.',
+      evidence: [],
+      recommendations: [],
+    };
+  });
+  assessments[domain].evidence_gaps = [];
+
+  assessments[domain].findings.forEach((finding, index) => {
+    if (declared[index].threshold === 'UNKNOWN') {
+      finding.status = 'CONCERNS';
+    }
   });
 });
 ```
 
+Requirements documents belong only in each criterion's `threshold_source`.
+They do not become findings, evidence, or gaps. A domain with no declared
+criteria is N/A and contributes no gap.
+
 ---
 
-### 1b. Roll Each Domain's Findings Into Its Domain Status
+### 1b. Audit Every Citation Before Aggregation
+
+Treat the `implementation-evidence` entries in
+`subagentContext.supplied_evidence_ledger` as the only publication allowlist.
+Each ledger observation must name a stable `criterion_id` from the declared
+scope. Audit worker citations, then replace each finding's evidence with every
+ledger observation bound to that criterion. Normalize paths to the spelling
+relative to `supplied_project_root`, with no project-directory prefix. A
+requirements or threshold-source document is always rejected as implementation
+evidence.
+
+```javascript
+const projectDirectory = path.basename(subagentContext.supplied_project_root.replace(/[\\/]+$/, ''));
+const canonicalEvidencePath = (candidate) => {
+  if (typeof candidate !== 'string' || path.isAbsolute(candidate)) return null;
+  let normalized = candidate.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (normalized.startsWith(`${projectDirectory}/`)) normalized = normalized.slice(projectDirectory.length + 1);
+  if (!normalized || normalized.split('/').some((part) => part === '' || part === '.' || part === '..')) return null;
+  const resolved = path.resolve(subagentContext.supplied_project_root, normalized);
+  const relative = path.relative(subagentContext.supplied_project_root, resolved).replace(/\\/g, '/');
+  if (relative !== normalized || relative.startsWith('../')) return null;
+  return normalized;
+};
+const declaredEntries = domains.flatMap((domain) =>
+  (subagentContext.declared_nfr_criteria[domain] || []).map((criterion) => [criterion.id, { ...criterion, domain }]),
+);
+const declaredById = new Map(declaredEntries);
+if (declaredById.size !== declaredEntries.length) throw new Error('Declared NFR criterion IDs must be globally unique');
+const thresholdSourcePaths = new Set(
+  [...declaredEntries.map(([, criterion]) => criterion), ...(subagentContext.recorded_only_nfr_criteria || [])]
+    .map((criterion) => canonicalEvidencePath(criterion.threshold_source))
+    .filter(Boolean),
+);
+const evidenceLedger = new Map();
+const evidenceByCriterion = new Map();
+const ledgerEntries = subagentContext.supplied_evidence_ledger;
+if (!Array.isArray(ledgerEntries)) throw new Error('supplied_evidence_ledger must be an array');
+
+ledgerEntries.forEach((entry) => {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('Malformed supplied-evidence ledger entry');
+  const canonicalPath = canonicalEvidencePath(entry.path);
+  if (canonicalPath !== entry.path) throw new Error(`Ledger path is not canonical: ${entry.path}`);
+  if (entry.source_type !== 'implementation-evidence') {
+    throw new Error(`Ledger entry has invalid source_type: ${entry.path}`);
+  }
+  if (thresholdSourcePaths.has(entry.path)) {
+    throw new Error(`Threshold source is mislabeled as implementation evidence: ${entry.path}`);
+  }
+  if (evidenceLedger.has(entry.path)) throw new Error(`Duplicate ledger path: ${entry.path}`);
+  const resolved = path.resolve(subagentContext.supplied_project_root, entry.path);
+  if (!fs.existsSync(resolved) || !fs.lstatSync(resolved).isFile()) {
+    throw new Error(`Ledger path is not a supplied regular file: ${entry.path}`);
+  }
+  if (!Array.isArray(entry.observations) || entry.observations.length === 0) {
+    throw new Error(`Ledger entry has no criterion-bound observations: ${entry.path}`);
+  }
+  const supported = new Set();
+  entry.observations.forEach((observation) => {
+    if (
+      !observation ||
+      typeof observation !== 'object' ||
+      typeof observation.criterion_id !== 'string' ||
+      typeof observation.supports !== 'string' ||
+      observation.supports.trim().length === 0
+    ) {
+      throw new Error(`Malformed ledger observation: ${entry.path}`);
+    }
+    if (!declaredById.has(observation.criterion_id)) {
+      throw new Error(`Ledger observation names undeclared criterion_id: ${observation.criterion_id}`);
+    }
+    const key = `${observation.criterion_id}\0${observation.supports}`;
+    if (supported.has(key)) throw new Error(`Duplicate ledger observation: ${entry.path} -> ${observation.criterion_id}`);
+    supported.add(key);
+    const evidence = { path: entry.path, supports: observation.supports };
+    const bound = evidenceByCriterion.get(observation.criterion_id) || [];
+    bound.push(evidence);
+    evidenceByCriterion.set(observation.criterion_id, bound);
+  });
+  evidenceLedger.set(entry.path, supported);
+});
+
+for (const [criterionId, evidence] of evidenceByCriterion) {
+  evidenceByCriterion.set(
+    criterionId,
+    evidence
+      .filter((item, index, all) => all.findIndex((other) => other.path === item.path && other.supports === item.supports) === index)
+      .sort((left, right) => left.path.localeCompare(right.path) || left.supports.localeCompare(right.supports)),
+  );
+}
+const citationAudit = [];
+
+domains.forEach((domain) => {
+  assessments[domain].evidence_gaps ||= [];
+  assessments[domain].findings.forEach((finding) => {
+    const evidence = Array.isArray(finding.evidence) ? finding.evidence : [];
+    const normalized = evidence.map((item) => ({ ...item, path: canonicalEvidencePath(item?.path) }));
+    const allowedForCriterion = new Set(
+      (evidenceByCriterion.get(finding.criterion_id) || []).map((item) => `${item.path}\0${item.supports}`),
+    );
+    const rejected = normalized.filter((item) => {
+      if (!item || typeof item.path !== 'string' || typeof item.supports !== 'string') return true;
+      return (
+        !evidenceLedger.get(item.path)?.has(`${finding.criterion_id}\0${item.supports}`) ||
+        !allowedForCriterion.has(`${item.path}\0${item.supports}`)
+      );
+    });
+    finding.evidence = evidenceByCriterion.get(finding.criterion_id) || [];
+    if (rejected.length > 0) citationAudit.push({ domain, criterion_id: finding.criterion_id, rejected });
+    const criterion = declaredById.get(finding.criterion_id);
+    finding.description =
+      finding.evidence.length === 0
+        ? `${criterion.label}: no supplied implementation evidence.`
+        : `${criterion.label}: ${finding.evidence.map((item) => item.supports).join('; ')}.`;
+    const gapMessage =
+      criterion.threshold === 'UNKNOWN'
+        ? `${criterion.label}: declared threshold is UNKNOWN`
+        : rejected.length > 0
+          ? `${criterion.label}: submitted citation rejected by publication audit`
+          : finding.evidence.length === 0
+            ? `${criterion.label}: no supplied implementation evidence`
+            : null;
+    if (gapMessage === null) return;
+    finding.status = 'CONCERNS';
+    const gap = { criterion_id: finding.criterion_id, message: gapMessage };
+    assessments[domain].evidence_gaps.push(gap);
+    citationAudit.push({ domain, criterion_id: finding.criterion_id, rejected, gap });
+  });
+});
+```
+
+The normalizer accepts the two equivalent incoming spellings solely to produce
+one canonical output spelling. Any other spelling is rejected. Never publish the project-directory prefix, a
+rejected path, a threshold source as implementation evidence, or an unsupported
+statement. This step cites all valid bound observations even when a worker
+omitted some, which keeps grounded criterion coverage stable. Preserve the one
+fixed structured gap per unsupported declared criterion in the report. If the workflow's
+status vocabulary declares a separate undecidable value for this context, use
+that value and preserve the same gap.
+
+### 1c. Roll Each Domain's Findings Into Its Domain Status
 
 A worker reports findings. The domain has one status of its own, and this is
 where it is computed, by the rule stated in
 `{skill-root}/steps-c/nfr-status-definitions.md` (see "Domain Status"): the worst
 status among the domain's findings, with N/A deciding nothing.
 
-This runs after 1a, so a PASS the undefined-threshold default downgraded is
-already CONCERNS here and cannot roll a domain up to PASS.
+This runs after 1a and 1b, so a PASS downgraded for an unknown threshold or
+missing evidence is already CONCERNS here and cannot roll a domain up to PASS.
 
 ```javascript
 const DOMAIN_STATUS_ORDER = ['FAIL', 'CONCERNS', 'PASS'];
@@ -106,7 +274,14 @@ and into each `## <Domain> Assessment` section, and the two have to agree.
 
 ```javascript
 const riskLevels = { HIGH: 3, MEDIUM: 2, LOW: 1, NONE: 0 };
-const domainRisks = domains.map((d) => assessments[d].risk_level);
+const riskFromFindings = (findings) => {
+  if (findings.some((finding) => finding.status === 'FAIL')) return 'HIGH';
+  if (findings.some((finding) => finding.status === 'CONCERNS')) return 'MEDIUM';
+  if (findings.some((finding) => finding.status === 'PASS')) return 'LOW';
+  return 'NONE';
+};
+const domainRiskLevels = Object.fromEntries(domains.map((domain) => [domain, riskFromFindings(assessments[domain].findings)]));
+const domainRisks = domains.map((domain) => domainRiskLevels[domain]);
 const maxRiskValue = Math.max(...domainRisks.map((r) => riskLevels[r]));
 const overallRisk = Object.keys(riskLevels).find((k) => riskLevels[k] === maxRiskValue);
 ```
@@ -122,59 +297,56 @@ const overallRisk = Object.keys(riskLevels).find((k) => riskLevels[k] === maxRis
 ### 3. Aggregate Compliance Status
 
 ```javascript
-const allCompliance = {};
-
-domains.forEach((domain) => {
-  const compliance = assessments[domain].compliance;
-  Object.entries(compliance).forEach(([standard, status]) => {
-    if (!allCompliance[standard]) {
-      allCompliance[standard] = [];
+const declaredCompliance = subagentContext.declared_compliance || {};
+if (!declaredCompliance || typeof declaredCompliance !== 'object' || Array.isArray(declaredCompliance)) {
+  throw new Error('declared_compliance must be an object');
+}
+const complianceSummary = Object.fromEntries(
+  Object.entries(declaredCompliance).map(([standard, declaration]) => {
+    if (!declaration || declaration.explicitly_declared !== true || !['PASS', 'PARTIAL', 'FAIL'].includes(declaration.status)) {
+      throw new Error(`Malformed explicitly declared compliance entry: ${standard}`);
     }
-    allCompliance[standard].push({ domain, status });
-  });
-});
-
-// Determine overall compliance per standard
-const complianceSummary = {};
-Object.entries(allCompliance).forEach(([standard, statuses]) => {
-  const hasFail = statuses.some((s) => s.status === 'FAIL');
-  const hasPartial = statuses.some((s) => s.status === 'PARTIAL' || s.status === 'CONCERNS');
-
-  complianceSummary[standard] = hasFail ? 'FAIL' : hasPartial ? 'PARTIAL' : 'PASS';
-});
+    return [standard, declaration.status];
+  }),
+);
 ```
+
+Ignore worker-authored compliance keys. A compliance standard absent from
+`declared_compliance` is absent from the summary; silence never becomes PASS.
 
 ---
 
 ### 4. Identify Cross-Domain Risks
 
-**Look for risks that span multiple domains:**
+Record a cross-domain risk only when the audited findings share an exact ledger
+evidence item. A pair of domain statuses alone does not support a factual
+cross-domain claim.
 
 ```javascript
 const crossDomainRisks = [];
 
-// Example: Reliability + Maintainability issue
-const reliabilityFindingConcerns = assessments.reliability.findings.filter((f) => f.status !== 'PASS');
-const maintainabilityConcerns = assessments.maintainability.findings.filter((f) => f.status !== 'PASS');
-if (reliabilityFindingConcerns.length > 0 && maintainabilityConcerns.length > 0) {
-  crossDomainRisks.push({
-    domains: ['reliability', 'maintainability'],
-    description: 'Low test coverage or missing observability may hide reliability regressions',
-    impact: 'HIGH',
-  });
-}
-
-// Example: Security + Reliability issue
-const securityFails = assessments.security.findings.filter((f) => f.status === 'FAIL');
-const reliabilityConcerns = assessments.reliability.findings.filter((f) => f.status !== 'PASS');
-if (securityFails.length > 0 && reliabilityConcerns.length > 0) {
-  crossDomainRisks.push({
-    domains: ['security', 'reliability'],
-    description: 'Security vulnerabilities may cause reliability incidents',
-    impact: 'CRITICAL',
-  });
+for (let leftIndex = 0; leftIndex < domains.length; leftIndex += 1) {
+  for (let rightIndex = leftIndex + 1; rightIndex < domains.length; rightIndex += 1) {
+    const leftDomain = domains[leftIndex];
+    const rightDomain = domains[rightIndex];
+    for (const left of assessments[leftDomain].findings) {
+      for (const right of assessments[rightDomain].findings) {
+        const rightEvidence = new Set(right.evidence.map((item) => `${item.path}\0${item.supports}`));
+        const shared = left.evidence.filter((item) => rightEvidence.has(`${item.path}\0${item.supports}`));
+        if (shared.length === 0) continue;
+        crossDomainRisks.push({
+          domains: [leftDomain, rightDomain],
+          description: `{CROSS_DOMAIN_INTERPRETATION_OF_${left.category}_AND_${right.category}}`,
+          evidence: shared,
+        });
+      }
+    }
+  }
 }
 ```
+
+Replace the braced description only with an interpretation supported by the
+shared evidence. If the relationship itself is not supported, omit the risk.
 
 ---
 
@@ -182,15 +354,41 @@ if (securityFails.length > 0 && reliabilityConcerns.length > 0) {
 
 ```javascript
 const allPriorityActions = domains.flatMap((domain) =>
-  assessments[domain].priority_actions.map((action) => ({
-    domain,
-    action,
-    urgency: assessments[domain].risk_level === 'HIGH' ? 'URGENT' : 'NORMAL',
-  })),
+  assessments[domain].findings.flatMap((finding) =>
+    finding.recommendations.map((action) => ({
+      domain,
+      criterion_id: finding.criterion_id,
+      action,
+      urgency: finding.status === 'FAIL' ? 'URGENT' : 'NORMAL',
+    })),
+  ),
 );
 
 // Sort by urgency
-const prioritizedActions = allPriorityActions.sort((a, b) => (a.urgency === 'URGENT' ? -1 : 1));
+const prioritizedActions = allPriorityActions.sort(
+  (left, right) =>
+    Number(right.urgency === 'URGENT') - Number(left.urgency === 'URGENT') ||
+    left.domain.localeCompare(right.domain) ||
+    left.criterion_id.localeCompare(right.criterion_id) ||
+    String(left.action).localeCompare(String(right.action)),
+);
+const normalizedDomainAssessments = Object.fromEntries(
+  domains.map((domain) => [
+    domain,
+    {
+      status: domainStatuses[domain],
+      risk_level: domainRiskLevels[domain],
+      findings: assessments[domain].findings,
+      evidence_gaps: assessments[domain].evidence_gaps,
+      priority_actions: prioritizedActions.filter((action) => action.domain === domain),
+      summary: {
+        pass: assessments[domain].findings.filter((finding) => finding.status === 'PASS').length,
+        concerns: assessments[domain].findings.filter((finding) => finding.status === 'CONCERNS').length,
+        fail: assessments[domain].findings.filter((finding) => finding.status === 'FAIL').length,
+      },
+    },
+  ]),
+);
 ```
 
 ---
@@ -219,7 +417,7 @@ const executiveSummary = {
   overall_risk: overallRisk,
   assessment_date: new Date().toISOString(),
 
-  domain_assessments: assessments,
+  domain_assessments: normalizedDomainAssessments,
 
   // The four values step 5 writes into the gate artifact's `audited_domains`
   // block. They are carried here rather than recomputed there, so the artifact
@@ -232,11 +430,16 @@ const executiveSummary = {
 
   priority_actions: prioritizedActions,
 
+  // Step 5 must confirm this audit contains no rejected citation before it
+  // publishes the report. Rejected items have already been removed from each
+  // finding and converted into explicit evidence gaps above.
+  citation_audit: citationAudit,
+
   risk_breakdown: {
-    security: assessments.security.risk_level,
-    performance: assessments.performance.risk_level,
-    reliability: assessments.reliability.risk_level,
-    maintainability: assessments.maintainability.risk_level,
+    security: domainRiskLevels.security,
+    performance: domainRiskLevels.performance,
+    reliability: domainRiskLevels.reliability,
+    maintainability: domainRiskLevels.maintainability,
   },
 
   subagent_execution: subagentExecutionLabel,

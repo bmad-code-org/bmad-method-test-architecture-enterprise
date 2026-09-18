@@ -23,7 +23,7 @@
   ],
   "id": "gapped-compliance-duplicate-heading-hides-wrong-citation",
   "suite": "nfr",
-  "scorerVersion": 10,
+  "scorerVersion": 12,
   "storedOutput": {
     "origin": "constructed",
     "report": "test-artifacts/nfr-assessment.md"
@@ -77,29 +77,14 @@
     "gateDisagreements": [],
     "unsupportedPass": [],
     "citations": {
-      "performance": [
-        "evidence/load-test-2026-08-28.json",
-        "evidence/load-test-2026-08-28.json",
-        "evidence/load-test-2026-08-28.json",
-        "evidence/load-test-2026-08-28.json"
-      ],
+      "performance": ["evidence/load-test-2026-08-28.json"],
       "security": [
-        "evidence/security-review-2026-08-29.md",
-        "evidence/security-review-2026-08-29.md",
-        "evidence/security-review-2026-08-29.md",
         "evidence/dependency-scan-2026-08-30.json",
         "evidence/load-test-2026-08-28.json",
         "evidence/security-review-2026-08-29.md"
       ],
-      "reliability": [
-        "evidence/reliability-2026-08.json",
-        "evidence/reliability-2026-08.json",
-        "evidence/reliability-2026-08.json",
-        "evidence/reliability-2026-08.json",
-        "evidence/reliability-2026-08.json",
-        "evidence/reliability-2026-08.json"
-      ],
-      "maintainability": ["docs/tech-spec.md", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json", "config/logging.json"]
+      "reliability": ["evidence/reliability-2026-08.json"],
+      "maintainability": ["config/logging.json", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json"]
     },
     "fabricated": [],
     "groundedCriteria": {

@@ -1,0 +1,89 @@
+{
+  "story": "1.5",
+  "source": {
+    "aggregate": "test/results/eval-all/latest.json",
+    "aggregateSha256": "201138d028e6c5612dc5786a1617025c6b9d01cf0de2d34e00f37cff8c8c7631",
+    "generatedAt": "2026-09-17T10:54:06.564Z",
+    "agent": "claude",
+    "model": "sonnet",
+    "reportRecovery": "The four reports were recovered from the local Claude session history that produced the aggregate, then scored through the unchanged test/eval-nfr.js parser and scorer."
+  },
+  "aggregate": {
+    "groundedCitationAccuracy": 0.9852941176470589,
+    "fabricatedEvidence": 22,
+    "unstableCases": 2,
+    "rootCause": "tea-workflow-defect",
+    "classification": "The workflow exposed realistic fictional paths and values, gave workers no supplied-evidence allowlist, and performed no citation or statement-support audit before publication."
+  },
+  "runs": [
+    {
+      "caseId": "gapped-harbor-billing-ledger",
+      "bundle": "gapped",
+      "repetition": 1,
+      "reportSha256": "8273a3d1f204c1cb1a252394f85ef6aa4775bda78bb3a511d1794714ef7e3a52",
+      "fabricated": {
+        "security": ["ledger/test/auth/token-lifetime.spec.ts", "tenant-guard.ts"],
+        "maintainability": [
+          "coverage/lcov-report/index.html",
+          "coverage-summary.json",
+          "ledger/test/observability/log-format.spec.ts"
+        ]
+      },
+      "wrongSuppliedFile": ["performance: Response Time (p95) -> docs/tech-spec.md"],
+      "unstable": true,
+      "rootCause": "tea-workflow-defect"
+    },
+    {
+      "caseId": "gapped-harbor-billing-ledger",
+      "bundle": "gapped",
+      "repetition": 2,
+      "reportSha256": "738b8b9ba0451ae8cad0d539e7b9cafb337b25cafed96425c6093a949ab9608e",
+      "fabricated": {
+        "security": ["ledger/test/auth/token-lifetime.spec.ts", "ledger/src/http/tenant-guard.ts"],
+        "maintainability": ["ledger/test/observability/log-format.spec.ts"]
+      },
+      "wrongSuppliedFile": [],
+      "unstable": true,
+      "rootCause": "tea-workflow-defect"
+    },
+    {
+      "caseId": "clean-atlas-notification-relay",
+      "bundle": "clean",
+      "repetition": 1,
+      "reportSha256": "c789d69e4f3f88cefc72af58cbd11d6786264eb9dc15ea8e4f140a113601e534",
+      "fabricated": {
+        "security": ["service-guard.ts"],
+        "reliability": ["relay/src/delivery/circuit-breaker.ts"],
+        "maintainability": [
+          "relay/src/transports/sms-fallback.ts",
+          "email.ts",
+          "webhook.ts",
+          "relay/test/observability/log-format.spec.ts"
+        ]
+      },
+      "wrongSuppliedFile": [],
+      "unstable": true,
+      "rootCause": "tea-workflow-defect"
+    },
+    {
+      "caseId": "clean-atlas-notification-relay",
+      "bundle": "clean",
+      "repetition": 2,
+      "reportSha256": "a6abe0480a993d8d93633f0fd898059d2cb04240cab1311810a99566d77c8f3e",
+      "fabricated": {
+        "security": ["relay/test/auth/token-lifetime.spec.ts", "relay/src/http/service-guard.ts"],
+        "reliability": ["relay/src/delivery/circuit-breaker.ts"],
+        "maintainability": [
+          "sms-fallback.ts",
+          "replay-console.ts",
+          "email.ts",
+          "webhook.ts",
+          "relay/test/observability/log-format.spec.ts"
+        ]
+      },
+      "wrongSuppliedFile": [],
+      "unstable": true,
+      "rootCause": "tea-workflow-defect"
+    }
+  ]
+}

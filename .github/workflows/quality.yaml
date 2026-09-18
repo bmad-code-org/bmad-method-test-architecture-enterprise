@@ -272,6 +272,9 @@ jobs:
       - name: Validate NFR corpus validation checks fire on a seeded defect
         run: npm run test:nfr-validate-corpus
 
+      - name: Prove NFR claims stay bound to the supplied evidence ledger
+        run: npm run test:nfr-evidence-guidance
+
       - name: Validate CI eval corpus
         run: npm run test:eval-ci-data
 

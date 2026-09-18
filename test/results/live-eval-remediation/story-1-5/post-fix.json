@@ -1,0 +1,231 @@
+{
+  "schemaVersion": "1.5.0",
+  "kind": "suite-result",
+  "generatedAt": "2026-09-18T01:53:56.749Z",
+  "mode": "live",
+  "repository": {
+    "commit": "9f03cc0d02b4731a4860cdeea64b917737831d70",
+    "dirty": true
+  },
+  "suite": {
+    "id": "nfr",
+    "evalType": "behavioral",
+    "skills": [
+      "bmad-testarch-nfr"
+    ],
+    "contracts": [
+      {
+        "path": "test/contracts/nfr.contract.json",
+        "version": "5"
+      }
+    ],
+    "ciTier": "full-matrix",
+    "runnerCapabilities": [
+      "scoped-artifact-writes"
+    ],
+    "fixtureDigest": "sha256:0cc7e216bf8b377dbd64a5edec96d6779f4d6849c74fa5db061923a8b15ef879",
+    "promptDigest": "sha256:966f9ccaa2a7bb7dbe07c3ce9fd94d87c0bc74aa68715e0c760387989f8597bd",
+    "caseIds": [
+      "gapped-harbor-billing-ledger",
+      "clean-atlas-notification-relay"
+    ],
+    "cases": [
+      {
+        "id": "gapped-harbor-billing-ledger",
+        "promptDigest": "sha256:924e8e29f3640f9336ac7a97ce0f9aec7a6e808b5a757a9b79d915ed5972f67f"
+      },
+      {
+        "id": "clean-atlas-notification-relay",
+        "promptDigest": "sha256:ce23e3c69cd4fb7a1cde92a36ba21b051adbfd280ad0f63e8c0d29fc1dde7415"
+      }
+    ],
+    "thresholds": {
+      "domainStatusAccuracy": 0.875,
+      "undecidableDomainAccuracy": 1,
+      "thresholdFidelityAccuracy": 0.9,
+      "overallStatusAccuracy": 1,
+      "domainCoverage": 1,
+      "groundedCitationAccuracy": 1,
+      "maxUnsupportedPass": 0,
+      "maxFabricatedEvidence": 0,
+      "maxCleanFalsePositives": 0,
+      "maxDuplicateDomainSections": 0,
+      "maxGateDisagreements": 0,
+      "maxUnstableCases": 0,
+      "maxFixtureMutations": 0
+    },
+    "declaredRepetitions": 2
+  },
+  "runners": [
+    {
+      "agent": "claude",
+      "executable": "claude",
+      "version": "2.1.273 (Claude Code)",
+      "model": "sonnet",
+      "parameters": {
+        "agentArgs": [],
+        "envPassNames": [],
+        "timeoutMs": 1200000,
+        "promptTransport": "stdin"
+      },
+      "repetitions": {
+        "expected": 4,
+        "completed": 0
+      },
+      "measurements": {
+        "domainStatusAccuracy": null,
+        "undecidableDomainAccuracy": null,
+        "thresholdFidelityAccuracy": null,
+        "overallStatusAccuracy": null,
+        "domainCoverage": null,
+        "groundedCitationAccuracy": null,
+        "duplicateDomainSections": 0,
+        "gateDisagreements": 0,
+        "unsupportedPass": 0,
+        "fabricatedEvidence": 0,
+        "cleanFalsePositives": 0,
+        "unstableCases": null,
+        "incompleteCases": 2,
+        "fixtureMutations": 0
+      },
+      "durationMs": 5295,
+      "usage": null,
+      "failureClass": "environment-transport",
+      "failures": [
+        "domainStatusAccuracy (unmeasurable)",
+        "undecidableDomainAccuracy (unmeasurable)",
+        "thresholdFidelityAccuracy (unmeasurable)",
+        "overallStatusAccuracy (unmeasurable)",
+        "domainCoverage (unmeasurable)",
+        "groundedCitationAccuracy (unmeasurable)",
+        "2 case(s) short of 2 repetitions"
+      ],
+      "diagnostics": [
+        {
+          "caseId": "gapped-harbor-billing-ledger",
+          "repetition": 1,
+          "completionState": "failed",
+          "signature": null,
+          "metricContributions": {},
+          "failureClass": "environment-transport",
+          "rootCause": null,
+          "reason": "tea-nfr-runner: Agent \"claude\" exited with code 1.",
+          "triage": [],
+          "mappedFailures": [
+            "domainStatusAccuracy (unmeasurable)",
+            "undecidableDomainAccuracy (unmeasurable)",
+            "thresholdFidelityAccuracy (unmeasurable)",
+            "overallStatusAccuracy (unmeasurable)",
+            "domainCoverage (unmeasurable)",
+            "groundedCitationAccuracy (unmeasurable)",
+            "2 case(s) short of 2 repetitions"
+          ],
+          "mappedMeasurements": [
+            "domainStatusAccuracy",
+            "undecidableDomainAccuracy",
+            "thresholdFidelityAccuracy",
+            "overallStatusAccuracy",
+            "domainCoverage",
+            "groundedCitationAccuracy",
+            "unstableCases"
+          ],
+          "evidence": []
+        },
+        {
+          "caseId": "gapped-harbor-billing-ledger",
+          "repetition": 2,
+          "completionState": "failed",
+          "signature": null,
+          "metricContributions": {},
+          "failureClass": "environment-transport",
+          "rootCause": null,
+          "reason": "tea-nfr-runner: Agent \"claude\" exited with code 1.",
+          "triage": [],
+          "mappedFailures": [
+            "domainStatusAccuracy (unmeasurable)",
+            "undecidableDomainAccuracy (unmeasurable)",
+            "thresholdFidelityAccuracy (unmeasurable)",
+            "overallStatusAccuracy (unmeasurable)",
+            "domainCoverage (unmeasurable)",
+            "groundedCitationAccuracy (unmeasurable)",
+            "2 case(s) short of 2 repetitions"
+          ],
+          "mappedMeasurements": [
+            "domainStatusAccuracy",
+            "undecidableDomainAccuracy",
+            "thresholdFidelityAccuracy",
+            "overallStatusAccuracy",
+            "domainCoverage",
+            "groundedCitationAccuracy",
+            "unstableCases"
+          ],
+          "evidence": []
+        },
+        {
+          "caseId": "clean-atlas-notification-relay",
+          "repetition": 1,
+          "completionState": "failed",
+          "signature": null,
+          "metricContributions": {},
+          "failureClass": "environment-transport",
+          "rootCause": null,
+          "reason": "tea-nfr-runner: Agent \"claude\" exited with code 1.",
+          "triage": [],
+          "mappedFailures": [
+            "domainStatusAccuracy (unmeasurable)",
+            "undecidableDomainAccuracy (unmeasurable)",
+            "thresholdFidelityAccuracy (unmeasurable)",
+            "overallStatusAccuracy (unmeasurable)",
+            "domainCoverage (unmeasurable)",
+            "groundedCitationAccuracy (unmeasurable)",
+            "2 case(s) short of 2 repetitions"
+          ],
+          "mappedMeasurements": [
+            "domainStatusAccuracy",
+            "undecidableDomainAccuracy",
+            "thresholdFidelityAccuracy",
+            "overallStatusAccuracy",
+            "domainCoverage",
+            "groundedCitationAccuracy",
+            "unstableCases"
+          ],
+          "evidence": []
+        },
+        {
+          "caseId": "clean-atlas-notification-relay",
+          "repetition": 2,
+          "completionState": "failed",
+          "signature": null,
+          "metricContributions": {},
+          "failureClass": "environment-transport",
+          "rootCause": null,
+          "reason": "tea-nfr-runner: Agent \"claude\" exited with code 1.",
+          "triage": [],
+          "mappedFailures": [
+            "domainStatusAccuracy (unmeasurable)",
+            "undecidableDomainAccuracy (unmeasurable)",
+            "thresholdFidelityAccuracy (unmeasurable)",
+            "overallStatusAccuracy (unmeasurable)",
+            "domainCoverage (unmeasurable)",
+            "groundedCitationAccuracy (unmeasurable)",
+            "2 case(s) short of 2 repetitions"
+          ],
+          "mappedMeasurements": [
+            "domainStatusAccuracy",
+            "undecidableDomainAccuracy",
+            "thresholdFidelityAccuracy",
+            "overallStatusAccuracy",
+            "domainCoverage",
+            "groundedCitationAccuracy",
+            "unstableCases"
+          ],
+          "evidence": []
+        }
+      ]
+    }
+  ],
+  "suiteDiagnostics": [],
+  "durationMs": 5361,
+  "failureClass": "environment-transport",
+  "exitCode": 2
+}

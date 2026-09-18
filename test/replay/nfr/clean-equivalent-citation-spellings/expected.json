@@ -1,15 +1,14 @@
 {
   "$comment": [
-    "Why this case is in the corpus: it is the control the suite cannot do without. Every threshold this bundle",
-    "states is measured by a pipeline job and every measurement meets it, so the correct audit reports four PASS",
-    "results, no evidence gap, and no threshold recorded as unknown.",
+    "Why this case is in the corpus: it is semantically identical to clean-correct-audit while one criterion cites",
+    "the same evidence three ways and names the requirements document on a Threshold Source line.",
     "",
-    "Without it a workflow that answered CONCERNS to everything would clear maxUnsupportedPass and read as",
-    "careful. This is the case that makes that impossible.",
+    "The scorer must exclude the threshold source, strip the fixture project root and ./ prefixes, de-duplicate the",
+    "three evidence spellings, and sort citations before grounding and signatures.",
     "",
     "The report is CONSTRUCTED."
   ],
-  "id": "clean-correct-audit",
+  "id": "clean-equivalent-citation-spellings",
   "suite": "nfr",
   "scorerVersion": 12,
   "storedOutput": {
@@ -22,6 +21,11 @@
     "scoringInputsDigest": "sha256:3848bbe1b0d7a0721993899b738b5398daecf748fa40bff070f50f0f8ed0e19f"
   },
   "derivation": [
+    "This report differs from clean-correct-audit only in citation presentation under Response Time (p95).",
+    "The Threshold Source line is requirements metadata and contributes no implementation citation. The three",
+    "Evidence paths canonicalize to evidence/load-test-2026-09-02.json, then de-duplicate to one citation.",
+    "Its projected result and scored signature therefore match clean-correct-audit exactly.",
+    "",
     "Every domain section carries only PASS findings, so all four roll up to PASS and there is no status miss.",
     "isCleanSet is true because the ground truth expects PASS on all four.",
     "",
