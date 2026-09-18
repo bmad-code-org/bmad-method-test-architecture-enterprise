@@ -847,6 +847,25 @@ async function validateCorpus(groundTruth) {
     return { problems, notices };
   }
 
+  // The live baseline exposed model-produced metadata drift: the workflow output
+  // contract existed in step 05, yet the assembled run prompt did not repeat the
+  // exact resolved values. Keep that contract in deterministic preflight so a
+  // future prompt change cannot reopen the defect silently.
+  for (const set of groundTruth.fixtureSets) {
+    const prompt = buildPrompt(set);
+    const requiredPromptLines = [
+      '- `decision_mode`: `deterministic`',
+      `- \`links.trace_report_path\`: \`${projectRootOf(set)}/test-artifacts/traceability-matrix.md\``,
+      '- `links.trace_report_url`, `links.artifact_url`, and `links.journey_evidence_url`: empty strings',
+      '- `tests.skipped_cases`, `tests.fixme_cases`, and `tests.pending_cases`: zero when no such cases exist',
+      '- `heuristics.ui_journey_status` and `heuristics.ui_state_status`: `not_applicable` for this formal requirements oracle',
+      'Use the explicit unknown representation `unknown` defined by the workflow when a runtime value is unavailable.',
+    ];
+    for (const line of requiredPromptLines) {
+      if (!prompt.includes(line)) problems.push(`fixtureSets[${set.id}]: prompt omits trace metadata contract line: ${line}`);
+    }
+  }
+
   // Every skill rule the corpus cites must still exist under the section it names.
   // The section name is the stable anchor; the line span is pinned to commit 7ba2130
   // and drifts whenever a step file is edited, which is a notice rather than a failure.
@@ -1437,6 +1456,15 @@ function buildPrompt(set, { allowGate = true } = {}) {
     '  that establish it as `file:line`.',
     `- \`${root}/test-artifacts/e2e-trace-summary.json\` at schema_version 0.3.0, exactly as`,
     '  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.',
+    '',
+    'The summary metadata is a contract. Copy these resolved values exactly:',
+    `- \`decision_mode\`: \`deterministic\``,
+    `- \`links.trace_report_path\`: \`${root}/test-artifacts/traceability-matrix.md\``,
+    '- `links.trace_report_url`, `links.artifact_url`, and `links.journey_evidence_url`: empty strings',
+    '- `tests.skipped_cases`, `tests.fixme_cases`, and `tests.pending_cases`: zero when no such cases exist',
+    '- `heuristics.ui_journey_status` and `heuristics.ui_state_status`: `not_applicable` for this formal requirements oracle',
+    'Use the explicit unknown representation `unknown` defined by the workflow when a runtime value is unavailable.',
+    'Do not infer a shorter artifact path, add a URL, or replace an unknown value with a guess.',
     '',
     `Do not add, edit, or delete any file under \`${root}/docs/\`, \`${root}/src/\`, or \`${root}/tests/\`.`,
     'This workflow does not generate tests.',

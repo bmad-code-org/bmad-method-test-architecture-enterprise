@@ -467,6 +467,20 @@ const gateReport = {
 
 This file is the portable, automation-friendly companion to the markdown report. Any CI/CD pipeline, reporting dashboard, or LLM agent can consume it without parsing markdown.
 
+The summary metadata is a strict contract. Emit the resolved run value for every field below. Use the explicit unknown representation `unknown` when a runtime value cannot be resolved. Preserve the exact artifact path supplied by `{outputFile}`. Empty URL fields remain empty until a CI/CD uploader populates them. The formal requirements oracle uses `not_applicable` for both optional UI heuristic statuses when no synthetic user journey oracle exists.
+
+| Field                                                             | Required value for this run                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `decision_mode`                                                   | `{decision_mode}`                                                  |
+| `links.trace_report_path`                                         | `{outputFile}`                                                     |
+| `links.trace_report_url`                                          | `''`                                                               |
+| `links.artifact_url`                                              | `''`                                                               |
+| `links.journey_evidence_url`                                      | `''`                                                               |
+| `tests.skipped_cases`, `tests.fixme_cases`, `tests.pending_cases` | The real inventory counts. Use `0` when no cases have that status. |
+| `heuristics.ui_journey_status`, `heuristics.ui_state_status`      | `not_applicable` for a non-synthetic formal requirements oracle    |
+
+Do not shorten `{outputFile}`, invent a URL, or replace an unavailable runtime value with a guess. Use the literal string `unknown` for an unavailable runtime value.
+
 ```javascript
 const buildFallbackInventory = () => {
   const byLevel = {
