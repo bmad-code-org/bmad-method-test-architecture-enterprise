@@ -1053,6 +1053,10 @@ async function main() {
     fs.existsSync(currentHistory) && fs.readFileSync(CURRENT_RESULT).equals(fs.readFileSync(currentHistory)),
     'latest.json and its timestamp-matched history record preserve identical bytes',
   );
+  check(
+    current.schemaVersion === SCHEMA_VERSION,
+    `the current recorded run schema is ${current.schemaVersion}, expected ${SCHEMA_VERSION}`,
+  );
   check(validateEvalRun(current).success, 'the current recorded run remains schema-valid');
   check(!Object.hasOwn(current, 'qualityScore'), 'the current environment-only run makes no quality-score claim');
 
