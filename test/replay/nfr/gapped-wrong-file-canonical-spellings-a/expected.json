@@ -1,0 +1,81 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: one real but wrong file is cited four times under Fault Tolerance using the",
+    "canonical spelling, ./ spelling, project-root-prefixed spelling, and a duplicate canonical spelling.",
+    "All four must collapse to one ungrounded citation and one stable scored signature.",
+    "The report is CONSTRUCTED."
+  ],
+  "id": "gapped-wrong-file-canonical-spellings-a",
+  "suite": "nfr",
+  "scorerVersion": 13,
+  "storedOutput": {
+    "origin": "constructed",
+    "report": "test-artifacts/nfr-assessment.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/nfr-eval/ground-truth.json",
+    "fixtureSet": "gapped-harbor-billing-ledger",
+    "scoringInputsDigest": "sha256:e380e9f2b86b37b2570507bc3304ef442b105b984bf2a674852e5ab234adcbd6"
+  },
+  "derivation": [
+    "The four spellings normalize and de-duplicate to docs/tech-spec.md before grounding.",
+    "That supplied file is real but is not the declared Fault Tolerance implementation evidence.",
+    "The projected result and signature therefore match the single-spelling pair case exactly."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "statusMisses": [],
+    "coverage": {
+      "present": 4,
+      "sections": 4,
+      "total": 4
+    },
+    "duplicateDomainSections": [],
+    "sectionStatuses": {
+      "performance": "CONCERNS",
+      "security": "PASS",
+      "reliability": "FAIL",
+      "maintainability": "CONCERNS"
+    },
+    "gateBlockDeclared": true,
+    "gateDisagreements": [],
+    "unsupportedPass": [],
+    "citations": {
+      "performance": ["evidence/load-test-2026-08-28.json"],
+      "security": ["evidence/dependency-scan-2026-08-30.json", "evidence/security-review-2026-08-29.md"],
+      "reliability": ["docs/tech-spec.md", "evidence/reliability-2026-08.json"],
+      "maintainability": ["config/logging.json", "docs/tech-spec.md", "evidence/dependency-scan-2026-08-30.json"]
+    },
+    "fabricated": [],
+    "groundedCriteria": {
+      "hits": 16,
+      "total": 17
+    },
+    "ungroundedCitations": ["reliability: Fault Tolerance -> docs/tech-spec.md"],
+    "evidenceGaps": ["Test Coverage"],
+    "thresholds": {
+      "checks": 4,
+      "passed": 4,
+      "failed": []
+    },
+    "overall": {
+      "field": "overall_status",
+      "expected": "FAIL",
+      "actual": "FAIL",
+      "ok": true
+    },
+    "unknownThreshold": {
+      "field": "a threshold is recorded as UNKNOWN",
+      "expected": true,
+      "actual": true,
+      "ok": true
+    },
+    "cleanFalsePositives": 0
+  }
+}

@@ -1244,6 +1244,7 @@ const DOMAIN_HEADING = /^(#{2,6})\s+(Performance|Security|Reliability|Maintainab
 const EVIDENCE_GAPS_HEADING = /^(#{2,6})\s+Evidence Gaps\b/i;
 const STATUS_LINE = /\*\*\s*status\s*:?\s*\*\*\s*:?\s*(PASS|CONCERNS|FAIL|N\/A)\b/i;
 const THRESHOLD_LINE = /\*\*\s*threshold\s*:?\s*\*\*\s*:?\s*(.*)$/i;
+const THRESHOLD_SOURCE_LINE = /\*\*\s*threshold\s+source\s*:?\s*\*\*\s*:?\s*(.*)$/i;
 /**
  * A claimed evidence gap: one top-level list item under the Evidence Gaps
  * heading.
@@ -1465,6 +1466,36 @@ function citationsIn(line) {
 }
 
 /**
+ * One stable spelling for a citation scored from a fixture report.
+ *
+ * Live runs can cite the same supplied file as `docs/spec.md`,
+ * `./docs/spec.md`, or `<projectRoot>/docs/spec.md`. The staged project root is
+ * presentation context, so it is removed before grounding and signatures.
+ */
+function canonicalCitation(citation, projectRoot) {
+  const original = String(citation);
+  if (original.includes('\\') || path.isAbsolute(original) || /^[A-Za-z]:\//.test(original)) return original;
+  let normalized = original;
+  if (normalized.startsWith('./')) normalized = normalized.slice(2);
+  else if (normalized.startsWith(`${projectRoot}/`)) normalized = normalized.slice(projectRoot.length + 1);
+  if (
+    !normalized ||
+    normalized.startsWith('./') ||
+    normalized.startsWith(`${projectRoot}/`) ||
+    normalized.split('/').some((part) => part === '' || part === '.' || part === '..')
+  ) {
+    return original;
+  }
+  return normalized;
+}
+
+function canonicalCitations(citations, projectRoot) {
+  return [...new Set(citations.map((citation) => canonicalCitation(citation, projectRoot)))].sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
+/**
  * The four domain sections, the gate block's four domain statuses, the overall
  * status, and the evidence gaps, read out of the report the run wrote.
  *
@@ -1598,6 +1629,7 @@ function parseReport(text) {
     const status = STATUS_LINE.exec(line);
     if (status) entry.statuses.push(status[1].toUpperCase());
     const threshold = THRESHOLD_LINE.exec(line);
+    const thresholdSource = THRESHOLD_SOURCE_LINE.exec(line);
     if (threshold) entry.thresholdLines.push(threshold[1]);
     // Every other line of the domain section, rather than only the one labelled
     // `**Evidence:**`.
@@ -1612,9 +1644,9 @@ function parseReport(text) {
     // the section is the honest boundary: a file named inside a domain's
     // assessment is that domain's grounding whatever line it is written on.
     //
-    // The `**Threshold:**` line is the one exclusion, because it is the one line
-    // that legitimately names a document without citing evidence. A threshold
-    // line says where the target came from, so `Statement coverage at or above
+    // `**Threshold:**` and `**Threshold Source:**` are excluded because both
+    // legitimately name a requirements document without citing implementation
+    // evidence. A threshold line says where the target came from, so `Statement coverage at or above
     // 80% (docs/tech-spec.md)` names the requirements document rather than a
     // measurement of the service. Folding that into the grounding would make a
     // run that mentions its spec there read as differently grounded from one that
@@ -1655,7 +1687,7 @@ function parseReport(text) {
     // section whose prose says `Node.js` now offers a `.js` token where before
     // only an evidence line could; that is the same reading the evidence line has
     // always had, applied to more lines.
-    if (!threshold) {
+    if (!threshold && !thresholdSource) {
       const found = citationsIn(line);
       entry.citations.push(...found);
       // Attributed to whichever criterion heading or promoted bullet is still
@@ -1805,16 +1837,15 @@ function check(field, expected, actual) {
 }
 
 /**
- * The basenames a citation may resolve to: every file the bundle carries, plus
- * the config the harness staged and the report the run is writing.
+ * The exact canonical project-relative paths a citation may resolve to.
  *
  * Read from the corpus rather than from the staged workspace, so a stored replay
  * case resolves a citation exactly as a live run does without a workspace to look
  * at. validateCorpus holds `evidenceFiles` equal to what is on disk in both
  * directions, which is what makes the two readings the same reading.
  */
-function knownBasenames(set) {
-  return new Set([...(set.evidenceFiles ?? []).map((relative) => path.basename(relative)), 'config.yaml', 'nfr-assessment.md']);
+function knownPaths(set) {
+  return new Set(set.evidenceFiles ?? []);
 }
 
 /**
@@ -1845,7 +1876,16 @@ function scoreThreshold(domain, reported) {
  * @returns {object}
  */
 function scoreRun(set, report) {
-  const known = knownBasenames(set);
+  const known = knownPaths(set);
+  const scoredCitations = new Map(
+    [...report.domains].map(([name, entry]) => [
+      name,
+      {
+        citations: canonicalCitations(entry.citations, set.projectRoot),
+        criteria: new Map([...entry.criteria].map(([criterion, citations]) => [criterion, canonicalCitations(citations, set.projectRoot)])),
+      },
+    ]),
+  );
   const domainResults = DOMAINS.map((name) => {
     const declared = set.domains[name];
     const reported = report.domains.get(name) ?? null;
@@ -1907,9 +1947,9 @@ function scoreRun(set, report) {
     .map((item) => item.domain);
 
   const fabricated = [];
-  for (const [name, entry] of report.domains) {
+  for (const [name, entry] of scoredCitations) {
     for (const citation of entry.citations) {
-      if (!known.has(path.basename(citation))) fabricated.push(`${name} -> ${citation}`);
+      if (!known.has(citation)) fabricated.push(`${name} -> ${citation}`);
     }
   }
 
@@ -1954,7 +1994,7 @@ function scoreRun(set, report) {
   let groundedCriteriaTotal = 0;
   for (const domainName of DOMAINS) {
     const declaredCriteria = set.domains[domainName]?.criteria ?? [];
-    const reportedCriteria = report.domains.get(domainName)?.criteria ?? new Map();
+    const reportedCriteria = scoredCitations.get(domainName)?.criteria ?? new Map();
     const byStrippedName = new Map();
     for (const [name, cites] of reportedCriteria) {
       const key = stripCriterionAnnotation(name);
@@ -1964,7 +2004,7 @@ function scoreRun(set, report) {
       if ((criterion.evidence ?? []).length === 0) continue;
       const cited = byStrippedName.get(stripCriterionAnnotation(criterion.name));
       if (!cited || cited.length === 0) continue;
-      const real = cited.filter((file) => known.has(path.basename(file)));
+      const real = cited.filter((file) => known.has(file));
       if (real.length === 0) continue;
       groundedCriteriaTotal += 1;
       // Every real citation has to match, not just one of them: a criterion
@@ -1973,7 +2013,7 @@ function scoreRun(set, report) {
       // irrelevant file, exactly what AC1 says cannot read as grounding. Only
       // the mismatched file(s) are named below; the correct one alongside them
       // is not a finding.
-      const mismatched = real.filter((file) => !criterion.evidence.some((declared) => path.basename(declared) === path.basename(file)));
+      const mismatched = real.filter((file) => !criterion.evidence.includes(file));
       if (mismatched.length === 0) groundedCriteriaHits += 1;
       else ungroundedCitations.push(`${domainName}: ${criterion.name} -> ${mismatched.join(', ')}`);
     }
@@ -2008,7 +2048,7 @@ function scoreRun(set, report) {
     // `fabricated` is the subset of these that resolves to no file in the bundle
     // and is what reaches a threshold; the whole set is carried so signatureOf
     // can see a run change its grounding while keeping its verdict.
-    citations: Object.fromEntries([...report.domains].map(([name, entry]) => [name, entry.citations])),
+    citations: Object.fromEntries([...scoredCitations].map(([name, entry]) => [name, entry.citations])),
     domainResults,
     // `present` is what domainCoverage grades: a domain the report states a status
     // for. `sections` is the weaker heading count, which is all the contract's own
@@ -2774,6 +2814,7 @@ module.exports = {
   readReport,
   reportFromArtifact,
   parseReport,
+  canonicalCitation,
   scoreRun,
   signatureOf,
   nfrDiagnosticProjection,

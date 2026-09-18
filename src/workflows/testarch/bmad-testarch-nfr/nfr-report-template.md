@@ -35,7 +35,8 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_VALUE}
 - **Actual:** {ACTUAL_VALUE}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Throughput
@@ -43,7 +44,8 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_VALUE}
 - **Actual:** {ACTUAL_VALUE}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Resource Usage
@@ -52,13 +54,15 @@ Note: This audit summarizes existing implementation evidence; it does not run te
   - **Status:** {STATUS} {STATUS_ICON}
   - **Threshold:** {THRESHOLD_VALUE}
   - **Actual:** {ACTUAL_VALUE}
-  - **Evidence:** {EVIDENCE_SOURCE}
+  - **Evidence:** {PROJECT_RELATIVE_PATH}
+  - **Supports:** {SUPPORTED_OBSERVATION}
 
 - **Memory Usage**
   - **Status:** {STATUS} {STATUS_ICON}
   - **Threshold:** {THRESHOLD_VALUE}
   - **Actual:** {ACTUAL_VALUE}
-  - **Evidence:** {EVIDENCE_SOURCE}
+  - **Evidence:** {PROJECT_RELATIVE_PATH}
+  - **Supports:** {SUPPORTED_OBSERVATION}
 
 ---
 
@@ -69,7 +73,8 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 - **Recommendation:** {RECOMMENDATION} (if CONCERNS or FAIL)
 
@@ -78,7 +83,8 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Data Protection
@@ -86,23 +92,26 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Vulnerability Management
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "0 critical, <3 high vulnerabilities")
-- **Actual:** {ACTUAL_DESCRIPTION} (e.g., "0 critical, 1 high, 5 medium vulnerabilities")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Snyk scan results - scan-2025-10-14.json")
+- **Threshold:** {THRESHOLD_DESCRIPTION}
+- **Actual:** {ACTUAL_DESCRIPTION}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Compliance (if applicable)
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Standards:** {COMPLIANCE_STANDARDS} (e.g., "GDPR, HIPAA, PCI-DSS")
+- **Standards:** {COMPLIANCE_STANDARDS}
 - **Actual:** {ACTUAL_COMPLIANCE_STATUS}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ---
@@ -112,25 +121,28 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 ### Availability (Uptime)
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., "99.9%")
-- **Actual:** {ACTUAL_VALUE} (e.g., "99.95%")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Uptime monitoring - uptime-report-2025-10-14.csv")
+- **Threshold:** {THRESHOLD_VALUE}
+- **Actual:** {ACTUAL_VALUE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Error Rate
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., "<0.1%")
-- **Actual:** {ACTUAL_VALUE} (e.g., "0.05%")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Error logs - logs/errors-2025-10.log")
+- **Threshold:** {THRESHOLD_VALUE}
+- **Actual:** {ACTUAL_VALUE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### MTTR (Mean Time To Recovery)
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., "<15 minutes")
-- **Actual:** {ACTUAL_VALUE} (e.g., "12 minutes")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "Incident reports - incidents/")
+- **Threshold:** {THRESHOLD_VALUE}
+- **Actual:** {ACTUAL_VALUE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Fault Tolerance
@@ -138,15 +150,17 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### CI Burn-In (Stability)
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_VALUE} (e.g., "100 consecutive successful runs")
-- **Actual:** {ACTUAL_VALUE} (e.g., "150 consecutive successful runs")
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "CI burn-in results - ci-burn-in-2025-10-14.log")
+- **Threshold:** {THRESHOLD_VALUE}
+- **Actual:** {ACTUAL_VALUE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Disaster Recovery (if applicable)
@@ -155,13 +169,15 @@ Note: This audit summarizes existing implementation evidence; it does not run te
   - **Status:** {STATUS} {STATUS_ICON}
   - **Threshold:** {THRESHOLD_VALUE}
   - **Actual:** {ACTUAL_VALUE}
-  - **Evidence:** {EVIDENCE_SOURCE}
+  - **Evidence:** {PROJECT_RELATIVE_PATH}
+  - **Supports:** {SUPPORTED_OBSERVATION}
 
 - **RPO (Recovery Point Objective)**
   - **Status:** {STATUS} {STATUS_ICON}
   - **Threshold:** {THRESHOLD_VALUE}
   - **Actual:** {ACTUAL_VALUE}
-  - **Evidence:** {EVIDENCE_SOURCE}
+  - **Evidence:** {PROJECT_RELATIVE_PATH}
+  - **Supports:** {SUPPORTED_OBSERVATION}
 
 ---
 
@@ -170,33 +186,37 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 ### Test Coverage
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "≥80% coverage")
+- **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "CI coverage report - coverage/lcov-report/index.html")
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Code Duplication
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "<5% duplication")
+- **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "jscpd report - reports/jscpd/jscpd-report.json")
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Vulnerability Scan
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "0 critical, 0 high vulnerabilities")
+- **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE} (e.g., "npm audit CI job output")
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### Observability
 
 - **Status:** {STATUS} {STATUS_ICON}
-- **Threshold:** {THRESHOLD_DESCRIPTION} (e.g., "structured logging + error tracking configured")
+- **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ---
@@ -208,7 +228,8 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ### {CUSTOM_NFR_NAME_2}
@@ -216,7 +237,8 @@ Note: This audit summarizes existing implementation evidence; it does not run te
 - **Status:** {STATUS} {STATUS_ICON}
 - **Threshold:** {THRESHOLD_DESCRIPTION}
 - **Actual:** {ACTUAL_DESCRIPTION}
-- **Evidence:** {EVIDENCE_SOURCE}
+- **Evidence:** {PROJECT_RELATIVE_PATH}
+- **Supports:** {SUPPORTED_OBSERVATION}
 - **Findings:** {FINDINGS_DESCRIPTION}
 
 ---

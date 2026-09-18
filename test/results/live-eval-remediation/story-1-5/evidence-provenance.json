@@ -1,0 +1,139 @@
+{
+  "story": "1.5",
+  "requestedRunner": {
+    "agent": "claude",
+    "version": "2.1.273 (Claude Code)",
+    "model": "sonnet"
+  },
+  "runnerAvailability": {
+    "status": "unavailable",
+    "boundary": "confirmed weekly usage limit",
+    "exactMessage": "You've hit your weekly limit · resets Sep 22 at 3pm (America/Chicago)",
+    "observedAt": "2026-09-18T02:29:05.308Z",
+    "apiErrorStatus": 429,
+    "error": "rate_limit",
+    "rateLimitType": "seven_day",
+    "resetsAt": 1790107200,
+    "unifiedRateLimitFallbackAvailable": false,
+    "overageStatus": "rejected",
+    "sourceSession": "9aa69706-f47c-44a2-98cd-20657bd70e77"
+  },
+  "comparabilityContract": {
+    "fixtureSets": ["gapped-harbor-billing-ledger", "clean-atlas-notification-relay"],
+    "repetitionsPerSet": 2,
+    "sameRunner": true,
+    "sameModel": true,
+    "sameFixtures": true,
+    "sameThresholds": true
+  },
+  "preFixAttempt": {
+    "record": "pre-fix.json",
+    "sha256": "5a7140531969d05761aad7a484aaaeb14ea71ec70d59ed37591e85492ab796f7",
+    "generatedAt": "2026-09-18T01:45:52.408Z",
+    "outcome": "environment-transport",
+    "completedRepetitions": 0
+  },
+  "postFixAttempt": {
+    "record": "post-fix.json",
+    "sha256": "ac6215fabf3544f46430dc6412ac8cdd2a433e65fda103f50b07093c909e8f15",
+    "generatedAt": "2026-09-18T01:53:56.749Z",
+    "outcome": "environment-transport",
+    "completedRepetitions": 0
+  },
+  "substituteAttempt": {
+    "agent": "codex",
+    "model": "gpt-5.6-sol",
+    "outcome": "operator-terminated-environment-timeout",
+    "completedRepetitions": 0,
+    "reason": "The first case produced no result after more than 21 minutes. The delivery coordinator directed termination under the bounded timeout policy.",
+    "comparableToBaseline": false
+  },
+  "codexLowDiagnostic": {
+    "record": "post-fix-codex-low.json",
+    "sha256": "cb9da2d75fb0f0673c2d0aa56625544cfb0dccac88ec2e867560a6d453fca9ad",
+    "generatedAt": "2026-09-18T03:05:41.890Z",
+    "agent": "codex",
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "low",
+    "outcome": "quality",
+    "completedRepetitions": 4,
+    "comparableToBaseline": false,
+    "observedDefects": [
+      "project-directory-prefixed citation spelling",
+      "requirements document used as implementation evidence",
+      "undeclared checklist categories created clean false positives",
+      "equivalent evidence produced unstable scored signatures"
+    ]
+  },
+  "codexLowRerunDiagnostic": {
+    "record": "post-fix-codex-low-rerun.json",
+    "sha256": "8386c215e1a16a8622f8893705089213133bb1f7c77d5ccee38a30beab90ed25",
+    "generatedAt": "2026-09-18T03:54:01.604Z",
+    "agent": "codex",
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "low",
+    "outcome": "quality",
+    "completedRepetitions": 4,
+    "comparableToBaseline": false,
+    "observedDefects": [
+      "Threshold Source lines counted as implementation evidence",
+      "project-root-prefixed and duplicate citations produced different grounding and signatures",
+      "an allowed moderate dependency finding lowered a clean security domain below PASS"
+    ]
+  },
+  "codexFinalDiagnostic": {
+    "record": "post-fix-codex-final.json",
+    "sha256": "61d37d4ab8791e61a896a61ea96097080b0a1ac332b0da549ab4f0b46a4c64b1",
+    "generatedAt": "2026-09-18T04:32:44.909Z",
+    "agent": "codex",
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "low",
+    "outcome": "quality",
+    "completedRepetitions": 4,
+    "comparableToBaseline": false,
+    "passingMetrics": [
+      "domain status accuracy",
+      "undecidable domain accuracy",
+      "threshold fidelity accuracy",
+      "overall status accuracy",
+      "domain coverage",
+      "grounded citation accuracy",
+      "unsupported pass ceiling",
+      "fabricated evidence ceiling",
+      "clean false-positive ceiling",
+      "duplicate domain section ceiling",
+      "gate disagreement ceiling",
+      "fixture mutation ceiling"
+    ],
+    "observedDefects": [
+      "gapped bundle cited 4 grounded criteria in one repetition and 13 in the other",
+      "unsupported criteria used variable free-form gap labels"
+    ]
+  },
+  "codexConfirmation": {
+    "record": "post-fix-codex-confirmation.json",
+    "sha256": "be75b02f31ec4e328ebfb503294a18ba6461e851d73b6fda2e24a0ffcec270e5",
+    "generatedAt": "2026-09-18T05:12:31.167Z",
+    "agent": "codex",
+    "version": "codex-cli 0.154.0",
+    "model": "gpt-5.6-sol",
+    "reasoningEffort": "low",
+    "outcome": "none",
+    "exitCode": 0,
+    "completedRepetitions": 4,
+    "allThresholdsMet": true,
+    "stableCases": ["gapped-harbor-billing-ledger", "clean-atlas-notification-relay"],
+    "comparableToBaseline": false
+  },
+  "substitutionPrecedent": {
+    "record": "../story-1-3/evidence-provenance.json",
+    "claim": "focused remediation evidence with a disclosed runner substitution",
+    "sameCorpus": true,
+    "sameGroundTruth": true,
+    "sameThresholds": true,
+    "sameRepetitions": true,
+    "sameRunner": false,
+    "sameModel": false
+  },
+  "qualityConclusion": "The disclosed Codex confirmation completed every repetition, passed every declared threshold, and produced stable signatures for both bundles. It supplies final live evidence under the repository's Story 1.3 runner-substitution precedent because Claude was blocked by its confirmed weekly quota."
+}

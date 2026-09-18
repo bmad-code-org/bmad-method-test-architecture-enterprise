@@ -186,6 +186,7 @@ const {
   scoreRun: scoreNfrRun,
   signatureOf: nfrSignatureOf,
   parseReport: parseNfrReport,
+  canonicalCitation: canonicalNfrCitation,
   DOMAINS: NFR_DOMAINS,
 } = require('./eval-nfr');
 const {
@@ -365,8 +366,15 @@ const ATDD_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'atdd-eval', 'ground-
  * test-review, fragment-selection, test-design, trace, nfr or routing case moved,
  * so every case recorded at an earlier version reproduces and is reported as a
  * version stamp only.
+ *
+ * 12 is the nfr scorer canonicalizing citations before grounding and
+ * signatures. It removes the fixture project-root prefix and a leading `./`,
+ * then de-duplicates and sorts domain and criterion citation lists. The parser
+ * also excludes `Threshold Source` lines from implementation evidence. The new
+ * clean-equivalent-citation-spellings case holds all three readings against the
+ * clean control. No unrelated replay suite moved.
  */
-const SCORER_VERSION = 11;
+const SCORER_VERSION = 13;
 
 const colors = {
   reset: '[0m',
@@ -1171,6 +1179,23 @@ function checkNfrGateBlockReadings() {
   );
 }
 
+function checkNfrCitationCanonicalization() {
+  const projectRoot = 'harbor-billing-ledger';
+  const canonical = 'docs/tech-spec.md';
+  assert(canonicalNfrCitation(canonical, projectRoot) === canonical, 'nfr citations preserve canonical project-relative paths');
+  assert(canonicalNfrCitation(`./${canonical}`, projectRoot) === canonical, 'nfr citations accept the documented ./ spelling');
+  assert(
+    canonicalNfrCitation(`${projectRoot}/${canonical}`, projectRoot) === canonical,
+    'nfr citations accept the documented project-root-prefixed spelling',
+  );
+  for (const invalid of [`${projectRoot}/${projectRoot}/${canonical}`, `../${canonical}`, `/tmp/${canonical}`, `C:/${canonical}`]) {
+    assert(
+      canonicalNfrCitation(invalid, projectRoot) === invalid,
+      `nfr citations leave invalid absolute, traversal, and repeated-prefix paths uncanonicalized: ${invalid}`,
+    );
+  }
+}
+
 /**
  * signatureOf held to its own contract over every scored trace case.
  *
@@ -1809,6 +1834,7 @@ async function main(argv) {
   checkAtddSignatures(atddReplayed);
   checkRecordHygiene();
   checkNfrGateBlockReadings();
+  checkNfrCitationCanonicalization();
 
   console.log(`\n${colors.cyan}========================================${colors.reset}`);
   if (accepted.length > 0) {

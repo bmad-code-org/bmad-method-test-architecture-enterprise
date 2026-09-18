@@ -49,7 +49,8 @@ Before deriving thresholds from raw documents, check if a `test-design` output e
 
 ## 1. Select Categories
 
-Use the ADR Quality Readiness Checklist (8 categories) as the elicitation source for thresholds:
+Use the ADR Quality Readiness Checklist (8 categories) only as an elicitation
+source for finding explicitly declared requirements:
 
 1. Testability & Automation
 2. Test Data Strategy
@@ -62,13 +63,51 @@ Use the ADR Quality Readiness Checklist (8 categories) as the elicitation source
 
 Add any `custom_nfr_categories` if provided.
 
+The checklist never creates an assessment criterion by itself. Build a canonical
+`declared_nfr_criteria` map containing only requirements in the four automated
+audit domains: Security, Performance, Reliability, and Maintainability. Put
+explicit requirements from every other category in a separate
+`recorded_only_nfr_criteria` list. Both collections come only from the supplied
+test-design plan, tech spec, PRD, story, or custom configuration.
+For each criterion record a stable ID, its source-order position, exact label,
+domain, threshold, and canonical threshold-source path. Preserve source order.
+Do not add a broad checklist category, evidence gap, or CONCERNS finding when
+the supplied requirements do not declare it.
+
+Derive the stable ID mechanically from the domain plus the exact declared label:
+lowercase both, replace each run of non-alphanumeric characters with one hyphen,
+and trim leading or trailing hyphens. Stop with an explicit ambiguity error if
+two criteria produce the same ID. Repeated runs over the same requirements must
+produce the same IDs and order.
+
+```json
+{
+  "{NFR_DOMAIN}": [
+    {
+      "id": "{STABLE_CRITERION_ID}",
+      "order": "{SOURCE_ORDER}",
+      "label": "{DECLARED_REQUIREMENT_LABEL}",
+      "threshold": "{DECLARED_THRESHOLD_OR_UNKNOWN}",
+      "threshold_source": "{PATH_RELATIVE_TO_SUPPLIED_PROJECT_ROOT}"
+    }
+  ]
+}
+```
+
+Each recorded-only entry uses the same fields and stable-ID derivation, plus
+`assessment_mode: "recorded-only"`. Recorded-only criteria are preserved for
+publication with their exact threshold and threshold source. They never enter a
+worker payload, finding, domain status, evidence gap, risk rollup, compliance
+summary, or gate decision.
+
 **Note:** This workflow's automated evidence audit in Step 4 evaluates exactly four domains: Security, Performance, Reliability, and Maintainability. Security and Performance draw their thresholds from the ADR-8 list above. The Reliability worker consumes availability, error-rate, fault-tolerance, and MTTR thresholds. Disaster Recovery remains a separate ADR-8 category for RTO, RPO, backup, restore, and regional recovery evidence; no automated Step 4 worker evaluates it. Maintainability criteria (test coverage, code duplication, dependency vulnerabilities, structured logging, and error tracking) come directly from `nfr-criteria.md`. Thresholds gathered here for Test Data Strategy, Disaster Recovery, Monitorability, QoS/QoE, and Deployability are recorded for the report and are not evaluated by an automated subagent in this workflow.
 
 ---
 
 ## 2. Define Thresholds
 
-For each category, use thresholds from the test-design NFR plan (step 0) where available. For any remaining UNKNOWN or missing thresholds, extract from:
+For each declared criterion, use thresholds from the test-design NFR plan (step 0) where available. For any remaining UNKNOWN or missing thresholds, extract
+from:
 
 - tech-spec (primary)
 - PRD (secondary)
@@ -76,11 +115,19 @@ For each category, use thresholds from the test-design NFR plan (step 0) where a
 
 If a threshold is still unknown after checking all sources, mark it **UNKNOWN** and plan to report **CONCERNS**.
 
+A requirements document proves only the declared target. Record it as
+`threshold_source`; never treat it as implementation evidence or place it in a
+finding's `evidence` array.
+
 ---
 
 ## 3. Confirm NFR Matrix
 
-List each NFR category with its threshold or UNKNOWN status.
+List each declared NFR criterion with its stable ID, domain, source order,
+threshold or UNKNOWN status, threshold source, and assessment mode. The ordered
+`declared_nfr_criteria` map is the complete worker assessment scope passed to
+Steps 3 through 5. The ordered `recorded_only_nfr_criteria` list is passed to
+Step 5 solely for the recorded-only report table.
 
 ---
 
