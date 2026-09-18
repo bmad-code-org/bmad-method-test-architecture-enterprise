@@ -241,6 +241,8 @@ Pact MCP complements `pactjs-utils`: MCP helps at planning and review time, `pac
 ## Related
 
 - [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - why TEA exists, and the three-part stack
+- [Verification Architecture](/docs/explanation/verification-architecture.md) - stack-neutral vs execution target split
+- [How TEA Is Tested](/docs/explanation/how-tea-is-tested.md) - how TEA proves its own behavior with deterministic checks and live evals
 - [Engagement Models](/docs/explanation/engagement-models.md) - the five ways to adopt TEA
 - [Risk-Based Testing](/docs/explanation/risk-based-testing.md) - probability × impact scoring and P0-P3
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the Definition of Done and the 100-point rubric

@@ -35,7 +35,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 
 Every one of the ten skills now has a real suite. `test/evals/suite-manifest.json`'s `deferred` array is empty, which is what a suite list can only claim honestly once every skill on it either carries a behavioral suite or is named in that array with its owner, missing evidence, and exit condition.
 
-The three suites that existed then were measured live for the first time on 2026-09-08 and all three were green. No result artifact is committed, so the numbers live in `docs/explanation/eval-quality-roadmap.md` and any claim about them needs a fresh measurement. The `bmad-tea-routing`, `nfr`, `test-design` and `ci` suites were added afterwards and have never been run live, so each has declared thresholds and no measurement behind them.
+Live baselines across the complete suite are recorded in `test/results/eval-all/latest.json` with timestamped history. [How TEA Is Tested](/docs/explanation/how-tea-is-tested.md) explains the verification layers, clean and seeded controls, and the boundary with `eval-quality` in plain language.
 
 ## 1. What you need before you start
 
@@ -96,7 +96,7 @@ Order the skills by the evidence available, and let the first ones build infrast
 2. `nfr` and `test-design`, each writing its assessment artifact. Medium: neither has a harness, so the corpus is the work.
 3. `atdd`, one command against two revisions. Medium: the fixture reset such a plan needs does not exist. `automate`'s fail-before leg is no longer part of this plan: it proves the same boundary a different way, against two live server processes rather than one command re-run against two revisions.
 4. `framework` and `ci`, scaffolding a project or pipeline. High: the artifact is a tree and the artifact map addresses files.
-5. `bmad-tea` and `bmad-teach-me-testing`. Unknown: one request and one observation is not a multi-turn transcript.
+5. `bmad-tea` and `bmad-teach-me-testing`. Transcript-based, multi-turn behavior with semantic and progress scoring, driven through `tea-transcript-runner`.
 
 The two orderings agree at both ends, which is the useful part: a bounded JSON report is the cheapest thing to measure and a transcript is the most expensive. They disagree in the middle because they weigh different work, so pick a skill that both lists place early.
 

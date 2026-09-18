@@ -1305,18 +1305,6 @@
           "reason": "a claim about the absence of a feature; nothing in the tree can decide whether an extension surface was deliberately never built"
         },
         {
-          "file": "docs/explanation/eval-quality-adoption-guide.md",
-          "key": "have never been run live",
-          "settles": "read",
-          "reason": "a claim about history outside this repository (which suites have been run against a live model); the tree carries no evidence either way by design"
-        },
-        {
-          "file": "README.md",
-          "key": "have never been run live",
-          "settles": "read",
-          "reason": "a claim about history outside this repository (which suites have been run against a live model); the tree carries no evidence either way by design"
-        },
-        {
           "file": "README.md",
           "key": "`risk_threshold` \u2014 risk cutoff for mandatory testing",
           "settles": {
