@@ -1,28 +1,26 @@
 {
-  "schemaVersion": "1.5.0",
+  "schemaVersion": "1.3.0",
   "kind": "run-summary",
-  "generatedAt": "2026-09-18T13:23:35.961Z",
+  "generatedAt": "2026-09-17T12:23:09.218Z",
   "repository": {
-    "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+    "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
     "dirty": false
   },
   "evalQualityVersion": "3.4.0",
   "suites": [
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:19:57.578Z",
+      "generatedAt": "2026-09-17T09:44:46.300Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "atdd",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-testarch-atdd"
-        ],
+        "skills": ["bmad-testarch-atdd"],
         "contracts": [
           {
             "path": "test/contracts/atdd.contract.json",
@@ -30,14 +28,10 @@
           }
         ],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "scoped-artifact-writes"
-        ],
+        "runnerCapabilities": ["scoped-artifact-writes"],
         "fixtureDigest": "sha256:885822cfd5be9a8874e05679fefd9bc7dbf80de09aa7914279168cec8ab0be93",
         "promptDigest": "sha256:83de480469179deacabc7fc104fddc5f6c3f1b9674e0c5a4e6cecd59cb78c5d8",
-        "caseIds": [
-          "reservations"
-        ],
+        "caseIds": ["reservations"],
         "cases": [
           {
             "id": "reservations",
@@ -71,115 +65,55 @@
           },
           "repetitions": {
             "expected": 2,
-            "completed": 0
+            "completed": 2
           },
           "measurements": {
-            "redForIntendedReasonRate": null,
-            "criteriaCoverage": null,
-            "vacuousPass": null,
-            "stillSkipped": null,
-            "nonAssertionExit": null,
-            "loadErrors": null,
-            "unmapped": null,
-            "productionMutations": null,
-            "unstableCases": null,
-            "incompleteCases": 1
+            "redForIntendedReasonRate": 0.625,
+            "criteriaCoverage": 0.5,
+            "vacuousPass": 0,
+            "stillSkipped": 0,
+            "nonAssertionExit": 3,
+            "loadErrors": 0,
+            "unmapped": 8,
+            "productionMutations": 0,
+            "unstableCases": 1,
+            "incompleteCases": 0
           },
-          "durationMs": 2508,
+          "durationMs": 327261,
           "usage": null,
-          "failureClass": "environment-transport",
+          "failureClass": "quality",
           "failures": [
-            "short of 2 repetitions"
-          ],
-          "diagnostics": [
-            {
-              "caseId": "reservations",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-atdd-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "redForIntendedReasonRate",
-                "criteriaCoverage",
-                "vacuousPass",
-                "stillSkipped",
-                "nonAssertionExit",
-                "loadErrors",
-                "unmapped",
-                "productionMutations",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "reservations",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-atdd-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "redForIntendedReasonRate",
-                "criteriaCoverage",
-                "vacuousPass",
-                "stillSkipped",
-                "nonAssertionExit",
-                "loadErrors",
-                "unmapped",
-                "productionMutations",
-                "unstableCases"
-              ],
-              "evidence": []
-            }
+            "redForIntendedReasonRate",
+            "criteriaCoverage",
+            "3 non-assertion exit(s)",
+            "8 unmapped test(s)",
+            "1 unstable case(s)"
           ]
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 2634,
-      "failureClass": "environment-transport",
-      "exitCode": 2
+      "durationMs": 327406,
+      "failureClass": "quality",
+      "exitCode": 1
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:20:01.957Z",
+      "generatedAt": "2026-09-17T09:44:50.611Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "automate",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-testarch-automate"
-        ],
+        "skills": ["bmad-testarch-automate"],
         "contracts": [],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "command-execution"
-        ],
+        "runnerCapabilities": ["command-execution"],
         "fixtureDigest": "sha256:fd29266d1073e83d6d51efe83432a23fe8334e1c397c05a6524c57b4e9c5efb7",
         "promptDigest": null,
-        "caseIds": [
-          "correct-run",
-          "misses-regression",
-          "vacuous-pass",
-          "duplicate"
-        ],
+        "caseIds": ["correct-run", "misses-regression", "vacuous-pass", "duplicate"],
         "cases": [
           {
             "id": "correct-run",
@@ -220,8 +154,8 @@
             "promptTransport": "stdin"
           },
           "repetitions": {
-            "expected": 4,
-            "completed": 4
+            "expected": 1,
+            "completed": 1
           },
           "measurements": {
             "loadErrors": 0,
@@ -233,166 +167,29 @@
             "vacuousTests": 1,
             "duplicateTests": 1
           },
-          "durationMs": 4222,
+          "durationMs": 4186,
           "usage": null,
           "failureClass": "none",
-          "failures": [],
-          "diagnostics": [
-            {
-              "caseId": "correct-run",
-              "repetition": 1,
-              "completionState": "completed",
-              "signature": "{\"verdict\":\"catches-regression\",\"expectedDetectsRegression\":true,\"loadFailure\":null,\"classifications\":[\"matches-declared\",\"matches-declared\",\"matches-declared\",\"matches-declared\",\"matches-declared\"]}",
-              "metricContributions": {
-                "expectedDetectsRegression": 1,
-                "detectedRegression": 1,
-                "undetectedRegression": 0,
-                "falseRegressionDetection": 0,
-                "unattributedFailures": 0,
-                "unexpectedOutcomes": 0,
-                "matchingOutcomes": 5,
-                "vacuousTests": 0,
-                "duplicateTests": 0,
-                "maxUndetectedRegressionCases": 0,
-                "maxFalseRegressionDetections": 0,
-                "maxUnattributedFailures": 0,
-                "maxUnexpectedOutcomes": 0
-              },
-              "failureClass": "none",
-              "rootCause": null,
-              "reason": null,
-              "triage": [],
-              "mappedFailures": [],
-              "mappedMeasurements": [],
-              "evidence": [
-                {
-                  "kind": "output-signature",
-                  "value": "{\"verdict\":\"catches-regression\",\"expectedDetectsRegression\":true,\"loadFailure\":null,\"classifications\":[\"matches-declared\",\"matches-declared\",\"matches-declared\",\"matches-declared\",\"matches-declared\"]}"
-                }
-              ]
-            },
-            {
-              "caseId": "misses-regression",
-              "repetition": 1,
-              "completionState": "completed",
-              "signature": "{\"verdict\":\"does-not-detect-regression\",\"expectedDetectsRegression\":false,\"loadFailure\":null,\"classifications\":[\"matches-declared\",\"matches-declared\",\"matches-declared\",\"matches-declared\",\"matches-declared\"]}",
-              "metricContributions": {
-                "expectedDetectsRegression": 0,
-                "detectedRegression": 0,
-                "undetectedRegression": 0,
-                "falseRegressionDetection": 0,
-                "unattributedFailures": 0,
-                "unexpectedOutcomes": 0,
-                "matchingOutcomes": 5,
-                "vacuousTests": 0,
-                "duplicateTests": 0,
-                "maxUndetectedRegressionCases": 0,
-                "maxFalseRegressionDetections": 0,
-                "maxUnattributedFailures": 0,
-                "maxUnexpectedOutcomes": 0
-              },
-              "failureClass": "none",
-              "rootCause": null,
-              "reason": null,
-              "triage": [],
-              "mappedFailures": [],
-              "mappedMeasurements": [],
-              "evidence": [
-                {
-                  "kind": "output-signature",
-                  "value": "{\"verdict\":\"does-not-detect-regression\",\"expectedDetectsRegression\":false,\"loadFailure\":null,\"classifications\":[\"matches-declared\",\"matches-declared\",\"matches-declared\",\"matches-declared\",\"matches-declared\"]}"
-                }
-              ]
-            },
-            {
-              "caseId": "vacuous-pass",
-              "repetition": 1,
-              "completionState": "completed",
-              "signature": "{\"verdict\":\"does-not-detect-regression\",\"expectedDetectsRegression\":false,\"loadFailure\":null,\"classifications\":[\"vacuous\"]}",
-              "metricContributions": {
-                "expectedDetectsRegression": 0,
-                "detectedRegression": 0,
-                "undetectedRegression": 0,
-                "falseRegressionDetection": 0,
-                "unattributedFailures": 0,
-                "unexpectedOutcomes": 0,
-                "matchingOutcomes": 0,
-                "vacuousTests": 1,
-                "duplicateTests": 0,
-                "maxUndetectedRegressionCases": 0,
-                "maxFalseRegressionDetections": 0,
-                "maxUnattributedFailures": 0,
-                "maxUnexpectedOutcomes": 0
-              },
-              "failureClass": "none",
-              "rootCause": null,
-              "reason": null,
-              "triage": [],
-              "mappedFailures": [],
-              "mappedMeasurements": [],
-              "evidence": [
-                {
-                  "kind": "output-signature",
-                  "value": "{\"verdict\":\"does-not-detect-regression\",\"expectedDetectsRegression\":false,\"loadFailure\":null,\"classifications\":[\"vacuous\"]}"
-                }
-              ]
-            },
-            {
-              "caseId": "duplicate",
-              "repetition": 1,
-              "completionState": "completed",
-              "signature": "{\"verdict\":\"does-not-detect-regression\",\"expectedDetectsRegression\":false,\"loadFailure\":null,\"classifications\":[\"matches-declared\",\"duplicate\"]}",
-              "metricContributions": {
-                "expectedDetectsRegression": 0,
-                "detectedRegression": 0,
-                "undetectedRegression": 0,
-                "falseRegressionDetection": 0,
-                "unattributedFailures": 0,
-                "unexpectedOutcomes": 0,
-                "matchingOutcomes": 1,
-                "vacuousTests": 0,
-                "duplicateTests": 1,
-                "maxUndetectedRegressionCases": 0,
-                "maxFalseRegressionDetections": 0,
-                "maxUnattributedFailures": 0,
-                "maxUnexpectedOutcomes": 0
-              },
-              "failureClass": "none",
-              "rootCause": null,
-              "reason": null,
-              "triage": [],
-              "mappedFailures": [],
-              "mappedMeasurements": [],
-              "evidence": [
-                {
-                  "kind": "output-signature",
-                  "value": "{\"verdict\":\"does-not-detect-regression\",\"expectedDetectsRegression\":false,\"loadFailure\":null,\"classifications\":[\"matches-declared\",\"duplicate\"]}"
-                }
-              ]
-            }
-          ]
+          "failures": []
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 4255,
+      "durationMs": 4222,
       "failureClass": "none",
       "exitCode": 0
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:20:47.633Z",
+      "generatedAt": "2026-09-17T09:46:57.193Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "bmad-tea-routing",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-tea"
-        ],
+        "skills": ["bmad-tea"],
         "contracts": [
           {
             "path": "test/contracts/tea-routing-controls.contract.json",
@@ -404,11 +201,9 @@
           }
         ],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "read-only"
-        ],
+        "runnerCapabilities": ["read-only"],
         "fixtureDigest": "sha256:cd3856056f42680cbe4eb861f44bdc2299c68aa27f8051d99e8f766f1b25aaae",
-        "promptDigest": "sha256:5f0c3f9d98a815627a913afbaf09edc2371b083d427dbd9f9d63611fc6f10753",
+        "promptDigest": "sha256:d6544163e36520cc614395a095282ee00ed9b1e31c0327c3db3c7db494bacd0d",
         "caseIds": [
           "epic-risk-before-tests",
           "no-framework-yet",
@@ -432,75 +227,75 @@
         "cases": [
           {
             "id": "epic-risk-before-tests",
-            "promptDigest": "sha256:7248f52ec3c31d2b6e5e5ad933235c07c1578fe7d82064d8369b59d7f7e2754f"
+            "promptDigest": "sha256:449e8a6734a6f060d6748882eacd7a5ec1bae7b21e6b37d147dedcc1be2e3ea4"
           },
           {
             "id": "no-framework-yet",
-            "promptDigest": "sha256:5fe7e4346b09fa7bce3a6b65f3f8ae179bd2727a92cbcd3c183f1d39c373b699"
+            "promptDigest": "sha256:5ee9f1b66b300064087ea5338dfc070d1e63793cd53ff2e9dd1743375dff5729"
           },
           {
             "id": "pipeline-quality-gates",
-            "promptDigest": "sha256:c26214e5b411957d31be24811463f66cb7741cffe17cbff17b3c56a2e90a3664"
+            "promptDigest": "sha256:cf2be1b370c93d626a3c6b5eb0f0124f9b8390608d0d3f0811498206d8a8d617"
           },
           {
             "id": "acceptance-tests-before-code",
-            "promptDigest": "sha256:d3b41fe263a456a3ca79fd0447d5786c02aafae6535de98e40505f86e55fd8d4"
+            "promptDigest": "sha256:bdc2d9cae24a556389456511936b1d4c3d7779b34d795ea5af6efdfc331c3a05"
           },
           {
             "id": "implemented-feature-no-tests",
-            "promptDigest": "sha256:6e09ec4014ea34f7cb88d56b389c2c6e71591fd148997b83b173111e7c76e009"
+            "promptDigest": "sha256:0026773b3a76c8f3ba495eb8b517ef92d502f6cd729b23bd1e9874e8924f01d1"
           },
           {
             "id": "review-existing-tests",
-            "promptDigest": "sha256:53013f346588ca05e25c16f46e73348408f5b65f5e0a33bc2f0f106b94181ee0"
+            "promptDigest": "sha256:b4a2dea295b154818703b19281c375761090ca36a6661f9c55b798cbcffc3eca"
           },
           {
             "id": "nfr-evidence-on-hand",
-            "promptDigest": "sha256:f37457acac8d1e274bdf2ae959f45555360577526b103775a2f9c181f117d28f"
+            "promptDigest": "sha256:76c568c20a0dfbf7451c81beb0ce768af24f40e3cfb406afc90d603781dbe691"
           },
           {
             "id": "trace-criteria-to-tests",
-            "promptDigest": "sha256:12eda4712eae3a08c38a08afb1e264db7fdda349e5f196d0bd26cdc7f18c662f"
+            "promptDigest": "sha256:d3cfd213139ac67b517164d7d022be03b1afcbd08fa05d4290b75ade3a5efd03"
           },
           {
             "id": "learn-testing-properly",
-            "promptDigest": "sha256:cb51ca6556a4bb84e71084ec4d9ea0cef0d4d588c8450a8e89ca41873d1f0655"
+            "promptDigest": "sha256:97832bbbd87a707b3ee639a3e8fbb6d0b1b46ac96b6c42bf2374e46238ffa42f"
           },
           {
             "id": "release-gate-sequence",
-            "promptDigest": "sha256:1a921afee68b168edcb7b603e4ed47263822e7aee530761c33bfaec7b23c62c9"
+            "promptDigest": "sha256:b477f5c92fc0d906fd1f93035026f0016f33eb6f7fa4c12eb494dbf51ffc7c30"
           },
           {
             "id": "good-or-covering-what-matters",
-            "promptDigest": "sha256:c718bac51cc27e7e4bff8e783ecd9dcf6f52728056fdfb0a240b3d83fed804d8"
+            "promptDigest": "sha256:fa192d965733595d0f837154b8941c0a3ed52388aaa59ca305929433199cf246"
           },
           {
             "id": "measured-some-nfrs-planned-none",
-            "promptDigest": "sha256:3a0ead1e5876c06e5eaf2f113a4742b962cccc18303957303efc37782cefe108"
+            "promptDigest": "sha256:7702d0acf06c6f40954276bbd2bf1439fb46412e6098e778c40ea5adefb014ff"
           },
           {
             "id": "thin-coverage-on-payments",
-            "promptDigest": "sha256:3f85e8cf494c222d7b8619ea2e2fb2a33847aa991eab8ddd201158cb78ca17b8"
+            "promptDigest": "sha256:0af298c94c842b229b58c817a0fb92e475895d5dc1cd8065d5bf972bdf88cd41"
           },
           {
             "id": "story-half-done",
-            "promptDigest": "sha256:daa0ed7f6de42a2556c859684d76b8a92cfd4eb720b981e725626e6f154acf3f"
+            "promptDigest": "sha256:316309e5f9dba059c7a28a98d8a347d5c7ec84c18267227c223f74bfd84efb1e"
           },
           {
             "id": "run-and-fix-ci-failures",
-            "promptDigest": "sha256:603e038dabc537045a0eeda3f10cd8136fb1785c803d3a660767bd8f5e1ba63f"
+            "promptDigest": "sha256:7b3807810a1a06a8a393dd548d4d844ae70ea11e6e04128cc08b1e59431975e6"
           },
           {
             "id": "write-production-code",
-            "promptDigest": "sha256:585a922b42f0e4a5c98b1ff8eca70e67d930ed545e5747f06268a7b8f5638050"
+            "promptDigest": "sha256:9419a0d340d69f61a69d7df1954f470b3b4edc70314abefbe95e3ca14c2a903f"
           },
           {
             "id": "penetration-test-staging",
-            "promptDigest": "sha256:24f1eddf84c5e748e4c698ea908b93ac66663c8016d54fdaefc98b7045eeb035"
+            "promptDigest": "sha256:0719070e9f4c9f11aebf5d1fdd9a8f72813ca5bf00bfe98e070e3c8abac5278d"
           },
           {
             "id": "hire-a-qa-lead",
-            "promptDigest": "sha256:0f4e2869350f33cec75cd27530818e4256106601f9f505096ac25d9af3c9303e"
+            "promptDigest": "sha256:c0f2c5f0f06f8579207b3762c84a7babd5d3e78c64ed1f163117a796d4e50c01"
           }
         ],
         "thresholds": {
@@ -530,1056 +325,38 @@
           },
           "repetitions": {
             "expected": 36,
-            "completed": 0
+            "completed": 36
           },
           "measurements": {
-            "routeAccuracy": null,
-            "reasonTokenRecall": null,
-            "scopeFidelity": null,
-            "clarifyRecall": null,
-            "declineRecall": null,
+            "routeAccuracy": 1,
+            "reasonTokenRecall": 0.8285714285714286,
+            "scopeFidelity": 0.9375,
+            "clarifyRecall": 0.125,
+            "declineRecall": 1,
             "confidentRoutesOnUnservable": 0,
-            "confidentRoutesOnAmbiguous": 0,
+            "confidentRoutesOnAmbiguous": 5,
             "unroutedClearIntents": 0,
-            "unstableCases": null,
-            "incompleteCases": 18,
-            "unmeasuredRuns": 36
+            "unstableCases": 2,
+            "incompleteCases": 0,
+            "unmeasuredRuns": 0
           },
-          "durationMs": 45505,
+          "durationMs": 126425,
           "usage": null,
-          "failureClass": "environment-transport",
-          "failures": [
-            "route accuracy (unmeasurable)",
-            "reason token recall (unmeasurable)",
-            "scope fidelity (unmeasurable)",
-            "clarification recall (unmeasurable)",
-            "decline recall (unmeasurable)",
-            "18 case(s) short of 2 repetitions"
-          ],
-          "diagnostics": [
-            {
-              "caseId": "epic-risk-before-tests",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "epic-risk-before-tests",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "no-framework-yet",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "no-framework-yet",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "pipeline-quality-gates",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "pipeline-quality-gates",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "acceptance-tests-before-code",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "acceptance-tests-before-code",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "implemented-feature-no-tests",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "implemented-feature-no-tests",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "review-existing-tests",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "review-existing-tests",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "nfr-evidence-on-hand",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "nfr-evidence-on-hand",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "trace-criteria-to-tests",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "trace-criteria-to-tests",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "learn-testing-properly",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "learn-testing-properly",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "release-gate-sequence",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "release-gate-sequence",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "good-or-covering-what-matters",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "good-or-covering-what-matters",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "measured-some-nfrs-planned-none",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "measured-some-nfrs-planned-none",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "thin-coverage-on-payments",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "thin-coverage-on-payments",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "story-half-done",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "story-half-done",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "run-and-fix-ci-failures",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "run-and-fix-ci-failures",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "write-production-code",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "write-production-code",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "penetration-test-staging",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "penetration-test-staging",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "hire-a-qa-lead",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "hire-a-qa-lead",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-routing-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "route accuracy (unmeasurable)",
-                "reason token recall (unmeasurable)",
-                "scope fidelity (unmeasurable)",
-                "clarification recall (unmeasurable)",
-                "decline recall (unmeasurable)",
-                "18 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "routeAccuracy",
-                "reasonTokenRecall",
-                "scopeFidelity",
-                "clarifyRecall",
-                "declineRecall",
-                "unstableCases"
-              ],
-              "evidence": []
-            }
-          ]
+          "failureClass": "quality",
+          "failures": ["clarification recall", "5 confident route(s) on an intent whose menu items are genuinely close"]
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 45569,
-      "failureClass": "environment-transport",
-      "exitCode": 2
+      "durationMs": 126498,
+      "failureClass": "quality",
+      "exitCode": 1
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:21:49.587Z",
+      "generatedAt": "2026-09-17T10:24:15.903Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
@@ -1630,11 +407,9 @@
           }
         ],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "read-only"
-        ],
+        "runnerCapabilities": ["read-only"],
         "fixtureDigest": "sha256:8cc5a5891c78f264076f74a170758aa50957b2e09208cfd56e93e823e6c3c5b5",
-        "promptDigest": "sha256:8e28569918de3deb7f03b84bd1a7b5a7ca9ded235260b244feaf1f856cfc60d8",
+        "promptDigest": "sha256:ab691a6bfed0b746c43579ecf57ee22205dbfacfd0fb6a49cebdef672a3bf8a2",
         "caseIds": [
           "bmad-testarch-atdd:atdd-frontend-playwright",
           "bmad-testarch-atdd:atdd-backend-pytest",
@@ -1664,105 +439,104 @@
         "cases": [
           {
             "id": "bmad-testarch-atdd:atdd-frontend-playwright",
-            "promptDigest": "sha256:a73b7914c99c48a7345e5e98e554e736a7f2bce1c26a35a8ab97f31370251b64"
+            "promptDigest": "sha256:f1dcf0d0faa45bdc1b1bc0a4b65a361b9147d8d17048a5797d4b028e0951250e"
           },
           {
             "id": "bmad-testarch-atdd:atdd-backend-pytest",
-            "promptDigest": "sha256:f68e0b077d57acf323d5b5a7eabdbe556d4909fa975df3b2ff0f40e38d93e9f4"
+            "promptDigest": "sha256:74f9632fa6de21d4967b4c2c49d43fcfcc9d05191ca0d618010e7c8e477fdb75"
           },
           {
             "id": "bmad-testarch-atdd:atdd-fullstack-pact",
-            "promptDigest": "sha256:68bbcd89db591fc6a71c24190c5be1806bea26aae0a2dec15c8bce0f8c8c3647"
+            "promptDigest": "sha256:aa605e4e270c9e37e1fb0f476922a3c976922fb7072f82de1aeb3b96e86bd9b6"
           },
           {
             "id": "bmad-testarch-automate:automate-playwright-ui-utils-on",
-            "promptDigest": "sha256:bbcd212aa0fa5b996043f980efb39ce93efbe761a3feccc98199770f6c52c9f7"
+            "promptDigest": "sha256:d8dce8e52af6a25843deab69d38db1ead88ade81753cc7d89885000562f63a2c"
           },
           {
             "id": "bmad-testarch-automate:automate-backend-pytest",
-            "promptDigest": "sha256:17400bc81101f37a8d05a8e7e9c589b202d3027451105514a8979254c35ca4aa"
+            "promptDigest": "sha256:c3728e5d256680075dd93aadab3ceaf9ff60f32cb8b8b87c517b4d00366c2640"
           },
           {
             "id": "bmad-testarch-automate:automate-mobile-maestro",
-            "promptDigest": "sha256:8b7db966c92f6065a7252f8d409fc4141537fb72b8ee70bf219bdfb0e235961b"
+            "promptDigest": "sha256:3f8a4e1bc50cf30b4cb4c7f10a082ffc789ca0c152b3539f0bd01f4ce5512b1e"
           },
           {
             "id": "bmad-testarch-automate:automate-pact-consumer",
-            "promptDigest": "sha256:4bfe12d781590dcd64f575dcd4703d40a9c73b3e55dbc51c1d2771d7823f28d9"
+            "promptDigest": "sha256:c3ff9646167b0480400e64a5250fcb3bad5cd520680c5fff2ee0cd8b416fd21c"
           },
           {
             "id": "bmad-testarch-automate:automate-backend-junit",
-            "promptDigest": "sha256:f3f9ac0737e8344607fd00098dfd5924875f3ec29f37e4e530bee8abf9d1b90e"
+            "promptDigest": "sha256:81b4cef94e08fee7c2566eb45580cc3fd56a98c264e5a61edcdfc3a0dbb620fe"
           },
           {
             "id": "bmad-testarch-ci:ci-gitlab-python",
-            "promptDigest": "sha256:d57c9f5d7a29e8a1fda1d684365c928fad53fbff660a1448b47881397845c54d"
+            "promptDigest": "sha256:bb8a164fe91b473a16933f535648c6563fee51adec701a65b8034b7fb114e68c"
           },
           {
             "id": "bmad-testarch-ci:ci-pact-consumer-pipeline",
-            "promptDigest": "sha256:af856c3a3ae03fb656468ce6a1207ec77b9f263f7e22a64d56eb22452383ac55"
+            "promptDigest": "sha256:e706c31388fdc816f1e9702bd10d238f878f8ebd7baf2569f59328800e3a81e0"
           },
           {
             "id": "bmad-testarch-framework:framework-mobile-scaffold",
-            "promptDigest": "sha256:1202d54984ea3e27af247ad145634b6794cf404c9b579d1cc968b0d77965fc96"
+            "promptDigest": "sha256:e24093811839315eee4331d22246dac2514b58e19b22151b069e4be21a534a03"
           },
           {
             "id": "bmad-testarch-framework:framework-greenfield-playwright-utils",
-            "promptDigest": "sha256:943ef0aae0e9ceadf49cc8bb7862a4739823333b169e5b3af65d2f63cbb3ec36"
+            "promptDigest": "sha256:a453b55d418920110e3d2d09946c3274c94a2dfba5b5bcc4c5ccfaaf4c7fb0b8"
           },
           {
             "id": "bmad-testarch-framework:framework-python-backend",
-            "promptDigest": "sha256:b7f8cd8c3afb264cc12d760d67f5b651458155c4b45bbd055106d0eab12f8a75"
+            "promptDigest": "sha256:f5f45c86f66c3afc4e49d2f61e191f063c83a818272109067dc8b048003a2a47"
           },
           {
             "id": "bmad-testarch-nfr:nfr-backend-junit-no-browser",
-            "promptDigest": "sha256:d17280798f90c3244c659dd329273a7ee30c4edc63873764f5cf740eda87b325"
+            "promptDigest": "sha256:e9cc4526a158ed899bec27307743c13fb1096d498fe5e05a5a06877d46ab111a"
           },
           {
             "id": "bmad-testarch-nfr:nfr-browser-automation-cli",
-            "promptDigest": "sha256:b63b055b0845f52a24ebcfdad5661d77f87147e25a6c73b709822c97b564a702"
+            "promptDigest": "sha256:5bbc1ef3ba4c1e13aa7f02758e24de1514e27648df4f5c06a5edf0b287c9aef0"
           },
           {
             "id": "bmad-testarch-test-design:test-design-system-level",
-            "promptDigest": "sha256:4e8252ddd88400a4039325709e88e96f58ed45a3cb657c24ff30cc2b7459f306"
+            "promptDigest": "sha256:6f901a9dff327260485835725c4c1eb7ea35586d9b6261bc2e9b2c4635f79021"
           },
           {
             "id": "bmad-testarch-test-design:test-design-epic-level",
-            "promptDigest": "sha256:6c24ce5d3e48173516a35870d757d3b911d6eab1415c599f961f28bf5a89c61a"
+            "promptDigest": "sha256:31c067597f15e6f773e73f762e43344d06256e245300f77967b9b9b3e154600c"
           },
           {
             "id": "bmad-testarch-test-design:test-design-epic-with-nfrs",
-            "promptDigest": "sha256:76528cab3f18f10d12760cf96e81933c79e56c3b9008d870644630aef9880ec8"
+            "promptDigest": "sha256:5f02eaac7b6c100ad9e9a3a58ac89f682cbc740ed8e71a359cb4fddc698aa757"
           },
           {
             "id": "bmad-testarch-test-design:test-design-pact-consumer-is-a-frontend",
-            "promptDigest": "sha256:2aef2eb80f18bcdd6e9744dd428b541ccd003760f228026d067dee6d113fdf96"
+            "promptDigest": "sha256:d9423e3f465bd350bed1e881a4dde441b5bccd68b5742008650cc0a39606cd2b"
           },
           {
             "id": "bmad-testarch-test-design:test-design-backend-junit",
-            "promptDigest": "sha256:d1917d0ea6033762b7fce489321af8551cd8e50fc2e9f1935583dac23f23fc2c"
+            "promptDigest": "sha256:cb5e2ba31442041e1c38408c41d61219649a74d896c2b4d1ca50b26b4e0d0c3e"
           },
           {
             "id": "bmad-testarch-test-review:test-review-maestro-flow-set",
-            "promptDigest": "sha256:864796e4e8a66b1f7b8fc63f33583af5d1cf4fd296c0df435e9b82794d4c2340"
+            "promptDigest": "sha256:cf2fcf463833c2a8e7587c326f3d4bec78c90c1c52d04ce2891aa1be81f0bdba"
           },
           {
             "id": "bmad-testarch-test-review:test-review-java-suite",
-            "promptDigest": "sha256:a75aaaa558da1a9dfc798e93b8daa0e1046ad30413bd52950fd6b63f459c0e9e"
+            "promptDigest": "sha256:c6933bf438d3efb16302fc6385b24fc32fb4ed5af97812823bae26b338154eff"
           },
           {
             "id": "bmad-testarch-trace:trace-go-service-no-js",
-            "promptDigest": "sha256:833bbce64140937b4ce0ece0cbfe7edff0b1768f4d250a86091f5e1b7ec98e9a"
+            "promptDigest": "sha256:616282db4ff5471f408dddffba16848fe06198290a22a2b0dfa6daa38141fa06"
           },
           {
             "id": "bmad-testarch-trace:trace-mobile-epic",
-            "promptDigest": "sha256:1466387448f554acd26805e8710fd86e2fe70f0fdd783d25a068c35cd0e36ee6"
+            "promptDigest": "sha256:de93caf9a810af746296bb6c1baf27d246d4c148c6ff4151441e3efc584fbbbf"
           }
         ],
         "thresholds": {
           "requiredRecall": 0.9,
-          "forbiddenRate": 0.1,
-          "maxUnstableCases": 0
+          "forbiddenRate": 0.1
         },
         "declaredRepetitions": 2
       },
@@ -1780,1054 +554,38 @@
           },
           "repetitions": {
             "expected": 48,
-            "completed": 0
+            "completed": 48
           },
           "measurements": {
-            "requiredRecall": null,
-            "forbiddenRate": null,
-            "unstableCases": null,
-            "incompleteCases": 24,
-            "unmeasuredRuns": 48
+            "requiredRecall": 1,
+            "forbiddenRate": 0,
+            "unstableCases": 2,
+            "incompleteCases": 0,
+            "unmeasuredRuns": 0
           },
-          "durationMs": 61723,
+          "durationMs": 2238522,
           "usage": null,
-          "failureClass": "environment-transport",
-          "failures": [
-            "required recall (unmeasurable)",
-            "24 case(s) short of 2 repetitions"
-          ],
-          "diagnostics": [
-            {
-              "caseId": "bmad-testarch-atdd:atdd-frontend-playwright",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-atdd:atdd-frontend-playwright",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-atdd:atdd-backend-pytest",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-atdd:atdd-backend-pytest",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-atdd:atdd-fullstack-pact",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-atdd:atdd-fullstack-pact",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-playwright-ui-utils-on",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-playwright-ui-utils-on",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-backend-pytest",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-backend-pytest",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-mobile-maestro",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-mobile-maestro",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-pact-consumer",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-pact-consumer",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-backend-junit",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-automate:automate-backend-junit",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-ci:ci-gitlab-python",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-ci:ci-gitlab-python",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-ci:ci-pact-consumer-pipeline",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-ci:ci-pact-consumer-pipeline",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-framework:framework-mobile-scaffold",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-framework:framework-mobile-scaffold",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-framework:framework-greenfield-playwright-utils",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-framework:framework-greenfield-playwright-utils",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-framework:framework-python-backend",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-framework:framework-python-backend",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-nfr:nfr-backend-junit-no-browser",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-nfr:nfr-backend-junit-no-browser",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-nfr:nfr-browser-automation-cli",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-nfr:nfr-browser-automation-cli",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-system-level",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-system-level",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-epic-level",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-epic-level",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-epic-with-nfrs",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-epic-with-nfrs",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-pact-consumer-is-a-frontend",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-pact-consumer-is-a-frontend",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-backend-junit",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-design:test-design-backend-junit",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-review:test-review-maestro-flow-set",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-review:test-review-maestro-flow-set",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-review:test-review-java-suite",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-test-review:test-review-java-suite",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-trace:trace-go-service-no-js",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-trace:trace-go-service-no-js",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-trace:trace-mobile-epic",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "bmad-testarch-trace:trace-mobile-epic",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-fragment-selection-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "required recall (unmeasurable)",
-                "24 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requiredRecall",
-                "forbiddenRate",
-                "unstableCases"
-              ],
-              "evidence": []
-            }
-          ]
+          "failureClass": "quality",
+          "failures": ["2 unstable case(s)"]
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 61820,
-      "failureClass": "environment-transport",
-      "exitCode": 2
+      "durationMs": 2238614,
+      "failureClass": "quality",
+      "exitCode": 1
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:21:54.981Z",
+      "generatedAt": "2026-09-17T10:37:20.041Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "ci",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-testarch-ci"
-        ],
+        "skills": ["bmad-testarch-ci"],
         "contracts": [
           {
             "path": "test/contracts/ci.contract.json",
@@ -2835,15 +593,10 @@
           }
         ],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "scoped-artifact-writes"
-        ],
+        "runnerCapabilities": ["scoped-artifact-writes"],
         "fixtureDigest": "sha256:2b2180234434ba7bc8b2f65d8bba5fd9b6f7bcb134f47cac372b89b362cf0561",
         "promptDigest": "sha256:7436fe5a648c3c3e1b892ca47ddfd92aef066e03ac694c7c1544f8ed60c8fac0",
-        "caseIds": [
-          "full-meridian-storefront",
-          "minimal-lantern-audit-log"
-        ],
+        "caseIds": ["full-meridian-storefront", "minimal-lantern-audit-log"],
         "cases": [
           {
             "id": "full-meridian-storefront",
@@ -2881,151 +634,48 @@
               {
                 "name": "actionlint",
                 "version": "1.7.12",
-                "args": [
-                  "-no-color",
-                  "-format",
-                  "{{json .}}",
-                  "-shellcheck=",
-                  "-pyflakes="
-                ]
+                "args": ["-no-color", "-format", "{{json .}}", "-shellcheck=", "-pyflakes="]
               }
             ]
           },
           "repetitions": {
             "expected": 4,
-            "completed": 0
+            "completed": 4
           },
           "measurements": {
             "parseFailures": 0,
             "lintFindings": 0,
-            "requestedElementRecall": null,
-            "triggerAccuracy": null,
+            "requestedElementRecall": 1,
+            "triggerAccuracy": 1,
             "unrequestedElements": 0,
             "workflowRuleViolations": 0,
-            "unstableCases": null,
-            "incompleteCases": 2,
+            "unstableCases": 0,
+            "incompleteCases": 0,
             "fixtureMutations": 0
           },
-          "durationMs": 5153,
+          "durationMs": 783889,
           "usage": null,
-          "failureClass": "environment-transport",
-          "failures": [
-            "requestedElementRecall (unmeasurable)",
-            "triggerAccuracy (unmeasurable)",
-            "2 case(s) short of 2 repetitions"
-          ],
-          "diagnostics": [
-            {
-              "caseId": "full-meridian-storefront",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-ci-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "requestedElementRecall (unmeasurable)",
-                "triggerAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requestedElementRecall",
-                "triggerAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "full-meridian-storefront",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-ci-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "requestedElementRecall (unmeasurable)",
-                "triggerAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requestedElementRecall",
-                "triggerAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "minimal-lantern-audit-log",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-ci-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "requestedElementRecall (unmeasurable)",
-                "triggerAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requestedElementRecall",
-                "triggerAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "minimal-lantern-audit-log",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-ci-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "requestedElementRecall (unmeasurable)",
-                "triggerAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "requestedElementRecall",
-                "triggerAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            }
-          ]
+          "failureClass": "none",
+          "failures": []
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 5219,
-      "failureClass": "environment-transport",
-      "exitCode": 2
+      "durationMs": 783974,
+      "failureClass": "none",
+      "exitCode": 0
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:22:00.405Z",
+      "generatedAt": "2026-09-17T10:54:06.564Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "nfr",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-testarch-nfr"
-        ],
+        "skills": ["bmad-testarch-nfr"],
         "contracts": [
           {
             "path": "test/contracts/nfr.contract.json",
@@ -3033,15 +683,10 @@
           }
         ],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "scoped-artifact-writes"
-        ],
+        "runnerCapabilities": ["scoped-artifact-writes"],
         "fixtureDigest": "sha256:0cc7e216bf8b377dbd64a5edec96d6779f4d6849c74fa5db061923a8b15ef879",
         "promptDigest": "sha256:966f9ccaa2a7bb7dbe07c3ce9fd94d87c0bc74aa68715e0c760387989f8597bd",
-        "caseIds": [
-          "gapped-harbor-billing-ledger",
-          "clean-atlas-notification-relay"
-        ],
+        "caseIds": ["gapped-harbor-billing-ledger", "clean-atlas-notification-relay"],
         "cases": [
           {
             "id": "gapped-harbor-billing-ledger",
@@ -3083,180 +728,47 @@
           },
           "repetitions": {
             "expected": 4,
-            "completed": 0
+            "completed": 4
           },
           "measurements": {
-            "domainStatusAccuracy": null,
-            "undecidableDomainAccuracy": null,
-            "thresholdFidelityAccuracy": null,
-            "overallStatusAccuracy": null,
-            "domainCoverage": null,
-            "groundedCitationAccuracy": null,
+            "domainStatusAccuracy": 1,
+            "undecidableDomainAccuracy": 1,
+            "thresholdFidelityAccuracy": 1,
+            "overallStatusAccuracy": 1,
+            "domainCoverage": 1,
+            "groundedCitationAccuracy": 0.9852941176470589,
             "duplicateDomainSections": 0,
             "gateDisagreements": 0,
             "unsupportedPass": 0,
-            "fabricatedEvidence": 0,
+            "fabricatedEvidence": 22,
             "cleanFalsePositives": 0,
-            "unstableCases": null,
-            "incompleteCases": 2,
+            "unstableCases": 2,
+            "incompleteCases": 0,
             "fixtureMutations": 0
           },
-          "durationMs": 5221,
+          "durationMs": 1006348,
           "usage": null,
-          "failureClass": "environment-transport",
-          "failures": [
-            "domainStatusAccuracy (unmeasurable)",
-            "undecidableDomainAccuracy (unmeasurable)",
-            "thresholdFidelityAccuracy (unmeasurable)",
-            "overallStatusAccuracy (unmeasurable)",
-            "domainCoverage (unmeasurable)",
-            "groundedCitationAccuracy (unmeasurable)",
-            "2 case(s) short of 2 repetitions"
-          ],
-          "diagnostics": [
-            {
-              "caseId": "gapped-harbor-billing-ledger",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-nfr-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "domainStatusAccuracy (unmeasurable)",
-                "undecidableDomainAccuracy (unmeasurable)",
-                "thresholdFidelityAccuracy (unmeasurable)",
-                "overallStatusAccuracy (unmeasurable)",
-                "domainCoverage (unmeasurable)",
-                "groundedCitationAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "domainStatusAccuracy",
-                "undecidableDomainAccuracy",
-                "thresholdFidelityAccuracy",
-                "overallStatusAccuracy",
-                "domainCoverage",
-                "groundedCitationAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "gapped-harbor-billing-ledger",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-nfr-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "domainStatusAccuracy (unmeasurable)",
-                "undecidableDomainAccuracy (unmeasurable)",
-                "thresholdFidelityAccuracy (unmeasurable)",
-                "overallStatusAccuracy (unmeasurable)",
-                "domainCoverage (unmeasurable)",
-                "groundedCitationAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "domainStatusAccuracy",
-                "undecidableDomainAccuracy",
-                "thresholdFidelityAccuracy",
-                "overallStatusAccuracy",
-                "domainCoverage",
-                "groundedCitationAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "clean-atlas-notification-relay",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-nfr-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "domainStatusAccuracy (unmeasurable)",
-                "undecidableDomainAccuracy (unmeasurable)",
-                "thresholdFidelityAccuracy (unmeasurable)",
-                "overallStatusAccuracy (unmeasurable)",
-                "domainCoverage (unmeasurable)",
-                "groundedCitationAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "domainStatusAccuracy",
-                "undecidableDomainAccuracy",
-                "thresholdFidelityAccuracy",
-                "overallStatusAccuracy",
-                "domainCoverage",
-                "groundedCitationAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "clean-atlas-notification-relay",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-nfr-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "domainStatusAccuracy (unmeasurable)",
-                "undecidableDomainAccuracy (unmeasurable)",
-                "thresholdFidelityAccuracy (unmeasurable)",
-                "overallStatusAccuracy (unmeasurable)",
-                "domainCoverage (unmeasurable)",
-                "groundedCitationAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "domainStatusAccuracy",
-                "undecidableDomainAccuracy",
-                "thresholdFidelityAccuracy",
-                "overallStatusAccuracy",
-                "domainCoverage",
-                "groundedCitationAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            }
-          ]
+          "failureClass": "quality",
+          "failures": ["groundedCitationAccuracy", "22 fabricated evidence citation(s)", "2 unstable case(s)"]
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 5283,
-      "failureClass": "environment-transport",
-      "exitCode": 2
+      "durationMs": 1006420,
+      "failureClass": "quality",
+      "exitCode": 1
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:22:05.754Z",
+      "generatedAt": "2026-09-17T11:22:51.593Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "test-design",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-testarch-test-design"
-        ],
+        "skills": ["bmad-testarch-test-design"],
         "contracts": [
           {
             "path": "test/contracts/test-design.contract.json",
@@ -3264,15 +776,10 @@
           }
         ],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "scoped-artifact-writes"
-        ],
+        "runnerCapabilities": ["scoped-artifact-writes"],
         "fixtureDigest": "sha256:56e7e6dd92b0e73a93d88f4211ae8cf7aa530de38dfc26bc6505302e0a0d3b1b",
         "promptDigest": "sha256:fdd0f6e259ed16fe3761f77bccfaa3b1ae8835842062ce5c4ca9175781c99be5",
-        "caseIds": [
-          "seeded-offline-order-capture",
-          "clean-last-sync-indicator"
-        ],
+        "caseIds": ["seeded-offline-order-capture", "clean-last-sync-indicator"],
         "cases": [
           {
             "id": "seeded-offline-order-capture",
@@ -3317,233 +824,79 @@
           },
           "repetitions": {
             "expected": 4,
-            "completed": 0
+            "completed": 4
           },
           "measurements": {
-            "groundedRiskRecall": null,
-            "riskPrecision": null,
-            "scaleComplianceAccuracy": null,
-            "scoreArithmeticAccuracy": null,
-            "categoryValidityAccuracy": null,
-            "bandPlacementAccuracy": null,
-            "riskIdWellFormedAccuracy": null,
-            "riskLinkResolutionAccuracy": null,
-            "priorityOrderingAccuracy": null,
-            "coverageMappingAccuracy": null,
+            "groundedRiskRecall": 1,
+            "riskPrecision": 1,
+            "scaleComplianceAccuracy": 1,
+            "scoreArithmeticAccuracy": 1,
+            "categoryValidityAccuracy": 1,
+            "bandPlacementAccuracy": 1,
+            "riskIdWellFormedAccuracy": 1,
+            "riskLinkResolutionAccuracy": 1,
+            "priorityOrderingAccuracy": 1,
+            "coverageMappingAccuracy": 0.5,
             "ungroundedRisks": 0,
             "unscoredRiskTables": 0,
             "topSeverityMissed": 0,
-            "riskCeilingExcess": 0,
-            "unstableCases": null,
-            "incompleteCases": 2,
+            "riskCeilingExcess": 11,
+            "unstableCases": 2,
+            "incompleteCases": 0,
             "fixtureMutations": 0
           },
-          "durationMs": 5173,
+          "durationMs": 1724867,
           "usage": null,
-          "failureClass": "environment-transport",
-          "failures": [
-            "groundedRiskRecall (unmeasurable)",
-            "riskPrecision (unmeasurable)",
-            "scaleComplianceAccuracy (unmeasurable)",
-            "scoreArithmeticAccuracy (unmeasurable)",
-            "categoryValidityAccuracy (unmeasurable)",
-            "bandPlacementAccuracy (unmeasurable)",
-            "riskIdWellFormedAccuracy (unmeasurable)",
-            "riskLinkResolutionAccuracy (unmeasurable)",
-            "priorityOrderingAccuracy (unmeasurable)",
-            "coverageMappingAccuracy (unmeasurable)",
-            "2 case(s) short of 2 repetitions"
-          ],
-          "diagnostics": [
-            {
-              "caseId": "seeded-offline-order-capture",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-test-design-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "groundedRiskRecall (unmeasurable)",
-                "riskPrecision (unmeasurable)",
-                "scaleComplianceAccuracy (unmeasurable)",
-                "scoreArithmeticAccuracy (unmeasurable)",
-                "categoryValidityAccuracy (unmeasurable)",
-                "bandPlacementAccuracy (unmeasurable)",
-                "riskIdWellFormedAccuracy (unmeasurable)",
-                "riskLinkResolutionAccuracy (unmeasurable)",
-                "priorityOrderingAccuracy (unmeasurable)",
-                "coverageMappingAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "groundedRiskRecall",
-                "riskPrecision",
-                "scaleComplianceAccuracy",
-                "scoreArithmeticAccuracy",
-                "categoryValidityAccuracy",
-                "bandPlacementAccuracy",
-                "riskIdWellFormedAccuracy",
-                "riskLinkResolutionAccuracy",
-                "priorityOrderingAccuracy",
-                "coverageMappingAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "seeded-offline-order-capture",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-test-design-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "groundedRiskRecall (unmeasurable)",
-                "riskPrecision (unmeasurable)",
-                "scaleComplianceAccuracy (unmeasurable)",
-                "scoreArithmeticAccuracy (unmeasurable)",
-                "categoryValidityAccuracy (unmeasurable)",
-                "bandPlacementAccuracy (unmeasurable)",
-                "riskIdWellFormedAccuracy (unmeasurable)",
-                "riskLinkResolutionAccuracy (unmeasurable)",
-                "priorityOrderingAccuracy (unmeasurable)",
-                "coverageMappingAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "groundedRiskRecall",
-                "riskPrecision",
-                "scaleComplianceAccuracy",
-                "scoreArithmeticAccuracy",
-                "categoryValidityAccuracy",
-                "bandPlacementAccuracy",
-                "riskIdWellFormedAccuracy",
-                "riskLinkResolutionAccuracy",
-                "priorityOrderingAccuracy",
-                "coverageMappingAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "clean-last-sync-indicator",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-test-design-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "groundedRiskRecall (unmeasurable)",
-                "riskPrecision (unmeasurable)",
-                "scaleComplianceAccuracy (unmeasurable)",
-                "scoreArithmeticAccuracy (unmeasurable)",
-                "categoryValidityAccuracy (unmeasurable)",
-                "bandPlacementAccuracy (unmeasurable)",
-                "riskIdWellFormedAccuracy (unmeasurable)",
-                "riskLinkResolutionAccuracy (unmeasurable)",
-                "priorityOrderingAccuracy (unmeasurable)",
-                "coverageMappingAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "groundedRiskRecall",
-                "riskPrecision",
-                "scaleComplianceAccuracy",
-                "scoreArithmeticAccuracy",
-                "categoryValidityAccuracy",
-                "bandPlacementAccuracy",
-                "riskIdWellFormedAccuracy",
-                "riskLinkResolutionAccuracy",
-                "priorityOrderingAccuracy",
-                "coverageMappingAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "clean-last-sync-indicator",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-test-design-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "groundedRiskRecall (unmeasurable)",
-                "riskPrecision (unmeasurable)",
-                "scaleComplianceAccuracy (unmeasurable)",
-                "scoreArithmeticAccuracy (unmeasurable)",
-                "categoryValidityAccuracy (unmeasurable)",
-                "bandPlacementAccuracy (unmeasurable)",
-                "riskIdWellFormedAccuracy (unmeasurable)",
-                "riskLinkResolutionAccuracy (unmeasurable)",
-                "priorityOrderingAccuracy (unmeasurable)",
-                "coverageMappingAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "groundedRiskRecall",
-                "riskPrecision",
-                "scaleComplianceAccuracy",
-                "scoreArithmeticAccuracy",
-                "categoryValidityAccuracy",
-                "bandPlacementAccuracy",
-                "riskIdWellFormedAccuracy",
-                "riskLinkResolutionAccuracy",
-                "priorityOrderingAccuracy",
-                "coverageMappingAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            }
-          ]
+          "failureClass": "quality",
+          "failures": ["coverageMappingAccuracy", "11 risk(s) over the declared ceiling", "2 unstable case(s)"]
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 5229,
-      "failureClass": "environment-transport",
-      "exitCode": 2
+      "durationMs": 1724937,
+      "failureClass": "quality",
+      "exitCode": 1
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:22:51.406Z",
+      "generatedAt": "2026-09-17T11:57:53.983Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "test-review",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-testarch-test-review"
-        ],
+        "skills": ["bmad-testarch-test-review"],
         "contracts": [
           {
             "path": "test/contracts/test-review.contract.json",
-            "version": null
+            "version": "5"
           }
         ],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "scoped-artifact-writes"
-        ],
+        "runnerCapabilities": ["scoped-artifact-writes"],
         "fixtureDigest": "sha256:7cced01d802eea31bf2b4eba6392be4e7cc088762c22963a35f5c1a1dc6dbeee",
-        "promptDigest": null,
-        "caseIds": [],
-        "cases": [],
+        "promptDigest": "sha256:1a63410b7c1c4c4655f6b6d80677dd823976523a078086ec87241714d8741938",
+        "caseIds": [
+          "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+          "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+          "test/fixtures/test-review-eval/clean/profile.spec.ts"
+        ],
+        "cases": [
+          {
+            "id": "test/fixtures/test-review-eval/seeded/checkout.spec.ts",
+            "promptDigest": "sha256:1a63410b7c1c4c4655f6b6d80677dd823976523a078086ec87241714d8741938"
+          },
+          {
+            "id": "test/fixtures/test-review-eval/seeded/orders.service.spec.ts",
+            "promptDigest": "sha256:1a63410b7c1c4c4655f6b6d80677dd823976523a078086ec87241714d8741938"
+          },
+          {
+            "id": "test/fixtures/test-review-eval/clean/profile.spec.ts",
+            "promptDigest": "sha256:1a63410b7c1c4c4655f6b6d80677dd823976523a078086ec87241714d8741938"
+          }
+        ],
         "thresholds": {
           "criticalRecall": 1,
           "recall": 0.7,
@@ -3553,39 +906,56 @@
         },
         "declaredRepetitions": 3
       },
-      "runners": [],
-      "suiteDiagnostics": [
+      "runners": [
         {
-          "failureClass": "environment-harness",
-          "rootCause": "harness-defect",
-          "reason": "test-review live eval exited 2 with a result record from another invocation: suite prompt digest does not match invocation; case prompt digests do not match invocation",
-          "evidence": [
-            {
-              "kind": "summary",
-              "value": "child=test-review live eval; exit=2; detail=with a result record from another invocation: suite prompt digest does not match invocation; case prompt digests do not match invocation"
-            }
-          ]
+          "agent": "claude",
+          "executable": "claude",
+          "version": "2.1.273 (Claude Code)",
+          "model": "sonnet",
+          "parameters": {
+            "agentArgs": [],
+            "envPassNames": [],
+            "timeoutMs": 900000,
+            "promptTransport": "stdin"
+          },
+          "repetitions": {
+            "expected": 3,
+            "completed": 3
+          },
+          "measurements": {
+            "recall": 1,
+            "criticalRecall": 1,
+            "nonFalsePositiveRate": 1,
+            "unattributedMean": 1,
+            "outOfScopeMean": 0,
+            "unlocatedMean": 0,
+            "scoreStdev": 0.9428090415820634,
+            "distinctVerdicts": 1,
+            "meanScore": 31.666666666666668
+          },
+          "durationMs": 2102150,
+          "usage": null,
+          "failureClass": "none",
+          "failures": []
         }
       ],
-      "durationMs": 45494,
-      "failureClass": "environment-harness",
-      "exitCode": 2
+      "durationMs": 2102289,
+      "failureClass": "none",
+      "exitCode": 0
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:22:56.834Z",
+      "generatedAt": "2026-09-17T12:19:08.531Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "trace",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-testarch-trace"
-        ],
+        "skills": ["bmad-testarch-trace"],
         "contracts": [
           {
             "path": "test/contracts/trace.contract.json",
@@ -3593,23 +963,18 @@
           }
         ],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "scoped-artifact-writes"
-        ],
+        "runnerCapabilities": ["scoped-artifact-writes"],
         "fixtureDigest": "sha256:5d2090b39d708de9b56ef5f764a4a6f0f92244c0f0805df3923dc8303851d993",
-        "promptDigest": "sha256:9727b70015b5239a273d128def82bc05144443071c921d8bb4d872cd0a2b8ced",
-        "caseIds": [
-          "seeded-tenant-data-export",
-          "clean-api-token-lifecycle"
-        ],
+        "promptDigest": "sha256:5209d1fb0582b15573f0bea3ecc36dd8be42eda324dd027c4ec96003de8589dc",
+        "caseIds": ["seeded-tenant-data-export", "clean-api-token-lifecycle"],
         "cases": [
           {
             "id": "seeded-tenant-data-export",
-            "promptDigest": "sha256:c84b06e4f1455ba1dc82fda8e1451987f513a37a0986483704399cb20cde7b44"
+            "promptDigest": "sha256:8a026d95c1716481070581912b83f48e176a5d0c4c7bf9b6d05928f377c4b46d"
           },
           {
             "id": "clean-api-token-lifecycle",
-            "promptDigest": "sha256:66d5ca177eef87a00201f4e9a41e801c13160474cd900dfbe8500d1573f1f78d"
+            "promptDigest": "sha256:ae8708d317ee2160c91460fc8318dbb7410567598d5d06950a8493dcab892ba1"
           }
         ],
         "thresholds": {
@@ -3646,216 +1011,45 @@
           },
           "repetitions": {
             "expected": 4,
-            "completed": 0
+            "completed": 4
           },
           "measurements": {
-            "criterionStatusAccuracy": null,
-            "discriminatingCriterionAccuracy": null,
-            "gateAccuracy": null,
-            "gateCriteriaAccuracy": null,
-            "coverageArithmeticAccuracy": null,
-            "oracleResolutionAccuracy": null,
-            "runMetadataAccuracy": null,
-            "evidenceCitationPrecision": null,
-            "rejectedEvidenceAccuracy": null,
-            "waiverOracleAccuracy": null,
-            "liveEvidenceAccuracy": null,
+            "criterionStatusAccuracy": 1,
+            "discriminatingCriterionAccuracy": 1,
+            "gateAccuracy": 1,
+            "gateCriteriaAccuracy": 1,
+            "coverageArithmeticAccuracy": 1,
+            "oracleResolutionAccuracy": 1,
+            "runMetadataAccuracy": 0.9,
+            "evidenceCitationPrecision": 0.9696969696969697,
+            "rejectedEvidenceAccuracy": 1,
+            "waiverOracleAccuracy": 1,
+            "liveEvidenceAccuracy": 1,
             "cleanFalsePositives": 0,
             "inventedCriteria": 0,
             "duplicateCriteria": 0,
-            "unstableCases": null,
-            "incompleteCases": 2,
+            "unstableCases": 1,
+            "incompleteCases": 0,
             "fixtureMutations": 0,
             "waiverRunsNotScored": 0
           },
-          "durationMs": 5270,
+          "durationMs": 1274389,
           "usage": null,
-          "failureClass": "environment-transport",
-          "failures": [
-            "criterionStatusAccuracy (unmeasurable)",
-            "discriminatingCriterionAccuracy (unmeasurable)",
-            "gateAccuracy (unmeasurable)",
-            "gateCriteriaAccuracy (unmeasurable)",
-            "coverageArithmeticAccuracy (unmeasurable)",
-            "oracleResolutionAccuracy (unmeasurable)",
-            "runMetadataAccuracy (unmeasurable)",
-            "evidenceCitationPrecision (unmeasurable)",
-            "rejectedEvidenceAccuracy (unmeasurable)",
-            "liveEvidenceAccuracy (unmeasurable)",
-            "2 case(s) short of 2 repetitions"
-          ],
-          "diagnostics": [
-            {
-              "caseId": "seeded-tenant-data-export",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-trace-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "criterionStatusAccuracy (unmeasurable)",
-                "discriminatingCriterionAccuracy (unmeasurable)",
-                "gateAccuracy (unmeasurable)",
-                "gateCriteriaAccuracy (unmeasurable)",
-                "coverageArithmeticAccuracy (unmeasurable)",
-                "oracleResolutionAccuracy (unmeasurable)",
-                "runMetadataAccuracy (unmeasurable)",
-                "evidenceCitationPrecision (unmeasurable)",
-                "rejectedEvidenceAccuracy (unmeasurable)",
-                "liveEvidenceAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "criterionStatusAccuracy",
-                "discriminatingCriterionAccuracy",
-                "gateAccuracy",
-                "gateCriteriaAccuracy",
-                "coverageArithmeticAccuracy",
-                "oracleResolutionAccuracy",
-                "runMetadataAccuracy",
-                "evidenceCitationPrecision",
-                "rejectedEvidenceAccuracy",
-                "waiverOracleAccuracy",
-                "liveEvidenceAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "seeded-tenant-data-export",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-trace-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "criterionStatusAccuracy (unmeasurable)",
-                "discriminatingCriterionAccuracy (unmeasurable)",
-                "gateAccuracy (unmeasurable)",
-                "gateCriteriaAccuracy (unmeasurable)",
-                "coverageArithmeticAccuracy (unmeasurable)",
-                "oracleResolutionAccuracy (unmeasurable)",
-                "runMetadataAccuracy (unmeasurable)",
-                "evidenceCitationPrecision (unmeasurable)",
-                "rejectedEvidenceAccuracy (unmeasurable)",
-                "liveEvidenceAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "criterionStatusAccuracy",
-                "discriminatingCriterionAccuracy",
-                "gateAccuracy",
-                "gateCriteriaAccuracy",
-                "coverageArithmeticAccuracy",
-                "oracleResolutionAccuracy",
-                "runMetadataAccuracy",
-                "evidenceCitationPrecision",
-                "rejectedEvidenceAccuracy",
-                "waiverOracleAccuracy",
-                "liveEvidenceAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "clean-api-token-lifecycle",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-trace-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "criterionStatusAccuracy (unmeasurable)",
-                "discriminatingCriterionAccuracy (unmeasurable)",
-                "gateAccuracy (unmeasurable)",
-                "gateCriteriaAccuracy (unmeasurable)",
-                "coverageArithmeticAccuracy (unmeasurable)",
-                "oracleResolutionAccuracy (unmeasurable)",
-                "runMetadataAccuracy (unmeasurable)",
-                "evidenceCitationPrecision (unmeasurable)",
-                "rejectedEvidenceAccuracy (unmeasurable)",
-                "liveEvidenceAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "criterionStatusAccuracy",
-                "discriminatingCriterionAccuracy",
-                "gateAccuracy",
-                "gateCriteriaAccuracy",
-                "coverageArithmeticAccuracy",
-                "oracleResolutionAccuracy",
-                "runMetadataAccuracy",
-                "evidenceCitationPrecision",
-                "rejectedEvidenceAccuracy",
-                "waiverOracleAccuracy",
-                "liveEvidenceAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            },
-            {
-              "caseId": "clean-api-token-lifecycle",
-              "repetition": 2,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "tea-trace-runner: Agent \"claude\" exited with code 1.",
-              "triage": [],
-              "mappedFailures": [
-                "criterionStatusAccuracy (unmeasurable)",
-                "discriminatingCriterionAccuracy (unmeasurable)",
-                "gateAccuracy (unmeasurable)",
-                "gateCriteriaAccuracy (unmeasurable)",
-                "coverageArithmeticAccuracy (unmeasurable)",
-                "oracleResolutionAccuracy (unmeasurable)",
-                "runMetadataAccuracy (unmeasurable)",
-                "evidenceCitationPrecision (unmeasurable)",
-                "rejectedEvidenceAccuracy (unmeasurable)",
-                "liveEvidenceAccuracy (unmeasurable)",
-                "2 case(s) short of 2 repetitions"
-              ],
-              "mappedMeasurements": [
-                "criterionStatusAccuracy",
-                "discriminatingCriterionAccuracy",
-                "gateAccuracy",
-                "gateCriteriaAccuracy",
-                "coverageArithmeticAccuracy",
-                "oracleResolutionAccuracy",
-                "runMetadataAccuracy",
-                "evidenceCitationPrecision",
-                "rejectedEvidenceAccuracy",
-                "waiverOracleAccuracy",
-                "liveEvidenceAccuracy",
-                "unstableCases"
-              ],
-              "evidence": []
-            }
-          ]
+          "failureClass": "quality",
+          "failures": ["runMetadataAccuracy", "1 unstable case(s)"]
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 5338,
-      "failureClass": "environment-transport",
-      "exitCode": 2
+      "durationMs": 1274454,
+      "failureClass": "quality",
+      "exitCode": 1
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:22:57.272Z",
+      "generatedAt": "2026-09-17T12:19:08.896Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
@@ -3864,14 +1058,10 @@
         "skills": [],
         "contracts": [],
         "ciTier": "deterministic",
-        "runnerCapabilities": [
-          "scoped-artifact-writes"
-        ],
+        "runnerCapabilities": ["scoped-artifact-writes"],
         "fixtureDigest": "sha256:de9e49770912b8cc3376ac32df838fa6217e133bfb077f4f45cced269cf3c073",
         "promptDigest": null,
-        "caseIds": [
-          "consistent-three-turn-session"
-        ],
+        "caseIds": ["consistent-three-turn-session"],
         "cases": [
           {
             "id": "consistent-three-turn-session",
@@ -3891,9 +1081,7 @@
           "model": null,
           "parameters": {
             "agentArgs": [],
-            "envPassNames": [
-              "STUB_TRANSCRIPT_MODE"
-            ],
+            "envPassNames": ["STUB_TRANSCRIPT_MODE"],
             "timeoutMs": 60000,
             "promptTransport": "stdin"
           },
@@ -3904,67 +1092,35 @@
           "measurements": {
             "crossTurnConsistencyRate": 1
           },
-          "durationMs": 239,
+          "durationMs": 211,
           "usage": null,
           "failureClass": "none",
-          "failures": [],
-          "diagnostics": [
-            {
-              "caseId": "consistent-three-turn-session",
-              "repetition": 1,
-              "completionState": "completed",
-              "signature": "{\"crossTurnConsistency\":true,\"disagreement\":null}",
-              "metricContributions": {
-                "crossTurnConsistency.numerator": 1,
-                "crossTurnConsistency.denominator": 1,
-                "crossTurnConsistency.threshold": 1
-              },
-              "failureClass": "none",
-              "rootCause": null,
-              "reason": null,
-              "triage": [],
-              "mappedFailures": [],
-              "mappedMeasurements": [],
-              "evidence": [
-                {
-                  "kind": "output-signature",
-                  "value": "{\"crossTurnConsistency\":true,\"disagreement\":null}"
-                }
-              ]
-            }
-          ]
+          "failures": []
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 298,
+      "durationMs": 274,
       "failureClass": "none",
       "exitCode": 0
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:23:34.407Z",
+      "generatedAt": "2026-09-17T12:19:25.391Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "framework",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-testarch-framework"
-        ],
+        "skills": ["bmad-testarch-framework"],
         "contracts": [],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "command-execution"
-        ],
+        "runnerCapabilities": ["command-execution"],
         "fixtureDigest": "sha256:1963b459dfa810eb980a0e01fb586654df0647ef5c91c776f7f2c5e24436321a",
         "promptDigest": null,
-        "caseIds": [
-          "install-and-smoke"
-        ],
+        "caseIds": ["install-and-smoke"],
         "cases": [
           {
             "id": "install-and-smoke",
@@ -3992,20 +1148,12 @@
               {
                 "name": "npm",
                 "version": "11.19.0",
-                "args": [
-                  "install",
-                  "--no-audit",
-                  "--no-fund"
-                ]
+                "args": ["install", "--no-audit", "--no-fund"]
               },
               {
                 "name": "@playwright/test",
                 "version": null,
-                "args": [
-                  "test",
-                  "tests/e2e/api-sample.spec.ts",
-                  "--reporter=list"
-                ]
+                "args": ["test", "tests/e2e/api-sample.spec.ts", "--reporter=list"]
               }
             ]
           },
@@ -4017,70 +1165,35 @@
             "installAndSmokePassRate": 1,
             "seededDefectDetectionRate": 1
           },
-          "durationMs": 36650,
+          "durationMs": 16037,
           "usage": null,
           "failureClass": "none",
-          "failures": [],
-          "diagnostics": [
-            {
-              "caseId": "install-and-smoke",
-              "repetition": 1,
-              "completionState": "completed",
-              "signature": "[1,1]",
-              "metricContributions": {
-                "installAndSmoke.numerator": 1,
-                "installAndSmoke.denominator": 1,
-                "installAndSmoke.threshold": 1,
-                "seededDefectDetection.numerator": 1,
-                "seededDefectDetection.denominator": 1,
-                "seededDefectDetection.threshold": 1
-              },
-              "failureClass": "none",
-              "rootCause": null,
-              "reason": null,
-              "triage": [],
-              "mappedFailures": [],
-              "mappedMeasurements": [],
-              "evidence": [
-                {
-                  "kind": "summary",
-                  "value": "clean smoke passed; seeded backend and fixture defects were detected"
-                }
-              ]
-            }
-          ]
+          "failures": []
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 37021,
+      "durationMs": 16419,
       "failureClass": "none",
       "exitCode": 0
     },
     {
-      "schemaVersion": "1.5.0",
+      "schemaVersion": "1.3.0",
       "kind": "suite-result",
-      "generatedAt": "2026-09-18T13:23:35.889Z",
+      "generatedAt": "2026-09-17T12:23:09.164Z",
       "mode": "live",
       "repository": {
-        "commit": "3c4bc471a107668b8428444495fe400c8c11ee70",
+        "commit": "5c84a77f19576b075513dbbea9a74821cfe19f5d",
         "dirty": false
       },
       "suite": {
         "id": "teach-me-testing",
         "evalType": "behavioral",
-        "skills": [
-          "bmad-teach-me-testing"
-        ],
+        "skills": ["bmad-teach-me-testing"],
         "contracts": [],
         "ciTier": "full-matrix",
-        "runnerCapabilities": [
-          "scoped-artifact-writes"
-        ],
+        "runnerCapabilities": ["scoped-artifact-writes"],
         "fixtureDigest": "sha256:e4613b52d5ad83547001aa9c597f673b929b582245b145f547c093986079db5f",
         "promptDigest": null,
-        "caseIds": [
-          "session-01-first-run-then-fresh-continuation"
-        ],
+        "caseIds": ["session-01-first-run-then-fresh-continuation"],
         "cases": [
           {
             "id": "session-01-first-run-then-fresh-continuation",
@@ -4110,54 +1223,28 @@
           },
           "repetitions": {
             "expected": 1,
-            "completed": 0
+            "completed": 1
           },
           "measurements": {
-            "placementAccuracy": null,
-            "correctionRate": null,
-            "reTeachingRate": null,
-            "continuationRate": null,
+            "placementAccuracy": 1,
+            "correctionRate": 1,
+            "reTeachingRate": 1,
+            "continuationRate": 1,
             "maxUnearnedMastery": 0
           },
-          "durationMs": 1296,
+          "durationMs": 223609,
           "usage": null,
-          "failureClass": "environment-transport",
-          "failures": [
-            "1 run(s) short of 1 repetitions"
-          ],
-          "diagnostics": [
-            {
-              "caseId": "session-01-first-run-then-fresh-continuation",
-              "repetition": 1,
-              "completionState": "failed",
-              "signature": null,
-              "metricContributions": {},
-              "failureClass": "environment-transport",
-              "rootCause": null,
-              "reason": "run 1: turn 1 did not complete (exit 4)",
-              "triage": [],
-              "mappedFailures": [
-                "1 run(s) short of 1 repetitions"
-              ],
-              "mappedMeasurements": [
-                "placementAccuracy",
-                "correctionRate",
-                "reTeachingRate",
-                "continuationRate"
-              ],
-              "evidence": []
-            }
-          ]
+          "failureClass": "none",
+          "failures": []
         }
       ],
-      "suiteDiagnostics": [],
-      "durationMs": 1362,
-      "failureClass": "environment-transport",
-      "exitCode": 2
+      "durationMs": 223687,
+      "failureClass": "none",
+      "exitCode": 0
     }
   ],
   "unaccountedSkills": [],
-  "durationMs": 221096,
-  "failureClass": "environment-harness",
-  "exitCode": 2
+  "durationMs": 9830418,
+  "failureClass": "quality",
+  "exitCode": 1
 }
