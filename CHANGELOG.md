@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Deterministic live evaluation harnesses reject unsupported repetition counts during argument validation, before starting install, browser, or scoring work.
+- The complete Story 1.8 live-baseline attempt is recorded with its environment result, protected 1.27.1 history remains byte-identical, and no quality score is claimed after Claude transport failures and the documented Codex quota substitution.
 
 ### Fixed
 
