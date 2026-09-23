@@ -226,7 +226,7 @@ So that every later failure is attributable to Evaluate.
 **Given** eval-quality 4.0.0 is published, carrying Story 1.1's target-policy export and trial-set scoring (eval-quality #143)
 **When** TeA's `eval-quality` devDependency is raised to it and `npm install` runs
 **Then** the engine check exits 0
-**And** `git diff -- package.json package-lock.json` shows only the version bump, with no `file:` or `.tgz` spec
+**And** `git diff -- package.json package-lock.json` shows the `eval-quality` version bump and no `file:` or `.tgz` spec
 
 **Given** eval-quality 4.0.0 carries `EvidenceArtifact` schema version 4 and repeatable `--record` (eval-quality #143)
 **When** `npm test` runs
@@ -457,7 +457,7 @@ As an adopter with an AI feature or web application,
 I want a scaffolded HTTP port that delegates every address decision to eval-quality,
 So that my HTTP surface is evaluated as `api` with no copied network policy (CAP-6, AD-4).
 
-**Engine consumption.** This story needs the export from Story 1.1, which no published eval-quality carries. It uses the `--no-save` install from Story 1.2: first the engine check, and when Story 1.1's worktree changed after packing, a re-pack and re-install. At the end `package.json` and `package-lock.json` carry no tarball reference (`git diff`), and the TeA devDependency spec is unchanged. Story H.1 restores the registry install once the release ships.
+**Engine consumption.** This story needs the export from Story 1.1, published as eval-quality 4.0.0 by the time this story runs. It runs on the devDependency Story 1.2 already raised to that release, with the engine check at start and end; no re-pack or `--no-save` install remains.
 
 **Acceptance Criteria:**
 
@@ -556,7 +556,7 @@ So that the proof run registers its suite in one step (AD-13, AD-15).
 **When** the pin floats
 **Then** the devDependency spec for `eval-quality` in `package.json` is `latest` and `test/test-eval-quality-corpus.js` no longer demands an exact version
 **And** the `.npmrc` and `lockfile-age` exclusions stay, with their rationale rewritten
-**And** after the lockfile update the tarball is re-installed, the engine check exits 0 and `git diff -- package.json package-lock.json` shows no tarball reference
+**And** after the pin floats to `latest`, `npm install` resolves `eval-quality` from the registry, the engine check exits 0 and `git diff -- package.json package-lock.json` shows no `file:` or `.tgz` spec
 
 **Given** `test/lib/suite-manifest.js` and `tools/validate-eval-schemas.js` count only `evalType: "behavioral"`
 **When** the new `evalType` `evaluate-authored` is admitted
@@ -731,12 +731,12 @@ As the owner,
 I want the dirty overnight proof replaced by a committed, released one,
 So that the `pr` replay has a baseline to reproduce and TeA runs on a published engine.
 
-**Checks red until eval-quality releases:** derived mechanically at the end of Story 2.5: the worker runs `npm ci` (published 3.4.0), then `npm test`, records every failing script in `epic-2-proof.md`, and re-installs the tarball. Expected members include the engine check, `test:trial-set-scoring`, `test:evaluate-guidance`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-mcp`, `test:evaluate-api`, `test:evaluate-compare`, `test:evaluate-ci` and the Evaluate `pr` steps. The next eval-quality release is the minor after 3.4.0 or a major if the owner treats #143's `EvidenceArtifact` version 4 as a major change; call it `<EQ_RELEASE>`.
+**This gate closed early.** eval-quality released as `4.0.0` during Story 1.2, not at the end of Story 2.5 as originally planned, so `<EQ_RELEASE>` is `4.0.0` and the checks below (the engine check, `test:trial-set-scoring`, `test:evaluate-guidance`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-mcp`, `test:evaluate-api`, `test:evaluate-compare`, `test:evaluate-ci` and the Evaluate `pr` steps) have run on the published engine since Story 1.2 landed, not red until this story.
 
 **Steps, each with what it proves:**
 
 1. In the eval-quality worktree, review and commit Story 1.1, merge it, then `npm run release:minor` (or `release:major`). Proves the export and trial-set scoring are published and `npm view eval-quality version` shows `<EQ_RELEASE>`.
-2. In TeA, raise the `peerDependencies` floor from `>=3.4.0` to `>=<EQ_RELEASE>`, the released version, then `npm update eval-quality` (keeps the `latest` spec; `npm install eval-quality@latest` would rewrite it to a caret range) and `npm ci`. Proves the registry install replaces the tarball; the engine check exits 0 on the published package.
+2. In TeA, raise the `peerDependencies` floor from `>=3.4.0` to `>=<EQ_RELEASE>`, the released version, then `npm update eval-quality` (keeps the `latest` spec; `npm install eval-quality@latest` would rewrite it to a caret range) and `npm ci`. Proves the peer floor and the devDependency, already on the registry since Story 1.2, agree on the released version; the engine check exits 0 on the published package.
 3. `npm test`. Proves every check listed above is green on the published engine.
 4. Commit the staged TeA work. Then `node cli/evaluate.js run --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` and `score` on the committed tree, with live legs through the local Claude Code CLI. Proves a clean (`dirty: false`) run: preflight passed, `passed-clean-control`, `caught` at `minimumTrialCount`, rollback proved.
 5. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` script with its own `validate` step in `quality.yaml` in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
