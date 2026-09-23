@@ -1437,10 +1437,18 @@ async function main() {
     );
 
     const failures = [];
-    const redRate = measurements.redForIntendedReasonRate;
-    if (redRate !== null && redRate < THRESHOLDS.redForIntendedReasonRate) failures.push('redForIntendedReasonRate');
-    const coverage = measurements.criteriaCoverage;
-    if (coverage !== null && coverage < THRESHOLDS.criteriaCoverage) failures.push('criteriaCoverage');
+    for (const key of ['redForIntendedReasonRate', 'criteriaCoverage']) {
+      const value = measurements[key];
+      // A completed run with no mapped test (every spec file failed to load)
+      // leaves a rate with an empty denominator. Skipping it let the rate clear
+      // a bar it never met and left the null with no diagnostic, which the
+      // result schema refuses as a harness bug. Unmeasurable is a failure, and
+      // it says which metric; a run that completed nothing is reported by the
+      // incomplete-repetitions path below.
+      if (value === null) {
+        if (!noMeasurement) failures.push(`${key} (unmeasurable)`);
+      } else if (value < THRESHOLDS[key]) failures.push(key);
+    }
     if (totals.vacuousPass > THRESHOLDS.maxVacuousPass) failures.push(`${totals.vacuousPass} vacuous pass(es)`);
     if (totals.stillSkipped > THRESHOLDS.maxStillSkipped) failures.push(`${totals.stillSkipped} still-skipped scaffold(s)`);
     if (totals.nonAssertion > THRESHOLDS.maxNonAssertionExit) failures.push(`${totals.nonAssertion} non-assertion exit(s)`);

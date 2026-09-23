@@ -105,7 +105,7 @@ Three layers ran on opus: `bmad-code-review` (four sub-layers), `bmad-review` ad
 | 5 | code review, adversarial, test review | medium | move check guarded one sentinel per module | fixed: every function of the moved modules guarded, aliases and assignments detected, all `test/lib/` scanned; plants for each evasion |
 | 5b | code review, adversarial | medium | `test-import` missed computed and self-referencing specifiers | fixed: `dynamic-specifier` widened to all of `cli/`, self-reference refused |
 | 6 | code review, adversarial | medium | missing engine misreported, cause dropped, untested | fixed: cause kept, `EngineUnavailableError` everywhere, engine-absent cases |
-| 7 | code review | low | the check test reads an unexported eval-quality module | kept, with a named failure; the upstream fix (exporting a `CommandTargetPolicy` schema or parser from eval-quality) needs an eval-quality release, which this story cannot ship; raised for the coordinator |
+| 7 | code review | low | the check test reads an unexported eval-quality module | kept, with a named failure; no public eval-quality surface can hold the check, and the missing export is recorded under "Needs a decision: eval-quality export for CommandTargetPolicy" |
 | 8 | code review, test review | low | new rules outside `STORY_RULES`; no pass-side cases; loose `exits 3` assertion | fixed |
 | 9 | code review, test review | low | doc said 3 to 6 for every TeA target; test-design said 2 to 6 | fixed in the doc and the plan |
 | 10 | code review, adversarial | medium | fixture exit 1 was a crash code for `tea-atdd-runner`; fixture codes drifted from TeA's | fixed: the fixture targets its own gate; TeA's runners declare 1 |
@@ -124,11 +124,41 @@ Three layers ran on opus: `bmad-code-review` (four sub-layers), `bmad-review` ad
 | R2-5 | second round | low | the move check guarded nested private helper names | fixed: it guards exported names; a clean plant reuses `deepFreeze` |
 | R2-6 | second round | nit | path patterns admitted DEL | fixed |
 
-## Anything undone
+## Needs a decision: eval-quality export for CommandTargetPolicy
 
-- `npm run docs:build` passes with 204 characters left under `llms-full.txt`'s 600,000 cap (596,837 before this story). The next story that adds reference prose will hit it; the cap is marked "do not change", so a decision on what leaves the bundle is needed.
-- eval-quality exposes no public schema or parser for `CommandTargetPolicy` (finding 7).
-- The first full `npm test` run saw `test:doc-invocations` report `npm run test:probe-targets` exiting 1 once; it passed on the standalone rerun, in six parallel runs of the test itself, and in the later full gates, so no cause was found.
+`test/test-evaluate-check.js` still imports `node_modules/eval-quality/dist/core/schemas/probe-policy.js`, a module eval-quality 4.0.0's `exports` map does not name, to parse the registry's policy with eval-quality's strict Zod `CommandTargetPolicy` and to prove that schema refuses an unknown key such as `infrastructureExitCodes`.
+Every public surface was checked, and none can hold the check:
+
+- `schemas/*`: the twelve published JSON Schemas are the interchange artifacts; none describes a command target policy (no file mentions `permittedSubcommandPaths` or `maxOutputBytes`).
+- `.` (root): `evaluateTarget` and the rest of `core/probe/target-policy` take the HTTP `ProbeTargetPolicy`; the root exports `ProbeTargetPolicy` and `ProbeTargetAuthorization` as types only, and nothing for the command policy.
+- `./adapters`: `createCommandLineAdapter` takes the policy as a plain object and never parses it (its own source says "nothing in this package parses `CommandTargetPolicy`"); `evaluateCommandTarget` lives in `dist/adapters/command-target-policy.js`, which `adapters/index` does not re-export, and it reads fields without refusing unknown keys.
+- `./conformance`: `runCommandLineProbeConformance` drives a policy through an adapter behaviorally, and `CommandTargetPolicy` is exported there as a type only, so an extra key passes.
+
+The missing export is a runtime `CommandTargetPolicy` Zod schema (or a `parseCommandTargetPolicy` function that applies it) from a public subpath, `eval-quality/adapters` being the natural home beside `createCommandLineAdapter`.
+A generated `schemas/command-target-policy.schema.json` would serve too, and TeA's test would then validate with Ajv as it does for the other published schemas.
+Once either ships, the test switches to it and the deep import goes; the gate's `dependency-direction` rule and the `cli/` boundary (only `engine.js` loads eval-quality) are unaffected, since this is test code.
+
+## Gaps closed after review
+
+- `llms-full.txt` stood at 599,796 of its 600,000-character cap after this story.
+  The cap's rationale (an agent's context window of roughly 200k tokens) still holds, so the cap stays.
+  `tools/build-docs.js` now collapses Prettier's table alignment padding outside code, which saves about 63k characters and keeps every cell's text; each bundled document matched its source after whitespace normalization, 39 of 39.
+  It also excludes `404.md` and `docs/explanation/how-tea-is-tested.md`, which has the same maintainer audience as the eval-quality documents already excluded.
+  Three exclusion patterns that matched no document are gone, and the build fails on a pattern that matches nothing.
+  The bundle measures 525,244 characters, 74,756 under the cap.
+  The stale "~111k tokens" in the site's `ai-terms` meta tag is removed.
+- The `test:doc-invocations` flake was `test:probe-targets` failing its ATDD harness smoke.
+  `test/fixtures/atdd-eval/reservations/playwright.config.ts` pointed Playwright's `webServer` at the default port 4310, while `tea-atdd-red-check` serves the fixture on an OS-assigned port and passes it only as `LOCKER_BASE_URL`.
+  Playwright therefore never reused that server and started its own on 4310 for every spec file, which failed ("Process from config.webServer was not able to start") whenever anything else held 4310, such as a concurrent run in another worktree or a lingering server.
+  The config now derives the `webServer` URL from `LOCKER_BASE_URL`.
+  A second defect surfaced with it: the harness skipped an unmeasurable `redForIntendedReasonRate` when no spec loaded, and the result schema then refused the record as a harness bug (exit 2).
+  It now reports `redForIntendedReasonRate (unmeasurable)` as a quality failure, as the other harnesses do; `STUB_MODE=load-error` had hit the same crash every time.
+  With 4310 held by a listener that answers nothing, the correct-run harness failed 1 of 1 before and passes after.
+  Twelve concurrent `test:probe-targets` runs for 3 rounds failed 2 of 36 before, one per failure form above.
+  The same stress passed 84 of 84 after the fix (seven rounds of twelve).
+  One further round lost all twelve `mutate` runs while files in this worktree were being edited: the ATDD harness refuses a run when `git status` gains a line during generation, which is its guard against a runner writing into the repository, and it cannot tell that write from an operator's edit.
+  That guard is working as designed, so editing the worktree while `npm test` runs remains a way to fail `test:probe-targets`; the harness names the changed paths on stderr.
+  `test:probe-targets` now holds 4310 during the correct-run case (reverting the config fails it) and adds a load-error case.
 
 ## Verification
 
