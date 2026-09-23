@@ -107,6 +107,8 @@ Final review, 2026-09-23. Every item was fixed; each fix has a test that fails w
 | 9 | low | a `null` or array `evaluation.json` got the upgrade-TeA message | a non-object manifest gets `(root) must be object` before the version gate | `an evaluation.json that is null`, `an evaluation.json that is an array` |
 | 10 | low | plan wording promised to name a newer TeA release | epics.md and AD-9 amended (see Spec Change Log) | wording only; the unknown-`schemaVersion` case already asserts the installed version and known versions |
 | 11 | low | a registry outage in the packed install could read as the missing-`ajv` failure | npm's fetch failures (ENOTFOUND, ETIMEDOUT, ECONNRESET, ECONNREFUSED, EAI_AGAIN, E5xx) are reported as `registry unreachable (<code>)`; the network install stays | `checkRegistryClassification` over sample npm outputs |
+| CR-1 | minor | CodeRabbit: a qualification `if` without `required: ["route"]` applied every route branch when `route` was missing, burying the one real finding | each `if` requires `route` | "a qualification with no route" in `test:evaluate-check` (revert verified red) |
+| CR-2 | minor | CodeRabbit: the `written-file-signature` row in `tea-evaluate-cli.md` omitted the predicate-pointer half of the rule | the row names the `artifact` channel and an `/interactions/<id>/artifact` pointer | docs only |
 
 ## Design Notes
 

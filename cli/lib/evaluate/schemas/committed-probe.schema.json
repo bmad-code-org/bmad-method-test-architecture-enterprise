@@ -44,7 +44,7 @@
       },
       "allOf": [
         {
-          "if": { "properties": { "route": { "const": "historical" } } },
+          "if": { "required": ["route"], "properties": { "route": { "const": "historical" } } },
           "then": {
             "additionalProperties": false,
             "required": ["route", "fixCommit"],
@@ -52,7 +52,7 @@
           }
         },
         {
-          "if": { "properties": { "route": { "const": "controlled-mutation" } } },
+          "if": { "required": ["route"], "properties": { "route": { "const": "controlled-mutation" } } },
           "then": {
             "additionalProperties": false,
             "required": ["route", "mutation"],
@@ -63,7 +63,7 @@
           }
         },
         {
-          "if": { "properties": { "route": { "const": "gameability" } } },
+          "if": { "required": ["route"], "properties": { "route": { "const": "gameability" } } },
           "then": {
             "additionalProperties": false,
             "required": ["route", "degenerateResponse"],
@@ -71,7 +71,7 @@
           }
         },
         {
-          "if": { "properties": { "route": { "const": "canary" } } },
+          "if": { "required": ["route"], "properties": { "route": { "const": "canary" } } },
           "then": {
             "additionalProperties": false,
             "required": ["route", "indicts"],
@@ -79,7 +79,7 @@
           }
         },
         {
-          "if": { "properties": { "route": { "const": "clean-control" } } },
+          "if": { "required": ["route"], "properties": { "route": { "const": "clean-control" } } },
           "then": {
             "additionalProperties": false,
             "required": ["route", "noKnownDefectStatement"],

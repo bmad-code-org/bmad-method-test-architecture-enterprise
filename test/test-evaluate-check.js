@@ -319,6 +319,19 @@ function outsideFile(bytes) {
  */
 const HARDENING_CASES = [
   {
+    name: 'a qualification with no route',
+    file: 'probes/P-002.probe.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'probes/P-002.probe.json', (value) => delete value.qualification.route),
+    expect: (output) => [
+      [output.includes('route'), 'the finding does not name the missing route'],
+      [
+        !/fixCommit|degenerateResponse|noKnownDefectStatement|indicts/.test(output),
+        'every route branch applied, burying the missing route',
+      ],
+    ],
+  },
+  {
     name: 'a symbolic link as the corpus/ root',
     file: 'corpus',
     rule: 'corpus-file',
