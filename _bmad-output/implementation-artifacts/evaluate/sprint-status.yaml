@@ -1,0 +1,73 @@
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created, ready for development
+#   - in-progress: Developer actively working on implementation
+#   - review: Implementation complete, ready for review
+#   - done: Story completed
+
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when its first story starts (via build's sprint sync)
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates the next story after the previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; the status view surfaces open ones
+generated: 09-22-2026 18:09
+last_updated: 09-22-2026 18:13
+project: "bmad-method-test-architecture-enterprise: Evaluate"
+project_key: NOKEY
+tracking_system: file-system
+story_location: _bmad-output/implementation-artifacts/evaluate
+development_status:
+  epic-1: in-progress
+  1-1-export-eval-quality-s-http-target-policy-evaluation-and-pack: review
+  1-2-run-tea-s-gate-on-the-engine-evaluate-needs: backlog
+  1-3-register-evaluate-as-a-tea-skill: backlog
+  1-4-ship-tea-evaluate-with-check-and-digest: backlog
+  1-5-move-the-registry-records-and-provenance-into-the-runtime: backlog
+  1-6-probe-a-skill-through-the-generic-runner-and-tea-evaluate-pr: backlog
+  1-7-mutate-only-in-a-disposable-copy-and-prove-the-rollback: backlog
+  1-8-run-the-clean-and-mutated-arms-and-score-them: backlog
+  1-9-qualify-gameability-and-historical-probes-and-judge-rubrics: backlog
+  1-10-evaluate-a-stdio-mcp-tool-server: backlog
+  1-11-scaffold-the-http-probe-port-for-api-targets: backlog
+  1-12-inspect-the-target-capture-requirements-and-design-the-corpu: backlog
+  1-13-author-the-contract-oracles-rubrics-and-adapter-wiring: backlog
+  1-14-drive-the-run-and-interpret-the-gaps: backlog
+  1-15-float-the-engine-pin-and-admit-evaluate-authored-suites: backlog
+  1-16-evaluate-authors-its-own-suite-run-live-and-recorded: backlog
+  epic-1-retrospective: optional
+
+  epic-2: backlog
+  2-1-compare-runs-and-accept-a-baseline: backlog
+  2-2-plan-ci-tiers-and-run-them-with-tea-evaluate-ci: backlog
+  2-3-render-evaluation-plans-in-bmad-testarch-ci: backlog
+  2-4-finish-the-evaluation-with-its-ci-stage: backlog
+  2-5-tea-runs-its-pr-tier-and-documents-evaluate: backlog
+  epic-2-retrospective: optional
+owner_handoff:
+  - key: h-1-release-the-engine-accept-the-baseline-turn-the-pr-replay-green
+    owner: Murat
+    note: "Owner-only (epics.md Story H.1). Kept outside development_status so no
+      /bmad-build worker picks it up. Runs after the owner commits the staged work
+      in both repositories and eval-quality releases."
+    status: backlog
+    depends_on:
+      - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
+      - "eval-quality release carrying Story 1.1 and #143"
