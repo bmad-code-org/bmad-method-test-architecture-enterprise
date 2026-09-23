@@ -279,7 +279,7 @@ So that I can start an evaluation the way I start every other TEA workflow.
 
 **Given** the registration set in AD-2
 **When** it lands in this story
-**Then** `src/module-help.csv` has an `Evaluate` row with menu code `EV`, phase `4-implementation`, followed-by `bmad-testarch-ci` and output-location `tea_evaluations_folder` (AD-2, amended: Evaluate writes evaluation folders there, not under `test_artifacts`)
+**Then** `src/module-help.csv` has an `Evaluate` row with menu code `EV`, phase `4-implementation`, followed-by `bmad-testarch-ci` and output-location `tea_evaluations_folder` (AD-2, amended: the committed evaluation folder lives under `tea_evaluations_folder`; working drafts such as the Story 1.12 requirements statement go under `{test_artifacts}/evaluate/`)
 **And** `src/agents/bmad-tea/customize.toml` has a `[[agent.menu]]` entry with `code = "EV"` and `skill = "bmad-testarch-evaluate"`
 **And** `.claude-plugin/marketplace.json` lists the skill path, `src/module.yaml` declares `tea_evaluations_folder` with default `evals` resolved as `{project-root}/{value}`, and `test/test-installation-components.js` lists the workflow and has EV in `expectedMenu`
 **And** `test/fixtures/tea-routing-eval/intents.json` carries an EV intent with its ground truth, the routing contracts and probes are regenerated with `node tools/generate-contracts.js` and `node tools/generate-probes.js`, and the intents contract stays within its `probeStepBound`

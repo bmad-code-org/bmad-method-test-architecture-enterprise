@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-23'
 status: 'review'
 route: 'dispatch'
-review_loop_iteration: 2
+review_loop_iteration: 3
 baseline_commit: '1054b066bcc8b1f6db1e9ef2555ab2b22b7d97f1'
 context: []
 ---
@@ -152,7 +152,7 @@ All findings confirmed against the current diff or live-verified by mutation tes
 
 | # | Source | Finding | Verdict | Route |
 | --- | --- | --- | --- | --- |
-| 33 | opus | `module-help.csv`'s EV row output-location `tea_evaluations_folder` disagreed with AD-2 (ARCHITECTURE-SPINE.md) and the Story 1.3 AC (epics.md), both still naming `test_artifacts` | high | patch: the plan is amended, not the CSV -- AD-2 and the AC now name `tea_evaluations_folder`, since that is where Evaluate actually writes; `test_artifacts` was never correct for this row (see Design Notes) |
+| 33 | opus | `module-help.csv`'s EV row output-location `tea_evaluations_folder` disagreed with AD-2 (ARCHITECTURE-SPINE.md) and the Story 1.3 AC (epics.md), both still naming `test_artifacts` | high | patch: the plan is amended, not the CSV -- AD-2 and the AC now name `tea_evaluations_folder` (see Design Notes for the corrected reason) |
 | 34 | opus | no test in `test/` or `tools/` reads `src/module-help.csv`; deleting the EV row left every relevant test at exit 0 | high, live-verified | patch: `test-installation-components.js` parses the CSV with `csv-parse` and asserts the EV row's five fields; live-verified the row's deletion now fails |
 | 35 | opus | `test-routing-evidence.js` re-anchored only `cases`; `fixtureDigest`/`recordFixtureDigest` got a shape check compared against nothing, and `menuSource`/`skillSource`/`groundTruthVersion`/`corpusVersion` were unguarded | high, live-verified | patch: the envelope is snapshotted (`cases/_envelope.json`) beside an independently recorded `EXPECTED_ENVELOPE_DIGEST`; the 18-case files are rebuilt byte-exact from envelope plus snapshots and digested with `digestFiles`'s own algorithm, asserted equal to `contract.fixtureDigest`/`recordFixtureDigest`; live-verified a `menuSource` tamper is now caught |
 | 36 | opus | house/lean skill-set lists in `test-installation-components.js` were hard-coded; `isLeanSkill` never decided membership, so an unclassified new skill directory got no shape assertions | medium, live-verified | patch: both sets are now computed by running `isLeanSkill` over every `src/workflows/testarch/*/` directory and asserted equal to the expected lists; live-verified mutating the lean/house rule now fails four assertions |
@@ -162,11 +162,17 @@ All findings confirmed against the current diff or live-verified by mutation tes
 
 All seven re-verified against the current diff before fixing; none were stale. None were speculative.
 
+**Round 4: Opus re-review on PR #232.** One finding.
+
+| # | Source | Finding | Verdict | Route |
+| --- | --- | --- | --- | --- |
+| 40 | opus | the Round 3 reason for finding 33's output-location amendment (AD-2, the AC, and this file's Design Notes) claimed `test_artifacts` was "never" where Evaluate writes, but Story 1.12's own AC (epics.md) writes the requirements statement to `{test_artifacts}/evaluate/<evaluationId>/` | high | patch: the reason is corrected in all three places to distinguish the committed evaluation folder (`tea_evaluations_folder`) from the working-draft path (`{test_artifacts}/evaluate/`); `tea_evaluations_folder` stays the row's output-location, unchanged |
+
 ## Design Notes
 
 The lean shape (AD-3) has no prior TEA skill to copy wholesale: every sibling either has `workflow.yaml` or, like `bmad-teach-me-testing`, `steps-c/` (which is why the AC's own discriminator explicitly classifies `teach-me-testing` as house despite having no `workflow.yaml`). The activation-contract boilerplate is copied verbatim from `bmad-teach-me-testing`'s `SKILL.md`/`customize.toml`, since AD-3 requires TEA's activation contract kept intact; everything else (the twelve-stage inline workflow body, the placeholder reference guides) is new.
 
-**Output-location amendment (finding 33).** AD-2's registration-set bullet and the Story 1.3 AC both said `test_artifacts`, copied from the pattern every other registered skill's row follows. Evaluate is not every other skill: its own goal is a scored evaluation folder, and it writes there, under `tea_evaluations_folder`, not under `test_artifacts`. The CSV row was correct and the plan was stale, so the plan is the thing that changed: AD-2 now documents the correction with a dated amendment note, and the AC's "Then" clause names `tea_evaluations_folder` directly.
+**Output-location amendment (finding 33).** AD-2's registration-set bullet and the Story 1.3 AC both said `test_artifacts`, copied from the pattern every other registered skill's row follows. The CSV row was correct and the plan was stale, so the plan is the thing that changed: AD-2 now documents the correction with a dated amendment note, and the AC's "Then" clause names `tea_evaluations_folder` directly. The reason: the committed evaluation folder lives under `tea_evaluations_folder`, which is what a registration row's output-location names. `test_artifacts` is still real and still used, but for working drafts such as the Story 1.12 requirements statement (epics.md's Story 1.12 AC writes it to `{test_artifacts}/evaluate/<evaluationId>/` before it is copied into the committed evaluation folder), not for the row's own output-location. An Opus re-review caught the first version of this note claiming `test_artifacts` was "never" where Evaluate writes, which Story 1.12's own text contradicts; corrected here and in AD-2/the AC.
 
 The routing corpus re-anchoring design: rather than keep asserting a whole-file digest against the live, now-growing corpus (structurally impossible once a case is added), each of the original 18 cases is snapshotted once, at the moment the live corpus still matched the frozen evidence's digest, with its own `caseDigest` recorded beside it. The ongoing test then holds each live case byte-identical to its snapshot (proving no historical case was edited) while admitting new cases by id (proving nothing about growth is itself a violation).
 
