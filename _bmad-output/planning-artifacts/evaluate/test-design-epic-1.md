@@ -178,9 +178,9 @@ Levels: integration over real eval-quality, replay.
 
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
-| `eval-quality` devDependency raised to the published 4.0.0, engine check 0, manifests show only the version bump | Engine check; `git diff -- package.json package-lock.json` | Integration | P0 | A `file:` or `.tgz` spec in the diff fails the story gate |
+| `eval-quality` devDependency raised to the published 4.0.0, engine check 0, manifests show the version bump and no `file:` or `.tgz` spec | Engine check; `git diff -- package.json package-lock.json` | Integration | P0 | A `file:` or `.tgz` spec in the diff fails the story gate |
 | `npm test` green on eval-quality 4.0.0, with the broken tests repaired | Worker first runs `npm test` on eval-quality 4.0.0 with no repair and records every failing script; those scripts are the repair's revert checks | Replay, integration | P0 | Reverting the repair re-fails each recorded script |
-| TeA's gate depends on trial-set scoring | New `test/test-trial-set-scoring.js` (`test:trial-set-scoring`) built with the `test/lib/eval-quality-inputs.js` builders: seal a contract, score a three-trial set through `eval-quality score` with repeated `--record`, assert `reducedProbeOutcomes` present and `strength.comparable === true` | Integration over real eval-quality | P0 | With `node_modules/eval-quality` downgraded to published 3.4.0 (`npm install eval-quality@3.4.0 --no-save`, since `npm ci` now restores the committed 4.0.0 pin) the case fails: `score` takes one record and the set is non-comparable |
+| TeA's gate depends on trial-set scoring | New `test/test-trial-set-scoring.js` (`test:trial-set-scoring`) built with the `test/lib/eval-quality-inputs.js` builders: seal a contract, score a three-trial set through `eval-quality score` with repeated `--record`, assert `reducedProbeOutcomes` present and `strength.comparable === true` | Integration over real eval-quality | P0 | With `node_modules/eval-quality` downgraded to published 3.4.0 (`npm install eval-quality@3.4.0 --no-save`, since `npm ci` now restores the committed 4.0.0 pin), the CLI rejects the repeated `--record` flag as a usage error, so the case fails and proves TeA depends on trial-set scoring |
 
 ### Story 1.3: Register Evaluate as a TEA skill
 
