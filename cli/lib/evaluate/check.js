@@ -429,7 +429,7 @@ function infrastructureObservation(stepId, exitCode, callInputs = {}) {
 
 const CONNECTIVES = new Set(['all', 'any', 'not']);
 const CALL_INPUTS_POINTER = /^\/interactions\/[^/]+\/call-inputs(?:\/|$)/;
-/** More call-input clauses than this and the expression is reported unresolved instead of enumerated. */
+/** More call-input clauses than this and the expression is reported unresolved. */
 const MAX_CALL_INPUT_CLAUSES = 8;
 const ALWAYS = { op: 'equality', operands: [{ literal: 0 }, { literal: 0 }] };
 const NEVER = { op: 'equality', operands: [{ literal: 0 }, { literal: 1 }] };

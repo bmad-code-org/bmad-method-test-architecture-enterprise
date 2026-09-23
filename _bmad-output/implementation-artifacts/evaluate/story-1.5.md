@@ -148,7 +148,7 @@ Each finding was verified against the branch at `0a6e8a1` before acting.
 | C6 | `test:boundary` did not hold the no-`test/`-import criterion | fixed: a `test-tree-reach` pattern, a seeded-tree case, and the amended criterion |
 | D1 | `digestFiles` encoded a missing file and a file holding `<missing>` alike | fixed without moving any digest: only a present file whose bytes equal the marker changes encoding (its path gains a NUL, which no path holds), so stored `fixtureDigest` values, the missing-file encoding `test:file-system-port` asserts and every ordinary digest are unchanged |
 | D2 | URL userinfo survived `redactSecrets` | fixed: userinfo of an http or https URL is redacted, scheme and host kept; cases |
-| D3 | `date-time` was not checked by the record validator | fixed: `cli/lib/evaluate/formats.js` registers one calendar-checked RFC 3339 format on the record validator and on `check`, whose own `Date.parse` check accepted `2026-02-30` and hour 24; no dependency added, since this is the only format the engine schemas use; cases for the format and for the validator (no warning, malformed refused) |
+| D3 | `date-time` was not checked by the record validator | fixed: `cli/lib/evaluate/formats.js` registers one calendar-checked RFC 3339 format on the record validator, and `check` shares it; `check` shows no behavior change, because eval-quality's own `expiresAt` pattern already refused `2026-02-30` and hour 24 (round 2 corrected an earlier claim here); no dependency added, since this is the only format the engine schemas use; cases for the format and for the validator (no warning, malformed refused) |
 | D4 | a relative registry root or `projectRoot` override was kept relative | fixed: `path.resolve` once in `createRegistry` and on each override; cases that change the working directory afterwards |
 
 Revert checks: each fix above was undone once and the named case failed (C2 to C5, A2, A4, D1 to D4 in `test:evaluate-check`; B1 and C1 in `test:evaluate-boundaries`; C6 in `test:layering-boundary-lineage`).
@@ -196,3 +196,13 @@ Once either ships, the test switches to it and the deep import goes; the gate's 
 - `npm test` -- exit 0
 - `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
 - the Build Rules engine check -- exit 0 before and after
+
+## Review round 2
+
+Round 2 confirmed every round 1 fix by reverting it and watching its test fail, and found three items, all fixed.
+
+| ID | Finding | Outcome |
+| --- | --- | --- |
+| R2-1 | The CHANGELOG and row D3 claimed `check` had accepted `2026-02-30`; eval-quality's `expiresAt` pattern already refused it | fixed: both now name the record validator as the defect and `check` as sharing the format |
+| R2-2 | `tools/build-docs.js` compared exclusion patterns against `path.relative` output, which carries backslashes on Windows, so the new dead-pattern check would fail the build there | fixed: `getAllMarkdownFiles` returns POSIX separators |
+| R2-3 | Two new comments in `check.js` and `registry.js` named a rejected alternative | fixed: both state only the affirmative |

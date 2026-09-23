@@ -450,8 +450,7 @@ function createRegistry(entries, { root } = {}) {
 }
 
 /**
- * Whether `value` is a registry `createRegistry` built, as opposed to an object
- * of the same shape assembled elsewhere.
+ * Whether `value` is a registry that `createRegistry` built.
  *
  * @param {unknown} value
  * @returns {boolean}

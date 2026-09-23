@@ -277,7 +277,7 @@ function getAllMarkdownFiles(dir, baseDir = dir) {
       files.push(...getAllMarkdownFiles(fullPath, baseDir));
     } else if (entry.name.endsWith('.md')) {
       // Return relative path from baseDir
-      const relativePath = path.relative(baseDir, fullPath);
+      const relativePath = path.relative(baseDir, fullPath).split(path.sep).join('/');
       files.push(relativePath);
     }
   }
