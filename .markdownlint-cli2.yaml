@@ -13,6 +13,10 @@ ignores:
   - _bmad/**
   - .*/**
   - z*/**
+  # The BMad memlog: an append-only process log written by
+  # _bmad/scripts/memlog.py, never edited by hand, so its layout is the
+  # script's to own.
+  - "**/.memlog.md"
 
 # Rule configuration
 #
