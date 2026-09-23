@@ -97,7 +97,7 @@ An adopter target, proven first against TeA's own next skill, gets a compiling, 
 
 ## Assumptions
 
-- Assumed the five-way target-kind vocabulary is TeA's own classification layer, absent from `eval-quality`'s schema (verified in `target-kind-adapter-mapping.md`).
+- Assumed the six-way target-kind vocabulary is TeA's own classification layer, absent from `eval-quality`'s schema (verified in `target-kind-adapter-mapping.md`).
 - Assumed `eval-quality-gates` wiring is opt-in per adopter repository, since `eval-quality`'s own documentation states that a user adopting behavioral evaluation does not need it.
 
 ## Open Questions

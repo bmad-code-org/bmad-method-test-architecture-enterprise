@@ -35,7 +35,7 @@ Date: 2026-09-22. Scope: `_bmad-output/planning-artifacts/evaluate/` (`SPEC.md` 
 
 ## Amendment Check: 2026-09-23
 
-Scope: the fully-stacked amendment that closes the plan gap audit (eleven partial and two missing items, eight uncovered eval-quality non-goals, and the audit addendum).
+Scope: the fully-stacked amendment that closes the plan gap audit (eleven partial and two missing items, seven uncovered eval-quality non-goals, and the audit addendum).
 
 **Verdict: PASS**, on the checks below.
 

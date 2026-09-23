@@ -1,6 +1,6 @@
 # Target kind to adapter mapping
 
-Verified against `bmad-eval-quality` v3.4.0 source (`schemas/eval-contract.schema.json`, `src/core/schemas/interface.ts`, and the five `docs/how-to/evaluate-*-behavior.md` guides). The input notes' list of target kinds was checked against these sources before use.
+Verified against `bmad-eval-quality` v3.4.0 source, and re-verified on 2026-09-23 against v4.0.0 (`origin/main` `aa1b724`), where `INTERFACE_KINDS`, the `unsupported-interface-kind` rejection in `src/core/compile/interface-inventory.ts` and the five `docs/how-to/evaluate-*-behavior.md` guides are unchanged. Sources: `schemas/eval-contract.schema.json`, `src/core/schemas/interface.ts`, and the five `docs/how-to/evaluate-*-behavior.md` guides; `git diff 467e3a3 origin/main` over them is empty. The input notes' list of target kinds was checked against these sources before use.
 
 ## Two separate vocabularies
 
