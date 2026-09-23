@@ -522,7 +522,7 @@ The worker performs each step and records its output in `_bmad-output/implementa
 3. The evidence artifact for the clean control carries `passed-clean-control` in `reducedProbeOutcomes`; the seeded probe carries `caught`; `trials.completedAttempts` is at least `minimumTrialCount` for each set; both `eval-quality score` exit codes are recorded.
 4. Rollback: the mutation evidence carries `preDigest`, `mutatedDigest` and `restoredDigest`, with `mutatedDigest` unequal to `preDigest` and `restoredDigest` equal to it, and the re-passed baseline leg resolves the clean-control oracle. Adopter tree untouched: `shasum -a 256` of the file in the worktree equals `preDigest` and `git status --porcelain` is identical before and after.
 5. Independent re-score: `eval-quality score` run directly from `node_modules/.bin`, outside `tea-evaluate`, over the persisted records, isolation manifests and evaluator configuration, reproduces each evidence artifact byte for byte (sha256 equal). This is the proof that the verdicts come from the CLI.
-6. `run.json` records `dirty: true`, the model and runner identity as fixed conditions, and the engine version with a note that it is the local tarball.
+6. `run.json` records `dirty: true`, the model and runner identity as fixed conditions, and the engine version: the published eval-quality release TeA's devDependency resolves (4.0.0 or later).
 7. The gaps Evaluate named, verbatim.
 
 A verdict other than PASS, or a `missed` seeded probe, is recorded as the finding it is. The run is recorded once, and the gaps stage output is the next action.
@@ -566,7 +566,7 @@ Each score-6 risk above names its test and story. Verification for all of them i
 
 ## Assumptions and Dependencies
 
-1. The local tarball carries eval-quality main at 467e3a3 or later plus Story 1.1's export; its `package.json` version reads 3.4.0.
+1. The engine is the published eval-quality release, 4.0.0 or later, which carries trial-set scoring (#143) and Story 1.1's target-policy export (#158); its `package.json` version reads that release.
 2. `node_modules/.bin/eval-quality` is the CLI every integration test spawns; no test spawns a globally installed copy.
 3. The local Claude Code CLI is authenticated on the build machine.
 

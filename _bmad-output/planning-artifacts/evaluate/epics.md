@@ -1021,7 +1021,7 @@ So that Evaluate is continuously proven where it is built, and users can read ho
 
 Run by the coordinator of Story 2.5 once it merges. The eval-quality release in step 1 happens earlier, right after Story 1.1 merges; the remaining steps still apply. No `/bmad-build` worker runs this story.
 
-**Release status (verified 2026-09-23):** eval-quality v4.0.0 is published and is npm `latest`; its changelog records the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143), so step 1 is done and `<EQ_RELEASE>` is `4.0.0` (`evaluation-framework-facts.md`).
+**Release status (verified 2026-09-23):** eval-quality v4.0.0 is published and is npm `latest`; its changelog records the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143), so step 1 is done and `<EQ_RELEASE>` is `4.0.0` (`evaluation-framework-facts.md`). Every `test:evaluate-*` script the 2026-09-23 amendment adds (`test:evaluate-evaluators`, `-workflow`, `-tool-use`, `-promptfoo`, `-partitions`, `-calibration`, `-interpret`, `-authoring`, `-gap-loop`, `-learned-framework`) runs on the published engine from the story that adds it.
 
 As the owner,
 I want the dirty overnight proof replaced by a committed, released one,
