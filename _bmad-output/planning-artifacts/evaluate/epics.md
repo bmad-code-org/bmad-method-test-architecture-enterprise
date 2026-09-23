@@ -162,7 +162,7 @@ The evaluation Epic 1 produces runs in the adopter's CI on every pull request, w
 
 ## Epic Dependencies
 
-Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `eval-quality` devDependency to the published release carrying it, and every later TeA story runs on that release. Epic 1's stories run in the order this table lists them, which is the order they are written in. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after the owner commits the staged work and eval-quality releases.
+Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `eval-quality` devDependency to the published release carrying it, and every later TeA story runs on that release. Epic 1's stories run in the order this table lists them, which is the order they are written in. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after Story 2.5 merges; eval-quality 4.0.0, the release it once waited for, shipped during Story 1.2.
 
 | Order | Story | Depends on |
 | --- | --- | --- |
@@ -197,7 +197,7 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 29 | 2.3 | 2.2 |
 | 30 | 2.4 | 2.3 |
 | 31 | 2.5 | 2.4 |
-| 32 | H.1 | 2.5, an eval-quality release carrying Story 1.1 and #143 |
+| 32 | H.1 | 2.5 |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -1025,28 +1025,24 @@ So that Evaluate is continuously proven where it is built, and users can read ho
 
 ## Owner Hand-off
 
-### Story H.1: Release the engine, accept the baseline, turn the `pr` replay green
+### Story H.1: Accept the dogfood baseline and turn its `pr` replay green
 
-Run by the coordinator of Story 2.5 once it merges. The eval-quality release in step 1 happens earlier, right after Story 1.1 merges; the remaining steps still apply. No `/bmad-build` worker runs this story.
+Run by the coordinator of Story 2.5 once it merges. No `/bmad-build` worker runs this story.
 
-**Release status (verified 2026-09-23):** eval-quality v4.0.0 is published and is npm `latest`; its changelog records the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143), so step 1 is done and `<EQ_RELEASE>` is `4.0.0` (`evaluation-framework-facts.md`). Every `test:evaluate-*` script the 2026-09-23 amendment adds (`test:evaluate-evaluators`, `-workflow`, `-tool-use`, `-promptfoo`, `-partitions`, `-calibration`, `-interpret`, `-authoring`, `-gap-loop`, `-learned-framework`) runs on the published engine from the story that adds it.
+**Engine status (verified 2026-09-23):** eval-quality 4.0.0 is published and is npm `latest`, carrying the target-policy export (#158) and trial-set scoring with `EvidenceArtifact` version 4 (#143). Story 1.2 put TeA on it and Story 1.4 floors the peer range at `>=4.0.0`, so every Epic 1 and Epic 2 check, the `test:evaluate-*` scripts the 2026-09-23 amendment adds included, runs on the published engine from the story that adds it. No engine release or floor raise remains for this story.
 
 As the owner,
-I want the dirty overnight proof replaced by a committed, released one,
-So that the `pr` replay has a baseline to reproduce and TeA runs on a published engine.
-
-**This gate closed early.** eval-quality released as `4.0.0` during Story 1.2, not at the end of Story 2.5 as originally planned, so `<EQ_RELEASE>` is `4.0.0` and the checks below (the engine check, `test:trial-set-scoring`, `test:evaluate-guidance`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-mcp`, `test:evaluate-api`, `test:evaluate-compare`, `test:evaluate-ci` and the Evaluate `pr` steps) have run on the published engine since Story 1.2 landed, not red until this story.
+I want the dirty proof run replaced by a clean one on the merged tree,
+So that the `pr` replay of `bmad-testarch-evaluate` has an accepted baseline to reproduce.
 
 **Steps, each with what it proves:**
 
-1. In the eval-quality worktree, review and commit Story 1.1, merge it, then `npm run release:minor` (or `release:major`). Proves the export and trial-set scoring are published and `npm view eval-quality version` shows `<EQ_RELEASE>`.
-2. In TeA, raise the `peerDependencies` floor from `>=3.4.0` to `>=<EQ_RELEASE>`, the released version, then `npm update eval-quality` (keeps the `latest` spec; `npm install eval-quality@latest` would rewrite it to a caret range) and `npm ci`. Proves the peer floor and the devDependency, already on the registry since Story 1.2, agree on the released version; the engine check exits 0 on the published package.
-3. `npm test`. Proves every check listed above is green on the published engine.
-4. Commit the staged TeA work. Then `node cli/evaluate.js run --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` and `score` on the committed tree, with live legs through the local Claude Code CLI. Proves a clean (`dirty: false`) run: preflight passed, `passed-clean-control`, `caught` at `minimumTrialCount`, rollback proved.
-5. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` script with its own `validate` step in `quality.yaml` in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
-6. `node cli/evaluate.js ci --tier pr --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json`, locally and in the pull request's `quality.yaml` run. Proves the `pr` replay reproduces the committed evidence, closing AD-15's last condition.
+1. On `main` after Story 2.5 merges, `npm ci` then `npm test`. Proves every check is green on the merged tree and the published engine.
+2. `node cli/evaluate.js run --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` and `score` on that committed tree, with live legs through the local Claude Code CLI. Proves a clean (`dirty: false`) run: preflight passed, `passed-clean-control`, `caught` at `minimumTrialCount`, rollback proved.
+3. `node cli/evaluate.js compare --accept --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json` in a branch, and open the pull request. Add the `bmad-testarch-evaluate` replay as an `npm test` script with its own `validate` step in `quality.yaml` in the same pull request. Proves the baseline enters `baseline/` only through a reviewed pull request (AD-12).
+4. `node cli/evaluate.js ci --tier pr --evaluation test/evaluations/bmad-testarch-evaluate/evaluation.json`, locally and in the pull request's `quality.yaml` run. Proves the `pr` replay reproduces the committed evidence, closing AD-15's last condition.
 
-**Dependencies:** 2.5 and the eval-quality release.
+**Dependencies:** 2.5.
 
 ## Traceability
 
@@ -1062,8 +1058,8 @@ So that the `pr` replay has a baseline to reproduce and TeA runs on a published 
 | CAP-8 | 1.8, 1.14 | template schema validation; guidance test (risk table) |
 | CAP-9 | 1.6, 1.8, 1.14, 1.16, 1.17 | `test:evaluate-run`; `test:evaluate-evaluators`; 1.16 live verdicts |
 | CAP-10 | 1.14, 1.16, 1.22, 1.25 | guidance test over exported vocabularies; `test:evaluate-interpret`; `test:evaluate-gap-loop` |
-| CAP-11 | 2.2, 2.3, 2.4, 2.5, H.1 | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; `quality.yaml` steps; H.1 step 6 |
-| CAP-12 | 1.8, 2.1, 2.5, H.1 | `run.json`; `test:evaluate-compare`; H.1 step 5 |
+| CAP-11 | 2.2, 2.3, 2.4, 2.5, H.1 | `test:evaluate-ci` (placement, gameability, freshness, agreement); rendering test; `quality.yaml` steps; H.1 step 4 |
+| CAP-12 | 1.8, 2.1, 2.5, H.1 | `run.json`; `test:evaluate-compare`; H.1 step 3 |
 | CAP-13 | 1.17, 1.19, 1.20, 1.23, 1.26 | `test:evaluate-evaluators`, `-tool-use`, `-promptfoo`, `-learned-framework`; template rendering in the guidance test |
 | CAP-14 | 1.21, 2.2 | `test:evaluate-partitions`, `test:evaluate-calibration`; `scheduled` and `release` tier cases |
 

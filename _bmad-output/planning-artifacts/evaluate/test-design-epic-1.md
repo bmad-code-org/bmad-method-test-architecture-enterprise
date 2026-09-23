@@ -141,7 +141,7 @@ Unknown threshold: no source states a limit on `npm test` wall time or on live p
 
 ## Entry Criteria
 
-- [ ] eval-quality 4.0.0 is published, carrying Story 1.1's export and trial-set scoring, and the engine check exits 0 in the TeA worktree
+- [ ] The engine check exits 0 in the TeA worktree on the published eval-quality package TeA's devDependency resolves (4.0.0 or later, carrying Story 1.1's export and trial-set scoring)
 - [ ] `npm test` is green on the TeA worktree before Story 1.2's change (the baseline every later failure is compared with)
 - [ ] The local Claude Code CLI runs non-interactively on the build machine (needed by Stories 1.3 and 1.16)
 

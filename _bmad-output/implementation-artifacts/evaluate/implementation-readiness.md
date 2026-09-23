@@ -51,4 +51,4 @@ Scope: the fully-stacked amendment that closes the plan gap audit (eleven partia
 ## Amendment Tracking Notes
 
 - `sprint-status.yaml` gains ten `backlog` rows (Stories 1.17 to 1.26), placed in execution order.
-- eval-quality v4.0.0 was published on 2026-09-23 with the target-policy export (#158) and trial-set scoring (#143). Story H.1 now records step 1 as done. Story 1.1's `review` status and Story 1.2's text are left to the branch that owns them.
+- eval-quality v4.0.0 was published on 2026-09-23 with the target-policy export (#158) and trial-set scoring (#143). Stories 1.1 and 1.2 are done. Story H.1 lost its release and peer-floor steps (Story 1.4 now floors the peer range at `>=4.0.0`) and keeps the clean run, baseline acceptance and replay steps; its `owner_handoff` key in `sprint-status.yaml` was renamed to match its new title.

@@ -41,7 +41,7 @@ inputDocuments:
 **Coverage summary:**
 
 - P0: 20 scenarios over replay integrity, the AD-10 table, baseline acceptance, the placement floor and the three added deterministic checks
-- P1: 21 scenarios over tier membership, placement reasons, rendering and TeA's own wiring
+- P1: 20 scenarios over tier membership, placement reasons, rendering and TeA's own wiring
 - P2: 2 scenarios over documentation
 - New `npm test` scripts: `test:evaluate-compare`, `test:evaluate-ci`, `test:evaluate-ci-render`, and Story 2.5's per-evaluation `pr` scripts, each with its own `quality.yaml` step
 
@@ -64,14 +64,14 @@ Owner for every mitigation is the `/bmad-build` worker of the story named, verif
 | R2-14 | DATA | The replay cannot reproduce committed evidence: `baseline/` as first specified held no isolation manifests, evaluator configuration, scoring policy, sealed brief or preflight verdict, and `score` is Invalid or produces different bytes without them | 3 | 3 | 9 | AD-12 and Story 2.1 list every replay input; omitting the isolation manifests makes the replay exit 3 | 2.1 |
 | R2-15 | TECH | Fixture baselines have no sanctioned producer: overnight fixture runs would be dirty and `compare --accept` refuses them | 3 | 2 | 6 | A fixture's `evaluation.json` declares a copy workspace, so its runs record `dirty: false` and are accepted through `compare --accept` (AD-8 amended) | 2.2 |
 | R2-16 | TECH | Placement drifts from what the adopter's repository needs: the ci stage writes AD-10's default table without inspecting, or a plan moves a deterministic no-secret check off `pr` | 2 | 3 | 6 | Plan schema refuses a changed tier with no reason and a deterministic check off `pr`; two recorded fixture repositories must yield plans that differ, with reasons citing their files (Story 2.4) | 2.2, 2.4 |
-| R2-07 | BUS | AD-15's last condition (the `pr` replay of the dogfood baseline) never lands because Story H.1 is manual | 2 | 3 | 6 | Story H.1 lists exact commands and what each proves; the pending replay is named in `epic-2-proof.md`; H.1 step 5 adds the replay script so `test:ci-coverage` holds it once added | H.1 |
+| R2-07 | BUS | AD-15's last condition (the `pr` replay of the dogfood baseline) never lands because Story H.1 is manual | 2 | 3 | 6 | Story H.1 lists exact commands and what each proves; the pending replay is named in `epic-2-proof.md`; H.1 step 3 adds the replay script so `test:ci-coverage` holds it once added | H.1 |
 
 ### Medium-Priority Risks (Score 3 to 4)
 
 | Risk ID | Category | Description | P | I | Score | Mitigation |
 | --- | --- | --- | --- | --- | --- | --- |
 | R2-08 | TECH | A stale baseline (contract or corpus digest changed) passes `pr` silently | 2 | 2 | 4 | `test:evaluate-ci` case: digest drift warns on `pr`, blocks on `release` |
-| R2-09 | OPS | Fixture baselines recorded on the local tarball diverge from the released engine, turning `pr` red after H.1 | 2 | 2 | 4 | H.1 step 3 runs `npm test` on the published engine; a divergence re-records the fixture baselines through `compare --accept` in the same pull request |
+| R2-09 | OPS | Fixture baselines recorded on one published engine diverge after the engine floats to a newer release (Story 1.15 `latest` spec), turning `pr` red for a reason that is engine drift | 2 | 2 | 4 | `compare` refuses across `evalQualityVersion` (Story 2.1) and routes to `compare --accept`; the pull request that moves the engine re-records the fixture baselines through `compare --accept` |
 | R2-10 | TECH | A refused comparison across `evalQualityVersion` read as a block | 2 | 2 | 4 | AD-10 "informs" row asserted in the table test |
 | R2-11 | SEC | A live tier wired to run on `pr`, needing a secret TeA's CI lacks | 1 | 3 | 3 | Plan schema forbids a live check on `pr`; guidance test asserts skill and agent live tiers sit on `scheduled`, `release` and manual dispatch |
 | R2-12 | OPS | The CI stage rewrites an existing `eval-quality.config.json` section | 1 | 3 | 3 | Guidance marker; the eight TeA gate jobs asserted unchanged by a `quality.yaml` diff check in Story 2.5 |
@@ -116,7 +116,7 @@ Owner for every mitigation is the `/bmad-build` worker of the story named, verif
 | 2.2 | Overnight fixture runs were dirty, so `compare --accept` could never produce the fixture baselines | Fixture targets declare a copy workspace and record `dirty: false` (AD-8 amended) |
 | 2.3 | No deterministic renderer exists for the agent-rendered CI templates; `eval:ci` writes no replay cases; set roots must sit under `test/fixtures/ci-eval/`; a new set regenerates contracts and probes and changes the suite's `caseCount` | Deterministic step-and-template test, hand-captured replay case, regenerated contracts and probes, updated manifest entry |
 | 2.5 | The upload named no check; running the CI skill against TeA would render one agent-written step per command, where TeA's checks must be `npm test` scripts with `validate` steps | A `quality.yaml` test case; TeA wired directly; the fixture `runs/` ignore entry moved to Story 1.8 |
-| H.1 | The red-until-release list was hand-written and missed members; `npm install` with the `latest` spec and an existing lockfile does not advance the engine | The list derived by running `npm test` on published 3.4.0 at the end of 2.5; `npm update eval-quality` |
+| H.1 | The red-until-release list was hand-written and missed members; `npm install` with the `latest` spec and an existing lockfile does not advance the engine | Superseded on 2026-09-23: eval-quality 4.0.0 shipped during Story 1.2, so the red-until-release list and the release and floor-raise steps were removed; H.1 keeps the `npm test`, clean run, baseline acceptance and replay steps |
 
 ## Coverage Plan By Story
 
@@ -195,12 +195,11 @@ Levels: static, integration, documentation gates.
 | `ci --tier pr` exits 0 for both fixtures; `check`, `compile`, `seal` exit 0 for the evaluate suite | The new scripts themselves | Integration | P0 | Any break fails `npm test` |
 | Every fixture evaluation added by Stories 1.18 to 1.20 and 1.24 to 1.26 runs its `pr` tier, gameability, freshness and agreement included | One script and `validate` step each; `test:ci-coverage` | Integration, static | P0 | A chained script with no step fails; any break fails `npm test` |
 | The how-to page explains the stack, evaluator kinds, the import contract, learn-on-the-go, held-out probes, calibration and CI placement | `docs:validate-links`, `docs:build`, `test:doc-claims` | Documentation gate | P2 | A broken link or claim fails |
-| Checks red on published 3.4.0 derived mechanically | `npm ci`, `npm test`, failing scripts recorded in `epic-2-proof.md`, tarball re-installed | Integration | P1 | Recorded evidence for H.1 |
 | How-to page, links, shipped wording, 0/1/2 as optional pattern | `docs:validate-links`, `docs:build`, `test:doc-counts`, `test:doc-claims` | Documentation gate | P2 | Broken link fails |
 
-### Story H.1 (owner): Release the engine, accept the baseline, turn the `pr` replay green
+### Story H.1 (owner): Accept the dogfood baseline and turn its `pr` replay green
 
-Each step already names what it proves in `epics.md`. The test view: step 2 uses `npm update eval-quality` so the `latest` spec survives; step 3 is the full `npm test` on the published engine (every Epic 1 and Epic 2 check green, R2-09 surfaced here); step 4 repeats "The Dogfood Proof" of `test-design-epic-1.md` with `dirty: false`; step 5 adds the `bmad-testarch-evaluate` replay script and its `quality.yaml` step, which `test:ci-coverage` then holds; step 6 is the replay passing in the pull request's own `quality.yaml` run.
+Each step already names what it proves in `epics.md`. The test view: step 1 is the full `npm test` on the merged tree and the published engine (every Epic 1 and Epic 2 check green); step 2 repeats "The Dogfood Proof" of `test-design-epic-1.md` with `dirty: false`; step 3 adds the `bmad-testarch-evaluate` replay script and its `quality.yaml` step, which `test:ci-coverage` then holds; step 4 is the replay passing in the pull request's own `quality.yaml` run.
 
 ## The Dogfood Proof In CI
 
@@ -212,7 +211,7 @@ Each step already names what it proves in `epics.md`. The test view: step 2 uses
 
 ### What is committed
 
-Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and baselines, the `bmad-testarch-ci` step and template block, CI suite corpus and replay records, `quality.yaml` steps, documentation, and `epic-2-proof.md` (`git add -f`). The evaluate suite's `baseline/` enters only through H.1 step 5.
+Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and baselines, the `bmad-testarch-ci` step and template block, CI suite corpus and replay records, `quality.yaml` steps, documentation, and `epic-2-proof.md` (`git add -f`). The evaluate suite's `baseline/` enters only through H.1 step 3.
 
 ### What `npm test` enforces afterwards
 
@@ -224,7 +223,7 @@ Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and b
 ## Execution Strategy
 
 - **Pull request:** all scripts above; no secret, no model call.
-- **Manual, recorded:** Story 2.3's `eval:ci` live case; H.1 steps 4 to 6.
+- **Manual, recorded:** Story 2.3's `eval:ci` live case; H.1 steps 2 to 4.
 - **Scheduled and release:** defined per adopter by the plan; TeA's own CI has no model secret and runs the `pr` tier only (AD-20).
 
 ## Resource Estimates
@@ -232,9 +231,9 @@ Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and b
 | Priority | Scenarios | Effort range |
 | --- | --- | --- |
 | P0 | 20 | 19 to 30 hours |
-| P1 | 21 | 12 to 21 hours |
+| P1 | 20 | 12 to 20 hours |
 | P2 | 2 | 2 to 3 hours |
-| Total | 43 | 33 to 54 hours, over five stories |
+| Total | 42 | 33 to 53 hours, over five stories |
 
 ## Quality Gate Criteria
 
@@ -246,7 +245,7 @@ Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and b
 ## Assumptions and Dependencies
 
 1. Story 1.16's `runs/<invocationId>/` is retained in the worktree for Story 2.1.
-2. The eval-quality release in H.1 carries the same trial-set scoring and export the tarball carried; R2-09 covers a divergence.
+2. The fixture baselines are recorded on the published engine TeA's devDependency resolves (4.0.0 or later); R2-09 covers a later engine float.
 
 ## Interworking and Regression
 

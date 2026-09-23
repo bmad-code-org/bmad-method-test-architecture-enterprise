@@ -72,12 +72,11 @@ development_status:
   2-5-tea-runs-its-pr-tier-and-documents-evaluate: backlog
   epic-2-retrospective: optional
 owner_handoff:
-  - key: h-1-release-the-engine-accept-the-baseline-turn-the-pr-replay-green
+  - key: h-1-accept-the-dogfood-baseline-and-turn-its-pr-replay-green
     owner: Murat
     note: "Owner-only (epics.md Story H.1). Kept outside development_status so no
-      /bmad-build worker picks it up. Runs after the owner commits the staged work
-      in both repositories and eval-quality releases."
+      /bmad-build worker picks it up. Runs on main after Story 2.5 merges;
+      eval-quality 4.0.0 is already published and TeA runs on it."
     status: backlog
     depends_on:
       - 2-5-tea-runs-its-pr-tier-and-documents-evaluate
-      - "eval-quality release carrying Story 1.1 and #143"
