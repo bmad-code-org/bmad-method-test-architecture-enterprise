@@ -45,7 +45,7 @@ For a completed CI run to be auditable without re-running it: the evidence artif
 
 ## Settled by architecture
 
-AD-11 settles CI ownership: Evaluate extends `bmad-testarch-ci`'s existing pipeline-generation step rather than generating a dedicated job per adopter. AD-10 settles which of the checks above are mandatory per tier: `pr`, `merge`, `scheduled`, and `release` each have a fixed check membership defined in `ci/evaluation-ci-plan.json`, replacing the three-tier sketch above as Evaluate's default shape for every adopter, not a TeA-specific convention.
+AD-11 settles CI ownership: Evaluate extends `bmad-testarch-ci`'s existing pipeline-generation step, so one skill owns every adopter's pipeline files. AD-10 settles tier placement: Evaluate's ci stage inspects the adopter's repository, existing CI, release flow, and risk profile and places each check, starting from AD-10's default table for `pr`, `merge`, `scheduled`, and `release` and recording a reason for every placement in `ci/evaluation-ci-plan.json`. Every deterministic check that needs no secret stays on `pr`: BEC compile validation, contract-source freshness (check 2, as `tea-evaluate check` comparing the contract's `sourceSpecDigest` with the confirmed requirements statement), oracle-vs-scorer agreement (check 3, over the committed baseline), the gameability arm, and the replay (check 7). Amended 2026-09-23; the earlier text fixed membership for every adopter.
 
 ## Open question
 

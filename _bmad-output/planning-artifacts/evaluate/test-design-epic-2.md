@@ -5,7 +5,7 @@ stepsCompleted:
   ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output']
 lastStep: 'step-05-generate-output'
 nextStep: ''
-lastSaved: '2026-09-22'
+lastSaved: '2026-09-23'
 inputDocuments:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
   - '_bmad-output/planning-artifacts/evaluate/SPEC.md'
@@ -30,19 +30,19 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 2.1 to 2.5 and the owner's Story H.1. Epic 2 turns Epic 1's evaluation into a check that runs on every pull request, with tiers, enforcement classes and a published evidence bundle. It inherits Epic 1's test levels, house test form and revert-check rule (`test-design-epic-1.md`, "Test Levels Used In This Epic").
+**Scope:** full epic-level test design for Stories 2.1 to 2.5 and the owner's Story H.1. The 2026-09-23 amendment made tier placement a derived, recorded decision (AD-10), added the gameability arm, contract-source freshness and oracle-versus-scorer agreement to `pr`, put held-out partitions and judge calibration on `scheduled` and `release`, and wired every new fixture evaluation into TeA's `pr` tier; the added risks and scenarios are marked by those stories. Epic 2 turns Epic 1's evaluation into a check that runs on every pull request, with tiers, enforcement classes and a published evidence bundle. It inherits Epic 1's test levels, house test form and revert-check rule (`test-design-epic-1.md`, "Test Levels Used In This Epic").
 
 **Risk summary:**
 
-- Risks identified: 15
-- High-priority risks (score 6 or more): 9, one of them at 9 as the stories were first written (R2-14), closed by a corrected acceptance criterion
+- Risks identified: 19
+- High-priority risks (score 6 or more): 10, one of them at 9 as the stories were first written (R2-14), closed by a corrected acceptance criterion
 - Dominant categories: TECH (replay integrity, enforcement mapping) and OPS (pipeline rendering, evidence upload)
 
 **Coverage summary:**
 
-- P0: 14 scenarios over replay integrity, the AD-10 table and baseline acceptance
-- P1: 15 scenarios over tier membership, rendering and TeA's own wiring
-- P2: 1 scenario over documentation
+- P0: 20 scenarios over replay integrity, the AD-10 table, baseline acceptance, the placement floor and the three added deterministic checks
+- P1: 21 scenarios over tier membership, placement reasons, rendering and TeA's own wiring
+- P2: 2 scenarios over documentation
 - New `npm test` scripts: `test:evaluate-compare`, `test:evaluate-ci`, `test:evaluate-ci-render`, and Story 2.5's per-evaluation `pr` scripts, each with its own `quality.yaml` step
 
 **Corrections made to `epics.md` and `ARCHITECTURE-SPINE.md` in this step:** acceptance criteria in all five stories and H.1 were untestable, incomplete or unbuildable as written, and AD-5, AD-7, AD-8, AD-10 and AD-12 gained the matching text; see "Acceptance Criteria Corrected In epics.md".
@@ -63,6 +63,7 @@ Owner for every mitigation is the `/bmad-build` worker of the story named, verif
 | R2-06 | OPS | TeA's own `pr` wiring passes CI while the evidence is never uploaded, so a red run leaves nothing to audit | 2 | 3 | 6 | A `test:evaluate-ci` case parses `quality.yaml` and asserts an `actions/upload-artifact` step with `if: always()` whose path covers every evaluation's `runs/` directory | 2.5 |
 | R2-14 | DATA | The replay cannot reproduce committed evidence: `baseline/` as first specified held no isolation manifests, evaluator configuration, scoring policy, sealed brief or preflight verdict, and `score` is Invalid or produces different bytes without them | 3 | 3 | 9 | AD-12 and Story 2.1 list every replay input; omitting the isolation manifests makes the replay exit 3 | 2.1 |
 | R2-15 | TECH | Fixture baselines have no sanctioned producer: overnight fixture runs would be dirty and `compare --accept` refuses them | 3 | 2 | 6 | A fixture's `evaluation.json` declares a copy workspace, so its runs record `dirty: false` and are accepted through `compare --accept` (AD-8 amended) | 2.2 |
+| R2-16 | TECH | Placement drifts from what the adopter's repository needs: the ci stage writes AD-10's default table without inspecting, or a plan moves a deterministic no-secret check off `pr` | 2 | 3 | 6 | Plan schema refuses a changed tier with no reason and a deterministic check off `pr`; two recorded fixture repositories must yield plans that differ, with reasons citing their files (Story 2.4) | 2.2, 2.4 |
 | R2-07 | BUS | AD-15's last condition (the `pr` replay of the dogfood baseline) never lands because Story H.1 is manual | 2 | 3 | 6 | Story H.1 lists exact commands and what each proves; the pending replay is named in `epic-2-proof.md`; H.1 step 5 adds the replay script so `test:ci-coverage` holds it once added | H.1 |
 
 ### Medium-Priority Risks (Score 3 to 4)
@@ -74,6 +75,9 @@ Owner for every mitigation is the `/bmad-build` worker of the story named, verif
 | R2-10 | TECH | A refused comparison across `evalQualityVersion` read as a block | 2 | 2 | 4 | AD-10 "informs" row asserted in the table test |
 | R2-11 | SEC | A live tier wired to run on `pr`, needing a secret TeA's CI lacks | 1 | 3 | 3 | Plan schema forbids a live check on `pr`; guidance test asserts skill and agent live tiers sit on `scheduled`, `release` and manual dispatch |
 | R2-12 | OPS | The CI stage rewrites an existing `eval-quality.config.json` section | 1 | 3 | 3 | Guidance marker; the eight TeA gate jobs asserted unchanged by a `quality.yaml` diff check in Story 2.5 |
+| R2-17 | TECH | The oracle-agreement table counts a disagreeing pair as agreement, so an evaluator that contradicts the engine passes `pr` | 2 | 2 | 4 | The table in `cli/lib/evaluate/ci.js` is asserted row by row; a flipped disposition in a fixture baseline exits 11 |
+| R2-18 | DATA | Contract-source freshness passes on a changed requirements statement | 2 | 2 | 4 | The digest covers the committed statement bytes; a one-byte edit exits 10 |
+| R2-19 | SEC | Held-out partitions or model-judge calibration placed on `pr`, needing a secret TeA's CI lacks | 1 | 3 | 3 | AD-20 rule; plan schema and guidance place them on `scheduled` and `release` |
 
 ### Low-Priority Risks (Score 1 to 2)
 
@@ -146,6 +150,13 @@ File: `test/test-evaluate-ci.js` (`test:evaluate-ci`). Levels: integration over 
 | Each check's exit code, stdout and stderr persisted | A fixture plan with a stub `gate` check printing distinct known bytes to each stream and exiting 1; assert byte equality per stream and the recorded code under `runs/<invocationId>/` | Integration | P1 | An empty, swapped or dropped capture fails equality |
 | Claims none of the three unreachable FAIL rows | Static scan of `cli/lib/evaluate/ci.js` and the plan schema for the three names | Static | P1 | Adding one fails |
 | Fixture plans and baselines for MCP and API adopters validate | Contract validation; each fixture run records `dirty: false` from its copy workspace and its baseline came through `compare --accept` | Contract | P1 | Missing plan fails; a dirty fixture run is refused at acceptance |
+| A changed tier needs a `placement.reason` | Fixture plan with a moved check and no reason fails validation | Contract | P1 | Dropping the rule validates the plan |
+| A deterministic no-secret check placed off `pr` is refused | Fixture plan moving `compile` to `scheduled` fails validation | Contract | P0 | Dropping the floor validates the plan |
+| Gameability arm runs on `pr` with no target launch | Launch marker stays absent; the gameability probe's evidence is produced in `runs/` | Integration over real eval-quality | P0 | Launching the target writes the marker |
+| Contract-source freshness | One byte changed in the fixture requirements statement makes `check` exit 10 | Integration | P0 | Removing the comparison exits 0 |
+| Oracle-versus-scorer agreement | Agreeing-pairs table asserted row by row; one flipped disposition in a fixture baseline record exits 11; an `unreached` required oracle exits 11 | Integration over real eval-quality | P0 | An always-agree table passes the flipped case |
+| Held-out partition held to the floor on its own | Below-floor held-out fixture warns on `scheduled`, blocks on `release` | Integration | P1 | Pooling partitions hides the held-out shortfall |
+| Judge calibration on `scheduled` and `release` | A below-threshold stub judge exits 11 and blocks both tiers | Integration | P1 | Skipping calibration in the tier passes |
 
 ### Story 2.3: Render evaluation plans in `bmad-testarch-ci`
 
@@ -167,6 +178,10 @@ Levels: guidance, contract.
 | Stage writes the plan, live tiers for skill and agent targets on `scheduled`, `release` and manual dispatch, credential keys as `permittedEnvironmentKeys`, invokes `bmad-testarch-ci` edit mode | `test:evaluate-guidance` markers in `references/ci.md` | Guidance | P1 | Removing a marker fails |
 | `eval-quality-gates` opt-in, sections added only for adopted gates, never rewritten | Guidance markers | Guidance | P1 | Removal fails |
 | Plan template validates | Contract test against the runtime schema | Contract | P1 | Template drift fails |
+| Repository inspection headings (existing CI, merge flow, release flow, risk profile) with worked examples | `test:evaluate-guidance` heading markers | Guidance | P1 | Removing a heading fails |
+| Every placement records its reason; deviations from the default are recorded | Guidance marker; template field present | Guidance, contract | P1 | Removal fails |
+| Gameability, freshness and agreement placed on `pr`; held-out and calibration on `scheduled` and `release` | Guidance markers and template defaults | Guidance | P1 | Moving one fails |
+| Two fixture repositories yield different, reasoned placements | Both committed plans validate; `test:evaluate-ci` asserts at least one live check differs and each differing reason cites a file from its repository | Contract, live evidence | P0 | A stage that writes the default table produces identical plans, which the assertion catches |
 
 ### Story 2.5: TeA runs its `pr` tier and documents Evaluate
 
@@ -178,6 +193,8 @@ Levels: static, integration, documentation gates.
 | Upload of every `runs/` directory | `test:evaluate-ci` case over `quality.yaml` | Static | P1 | Removing the upload step fails |
 | Eight gates unchanged | `test:evaluate-ci` case asserts the eight `eval-quality-gates` scripts still run in their current jobs | Static | P1 | Moving a gate fails |
 | `ci --tier pr` exits 0 for both fixtures; `check`, `compile`, `seal` exit 0 for the evaluate suite | The new scripts themselves | Integration | P0 | Any break fails `npm test` |
+| Every fixture evaluation added by Stories 1.18 to 1.20 and 1.24 to 1.26 runs its `pr` tier, gameability, freshness and agreement included | One script and `validate` step each; `test:ci-coverage` | Integration, static | P0 | A chained script with no step fails; any break fails `npm test` |
+| The how-to page explains the stack, evaluator kinds, the import contract, learn-on-the-go, held-out probes, calibration and CI placement | `docs:validate-links`, `docs:build`, `test:doc-claims` | Documentation gate | P2 | A broken link or claim fails |
 | Checks red on published 3.4.0 derived mechanically | `npm ci`, `npm test`, failing scripts recorded in `epic-2-proof.md`, tarball re-installed | Integration | P1 | Recorded evidence for H.1 |
 | How-to page, links, shipped wording, 0/1/2 as optional pattern | `docs:validate-links`, `docs:build`, `test:doc-counts`, `test:doc-claims` | Documentation gate | P2 | Broken link fails |
 
@@ -189,7 +206,7 @@ Each step already names what it proves in `epics.md`. The test view: step 2 uses
 
 ### How AD-15's CI condition is verified
 
-1. Overnight (Story 2.5): `check`, `compile` and `seal` of `test/evaluations/bmad-testarch-evaluate/` exit 0 as `npm test` scripts; both fixture adopters' full `pr` tier exits 0, replay included.
+1. Overnight (Story 2.5): `check`, `compile` and `seal` of `test/evaluations/bmad-testarch-evaluate/` exit 0 as `npm test` scripts; every fixture evaluation's full `pr` tier exits 0, replay, gameability arm, freshness and agreement included.
 2. `epic-2-proof.md` records: each `pr` script's exit, the replay's produced and baseline evidence digests for both fixtures, the pending status of the evaluate suite's replay with a pointer to `epic-1-proof.md`, and the measured `pr` tier duration.
 3. After H.1: the evaluate suite's replay reproduces its accepted baseline locally and in the pull request's `quality.yaml` run; the run's uploaded artifact holds `runs/<invocationId>/`.
 
@@ -214,10 +231,10 @@ Staged overnight: `cli/lib/evaluate/compare.js` and `ci.js`, fixture plans and b
 
 | Priority | Scenarios | Effort range |
 | --- | --- | --- |
-| P0 | 14 | 14 to 22 hours |
-| P1 | 15 | 9 to 16 hours |
-| P2 | 1 | 1 to 2 hours |
-| Total | 29 | 24 to 40 hours, over five stories |
+| P0 | 20 | 19 to 30 hours |
+| P1 | 21 | 12 to 21 hours |
+| P2 | 2 | 2 to 3 hours |
+| Total | 43 | 33 to 54 hours, over five stories |
 
 ## Quality Gate Criteria
 

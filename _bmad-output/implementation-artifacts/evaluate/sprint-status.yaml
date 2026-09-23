@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 09-22-2026 18:09
-last_updated: 09-22-2026 18:13
+last_updated: 09-23-2026 12:00
 project: "bmad-method-test-architecture-enterprise: Evaluate"
 project_key: NOKEY
 tracking_system: file-system
@@ -45,13 +45,23 @@ development_status:
   1-7-mutate-only-in-a-disposable-copy-and-prove-the-rollback: backlog
   1-8-run-the-clean-and-mutated-arms-and-score-them: backlog
   1-9-qualify-gameability-and-historical-probes-and-judge-rubrics: backlog
+  1-17-drive-any-evaluation-layer-through-one-import-contract: backlog
   1-10-evaluate-a-stdio-mcp-tool-server: backlog
   1-11-scaffold-the-http-probe-port-for-api-targets: backlog
+  1-18-evaluate-a-workflow-target-through-after-and-captured-bindi: backlog
+  1-19-evaluate-a-tool-use-calling-agent-through-its-own-command-j: backlog
+  1-20-import-a-second-framework-s-results-promptfoo: backlog
+  1-21-hold-out-probes-and-calibrate-rubric-judges: backlog
+  1-22-attribute-findings-for-interpretation: backlog
   1-12-inspect-the-target-capture-requirements-and-design-the-corpu: backlog
   1-13-author-the-contract-oracles-rubrics-and-adapter-wiring: backlog
+  1-23-teach-choosing-and-building-the-evaluation-layer: backlog
   1-14-drive-the-run-and-interpret-the-gaps: backlog
   1-15-float-the-engine-pin-and-admit-evaluate-authored-suites: backlog
   1-16-evaluate-authors-its-own-suite-run-live-and-recorded: backlog
+  1-24-evaluate-authors-strong-suites-for-two-more-target-kinds: backlog
+  1-25-close-seeded-weaknesses-through-the-gap-loop: backlog
+  1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog
