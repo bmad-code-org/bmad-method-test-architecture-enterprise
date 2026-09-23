@@ -5,7 +5,7 @@ stepsCompleted:
   ['step-01-detect-mode', 'step-02-load-context', 'step-03-risk-and-testability', 'step-04-coverage-plan', 'step-05-generate-output']
 lastStep: 'step-05-generate-output'
 nextStep: ''
-lastSaved: '2026-09-22'
+lastSaved: '2026-09-23'
 inputDocuments:
   - '_bmad-output/planning-artifacts/evaluate/epics.md'
   - '_bmad-output/planning-artifacts/evaluate/SPEC.md'
@@ -14,6 +14,7 @@ inputDocuments:
   - '_bmad-output/planning-artifacts/evaluate/eval-quality-vocabulary.md'
   - '_bmad-output/planning-artifacts/evaluate/target-kind-adapter-mapping.md'
   - '_bmad-output/planning-artifacts/evaluate/input-notes.md'
+  - '_bmad-output/planning-artifacts/evaluate/evaluation-framework-facts.md'
   - 'AGENTS.md'
   - 'package.json'
   - '.github/workflows/quality.yaml'
@@ -37,20 +38,20 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.16 of `epics.md`. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.26 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
-- Risks identified: 24
-- High-priority risks (score 6 or more): 14, two of them at 9 as the stories were first written (R1-21, R1-22), each closed by a corrected acceptance criterion
-- Dominant categories: TECH (engine boundary, runtime moves, shape tests) and DATA (rollback and evidence integrity)
+- Risks identified: 37
+- High-priority risks (score 6 or more): 21, two of them at 9 as the stories were first written (R1-21, R1-22), each closed by a corrected acceptance criterion
+- Dominant categories: TECH (engine boundary, runtime moves, evaluator isolation, shape tests), DATA (rollback, evidence and held-out integrity) and BUS (guidance that looks complete and produces weak evaluations)
 
 **Coverage summary:**
 
-- P0: 45 scenarios over the runtime's integrity paths (rollback, verdict source, infrastructure classification, the dogfood proof)
-- P1: 32 scenarios over authoring checks, adapters and registration
-- P2: 8 scenarios over guidance text, packaging and documentation counts
-- New `npm test` scripts: `test:trial-set-scoring`, `test:evaluate-boundaries`, `test:evaluate-check`, `test:evaluate-preflight`, `test:evaluate-mutation`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-mcp`, `test:evaluate-api`, `test:evaluate-guidance`, each with its own `quality.yaml` step in the `validate` job
+- P0: 81 scenarios over the runtime's integrity paths (rollback, verdict source, infrastructure classification, evaluator isolation, held-out redaction, calibration, the dogfood proof, the behavioral proofs of guidance)
+- P1: 67 scenarios over authoring checks, adapters, registration, the evaluation layer and craft headings
+- P2: 12 scenarios over guidance text, packaging and documentation counts
+- New `npm test` scripts: `test:trial-set-scoring`, `test:evaluate-boundaries`, `test:evaluate-check`, `test:evaluate-preflight`, `test:evaluate-mutation`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-evaluators`, `test:evaluate-mcp`, `test:evaluate-api`, `test:evaluate-workflow`, `test:evaluate-tool-use`, `test:evaluate-promptfoo`, `test:evaluate-partitions`, `test:evaluate-calibration`, `test:evaluate-interpret`, `test:evaluate-guidance`, `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:evaluate-learned-framework`, each with its own `quality.yaml` step in the `validate` job
 
 **Corrections made to `epics.md` in this step:** acceptance criteria in fourteen stories were untestable or wrong as written. Each is listed with its reason under "Acceptance Criteria Corrected In epics.md" and the corrected text is already in `epics.md`.
 
@@ -66,7 +67,8 @@ TeA's suites are plain Node scripts using `node:assert`, a header comment statin
 | Contract | An artifact validated against eval-quality's published schemas or the runtime-owned schemas | `evaluation.json` template against the runtime schema |
 | Guidance | A structured read of prompt content in the skill (`SKILL.md`, `references/`, `assets/`) that fails when a required passage or marker is removed | `test:evaluate-guidance` |
 | Replay | Stored observations and sealed records re-scored through the CLI with no target launch | Story 1.2's `test:trial-set-scoring`, which re-scores stored replay records as a three-trial set through `eval-quality score` |
-| Live | A real run of a skill through the local Claude Code CLI on the owner's subscription, recorded as evidence | Story 1.16's proof run |
+| Live | A real run of a skill through the local Claude Code CLI on the owner's subscription, recorded as evidence | Story 1.16's proof run; the authoring, gap-loop and learned-framework sessions of Stories 1.24 to 1.26 |
+| Behavioral guidance | A live authoring session whose committed output is then re-run deterministically in `npm test` and must score strong | `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:evaluate-learned-framework` |
 
 Live runs never enter `npm test`. Their evidence is recorded and then held by deterministic checks.
 
@@ -92,6 +94,13 @@ Scores use probability (1 to 3) times impact (1 to 3). Six or more requires a mi
 | R1-21 | OPS | The shipped runtime crashes for every adopter: code moved from `test/lib/` requires `ajv`, a devDependency, and every in-repo test stays green because devDependencies are installed | 3 | 3 | 9 | `ajv` moves to `dependencies`; a packed-install case installs the packed tarball with `--omit=dev` and runs `tea-evaluate check` to exit 0 (Story 1.4 corrected) | 1.4 |
 | R1-22 | OPS | The dogfood proof cannot start: TEA is not installed into its own repository, so `_bmad/tea/config.yaml` does not exist for the skill's activation contract | 3 | 3 | 9 | Story 1.16 writes a gitignored `_bmad/tea/config.yaml`, invokes the skill by path and records both (Story 1.16 corrected) | 1.16 |
 | R1-23 | TECH | The dogfood mutated arm does not manifest because the mutated behavior is restated in several guides the model also reads, so the run exits 11 | 2 | 3 | 6 | The discharged output is defined in one place in `references/`; the worker confirms manifestation once on the disposable copy before the recorded run | 1.16 |
+| R1-25 | TECH | An evaluator reads the answers: a sealed-brief agent or command evaluator receives oracle checks, `testData` or the interaction plan and satisfies them without exercising the behavior | 2 | 3 | 6 | A stub agent adapter captures the whole prompt and tool configuration and the test scans it for every `check` string, `testData` literal and step ID; the bridge exposes brief-permitted operations only | 1.17 |
+| R1-26 | TECH | The runtime grows framework-specific importers or re-implements ingest checks (quote and citation verification), creating a second verdict path and a release per framework | 2 | 3 | 6 | The `cli` layer's dependency-direction `allow` list names no framework, so `test:direction` fails any framework import whatever its name; a secondary name scan in `test:evaluate-boundaries`; an unwitnessed quote reaches `score` unchanged and eval-quality returns Invalid; Stories 1.20 and 1.26 record an empty `cli/` diff | 1.17, 1.20, 1.26 |
+| R1-28 | DATA | Held-out probe content reaches the gap stage, so the evaluation is tuned to the probes meant to test it | 2 | 3 | 6 | `gap-view.json` carries held-out probes as ID, class and outcome only, asserted by a content scan; Story 1.25's transcript shows no held-out file read | 1.21, 1.25 |
+| R1-29 | TECH | Judge calibration leaks the labels to the judge, or an uncalibrated judge's scores count | 2 | 3 | 6 | Stub judge capture shows no `expectedLevel`; agreement below threshold exits 11 with no record; calibration digest carried as `decodingParameters["tea.judgeCalibrationDigest"]` in `EvaluatorConfiguration`, whose strict schema has no other slot | 1.21 |
+| R1-30 | TECH | `interpretation.json` or `partitions.json` restates outcomes differently from the evidence artifact, a second verdict path | 2 | 3 | 6 | Byte comparison of every copied field; a key allow-list forbids added outcomes, verdicts, rates or claim scores | 1.21, 1.22 |
+| R1-31 | BUS | Guidance passes every term and heading test and still produces weak corpora or contracts | 3 | 2 | 6 | Stories 1.24 to 1.26: live authoring on two more kinds, seeded-weakness closure and an unfamiliar framework, each committed and re-run to a defined strong state in `npm test`; tagged worked examples compile | 1.12 to 1.14, 1.23 to 1.26 |
+| R1-32 | TECH | A live authoring session is contaminated: it reads the hand-built fixture evaluations, `SEEDED.md` or held-out probes, so the proof proves nothing about the guidance | 2 | 3 | 6 | Sessions run in a temporary folder holding only the skill, the target and its files; transcript file reads are cited in completion notes; the reviewer checks them | 1.24, 1.25, 1.26 |
 
 ### Medium-Priority Risks (Score 3 to 4)
 
@@ -105,6 +114,12 @@ Scores use probability (1 to 3) times impact (1 to 3). Six or more requires a mi
 | R1-17 | OPS | The API conformance template needs endpoints (redirect chain, slow and oversize responses) no deployed adopter target offers, so the `pr` tier would need a live target | 2 | 2 | 4 | The conformance template starts its own loopback stub server (Story 1.11 corrected) |
 | R1-18 | BUS | Live nondeterminism in the dogfood clean arm produces `false-positive` and a FAIL on the proof | 2 | 2 | 4 | A behavior with a crisp deterministic oracle; trial count set explicitly; any FAIL is recorded as found and routed through the gaps stage as the next action; the run is recorded once |
 | R1-19 | TECH | A rubric judge runs when no rubric is declared, putting a model call into a deterministic arm | 1 | 3 | 3 | `test:evaluate-arms` counts judge invocations through a stub adapter: zero without a rubric |
+| R1-27 | OPS | Framework devDependencies (AgentEvals pulls a LangChain dependency tree; promptfoo declares `engines.node >=22.22.0`) break installation, licences or lockfile age | 2 | 2 | 4 | `test:licences`, `test:lockfile-age`, `test:supply-chain` in Stories 1.19, 1.20, 1.26; the promptfoo test checks `.nvmrc` before spawning |
+| R1-33 | TECH | The "unfamiliar" framework of Story 1.26 is already described in the skill, so the learn-on-the-go procedure is never exercised | 2 | 2 | 4 | `test:evaluate-learned-framework` greps the skill directory for the framework's name |
+| R1-34 | TECH | Worked examples in the guides drift from eval-quality's schemas as the engine floats | 2 | 2 | 4 | Tagged examples compile or validate inside `test:evaluate-guidance` against the installed engine |
+| R1-35 | TECH | A `captured` binding resolves from `testData` and the workflow test passes on a constant | 2 | 2 | 4 | The workflow fixture mints a fresh identifier per run |
+| R1-36 | OPS | Verified framework facts drift as versions float | 3 | 1 | 3 | Each framework story re-verifies the facts against the installed version and corrects `evaluation-framework-facts.md` |
+| R1-37 | BUS | A request to evaluate a vendor model is carried out as asked | 1 | 3 | 3 | Vendor-model passage asserted by the guidance test; recorded redirect in Story 1.24 |
 
 ### Low-Priority Risks (Score 1 to 2)
 
@@ -119,14 +134,14 @@ Scores use probability (1 to 3) times impact (1 to 3). Six or more requires a mi
 | --- | --- | --- | --- | --- |
 | Security | NFR3 (`web` never emitted), NFR4 (signature channels), AD-20 (only declared environment keys reach a target, `PATH` never declared) | R1-12, R1-13 | `test:evaluate-check` cases; command conformance's environment-key denial through `createCommandLineAdapter` | `npm test` output |
 | Reliability | AD-8 rollback proof; AD-7 infrastructure classification | R1-01, R1-10, R1-11 | `test:evaluate-mutation`, `test:evaluate-run` | `npm test` output; Story 1.16 rollback digests |
-| Maintainability | NFR1 single engine, AD-5 single driver, NFR6 floating versions | R1-02, R1-06, R1-07 | `test:evaluate-boundaries`; Story 1.15 float | `npm test` output; `git diff -- package.json package-lock.json` |
+| Maintainability | NFR1 single engine, AD-5 single driver, NFR6 floating versions, NFR10 framework-neutral runtime | R1-02, R1-06, R1-07, R1-26 | `test:evaluate-boundaries`; Story 1.15 float; empty `cli/` diffs in Stories 1.20 and 1.26 | `npm test` output; `git diff -- package.json package-lock.json`; completion notes |
 | Performance | UNKNOWN: no threshold stated for `npm test` duration or live run cost | R1-20 | Measured and recorded per story | Completion notes |
 
 Unknown threshold: no source states a limit on `npm test` wall time or on live proof duration. Recorded as unknown; stories report measured values.
 
 ## Entry Criteria
 
-- [ ] eval-quality 4.0.0 is published, carrying Story 1.1's export and trial-set scoring, and the engine check exits 0 in the TeA worktree
+- [ ] The engine check exits 0 in the TeA worktree on the published eval-quality package TeA's devDependency resolves (4.0.0 or later, carrying Story 1.1's export and trial-set scoring)
 - [ ] `npm test` is green on the TeA worktree before Story 1.2's change (the baseline every later failure is compared with)
 - [ ] The local Claude Code CLI runs non-interactively on the build machine (needed by Stories 1.3 and 1.16)
 
@@ -135,6 +150,7 @@ Unknown threshold: no source states a limit on `npm test` wall time or on live p
 - [ ] Every P0 and P1 scenario below exists and passes in `npm test`
 - [ ] Every acceptance criterion's revert check was exercised once by the worker (revert the change locally, observe the named failure, restore) and the observation is in the completion notes
 - [ ] Story 1.16's proof record holds every item in "The Dogfood Proof" below
+- [ ] The committed outputs of Stories 1.24, 1.25 and 1.26 reach their defined strong states in `test:evaluate-authoring`, `test:evaluate-gap-loop` and `test:evaluate-learned-framework`, and each session's transcript shows no read outside its permitted folder
 - [ ] `git diff -- package.json package-lock.json` shows no `file:` or `.tgz` spec
 
 ## Acceptance Criteria Corrected In epics.md
@@ -152,6 +168,7 @@ Unknown threshold: no source states a limit on `npm test` wall time or on live p
 | 1.11 | The conformance suite needs endpoints no deployed target offers; an ESM import cannot be spied on | A self-started loopback stub server; an injected evaluator |
 | 1.13 | "once filled from the example" had no mechanical meaning | A fill-values file and a failing unfilled-placeholder case |
 | 1.15 | `evalType` is a closed enum in `test/schema/suite-manifest.js`, `eval:all` spawns every suite's harness, and three counters count only `behavioral`, so Story 1.16's registration would leave the skill unaccounted | Schema branch, `eval:all` routing and counters named, with a revert case; AD-14 case added |
+| 1.3 to 1.16 (amendment 2026-09-23) | The plan gap audit found eleven partial and two missing items: guides specified as term lists, no evaluation-layer choice, no workflow or calling-agent fixture, no held-out probes or judge calibration, no `seal` in the skill stage, fixed CI membership | Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 extended; Stories 1.17 to 1.26 added; scenarios below |
 | 1.16 | TEA is not installed into its own repository, so the activation contract had no config to load; the behavior's channel was unconstrained; a multiply-stated behavior may not manifest under a one-file mutation; the worktree `shasum` proved an untouched tree and was labelled rollback proof | Setup steps; stdout or exit code; single-source output with a manifestation check; the independent CLI re-score; relabelled check |
 
 ## Coverage Plan By Story
@@ -191,7 +208,7 @@ Levels: static (install test, description validator), contract (routing contract
 | Lean files present, house files absent | `test/test-installation-components.js` lean set: requires `SKILL.md`, `customize.toml`, `references/`, `assets/`; forbids `workflow.yaml`, `steps-c/`, `steps-e/`, `steps-v/`, `instructions.md`, `checklist.md`, `scripts/` | Static | P0 | Adding `workflow.yaml` to the skill fails the lean set |
 | Lean discriminator | Same file: a skill is lean when it has neither `workflow.yaml` nor `steps-c/`; `bmad-teach-me-testing` stays on the house set; a synthetic temp skill with `steps-c/` and no `workflow.yaml` is classified house | Static | P0 | Changing the rule to "no `workflow.yaml`" moves `bmad-teach-me-testing` to the lean set and fails its forbidden-file assertions |
 | Activation contract | Lean set asserts the `resolve_customization.py` line, `{workflow.persistent_facts}` and `_bmad/tea/config.yaml` in `SKILL.md`, and `persistent_facts = []` and `on_complete` in `customize.toml` | Static | P1 | Deleting any line fails |
-| Stage list points at `references/` files | `test/test-evaluate-guidance.js` (created and chained here as `test:evaluate-guidance`, with its `quality.yaml` step) parses the stage list in `SKILL.md` and asserts eleven stages, each naming an existing `references/<stage>.md` | Guidance | P1 | Removing a stage entry or file fails |
+| Stage list points at `references/` files | `test/test-evaluate-guidance.js` (created and chained here as `test:evaluate-guidance`, with its `quality.yaml` step) parses the stage list in `SKILL.md` and asserts twelve stages, the `evaluator` stage among them, each naming an existing `references/<stage>.md` | Guidance | P1 | Removing a stage entry or file fails |
 | `module-help.csv` EV row, agent menu EV, marketplace path, `tea_evaluations_folder` default `evals`, `expectedMenu` | Install test assertions, one per item | Static | P0 | Each revert fails `test:install` |
 | Routing intent and regenerated contracts | `test:contract-sources`, `test:probe-sources` (`--check`), `test:eval-routing-data`; `probeStepBound` held by `test:contracts` | Contract | P1 | Reverting the regeneration fails `--check` |
 | Historical routing evidence re-anchored | `test/test-routing-evidence.js` holds each recorded case to a per-case snapshot under `test/results/live-eval-remediation/story-1-3/cases/`, extracted while the whole-file digest still equals the contract's `fixtureDigest`, with a new per-case sha256; added live cases pass, a changed recorded case fails | Static | P0 | Editing one recorded intent's text fails |
@@ -207,7 +224,7 @@ Levels: unit, integration over real eval-quality, contract, static. Files create
 
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
-| Bin, optional `peerDependencies >=3.4.0`, release metadata and guard-publish cover both | `test:release-metadata`, `test:guard-publish` gain assertions for `bin["tea-evaluate"]`, the peer range and `peerDependenciesMeta` optional | Static | P1 | Removing the bin, peer entry or optional flag fails |
+| Bin, optional `peerDependencies >=4.0.0`, release metadata and guard-publish cover both | `test:release-metadata`, `test:guard-publish` gain assertions for `bin["tea-evaluate"]`, the `>=4.0.0` peer range and `peerDependenciesMeta` optional | Static | P1 | Removing the bin, lowering the floor below 4.0.0, or dropping the optional flag fails |
 | Runtime installs and runs for an adopter | Packed-install case in `test:evaluate-check`: `npm pack`, install into a temp folder with `--omit=dev` beside the local engine, `tea-evaluate check --evaluation <fixture>` exits 0 | Integration | P0 | Moving `ajv` back to `devDependencies` fails with a module-not-found crash |
 | CommonJS runtime, one engine module, `cli` externals listed | `test:direction` with an `allow` list naming every external `cli/` uses; `test:evaluate-boundaries` asserts `cli/lib/evaluate/engine.js` is the only file naming `eval-quality` in `import(` or `require(`, subpaths and synchronous requires included | Static | P1 | A second engine import anywhere under `cli/` fails; removing a listed external while `cli/` imports it fails `test:direction` |
 | Engine boundary (AD-1, AD-6) | `test:evaluate-boundaries` scans bindings obtained from `engine.js` only (so `ajv.compile` is untouched) and fails on `runScore`, `preflightFromObservations`, `compile` or `seal` | Static | P0 | Adding `engine.runScore(` anywhere in `cli/` fails |
@@ -265,6 +282,7 @@ Levels: integration over real eval-quality, contract, unit. File: `test/test-eva
 | Requests only from `interactionPlan` bound from `testData` | Stub target logs its received input; assert it equals the bound plan literal | Integration | P1 | A hard-coded request differs from the logged input |
 | Deterministic evaluator over `resolveCheck` | Unit: a synthetic observation resolves to the expected finding set | Unit | P1 | Swapping the evaluator changes the finding |
 | `IsolationManifest` per trial set, `EvaluatorConfiguration` per run with `sealedBriefDigest`, `run.json` fields | Contract validation against eval-quality schemas; `sealedBriefDigest` equals the digest of the persisted sealed brief | Contract | P0 | A stale digest fails equality |
+| A no-model run's `EvaluatorConfiguration` validates: `modelSnapshot` is `none`, `systemPromptDigest` is `digestBytes` over the empty byte string | Schema validation of the generated configuration | Contract | P1 | Leaving either field empty fails validation |
 | Infrastructure exit yields no record, invocation exits 12 | Stub exiting 4 in one trial | Integration | P0 | Recording the trial yields a record and exit 0 or 2 |
 | `score` once per probe, every `--record`, exit passed through | A logging shim at `TEA_EVALUATE_ENGINE_CLI` records one `score` argv per probe with every trial's `--record`; with the real engine, a direct `eval-quality score` on the persisted inputs gives equal exit and byte-equal evidence on a passing and a FAIL fixture | Integration over real eval-quality | P0 | Computing the exit in the runtime makes the FAIL fixture's exits differ |
 | Artifacts validated before the CLI | Corrupt one field in memory through a test hook; assert the runtime refuses before spawning | Contract | P1 | Validation removed lets the CLI reject with exit 4 instead, which the test distinguishes |
@@ -284,6 +302,24 @@ File: `test/test-evaluate-arms.js` (`test:evaluate-arms`). Levels: integration o
 | Gameability arm launches no target | Stub target writes a launch marker; assert no marker; assert both gameability evidence fields and `qualifyProbe` returns no failure code | Integration | P0 | Launching the target writes the marker |
 | Historical arm over two revisions; refused with fewer | Temp git repo with a fix commit; assert fail-before, pass-after, seeded-fault leg `cwd` at the pre-fix revision; a one-commit repo yields a refused probe with a reason | Integration | P1 | Routing to HEAD fails the fail-before assertion |
 | Judge only with a rubric, through `agent-adapters.js`, recorded in `judgeConfiguration` | Stub agent adapter counts calls: one per judged trial with a rubric, zero without | Integration | P0 | An unconditional judge call makes the zero-rubric count non-zero |
+
+### Story 1.17: Drive any evaluation layer through one import contract
+
+File: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), stub evaluators under `test/fixtures/evaluate/evaluators/`. Levels: integration over real eval-quality, contract, static.
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| `check` refuses an unknown kind, a missing `mapping.json`, a key bound to an undeclared oracle, behavior or criterion, rubric levels that differ from the anchored scale, a missing records directory | One `test:evaluate-check` case per refusal, each exit 10 | Integration | P1 | Deleting one rule turns its case to exit 0 |
+| Judgment rows (with `quoteChannel`, `artifactId` on the `artifact` channel, `comment` on `fail`) convert through `mapping.json` into `Finding`-valid findings (`findingType: defect`, runtime-minted `findingId`, `summary` from `comment`, `evidenceArtifacts: []`, `quotedEvidence { quote, channel, artifactId }`), dispositions and judge results; every record validates against the published `sealed-run-record` schema; a clean arm `passed-clean-control`, a mutated arm `caught` | Stub `command` evaluators, one per row shape, run end to end through `score`; a `fail` row with no `quoteChannel`, and an `artifact` row with no `artifactId`, each fail the row schema and exit 12 | Integration over real eval-quality | P0 | A conversion that drops `findingType` or `evidenceArtifacts` fails schema validation before `score`; one that drops `observationIds` makes the mutated outcome something other than `caught` |
+| The runtime copies no ingest rule | A stub whose `quote` is absent from the cited observation reaches `score` unchanged, and eval-quality returns Invalid | Integration over real eval-quality | P0 | A runtime that pre-filters quotes produces a record the engine scores differently, which the assertion on the Invalid result catches |
+| Evaluator crash, non-zero exit or schema-invalid output exits 12 with no record; stdout and stderr persisted | Three stubs; assert exit 12, no record, byte-equal captured streams | Integration | P0 | Recording a trial from invalid output yields a record and a scored exit |
+| Sealed-brief agent receives the brief and nothing else | Stub agent adapter captures prompt and tool configuration; assert the brief is present and no oracle `check`, `testData` literal, plan step ID, operation ID or path template appears | Integration | P0 | Adding the contract to the prompt, or naming operations in the bridge's tool descriptions, makes the scan find them |
+| Bridge exposes one tool per brief interface with a kind-generic call shape, maps authorized calls to the contract `operationId`, and records `evaluator-chosen` observations with routed `cwd`; a call the registry authorization does not grant is denied with eval-quality's denial reason and no launch | MCP client drives the bridge for each interface kind; launch marker absent on denial; an authorized call matching no declared operation is recorded unmatched | Integration | P0 | A bridge that forwards every call writes the marker |
+| `EvaluatorConfiguration` validates against its strict published schema, with kind and digests under `decodingParameters` (`tea.evaluatorKind`, `tea.evaluatorExecutableDigest`, `tea.evaluatorTreeDigest`) | Schema validation; one byte edited under `evaluator/` changes the configuration digest, the records' `evaluatorConfigurationDigest` and the scoring version | Contract | P1 | Omitting the tree digest leaves the configuration digest unchanged after the edit |
+| `records` evaluator validated and passed through unchanged; invalid record exits 10 before any engine call | Logging engine shim shows no call for the invalid record; valid records reach `score` byte-identical | Integration | P1 | Removing validation lets the shim log a `score` call |
+| Row cardinality: unmapped key or duplicate key fails the row schema, exit 12; zero rows for a trial with a mapped oracle exits 12 | Three stub evaluators, one per shape | Integration | P1 | Accepting a duplicate row produces two findings for one oracle, which the case catches |
+| `evaluator.timeoutMs` required for `command`; a hung evaluator's process group is killed at the timeout, its streams persisted, no record, exit 12 | `test:evaluate-check` case for a missing timeout; a stub that never exits | Integration | P0 | Removing the timeout leaves the test hanging until the harness timeout, which fails it |
+| No framework name under `cli/` | `test:evaluate-boundaries` scan over a name list held in the test | Static | P0 | Adding `require('agentevals')` under `cli/` fails |
 
 ### Story 1.10: Evaluate a stdio MCP tool server
 
@@ -306,13 +342,81 @@ File: `test/test-evaluate-api.js` (`test:evaluate-api`), fixture `test/fixtures/
 | Conformance template starts its own loopback stub server and passes `runEnvironmentProbePortConformance` | Run the rendered conformance file; assert nineteen outcomes pass and the stub server is closed in `finally` | Integration over real eval-quality | P0 | Pointing conformance at a deployed URL fails in the offline test |
 | Loopback fixture: conformance, preflight, `passed-clean-control`, `caught`; contract kind `api`; unlisted address denied with eval-quality's reason | End to end over the fixture | Integration | P0 | Chain break changes outcome |
 
+### Story 1.18: Evaluate a workflow target through `after` and `captured` bindings
+
+File: `test/test-evaluate-workflow.js` (`test:evaluate-workflow`), fixture `test/fixtures/evaluate-workflow/`.
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Steps issued in `after` order; `sequence` increases in issue order | Read observations of each trial | Integration | P1 | Issuing in array order with the plan reversed breaks the ordering assertion |
+| `captured` binding carries the identifier minted in the same trial | Assert `read-back` `callInputs` equals `create`'s returned identifier; the fixture mints a fresh one per run | Integration | P0 | Binding from `testData` fails equality |
+| Preflight passes; clean `passed-clean-control`; mutated `caught` | Evidence artifacts | Integration over real eval-quality | P0 | A chain break changes the outcome |
+| Missing captured value: dependent step not issued, no observation, outcome other than `caught` | A fixture variant whose `create` omits the identifier | Integration | P1 | Issuing the step with an empty binding produces an observation the test forbids |
+| Capture and `after` cycle refused with `binding-cycle`, exit 4 passed through | Compile a cyclic contract variant | Integration over real eval-quality | P2 | A mapped exit differs |
+
+### Story 1.19: Evaluate a tool-use calling agent through its own command, judged by AgentEvals
+
+File: `test/test-evaluate-tool-use.js` (`test:evaluate-tool-use`), fixture `test/fixtures/evaluate-tool-use-agent/`.
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Evaluator runs AgentEvals' `createTrajectoryMatchEvaluator` in `strict` mode over the cited stdout trajectory and prints judgment rows | Run the fixture evaluator directly on a recorded clean and wrong-tool trajectory; assert one `pass` and one `fail` row citing the observation | Integration | P0 | An evaluator that ignores the trajectory prints the same row for both |
+| Clean `passed-clean-control`; mutated (wrong tool) `caught`; the contract's own oracle names the first tool | Evidence artifacts | Integration over real eval-quality | P0 | An always-`pass` evaluator makes the mutated outcome something other than `caught`, which the test observes |
+| Agent's own command is the authorized executable | Assert the preflight authorization's executable is the stub agent command | Integration | P1 | Routing through the skill runner fails equality |
+| Scored AgentEvals result maps to `judgeResults` when the score is an anchored level; exit 12 otherwise | Unit cases over `{ key, score, comment }` objects | Unit | P1 | Accepting any number produces a record for the out-of-scale score |
+| devDependencies at `latest`; licences, lockfile age and supply chain pass; no framework name in `cli/` | `test:release-metadata`, `test:licences`, `test:lockfile-age`, `test:supply-chain`, `test:evaluate-boundaries` | Static | P1 | A pinned spec fails the float assertion |
+| Facts re-verified against the installed version | Completion notes; `evaluation-framework-facts.md` diff reviewed | Manual evidence | P2 | Recorded evidence |
+
+### Story 1.20: Import a second framework's results: promptfoo
+
+File: `test/test-evaluate-promptfoo.js` (`test:evaluate-promptfoo`), fixture `test/fixtures/evaluate-promptfoo/`.
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Evaluator runs `promptfoo eval --assertions --model-outputs --output <results.jsonl> --no-cache` with telemetry and update checks off, reads the JSONL rows, prints one row per `componentResults` entry, falls back to `gradingResult` when `componentResults` is absent, and prints a `fail` row for an error row with no `gradingResult` | Run the fixture evaluator on a multi-assertion row, a single-assertion row with no `componentResults`, and an error row | Integration | P0 | Reading only `componentResults` drops the single-assertion row, which the case catches |
+| Clean `passed-clean-control`; mutated `caught` | Evidence artifacts | Integration over real eval-quality | P0 | A chain break changes the outcome |
+| No `cli/` change across the story | `git diff --stat -- cli/` recorded; `test:evaluate-boundaries` afterwards | Static, manual evidence | P1 | A framework import under `cli/` fails the scan |
+| Node engine floor met by `.nvmrc`, reported by name when unmet | The test reads `.nvmrc` and promptfoo's `engines.node` before spawning | Static | P2 | A lower major in a temp `.nvmrc` produces the named message |
+
+### Story 1.21: Hold out probes and calibrate rubric judges
+
+Files: `test/test-evaluate-partitions.js` (`test:evaluate-partitions`), `test/test-evaluate-calibration.js` (`test:evaluate-calibration`), new `test:evaluate-check` cases.
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| `heldOutProbes` refusals: unknown ID, clean control, behavior left with no development probe | `test:evaluate-check` cases, exit 10 | Integration | P1 | A removed rule turns its case to exit 0 |
+| `--partition` runs the named partition only | Executed-probe log per partition | Integration | P1 | Ignoring the flag runs every probe |
+| `gap-view.json` carries held-out probes as ID, class and outcome only | Scan for each held-out probe's rationale, defect summary, `testData` binding and mutation text | Integration | P0 | Writing a full probe into the file fails the scan |
+| Partition outcomes equal evidence fields byte for byte | Compare each copied field | Integration over real eval-quality | P0 | A recomputed outcome differs on a fixture whose evidence the test edits |
+| Calibration refusals: criterion with no item, anchored level with no item, missing `minimumAgreement` | `test:evaluate-check` cases, exit 10 | Integration | P1 | A removed rule turns its case to exit 0 |
+| Calibration runs before the first trial through the same judge path with labels withheld | Stub judge captures input; assert no `expectedLevel` value; assert calibration file written before any record | Integration | P0 | Passing the item whole puts the label in the capture |
+| Agreement below threshold exits 11 with no record | Stub judge disagreeing on one of two items, threshold 0.9 | Integration | P0 | Skipping the gate yields records and a scored exit |
+| Calibration digest carried as `decodingParameters["tea.judgeCalibrationDigest"]` | Schema validation of the configuration; editing one calibration item changes the configuration digest and the scoring version | Contract | P1 | Omitting the digest leaves the configuration digest unchanged |
+
+### Story 1.22: Attribute findings for interpretation
+
+File: `test/test-evaluate-interpret.js` (`test:evaluate-interpret`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| `operationPhases` refusals: unclassified permitted operation, phase for an undeclared operation | `test:evaluate-check` cases, exit 10 | Integration | P1 | A removed rule turns its case to exit 0 |
+| Findings traced to observations, quotes, oracle and evidence pointers; partitioned by phase | Fixture records with process and outcome findings | Integration | P1 | Dropping the pointer lookup leaves pointers empty, which the assertion catches |
+| First material error is the lowest `sequence` among `material` and `critical` citations | Sequences 7, 3, 12 name 3; a `low` finding at 1 leaves it at 3 | Unit | P0 | Ignoring severity names 1 |
+| Outcomes, verdict and strength copied from evidence byte for byte; no added outcome, verdict, rate or claim score | Field comparison and a key allow-list over the file | Integration over real eval-quality | P0 | A computed field outside the allow-list fails |
+
 ### Story 1.12: Inspect the target, capture requirements and design the corpus
 
 Levels: guidance, contract. File: `test/test-evaluate-guidance.js`.
 
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
-| Inspection maps five kinds as AD-4 does, web to `api`, clarifying question on ambiguity, kind only in `evaluation.json` | Parse the mapping table in `references/inspection.md` and compare row by row with a copy of AD-4's table held in the test | Guidance | P1 | Editing one row fails |
+| Inspection maps six kinds as AD-4 does, web to `api`, clarifying question on ambiguity, kind only in `evaluation.json` | Parse the mapping table in `references/inspection.md` and compare row by row with a copy of AD-4's table held in the test | Guidance | P1 | Editing one row fails |
+| Five inspection headings (entry points, behaviors, surfaces, existing tests, failure history) with worked examples; inspection record template | Heading markers; template section parse | Guidance | P1 | Removing one heading fails |
+| Vendor-model passage and worked redirect | Marker plus the redirect example's presence | Guidance | P0 | Removing the passage fails |
+| Six intake question families with example questions and worked answers; statement template sections match | Heading markers; template section set equals the family set | Guidance | P1 | Removing one family or section fails |
+| `requirements` path and digest in `evaluation.json` | `test:evaluate-check` case: a template-filled `evaluation.json` validates, one missing the digest fails | Contract | P1 | Removing the schema field fails the valid case |
+| Six per-kind corpus headings, each with representative, negative and malformed, gameability and held-out sub-headings | Heading tree parse | Guidance | P1 | Removing one sub-heading fails |
+| Tagged worked corpora validate against eval-quality's probe schema, rationales tagged by section | Extract tagged blocks; validate; parse rationale tags | Contract | P0 | Corrupting one example fails |
 | Intake writes to `{test_artifacts}/evaluate/<evaluationId>/` and halts | Assert the halt marker and the path string | Guidance | P1 | Removing the halt fails |
 | Corpus names each CAP-3 rule and runs `digest` | Assert four rule markers and the `tea-evaluate digest` invocation | Guidance | P1 | Deleting a rule fails |
 | `evaluation.json` template validates against the runtime schema | Contract | Contract | P1 | Template drift fails |
@@ -322,8 +426,28 @@ Levels: guidance, contract. File: `test/test-evaluate-guidance.js`.
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
 | Contract guide covers sixteen authored and five identity fields, seven `forbiddenInputs`, non-null criterion | Guidance test reads the field list from `eval-quality/schemas/eval-contract.schema.json` `required` and asserts each is named | Guidance | P1 | Removing a field name fails |
-| Skeleton filled from `test/fixtures/evaluate/contract-fill.json` compiles exit 0; an unfilled placeholder fails | Substitute every `{{key}}` from the fill file, run `eval-quality compile`; a skeleton key absent from the fill file fails the test before compile | Integration over real eval-quality | P0 | Removing `forbiddenInputs` from the skeleton yields exit 4 |
+| Skeleton filled from `test/fixtures/evaluate/contract-fill.json` compiles and seals exit 0; an unfilled placeholder fails; `sourceSpecDigest` equals `digestBytes` over the fixture's `requirements.md` bytes | Substitute every `{{key}}` from the fill file, run `eval-quality compile` and `seal`; a skeleton key absent from the fill file fails the test before compile; compare the stamped digest | Integration over real eval-quality | P0 | Removing `forbiddenInputs` from the skeleton yields exit 4; stamping any other digest fails equality |
 | Oracle guide, adapter guide, stage halts on non-zero with the failure code | Guidance markers | Guidance | P2 | Removal fails |
+| Seven authoring-discipline rules, each with a worked fragment and the gap its absence produces | Heading per rule; tagged fragments compile inside the fill contract | Guidance, integration over real eval-quality | P0 | Removing a rule heading or corrupting its fragment fails |
+| Interaction-plan, sensitivity-witness and waiver headings with worked examples | Heading markers; tagged examples compile | Guidance | P1 | Removal fails |
+| What `seal` withholds and why | Marker naming checks, interaction plan and test data, and the digest's role | Guidance | P1 | Removal fails |
+| Skill stage runs `check`, `compile`, then `seal`, halting on non-zero | Parse the stage's command sequence | Guidance | P0 | Removing `seal` fails |
+| Oracle relation choice, exact checks with evidence pointers, anchored rubrics, calibration design; every tagged check and rubric compiles | Heading markers; compile tagged blocks | Guidance, integration over real eval-quality | P0 | An unanchored rubric example fails compile with `rubric-unanchored` |
+| Loose oracle shown with the degenerate response it accepts and the tightened oracle | Marker for the triple | Guidance | P1 | Removal fails |
+| Adapter guide covers every AD-4 row with a worked registry entry and cites the fixtures | Row set equals AD-4's; each cited fixture path exists | Guidance | P1 | Removing the workflow or calling-agent row fails |
+
+### Story 1.23: Teach choosing and building the evaluation layer
+
+Levels: guidance, integration (template rendering).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Duties of an evaluation layer mapped to evaluator kinds | Heading markers in `references/evaluator.md` | Guidance | P1 | Removing a heading fails |
+| Selection rubric: every option row with named criteria and a valid `evaluator.kind` | Parse the table; validate each kind against the runtime schema | Guidance, contract | P0 | Removing a row or naming an unknown kind fails |
+| Landscape states the list is illustrative | Marker | Guidance | P2 | Removal fails |
+| Learn-on-the-go steps and the `LEARNED.md` template sections | Step markers; template section parse | Guidance | P0 | Removing the executed-example step fails |
+| Vendor rule for the layer | Marker | Guidance | P1 | Removal fails |
+| Framework templates reproduce the Story 1.19 and 1.20 fixtures | Render each template into a temp copy of its fixture and run it to `passed-clean-control` and `caught` | Integration over real eval-quality | P0 | A template that drifts from its fixture changes the outcome |
 
 ### Story 1.14: Drive the run and interpret the gaps
 
@@ -333,6 +457,10 @@ Levels: guidance, contract. File: `test/test-evaluate-guidance.js`.
 | Harness asks for the three thresholds and fills no default | Guidance marker plus the Story 1.8 template contract test | Guidance | P1 | A default value fails the template test |
 | Runtime invocation per AD-20 and `node cli/evaluate.js` in TeA | Guidance markers for both forms | Guidance | P2 | Removal fails |
 | Mutation planning writes `M-NNN.mutation.json` per AD-19 | Guidance marker; the file shape is held by `check` | Guidance | P2 | Removal fails |
+| Realistic mutation headings per behavior class, each with a tagged mutation file; single-source rule; vendor refusal | Heading markers; tagged files validate against the runtime schema | Guidance, contract | P0 | Corrupting one example fails |
+| Harness risk table (deterministic and sampled targets at three risk levels) and the strict threshold rule | Table parse; marker for `caughtCount / validCount > catchThreshold` | Guidance | P1 | Removing a row fails |
+| Gaps readings: strength vector, loose oracle, process and outcome, first material error, held-out from `gap-view.json` | Heading markers | Guidance | P1 | Removal fails |
+| Author, rerun and rescore loop steps, held-out partition last | Ordered step parse | Guidance | P1 | Removing a step or reordering held-out first fails |
 
 ### Story 1.15: Float the engine pin and admit Evaluate-authored suites
 
@@ -348,6 +476,40 @@ Levels: guidance, contract. File: `test/test-evaluate-guidance.js`.
 
 Covered in full under "The Dogfood Proof" below.
 
+### Story 1.24: Evaluate authors strong suites for two more target kinds
+
+Levels: live (recorded), integration (deterministic re-run). File: `test/test-evaluate-authoring.js` (`test:evaluate-authoring`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Sessions run in a temporary folder with only the skill, the target and its two files | Transcript file reads recorded; the worker lists the folder before the session | Live evidence | P0 | A read outside the folder in the transcript fails the story's review |
+| `check`, `compile`, `seal` exit 0; committed replay inputs (observations, preflight verdict, sealed records, isolation manifests, evaluator configuration, policy, evidence) present | `test:evaluate-authoring` runs the three commands and checks the `evaluation/replay/` set | Integration over real eval-quality | P0 | Breaking the contract fails compile |
+| Both suites strong at `minimumTrialCount` as defined in the story, whatever evaluator kind was chosen | Replay the committed observations and records through `eval-quality preflight --observations` and `score` directly, with no target launch and no model call; produced evidence equals the committed evidence byte for byte; assert outcomes, class rates 1.0, PASS, no gap at or above the floor | Replay | P0 | Editing the committed contract or one committed observation changes the evidence and fails |
+| Each suite covers its kind's four corpus sections | Parse `rationale` section tags per probe | Integration | P1 | Deleting the held-out probes fails coverage |
+| Vendor-model request redirected; no mutation targets a model | Transcript excerpt in completion notes; scan committed mutations for model identifiers | Live evidence, static | P1 | Recorded evidence |
+
+### Story 1.25: Close seeded weaknesses through the gap loop
+
+File: `test/test-evaluate-gap-loop.js` (`test:evaluate-gap-loop`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Before evidence shows W1 (gameability probe unqualified or not `caught`) and W2 (`malformed-input` coverage gap) | Replay of `before/replay/` through `preflight` and `score`, byte-equal to the committed evidence | Replay | P0 | A before copy without the seeded weakness fails the assertion |
+| After evaluation strong | Replay of `after/replay/`, byte-equal to the committed evidence | Replay | P0 | Reverting the tightened oracle changes the evidence and fails |
+| Every changed file is named in the gap report | Diff `before/` against `after/`; parse the committed gap report | Static | P1 | An unexplained edit fails |
+| Session never read `SEEDED.md` or held-out probe files | Transcript file reads cited in completion notes | Live evidence | P0 | Recorded evidence |
+
+### Story 1.26: Learn an unfamiliar evaluation framework on the go
+
+File: `test/test-evaluate-learned-framework.js` (`test:evaluate-learned-framework`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Framework name absent from the skill directory | Recursive grep in the test | Static | P0 | Adding the name to a guide fails |
+| `LEARNED.md` holds framework, version, facts with sources, executed example and output, contradictions | Section parse | Static | P1 | Removing the executed example fails |
+| Minimal example executed against a known pass and fail before mapping | Transcript order in completion notes | Live evidence | P1 | Recorded evidence |
+| Clean `passed-clean-control`; mutated `caught`; no `cli/` change | Deterministic re-run; `git diff --stat -- cli/` recorded | Integration over real eval-quality | P0 | Breaking the mapping changes the outcome |
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce
@@ -358,12 +520,12 @@ A maintainer session (the overnight worker) runs `EV` on `bmad-testarch-evaluate
 
 The worker performs each step and records its output in `_bmad-output/implementation-artifacts/evaluate/epic-1-proof.md`:
 
-1. `tea-evaluate check` and `eval-quality compile` on `contract.json` exit 0.
+1. `tea-evaluate check`, `eval-quality compile` and `eval-quality seal` on `contract.json` exit 0, in the order the skill's stage runs them.
 2. `runs/<invocationId>/preflight-verdict.json` has `passed: true`, with `clean-control`, `seeded-faults-scoped` and `seeded-fault-fired` satisfied.
 3. The evidence artifact for the clean control carries `passed-clean-control` in `reducedProbeOutcomes`; the seeded probe carries `caught`; `trials.completedAttempts` is at least `minimumTrialCount` for each set; both `eval-quality score` exit codes are recorded.
 4. Rollback: the mutation evidence carries `preDigest`, `mutatedDigest` and `restoredDigest`, with `mutatedDigest` unequal to `preDigest` and `restoredDigest` equal to it, and the re-passed baseline leg resolves the clean-control oracle. Adopter tree untouched: `shasum -a 256` of the file in the worktree equals `preDigest` and `git status --porcelain` is identical before and after.
 5. Independent re-score: `eval-quality score` run directly from `node_modules/.bin`, outside `tea-evaluate`, over the persisted records, isolation manifests and evaluator configuration, reproduces each evidence artifact byte for byte (sha256 equal). This is the proof that the verdicts come from the CLI.
-6. `run.json` records `dirty: true`, the model and runner identity as fixed conditions, and the engine version with a note that it is the local tarball.
+6. `run.json` records `dirty: true`, the model and runner identity as fixed conditions, and the engine version: the published eval-quality release TeA's devDependency resolves (4.0.0 or later).
 7. The gaps Evaluate named, verbatim.
 
 A verdict other than PASS, or a `missed` seeded probe, is recorded as the finding it is. The run is recorded once, and the gaps stage output is the next action.
@@ -382,17 +544,17 @@ Staged, uncommitted overnight: `test/evaluations/bmad-testarch-evaluate/` (`eval
 ## Execution Strategy
 
 - **Pull request:** every `test:evaluate-*` script above runs in `npm test` and in its own `quality.yaml` step. All use stub targets or loopback fixtures, no secret, no model call.
-- **Manual, recorded:** Story 1.3's routing run and Story 1.16's proof run, through the local Claude Code CLI.
+- **Manual, recorded:** Story 1.3's routing run, Story 1.16's proof run, and the Story 1.24, 1.25 and 1.26 sessions, through the local Claude Code CLI; each of the last three is then held by a deterministic script.
 - **Nightly and weekly:** none in this epic; Epic 2 defines the `scheduled` tier.
 
 ## Resource Estimates
 
 | Priority | Scenarios | Effort range |
 | --- | --- | --- |
-| P0 | 45 | 40 to 60 hours |
-| P1 | 32 | 18 to 30 hours |
-| P2 | 8 | 3 to 6 hours |
-| Total | 85 | 61 to 96 hours, spread over sixteen stories |
+| P0 | 81 | 71 to 106 hours |
+| P1 | 67 | 37 to 61 hours |
+| P2 | 12 | 5 to 9 hours |
+| Total | 160 | 113 to 176 hours, spread over twenty-six stories |
 
 ## Quality Gate Criteria
 
@@ -407,7 +569,7 @@ Each score-6 risk above names its test and story. Verification for all of them i
 
 ## Assumptions and Dependencies
 
-1. The local tarball carries eval-quality main at 467e3a3 or later plus Story 1.1's export; its `package.json` version reads 3.4.0.
+1. The engine is the published eval-quality release, 4.0.0 or later, which carries trial-set scoring (#143) and Story 1.1's target-policy export (#158); its `package.json` version reads that release.
 2. `node_modules/.bin/eval-quality` is the CLI every integration test spawns; no test spawns a globally installed copy.
 3. The local Claude Code CLI is authenticated on the build machine.
 
@@ -418,7 +580,8 @@ Each score-6 risk above names its test and story. Verification for all of them i
 | `test/lib/` harness | Re-pointed at `cli/lib/evaluate/` | `test:probe-targets`, `test:probe-conformance`, `test:eval-replay`, `test:compare-eval-runs`, `test:automate-eval-fixture`, `eval:preflight` |
 | Routing suite | Menu grows to eleven items | `test:eval-routing-data`, `test:eval-routing-boundaries`, `test:eval-routing-evidence`, `test:contract-sources`, `test:probe-sources` |
 | Install and description validators | Lean shape admitted | `test:install`, `test:tea-workflow-descriptions` |
-| Package metadata | New bin and peer range | `test:release-metadata`, `test:guard-publish` |
+| Package metadata | New bin and peer range; framework devDependencies | `test:release-metadata`, `test:guard-publish`, `test:licences`, `test:lockfile-age`, `test:supply-chain` |
+| Agent adapters | Sealed-brief evaluator and bridge attachment | existing runner tests that load `cli/lib/agent-adapters.js`, `test:evaluate-evaluators` |
 
 ## Appendix
 

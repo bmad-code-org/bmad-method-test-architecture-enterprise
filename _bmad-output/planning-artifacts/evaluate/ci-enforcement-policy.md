@@ -4,7 +4,7 @@ What CAP-11 (CI enforcement wiring) and CAP-12 (evidence publishing) have to dec
 
 ## The three CI tiers TeA already proposed
 
-`docs/explanation/eval-quality-roadmap.md` section 5 names three tiers, unimplemented as a general pattern before Evaluate: **Deterministic** (every pull request; no credentials; compile, data validation, scorer replay), **Smoke** (manual and scheduled; one qualified case per suite; bounded model use), **Full matrix** (manual, scheduled, and release candidate; every suite at its required repetition count). CAP-11 wires an adopter's CI to this shape.
+`docs/explanation/eval-quality-roadmap.md` section 5 names three tiers, unimplemented as a general pattern before Evaluate: **Deterministic** (every pull request; no credentials; compile, data validation, scorer replay), **Smoke** (manual and scheduled; one qualified case per suite; bounded model use), **Full matrix** (manual, scheduled, and release candidate; every suite at its required repetition count). CAP-11 wires an adopter's CI to this shape. AD-10 splits these three into four runtime tiers: Deterministic is `pr`, Smoke is `merge`, and Full matrix is `scheduled` and `release`, matching the suite manifest mapping in the spine's Consistency Conventions.
 
 ## The CI evaluation set
 
@@ -45,7 +45,7 @@ For a completed CI run to be auditable without re-running it: the evidence artif
 
 ## Settled by architecture
 
-AD-11 settles CI ownership: Evaluate extends `bmad-testarch-ci`'s existing pipeline-generation step rather than generating a dedicated job per adopter. AD-10 settles which of the checks above are mandatory per tier: `pr`, `merge`, `scheduled`, and `release` each have a fixed check membership defined in `ci/evaluation-ci-plan.json`, replacing the three-tier sketch above as Evaluate's default shape for every adopter, not a TeA-specific convention.
+AD-11 settles CI ownership: Evaluate extends `bmad-testarch-ci`'s existing pipeline-generation step, so one skill owns every adopter's pipeline files. AD-10 settles tier placement: Evaluate's ci stage inspects the adopter's repository, existing CI, release flow, and risk profile and places each check, starting from AD-10's default table for `pr`, `merge`, `scheduled`, and `release` and recording a reason for every placement in `ci/evaluation-ci-plan.json`. Every deterministic check that needs no secret stays on `pr`: BEC compile validation, contract-source freshness (check 2, as `tea-evaluate check` comparing the contract's `sourceSpecDigest` with the confirmed requirements statement), oracle-vs-scorer agreement (check 3, over the committed baseline), the gameability arm, and the replay (check 7). Amended 2026-09-23; the earlier text fixed membership for every adopter.
 
 ## Open question
 

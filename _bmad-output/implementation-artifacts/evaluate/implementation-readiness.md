@@ -32,3 +32,23 @@ Date: 2026-09-22. Scope: `_bmad-output/planning-artifacts/evaluate/` (`SPEC.md` 
 - `sprint_plan.py` upgrades a story from disk only for a file named `<story-key>.md`. The Story 1.1 worker wrote `story-1.1.md`, so that upgrade does not fire for it.
 - Story H.1 is owner-only. It sits under a top-level `owner_handoff` key outside `development_status`, so no worker picks it up. A regeneration by `sprint_plan.py` keeps it, except with `--fresh`.
 - Story 1.1 runs in the eval-quality repository; its status is still tracked here.
+
+## Amendment Check: 2026-09-23
+
+Scope: the fully-stacked amendment that closes the plan gap audit (eleven partial and two missing items, seven uncovered eval-quality non-goals, and the audit addendum).
+
+**Verdict: PASS**, on the checks below.
+
+| Question | Result |
+| --- | --- |
+| Every audit item has a story and a testable criterion | Yes: `epics.md` "Plan gap audit closure" maps each item to its story; each criterion names a failing check |
+| Every new capability has a story | CAP-13 (evaluation layer) traces to 1.17, 1.19, 1.20, 1.23, 1.26; CAP-14 (held-out probes, judge calibration) to 1.21 and 2.2 |
+| No forward dependencies | The Epic Dependencies table lists stories in execution order; each new story depends only on earlier rows. Stories keep their numbers, so 1.17 to 1.26 sit at their execution positions in `epics.md` and `sprint-status.yaml` |
+| AD changes recorded with reasons | AD-1, AD-3, AD-4, AD-5, AD-7, AD-9, AD-10, AD-12, AD-15 and AD-20 carry dated amendment notes; AD-21, AD-22 and AD-23 are new. The AD-1 boundary (TeA authors, eval-quality measures), the no-engine-logic rule and the vendor-knowledge rule are unchanged |
+| Every new or extended criterion has a test plan | `test-design-epic-1.md` covers Stories 1.17 to 1.26 and the extended rows of 1.3, 1.12, 1.13, 1.14 and 1.16 (160 scenarios, 37 risks); `test-design-epic-2.md` covers the extended 2.2, 2.4 and 2.5 (42 scenarios, 19 risks) |
+| Third-party facts verified | `evaluation-framework-facts.md` records AgentEvals, promptfoo and eval-quality v4.0.0 facts from primary sources with commit or registry citations |
+
+## Amendment Tracking Notes
+
+- `sprint-status.yaml` gains ten `backlog` rows (Stories 1.17 to 1.26), placed in execution order.
+- eval-quality v4.0.0 was published on 2026-09-23 with the target-policy export (#158) and trial-set scoring (#143). Stories 1.1 and 1.2 are done. Story H.1 lost its release and peer-floor steps (Story 1.4 now floors the peer range at `>=4.0.0`) and keeps the clean run, baseline acceptance and replay steps; its `owner_handoff` key in `sprint-status.yaml` was renamed to match its new title.
