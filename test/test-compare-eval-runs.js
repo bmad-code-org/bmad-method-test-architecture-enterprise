@@ -24,7 +24,7 @@ const { contractVersionsFor } = require('./lib/contract-versions');
 const { evalResultSchema, evalRunSchema, SCHEMA_VERSION } = require('./schema/eval-result');
 const { portableRunForStorage } = require('../tools/record-eval-run');
 
-const colors = { reset: '[0m', red: '[31m', green: '[32m' };
+const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;
@@ -128,11 +128,32 @@ function runSummary(suites, overrides = {}) {
   };
 }
 
-/** A `ComparableResult` slice, the shape `compareStoredResults` reads. */
+/**
+ * A `ComparableResult` slice, the shape `compareStoredResults` reads: one
+ * probe `p1` over one completed trial, with the reduction `compareDominance`
+ * recomputes before it compares agreeing with the detailed outcome.
+ */
 function comparableResult(comparabilityKey, rate) {
+  const caught = rate === 1;
+  const state = caught ? 'caught' : 'missed';
   return {
     comparabilityKey,
-    outcomes: [{ probeId: 'p1', state: rate === 1 ? 'caught' : 'missed', severity: 'critical' }],
+    scoredProbeId: 'p1',
+    trials: { declaredMinimum: 1, completed: 1, completedAttempts: [1], invalidatedAttempts: [] },
+    reducedProbeOutcomes: [
+      {
+        probeId: 'p1',
+        severity: 'critical',
+        exercised: true,
+        caught,
+        catchThreshold: 0.5,
+        trialVotes: [{ trialIndex: 1, state }],
+        validCount: 1,
+        caughtCount: caught ? 1 : 0,
+        invalidatedAttempts: [],
+      },
+    ],
+    outcomes: [{ probeId: 'p1', state, severity: 'critical', trialIndex: 1 }],
     strength: {
       denominator: '1 admitted probe(s)',
       basis: 'measured',
@@ -290,6 +311,49 @@ async function checkDominanceCallSiteFiresOnComparableData() {
   check(change?.dominance?.relation === 'a-dominates-b', `expected "a-dominates-b", got "${change?.dominance?.relation}"`);
 }
 
+/**
+ * A result stored before `EvidenceArtifact` schema version 4 carries
+ * `{outcomes, strength, comparabilityKey}` and no trial-set reduction. The
+ * version 4 `compareDominance` recomputes that reduction first and throws on
+ * its absence, so the structural gate has to stop such a result before the
+ * package ever sees it.
+ */
+async function checkVersionThreeShapeNeverReachesDominance() {
+  const { scoredProbeId, trials, reducedProbeOutcomes, ...versionThree } = comparableResult('k1', 1);
+  const full = comparableResult('k1', 1);
+  const [reducedEntry] = full.reducedProbeOutcomes;
+  const { trialVotes, ...reducedWithoutVotes } = reducedEntry;
+  const { completedAttempts, ...trialsWithoutCompleted } = full.trials;
+  const { invalidatedAttempts, ...trialsWithoutInvalidated } = full.trials;
+  const { reducedProbeOutcomes: droppedReduced, ...withoutReduced } = full;
+  const { scoredProbeId: droppedProbeId, ...withoutProbeId } = full;
+  const rows = [
+    { label: 'the version 3 shape, with every version 4 key removed', slice: versionThree },
+    { label: 'reducedProbeOutcomes absent', slice: withoutReduced },
+    { label: 'scoredProbeId absent', slice: withoutProbeId },
+    { label: 'scoredProbeId a number', slice: { ...full, scoredProbeId: 1 } },
+    { label: 'trials without completedAttempts', slice: { ...full, trials: trialsWithoutCompleted } },
+    { label: 'trials without invalidatedAttempts', slice: { ...full, trials: trialsWithoutInvalidated } },
+    { label: 'a reduced entry without trialVotes', slice: { ...full, reducedProbeOutcomes: [reducedWithoutVotes] } },
+  ];
+
+  for (const { label, slice } of rows) {
+    const previous = suiteResult('atdd', slice);
+    check(isComparableShaped(previous) === false, `a ComparableResult with ${label} reads as comparable; it must not`);
+
+    // A measurement change guarantees a change entry exists, so the dominance
+    // assertion below cannot pass on an absent entry.
+    const current = suiteResult('atdd', {
+      ...comparableResult('k1', 0.5),
+      runners: [{ ...suiteResult('atdd').runners[0], measurements: { accuracy: 0.5 } }],
+    });
+    const result = await compareEvalRuns(runSummary([previous]), runSummary([current]));
+    const change = result.suiteChanges?.find((entry) => entry.id === 'atdd');
+    check(change !== undefined, `a ComparableResult with ${label} and a measurement change surfaced no suite change`);
+    check(change?.dominance === null, `a ComparableResult with ${label} reached compareDominance: ${JSON.stringify(change?.dominance)}`);
+  }
+}
+
 async function checkEquivalentDominanceIsNotReportedAsDrift() {
   const previous = suiteResult('atdd', comparableResult('k1', 1));
   const current = suiteResult('atdd', comparableResult('k1', 1));
@@ -415,6 +479,7 @@ async function main() {
   await checkDominanceCallSiteIsInertOnOrdinaryData();
   await checkDominanceCallSiteFiresOnComparableData();
   await checkEquivalentDominanceIsNotReportedAsDrift();
+  await checkVersionThreeShapeNeverReachesDominance();
   await checkContractVersionsFor();
   checkPortableRecordedExecutables();
 

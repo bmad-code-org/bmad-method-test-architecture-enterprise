@@ -3,6 +3,16 @@
     "declaredRelation": "a-dominates-b",
     "a": {
       "comparabilityKey": "fixture-key-1",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -10,7 +20,11 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 8, "exercised": 10, "rate": 0.8 },
+          "defect": {
+            "caught": 8,
+            "exercised": 10,
+            "rate": 0.8
+          },
           "gameability": null,
           "zero-action": null
         }
@@ -18,6 +32,16 @@
     },
     "b": {
       "comparabilityKey": "fixture-key-1",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -25,7 +49,11 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 5, "exercised": 10, "rate": 0.5 },
+          "defect": {
+            "caught": 5,
+            "exercised": 10,
+            "rate": 0.5
+          },
           "gameability": null,
           "zero-action": null
         }
@@ -36,6 +64,16 @@
     "declaredRelation": "b-dominates-a",
     "a": {
       "comparabilityKey": "fixture-key-2",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -43,7 +81,11 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 3, "exercised": 10, "rate": 0.3 },
+          "defect": {
+            "caught": 3,
+            "exercised": 10,
+            "rate": 0.3
+          },
           "gameability": null,
           "zero-action": null
         }
@@ -51,6 +93,16 @@
     },
     "b": {
       "comparabilityKey": "fixture-key-2",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -58,7 +110,11 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 9, "exercised": 10, "rate": 0.9 },
+          "defect": {
+            "caught": 9,
+            "exercised": 10,
+            "rate": 0.9
+          },
           "gameability": null,
           "zero-action": null
         }
@@ -69,6 +125,16 @@
     "declaredRelation": "equivalent",
     "a": {
       "comparabilityKey": "fixture-key-3",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -76,7 +142,11 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 6, "exercised": 10, "rate": 0.6 },
+          "defect": {
+            "caught": 6,
+            "exercised": 10,
+            "rate": 0.6
+          },
           "gameability": null,
           "zero-action": null
         }
@@ -84,6 +154,16 @@
     },
     "b": {
       "comparabilityKey": "fixture-key-3",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -91,7 +171,11 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 6, "exercised": 10, "rate": 0.6 },
+          "defect": {
+            "caught": 6,
+            "exercised": 10,
+            "rate": 0.6
+          },
           "gameability": null,
           "zero-action": null
         }
@@ -103,6 +187,16 @@
     "note": "A genuine tie: a wins the defect class, b wins the gameability class, so neither dominates the other. Distinct from a comparabilityKey refusal, which never reaches this relation at all.",
     "a": {
       "comparabilityKey": "fixture-key-4",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -110,14 +204,32 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 8, "exercised": 10, "rate": 0.8 },
-          "gameability": { "caught": 2, "exercised": 10, "rate": 0.2 },
+          "defect": {
+            "caught": 8,
+            "exercised": 10,
+            "rate": 0.8
+          },
+          "gameability": {
+            "caught": 2,
+            "exercised": 10,
+            "rate": 0.2
+          },
           "zero-action": null
         }
       }
     },
     "b": {
       "comparabilityKey": "fixture-key-4",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -125,8 +237,16 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 5, "exercised": 10, "rate": 0.5 },
-          "gameability": { "caught": 7, "exercised": 10, "rate": 0.7 },
+          "defect": {
+            "caught": 5,
+            "exercised": 10,
+            "rate": 0.5
+          },
+          "gameability": {
+            "caught": 7,
+            "exercised": 10,
+            "rate": 0.7
+          },
           "zero-action": null
         }
       }
@@ -136,6 +256,16 @@
     "note": "Not a dominance relation: the two sides do not share a comparabilityKey, so compareStoredResults must refuse rather than return any of the four verdicts.",
     "a": {
       "comparabilityKey": "fixture-key-5a",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -143,7 +273,11 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 8, "exercised": 10, "rate": 0.8 },
+          "defect": {
+            "caught": 8,
+            "exercised": 10,
+            "rate": 0.8
+          },
           "gameability": null,
           "zero-action": null
         }
@@ -151,6 +285,16 @@
     },
     "b": {
       "comparabilityKey": "fixture-key-5b",
+      "scoredProbeId": null,
+      "trials": {
+        "declaredMinimum": 1,
+        "completed": 1,
+        "completedAttempts": [
+          1
+        ],
+        "invalidatedAttempts": []
+      },
+      "reducedProbeOutcomes": [],
       "outcomes": [],
       "strength": {
         "denominator": "10 admitted probe(s)",
@@ -158,7 +302,11 @@
         "comparable": true,
         "note": null,
         "vector": {
-          "defect": { "caught": 5, "exercised": 10, "rate": 0.5 },
+          "defect": {
+            "caught": 5,
+            "exercised": 10,
+            "rate": 0.5
+          },
           "gameability": null,
           "zero-action": null
         }

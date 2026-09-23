@@ -14,6 +14,12 @@
  * ordinary verdict, and that a `strength.comparable: false` side is left to
  * the package's own check rather than overridden by this wrapper.
  *
+ * Each side carries the `EvidenceArtifact` schema version 4 fields the
+ * package reads before comparing: `scoredProbeId` `null`, an empty
+ * `reducedProbeOutcomes`, and one completed trial. With no detailed outcomes
+ * that reduction is trivially consistent, so the relation each fixture
+ * declares is decided by its strength vector alone.
+ *
  * Usage: node test/test-compare-dominance.js
  */
 
@@ -28,7 +34,7 @@ const { publishedMember } = require('./lib/vocabularies');
 
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'dominance', 'comparable-results.json');
 
-const colors = { reset: '[0m', red: '[31m', green: '[32m' };
+const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;

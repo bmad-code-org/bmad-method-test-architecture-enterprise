@@ -147,7 +147,7 @@ The evaluation Epic 1 produces runs in the adopter's CI on every pull request, w
 
 ## Epic Dependencies
 
-Story 1.1 runs first, in the eval-quality repository. Story 1.2 installs its tarball, and every later TeA story runs on it. Epic 1's stories run in order. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after the owner commits the staged work and eval-quality releases.
+Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `eval-quality` devDependency to the published release carrying it, and every later TeA story runs on that release. Epic 1's stories run in order. Epic 2 depends on Epic 1's runtime and on the evaluation Story 1.16 authors. Story H.1 is the owner's and runs after the owner commits the staged work and eval-quality releases.
 
 | Story | Depends on |
 | --- | --- |
@@ -218,21 +218,21 @@ So that my port delegates every address decision to the engine and carries no co
 ### Story 1.2: Run TeA's gate on the engine Evaluate needs
 
 As a TEA maintainer,
-I want TeA's existing gate green on the local engine build,
+I want TeA's existing gate green on the published engine release,
 So that every later failure is attributable to Evaluate.
 
 **Acceptance Criteria:**
 
-**Given** the tarball from Story 1.1 exists
-**When** `npm install --no-save "$PACK_DIR/eval-quality-local.tgz"` runs in the TeA worktree
+**Given** eval-quality 4.0.0 is published, carrying Story 1.1's target-policy export and trial-set scoring (eval-quality #143)
+**When** TeA's `eval-quality` devDependency is raised to it and `npm install` runs
 **Then** the engine check exits 0
-**And** `git diff -- package.json package-lock.json` is empty
+**And** `git diff -- package.json package-lock.json` shows only the version bump, with no `file:` or `.tgz` spec
 
-**Given** the local engine carries `EvidenceArtifact` schema version 4 and repeatable `--record` (eval-quality #143)
+**Given** eval-quality 4.0.0 carries `EvidenceArtifact` schema version 4 and repeatable `--record` (eval-quality #143)
 **When** `npm test` runs
 **Then** it exits 0, with every TeA harness, replay and schema-version test that the engine change broke repaired to read version 4
-**And** before repairing, the story runs `npm test` on the tarball and records every failing script in its completion notes; those scripts are the repair's revert checks, and reverting the repair re-fails each of them
-**And** a new `test/test-trial-set-scoring.js`, chained into `npm test` as `test:trial-set-scoring` with its own `quality.yaml` step and built with the `test/lib/eval-quality-inputs.js` builders (`test/test-eval-quality-corpus.js` feeds the package nothing of TeA's by design), seals a contract, scores a three-trial set through `eval-quality score` with a repeated `--record`, and asserts `reducedProbeOutcomes` is present and the strength vector is comparable; with `node_modules/eval-quality` restored to published 3.4.0 (`npm ci`) that case fails, which proves TeA's gate now depends on trial-set scoring (`test/test-schema-versions.js` reads every version from the installed package, so it cannot prove this)
+**And** before repairing, the story runs `npm test` on eval-quality 4.0.0 with no repair and records every failing script in its completion notes; those scripts are the repair's revert checks, and reverting the repair re-fails each of them
+**And** a new `test/test-trial-set-scoring.js`, chained into `npm test` as `test:trial-set-scoring` with its own `quality.yaml` step and built with the `test/lib/eval-quality-inputs.js` builders (`test/test-eval-quality-corpus.js` feeds the package nothing of TeA's by design), seals a contract, scores a three-trial set through `eval-quality score` with a repeated `--record`, and asserts `reducedProbeOutcomes` is present and the strength vector is comparable; with `node_modules/eval-quality` downgraded to published 3.4.0 (`npm install eval-quality@3.4.0 --no-save`, since `npm ci` now restores the committed 4.0.0 devDependency) that case fails, which proves TeA's gate now depends on trial-set scoring (`test/test-schema-versions.js` reads every version from the installed package, so it cannot prove this)
 
 **Dependencies:** 1.1.
 **Gate:** `npm test`, engine check.

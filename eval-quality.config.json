@@ -1373,10 +1373,10 @@
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The pin is 3.4.0 now",
+          "key": "The pin is 4.0.0 now",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "EVAL_QUALITY_PIN_IS_3_4_0"
+            "export": "EVAL_QUALITY_PIN_IS_4_0_0"
           },
           "reason": "package.json's eval-quality devDependency, compared for an exact match"
         },

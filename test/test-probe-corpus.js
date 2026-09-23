@@ -115,20 +115,31 @@ function probeSummary(entry, registries) {
 }
 
 /**
- * The `{comparabilityKey, outcomes, strength}` slice `compareDominance` reads
- * (TEA Story 5.1), or `null` when this probe minted no artifact. `outcomes`
- * is slimmed to `probeId`/`state`/`severity` rather than stored in full: the
- * severity-floor override in `compareDominance` reads exactly those three
- * fields and nothing else, and this baseline's own stated goal is staying
- * small enough to read in a diff.
+ * The `ComparableResult` slice `compareDominance` reads (TEA Story 5.1), or
+ * `null` when this probe minted no artifact. Since `EvidenceArtifact` schema
+ * version 4 the comparator recomputes each side's trial-set reduction before
+ * comparing, so the slice carries `scoredProbeId`, `reducedProbeOutcomes` and
+ * `trials` alongside `comparabilityKey` and `strength`. `outcomes` is slimmed
+ * to `probeId`/`state`/`severity`/`trialIndex`: the reduction consistency check
+ * reads exactly those four fields, the severity-floor override reads
+ * `reducedProbeOutcomes`, and this baseline's own stated goal is staying small
+ * enough to read in a diff.
  */
 function comparableResultOf(entry) {
   const artifact = entry.result.artifact;
   if (artifact === null) return null;
   return {
     comparabilityKey: artifact.comparabilityKey,
+    scoredProbeId: artifact.scoredProbeId,
     strength: artifact.strength,
-    outcomes: artifact.outcomes.map((outcome) => ({ probeId: outcome.probeId, state: outcome.state, severity: outcome.severity })),
+    trials: artifact.trials,
+    reducedProbeOutcomes: artifact.reducedProbeOutcomes,
+    outcomes: artifact.outcomes.map((outcome) => ({
+      probeId: outcome.probeId,
+      state: outcome.state,
+      severity: outcome.severity,
+      trialIndex: outcome.trialIndex,
+    })),
   };
 }
 

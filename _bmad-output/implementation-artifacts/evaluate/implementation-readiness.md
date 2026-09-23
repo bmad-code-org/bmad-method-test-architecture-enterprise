@@ -27,7 +27,7 @@ Date: 2026-09-22. Scope: `_bmad-output/planning-artifacts/evaluate/` (`SPEC.md` 
 
 ## Tracking Notes
 
-- `sprint-status.yaml` lists 2 epics and 21 worker stories in `epics.md` order. Story 1.1 is `review`, matching `story-1.1.md`: its implementation is [bmad-eval-quality#158](https://github.com/bmad-code-org/bmad-eval-quality/pull/158), open and not yet merged. Every other story is `backlog`.
+- `sprint-status.yaml` lists 2 epics and 21 worker stories in `epics.md` order. Story 1.1 is `done`: [bmad-eval-quality#158](https://github.com/bmad-code-org/bmad-eval-quality/pull/158) merged and released as eval-quality 4.0.0. Story 1.2 is `review`. Every other story is `backlog`.
 - The file lives at `_bmad-output/implementation-artifacts/evaluate/sprint-status.yaml`, as the coordinator directed. `/bmad-build` syncs `{implementation_artifacts}/sprint-status.yaml`, which resolves to `_bmad-output/implementation-artifacts/sprint-status.yaml`, so workers do not update this file on their own. The coordinator either passes this path to each worker or syncs statuses itself.
 - `sprint_plan.py` upgrades a story from disk only for a file named `<story-key>.md`. The Story 1.1 worker wrote `story-1.1.md`, so that upgrade does not fire for it.
 - Story H.1 is owner-only. It sits under a top-level `owner_handoff` key outside `development_status`, so no worker picks it up. A regeneration by `sprint_plan.py` keeps it, except with `--fresh`.

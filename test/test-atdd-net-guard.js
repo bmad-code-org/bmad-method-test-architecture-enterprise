@@ -27,7 +27,7 @@ const { spawnSync } = require('node:child_process');
 
 const NET_GUARD_PATH = path.join(__dirname, '..', 'cli', 'lib', 'atdd-net-guard.cjs');
 
-const colors = { reset: '[0m', red: '[31m', green: '[32m', dim: '[2m' };
+const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m', dim: '\u001B[2m' };
 let failures = 0;
 
 function assert(condition, label, detail) {

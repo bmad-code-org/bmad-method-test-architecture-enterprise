@@ -44,7 +44,7 @@
 
 const { placementHolds, correctionHolds, reTeachingHolds, masteryClaimHolds, continuationHolds } = require('./eval-teach-me-testing');
 
-const colors = { reset: '[0m', red: '[31m', green: '[32m', dim: '[2m' };
+const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m', dim: '\u001B[2m' };
 let failures = 0;
 
 function assert(condition, label, detail) {

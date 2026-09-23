@@ -65,7 +65,7 @@ TeA's suites are plain Node scripts using `node:assert`, a header comment statin
 | Integration over real eval-quality | The runtime drives the installed `eval-quality` CLI and library on fixture files, with stub targets under `test/fixtures/` | `test:evaluate-run` end to end on a stub target |
 | Contract | An artifact validated against eval-quality's published schemas or the runtime-owned schemas | `evaluation.json` template against the runtime schema |
 | Guidance | A structured read of prompt content in the skill (`SKILL.md`, `references/`, `assets/`) that fails when a required passage or marker is removed | `test:evaluate-guidance` |
-| Replay | Stored observations and sealed records re-scored through the CLI with no target launch | the Story 1.2 repair of `test:eval-replay` |
+| Replay | Stored observations and sealed records re-scored through the CLI with no target launch | Story 1.2's `test:trial-set-scoring`, which re-scores stored replay records as a three-trial set through `eval-quality score` |
 | Live | A real run of a skill through the local Claude Code CLI on the owner's subscription, recorded as evidence | Story 1.16's proof run |
 
 Live runs never enter `npm test`. Their evidence is recorded and then held by deterministic checks.

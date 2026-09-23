@@ -98,6 +98,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:04955353332f474ac5f28f36cbf9f93a9c17b49adbd0dc36427965fc09a598e3",
+          "scoredProbeId": "P-004",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -109,56 +110,90 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-004",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -252,6 +287,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:04955353332f474ac5f28f36cbf9f93a9c17b49adbd0dc36427965fc09a598e3",
+          "scoredProbeId": "P-004",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -263,136 +299,186 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-004",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -440,6 +526,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -455,231 +542,300 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -706,6 +862,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -717,231 +874,300 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "material",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -989,6 +1215,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -1004,141 +1231,192 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "material",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -1165,6 +1443,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -1176,141 +1455,192 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "material",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -1362,6 +1692,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -1377,71 +1708,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "material",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -1472,6 +1840,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -1487,71 +1856,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "material",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "caught",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -1582,6 +1988,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:414dca8b51b6df0bd0aa0c1232b1fae8e64f1b57dbd3dd1cdbb0aec15dd9d671",
+          "scoredProbeId": "P-003",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -1597,71 +2004,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-003",
+              "severity": "material",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "caught",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-003",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -1692,6 +2136,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:04955353332f474ac5f28f36cbf9f93a9c17b49adbd0dc36427965fc09a598e3",
+          "scoredProbeId": "P-004",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -1707,71 +2152,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-004",
+              "severity": "material",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "caught",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -1802,6 +2284,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:d91e49368c435985c82809827127adc528404188f10a6d70c0e0da8e892969e4",
+          "scoredProbeId": "P-005",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -1817,71 +2300,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-005",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-005",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -1912,6 +2432,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:df226049ee717e66d8ecf039abb423dadf722e3ba5959bae4f6007e50466e72d",
+          "scoredProbeId": "P-006",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -1927,71 +2448,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-006",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-006",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -2022,6 +2580,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:84c71441a460b7e8b218e855f5d32c47b4c21873d178f52801f3c076a3758fdf",
+          "scoredProbeId": "P-007",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -2037,71 +2596,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-007",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-007",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -2132,6 +2728,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:b382c66bfee4f2e3e4531c4cb530daf7722afed2a1c1a4470251ca775a65f29e",
+          "scoredProbeId": "P-008",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -2147,71 +2744,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-008",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-008",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -2242,6 +2876,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:a22f5d94400e314bf6867ffdfee7df56494359f846a80fad9611937dbdf427bf",
+          "scoredProbeId": "P-009",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -2257,71 +2892,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-009",
+              "severity": "material",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "caught",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-009",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -2348,6 +3020,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:4d270af1b2a09ecdd2cb1f264e7bd01b51a6fbfb58928df46f9c908cfb33d6f9",
+          "scoredProbeId": "P-010",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -2359,71 +3032,108 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-010",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-010",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -2624,6 +3334,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:d085c0a26e84e4bef5f3a2a1b5397a480a09f70825ab41d5c4f42ac52b91e0f8",
+          "scoredProbeId": "P-011",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -2635,81 +3346,120 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-011",
+              "severity": "material",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-011",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -2885,6 +3635,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:04955353332f474ac5f28f36cbf9f93a9c17b49adbd0dc36427965fc09a598e3",
+          "scoredProbeId": "P-004",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -2896,136 +3647,186 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-004",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-004",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3069,6 +3870,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3084,36 +3886,66 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "material",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -3136,6 +3968,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3147,36 +3980,66 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "material",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -3220,6 +4083,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3235,56 +4099,90 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3307,6 +4205,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3318,56 +4217,90 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3411,6 +4344,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3426,26 +4360,54 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3468,6 +4430,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3479,26 +4442,54 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3542,6 +4533,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3557,36 +4549,66 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3609,6 +4631,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3620,36 +4643,66 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3693,6 +4746,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3708,26 +4762,54 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3750,6 +4832,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3761,26 +4844,54 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -3824,6 +4935,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3839,56 +4951,90 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "material",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -3911,6 +5057,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -3922,56 +5069,90 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "material",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "material",
+              "trialIndex": 1
             }
           ]
         }
@@ -4015,6 +5196,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -4030,26 +5212,54 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -4072,6 +5282,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -4083,26 +5294,54 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -4146,6 +5385,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:015a88cbc912a13e7a02b0225cefd1e4109b401e341c457e8bcd7473eea68059",
+          "scoredProbeId": "P-001",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -4161,26 +5401,54 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-001",
+              "severity": "critical",
+              "exercised": true,
+              "caught": true,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "caught"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 1,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "caught",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-001",
               "state": "confirmed",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
@@ -4203,6 +5471,7 @@
         },
         "comparableResult": {
           "comparabilityKey": "sha256:03f7fec1fc7641c070a5994f9a3c58ba618bba8f4295a9f1398eaae13ba19563",
+          "scoredProbeId": "P-002",
           "strength": {
             "denominator": "unique qualified probe identifiers exercised per class, across 1 completed trial",
             "basis": "measured",
@@ -4214,26 +5483,54 @@
             "comparable": true,
             "note": "1 admitted probe over 1 completed trial."
           },
+          "trials": {
+            "declaredMinimum": 1,
+            "completed": 1,
+            "completedAttempts": [1],
+            "invalidatedAttempts": []
+          },
+          "reducedProbeOutcomes": [
+            {
+              "probeId": "P-002",
+              "severity": "critical",
+              "exercised": true,
+              "caught": false,
+              "catchThreshold": 0.5,
+              "trialVotes": [
+                {
+                  "trialIndex": 1,
+                  "state": "passed-clean-control"
+                }
+              ],
+              "validCount": 1,
+              "caughtCount": 0,
+              "invalidatedAttempts": []
+            }
+          ],
           "outcomes": [
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "critical"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             },
             {
               "probeId": "P-002",
               "state": "passed-clean-control",
-              "severity": "material"
+              "severity": "critical",
+              "trialIndex": 1
             }
           ]
         }
