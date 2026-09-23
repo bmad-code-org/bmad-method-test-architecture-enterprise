@@ -49,17 +49,18 @@ Together, these utility libraries eliminate the need to reinvent core testing pr
 
 A quality operating model packaged as ten workflows spanning learning, test design, evaluation, CI/CD gates, and release readiness. TEA encodes test architecture expertise into repeatable processes.
 
-| Workflow           | Purpose                                       |
-| ------------------ | --------------------------------------------- |
-| `teach-me-testing` | Guided testing education                      |
-| `test-design`      | Risk-based planning plus NFR planning         |
-| `framework`        | Scaffold production-ready test infrastructure |
-| `ci`               | CI pipeline with selective testing            |
-| `atdd`             | Acceptance test-driven development            |
-| `automate`         | Prioritized test automation                   |
-| `test-review`      | Test quality audits (0-100 score)             |
-| `nfr-assess`       | NFR Evidence Audit                            |
-| `trace`            | Coverage traceability and gate decisions      |
+| Workflow           | Purpose                                        |
+| ------------------ | ---------------------------------------------- |
+| `teach-me-testing` | Guided testing education                       |
+| `test-design`      | Risk-based planning plus NFR planning          |
+| `framework`        | Scaffold production-ready test infrastructure  |
+| `ci`               | CI pipeline with selective testing             |
+| `evaluate`         | Scored, evidence-backed evaluation of a target |
+| `atdd`             | Acceptance test-driven development             |
+| `automate`         | Prioritized test automation                    |
+| `test-review`      | Test quality audits (0-100 score)              |
+| `nfr-assess`       | NFR Evidence Audit                             |
+| `trace`            | Coverage traceability and gate decisions       |
 
 :::tip[Key Insight]
 TEA doesn't just generate tests. It provides a complete quality operating model with workflows for planning, execution, and release gates.

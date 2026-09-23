@@ -35,16 +35,50 @@ function readCaseSnapshot(id) {
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 
 /**
- * Each recorded case id, held byte-identical to its frozen snapshot.
+ * The eighteen original cases' digests, recorded here rather than only inside
+ * each `cases/<id>.json` snapshot. A digest stored beside the data it
+ * protects stays self-consistent under a coordinated edit of both fields in
+ * the same file; a second copy in this source file does not, since editing a
+ * snapshot's `intent` or `groundTruth` without also editing this literal (a
+ * different file, in its own diff hunk) now fails here.
+ */
+const EXPECTED_CASE_DIGESTS = {
+  'acceptance-tests-before-code': 'sha256:66eaff7d8d0dd6c27f1f71f0884a4b78a1ce8bc0b61197bd5107f19b5ad6e4ba',
+  'epic-risk-before-tests': 'sha256:12a86a5e755fbc76699cb63bfdce1156d1a4e64965c839e25fccee7580c1c003',
+  'good-or-covering-what-matters': 'sha256:95842385e7a682b7fb7cd73ecfb25d20a197ed0e9d0c52cd0cd8120d6d8380c9',
+  'hire-a-qa-lead': 'sha256:0d1a944fb833f2c14251f65188892affb00f2c3f33c153d23a3ef7b77cd6b1b8',
+  'implemented-feature-no-tests': 'sha256:7a30e63d0b786933872ff00e5a3cbd867fdf4b611b9385dcab52caf9da61e3bd',
+  'learn-testing-properly': 'sha256:44923a46338209779cceae9b2f35649610e284c77f84e7f1e9d9d6e863793603',
+  'measured-some-nfrs-planned-none': 'sha256:4306e801f9d063b0ae890c48a5363592d0687053e6e76033320d228844bb1570',
+  'nfr-evidence-on-hand': 'sha256:6b687701e55f5d9a7e32646e6a3ea893365c2c89c6243480f5c1ef99df7f3888',
+  'no-framework-yet': 'sha256:a6a62655dfe46039ffc5c353d8148c1f9cc82e696dc29bc3cb90ed4d39aa17ed',
+  'penetration-test-staging': 'sha256:ebbb4144d7879f8841878453c884bae9eedb0d5aa27bd9cb1d6046fda7ccf497',
+  'pipeline-quality-gates': 'sha256:b92a6b85450671120610b92598b7175e98a37f9e512d5e260395b03108f20dbe',
+  'release-gate-sequence': 'sha256:a1edfc7ef76f6c614d1f566fe8897ec82b818e65dc6a73e373a4d889abb810f3',
+  'review-existing-tests': 'sha256:30cfd925b46b2f8083368bd458a87b748c2e0f452b51e5f347f297d65bc776b1',
+  'run-and-fix-ci-failures': 'sha256:b7a8d3b1fb2a7c0e4d3f39081b6273b90902664967f01f5ddacc02357b7ff8bb',
+  'story-half-done': 'sha256:63e1ece075fc2a89edb970e6975c9819cf211c81f0b72cc278590469e38be058',
+  'thin-coverage-on-payments': 'sha256:e4710a957bfabe0419699746252a29323b24a51e287feea866a74ca77c8ab460',
+  'trace-criteria-to-tests': 'sha256:ddf0766497da0fd7dd6c196e1aeee5542dd6c19e62ea0e7fbc596036497c8e0d',
+  'write-production-code': 'sha256:d2a03e69bd69506a60e245efbf3061bcba201ede505a37f9608a1823257d135f',
+};
+
+/**
+ * Each recorded case id, held byte-identical to its frozen snapshot, and
+ * every snapshot's digest held to the independently recorded copy above.
  *
  * The snapshot's own `caseDigest` is recomputed and checked first, so a hand
  * edit of the snapshot file itself is caught before it could hide a live
  * edit; only then is the live corpus entry compared to the snapshot. A
  * missing or corrupt snapshot file is one failure among many rather than an
  * uncaught exception, so every other recorded case still gets checked.
+ *
+ * @returns {Map<string, object>} case id to its ground truth, for every case
+ *   whose snapshot was read successfully.
  */
 function checkCaseSnapshots(failures, contract, corpus) {
   const liveById = new Map(corpus.cases.map((item) => [item.id, item]));
+  const expectedById = new Map();
   for (const id of contract.caseIds) {
     if (!liveById.has(id)) {
       failures.push(`live corpus: recorded case "${id}" is missing`);
@@ -59,11 +93,14 @@ function checkCaseSnapshots(failures, contract, corpus) {
     }
     const recomputed = digest([JSON.stringify(snapshot.intent), JSON.stringify(snapshot.groundTruth)]);
     checkEqual(failures, recomputed, snapshot.caseDigest, `cases/${id}.json self-digest`);
+    checkEqual(failures, snapshot.caseDigest, EXPECTED_CASE_DIGESTS[id], `cases/${id}.json digest matches the independently recorded copy`);
 
     const live = liveById.get(id);
     checkEqual(failures, { id: live.id, intent: live.intent }, snapshot.intent, `intents.json :: ${id} matches its snapshot`);
     checkEqual(failures, live.expected, snapshot.groundTruth, `ground-truth.json :: ${id} matches its snapshot`);
+    expectedById.set(id, snapshot.groundTruth);
   }
+  return expectedById;
 }
 
 function checkEqual(failures, actual, expected, label) {
@@ -119,7 +156,6 @@ async function main() {
   const contract = readJson('evidence-contract.json');
   const provenance = readJson('evidence-provenance.json');
   const corpus = await loadCorpus();
-  const expectedById = new Map(contract.caseIds.map((id) => [id, readCaseSnapshot(id).groundTruth]));
 
   checkEqual(failures, contract.version, 1, 'evidence contract version');
   checkEqual(
@@ -153,7 +189,7 @@ async function main() {
     },
     'runner substitution provenance',
   );
-  checkCaseSnapshots(failures, contract, corpus);
+  const expectedById = checkCaseSnapshots(failures, contract, corpus);
 
   // Per-case snapshots superseded these as the live-corpus check once the
   // corpus grew past the eighteen cases they were computed over, so they are

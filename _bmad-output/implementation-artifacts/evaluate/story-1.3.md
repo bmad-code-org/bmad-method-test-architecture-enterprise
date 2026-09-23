@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-23'
 status: 'review'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 1
 baseline_commit: '1054b066bcc8b1f6db1e9ef2555ab2b22b7d97f1'
 context: []
 ---
@@ -135,6 +135,18 @@ Layers: `/bmad-workflow-builder` Analyze (deterministic pre-pass + five parallel
 | 25 | test-quality adversarial | `test-tea-workflow-descriptions.js` never asserts the tool's reported file count, only its exit code | low | no action: no plausible glob regression identified that isn't already caught by the existing per-file read-error check |
 
 All findings confirmed against the current diff or live-verified by mutation testing (planting real fixtures, editing real evidence files, and restoring); none were speculative.
+
+**Round 2: CodeRabbit on PR #232.** Five inline findings plus two outside-diff findings, all replied to individually and their threads resolved.
+
+| # | Source | Finding | Verdict | Route |
+| --- | --- | --- | --- | --- |
+| 26 | coderabbit | README's repository-layout tree and `testing-as-engineering.md`'s workflow-purpose table still enumerate nine workflows | medium | patch: `bmad-testarch-evaluate` / `evaluate` added to both |
+| 27 | coderabbit | Evaluate's `SKILL.md` sends a user through twelve placeholder stage guides that cannot yet deliver the promised evaluation | false as a defect in this story's scope: epics.md's own AC for Story 1.3 states the twelve `references/<stage>.md` files are "placeholder files until later stories fill them" (Stories 1.4 through 2.4); each placeholder already states in its own text which story fills it. Publishing the registration now, with content following incrementally, is the plan's explicit design, not an oversight | reject, reason posted |
+| 28 | coderabbit | `test-installation-components.js`'s npm-pack check unconditionally overwrites `.memlog.md` and recursively deletes `.analysis/`, which would destroy a real in-progress `bmad-workflow-builder` session's files | high, live-verified: planting real content in both paths before the fix, then running the test, showed both would be lost | patch: check pre-existence first, create with exclusive-create (`wx`) so an existing file is never truncated, plant the analysis probe under a unique filename, and remove in `finally` only what did not already exist; re-verified live that pre-existing content now survives |
+| 29 | coderabbit | `test-routing-evidence.js`'s snapshot `caseDigest` is recomputed from, and stored beside, the same data it protects, so editing a snapshot's `intent` and recomputing a self-consistent digest defeats the check | high, live-verified: tampering one snapshot's intent and recomputing its own `caseDigest` left the suite green before this fix | patch: the eighteen digests are now also hard-coded as `EXPECTED_CASE_DIGESTS` in the test file itself, a separate diff hunk from any data file; re-verified live that the same tampering now fails |
+| 30 | coderabbit | `expectedById` was built with an unguarded `readCaseSnapshot` call ahead of `checkCaseSnapshots`'s own guarded read, so a missing/corrupt snapshot would throw before any failure could be recorded | medium | patch: `checkCaseSnapshots` now builds and returns `expectedById` itself, from snapshots it already read inside its own try/catch |
+| 31 | coderabbit | `docs/explanation/eval-quality-roadmap.md`'s "Coverage Closed" section still claims no skill is deferred and the manifest's `deferred` array is empty | medium | patch: corrected to name `bmad-testarch-evaluate` as the one skill still open |
+| 32 | coderabbit | README's CI gate table still states 18 routing intents / 36 calls in two places | medium | patch: both corrected to 19 / 38 |
 
 ## Design Notes
 

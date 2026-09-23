@@ -575,12 +575,19 @@ async function runTests() {
   // Planting real fixture files here, rather than only asserting the
   // already-clean state, is what actually exercises that exclusion.
   {
+    // A real bmad-workflow-builder session could be mid-run against this same
+    // skill directory (its own memlog and analysis reports live here by
+    // design), so this only creates what does not already exist and only
+    // removes what it created.
     const plantedMemlog = path.join(projectRoot, 'src/workflows/testarch/bmad-testarch-evaluate/.memlog.md');
     const plantedAnalysisDir = path.join(projectRoot, 'src/workflows/testarch/bmad-testarch-evaluate/.analysis');
+    const plantedReport = path.join(plantedAnalysisDir, `tea-pack-probe-${process.pid}.md`);
+    const memlogPreexisted = await pathExists(plantedMemlog);
+    const analysisDirPreexisted = await pathExists(plantedAnalysisDir);
     try {
-      await fs.writeFile(plantedMemlog, '# session memory\n');
+      if (!memlogPreexisted) await fs.writeFile(plantedMemlog, '# session memory\n', { flag: 'wx' });
       await fs.mkdir(plantedAnalysisDir, { recursive: true });
-      await fs.writeFile(path.join(plantedAnalysisDir, 'report.md'), '# analysis\n');
+      await fs.writeFile(plantedReport, '# analysis\n', { flag: 'wx' });
 
       const packOutput = execFileSync('npm', ['pack', '--dry-run', '--json'], { cwd: projectRoot, encoding: 'utf8' });
       const [packResult] = JSON.parse(packOutput);
@@ -590,8 +597,9 @@ async function runTests() {
     } catch (error) {
       assert(false, 'npm pack --dry-run excludes builder artifacts', error.message);
     } finally {
-      await fs.rm(plantedMemlog, { force: true });
-      await fs.rm(plantedAnalysisDir, { recursive: true, force: true });
+      await fs.rm(plantedReport, { force: true });
+      if (!memlogPreexisted) await fs.rm(plantedMemlog, { force: true });
+      if (!analysisDirPreexisted) await fs.rm(plantedAnalysisDir, { recursive: true, force: true });
     }
   }
 

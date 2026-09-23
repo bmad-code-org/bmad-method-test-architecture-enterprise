@@ -40,7 +40,7 @@ Underneath the ten full behavioral suites above, TEA now exercises `eval-quality
 
 ## Coverage Closed
 
-Fragment selection is a routing measurement. A passing routing suite does not establish that the workflow produced a correct final artifact. Epic 6 closed this gap for `bmad-tea` (routing), `bmad-testarch-atdd`, `bmad-testarch-automate`, `bmad-testarch-ci`, `bmad-testarch-framework`, `bmad-testarch-nfr`, `bmad-testarch-test-design`, `bmad-testarch-test-review`, `bmad-testarch-trace`, and `bmad-teach-me-testing` (a transcript-based suite rather than a fragment-selection one), each now a full behavioral eval in `test/evals/suite-manifest.json`. No skill remains: `test/evals/suite-manifest.json`'s `deferred` array is empty, so `eval:all` cannot silently imply coverage that does not exist.
+Fragment selection is a routing measurement. A passing routing suite does not establish that the workflow produced a correct final artifact. Epic 6 closed this gap for `bmad-tea` (routing), `bmad-testarch-atdd`, `bmad-testarch-automate`, `bmad-testarch-ci`, `bmad-testarch-framework`, `bmad-testarch-nfr`, `bmad-testarch-test-design`, `bmad-testarch-test-review`, `bmad-testarch-trace`, and `bmad-teach-me-testing` (a transcript-based suite rather than a fragment-selection one), each now a full behavioral eval in `test/evals/suite-manifest.json`. `bmad-testarch-evaluate` is the one skill still open, named in `test/evals/suite-manifest.json`'s `deferred` array with its owner, missing evidence, and exit condition until Story 1.16 lands its own suite, so `eval:all` cannot silently imply coverage that does not exist.
 
 Each behavioral eval needs both positive cases and clean or negative controls. Recall alone rewards a system that reports everything.
 
