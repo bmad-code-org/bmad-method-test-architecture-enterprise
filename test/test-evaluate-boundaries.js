@@ -5,17 +5,21 @@
  * the others as a script with a module fallback), so comments, string text,
  * regular expression literals and template text are never mistaken for code,
  * and code inside a template `${...}` is always seen. A file that does not
- * parse is a `parse` violation, never a silent skip. The rules are closed:
- * none of them tracks where a value came from.
+ * parse is a `parse` violation, never a silent skip. A symbolic link under
+ * `cli/` is a `symlink` violation, and any file other than `.js`, `.cjs`,
+ * `.mjs` code or `.json`, `.md`, `.yml`, `.yaml` data (a `.ts` file Node runs
+ * natively, an extensionless script) is an `unscanned` violation. The rules
+ * are closed: none of them tracks where a value came from.
  *
  * Five rules (Story 1.4, AD-1, AD-5, AD-6):
  *
  * - `engine-import`: only `cli/lib/evaluate/engine.js` loads a specifier that
  *   is `eval-quality`, starts with `eval-quality/` or contains
  *   `node_modules/eval-quality`. A load is a `require(...)`,
- *   `require.resolve(...)`, `module.require(...)`, `import(...)`, a static
- *   `import`/`export ... from`, a bare `import '...'`, or a call (or
- *   `.resolve` call) through a binding obtained from `createRequire(...)`.
+ *   `require.resolve(...)`, `import.meta.resolve(...)`, `module.require(...)`,
+ *   `import(...)`, a static `import`/`export ... from`, a bare `import '...'`,
+ *   or a call (or `.resolve` call) through an alias of `require` or a binding
+ *   obtained from `createRequire(...)` under any local name.
  * - `dynamic-specifier`: under `cli/lib/evaluate/` and in `cli/evaluate.js`,
  *   every load takes a string literal or a template literal with no `${...}`.
  * - `engine-stage`: the stages that decide enforced verdicts come only from the
@@ -23,7 +27,8 @@
  *   - `runScore`, `preflightFromObservations` and `seal` fail anywhere under
  *     `cli/`, `engine.js` included, as an identifier, a member property (dot,
  *     or a bracket string or static template), an object-pattern key, or an
- *     import or export specifier. `Object.seal` is the one exemption.
+ *     import or export specifier. `Object.seal` is the one exemption, and only
+ *     in a file that binds no name `Object`.
  *   - `compile` as a member property or an object-pattern key fails everywhere
  *     under `cli/` unless its receiver is an identifier every binding of which
  *     is a `new X(...)` of Ajv (`X` bound to `require('ajv')` or
@@ -54,6 +59,7 @@ const ENGINE_MODULE = path.join('lib', 'evaluate', 'engine.js');
 const RUNTIME_DIRECTORY = path.join('lib', 'evaluate');
 const RUNTIME_BIN = 'evaluate.js';
 const SOURCE_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
+const DATA_EXTENSIONS = new Set(['.json', '.md', '.yml', '.yaml']);
 const ALWAYS_FORBIDDEN = new Set(['runScore', 'preflightFromObservations', 'seal']);
 const AJV_STAGE = 'compile';
 const AJV_MODULES = new Set(['ajv', 'ajv/dist/2020']);
@@ -61,6 +67,7 @@ const CREATE_REQUIRE = 'createRequire';
 const FORBIDDEN_CONFIG = '_bmad';
 const UNKNOWN = Symbol('unknown binding');
 const AJV_IMPORT = Symbol('ajv import');
+const CREATE_REQUIRE_FUNCTION = Symbol('createRequire');
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
@@ -68,14 +75,16 @@ function lineAt(source, offset) {
   return source.slice(0, offset).split('\n').length;
 }
 
-function filesUnder(directory) {
-  const found = [];
+/** Every regular file and every symbolic link under `directory`; links are listed apart and never followed. */
+function filesUnder(directory, links = []) {
+  const files = [];
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const absolute = path.join(directory, entry.name);
-    if (entry.isDirectory()) found.push(...filesUnder(absolute));
-    else if (entry.isFile()) found.push(absolute);
+    if (entry.isSymbolicLink()) links.push(absolute);
+    else if (entry.isDirectory()) files.push(...filesUnder(absolute, links).files);
+    else files.push(absolute);
   }
-  return found;
+  return { files, links };
 }
 
 /** The file's syntax tree: `.mjs` as a module, anything else as a script and then as a module. Throws when neither parses. */
@@ -185,7 +194,16 @@ function bindingValues(ast) {
       case 'VariableDeclarator': {
         if (node.id.type === 'Identifier') {
           if (node.init !== null) add(node.id.name, node.init);
-        } else unknown(node.id);
+        } else {
+          unknown(node.id);
+          if (node.id.type === 'ObjectPattern') {
+            for (const property of node.id.properties) {
+              if (property.type === 'Property' && propertyKey(property) === CREATE_REQUIRE) {
+                for (const name of patternNames(property.value)) add(name, CREATE_REQUIRE_FUNCTION);
+              }
+            }
+          }
+        }
         break;
       }
       case 'AssignmentExpression': {
@@ -223,6 +241,9 @@ function bindingValues(ast) {
         const fromAjv = AJV_MODULES.has(node.source.value);
         for (const specifier of node.specifiers) {
           add(specifier.local.name, fromAjv && specifier.type === 'ImportDefaultSpecifier' ? AJV_IMPORT : UNKNOWN);
+          if (specifier.type === 'ImportSpecifier' && specifierName(specifier.imported) === CREATE_REQUIRE) {
+            add(specifier.local.name, CREATE_REQUIRE_FUNCTION);
+          }
         }
         break;
       }
@@ -277,23 +298,30 @@ function ajvInstances(values) {
   });
 }
 
-function isCreateRequireCall(node) {
-  if (node === UNKNOWN || node === AJV_IMPORT || node.type !== 'CallExpression') return false;
-  const { callee } = node;
-  return isIdentifier(callee, CREATE_REQUIRE) || (callee.type === 'MemberExpression' && memberKey(callee) === CREATE_REQUIRE);
+function isNode(value) {
+  return value !== UNKNOWN && value !== AJV_IMPORT && value !== CREATE_REQUIRE_FUNCTION && value !== null && value !== undefined;
 }
 
-/** Names that any binding makes a `createRequire(...)` result, or an alias of one. */
-function createdRequires(values) {
+/** Whether an expression is `createRequire` itself, under any local name in `functions` or as a member. */
+function isCreateRequireFunction(node, functions) {
+  if (node === CREATE_REQUIRE_FUNCTION) return true;
+  if (!isNode(node)) return false;
+  if (node.type === 'Identifier') return node.name === CREATE_REQUIRE || functions.has(node.name);
+  return node.type === 'MemberExpression' && memberKey(node) === CREATE_REQUIRE;
+}
+
+function isCreateRequireCall(node, functions) {
+  return isNode(node) && node.type === 'CallExpression' && isCreateRequireFunction(node.callee, functions);
+}
+
+/** The least set of names any value of which `accepts`, grown to a fixed point. */
+function namesWhereAny(values, accepts) {
   const names = new Set();
   let grew = true;
   while (grew) {
     grew = false;
     for (const [name, list] of values) {
-      if (names.has(name)) continue;
-      if (
-        list.some((value) => isCreateRequireCall(value) || (value !== UNKNOWN && value?.type === 'Identifier' && names.has(value.name)))
-      ) {
+      if (!names.has(name) && list.some((value) => accepts(value, names))) {
         names.add(name);
         grew = true;
       }
@@ -302,18 +330,36 @@ function createdRequires(values) {
   return names;
 }
 
+/**
+ * The local names of `createRequire`, and the names that any binding makes a
+ * require: `require` itself or an alias of it, or a `createRequire(...)`
+ * result or an alias of one.
+ */
+function requireBindings(values) {
+  const functions = namesWhereAny(values, (value, names) => isCreateRequireFunction(value, names));
+  const requires = namesWhereAny(
+    values,
+    (value, names) =>
+      isCreateRequireCall(value, functions) ||
+      (isNode(value) && value.type === 'Identifier' && (value.name === 'require' || names.has(value.name))),
+  );
+  return { functions, requires };
+}
+
 /** The specifier node a module load takes, or undefined when `node` loads nothing. `null` stands for a load with no argument. */
-function loadedSpecifier(node, requires) {
+function loadedSpecifier(node, { functions, requires }) {
   if (node.type === 'ImportExpression' || node.type === 'ImportDeclaration' || node.type === 'ExportAllDeclaration') return node.source;
   if (node.type === 'ExportNamedDeclaration') return node.source ?? undefined;
   if (node.type !== 'CallExpression') return;
   const { callee } = node;
   const isRequire = (target) => target.type === 'Identifier' && (target.name === 'require' || requires.has(target.name));
+  const isImportMeta = (target) => target.type === 'MetaProperty' && target.meta.name === 'import' && target.property.name === 'meta';
   const loads =
     isRequire(callee) ||
-    isCreateRequireCall(callee) ||
+    isCreateRequireCall(callee, functions) ||
     (callee.type === 'MemberExpression' &&
-      ((memberKey(callee) === 'resolve' && (isRequire(callee.object) || isCreateRequireCall(callee.object))) ||
+      ((memberKey(callee) === 'resolve' &&
+        (isRequire(callee.object) || isCreateRequireCall(callee.object, functions) || isImportMeta(callee.object))) ||
         (memberKey(callee) === 'require' && isIdentifier(callee.object, 'module'))));
   return loads ? (node.arguments[0] ?? null) : undefined;
 }
@@ -341,7 +387,9 @@ function fileViolations({ source, ast, isEngine, isRuntime }) {
   };
   const values = bindingValues(ast);
   const instances = ajvInstances(values);
-  const requires = createdRequires(values);
+  const requires = requireBindings(values);
+  const objectRebound = values.has('Object');
+  const isGlobalObject = (node) => !objectRebound && isIdentifier(node, 'Object');
   const parentOf = new Map();
   let engineImports = 0;
   const isAjvReceiver = (node) => node !== null && node !== undefined && node.type === 'Identifier' && instances.has(node.name);
@@ -368,15 +416,10 @@ function fileViolations({ source, ast, isEngine, isRuntime }) {
 
     // engine-stage: the always-forbidden names.
     if ((node.type === 'Identifier' || node.type === 'PrivateIdentifier') && ALWAYS_FORBIDDEN.has(node.name)) {
-      const onObject = parent?.type === 'MemberExpression' && parent.property === node && isIdentifier(parent.object, 'Object');
+      const onObject = parent?.type === 'MemberExpression' && parent.property === node && isGlobalObject(parent.object);
       if (!onObject) report(node, 'engine-stage', `names "${node.name}"`);
     }
-    if (
-      node.type === 'MemberExpression' &&
-      node.computed &&
-      ALWAYS_FORBIDDEN.has(memberKey(node)) &&
-      !isIdentifier(node.object, 'Object')
-    ) {
+    if (node.type === 'MemberExpression' && node.computed && ALWAYS_FORBIDDEN.has(memberKey(node)) && !isGlobalObject(node.object)) {
       report(node, 'engine-stage', `reaches "${memberKey(node)}" by bracket access`);
     }
     if (
@@ -425,8 +468,18 @@ function scanCli(cliRoot) {
   const violations = [];
   let engineImports = 0;
 
-  for (const file of filesUnder(cliRoot)) {
-    const relative = path.relative(path.dirname(cliRoot), file).split(path.sep).join('/');
+  const toRelative = (file) => path.relative(path.dirname(cliRoot), file).split(path.sep).join('/');
+  const { files, links } = filesUnder(cliRoot);
+  for (const link of links) {
+    violations.push({
+      file: toRelative(link),
+      line: 1,
+      rule: 'symlink',
+      message: 'is a symbolic link; cli/ holds only real files, so every file is scanned where it lives',
+    });
+  }
+  for (const file of files) {
+    const relative = toRelative(file);
     const source = fs.readFileSync(file, 'utf8');
     const isRuntime = file.startsWith(runtimeDirectory) || file === runtimeBin;
     if (file.startsWith(runtimeDirectory)) {
@@ -436,7 +489,17 @@ function scanCli(cliRoot) {
         offset = source.indexOf(FORBIDDEN_CONFIG, offset + 1);
       }
     }
-    if (!SOURCE_EXTENSIONS.has(path.extname(file))) continue;
+    const extension = path.extname(file);
+    if (DATA_EXTENSIONS.has(extension)) continue;
+    if (!SOURCE_EXTENSIONS.has(extension)) {
+      violations.push({
+        file: relative,
+        line: 1,
+        rule: 'unscanned',
+        message: `has extension "${extension}", which the scanner does not parse; cli/ holds .js, .cjs and .mjs code and ${[...DATA_EXTENSIONS].join(', ')} data only`,
+      });
+      continue;
+    }
 
     let ast;
     try {
@@ -813,6 +876,69 @@ const PLANTS = [
       "const Ajv = require('ajv');\nconst ajv = new Ajv();\nfunction f(ajv) {\n  return ajv.compile({});\n}\nmodule.exports = { f, ajv };\n",
   },
 
+  // Review round 3
+  {
+    name: 'a createRequire imported under another name',
+    rule: 'engine-import',
+    file: 'lib/created-renamed.mjs',
+    source:
+      "import { createRequire as cr } from 'node:module';\nconst load = cr(import.meta.url);\nexport const eq = load('eval-quality');\n",
+  },
+  {
+    name: 'a createRequire destructured under another name',
+    rule: 'engine-import',
+    file: 'lib/created-destructured.js',
+    source: "const { createRequire: cr } = require('node:module');\nconst load = cr(__filename);\nconst eq = load('eval-quality');\n",
+  },
+  {
+    name: 'an alias of require',
+    rule: 'engine-import',
+    file: 'lib/require-alias.js',
+    source: "const r = require;\nconst eq = r('eval-quality');\n",
+  },
+  {
+    name: 'a computed specifier through an alias of require under the runtime',
+    rule: 'dynamic-specifier',
+    file: 'lib/evaluate/require-alias.js',
+    source: "const r = require;\nconst name = './engine';\nconst engine = r(name);\n",
+  },
+  {
+    name: 'a symbolic link under cli/',
+    rule: 'symlink',
+    file: 'lib/linked.js',
+    links: { 'lib/linked.js': 'evaluate/engine.js' },
+  },
+  {
+    name: 'a TypeScript file Node runs natively',
+    rule: 'unscanned',
+    file: 'lib/evaluate/stage.ts',
+    source: "const engine = require('./engine');\nengine.runScore({});\n",
+  },
+  {
+    name: 'an extensionless script',
+    rule: 'unscanned',
+    file: 'run-engine',
+    source: "#!/usr/bin/env node\nrequire('eval-quality');\n",
+  },
+  {
+    name: 'seal on a rebound Object',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/object-rebound.js',
+    source: "const Object = require('./engine');\nObject.seal({});\n",
+  },
+  {
+    name: 'seal by bracket on an Object parameter',
+    rule: 'engine-stage',
+    file: 'lib/evaluate/object-parameter.js',
+    source: "function f(Object) {\n  return Object['seal']();\n}\nmodule.exports = { f };\n",
+  },
+  {
+    name: 'import.meta.resolve of the engine',
+    rule: 'engine-import',
+    file: 'lib/meta-resolve.mjs',
+    source: "export const where = import.meta.resolve('eval-quality');\n",
+  },
+
   // bmad-config and parse
   {
     name: 'a _bmad path under the runtime',
@@ -895,10 +1021,15 @@ function plantedTree(plant) {
   const cliRoot = path.join(root, 'cli');
   fs.mkdirSync(path.join(cliRoot, RUNTIME_DIRECTORY), { recursive: true });
   fs.writeFileSync(path.join(cliRoot, ENGINE_MODULE), ENGINE_STUB);
-  for (const [file, source] of Object.entries({ ...plant.extra, [plant.file]: plant.source })) {
+  const written = plant.source === undefined ? { ...plant.extra } : { ...plant.extra, [plant.file]: plant.source };
+  for (const [file, source] of Object.entries(written)) {
     const target = path.join(cliRoot, file);
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, source);
+  }
+  for (const [link, target] of Object.entries(plant.links ?? {})) {
+    fs.mkdirSync(path.dirname(path.join(cliRoot, link)), { recursive: true });
+    fs.symlinkSync(target, path.join(cliRoot, link));
   }
   return { root, cliRoot };
 }
