@@ -4,7 +4,7 @@ What CAP-11 (CI enforcement wiring) and CAP-12 (evidence publishing) have to dec
 
 ## The three CI tiers TeA already proposed
 
-`docs/explanation/eval-quality-roadmap.md` section 5 names three tiers, unimplemented as a general pattern before Evaluate: **Deterministic** (every pull request; no credentials; compile, data validation, scorer replay), **Smoke** (manual and scheduled; one qualified case per suite; bounded model use), **Full matrix** (manual, scheduled, and release candidate; every suite at its required repetition count). CAP-11 wires an adopter's CI to this shape.
+`docs/explanation/eval-quality-roadmap.md` section 5 names three tiers, unimplemented as a general pattern before Evaluate: **Deterministic** (every pull request; no credentials; compile, data validation, scorer replay), **Smoke** (manual and scheduled; one qualified case per suite; bounded model use), **Full matrix** (manual, scheduled, and release candidate; every suite at its required repetition count). CAP-11 wires an adopter's CI to this shape. AD-10 splits these three into four runtime tiers: Deterministic is `pr`, Smoke is `merge`, and Full matrix is `scheduled` and `release`, matching the suite manifest mapping in the spine's Consistency Conventions.
 
 ## The CI evaluation set
 

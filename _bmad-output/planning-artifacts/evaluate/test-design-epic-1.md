@@ -48,8 +48,8 @@ inputDocuments:
 
 **Coverage summary:**
 
-- P0: 80 scenarios over the runtime's integrity paths (rollback, verdict source, infrastructure classification, evaluator isolation, held-out redaction, calibration, the dogfood proof, the behavioral proofs of guidance)
-- P1: 65 scenarios over authoring checks, adapters, registration, the evaluation layer and craft headings
+- P0: 81 scenarios over the runtime's integrity paths (rollback, verdict source, infrastructure classification, evaluator isolation, held-out redaction, calibration, the dogfood proof, the behavioral proofs of guidance)
+- P1: 67 scenarios over authoring checks, adapters, registration, the evaluation layer and craft headings
 - P2: 12 scenarios over guidance text, packaging and documentation counts
 - New `npm test` scripts: `test:trial-set-scoring`, `test:evaluate-boundaries`, `test:evaluate-check`, `test:evaluate-preflight`, `test:evaluate-mutation`, `test:evaluate-run`, `test:evaluate-arms`, `test:evaluate-evaluators`, `test:evaluate-mcp`, `test:evaluate-api`, `test:evaluate-workflow`, `test:evaluate-tool-use`, `test:evaluate-promptfoo`, `test:evaluate-partitions`, `test:evaluate-calibration`, `test:evaluate-interpret`, `test:evaluate-guidance`, `test:evaluate-authoring`, `test:evaluate-gap-loop`, `test:evaluate-learned-framework`, each with its own `quality.yaml` step in the `validate` job
 
@@ -282,6 +282,7 @@ Levels: integration over real eval-quality, contract, unit. File: `test/test-eva
 | Requests only from `interactionPlan` bound from `testData` | Stub target logs its received input; assert it equals the bound plan literal | Integration | P1 | A hard-coded request differs from the logged input |
 | Deterministic evaluator over `resolveCheck` | Unit: a synthetic observation resolves to the expected finding set | Unit | P1 | Swapping the evaluator changes the finding |
 | `IsolationManifest` per trial set, `EvaluatorConfiguration` per run with `sealedBriefDigest`, `run.json` fields | Contract validation against eval-quality schemas; `sealedBriefDigest` equals the digest of the persisted sealed brief | Contract | P0 | A stale digest fails equality |
+| A no-model run's `EvaluatorConfiguration` validates: `modelSnapshot` is `none`, `systemPromptDigest` is `digestBytes` over the empty byte string | Schema validation of the generated configuration | Contract | P1 | Leaving either field empty fails validation |
 | Infrastructure exit yields no record, invocation exits 12 | Stub exiting 4 in one trial | Integration | P0 | Recording the trial yields a record and exit 0 or 2 |
 | `score` once per probe, every `--record`, exit passed through | A logging shim at `TEA_EVALUATE_ENGINE_CLI` records one `score` argv per probe with every trial's `--record`; with the real engine, a direct `eval-quality score` on the persisted inputs gives equal exit and byte-equal evidence on a passing and a FAIL fixture | Integration over real eval-quality | P0 | Computing the exit in the runtime makes the FAIL fixture's exits differ |
 | Artifacts validated before the CLI | Corrupt one field in memory through a test hook; assert the runtime refuses before spawning | Contract | P1 | Validation removed lets the CLI reject with exit 4 instead, which the test distinguishes |
@@ -316,6 +317,8 @@ File: `test/test-evaluate-evaluators.js` (`test:evaluate-evaluators`), stub eval
 | Bridge exposes one tool per brief interface with a kind-generic call shape, maps authorized calls to the contract `operationId`, and records `evaluator-chosen` observations with routed `cwd`; a call the registry authorization does not grant is denied with eval-quality's denial reason and no launch | MCP client drives the bridge for each interface kind; launch marker absent on denial; an authorized call matching no declared operation is recorded unmatched | Integration | P0 | A bridge that forwards every call writes the marker |
 | `EvaluatorConfiguration` validates against its strict published schema, with kind and digests under `decodingParameters` (`tea.evaluatorKind`, `tea.evaluatorExecutableDigest`, `tea.evaluatorTreeDigest`) | Schema validation; one byte edited under `evaluator/` changes the configuration digest, the records' `evaluatorConfigurationDigest` and the scoring version | Contract | P1 | Omitting the tree digest leaves the configuration digest unchanged after the edit |
 | `records` evaluator validated and passed through unchanged; invalid record exits 10 before any engine call | Logging engine shim shows no call for the invalid record; valid records reach `score` byte-identical | Integration | P1 | Removing validation lets the shim log a `score` call |
+| Row cardinality: unmapped key or duplicate key fails the row schema, exit 12; zero rows for a trial with a mapped oracle exits 12 | Three stub evaluators, one per shape | Integration | P1 | Accepting a duplicate row produces two findings for one oracle, which the case catches |
+| `evaluator.timeoutMs` required for `command`; a hung evaluator's process group is killed at the timeout, its streams persisted, no record, exit 12 | `test:evaluate-check` case for a missing timeout; a stub that never exits | Integration | P0 | Removing the timeout leaves the test hanging until the harness timeout, which fails it |
 | No framework name under `cli/` | `test:evaluate-boundaries` scan over a name list held in the test | Static | P0 | Adding `require('agentevals')` under `cli/` fails |
 
 ### Story 1.10: Evaluate a stdio MCP tool server
@@ -423,7 +426,7 @@ Levels: guidance, contract. File: `test/test-evaluate-guidance.js`.
 | AC | Test | Level | P | Revert check |
 | --- | --- | --- | --- | --- |
 | Contract guide covers sixteen authored and five identity fields, seven `forbiddenInputs`, non-null criterion | Guidance test reads the field list from `eval-quality/schemas/eval-contract.schema.json` `required` and asserts each is named | Guidance | P1 | Removing a field name fails |
-| Skeleton filled from `test/fixtures/evaluate/contract-fill.json` compiles and seals exit 0; an unfilled placeholder fails; `sourceSpecDigest` equals `digestArtifact` over the fixture's `requirements.md` | Substitute every `{{key}}` from the fill file, run `eval-quality compile` and `seal`; a skeleton key absent from the fill file fails the test before compile; compare the stamped digest | Integration over real eval-quality | P0 | Removing `forbiddenInputs` from the skeleton yields exit 4; stamping any other digest fails equality |
+| Skeleton filled from `test/fixtures/evaluate/contract-fill.json` compiles and seals exit 0; an unfilled placeholder fails; `sourceSpecDigest` equals `digestBytes` over the fixture's `requirements.md` bytes | Substitute every `{{key}}` from the fill file, run `eval-quality compile` and `seal`; a skeleton key absent from the fill file fails the test before compile; compare the stamped digest | Integration over real eval-quality | P0 | Removing `forbiddenInputs` from the skeleton yields exit 4; stamping any other digest fails equality |
 | Oracle guide, adapter guide, stage halts on non-zero with the failure code | Guidance markers | Guidance | P2 | Removal fails |
 | Seven authoring-discipline rules, each with a worked fragment and the gap its absence produces | Heading per rule; tagged fragments compile inside the fill contract | Guidance, integration over real eval-quality | P0 | Removing a rule heading or corrupting its fragment fails |
 | Interaction-plan, sensitivity-witness and waiver headings with worked examples | Heading markers; tagged examples compile | Guidance | P1 | Removal fails |
@@ -548,10 +551,10 @@ Staged, uncommitted overnight: `test/evaluations/bmad-testarch-evaluate/` (`eval
 
 | Priority | Scenarios | Effort range |
 | --- | --- | --- |
-| P0 | 80 | 70 to 105 hours |
-| P1 | 65 | 36 to 60 hours |
+| P0 | 81 | 71 to 106 hours |
+| P1 | 67 | 37 to 61 hours |
 | P2 | 12 | 5 to 9 hours |
-| Total | 157 | 111 to 174 hours, spread over twenty-six stories |
+| Total | 160 | 113 to 176 hours, spread over twenty-six stories |
 
 ## Quality Gate Criteria
 
