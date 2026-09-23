@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:mutation",
+  "title": "mutations/M-NNN.mutation.json",
+  "description": "One controlled mutation (AD-8). It is the single source of the qualification's mutationSource, targetArtifact, operator and expectedObservableFailure. tea-evaluate check refuses an operator other than replace-exact with exactly one occurrence, and a targetArtifact inside a provisioned directory, under their own rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "mutationId", "mutationSource", "targetArtifact", "operator", "expectedObservableFailure"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "mutationId": { "type": "string" },
+    "mutationSource": {
+      "description": "Where the mutation came from, in the author's terms.",
+      "type": "string",
+      "minLength": 1
+    },
+    "targetArtifact": {
+      "description": "The mutated file, relative to the target's root, in POSIX form.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+    },
+    "operator": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "type": "string" },
+        "find": { "type": "string", "minLength": 1 },
+        "replace": { "type": "string" },
+        "occurrences": { "type": "integer" }
+      }
+    },
+    "expectedObservableFailure": { "type": "string", "minLength": 1 }
+  }
+}

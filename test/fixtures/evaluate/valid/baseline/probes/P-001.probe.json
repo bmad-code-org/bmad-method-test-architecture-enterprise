@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "systemId": "atdd-red-phase",
+  "implementationDigest": "sha256:91ec0f8847dba0003066b5304d00b148131f75d8b84653d3e3e0ab4444bac829",
+  "artifactDigest": "sha256:91ec0f8847dba0003066b5304d00b148131f75d8b84653d3e3e0ab4444bac829",
+  "commitDigest": "sha256:91ec0f8847dba0003066b5304d00b148131f75d8b84653d3e3e0ab4444bac829",
+  "rationale": "Clean control: the unmutated skill writes the scaffold the prompt names and exits 0.",
+  "qualification": {
+    "route": "clean-control",
+    "baselinePassEvidence": {
+      "storage": "public",
+      "path": "baseline/qualification/P-001.baseline-pass.json",
+      "privateRef": null,
+      "digest": "sha256:91ec0f8847dba0003066b5304d00b148131f75d8b84653d3e3e0ab4444bac829"
+    },
+    "revisionCommitDigest": "sha256:91ec0f8847dba0003066b5304d00b148131f75d8b84653d3e3e0ab4444bac829",
+    "noKnownDefectStatement": "The skill at the evaluated revision has no known defect in the generation command."
+  },
+  "expectedClean": true,
+  "defects": []
+}

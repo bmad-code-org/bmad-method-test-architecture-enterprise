@@ -1,0 +1,5 @@
+{
+  "interactionId": "tea-atdd-runner-run",
+  "exitCode": 0,
+  "stdout": "wrote tests/api/reservations.spec.ts\n"
+}

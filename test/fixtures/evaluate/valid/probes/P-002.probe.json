@@ -1,0 +1,95 @@
+{
+  "probeId": "P-002",
+  "probeClass": "defect",
+  "behaviorId": "B-001",
+  "expectedClean": false,
+  "rationale": "Seeded defect: M-001 makes the generation step write active tests, and the runner reports that through its exit code.",
+  "defects": [
+    {
+      "defectId": "D-001",
+      "behaviorId": "B-001",
+      "summary": "The generation step writes active tests, so the runner exits non-zero.",
+      "severity": "critical",
+      "source": "controlled-mutation",
+      "manifestationWitness": {
+        "legId": "manifest-active-tests",
+        "interfaceId": "tea-atdd-runner",
+        "operationId": "generate-red-phase-tests",
+        "inputs": {
+          "argument": {},
+          "option": {
+            "agent": "claude"
+          },
+          "environment": {},
+          "stdin": {
+            "kind": "text",
+            "value": "Generate the red-phase scaffold for the cancel-reservation story."
+          }
+        },
+        "relation": {
+          "op": "not",
+          "operands": [
+            {
+              "op": "equality",
+              "operands": [
+                {
+                  "pointer": "/interactions/manifest-active-tests/exit-code"
+                },
+                {
+                  "literal": 0
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "defectSignature": {
+    "interfaceKind": "cli",
+    "invocation": {
+      "executable": "tea-atdd-runner",
+      "subcommandPath": []
+    },
+    "observableChannel": "exit-code",
+    "condition": {
+      "selector": {
+        "inputBinding": {
+          "path": null,
+          "query": null,
+          "header": null,
+          "body": null,
+          "argument": null,
+          "option": {
+            "agent": {
+              "matcher": "any"
+            }
+          },
+          "environment": null,
+          "stdin": null,
+          "arguments": null
+        }
+      },
+      "predicate": {
+        "op": "not",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/observed/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "qualification": {
+    "route": "controlled-mutation",
+    "mutation": "M-001"
+  }
+}

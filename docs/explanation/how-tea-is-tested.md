@@ -145,13 +145,12 @@ TEA supplies the execution harnesses, domain-specific scorers, fixtures, oracles
 | Evidence & execution | Driving workflow execution and capturing generated artifacts       | Preflighting environments, verifying evidence integrity, and contract sealing |
 | Scoring & strength   | Interpreting domain-specific gaps and triage                       | Mathematical scoring, metric aggregation, and `compareDominance` calculation  |
 
-## Proposed Future Work: Evaluate
+## Evaluate, In Progress
 
-The **Evaluate skill** is proposed future work.
-
-An Evaluate skill has been proposed to help users build evaluations on top of `eval-quality`.
-Its exact scope and execution responsibilities remain to be defined.
-Until Evaluate ships, TEA's evaluation suites serve as the reference implementation.
+The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) helps users build evaluations on top of `eval-quality`, and it is being built story by story.
+It is registered as TEA's tenth workflow, and its runtime, `tea-evaluate`, already validates and digests an evaluation folder ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
+Running an evaluation, scoring it, and wiring it into CI arrive in later stories.
+Until Evaluate authors its own suite, TEA's evaluation suites serve as the reference implementation.
 
 ## Further Reading
 

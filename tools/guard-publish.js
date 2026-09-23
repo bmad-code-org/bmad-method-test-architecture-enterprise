@@ -21,11 +21,29 @@
  * ordinary case, a publish attempted from anywhere else, not to resist someone
  * deliberately forging a CI runner.
  *
+ * It also refuses a manifest that would ship Evaluate broken: the
+ * `tea-evaluate` bin must point at a file the package carries, and
+ * `eval-quality` must be an optional peer whose range admits no release older
+ * than 4.0.0, the first engine carrying the target-policy export and
+ * trial-set scoring Evaluate needs. Optional, because npm 7 and later install a
+ * required peer automatically and would pull the engine into every project that
+ * installs TeA for its other workflows.
+ *
  * Usage: node tools/guard-publish.js
  * Exit codes: 0 authorized, 1 refused
  */
 
 'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+
+const semver = require('semver');
+
+const PROJECT_ROOT = path.join(__dirname, '..');
+const EVALUATE_BIN = 'tea-evaluate';
+const ENGINE_PACKAGE = 'eval-quality';
+const ENGINE_FLOOR = '4.0.0';
 
 const EXPECTED_REPOSITORY = 'bmad-code-org/bmad-method-test-architecture-enterprise';
 const EXPECTED_WORKFLOW = 'Publish';
@@ -49,7 +67,56 @@ function checkAuthorization(env) {
   return null;
 }
 
+/**
+ * Why `manifest` would publish Evaluate broken, as a list of reasons; empty when it would not.
+ *
+ * @param {Record<string, any>} manifest the parsed package.json
+ * @param {string} [projectRoot] where the bin's path is resolved
+ * @returns {string[]}
+ */
+function checkManifest(manifest, projectRoot = PROJECT_ROOT) {
+  const problems = [];
+  const bin = manifest?.bin?.[EVALUATE_BIN];
+  if (typeof bin !== 'string' || bin.length === 0) {
+    problems.push(`bin["${EVALUATE_BIN}"] is missing`);
+  } else if (!fs.existsSync(path.join(projectRoot, bin)) || !fs.statSync(path.join(projectRoot, bin)).isFile()) {
+    problems.push(`bin["${EVALUATE_BIN}"] points at ${JSON.stringify(bin)}, which is not a file in the package`);
+  }
+
+  const range = manifest?.peerDependencies?.[ENGINE_PACKAGE];
+  if (typeof range === 'string') {
+    let floor = null;
+    try {
+      floor = semver.minVersion(range);
+    } catch {
+      floor = null;
+    }
+    if (floor === null) {
+      problems.push(`peerDependencies["${ENGINE_PACKAGE}"] is ${JSON.stringify(range)}, which is not a valid semver range`);
+    } else if (semver.lt(floor, ENGINE_FLOOR)) {
+      problems.push(
+        `peerDependencies["${ENGINE_PACKAGE}"] is ${JSON.stringify(range)}, which admits ${floor.version}; Evaluate needs ${ENGINE_FLOOR} or later`,
+      );
+    }
+  } else {
+    problems.push(`peerDependencies["${ENGINE_PACKAGE}"] is missing`);
+  }
+
+  if (manifest?.peerDependenciesMeta?.[ENGINE_PACKAGE]?.optional !== true) {
+    problems.push(
+      `peerDependenciesMeta["${ENGINE_PACKAGE}"].optional is not true, so npm would install the engine into every project that installs TeA`,
+    );
+  }
+  return problems;
+}
+
 function main() {
+  const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf8'));
+  const problems = checkManifest(manifest);
+  if (problems.length > 0) {
+    console.error(`publish refused: package.json would ship Evaluate broken:\n${problems.map((problem) => `  - ${problem}`).join('\n')}`);
+    return 1;
+  }
   const reason = checkAuthorization(process.env);
   if (reason) {
     console.error(
@@ -65,4 +132,4 @@ function main() {
 
 if (require.main === module) process.exitCode = main();
 
-module.exports = { checkAuthorization, EXPECTED_REPOSITORY, EXPECTED_WORKFLOW };
+module.exports = { checkAuthorization, checkManifest, ENGINE_FLOOR, EXPECTED_REPOSITORY, EXPECTED_WORKFLOW };

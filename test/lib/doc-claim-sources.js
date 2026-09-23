@@ -19,6 +19,7 @@ const yaml = require('yaml');
 const { parseRegistryRows } = require('../../tools/validate-criteria-fragments.js');
 const { EXIT, VERDICT_KEYS, SKIP_KEYS } = require('../../cli/test-review.js');
 const { RECOMMENDATION_ENUM } = require('../../cli/lib/parse-report.js');
+const { EXIT_CODES: EVALUATE_EXIT_CODES } = require('../../cli/evaluate.js');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
@@ -89,8 +90,11 @@ exports.SKIP_SCHEMA = schemaFromKeys(SKIP_KEYS);
 // codes
 // ---------------------------------------------------------------------------
 
-/** The exit codes `tea-test-review` documents, as strings (`readModuleStrings` reads an array of strings). */
-exports.EXIT_CODE_STRINGS = Object.values(EXIT).map(String);
+/**
+ * The exit codes `tea-test-review` and `tea-evaluate` document, as strings
+ * (`readModuleStrings` reads an array of strings), each code once.
+ */
+exports.EXIT_CODE_STRINGS = [...new Set([...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES)].map(String))];
 
 // ---------------------------------------------------------------------------
 // dated

@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:evaluation",
+  "title": "evaluation.json",
+  "description": "TeA's manifest for one Evaluate evaluation folder. The tea-evaluate runtime owns this schema. The top level is closed, so each later field is an additive schema change with its own check cases.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "evaluationId",
+    "targetKind",
+    "interface",
+    "registry",
+    "launch",
+    "workspace",
+    "arms",
+    "trials",
+    "tiers",
+    "strengthFloor"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "description": "The evaluation.json format version. tea-evaluate check refuses a version the installed runtime does not know before it validates anything else.",
+      "const": 1
+    },
+    "evaluationId": {
+      "description": "Kebab-case identifier; the evaluation folder is named after it.",
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "targetKind": {
+      "description": "What is evaluated (AD-4). Recorded only here, never in a contract.",
+      "enum": ["agent", "skill", "workflow", "tool-use", "ai-feature", "test-review-mechanism"]
+    },
+    "interface": {
+      "description": "The interface kind the contract declares. A web application maps to api; web is never emitted.",
+      "enum": ["cli", "api", "mcp"]
+    },
+    "registry": {
+      "description": "Execution-target registry entries. Story 1.5 defines their shape.",
+      "type": "object"
+    },
+    "launch": {
+      "description": "How the target is launched. Story 1.5 defines its shape.",
+      "type": "object"
+    },
+    "workspace": {
+      "description": "The disposable copy a run and a mutation happen in (AD-8).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "provision"],
+      "properties": {
+        "kind": {
+          "description": "git: a detached worktree at the evaluated commit. copy: a temp copy identified by its tree digest.",
+          "enum": ["git", "copy"]
+        },
+        "provision": {
+          "description": "Relative directories linked read-only into the copy (for example node_modules). A mutation may not target a file inside one.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+          }
+        }
+      }
+    },
+    "arms": {
+      "description": "The condition arms a run executes.",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["clean", "mutated"] }
+    },
+    "trials": {
+      "description": "Trials per probe per arm.",
+      "type": "integer",
+      "minimum": 1
+    },
+    "tiers": {
+      "description": "The CI tiers this evaluation takes part in (AD-10).",
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["pr", "merge", "scheduled", "release"] }
+    },
+    "strengthFloor": {
+      "description": "Minimum catch rate per probe class, from 0 to 1.",
+      "type": "object",
+      "propertyNames": { "enum": ["defect", "gameability", "zero-action", "canary"] },
+      "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+    }
+  }
+}

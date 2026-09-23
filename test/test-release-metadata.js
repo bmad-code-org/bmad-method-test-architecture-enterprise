@@ -6,6 +6,8 @@
  * - the package is not marked private
  * - publishConfig.access remains public
  * - the active stable-release step transports large changelog notes outside argv
+ * - the `tea-evaluate` bin and the optional `eval-quality` peer (floor 4.0.0)
+ *   are declared, and package-lock.json's root entry carries the same
  *
  * Usage: node test/test-release-metadata.js
  */
@@ -14,6 +16,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const semver = require('semver');
 const { parse: parseYaml } = require('yaml');
 
 const projectRoot = path.join(__dirname, '..');
@@ -86,6 +89,41 @@ if (!marketplacePlugin) {
   errors.push(
     `.claude-plugin/marketplace.json version ${marketplacePlugin.version} does not match package.json version ${packageJson.version}.`,
   );
+}
+
+// Evaluate's runtime: the bin, and eval-quality as an optional peer no older
+// than 4.0.0. The lockfile's root entry mirrors package.json, so a manifest
+// edit that skipped `npm install` is caught here too.
+const EVALUATE_BIN = 'tea-evaluate';
+const ENGINE_PACKAGE = 'eval-quality';
+const ENGINE_FLOOR = '4.0.0';
+const lockRoot = packageLock.packages?.[''] ?? {};
+
+const evaluateBin = packageJson.bin?.[EVALUATE_BIN];
+if (typeof evaluateBin !== 'string' || !fs.existsSync(path.join(projectRoot, evaluateBin))) {
+  errors.push(`package.json bin["${EVALUATE_BIN}"] is ${JSON.stringify(evaluateBin ?? null)}; it must name a file the package carries.`);
+}
+if (lockRoot.bin?.[EVALUATE_BIN] !== evaluateBin) {
+  errors.push(
+    `package-lock.json root bin["${EVALUATE_BIN}"] ${JSON.stringify(lockRoot.bin?.[EVALUATE_BIN] ?? null)} does not match package.json.`,
+  );
+}
+
+const peerRange = packageJson.peerDependencies?.[ENGINE_PACKAGE];
+const peerFloor = typeof peerRange === 'string' && semver.validRange(peerRange) ? semver.minVersion(peerRange) : null;
+if (peerFloor === null || semver.lt(peerFloor, ENGINE_FLOOR)) {
+  errors.push(
+    `package.json peerDependencies["${ENGINE_PACKAGE}"] is ${JSON.stringify(peerRange ?? null)}; its floor must be ${ENGINE_FLOOR} or later.`,
+  );
+}
+if (packageJson.peerDependenciesMeta?.[ENGINE_PACKAGE]?.optional !== true) {
+  errors.push(`package.json peerDependenciesMeta["${ENGINE_PACKAGE}"].optional must be true.`);
+}
+if (lockRoot.peerDependencies?.[ENGINE_PACKAGE] !== peerRange) {
+  errors.push(`package-lock.json root peerDependencies["${ENGINE_PACKAGE}"] does not match package.json.`);
+}
+if (lockRoot.peerDependenciesMeta?.[ENGINE_PACKAGE]?.optional !== packageJson.peerDependenciesMeta?.[ENGINE_PACKAGE]?.optional) {
+  errors.push(`package-lock.json root peerDependenciesMeta["${ENGINE_PACKAGE}"] does not match package.json.`);
 }
 
 if (releaseStep?.run) {

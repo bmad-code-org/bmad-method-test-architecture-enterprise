@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tea:evaluate:schema:committed-probe",
+  "title": "probes/P-NNN.probe.json",
+  "description": "The authored subset of an eval-quality probe that an evaluation folder commits (AD-9). Runtime-owned fields (schemaVersion, lineage, systemId, the three attested digests, every evidence reference, rollbackVerified, and the qualification fields a mutation file owns) are refused by tea-evaluate check under their own rule, and the runtime writes the qualified probe into runs/ and baseline/. Identifier patterns are checked by their own rule against eval-quality's published patterns.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["probeId", "probeClass", "behaviorId", "expectedClean", "rationale", "defects", "qualification"],
+  "properties": {
+    "probeId": { "type": "string" },
+    "probeClass": { "enum": ["defect", "gameability", "zero-action", "canary"] },
+    "behaviorId": { "type": "string" },
+    "expectedClean": { "type": "boolean" },
+    "rationale": { "type": "string", "minLength": 1 },
+    "defects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["defectId", "behaviorId", "summary", "severity", "source", "manifestationWitness"],
+        "properties": {
+          "defectId": { "type": "string" },
+          "behaviorId": { "type": "string" },
+          "summary": { "type": "string", "minLength": 1 },
+          "severity": { "enum": ["low", "material", "critical"] },
+          "source": { "enum": ["natural", "controlled-mutation"] },
+          "manifestationWitness": {
+            "description": "Validated against eval-quality's published probe schema.",
+            "type": ["object", "null"]
+          }
+        }
+      }
+    },
+    "defectSignature": {
+      "description": "Validated against eval-quality's published probe schema.",
+      "type": "object"
+    },
+    "qualification": {
+      "description": "The qualification route and the inputs its author supplies. The runtime adds the evidence the route demands.",
+      "type": "object",
+      "required": ["route"],
+      "properties": {
+        "route": { "enum": ["historical", "controlled-mutation", "gameability", "canary", "clean-control"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "route": { "const": "historical" } } },
+          "then": {
+            "additionalProperties": false,
+            "required": ["route", "fixCommit"],
+            "properties": { "route": true, "fixCommit": { "type": "string", "minLength": 1 } }
+          }
+        },
+        {
+          "if": { "properties": { "route": { "const": "controlled-mutation" } } },
+          "then": {
+            "additionalProperties": false,
+            "required": ["route", "mutation"],
+            "properties": {
+              "route": true,
+              "mutation": { "description": "The M-NNN identifier of a file under mutations/.", "type": "string" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "route": { "const": "gameability" } } },
+          "then": {
+            "additionalProperties": false,
+            "required": ["route", "degenerateResponse"],
+            "properties": { "route": true, "degenerateResponse": { "type": "string", "minLength": 1 } }
+          }
+        },
+        {
+          "if": { "properties": { "route": { "const": "canary" } } },
+          "then": {
+            "additionalProperties": false,
+            "required": ["route", "indicts"],
+            "properties": { "route": true, "indicts": { "enum": ["corpus", "fixture"] } }
+          }
+        },
+        {
+          "if": { "properties": { "route": { "const": "clean-control" } } },
+          "then": {
+            "additionalProperties": false,
+            "required": ["route", "noKnownDefectStatement"],
+            "properties": { "route": true, "noKnownDefectStatement": { "type": "string", "minLength": 1 } }
+          }
+        }
+      ]
+    }
+  }
+}

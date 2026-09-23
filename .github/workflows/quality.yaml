@@ -182,6 +182,12 @@ jobs:
       - name: Validate the Evaluate skill's stage guidance list
         run: npm run test:evaluate-guidance
 
+      - name: Check and digest Evaluate folders with tea-evaluate, including a packed install
+        run: npm run test:evaluate-check
+
+      - name: Hold tea-evaluate's engine boundary over cli/
+        run: npm run test:evaluate-boundaries
+
       - name: Test knowledge base (index sync, link resolution, workflow-copy parity)
         run: npm run test:knowledge
 

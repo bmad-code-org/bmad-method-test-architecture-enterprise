@@ -1,0 +1,345 @@
+{
+  "schemaVersion": 5,
+  "parentDigest": null,
+  "revisionCount": 0,
+  "contractId": "tea-evaluate-check-fixture",
+  "sourceSpecDigest": "sha256:7db023f2dc7a820a5fb2fcf398042b41d11aabf9b28d4b0a72c9b74e154ced92",
+  "behaviors": [
+    {
+      "id": "B-001",
+      "description": "The run wrote the one scaffold file the prompt asked for and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad scaffold.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The run left the scaffold the prompt named on disk and exited 0.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "projectRoot"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "unmeasurable-run-scored-as-a-miss"
+        }
+      ],
+      "oracles": [
+        "O-001"
+      ]
+    },
+    {
+      "id": "B-002",
+      "description": "The scaffold carries the workflow's own red-phase call, `test.skip(`. A file with none of these was never a red-phase scaffold to begin with, whatever else it asserts.",
+      "severity": "critical",
+      "observableSuccessCriterion": "The scaffold's tests are declared with the workflow's own test.skip() call.",
+      "requirementLinks": [
+        {
+          "scheme": "tea-eval-ground-truth",
+          "id": "projectRoot"
+        }
+      ],
+      "riskLinks": [
+        {
+          "scheme": "tea-eval-risk",
+          "id": "active-scaffold-shipped-as-red-phase"
+        }
+      ],
+      "oracles": [
+        "O-002"
+      ]
+    }
+  ],
+  "oracles": [
+    {
+      "id": "O-001",
+      "polarity": "expects-hold",
+      "commentary": "The run wrote the one scaffold file the prompt asked for and exited clean. A run that wrote nothing, or that exited non-zero, is an environment failure and is never scored as a bad scaffold.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "all",
+        "scope": "The exit code and the scaffold artifact of the generation run.",
+        "negativeDomain": "A run that left no scaffold behind, or whose command reported a failure class through its exit code.",
+        "evidenceTargets": [
+          "/interactions/tea-atdd-runner-run/artifact/scaffold",
+          "/interactions/tea-atdd-runner-run/exit-code"
+        ]
+      },
+      "check": {
+        "op": "all",
+        "operands": [
+          {
+            "op": "equality",
+            "operands": [
+              {
+                "pointer": "/interactions/tea-atdd-runner-run/exit-code"
+              },
+              {
+                "literal": 0
+              }
+            ]
+          },
+          {
+            "op": "existence",
+            "operands": [
+              {
+                "pointer": "/interactions/tea-atdd-runner-run/artifact/scaffold"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "O-002",
+      "polarity": "expects-hold",
+      "commentary": "The scaffold carries the workflow's own red-phase call, `test.skip(`. A file with none of these was never a red-phase scaffold to begin with, whatever else it asserts.",
+      "direction": {
+        "polarity": "expects-hold",
+        "relation": "containment",
+        "scope": "The scaffold file, read as one document.",
+        "negativeDomain": "A scaffold emitted as an active test, with no test.skip() call anywhere in it.",
+        "evidenceTargets": [
+          "/interactions/tea-atdd-runner-run/artifact/scaffold"
+        ]
+      },
+      "check": {
+        "op": "containment",
+        "operands": [
+          {
+            "pointer": "/interactions/tea-atdd-runner-run/artifact/scaffold"
+          },
+          {
+            "literal": "test.skip("
+          }
+        ]
+      }
+    }
+  ],
+  "rubrics": [],
+  "waivers": [],
+  "permittedInterfaces": [
+    {
+      "logicalId": "tea-atdd-runner",
+      "kind": "cli",
+      "operations": [
+        {
+          "operationId": "generate-red-phase-tests",
+          "invocation": {
+            "executable": "tea-atdd-runner",
+            "subcommandPath": []
+          },
+          "stateChangeMarker": true,
+          "requestShape": {
+            "argument": {
+              "requiredKeys": [],
+              "permittedKeys": [],
+              "types": {}
+            },
+            "option": {
+              "requiredKeys": [
+                "agent"
+              ],
+              "permittedKeys": [
+                "agent",
+                "agent-cmd",
+                "agent-arg",
+                "env-pass",
+                "model",
+                "timeout-ms"
+              ],
+              "types": {
+                "agent": "string",
+                "agent-cmd": "string",
+                "agent-arg": "string",
+                "env-pass": "string",
+                "model": "string",
+                "timeout-ms": "string"
+              }
+            },
+            "environment": {
+              "requiredKeys": [],
+              "permittedKeys": [
+                "ANTHROPIC_API_KEY",
+                "ANTHROPIC_BASE_URL",
+                "CLAUDE_CODE_OAUTH_TOKEN",
+                "HOME",
+                "OPENAI_API_KEY",
+                "USER"
+              ],
+              "types": {
+                "ANTHROPIC_API_KEY": "string",
+                "ANTHROPIC_BASE_URL": "string",
+                "CLAUDE_CODE_OAUTH_TOKEN": "string",
+                "HOME": "string",
+                "OPENAI_API_KEY": "string",
+                "USER": "string"
+              }
+            },
+            "stdin": {
+              "requiredKeys": [
+                "prompt"
+              ],
+              "permittedKeys": [
+                "prompt"
+              ],
+              "types": {
+                "prompt": "string"
+              }
+            }
+          },
+          "artifacts": [
+            "scaffold"
+          ],
+          "descriptorChannel": {
+            "kind": "artifact",
+            "artifactId": "scaffold"
+          },
+          "responseDescriptor": {
+            "requiredKeys": [],
+            "permittedKeys": [],
+            "types": {},
+            "successIndicator": null,
+            "channelRoles": null,
+            "collectionLocations": null
+          },
+          "volatilePointers": [],
+          "sensitivityWitness": {
+            "witnessId": "story-file-follows-the-prompt",
+            "channel": "stdin",
+            "legs": [
+              {
+                "legId": "witness-corpus-story",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-atdd` against the project in `reservations/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `reservations`\n- `{config_source}`: `reservations/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `reservations/test-artifacts`\n- `{test_dir}`: `reservations/tests`\n- `{skill-root}`: `skill`\n- `{story_file}`: `reservations/docs/stories/4-2-reserve-a-locker.md`\n\nThe story is at `reservations/docs/stories/4-2-reserve-a-locker.md`. Read the whole project under\n`reservations/` to discover its stack, existing routes, and test framework the way step-01 says to;\nnothing outside that directory is relevant to this story.\n\n----- what to produce -----\nGenerate red-phase acceptance test scaffolds for every acceptance criterion the story states, into\nexactly one file: `reservations/tests/api/reservations.spec.ts`. The fixture is a\nJSON API with no browser surface, so every criterion is an API test and none needs the workflow's\nE2E worker. Every scaffold must be a `test.skip()` call, per the workflow's own TDD red-phase rule,\nasserting the behavior the criterion promises rather than a placeholder. Do not add, edit, or delete\nany file outside that one path: this workflow generates tests and touches nothing else.\n\nWhen you are done, print one line naming how many test files you wrote. Nothing else you print is read."
+                  }
+                }
+              },
+              {
+                "legId": "witness-only-story",
+                "inputs": {
+                  "argument": {},
+                  "option": {
+                    "agent": "claude"
+                  },
+                  "environment": {},
+                  "stdin": {
+                    "kind": "text",
+                    "value": "You are running the TEA workflow `bmad-testarch-atdd` against the project in `reservations/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `reservations`\n- `{config_source}`: `reservations/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `reservations/test-artifacts`\n- `{test_dir}`: `reservations/tests`\n- `{skill-root}`: `skill`\n- `{story_file}`: `reservations/../witness/docs/stories/9-1-witness-only-story.md`\n\nThe story is at `reservations/../witness/docs/stories/9-1-witness-only-story.md`. Read the whole project under\n`reservations/` to discover its stack, existing routes, and test framework the way step-01 says to;\nnothing outside that directory is relevant to this story, except `{story_file}` itself, named above.\n\n----- what to produce -----\nGenerate red-phase acceptance test scaffolds for every acceptance criterion the story states, into\nexactly one file: `reservations/tests/api/reservations.spec.ts`. The fixture is a\nJSON API with no browser surface, so every criterion is an API test and none needs the workflow's\nE2E worker. Every scaffold must be a `test.skip()` call, per the workflow's own TDD red-phase rule,\nasserting the behavior the criterion promises rather than a placeholder. Do not add, edit, or delete\nany file outside that one path: this workflow generates tests and touches nothing else.\n\nWhen you are done, print one line naming how many test files you wrote. Nothing else you print is read."
+                  }
+                }
+              }
+            ],
+            "relation": {
+              "op": "all",
+              "operands": [
+                {
+                  "op": "containment",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-corpus-story/artifact/scaffold"
+                    },
+                    {
+                      "literal": "AC-1"
+                    }
+                  ]
+                },
+                {
+                  "op": "not",
+                  "operands": [
+                    {
+                      "op": "containment",
+                      "operands": [
+                        {
+                          "pointer": "/interactions/witness-only-story/artifact/scaffold"
+                        },
+                        {
+                          "literal": "AC-1"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "op": "containment",
+                  "operands": [
+                    {
+                      "pointer": "/interactions/witness-only-story/artifact/scaffold"
+                    },
+                    {
+                      "literal": "AC-9"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "referenceSets": {},
+  "siblingGroups": {
+    "operations": [],
+    "parameters": []
+  },
+  "interactionPlan": [
+    {
+      "stepId": "tea-atdd-runner-run",
+      "operationId": "generate-red-phase-tests",
+      "after": null,
+      "cardinality": "exactly-one",
+      "inputBinding": {
+        "argument": null,
+        "option": {
+          "agent": {
+            "matcher": "any"
+          }
+        },
+        "environment": null,
+        "stdin": {
+          "prompt": {
+            "literal": "You are running the TEA workflow `bmad-testarch-atdd` against the project in `reservations/`.\n\nThe workflow is in `skill/`. Read `skill/instructions.md` first, then execute every step file it\nnames in order, in full, without skipping or reordering. The step files are under `skill/steps-c/`.\n\n----- run configuration -----\nResolve the workflow placeholders to these values:\n\n- `{project-root}`: `reservations`\n- `{config_source}`: `reservations/_bmad/tea/config.yaml`\n- `{test_artifacts}`: `reservations/test-artifacts`\n- `{test_dir}`: `reservations/tests`\n- `{skill-root}`: `skill`\n- `{story_file}`: `reservations/docs/stories/4-2-reserve-a-locker.md`\n\nThe story is at `reservations/docs/stories/4-2-reserve-a-locker.md`. Read the whole project under\n`reservations/` to discover its stack, existing routes, and test framework the way step-01 says to;\nnothing outside that directory is relevant to this story.\n\n----- what to produce -----\nGenerate red-phase acceptance test scaffolds for every acceptance criterion the story states, into\nexactly one file: `reservations/tests/api/reservations.spec.ts`. The fixture is a\nJSON API with no browser surface, so every criterion is an API test and none needs the workflow's\nE2E worker. Every scaffold must be a `test.skip()` call, per the workflow's own TDD red-phase rule,\nasserting the behavior the criterion promises rather than a placeholder. Do not add, edit, or delete\nany file outside that one path: this workflow generates tests and touches nothing else.\n\nWhen you are done, print one line naming how many test files you wrote. Nothing else you print is read."
+          }
+        }
+      }
+    }
+  ],
+  "scopedResources": null,
+  "forbiddenInputs": [
+    "original-spec",
+    "source-code",
+    "repository",
+    "builder-transcript",
+    "implementation-logs",
+    "comparator-results",
+    "human-labels"
+  ],
+  "testData": {
+    "setup": "The one plan step stages the reservations fixture project into a disposable workspace: its files under reservations/, a resolved _bmad/tea/config.yaml, an empty tests/, and the bmad-testarch-atdd workflow under skill/. ground-truth.json is never staged, and the harness asserts that no staged file carries its bytes or its keys before the run. The prompt names the one path generation must write, tests/api/reservations.spec.ts, which is what makes the scaffold addressable at all: a path an agent were free to invent is not one a contract can point at before the run. The sensitivity witness differs its two legs on {story_file} rather than on any value within the corpus's own story, because both legs stage the one project this suite has; both name the criterion pattern rather than executing anything, since neither leg is scored by running the scaffold it produces.",
+    "cleanup": "Delete the workspace. Neither leg writes into the fixture itself.",
+    "principals": null,
+    "resources": null
+  },
+  "budgets": {
+    "maxToolCalls": 300,
+    "maxWallClockMinutes": 20,
+    "maxCostUsd": "4.00"
+  },
+  "safetyLimits": [
+    "The runner writes only inside the staged workspace, and only under its own tests/; the harness fails a run that changed the repository or wrote outside that directory.",
+    "No credential value appears in a prompt, an artifact, a log, or a result file."
+  ],
+  "requiredEvidence": [
+    "The scaffold file each run wrote, in full.",
+    "The exit code of the invocation.",
+    "The digest of the prompt the run was given, so an edit that changed the question is visible in the record."
+  ],
+  "probeStepBound": 3,
+  "fixtureReset": null
+}
