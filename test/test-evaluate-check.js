@@ -290,9 +290,156 @@ const DEFECT_CASES = [
   },
 ];
 
-async function checkDefectCases() {
-  const rulesCovered = new Set();
-  for (const testCase of DEFECT_CASES) {
+const STORY_RULES = [
+  'stale-index',
+  'schema-version',
+  'runtime-owned-field',
+  'mutation-operator',
+  'provisioned-target',
+  'web-interface',
+  'written-file-signature',
+  'oracle-count',
+  'id-pattern',
+  'qualification-digest',
+  'clean-control',
+];
+
+/** A file outside the evaluation folder, for the symbolic-link cases to point at. */
+function outsideFile(bytes) {
+  const file = path.join(tempDir('outside'), 'outside.json');
+  fs.writeFileSync(file, bytes);
+  return file;
+}
+
+/**
+ * Folder shapes the final review found crashing or passing: symbolic links and
+ * files where the index or the baseline expects a directory, duplicate IDs,
+ * paths that name the whole target, and a manifest that is not an object. Each
+ * must be an authoring finding (exit 10), never a crash or a pass.
+ */
+const HARDENING_CASES = [
+  {
+    name: 'a symbolic link as the corpus/ root',
+    file: 'corpus',
+    rule: 'corpus-file',
+    redigest: false,
+    digestExit: 10,
+    plant: (folder) => {
+      const outside = path.join(tempDir('outside-root'), 'corpus');
+      fs.cpSync(path.join(folder, 'corpus'), outside, { recursive: true });
+      fs.rmSync(path.join(folder, 'corpus'), { recursive: true });
+      fs.symlinkSync(outside, path.join(folder, 'corpus'), 'dir');
+    },
+  },
+  {
+    name: 'a regular file as the mutations/ root',
+    file: 'mutations',
+    rule: 'corpus-file',
+    redigest: false,
+    digestExit: 10,
+    plant: (folder) => {
+      fs.rmSync(path.join(folder, 'mutations'), { recursive: true });
+      fs.writeFileSync(path.join(folder, 'mutations'), 'not a directory\n');
+    },
+  },
+  {
+    name: 'a directory where corpus-index.json belongs',
+    file: 'corpus-index.json',
+    rule: 'stale-index',
+    redigest: false,
+    digestExit: 10,
+    digestNames: 'corpus-index.json: [corpus-file]',
+    plant: (folder) => {
+      fs.rmSync(path.join(folder, 'corpus-index.json'));
+      fs.mkdirSync(path.join(folder, 'corpus-index.json'));
+    },
+  },
+  {
+    name: 'a symbolic link loop under baseline/',
+    file: 'baseline/loop',
+    rule: 'baseline-file',
+    plant: (folder) => fs.symlinkSync(path.join(folder, 'baseline'), path.join(folder, 'baseline', 'loop'), 'dir'),
+  },
+  {
+    name: 'a qualification reference that is a symbolic link to an outside file with the same bytes',
+    file: 'baseline/probes/P-001.probe.json',
+    rule: 'qualification-digest',
+    plant: (folder) => {
+      const evidence = path.join(folder, 'baseline', 'qualification', 'P-001.baseline-pass.json');
+      const outside = outsideFile(fs.readFileSync(evidence));
+      fs.rmSync(evidence);
+      fs.symlinkSync(outside, evidence);
+    },
+  },
+  {
+    name: 'a qualification directory that is a symbolic link out of the folder',
+    file: 'baseline/probes/P-001.probe.json',
+    rule: 'qualification-digest',
+    plant: (folder) => {
+      const directory = path.join(folder, 'baseline', 'qualification');
+      const outside = path.join(tempDir('outside-qualification'), 'qualification');
+      fs.cpSync(directory, outside, { recursive: true });
+      fs.rmSync(directory, { recursive: true });
+      fs.symlinkSync(outside, directory, 'dir');
+    },
+  },
+  {
+    name: 'a duplicate behavior ID',
+    file: 'contract.json',
+    rule: 'duplicate-id',
+    plant: (folder) => editJson(folder, 'contract.json', (value) => (value.behaviors[1].id = value.behaviors[0].id)),
+  },
+  {
+    name: 'a duplicate oracle ID',
+    file: 'contract.json',
+    rule: 'duplicate-id',
+    plant: (folder) => editJson(folder, 'contract.json', (value) => (value.oracles[1].id = value.oracles[0].id)),
+  },
+  {
+    name: 'a duplicate defect ID within a probe',
+    file: 'probes/P-002.probe.json',
+    rule: 'duplicate-id',
+    plant: (folder) => editJson(folder, 'probes/P-002.probe.json', (value) => value.defects.push({ ...value.defects[0] })),
+  },
+  {
+    name: 'a provisioned directory of "."',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.workspace.provision = ['.'])),
+  },
+  {
+    name: 'a provisioned directory of "./"',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.workspace.provision = ['./'])),
+  },
+  {
+    name: 'a targetArtifact with a drive letter',
+    file: 'mutations/M-001.mutation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'mutations/M-001.mutation.json', (value) => (value.targetArtifact = 'C:/x')),
+  },
+  {
+    name: 'an evaluation.json that is null',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => fs.writeFileSync(path.join(folder, 'evaluation.json'), 'null\n'),
+    expect: (output) => [
+      [output.includes('(root) must be object'), 'the finding does not say the root must be an object'],
+      [!output.includes('[schema-version]'), 'a non-object manifest was told to upgrade TeA'],
+    ],
+  },
+  {
+    name: 'an evaluation.json that is an array',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => fs.writeFileSync(path.join(folder, 'evaluation.json'), '[]\n'),
+    expect: (output) => [[!output.includes('[schema-version]'), 'a non-object manifest was told to upgrade TeA']],
+  },
+];
+
+async function runCases(cases) {
+  for (const testCase of cases) {
     const folder = copyValid();
     testCase.plant(folder);
     if (testCase.redigest !== false) await writeCorpusIndex(folder);
@@ -304,9 +451,23 @@ async function checkDefectCases() {
       `${label}no finding names ${testCase.file} and rule ${testCase.rule}\n${result.output}`,
     );
     for (const [ok, message] of testCase.expect?.(result.output) ?? []) check(ok, `${label}${message}\n${result.output}`);
-    rulesCovered.add(testCase.rule);
+    if (testCase.digestExit !== undefined) {
+      const digest = runCli(['digest', '--evaluation', folder]);
+      check(
+        digest.status === testCase.digestExit,
+        `${label}digest exited ${digest.status}; expected ${testCase.digestExit}\n${digest.output}`,
+      );
+      const names = testCase.digestNames ?? `${testCase.file}: [${testCase.rule}]`;
+      check(digest.stdout.includes(names), `${label}digest did not print ${names}\n${digest.output}`);
+    }
   }
-  check(rulesCovered.size === 11, `the defect cases cover ${rulesCovered.size} distinct rules; the story lists eleven`);
+}
+
+async function checkDefectCases() {
+  await runCases(DEFECT_CASES);
+  const covered = new Set(DEFECT_CASES.map((testCase) => testCase.rule));
+  for (const rule of STORY_RULES) check(covered.has(rule), `no defect case covers the story's ${rule} rule`);
+  await runCases(HARDENING_CASES);
 
   // Two defects in one copy: both are listed, not only the first.
   const folder = copyValid();
@@ -417,10 +578,48 @@ function npm(args, cwd) {
   return result;
 }
 
+/**
+ * npm's own registry fetch failures. The packed install resolves TeA's
+ * production dependencies from the registry, so an outage fails it for a reason
+ * unrelated to TeA; naming it apart keeps it from ever reading as the
+ * missing-module failure this case exists to catch.
+ */
+const REGISTRY_FAILURE = /\b(?:code )?(ENOTFOUND|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAI_AGAIN|E5\d\d)\b/;
+
+/** The registry failure code in npm's output, or null when the failure is something else. */
+function registryFailure(output) {
+  return REGISTRY_FAILURE.exec(output)?.[1] ?? null;
+}
+
+function checkRegistryClassification() {
+  const cases = [
+    ['npm error code ENOTFOUND\nnpm error network request to https://registry.npmjs.org/ajv failed', 'ENOTFOUND'],
+    ['npm error code ETIMEDOUT', 'ETIMEDOUT'],
+    ['npm error code ECONNRESET', 'ECONNRESET'],
+    ['npm error code E503\nnpm error 503 Service Unavailable - GET https://registry.npmjs.org/ajv', 'E503'],
+    ["Error: Cannot find module 'ajv/dist/2020'", null],
+    ['npm error code ERESOLVE', null],
+  ];
+  for (const [output, expected] of cases) {
+    check(
+      registryFailure(output) === expected,
+      `registryFailure read ${JSON.stringify(output)} as ${registryFailure(output)}; expected ${expected}`,
+    );
+  }
+}
+
+function describeNpmFailure(step, result) {
+  const output = `${result.stdout}${result.stderr}`;
+  const code = registryFailure(output);
+  return code === null
+    ? `${step} exited ${result.status}\n${output}`
+    : `registry unreachable (${code}) during ${step}: this is an npm registry or network failure, not a TeA packaging defect\n${output}`;
+}
+
 function checkPackedInstall() {
   const packDirectory = tempDir('pack');
   const pack = npm(['pack', '--ignore-scripts', '--silent', '--pack-destination', packDirectory], PROJECT_ROOT);
-  check(pack.status === 0, `npm pack exited ${pack.status}\n${pack.stderr}`);
+  check(pack.status === 0, describeNpmFailure('npm pack', pack));
   if (pack.status !== 0) return;
   const tarball = path.join(packDirectory, pack.stdout.trim().split('\n').pop());
 
@@ -430,7 +629,7 @@ function checkPackedInstall() {
     `${JSON.stringify({ name: 'tea-evaluate-packed-install', private: true }, null, 2)}\n`,
   );
   const install = npm(['install', '--omit=dev', '--prefer-offline', '--no-audit', '--no-fund', tarball], project);
-  check(install.status === 0, `installing the packed tarball exited ${install.status}\n${install.stderr}`);
+  check(install.status === 0, describeNpmFailure('installing the packed tarball', install));
   if (install.status !== 0) return;
 
   // The optional peer is not installed by npm; the adopter installs it. Here it
@@ -458,6 +657,7 @@ async function main() {
     await checkDigestUnit();
     await checkDigestIntegration();
     checkEngineCliPath();
+    checkRegistryClassification();
     checkPackedInstall();
   } finally {
     for (const directory of scratch) fs.rmSync(directory, { recursive: true, force: true });

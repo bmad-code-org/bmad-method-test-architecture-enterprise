@@ -55,13 +55,13 @@
           "enum": ["git", "copy"]
         },
         "provision": {
-          "description": "Relative directories linked read-only into the copy (for example node_modules). A mutation may not target a file inside one.",
+          "description": "Relative directories linked read-only into the copy (for example node_modules). A mutation may not target a file inside one. Each is POSIX and relative, with no drive letter and no \".\" or \"..\" segment, so none can name the whole target.",
           "type": "array",
           "uniqueItems": true,
           "items": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+            "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\]+$"
           }
         }
       }

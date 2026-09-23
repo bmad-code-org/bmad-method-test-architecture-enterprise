@@ -59,7 +59,7 @@ function loadEngine() {
 /** The directory of the installed engine package, read through its exported `./package.json`. */
 function enginePackageRoot() {
   try {
-    return path.dirname(require.resolve(`${ENGINE_PACKAGE}/package.json`));
+    return path.dirname(require.resolve('eval-quality/package.json'));
   } catch (error) {
     throw new EngineUnavailableError(error);
   }

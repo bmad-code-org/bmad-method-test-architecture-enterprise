@@ -51,7 +51,7 @@ npx tea-evaluate check --evaluation evals/my-evaluation
 | `qualification-digest`   | a public reference under `baseline/qualification/` whose recorded digest does not match the file                                                                                                     |
 | `clean-control`          | a clean control that is not `zero-action` with an expected-clean flag and no defects                                                                                                                 |
 
-Beside those eleven, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior or mutation that does not exist (`reference`), a folder with no `contract.json` (`missing-file`), and a symbolic link or other non-regular entry under `corpus/`, `probes/` or `mutations/` (`corpus-file`), which `digest` refuses with exit 10 as well.
+Beside those eleven, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior or mutation that does not exist (`reference`), a folder with no `contract.json` (`missing-file`), an ID declared twice in one file (`duplicate-id`), a symbolic link or file where `corpus/`, `probes/` or `mutations/` or an entry inside them should be (`corpus-file`), which `digest` refuses with exit 10 as well, and a symbolic link or other non-regular entry under `baseline/` (`baseline-file`). A `baseline/qualification/` reference must resolve to a regular file inside the folder.
 
 ## digest
 

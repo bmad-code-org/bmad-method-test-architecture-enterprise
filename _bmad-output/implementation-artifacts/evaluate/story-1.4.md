@@ -88,7 +88,25 @@ context:
 
 ## Spec Change Log
 
+- 2026-09-23, final review item 10: epics.md Story 1.4 and ARCHITECTURE-SPINE.md AD-9 Versioning now say the unknown-`schemaVersion` finding names the installed TeA version and the schema versions it knows. Both said it names the TeA version that knows the newer schema, which a runtime cannot know for a release newer than itself; the implementation already printed the installed version and the known versions.
+
 ## Review Triage Log
+
+Final review, 2026-09-23. Every item was fixed; each fix has a test that fails when it is reverted.
+
+| # | Severity | Finding | Resolution | Test that fails on revert |
+| --- | --- | --- | --- | --- |
+| 1 | high | `engine-stage` missed `context.engine.runScore(`, `.then` callbacks, a parenthesized await, re-export modules, the library passed as an argument, and computed specifiers | `runScore`, `preflightFromObservations` and `seal` now fail as any identifier, member, destructured key or bracket string under `cli/`, `engine.js` included. `compile` keeps binding tracking, extended to `.then` callbacks (plain and destructured), a parenthesized await, stored promises, aliases, properties holding the library (`context.engine.compile`), and re-export modules to a fixed point across files. A computed `require(`/`require.resolve(`/`import(` under `cli/lib/evaluate/` or in `cli/evaluate.js` is a `dynamic-specifier` violation. `engine.js` now resolves `'eval-quality/package.json'` as a literal | a plant for every listed form in `test:evaluate-boundaries`, including the `check.js` shape for both `runScore` and `compile`; adding `context.engine.compile(` or `context.engine.runScore(` to `check.js` fails the real scan |
+| 2 | low | a bare `import 'eval-quality';` was not caught | `engine-import` also matches a bare side-effect import | the `a bare side-effect import` plant |
+| 3 | medium | a symlinked indexed root was followed, so `digest` indexed outside files and `check` passed | each root is `lstat`ed; a symlinked root is a `corpus-file` finding in `check` and exit 10 in `digest` | `a symbolic link as the corpus/ root` (check and digest) |
+| 4 | medium | a symlink loop under `baseline/` crashed with ELOOP; a qualification reference symlinked to an outside file passed | `baseline/` is walked by `lstat` type, entering only real directories; non-regular entries are `baseline-file` findings; each reference target must be a regular file whose real path is inside the folder's `baseline/qualification/` | `a symbolic link loop under baseline/`, `a qualification reference that is a symbolic link to an outside file with the same bytes`, `a qualification directory that is a symbolic link out of the folder` |
+| 5 | low | an indexed root that is a regular file crashed with ENOTDIR | a non-directory root is a `corpus-file` finding / digest exit 10; `check`'s directory listing no longer reads through it | `a regular file as the mutations/ root` |
+| 6 | low | `digest` crashed with EISDIR when `corpus-index.json` was a directory | `digest` exits 10 naming `corpus-index.json`; `check` reports it as `stale-index` | `a directory where corpus-index.json belongs` |
+| 7 | low | duplicate behavior, oracle and defect IDs passed | new `duplicate-id` rule over `contract.json` behaviors and oracles and each probe's defects | `a duplicate behavior ID`, `a duplicate oracle ID`, `a duplicate defect ID within a probe` |
+| 8 | low | `provision: ["."]` or `"./"` disabled `provisioned-target`; `targetArtifact: "C:/x"` passed | both schemas reject a drive letter and any `.` or `..` segment | `a provisioned directory of "."`, `a provisioned directory of "./"`, `a targetArtifact with a drive letter` |
+| 9 | low | a `null` or array `evaluation.json` got the upgrade-TeA message | a non-object manifest gets `(root) must be object` before the version gate | `an evaluation.json that is null`, `an evaluation.json that is an array` |
+| 10 | low | plan wording promised to name a newer TeA release | epics.md and AD-9 amended (see Spec Change Log) | wording only; the unknown-`schemaVersion` case already asserts the installed version and known versions |
+| 11 | low | a registry outage in the packed install could read as the missing-`ajv` failure | npm's fetch failures (ENOTFOUND, ETIMEDOUT, ECONNRESET, ECONNREFUSED, EAI_AGAIN, E5xx) are reported as `registry unreachable (<code>)`; the network install stays | `checkRegistryClassification` over sample npm outputs |
 
 ## Design Notes
 

@@ -22,7 +22,9 @@
  * - `clean-control`: a clean control is not `zero-action` with `expectedClean: true` and no defects.
  *
  * Beside them, `contract.json` must exist (`missing-file`), every indexed
- * entry must be a regular file or directory (`corpus-file`), and a file must
+ * root and entry must be a real directory or regular file (`corpus-file`), as
+ * must everything under `baseline/` (`baseline-file`), no ID may repeat within
+ * its file (`duplicate-id`), and a file must
  * parse (`json`), match its schema (`schema` for the runtime's own schemas,
  * `engine-schema` for eval-quality's), be named for its ID (`file-name`), and
  * name only behaviors and mutations that exist (`reference`).
@@ -197,15 +199,37 @@ function checkId(report, relative, pattern, value, label) {
   }
 }
 
+/**
+ * The entries of a folder subdirectory, sorted, typed without following links.
+ * An absent directory is empty; one that is a symbolic link or a file is not
+ * listed at all (`null`), since what it points at is not the folder's.
+ */
 function listDirectory(folder, name) {
+  let stats;
   try {
-    return fs
-      .readdirSync(path.join(folder, name), { withFileTypes: true })
-      .map((entry) => ({ name: entry.name, isFile: entry.isFile() }))
-      .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+    stats = fs.lstatSync(path.join(folder, name));
   } catch (error) {
     if (error.code === 'ENOENT') return [];
     throw error;
+  }
+  if (!stats.isDirectory()) return null;
+  return fs
+    .readdirSync(path.join(folder, name), { withFileTypes: true })
+    .map((entry) => ({ name: entry.name, isFile: entry.isFile(), isDirectory: entry.isDirectory() }))
+    .sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
+}
+
+/** Records a `duplicate-id` finding for every ID `ids` holds more than once. */
+function checkDuplicates(report, relative, ids, label) {
+  const seen = new Set();
+  const reported = new Set();
+  for (const id of ids) {
+    if (typeof id !== 'string') continue;
+    if (seen.has(id) && !reported.has(id)) {
+      report.add(relative, 'duplicate-id', `${label} ${JSON.stringify(id)} is declared more than once`);
+      reported.add(id);
+    }
+    seen.add(id);
   }
 }
 
@@ -234,15 +258,28 @@ function checkContract(report, folder, context) {
       checkId(report, CONTRACT_NAME, context.patterns.oracle, oracleId, `behavior ${JSON.stringify(behavior?.id)} oracle ID`);
     }
   }
-  for (const oracle of Array.isArray(contract?.oracles) ? contract.oracles : []) {
+  const oracles = Array.isArray(contract?.oracles) ? contract.oracles : [];
+  for (const oracle of oracles) {
     checkId(report, CONTRACT_NAME, context.patterns.oracle, oracle?.id, 'oracle ID');
   }
+  checkDuplicates(
+    report,
+    CONTRACT_NAME,
+    behaviors.map((behavior) => behavior?.id),
+    'behavior ID',
+  );
+  checkDuplicates(
+    report,
+    CONTRACT_NAME,
+    oracles.map((oracle) => oracle?.id),
+    'oracle ID',
+  );
   return new Map(behaviors.filter((behavior) => typeof behavior?.id === 'string').map((behavior) => [behavior.id, behavior]));
 }
 
 function checkMutations(report, folder, context, provision) {
   const known = new Set();
-  for (const entry of listDirectory(folder, 'mutations')) {
+  for (const entry of listDirectory(folder, 'mutations') ?? []) {
     const relative = `mutations/${entry.name}`;
     const match = MUTATION_FILE.exec(entry.name);
     if (!entry.isFile || match === null) {
@@ -360,6 +397,12 @@ function checkProbe(report, relative, probe, context, behaviors, mutations) {
 
   checkId(report, relative, context.patterns.probe, probe.probeId, 'probe ID');
   checkId(report, relative, context.patterns.behavior, probe.behaviorId, 'behavior ID');
+  checkDuplicates(
+    report,
+    relative,
+    defects.map((defect) => defect?.defectId),
+    'defect ID',
+  );
   for (const defect of defects) {
     checkId(report, relative, context.patterns.defect, defect?.defectId, 'defect ID');
     checkId(report, relative, context.patterns.behavior, defect?.behaviorId, `defect ${JSON.stringify(defect?.defectId)} behavior ID`);
@@ -422,7 +465,7 @@ function checkProbe(report, relative, probe, context, behaviors, mutations) {
 }
 
 function checkProbes(report, folder, context, behaviors, mutations) {
-  for (const entry of listDirectory(folder, 'probes')) {
+  for (const entry of listDirectory(folder, 'probes') ?? []) {
     const relative = `probes/${entry.name}`;
     const match = PROBE_FILE.exec(entry.name);
     if (!entry.isFile || match === null) {
@@ -442,15 +485,28 @@ function checkProbes(report, folder, context, behaviors, mutations) {
   }
 }
 
-function jsonFilesUnder(folder, relativeDirectory) {
+/**
+ * Every JSON file below a folder subdirectory. Only real directories are
+ * entered, so a symbolic link (a loop included) is never followed; each
+ * non-regular entry is a `baseline-file` finding.
+ */
+function jsonFilesUnder(report, folder, relativeDirectory) {
+  const entries = listDirectory(folder, relativeDirectory);
+  if (entries === null) {
+    report.add(
+      relativeDirectory,
+      'baseline-file',
+      `${relativeDirectory} is a symbolic link or a file; it must be a directory the folder holds`,
+    );
+    return [];
+  }
   const found = [];
-  for (const entry of listDirectory(folder, relativeDirectory)) {
+  for (const entry of entries) {
     const relative = `${relativeDirectory}/${entry.name}`;
-    if (entry.isFile) {
-      if (entry.name.endsWith('.json')) found.push(relative);
-    } else if (fs.statSync(path.join(folder, relative)).isDirectory()) {
-      found.push(...jsonFilesUnder(folder, relative));
-    }
+    if (entry.isDirectory) found.push(...jsonFilesUnder(report, folder, relative));
+    else if (!entry.isFile)
+      report.add(relative, 'baseline-file', `${relative} is not a regular file or directory; baseline/ holds only files the folder owns`);
+    else if (entry.name.endsWith('.json')) found.push(relative);
   }
   return found;
 }
@@ -467,7 +523,8 @@ function publicQualificationReferences(value, found = []) {
 
 function checkQualificationEvidence(report, folder, context) {
   const root = path.join(folder, QUALIFICATION_PREFIX);
-  for (const relative of jsonFilesUnder(folder, 'baseline')) {
+  const realRoot = `${path.join(fs.realpathSync(folder), QUALIFICATION_PREFIX)}`;
+  for (const relative of jsonFilesUnder(report, folder, 'baseline')) {
     const document = parseInto(report, folder, relative);
     if (document === undefined) continue;
     for (const reference of publicQualificationReferences(document)) {
@@ -478,6 +535,16 @@ function checkQualificationEvidence(report, folder, context) {
       }
       let bytes;
       try {
+        // A symbolic link, at the file or at any directory above it, would let
+        // bytes outside the folder stand in for committed evidence.
+        if (!fs.lstatSync(target).isFile() || !fs.realpathSync(target).startsWith(realRoot)) {
+          report.add(
+            relative,
+            'qualification-digest',
+            `reference ${reference.path} is a symbolic link or not a regular file; evidence must be bytes the folder holds`,
+          );
+          continue;
+        }
         bytes = fs.readFileSync(target);
       } catch {
         report.add(relative, 'qualification-digest', `reference ${reference.path} names a file the folder does not hold`);
@@ -513,6 +580,10 @@ async function checkEvaluation(folder) {
   const report = createFindings();
   const evaluation = parseInto(report, folder, MANIFEST_NAME);
   if (evaluation === undefined) return report.findings;
+  if (evaluation === null || typeof evaluation !== 'object' || Array.isArray(evaluation)) {
+    report.add(MANIFEST_NAME, 'schema', '(root) must be object');
+    return report.findings;
+  }
   if (!KNOWN_EVALUATION_SCHEMA_VERSIONS.includes(evaluation?.schemaVersion)) {
     report.add(MANIFEST_NAME, 'schema-version', schemaVersionMessage(evaluation?.schemaVersion));
     return report.findings;

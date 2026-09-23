@@ -73,6 +73,19 @@ async function buildCorpusIndex(folder) {
   const engine = await loadEngine();
   const entries = [];
   for (const root of INDEXED_ROOTS) {
+    let stats;
+    try {
+      stats = fs.lstatSync(path.join(folder, root));
+    } catch (error) {
+      if (error.code === 'ENOENT') continue;
+      throw error;
+    }
+    if (!stats.isDirectory()) {
+      throw new CorpusIndexError(
+        root,
+        `${root} is ${stats.isSymbolicLink() ? 'a symbolic link' : 'not a directory'}; ${INDEX_NAME} indexes only a directory the evaluation folder holds`,
+      );
+    }
     for (const absolute of filesUnder(path.join(folder, root), folder)) {
       const digest = engine.digestBytes(fs.readFileSync(absolute));
       entries.push({
@@ -95,6 +108,16 @@ async function corpusDigestOf(index) {
   return engine.digestArtifact(index, INDEX_NAME);
 }
 
+/** Whether a path is absent or a regular file (never a directory or a symbolic link). */
+function isRegularOrAbsent(file) {
+  try {
+    return fs.lstatSync(file).isFile();
+  } catch (error) {
+    if (error.code === 'ENOENT') return true;
+    throw error;
+  }
+}
+
 /**
  * Writes the recomputed index into the folder and returns it with its digest.
  *
@@ -105,6 +128,12 @@ async function writeCorpusIndex(folder) {
   const engine = await loadEngine();
   const index = await buildCorpusIndex(folder);
   const indexPath = path.join(folder, INDEX_NAME);
+  if (!isRegularOrAbsent(indexPath)) {
+    throw new CorpusIndexError(
+      INDEX_NAME,
+      `${INDEX_NAME} is a directory or a symbolic link; remove it so tea-evaluate digest can write the index`,
+    );
+  }
   fs.writeFileSync(indexPath, engine.serializeArtifact(index, INDEX_NAME));
   return { index, corpusDigest: await corpusDigestOf(index), indexPath };
 }
@@ -117,6 +146,7 @@ async function writeCorpusIndex(folder) {
  */
 async function corpusIndexProblem(folder) {
   const indexPath = path.join(folder, INDEX_NAME);
+  if (!isRegularOrAbsent(indexPath)) return `${INDEX_NAME} is a directory or a symbolic link; remove it and run tea-evaluate digest`;
   let committed;
   try {
     committed = JSON.parse(fs.readFileSync(indexPath, 'utf8'));

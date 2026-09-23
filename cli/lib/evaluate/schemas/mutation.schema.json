@@ -15,10 +15,10 @@
       "minLength": 1
     },
     "targetArtifact": {
-      "description": "The mutated file, relative to the target's root, in POSIX form.",
+      "description": "The mutated file, relative to the target's root, in POSIX form, with no drive letter and no \".\" or \"..\" segment.",
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\\\]+$"
+      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\]+$"
     },
     "operator": {
       "type": "object",
