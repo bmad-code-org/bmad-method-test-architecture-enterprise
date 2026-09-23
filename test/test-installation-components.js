@@ -532,6 +532,34 @@ async function runTests() {
     assert(false, 'lean-shape discriminator validates', error.message);
   }
 
+  // The discriminator has to decide set membership itself, not just prove
+  // correct in isolation: every directory under src/workflows/testarch/ is
+  // classified and checked against the two expected lists, so a new skill
+  // directory nobody added to either list shows up as a mismatch here
+  // instead of silently getting no shape assertions at all.
+  try {
+    const testarchRoot = path.join(projectRoot, 'src/workflows/testarch');
+    const allSkillDirs = (await fs.readdir(testarchRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    const computedLean = [];
+    const computedHouse = [];
+    for (const name of allSkillDirs) {
+      if (await isLeanSkill(path.join(testarchRoot, name))) computedLean.push(name);
+      else computedHouse.push(name);
+    }
+    assert(
+      computedLean.sort().join(',') === [...LEAN_SKILL_DIRS].sort().join(','),
+      `lean classification of src/workflows/testarch/* equals LEAN_SKILL_DIRS (got: ${computedLean.sort().join(', ')})`,
+    );
+    assert(
+      computedHouse.sort().join(',') === [...workflowDirs].sort().join(','),
+      `house classification of src/workflows/testarch/* equals the house workflowDirs list (got: ${computedHouse.sort().join(', ')})`,
+    );
+  } catch (error) {
+    assert(false, 'every src/workflows/testarch/* directory lands on exactly one expected set', error.message);
+  }
+
   for (const dirName of LEAN_SKILL_DIRS) {
     const workflowDir = path.join(projectRoot, `src/workflows/testarch/${dirName}`);
     try {
@@ -566,6 +594,28 @@ async function runTests() {
     }
   }
 
+  // Nothing else in test/ or tools/ reads src/module-help.csv, so its own
+  // catalog row needs its own assertion; without one, deleting the row still
+  // leaves npm test green.
+  try {
+    const csvContent = await fs.readFile(path.join(projectRoot, 'src/module-help.csv'), 'utf8');
+    const rows = parse(csvContent, { columns: true, skip_empty_lines: true });
+    const evaluateRow = rows.find((row) => row.skill === 'bmad-testarch-evaluate');
+    assert(evaluateRow !== undefined, 'src/module-help.csv has a bmad-testarch-evaluate row');
+    if (evaluateRow) {
+      assert(evaluateRow['display-name'] === 'Evaluate', 'bmad-testarch-evaluate row has display-name Evaluate');
+      assert(evaluateRow['menu-code'] === 'EV', 'bmad-testarch-evaluate row has menu-code EV');
+      assert(evaluateRow.phase === '4-implementation', 'bmad-testarch-evaluate row has phase 4-implementation');
+      assert(evaluateRow['followed-by'] === 'bmad-testarch-ci', 'bmad-testarch-evaluate row has followed-by bmad-testarch-ci');
+      assert(
+        evaluateRow['output-location'] === 'tea_evaluations_folder',
+        'bmad-testarch-evaluate row has output-location tea_evaluations_folder',
+      );
+    }
+  } catch (error) {
+    assert(false, 'src/module-help.csv bmad-testarch-evaluate row validates', error.message);
+  }
+
   // A bmad-workflow-builder session writes .memlog.md and .analysis/ inside
   // the skill directory it is working on; neither belongs in a published
   // package. `package.json`'s `files` array lists `src` as a directory entry,
@@ -594,6 +644,17 @@ async function runTests() {
       const packedPaths = packResult.files.map((file) => file.path);
       assert(!packedPaths.some((filePath) => filePath.endsWith('.memlog.md')), 'npm pack excludes a planted .memlog.md builder artifact');
       assert(!packedPaths.some((filePath) => filePath.includes('/.analysis/')), 'npm pack excludes a planted .analysis/ builder artifact');
+
+      const isGitIgnored = (targetPath) => {
+        try {
+          execFileSync('git', ['check-ignore', '-q', targetPath], { cwd: projectRoot });
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      assert(isGitIgnored(plantedMemlog), 'a planted .memlog.md is gitignored');
+      assert(isGitIgnored(plantedAnalysisDir), 'a planted .analysis/ is gitignored');
     } catch (error) {
       assert(false, 'npm pack --dry-run excludes builder artifacts', error.message);
     } finally {

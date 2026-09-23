@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-09-23'
 status: 'review'
 route: 'dispatch'
-review_loop_iteration: 1
+review_loop_iteration: 2
 baseline_commit: '1054b066bcc8b1f6db1e9ef2555ab2b22b7d97f1'
 context: []
 ---
@@ -148,9 +148,25 @@ All findings confirmed against the current diff or live-verified by mutation tes
 | 31 | coderabbit | `docs/explanation/eval-quality-roadmap.md`'s "Coverage Closed" section still claims no skill is deferred and the manifest's `deferred` array is empty | medium | patch: corrected to name `bmad-testarch-evaluate` as the one skill still open |
 | 32 | coderabbit | README's CI gate table still states 18 routing intents / 36 calls in two places | medium | patch: both corrected to 19 / 38 |
 
+**Round 3: Opus final review on PR #232.** Seven findings, all re-verified against current code first, then fixed per coordinator decision.
+
+| # | Source | Finding | Verdict | Route |
+| --- | --- | --- | --- | --- |
+| 33 | opus | `module-help.csv`'s EV row output-location `tea_evaluations_folder` disagreed with AD-2 (ARCHITECTURE-SPINE.md) and the Story 1.3 AC (epics.md), both still naming `test_artifacts` | high | patch: the plan is amended, not the CSV -- AD-2 and the AC now name `tea_evaluations_folder`, since that is where Evaluate actually writes; `test_artifacts` was never correct for this row (see Design Notes) |
+| 34 | opus | no test in `test/` or `tools/` reads `src/module-help.csv`; deleting the EV row left every relevant test at exit 0 | high, live-verified | patch: `test-installation-components.js` parses the CSV with `csv-parse` and asserts the EV row's five fields; live-verified the row's deletion now fails |
+| 35 | opus | `test-routing-evidence.js` re-anchored only `cases`; `fixtureDigest`/`recordFixtureDigest` got a shape check compared against nothing, and `menuSource`/`skillSource`/`groundTruthVersion`/`corpusVersion` were unguarded | high, live-verified | patch: the envelope is snapshotted (`cases/_envelope.json`) beside an independently recorded `EXPECTED_ENVELOPE_DIGEST`; the 18-case files are rebuilt byte-exact from envelope plus snapshots and digested with `digestFiles`'s own algorithm, asserted equal to `contract.fixtureDigest`/`recordFixtureDigest`; live-verified a `menuSource` tamper is now caught |
+| 36 | opus | house/lean skill-set lists in `test-installation-components.js` were hard-coded; `isLeanSkill` never decided membership, so an unclassified new skill directory got no shape assertions | medium, live-verified | patch: both sets are now computed by running `isLeanSkill` over every `src/workflows/testarch/*/` directory and asserted equal to the expected lists; live-verified mutating the lean/house rule now fails four assertions |
+| 37 | opus | `.gitignore`'s claim that builder artifacts "are gitignored" was untested; deleting the entries left `test:install` green | medium, live-verified | patch: `git check-ignore -q` asserted on the planted paths; live-verified removing the entries now fails two assertions |
+| 38 | opus | twelve placeholder stage guides had no instruction to stop; an agent could improvise a stage or compute a verdict outside `eval-quality` (AD-6); `tea-overview.md` overclaimed what the skill does | high, live-verified | patch: `SKILL.md`'s Workflow section gained a stop-on-placeholder rule and a rule against computing a verdict outside `eval-quality`'s CLI; `test-evaluate-guidance.js` asserts both phrases, live-verified against removal; `tea-overview.md`'s EV row reworded to match what the skill does today |
+| 39 | opus | `epics.md`'s AC said `/bmad-workflow-builder` Build runs headless; the skill was hand-authored instead (already recorded in Implementation Notes, but the AC itself was never amended) | medium | patch: the AC is rewritten to name the actual build path (hand-authored, matching the house activation contract) and the validation that replaced headless Build (Analyze's five lenses plus Validate Module) |
+
+All seven re-verified against the current diff before fixing; none were stale. None were speculative.
+
 ## Design Notes
 
 The lean shape (AD-3) has no prior TEA skill to copy wholesale: every sibling either has `workflow.yaml` or, like `bmad-teach-me-testing`, `steps-c/` (which is why the AC's own discriminator explicitly classifies `teach-me-testing` as house despite having no `workflow.yaml`). The activation-contract boilerplate is copied verbatim from `bmad-teach-me-testing`'s `SKILL.md`/`customize.toml`, since AD-3 requires TEA's activation contract kept intact; everything else (the twelve-stage inline workflow body, the placeholder reference guides) is new.
+
+**Output-location amendment (finding 33).** AD-2's registration-set bullet and the Story 1.3 AC both said `test_artifacts`, copied from the pattern every other registered skill's row follows. Evaluate is not every other skill: its own goal is a scored evaluation folder, and it writes there, under `tea_evaluations_folder`, not under `test_artifacts`. The CSV row was correct and the plan was stale, so the plan is the thing that changed: AD-2 now documents the correction with a dated amendment note, and the AC's "Then" clause names `tea_evaluations_folder` directly.
 
 The routing corpus re-anchoring design: rather than keep asserting a whole-file digest against the live, now-growing corpus (structurally impossible once a case is added), each of the original 18 cases is snapshotted once, at the moment the live corpus still matched the frozen evidence's digest, with its own `caseDigest` recorded beside it. The ongoing test then holds each live case byte-identical to its snapshot (proving no historical case was edited) while admitting new cases by id (proving nothing about growth is itself a violation).
 
@@ -158,7 +174,7 @@ The routing corpus re-anchoring design: rather than keep asserting a whole-file 
 
 **Commands, all green on the final diff:**
 
-- `npm test` -- exit 0 (all 77 chained scripts); run to completion eight times across the review cycle as fixes landed, green on the final run
+- `npm test` -- exit 0 (all chained scripts); run to completion nine times across the review cycle as fixes landed, green on the final run
 - `npm run test:install`, `node test/test-evaluate-guidance.js`, `node test/test-tea-workflow-descriptions.js`, `node test/test-routing-evidence.js` -- exit 0, run standalone repeatedly during the review cycle
 - `npm run test:eval-routing-data` (`--validate-only`) -- 19 intents over an 11-item menu, valid
 - `node tools/generate-contracts.js --check`, `node tools/generate-probes.js --check` -- match
@@ -174,3 +190,8 @@ The routing corpus re-anchoring design: rather than keep asserting a whole-file 
 - Tampering one frozen evidence record's `signature` field -- `test:eval-routing-evidence` fails naming the case and the mismatch; restored, passes.
 - Removing the `EV` `[[agent.menu]]` entry -- `test:install` fails 2 assertions; restored, passes.
 - Planting `.memlog.md`/`.analysis/report.md` under the skill, before the `package.json` `files`-array fix -- `npm pack --dry-run` packed both despite `.gitignore` (and, tested separately, despite an equivalent `.npmignore`); after the fix, both are excluded; cleaned up in `finally` either way.
+- Deleting the EV row from `src/module-help.csv` -- new CSV-parsing assertion fails; restored, passes.
+- Removing the `.gitignore` entries for `.memlog.md`/`.analysis/` -- new `git check-ignore -q` assertions fail (2); restored, passes.
+- Mutating `isLeanSkill` to drop its `hasStepsC` check -- new computed-set assertions fail (4); restored, passes.
+- Tampering `ground-truth.json`'s live `menuSource` field -- the rebuilt-fixture provenance check fails naming the mismatch; restored, passes.
+- Removing `SKILL.md`'s stop-on-placeholder/never-compute-a-verdict sentence -- both new `test-evaluate-guidance.js` assertions fail; restored, passes.

@@ -68,6 +68,16 @@ function main() {
     }
   }
 
+  // Every stage guide is still a placeholder, so the Workflow section must
+  // tell the agent to stop rather than improvise a stage's craft, and never
+  // compute a verdict itself outside eval-quality's own CLI.
+  if (!workflowSection.includes('stop')) {
+    failures.push("SKILL.md's Workflow section has no rule to stop on a placeholder stage guide");
+  }
+  if (!workflowSection.includes('never compute a verdict')) {
+    failures.push("SKILL.md's Workflow section has no rule against computing a verdict outside eval-quality's CLI");
+  }
+
   if (failures.length > 0) {
     console.error(`evaluate-guidance: ${failures.length} failure(s)`);
     for (const failure of failures) console.error(`  - ${failure}`);

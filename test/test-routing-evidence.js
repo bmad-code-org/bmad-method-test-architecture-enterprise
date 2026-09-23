@@ -6,9 +6,14 @@
  * 1.3 (a later, unrelated story sharing this number) adds a nineteenth case to
  * the same corpus, so the corpus is no longer byte-identical to what the
  * evidence recorded. Each of the original eighteen cases is snapshotted under
- * `cases/<id>.json`, extracted while the live corpus still matched the
- * evidence's whole-file digests, so this test holds every recorded case
- * byte-identical to its snapshot while admitting cases added after it.
+ * `cases/<id>.json`, and the fixture files' shared envelope (`$comment`,
+ * `corpusVersion`, `groundTruthVersion`, `menuSource`, `skillSource`) under
+ * `cases/_envelope.json`, both extracted while the live corpus still matched
+ * the evidence's whole-file digests. This test holds every recorded case
+ * byte-identical to its snapshot while admitting cases added after it, and
+ * separately proves the envelope plus all eighteen snapshots reconstruct the
+ * exact fixture files this evidence was captured against, byte for byte
+ * (`checkFixtureProvenance`), rather than trusting each snapshot in isolation.
  */
 
 'use strict';
@@ -32,7 +37,127 @@ function readCaseSnapshot(id) {
   return JSON.parse(fs.readFileSync(path.join(CASES_ROOT, `${id}.json`), 'utf8'));
 }
 
-const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
+function readEnvelopeSnapshot() {
+  return JSON.parse(fs.readFileSync(path.join(CASES_ROOT, '_envelope.json'), 'utf8'));
+}
+
+/** The envelope snapshot's digest, recorded a second time for the same reason as `EXPECTED_CASE_DIGESTS`. */
+const EXPECTED_ENVELOPE_DIGEST = 'sha256:31c41e5597e12ced2c6976c5f820eb8098391974e26ad0fc388f6d71cab32ca6';
+
+function isPrimitiveArray(value) {
+  return Array.isArray(value) && value.every((item) => item === null || typeof item !== 'object');
+}
+
+/**
+ * Reproduces the hand-formatting `test/fixtures/tea-routing-eval/*.json` were
+ * authored with: standard two-space pretty-printing, except an array of
+ * primitives prints inline (`["a", "b"]`) unless its key is `$comment`, whose
+ * arrays are one long paragraph split one sentence per line and print
+ * expanded like any other array. Verified byte-identical against both fixture
+ * files at the commit this evidence was captured against; a future
+ * reformatting of either fixture file would need this function's own diff
+ * reviewed alongside it, which is the point of asserting equality rather than
+ * only similarity.
+ */
+function stringifyLikeFixture(value, indent, keyHint) {
+  const pad = '  '.repeat(indent);
+  const padInner = '  '.repeat(indent + 1);
+  if (Array.isArray(value)) {
+    if (keyHint !== '$comment' && isPrimitiveArray(value)) {
+      return `[${value.map((item) => JSON.stringify(item)).join(', ')}]`;
+    }
+    if (value.length === 0) return '[]';
+    const items = value.map((item) => padInner + stringifyLikeFixture(item, indent + 1, null));
+    return `[\n${items.join(',\n')}\n${pad}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    const keys = Object.keys(value);
+    if (keys.length === 0) return '{}';
+    const items = keys.map((key) => `${padInner}${JSON.stringify(key)}: ${stringifyLikeFixture(value[key], indent + 1, key)}`);
+    return `{\n${items.join(',\n')}\n${pad}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * The digest `digestFiles` would compute over the two fixture files, given
+ * their would-be text content directly rather than reading them from disk.
+ * Mirrors `digestFiles`'s own sort-then-pair-push order exactly.
+ */
+function digestRebuiltFiles(pathsAndText) {
+  const parts = [];
+  for (const [relativePath, text] of [...pathsAndText].sort((left, right) => left[0].localeCompare(right[0]))) {
+    parts.push(relativePath, text);
+  }
+  return digest(parts);
+}
+
+/**
+ * Proves the provenance claim the per-case snapshots alone cannot: that the
+ * eighteen case snapshots plus the envelope really do reconstruct the exact
+ * fixture files this evidence was captured against, byte for byte, rather
+ * than each individually holding a value nobody checked against the frozen
+ * whole-file digest. The `menuSource`, `skillSource`, `groundTruthVersion`
+ * and `corpusVersion` fields the per-case checks do not touch are covered
+ * here, inside the envelope, and are held live-vs-snapshot the same way a
+ * case's own fields are: a live edit to any of them, not just a rebuild
+ * mismatch, is what this function exists to catch.
+ */
+function checkFixtureProvenance(failures, contract, corpus) {
+  let envelope;
+  try {
+    envelope = readEnvelopeSnapshot();
+  } catch (error) {
+    failures.push(`cases/_envelope.json: ${error.message}`);
+    return;
+  }
+  const recomputedEnvelopeDigest = digest([JSON.stringify(envelope.intentsEnvelope), JSON.stringify(envelope.groundTruthEnvelope)]);
+  checkEqual(failures, recomputedEnvelopeDigest, envelope.envelopeDigest, 'cases/_envelope.json self-digest');
+  checkEqual(
+    failures,
+    envelope.envelopeDigest,
+    EXPECTED_ENVELOPE_DIGEST,
+    'cases/_envelope.json digest matches the independently recorded copy',
+  );
+
+  const liveIntentsEnvelope = { $comment: corpus.intents.$comment, corpusVersion: corpus.intents.corpusVersion };
+  const liveGroundTruthEnvelope = {
+    $comment: corpus.groundTruth.$comment,
+    groundTruthVersion: corpus.groundTruth.groundTruthVersion,
+    menuSource: corpus.groundTruth.menuSource,
+    skillSource: corpus.groundTruth.skillSource,
+  };
+  checkEqual(failures, liveIntentsEnvelope, envelope.intentsEnvelope, 'intents.json envelope matches its snapshot');
+  checkEqual(failures, liveGroundTruthEnvelope, envelope.groundTruthEnvelope, 'ground-truth.json envelope matches its snapshot');
+
+  let rebuiltIntentsText;
+  let rebuiltGroundTruthText;
+  try {
+    const rebuiltIntents = { ...envelope.intentsEnvelope, cases: contract.caseIds.map((id) => readCaseSnapshot(id).intent) };
+    const rebuiltGroundTruth = {
+      ...envelope.groundTruthEnvelope,
+      cases: Object.fromEntries(contract.caseIds.map((id) => [id, readCaseSnapshot(id).groundTruth])),
+    };
+    rebuiltIntentsText = `${stringifyLikeFixture(rebuiltIntents, 0, null)}\n`;
+    rebuiltGroundTruthText = `${stringifyLikeFixture(rebuiltGroundTruth, 0, null)}\n`;
+  } catch (error) {
+    failures.push(`rebuilding the fixture files from the envelope and case snapshots: ${error.message}`);
+    return;
+  }
+
+  const rebuiltFixtureDigest = digestRebuiltFiles([
+    ['test/fixtures/tea-routing-eval/ground-truth.json', rebuiltGroundTruthText],
+    ['test/fixtures/tea-routing-eval/intents.json', rebuiltIntentsText],
+  ]);
+  const rebuiltRecordDigest = digestRebuiltFiles([['test/fixtures/tea-routing-eval/intents.json', rebuiltIntentsText]]);
+  checkEqual(failures, rebuiltFixtureDigest, contract.fixtureDigest, 'the envelope and case snapshots rebuild to the frozen fixtureDigest');
+  checkEqual(
+    failures,
+    rebuiltRecordDigest,
+    contract.recordFixtureDigest,
+    'the envelope and case snapshots rebuild to the frozen recordFixtureDigest',
+  );
+}
 
 /**
  * The eighteen original cases' digests, recorded here rather than only inside
@@ -190,14 +315,7 @@ async function main() {
     'runner substitution provenance',
   );
   const expectedById = checkCaseSnapshots(failures, contract, corpus);
-
-  // Per-case snapshots superseded these as the live-corpus check once the
-  // corpus grew past the eighteen cases they were computed over, so they are
-  // no longer compared against anything live; this holds them to the shape a
-  // real digest has, so a corrupted field still fails rather than sitting
-  // unchecked.
-  if (!SHA256_PATTERN.test(contract.fixtureDigest)) failures.push('evidence contract fixtureDigest is not a sha256 digest');
-  if (!SHA256_PATTERN.test(contract.recordFixtureDigest)) failures.push('evidence contract recordFixtureDigest is not a sha256 digest');
+  checkFixtureProvenance(failures, contract, corpus);
 
   const expectedGrid = contract.caseIds.flatMap((caseId) => [
     [caseId, 1],

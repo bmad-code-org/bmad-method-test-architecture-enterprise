@@ -63,6 +63,8 @@ Activation is complete. Begin the workflow below.
 
 Evaluate is one continuous loop over twelve stages, run inline rather than as separate step files: each stage's craft lives in its own `references/` guide, loaded when that stage is reached. Ask the adopter which stage to start from when resuming earlier work; otherwise start at Stage 1. Work under `{tea_evaluations_folder}` unless the adopter names another location.
 
+If the loaded `references/<stage>.md` guide is a placeholder (it says "Placeholder." and names the story that fills it), tell the adopter that stage is not yet available and stop there. Never improvise the stage's craft yourself, and never compute a verdict, score, or pass/fail decision outside `eval-quality`'s own CLI (AD-6): a placeholder stage has no craft to improvise from, and a verdict this skill computed itself would not be one `eval-quality` sealed.
+
 ### Stage 1: Inspection
 
 Inspect the target and identify its kind. Load `references/inspection.md`.
