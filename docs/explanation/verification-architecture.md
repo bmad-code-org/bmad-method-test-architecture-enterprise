@@ -59,7 +59,7 @@ Core is the part an enterprise is actually buying, and it is stack-neutral in co
 - **Architecture testability review.** An 8-category, 29-criteria audit applied at design time, before any test exists.
 - **Confidence gate.** A stop rule for the agent itself: below a confidence threshold it declines to generate rather than inventing plausible output.
 
-Two of TEA's nine workflows, `nfr-assess` and `trace`, contain no stack-conditional logic at any step. They run identically whether the system under test is a React app, a Go service, or a payment terminal. The risk and priority knowledge fragments reference no test framework at all.
+Two of TEA's ten workflows, `nfr-assess` and `trace`, contain no stack-conditional logic at any step. They run identically whether the system under test is a React app, a Go service, or a payment terminal. The risk and priority knowledge fragments reference no test framework at all.
 
 ## What an execution target supplies
 

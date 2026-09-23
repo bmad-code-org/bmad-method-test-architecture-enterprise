@@ -1,0 +1,27 @@
+{
+  "id": "measured-some-nfrs-planned-none",
+  "intent": {
+    "id": "measured-some-nfrs-planned-none",
+    "intent": "We already measured latency and error rates on the checkout service, and we have planned nothing at all for the next epic on that front. Which of those should we take first?"
+  },
+  "groundTruth": {
+    "expectedAction": "clarify",
+    "expectedMenuCode": null,
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "measured",
+      "planned"
+    ],
+    "scopeTokens": [
+      "checkout"
+    ],
+    "candidateCodes": [
+      "NR",
+      "TD"
+    ],
+    "boundaryFacts": "Measured NFR evidence exists for current work and future NFR coverage is unplanned",
+    "missingDecidingInformation": "Whether to audit the existing measurements or plan validation for the future scope first",
+    "rationale": "One half of the message is measured evidence, which is the NFR audit's row, and the other half is nothing planned for the next epic, which is test design's NFR planning. The user asks outright which to take first, so answering either without asking picks for them."
+  },
+  "caseDigest": "sha256:4306e801f9d063b0ae890c48a5363592d0687053e6e76033320d228844bb1570"
+}

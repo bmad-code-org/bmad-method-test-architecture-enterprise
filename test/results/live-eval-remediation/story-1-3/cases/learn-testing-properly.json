@@ -1,0 +1,20 @@
+{
+  "id": "learn-testing-properly",
+  "intent": {
+    "id": "learn-testing-properly",
+    "intent": "I am three months into my first QA job. I want to learn testing properly from the fundamentals up instead of copying what the team already does."
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "TMT",
+    "expectedWorkflow": "bmad-teach-me-testing",
+    "decidingTokens": [
+      "learn",
+      "fundamentals"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "The deliverable is the user's own understanding rather than an artifact, which is the only item on the menu that is true of."
+  },
+  "caseDigest": "sha256:44923a46338209779cceae9b2f35649610e284c77f84e7f1e9d9d6e863793603"
+}

@@ -11,7 +11,9 @@
  */
 
 const path = require('node:path');
+const os = require('node:os');
 const fs = require('node:fs/promises');
+const { execFileSync } = require('node:child_process');
 const { parse } = require('csv-parse/sync');
 const yaml = require('js-yaml');
 
@@ -84,6 +86,11 @@ async function runTests() {
     assert(moduleYaml.tea_use_playwright_utils.default === true, 'module.yaml defaults Playwright Utils to true');
     assert(moduleYaml.tea_use_pactjs_utils.default === true, 'module.yaml defaults Pact.js Utils to true');
     assert(moduleYaml.tea_pact_mcp.default === 'mcp', 'module.yaml defaults Pact MCP to mcp');
+    assert(moduleYaml.tea_evaluations_folder.default === 'evals', 'module.yaml defaults tea_evaluations_folder to evals');
+    assert(
+      moduleYaml.tea_evaluations_folder.result === '{project-root}/{value}',
+      'module.yaml resolves tea_evaluations_folder as {project-root}/{value}',
+    );
     assert(
       moduleYaml.tea_use_pactjs_utils.prompt.includes('consumer-driven contract testing'),
       'module.yaml Pact.js Utils prompt explains CDC intent',
@@ -161,6 +168,7 @@ async function runTests() {
         { code: 'TF', skill: 'bmad-testarch-framework' },
         { code: 'AT', skill: 'bmad-testarch-atdd' },
         { code: 'TA', skill: 'bmad-testarch-automate' },
+        { code: 'EV', skill: 'bmad-testarch-evaluate' },
         { code: 'TD', skill: 'bmad-testarch-test-design' },
         { code: 'TR', skill: 'bmad-testarch-trace' },
         { code: 'NR', skill: 'bmad-testarch-nfr' },
@@ -480,6 +488,180 @@ async function runTests() {
     );
   } catch (error) {
     assert(false, 'framework scaffold fragment list validates', error.message);
+  }
+
+  console.log('');
+
+  // ============================================================
+  // Test Suite 5: Lean Skill Shape
+  // ============================================================
+  console.log(`${colors.yellow}Test Suite 5: Lean Skill Shape${colors.reset}\n`);
+
+  const LEAN_SKILL_DIRS = ['bmad-testarch-evaluate'];
+  const LEAN_REQUIRED = ['SKILL.md', 'customize.toml', 'references', 'assets'];
+  const LEAN_FORBIDDEN = ['workflow.yaml', 'steps-c', 'steps-e', 'steps-v', 'instructions.md', 'checklist.md', 'scripts'];
+
+  // A skill is lean when it has neither workflow.yaml nor steps-c/. Both
+  // conditions matter: bmad-teach-me-testing has no workflow.yaml and would
+  // misclassify as lean under a "no workflow.yaml" rule alone, but it does
+  // carry steps-c/ and stays on the house set.
+  async function isLeanSkill(workflowDir) {
+    if (!(await pathExists(workflowDir))) return false;
+    const hasWorkflowYaml = await pathExists(path.join(workflowDir, 'workflow.yaml'));
+    const hasStepsC = await pathExists(path.join(workflowDir, 'steps-c'));
+    return !hasWorkflowYaml && !hasStepsC;
+  }
+
+  try {
+    const teachMeDir = path.join(projectRoot, 'src/workflows/testarch/bmad-teach-me-testing');
+    assert(!(await isLeanSkill(teachMeDir)), 'bmad-teach-me-testing (no workflow.yaml, has steps-c/) classifies as house');
+
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'tea-lean-shape-'));
+    try {
+      const tempLean = path.join(tempRoot, 'temp-lean');
+      await fs.mkdir(tempLean, { recursive: true });
+      assert(await isLeanSkill(tempLean), 'a temp skill with neither workflow.yaml nor steps-c/ classifies as lean');
+
+      const tempHouseStepsC = path.join(tempRoot, 'temp-house-steps-c');
+      await fs.mkdir(path.join(tempHouseStepsC, 'steps-c'), { recursive: true });
+      assert(!(await isLeanSkill(tempHouseStepsC)), 'a temp skill with steps-c/ and no workflow.yaml classifies as house');
+    } finally {
+      await fs.rm(tempRoot, { recursive: true, force: true });
+    }
+  } catch (error) {
+    assert(false, 'lean-shape discriminator validates', error.message);
+  }
+
+  // The discriminator has to decide set membership itself, not just prove
+  // correct in isolation: every directory under src/workflows/testarch/ is
+  // classified and checked against the two expected lists, so a new skill
+  // directory nobody added to either list shows up as a mismatch here
+  // instead of silently getting no shape assertions at all.
+  try {
+    const testarchRoot = path.join(projectRoot, 'src/workflows/testarch');
+    const allSkillDirs = (await fs.readdir(testarchRoot, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    const computedLean = [];
+    const computedHouse = [];
+    for (const name of allSkillDirs) {
+      if (await isLeanSkill(path.join(testarchRoot, name))) computedLean.push(name);
+      else computedHouse.push(name);
+    }
+    assert(
+      computedLean.sort().join(',') === [...LEAN_SKILL_DIRS].sort().join(','),
+      `lean classification of src/workflows/testarch/* equals LEAN_SKILL_DIRS (got: ${computedLean.sort().join(', ')})`,
+    );
+    assert(
+      computedHouse.sort().join(',') === [...workflowDirs].sort().join(','),
+      `house classification of src/workflows/testarch/* equals the house workflowDirs list (got: ${computedHouse.sort().join(', ')})`,
+    );
+  } catch (error) {
+    assert(false, 'every src/workflows/testarch/* directory lands on exactly one expected set', error.message);
+  }
+
+  for (const dirName of LEAN_SKILL_DIRS) {
+    const workflowDir = path.join(projectRoot, `src/workflows/testarch/${dirName}`);
+    try {
+      assert(await isLeanSkill(workflowDir), `${dirName} classifies as lean`);
+      for (const required of LEAN_REQUIRED) {
+        assert(await pathExists(path.join(workflowDir, required)), `${dirName}/${required} exists`);
+      }
+      for (const forbidden of LEAN_FORBIDDEN) {
+        assert(!(await pathExists(path.join(workflowDir, forbidden))), `${dirName} has no ${forbidden}`);
+      }
+
+      const skillContent = await fs.readFile(path.join(workflowDir, 'SKILL.md'), 'utf8');
+      assert(
+        skillContent.includes('resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow'),
+        `${dirName}/SKILL.md resolves the workflow customization block`,
+      );
+      assert(skillContent.includes('{workflow.persistent_facts}'), `${dirName}/SKILL.md loads persistent facts`);
+      assert(skillContent.includes('_bmad/tea/config.yaml'), `${dirName}/SKILL.md loads TEA config`);
+
+      const customizeContent = await fs.readFile(path.join(workflowDir, 'customize.toml'), 'utf8');
+      assert(/^\s*persistent_facts\s*=\s*\[\s*\]/m.test(customizeContent), `${dirName}/customize.toml ships persistent_facts empty`);
+      assert(customizeContent.includes('on_complete'), `${dirName}/customize.toml defines on_complete`);
+    } catch (error) {
+      assert(false, `${dirName} lean shape validates`, error.message);
+    }
+
+    try {
+      const marketplaceContent = await fs.readFile(path.join(projectRoot, '.claude-plugin/marketplace.json'), 'utf8');
+      assert(marketplaceContent.includes(`./src/workflows/testarch/${dirName}`), `.claude-plugin/marketplace.json lists ${dirName}`);
+    } catch (error) {
+      assert(false, `${dirName} marketplace registration validates`, error.message);
+    }
+  }
+
+  // Nothing else in test/ or tools/ reads src/module-help.csv, so its own
+  // catalog row needs its own assertion; without one, deleting the row still
+  // leaves npm test green.
+  try {
+    const csvContent = await fs.readFile(path.join(projectRoot, 'src/module-help.csv'), 'utf8');
+    const rows = parse(csvContent, { columns: true, skip_empty_lines: true });
+    const evaluateRow = rows.find((row) => row.skill === 'bmad-testarch-evaluate');
+    assert(evaluateRow !== undefined, 'src/module-help.csv has a bmad-testarch-evaluate row');
+    if (evaluateRow) {
+      assert(evaluateRow['display-name'] === 'Evaluate', 'bmad-testarch-evaluate row has display-name Evaluate');
+      assert(evaluateRow['menu-code'] === 'EV', 'bmad-testarch-evaluate row has menu-code EV');
+      assert(evaluateRow.phase === '4-implementation', 'bmad-testarch-evaluate row has phase 4-implementation');
+      assert(evaluateRow['followed-by'] === 'bmad-testarch-ci', 'bmad-testarch-evaluate row has followed-by bmad-testarch-ci');
+      assert(
+        evaluateRow['output-location'] === 'tea_evaluations_folder',
+        'bmad-testarch-evaluate row has output-location tea_evaluations_folder',
+      );
+    }
+  } catch (error) {
+    assert(false, 'src/module-help.csv bmad-testarch-evaluate row validates', error.message);
+  }
+
+  // A bmad-workflow-builder session writes .memlog.md and .analysis/ inside
+  // the skill directory it is working on; neither belongs in a published
+  // package. `package.json`'s `files` array lists `src` as a directory entry,
+  // and npm includes everything under a directory entry regardless of
+  // `.gitignore` or `.npmignore` (verified live: both left these artifacts
+  // packed), so the exclusion has to be a negated pattern in `files` itself.
+  // Planting real fixture files here, rather than only asserting the
+  // already-clean state, is what actually exercises that exclusion.
+  {
+    // A real bmad-workflow-builder session could be mid-run against this same
+    // skill directory (its own memlog and analysis reports live here by
+    // design), so this only creates what does not already exist and only
+    // removes what it created.
+    const plantedMemlog = path.join(projectRoot, 'src/workflows/testarch/bmad-testarch-evaluate/.memlog.md');
+    const plantedAnalysisDir = path.join(projectRoot, 'src/workflows/testarch/bmad-testarch-evaluate/.analysis');
+    const plantedReport = path.join(plantedAnalysisDir, `tea-pack-probe-${process.pid}.md`);
+    const memlogPreexisted = await pathExists(plantedMemlog);
+    const analysisDirPreexisted = await pathExists(plantedAnalysisDir);
+    try {
+      if (!memlogPreexisted) await fs.writeFile(plantedMemlog, '# session memory\n', { flag: 'wx' });
+      await fs.mkdir(plantedAnalysisDir, { recursive: true });
+      await fs.writeFile(plantedReport, '# analysis\n', { flag: 'wx' });
+
+      const packOutput = execFileSync('npm', ['pack', '--dry-run', '--json'], { cwd: projectRoot, encoding: 'utf8' });
+      const [packResult] = JSON.parse(packOutput);
+      const packedPaths = packResult.files.map((file) => file.path);
+      assert(!packedPaths.some((filePath) => filePath.endsWith('.memlog.md')), 'npm pack excludes a planted .memlog.md builder artifact');
+      assert(!packedPaths.some((filePath) => filePath.includes('/.analysis/')), 'npm pack excludes a planted .analysis/ builder artifact');
+
+      const isGitIgnored = (targetPath) => {
+        try {
+          execFileSync('git', ['check-ignore', '-q', targetPath], { cwd: projectRoot });
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      assert(isGitIgnored(plantedMemlog), 'a planted .memlog.md is gitignored');
+      assert(isGitIgnored(plantedAnalysisDir), 'a planted .analysis/ is gitignored');
+    } catch (error) {
+      assert(false, 'npm pack --dry-run excludes builder artifacts', error.message);
+    } finally {
+      await fs.rm(plantedReport, { force: true });
+      if (!memlogPreexisted) await fs.rm(plantedMemlog, { force: true });
+      if (!analysisDirPreexisted) await fs.rm(plantedAnalysisDir, { recursive: true, force: true });
+    }
   }
 
   console.log('');

@@ -241,7 +241,7 @@
         "file": "README.md",
         "claim": "the npm test chain length",
         "pattern": {
-          "match": "`npm test` chains ([a-z-]+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Eleven of the ([a-z-]+) keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:"
+          "match": "`npm test` chains ([a-z-]+) checks\\. That count covers the whole chain: every entry in it is deterministic and credential-free, so the chain and its credential-free subset are the same list\\. `npm run test:ci-coverage` derives the count from `package\\.json` and prints it\\. Twelve of the ([a-z-]+) keep the rules, guidance, hook, eval data, eval contracts, diagnostics, and documentation aligned:"
         },
         "counts": ["npmTestChainLength", "npmTestChainLength"]
       },
@@ -258,7 +258,7 @@
         "file": "docs/explanation/eval-quality-adoption-guide.md",
         "claim": "one eval:all run's total model calls and their per-suite breakdown",
         "pattern": {
-          "match": "One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(18 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(two ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), and (\\d+) complete atdd generations \\(one story at two repetitions\\)\\."
+          "match": "One `npm run eval:all` for one runner spends (\\d+) calls: (\\d+) fragment selections \\(24 cases at two repetitions\\), (\\d+) routing intents \\(19 intents at two repetitions\\), (\\d+) complete test designs \\(two cases at two repetitions\\), (\\d+) complete reviews \\(one call covers all three fixtures, at three repetitions\\), (\\d+) complete audits \\(two evidence bundles at two repetitions\\), (\\d+) complete pipelines \\(two ci projects at two repetitions\\), (\\d+) complete traces \\(two cases at two repetitions\\), and (\\d+) complete atdd generations \\(one story at two repetitions\\)\\."
         },
         "counts": [
           "totalCalls",
@@ -1190,13 +1190,10 @@
     "dated": {
       "triggers": [
         {
-          "match": "The central constraint is closed"
-        },
-        {
-          "match": "no skill's coverage obligation is discharged by declaration"
-        },
-        {
           "match": "still listed as deferred"
+        },
+        {
+          "match": "deferred` array names exactly one skill"
         },
         {
           "match": "the \\d+ CONCERNS the stored corpus scores"
@@ -1236,15 +1233,6 @@
       ],
       "claims": [
         {
-          "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "no skill's coverage obligation is discharged by declaration",
-          "settles": {
-            "module": "test/lib/doc-claim-sources.js",
-            "export": "NO_SKILLS_DEFERRED"
-          },
-          "reason": "test/evals/suite-manifest.json's deferred array"
-        },
-        {
           "file": "docs/explanation/eval-quality-adoption-guide.md",
           "key": "still listed as deferred",
           "settles": {
@@ -1252,6 +1240,16 @@
             "export": "NO_FRAGMENT_SELECTION_SKILL_DEFERRED"
           },
           "reason": "the fragment-selection suite's skills list filtered by suite-manifest.json's deferred array"
+        },
+        {
+          "file": "docs/explanation/eval-quality-roadmap.md",
+          "key": "`test/evals/suite-manifest.json`'s `deferred` array names exactly one skill",
+          "settles": "read",
+          "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (exactly one named skill, not zero) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
+          "asOf": {
+            "subject": "test/evals/suite-manifest.json",
+            "hash": "6b9796a396eb7281c9512398dd0a93229ef19777b2e08682527ced68bd1bd82d"
+          }
         },
         {
           "file": "docs/explanation/eval-quality-adoption-guide.md",
@@ -1324,10 +1322,10 @@
         },
         {
           "file": "README.md",
-          "key": "Ten are wired into workflows today",
+          "key": "Eleven are wired into workflows today",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "TEN_WIRED_FOUR_FUTURE"
+            "export": "ELEVEN_WIRED_FOUR_FUTURE"
           },
           "reason": "src/module.yaml's FUTURE-marked key count and a grep of src/workflows/ for each one"
         },
@@ -1347,7 +1345,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "475e4941cb1eb3fe833f0f8845db576c4fe1da2df772cf90977fd8aaa58c7e41"
+            "hash": "6b9796a396eb7281c9512398dd0a93229ef19777b2e08682527ced68bd1bd82d"
           }
         },
         {
@@ -1355,15 +1353,6 @@
           "key": "of the 59 cannot pre-flight today",
           "settles": "read",
           "reason": "a snapshot of how many of the 59 probes could not pre-flight when the rule was written (up from 55/eight pre-#186); a historical measurement, not a live-rechecked invariant"
-        },
-        {
-          "file": "docs/explanation/eval-quality-roadmap.md",
-          "key": "The central constraint is closed",
-          "settles": {
-            "module": "test/lib/doc-claim-sources.js",
-            "export": "EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE"
-          },
-          "reason": "test/evals/suite-manifest.json's deferred array is empty"
         },
         {
           "file": "docs/explanation/eval-quality-roadmap.md",

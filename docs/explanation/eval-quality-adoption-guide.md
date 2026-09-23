@@ -7,7 +7,7 @@ description: 'How to take one BMAD skill from asserted quality to measured quali
 
 This is a working guide for an engineer on a BMAD module who has never used `eval-quality` and wants one skill measured. It is written from what TEA built between commits `7f9d6ad` and `f6e3b4f`, and every claim in it names the file that supports it. Read it with the repository open.
 
-TEA is one module of ten skills. `bmad-method` core has many more and has none of this, so the unit of adoption is one skill, and the order the skills are taken in matters more than the speed.
+TEA is one module of eleven skills. `bmad-method` core has many more and has none of this, so the unit of adoption is one skill, and the order the skills are taken in matters more than the speed.
 
 ## What "measured" means here, and what TEA has
 
@@ -23,7 +23,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 | Behavioral eval, `atdd`             | A red-phase story with five acceptance criteria, executed against an unimplemented fixture under NFR9 isolation, repeated twice                                                                | `test/eval-atdd.js`               |
 | Behavioral eval, `automate`         | Four hand-authored spec sets against a fixed voucher-redemption service and a scratch copy carrying its seeded regression, no live agent, no repetition                                        | `test/eval-automate.js`           |
 | Behavioral eval, `trace`            | A seeded set of ten acceptance criteria and a clean set of five, each in its own staged workspace, repeated twice                                                                              | `test/eval-trace.js`              |
-| Behavioral eval, `bmad-tea`         | 18 intents put to the agent, one call each, measuring which menu item a sentence routes to, repeated twice                                                                                     | `test/eval-bmad-tea-routing.js`   |
+| Behavioral eval, `bmad-tea`         | 19 intents put to the agent, one call each, measuring which menu item a sentence routes to, repeated twice                                                                                     | `test/eval-bmad-tea-routing.js`   |
 | Behavioral eval, `nfr`              | An evidence bundle with known gaps and a clean control, each audited in its own staged workspace, repeated twice                                                                               | `test/eval-nfr.js`                |
 | Behavioral eval, `test-design`      | A seeded epic with five material risks and four ruled out, and a clean control epic, each in its own staged workspace, repeated twice                                                          | `test/eval-test-design.js`        |
 | Behavioral eval, `ci`               | A full-request project and a minimal-request project, each scaffolded and linted in its own staged workspace, repeated twice                                                                   | `test/eval-ci.js`                 |
@@ -33,7 +33,7 @@ TEA's state today, as `test/evals/suite-manifest.json` registers it:
 | Behavioral Evaluation Contracts     | Sixteen, all compiling, all generated, every oracle evaluated against stored evidence                                                                                                          | `test/contracts/`                 |
 | Replay corpus                       | 108 stored outputs scored with no model call: 3 selections, 6 atdd reports, 10 verdicts, 14 trace pairs, 26 nfr reports, 21 ci runs, 11 test-design documents, 17 replies                      | `test/replay/`                    |
 
-Every one of the ten skills now has a real suite. `test/evals/suite-manifest.json`'s `deferred` array is empty, which is what a suite list can only claim honestly once every skill on it either carries a behavioral suite or is named in that array with its owner, missing evidence, and exit condition.
+Ten of TEA's eleven skills now have a real suite. The eleventh, `bmad-testarch-evaluate`, is named in `test/evals/suite-manifest.json`'s `deferred` array with its owner, missing evidence, and exit condition until Story 1.16 lands its own suite, which is what a suite list can only claim honestly instead of implying coverage a skill does not have.
 
 Live baselines across the complete suite are recorded in `test/results/eval-all/latest.json` with timestamped history. [How TEA Is Tested](/docs/explanation/how-tea-is-tested.md) explains the verification layers, clean and seeded controls, and the boundary with `eval-quality` in plain language.
 
@@ -333,7 +333,7 @@ Run live against more than one vendor when you can. The confirming `trace` run w
 
 ### Model calls
 
-One `npm run eval:all` for one runner spends 105 calls: 48 fragment selections (24 cases at two repetitions), 36 routing intents (18 intents at two repetitions), 4 complete test designs (two cases at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), 4 complete audits (two evidence bundles at two repetitions), 4 complete pipelines (two ci projects at two repetitions), 4 complete traces (two cases at two repetitions), and 2 complete atdd generations (one story at two repetitions).
+One `npm run eval:all` for one runner spends 107 calls: 48 fragment selections (24 cases at two repetitions), 38 routing intents (19 intents at two repetitions), 4 complete test designs (two cases at two repetitions), 3 complete reviews (one call covers all three fixtures, at three repetitions), 4 complete audits (two evidence bundles at two repetitions), 4 complete pipelines (two ci projects at two repetitions), 4 complete traces (two cases at two repetitions), and 2 complete atdd generations (one story at two repetitions).
 
 Repetition counts are a real cost multiplier and are declared per suite. Two is the smallest number that can say whether an answer is reproducible. `test-review` uses three because it also measures score variance.
 

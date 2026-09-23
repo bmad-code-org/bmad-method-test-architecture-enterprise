@@ -196,7 +196,7 @@ Users do not need to know any of this to run a workflow. What they see is consis
 
 Every workflow is validated with BMad Builder, which checks for granular instructions, explicit exit conditions, context injection in every step, strict action boundaries, and subagent support where the workflow supports it. Validation runs against the working tree at the time it is invoked, so its output is a point-in-time reading rather than a durable artifact; the reports are not committed. Re-run BMad Builder validation after editing a step file, and read the result from that run.
 
-All nine workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and `ci` for GitHub Actions and GitLab CI generation.
+Nine of TEA's ten workflows have been exercised against real projects: `teach-me-testing` across a multi-session flow with persisted progress, `test-design` against a real story and epic, `automate` against real codebases, `atdd` for the red phase with failing tests confirmed, `test-review` against known good and bad suites, `nfr-assess` against a complex system, `trace` for both the coverage matrix and the gate decision, `framework` for Playwright and Cypress scaffolds, and `ci` for GitHub Actions and GitLab CI generation. `evaluate` is proved the same way starting with the dogfood suite in Story 1.16.
 
 ## Maintaining Step Files
 
@@ -224,4 +224,4 @@ Update a step file when knowledge fragments change, a new pattern needs enforcin
 - [Test Review CLI Architecture](/docs/explanation/test-review-cli-architecture.md) - running one of these workflows headless
 - [TEA Configuration](/docs/reference/configuration.md) - `tea_execution_mode` and `tea_capability_probe`
 - [Extend TEA with Custom Workflows](/docs/how-to/customization/extend-tea-with-custom-workflows.md) - authoring your own steps
-- [TEA Overview](/docs/explanation/tea-overview.md) - the nine workflows in the lifecycle
+- [TEA Overview](/docs/explanation/tea-overview.md) - the ten workflows in the lifecycle

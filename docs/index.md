@@ -7,7 +7,7 @@ description: Test Architect (TEA) - Risk-based testing workflows, automation gui
 
 ## What is TEA?
 
-TEA (Test Engineering Architect) is a BMAD module for testing strategy and automation. It provides nine workflows covering learning, setup, design, automation, review, and release gates.
+TEA (Test Engineering Architect) is a BMAD module for testing strategy and automation. It provides ten workflows covering learning, setup, design, automation, evaluation, review, and release gates.
 
 - **Workflow‑Driven**: Multiple workflows covering day-to-day activities of a test architect.
 - **Consistent Outputs**: Knowledge-base guidance keeps standards consistent, no matter the agent being used.

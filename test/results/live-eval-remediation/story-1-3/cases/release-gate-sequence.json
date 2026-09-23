@@ -1,0 +1,22 @@
+{
+  "id": "release-gate-sequence",
+  "intent": {
+    "id": "release-gate-sequence",
+    "intent": "We are at the release gate for epic 7. I have test results and a partial NFR write-up. What order should I run your workflows in to get a go or no-go?"
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "GATE",
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "release gate",
+      "order"
+    ],
+    "scopeTokens": [
+      "epic 7"
+    ],
+    "candidateCodes": [],
+    "rationale": "The ask is the order to run workflows in, not one workflow. GATE is the menu item that answers with a sequence, and it is a prompt rather than a skill, so expectedWorkflow is null and naming a workflow behind it is the merge its own prompt text forbids."
+  },
+  "caseDigest": "sha256:a1edfc7ef76f6c614d1f566fe8897ec82b818e65dc6a73e373a4d889abb810f3"
+}

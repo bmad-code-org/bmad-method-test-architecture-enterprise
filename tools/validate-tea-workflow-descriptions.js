@@ -77,18 +77,26 @@ function validateFile(filePath, projectRoot) {
   return errors.map((error) => `${relativePath}: ${error}`);
 }
 
+/**
+ * Every TEA workflow's description source: `workflow.yaml` when the skill has
+ * one, and `SKILL.md` frontmatter for a lean skill that does not (AD-3).
+ *
+ * @param {string} projectRoot
+ * @returns {Promise<string[]>}
+ */
+async function collectFiles(projectRoot) {
+  const workflowDirs = await glob('src/workflows/testarch/*/', { cwd: projectRoot, absolute: true });
+  const files = [];
+  for (const dir of workflowDirs) {
+    const workflowYamlPath = path.join(dir, 'workflow.yaml');
+    files.push(fs.existsSync(workflowYamlPath) ? workflowYamlPath : path.join(dir, 'SKILL.md'));
+  }
+  return files;
+}
+
 async function main(customProjectRoot) {
   const projectRoot = customProjectRoot || path.join(__dirname, '..');
-  const yamlFiles = await glob('src/workflows/testarch/*/workflow.yaml', {
-    cwd: projectRoot,
-    absolute: true,
-  });
-  // teach-me-testing has no workflow.yaml; its description lives in SKILL.md frontmatter
-  const mdFiles = await glob('src/workflows/testarch/bmad-teach-me-testing/SKILL.md', {
-    cwd: projectRoot,
-    absolute: true,
-  });
-  const files = [...yamlFiles, ...mdFiles];
+  const files = await collectFiles(projectRoot);
 
   if (files.length === 0) {
     console.error('No TEA workflow definitions found under src/workflows/testarch/');
@@ -115,8 +123,12 @@ async function main(customProjectRoot) {
   console.log(`Validated TEA workflow description quoting in ${files.length} file(s).`);
 }
 
-const customProjectRoot = process.argv[2];
-main(customProjectRoot).catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  const customProjectRoot = process.argv[2];
+  main(customProjectRoot).catch((error) => {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  });
+}
+
+module.exports = { validateFile, collectFiles };

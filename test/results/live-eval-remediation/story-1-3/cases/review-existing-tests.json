@@ -1,0 +1,20 @@
+{
+  "id": "review-existing-tests",
+  "intent": {
+    "id": "review-existing-tests",
+    "intent": "Here are thirty spec files the team wrote last quarter. Tell me which ones are badly written and what to fix."
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "RV",
+    "expectedWorkflow": "bmad-testarch-test-review",
+    "decidingTokens": [
+      "spec files",
+      "badly written"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "The tests exist and the judgment asked for is about how they are written, not about what they cover. The message says badly written, and that is the word a grounded reason repeats."
+  },
+  "caseDigest": "sha256:30cfd925b46b2f8083368bd458a87b748c2e0f452b51e5f347f297d65bc776b1"
+}

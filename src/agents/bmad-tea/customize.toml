@@ -88,6 +88,11 @@ description = "Test Automation — generate prioritized API/E2E tests, fixtures,
 skill = "bmad-testarch-automate"
 
 [[agent.menu]]
+code = "EV"
+description = "Evaluate — build and run a scored, evidence-backed evaluation of an agent, skill, workflow, or tool-use system, with seeded-defect proof and CI enforcement"
+skill = "bmad-testarch-evaluate"
+
+[[agent.menu]]
 code = "GATE"
 description = "Release Gate — route final audit, NFR evidence audit, and trace gate decision"
 prompt = "Help the user run the release gate path. First determine which evidence exists, then recommend the correct sequence: optional test-review for final test quality audit, optional nfr-assess for NFR Evidence Audit, then trace Phase 2 for PASS/CONCERNS/FAIL/WAIVED gate decision. Do not merge these workflows; route to the right one based on available evidence."

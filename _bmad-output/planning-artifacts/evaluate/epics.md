@@ -270,16 +270,16 @@ So that I can start an evaluation the way I start every other TEA workflow.
 
 **Acceptance Criteria:**
 
-**Given** no skill exists at `src/workflows/testarch/bmad-testarch-evaluate/`
-**When** `/bmad-workflow-builder` Build runs headless on that path
-**Then** the skill has `SKILL.md`, `customize.toml`, `references/` and `assets/`, and no `workflow.yaml`, `steps-c/`, `steps-e/`, `steps-v/`, `instructions.md`, `checklist.md` or `scripts/` (AD-3)
+**Given** no skill exists at `src/workflows/testarch/bmad-testarch-evaluate/`, and `/bmad-workflow-builder` Build's generic scaffolder targets `{bmad_builder_output_folder}` with a template that does not carry TEA's house activation contract
+**When** the skill is authored by hand at the correct path, in the exact activation-contract shape `bmad-teach-me-testing` establishes, then validated with `/bmad-workflow-builder` Analyze (deterministic pre-pass plus the five lenses: leanness, architecture, determinism, customization, enhancement) and `/bmad-module-builder` Validate Module on the AD-17 staged layout
+**Then** the skill has `SKILL.md`, `customize.toml`, `references/` and `assets/`, and no `workflow.yaml`, `steps-c/`, `steps-e/`, `steps-v/`, `instructions.md`, `checklist.md` or `scripts/` (AD-3), and Analyze and Validate Module both report zero new critical or high findings against the same staged run on main
 **And** the skill keeps TEA's activation contract: `SKILL.md` holds the `resolve_customization.py` call, `{workflow.persistent_facts}` and `_bmad/tea/config.yaml`; `customize.toml` holds `persistent_facts = []` and `on_complete`
 **And** a new `test/test-evaluate-guidance.js`, chained into `npm test` as `test:evaluate-guidance` with its own `quality.yaml` step, parses the stage list in `SKILL.md` and asserts twelve stages, each naming an existing `references/<stage>.md` (placeholder files until later stories fill them); Stories 1.12 to 1.14, 1.23 and 2.4 extend it
 **And** `SKILL.md` lists the stages the later stories fill (inspection, intake, corpus, contract, oracles, adapters, evaluator, mutation, harness, run, gaps, ci), each pointing at its `references/` file
 
 **Given** the registration set in AD-2
 **When** it lands in this story
-**Then** `src/module-help.csv` has an `Evaluate` row with menu code `EV`, phase `4-implementation`, followed-by `bmad-testarch-ci` and output-location `test_artifacts`
+**Then** `src/module-help.csv` has an `Evaluate` row with menu code `EV`, phase `4-implementation`, followed-by `bmad-testarch-ci` and output-location `tea_evaluations_folder` (AD-2, amended: the committed evaluation folder lives under `tea_evaluations_folder`; working drafts such as the Story 1.12 requirements statement go under `{test_artifacts}/evaluate/`)
 **And** `src/agents/bmad-tea/customize.toml` has a `[[agent.menu]]` entry with `code = "EV"` and `skill = "bmad-testarch-evaluate"`
 **And** `.claude-plugin/marketplace.json` lists the skill path, `src/module.yaml` declares `tea_evaluations_folder` with default `evals` resolved as `{project-root}/{value}`, and `test/test-installation-components.js` lists the workflow and has EV in `expectedMenu`
 **And** `test/fixtures/tea-routing-eval/intents.json` carries an EV intent with its ground truth, the routing contracts and probes are regenerated with `node tools/generate-contracts.js` and `node tools/generate-probes.js`, and the intents contract stays within its `probeStepBound`

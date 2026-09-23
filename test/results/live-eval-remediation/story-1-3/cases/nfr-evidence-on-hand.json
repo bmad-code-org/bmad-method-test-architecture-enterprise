@@ -1,0 +1,21 @@
+{
+  "id": "nfr-evidence-on-hand",
+  "intent": {
+    "id": "nfr-evidence-on-hand",
+    "intent": "We have a k6 load run from Tuesday, a pen test report, and uptime numbers for the last quarter. Are we actually in good shape on the non-functional side?"
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "NR",
+    "expectedWorkflow": "bmad-testarch-nfr",
+    "decidingTokens": [
+      "k6",
+      "uptime",
+      "non-functional"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "Three pieces of measured evidence are named and the ask is a judgment on them. The NFR audit's own menu row is about assessing evidence, and naming the evidence back is what distinguishes this from the case where none has been gathered."
+  },
+  "caseDigest": "sha256:6b687701e55f5d9a7e32646e6a3ea893365c2c89c6243480f5c1ef99df7f3888"
+}

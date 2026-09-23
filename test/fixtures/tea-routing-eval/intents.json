@@ -89,6 +89,10 @@
     {
       "id": "hire-a-qa-lead",
       "intent": "We are hiring a QA lead. Draft the job description and the interview loop."
+    },
+    {
+      "id": "prove-refund-agent-behavior",
+      "intent": "We built an agent that decides refund eligibility and I want a real evaluation of it: seeded defects and evidence-backed oracles that prove it actually handles refund eligibility correctly before it ships."
     }
   ]
 }

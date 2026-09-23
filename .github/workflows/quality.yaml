@@ -179,6 +179,9 @@ jobs:
       - name: Test agent compilation components
         run: npm run test:install
 
+      - name: Validate the Evaluate skill's stage guidance list
+        run: npm run test:evaluate-guidance
+
       - name: Test knowledge base (index sync, link resolution, workflow-copy parity)
         run: npm run test:knowledge
 

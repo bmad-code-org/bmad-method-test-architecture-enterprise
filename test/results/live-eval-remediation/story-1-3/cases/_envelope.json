@@ -1,0 +1,63 @@
+{
+  "intentsEnvelope": {
+    "$comment": [
+      "The intent corpus, and the only file in this directory the agent is ever shown.",
+      "",
+      "Every case is one user's opening message to `bmad-tea`, written the way a person writes it rather than the way",
+      "the menu describes itself. Not one of them quotes a menu code, a workflow name, or a trigger phrase out of a",
+      "workflow's frontmatter, because a corpus that does is measuring string matching and reporting it as routing.",
+      "",
+      "The four ambiguous intents are ambiguous from what the agent is shown, which is this file plus SKILL.md and",
+      "customize.toml. An intent whose second reading only opens once you have read a workflow's frontmatter or the",
+      "knowledge index is not ambiguous to the agent, and scoring it as a clarification measures a fact the agent was",
+      "never given.",
+      "",
+      "The answers live in ground-truth.json and never enter a prompt. test/eval-bmad-tea-routing.js asserts that",
+      "separation on the assembled prompt before it spends a model call, the way test/eval-trace.js does.",
+      "",
+      "`id` is the case id the manifest's caseCount is checked against and the id every stored replay case names."
+    ],
+    "corpusVersion": 2
+  },
+  "groundTruthEnvelope": {
+    "$comment": [
+      "The oracle for the routing corpus. The agent never sees this file, and the harness proves it: every key named",
+      "in GROUND_TRUTH_ONLY_KEYS is searched for in the assembled prompt before a model call is spent, and the whole",
+      "file's bytes are searched for too, the way test/eval-trace.js guards its own ground truth.",
+      "",
+      "Where the three actions come from. `route` and `clarify` are Step 8 of src/agents/bmad-tea/SKILL.md verbatim:",
+      "dispatch a clear match directly, and pause to clarify only when two or more items are genuinely close. `decline`",
+      "is not. Step 8's third clause says that when nothing on the menu fits the agent should just continue the",
+      "conversation, and it names chat, clarifying questions and bmad-help as fair game. It forbids a dispatch and it",
+      "asks for no refusal. The requirement that an unservable intent be declined and that the answer name what is",
+      "missing comes from this suite's own exit condition in test/evals/suite-manifest.json, and the prompt states it",
+      "outright, so the agent is scored against a rule it was given rather than one inferred from a skill that does not",
+      "carry it. The prompt is the whole of what makes that fair, and if the skill is ever taught to decline in its own",
+      "words, this paragraph is where that should be recorded.",
+      "",
+      "`expectedMenuCode` is the primary key because the menu is what the agent dispatches from. Nine of the ten items",
+      "name a skill and one, GATE, names a prompt, so `expectedWorkflow` is null there and is scored only where the menu",
+      "names a workflow. The harness checks every code and every workflow here against the live",
+      "src/agents/bmad-tea/customize.toml, so an edit to the menu fails this corpus rather than silently invalidating it.",
+      "",
+      "`decidingTokens` is the deciding feature of the intent, written as words the user's own message carries. The",
+      "harness refuses a token that is not in the intent, and that rule is the whole reason the number means anything:",
+      "a token reachable only from the menu row the agent is being scored for choosing can be satisfied without reading",
+      "the message at all, which turns a grounding metric into a vocabulary metric. Containment is the score:",
+      "lowercase, a word boundary at the start of the token, and a prefix match after it, so `plan` counts `planned`.",
+      "That is deliberately mechanical. A stated reason judged by a model is a second eval with its own error rate",
+      "sitting inside this one.",
+      "",
+      "`scopeTokens` is what the user named and what the dispatch has to still be about. The agent passes no scope",
+      "structurally, so the only observable is whether the answer restates it, and restating the whole message would",
+      "satisfy any token set, so the harness also bounds the length of an answer's scope against the message's.",
+      "",
+      "`candidateCodes` is the set a clarifying question has to name. Asking 'which did you mean?' without saying between",
+      "what is not a clarification, it is a stall."
+    ],
+    "groundTruthVersion": 3,
+    "menuSource": "src/agents/bmad-tea/customize.toml",
+    "skillSource": "src/agents/bmad-tea/SKILL.md"
+  },
+  "envelopeDigest": "sha256:31c41e5597e12ced2c6976c5f820eb8098391974e26ad0fc388f6d71cab32ca6"
+}

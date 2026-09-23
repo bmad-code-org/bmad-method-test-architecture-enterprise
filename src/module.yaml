@@ -24,12 +24,19 @@ agents:
 # TEA-specific configuration variables
 # IMPORTANT: tea_use_playwright_utils, tea_use_pactjs_utils, tea_pact_mcp, tea_browser_automation,
 # tea_execution_mode, tea_capability_probe, test_stack_type, ci_platform,
-# and test_framework are ACTIVELY USED in workflows
+# test_framework, and tea_evaluations_folder are ACTIVELY USED in workflows
 # Other variables are FUTURE placeholders for Phase 10 enhancements
 
 test_artifacts:
   prompt: "Where should test artifacts be stored? (test plans, coverage reports, quality audits)"
   default: "{output_folder}/test-artifacts"
+  result: "{project-root}/{value}"
+
+# ✅ ACTIVELY USED - Evaluate (bmad-testarch-evaluate) reads this on activation and
+# scaffolds every evaluation folder under it.
+tea_evaluations_folder:
+  prompt: "Where should Evaluate store evaluation folders?"
+  default: "evals"
   result: "{project-root}/{value}"
 
 # ✅ ACTIVELY USED - Playwright Utils integration (referenced in 6 workflows: automate, atdd, framework, test-design, test-review, ci)

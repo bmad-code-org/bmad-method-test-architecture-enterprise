@@ -153,7 +153,7 @@ Terminology reference for Test Architect (TEA).
 
 ## See Also
 
-- [TEA Overview](/docs/explanation/tea-overview.md) - the nine workflows and the phase lifecycle
+- [TEA Overview](/docs/explanation/tea-overview.md) - the ten workflows and the phase lifecycle
 - [Engagement Models](/docs/explanation/engagement-models.md) - the five models defined above
 - [TEA Knowledge Base](/docs/reference/knowledge-base.md) - fragment index
 - [TEA Command Reference](/docs/reference/commands.md) - workflow reference

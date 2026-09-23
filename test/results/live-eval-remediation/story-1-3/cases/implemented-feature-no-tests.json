@@ -1,0 +1,22 @@
+{
+  "id": "implemented-feature-no-tests",
+  "intent": {
+    "id": "implemented-feature-no-tests",
+    "intent": "The checkout service is already built and shipped behind a flag. It has no API tests at all. Generate a prioritized set for it."
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "TA",
+    "expectedWorkflow": "bmad-testarch-automate",
+    "decidingTokens": [
+      "api test",
+      "already built"
+    ],
+    "scopeTokens": [
+      "checkout"
+    ],
+    "candidateCodes": [],
+    "rationale": "The implementation is shipped, so tests are written against it rather than ahead of it. This is the mirror of the ATDD case, and `already built` against that case's `failing` is the pair that separates them."
+  },
+  "caseDigest": "sha256:7a30e63d0b786933872ff00e5a3cbd867fdf4b611b9385dcab52caf9da61e3bd"
+}

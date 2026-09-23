@@ -1,0 +1,22 @@
+{
+  "id": "epic-risk-before-tests",
+  "intent": {
+    "id": "epic-risk-before-tests",
+    "intent": "We just wrapped epic 4, the tenant data export work. No test code exists for it yet. I want to know where the risk actually sits and how much coverage each area deserves before anyone starts writing."
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "TD",
+    "expectedWorkflow": "bmad-testarch-test-design",
+    "decidingTokens": [
+      "risk",
+      "coverage"
+    ],
+    "scopeTokens": [
+      "epic 4"
+    ],
+    "candidateCodes": [],
+    "rationale": "An epic is finished, no test code exists, and the ask is where risk sits and how much coverage each area deserves. That is test design's whole sentence, and risk and coverage are the two words in the message that say so."
+  },
+  "caseDigest": "sha256:12a86a5e755fbc76699cb63bfdce1156d1a4e64965c839e25fccee7580c1c003"
+}

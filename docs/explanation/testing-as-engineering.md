@@ -47,19 +47,20 @@ Together, these utility libraries eliminate the need to reinvent core testing pr
 
 ### 2. Process: TEA (Test Engineering Architect)
 
-A quality operating model packaged as nine workflows spanning learning, test design, CI/CD gates, and release readiness. TEA encodes test architecture expertise into repeatable processes.
+A quality operating model packaged as ten workflows spanning learning, test design, evaluation, CI/CD gates, and release readiness. TEA encodes test architecture expertise into repeatable processes.
 
-| Workflow           | Purpose                                       |
-| ------------------ | --------------------------------------------- |
-| `teach-me-testing` | Guided testing education                      |
-| `test-design`      | Risk-based planning plus NFR planning         |
-| `framework`        | Scaffold production-ready test infrastructure |
-| `ci`               | CI pipeline with selective testing            |
-| `atdd`             | Acceptance test-driven development            |
-| `automate`         | Prioritized test automation                   |
-| `test-review`      | Test quality audits (0-100 score)             |
-| `nfr-assess`       | NFR Evidence Audit                            |
-| `trace`            | Coverage traceability and gate decisions      |
+| Workflow           | Purpose                                        |
+| ------------------ | ---------------------------------------------- |
+| `teach-me-testing` | Guided testing education                       |
+| `test-design`      | Risk-based planning plus NFR planning          |
+| `framework`        | Scaffold production-ready test infrastructure  |
+| `ci`               | CI pipeline with selective testing             |
+| `evaluate`         | Scored, evidence-backed evaluation of a target |
+| `atdd`             | Acceptance test-driven development             |
+| `automate`         | Prioritized test automation                    |
+| `test-review`      | Test quality audits (0-100 score)              |
+| `nfr-assess`       | NFR Evidence Audit                             |
+| `trace`            | Coverage traceability and gate decisions       |
 
 :::tip[Key Insight]
 TEA doesn't just generate tests. It provides a complete quality operating model with workflows for planning, execution, and release gates.
@@ -120,5 +121,5 @@ This approach is sometimes called _context engineering_: loading domain-specific
 - [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - the manifest that loads the standards
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the Definition of Done those standards encode
 - [Network-First Patterns](/docs/explanation/network-first-patterns.md) - the determinism rule in detail
-- [TEA Overview](/docs/explanation/tea-overview.md) - the nine workflows in the lifecycle
+- [TEA Overview](/docs/explanation/tea-overview.md) - the ten workflows in the lifecycle
 - [Engagement Models](/docs/explanation/engagement-models.md) - the five ways to adopt TEA

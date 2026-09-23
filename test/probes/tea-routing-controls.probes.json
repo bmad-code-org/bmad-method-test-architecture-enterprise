@@ -7,9 +7,9 @@
     "probeClass": "gameability",
     "behaviorId": "B-003",
     "systemId": "tea-routing-controls-behavioral",
-    "implementationDigest": "sha256:3bf5d22dbb7e09b43f1227ba32eaa89c943756f48a0df6b4d909b0aa2f27ddec",
-    "artifactDigest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda",
-    "commitDigest": "sha256:3bf5d22dbb7e09b43f1227ba32eaa89c943756f48a0df6b4d909b0aa2f27ddec",
+    "implementationDigest": "sha256:4219ca87d420c835304aeffb4c18d1ce3c506162e31f4d2d389ec4bc23090717",
+    "artifactDigest": "sha256:b59cfef15962a09dfd0fa19db285ad70a62ea958562dfb335d3ab49c4441af78",
+    "commitDigest": "sha256:4219ca87d420c835304aeffb4c18d1ce3c506162e31f4d2d389ec4bc23090717",
     "rationale": "A reply that quotes the user's own message back as its reason satisfies O-002 for good-or-covering-what-matters, because the deciding tokens are words from that message, and violates O-003, because the question it asks names nothing to choose between. The reason oracle alone cannot tell that reply from one that actually read the message, and the decision oracle can.",
     "qualification": {
       "route": "gameability",
@@ -18,13 +18,13 @@
         "storage": "public",
         "path": "test/fixtures/tea-routing-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda"
+        "digest": "sha256:b59cfef15962a09dfd0fa19db285ad70a62ea958562dfb335d3ab49c4441af78"
       },
       "disciplinedOracleRejectedEvidence": {
         "storage": "public",
         "path": "test/fixtures/tea-routing-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda"
+        "digest": "sha256:b59cfef15962a09dfd0fa19db285ad70a62ea958562dfb335d3ab49c4441af78"
       }
     },
     "expectedClean": false,
@@ -97,9 +97,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-002",
     "systemId": "tea-routing-controls-behavioral",
-    "implementationDigest": "sha256:3bf5d22dbb7e09b43f1227ba32eaa89c943756f48a0df6b4d909b0aa2f27ddec",
-    "artifactDigest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda",
-    "commitDigest": "sha256:3bf5d22dbb7e09b43f1227ba32eaa89c943756f48a0df6b4d909b0aa2f27ddec",
+    "implementationDigest": "sha256:4219ca87d420c835304aeffb4c18d1ce3c506162e31f4d2d389ec4bc23090717",
+    "artifactDigest": "sha256:b59cfef15962a09dfd0fa19db285ad70a62ea958562dfb335d3ab49c4441af78",
+    "commitDigest": "sha256:4219ca87d420c835304aeffb4c18d1ce3c506162e31f4d2d389ec4bc23090717",
     "rationale": "good-or-covering-what-matters declares the action, the deciding tokens and the scope the skill's own Step 8 implies for it, so an answer carrying all three is the run this contract exists to confirm rather than a defect to catch.",
     "qualification": {
       "route": "clean-control",
@@ -107,9 +107,9 @@
         "storage": "public",
         "path": "test/fixtures/tea-routing-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:5af29a5765149e31a6bbef5adc275aa12713b6aa219e7db424735fd1aadd4bda"
+        "digest": "sha256:b59cfef15962a09dfd0fa19db285ad70a62ea958562dfb335d3ab49c4441af78"
       },
-      "revisionCommitDigest": "sha256:3bf5d22dbb7e09b43f1227ba32eaa89c943756f48a0df6b4d909b0aa2f27ddec",
+      "revisionCommitDigest": "sha256:4219ca87d420c835304aeffb4c18d1ce3c506162e31f4d2d389ec4bc23090717",
       "noKnownDefectStatement": "good-or-covering-what-matters's expected answer is derived from src/agents/bmad-tea/SKILL.md and its menu, and node test/eval-bmad-tea-routing.js --validate-only fails when a menu code the corpus names has left customize.toml."
     },
     "expectedClean": true,

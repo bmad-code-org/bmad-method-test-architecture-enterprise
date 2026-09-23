@@ -47,7 +47,9 @@
     "cli",
     ".claude-plugin",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "!src/workflows/testarch/*/.memlog.md",
+    "!src/workflows/testarch/*/.analysis/**"
   ],
   "scripts": {
     "docs:build": "node tools/build-docs.js",
@@ -83,7 +85,7 @@
     "release:minor": "gh workflow run publish.yaml -f channel=latest -f bump=minor",
     "release:next": "gh workflow run publish.yaml -f channel=next",
     "release:patch": "gh workflow run publish.yaml -f channel=latest -f bump=patch",
-    "test": "npm run test:conflict-markers && npm run test:schemas && npm run test:install && npm run test:knowledge && npm run test:criteria-fragments && npm run test:doc-count-sources && npm run test:doc-counts && npm run test:doc-claim-sources && npm run test:doc-claims && npm run test:doc-invocation-entry && npm run test:doc-invocations && npm run test:enforce-hook && npm run test:framework-scaffold && npm run test:atdd-isolation && npm run test:atdd-net-guard && npm run test:atdd-scoring && npm run test:atdd-workflow-guidance && npm run test:framework-scaffold-install-isolation && npm run test:transcript-harness && npm run test:suite-manifest && npm run test:teach-me-testing-scoring && npm run test:eval-data && npm run test:eval-atdd-data && npm run test:eval-ci-data && npm run test:eval-framework-scaffold-data && npm run test:eval-nfr-data && npm run test:nfr-validate-corpus && npm run test:nfr-evidence-guidance && npm run test:eval-test-design-data && npm run test:eval-trace-data && npm run test:eval-routing-data && npm run test:eval-routing-boundaries && npm run test:eval-routing-evidence && npm run test:eval-transcript-data && npm run test:eval-teach-me-testing-data && npm run test:eval-schemas && npm run test:eval-diagnostics && npm run test:eval-replay && npm run test:eval-quality-corpus && npm run test:schema-versions && npm run test:contract-sources && npm run test:contracts && npm run test:contract-oracles && npm run test:probe-sources && npm run test:probe-corpus && npm run test:compare-dominance && npm run test:compare-eval-runs && npm run test:trial-set-scoring && npm run test:automate-eval-fixture && npm run test:eval-automate-data && npm run test:clock-port && npm run test:probe-conformance && npm run test:corpus-conformance && npm run test:file-system-conformance && npm run test:file-system-port && npm run test:probe-targets && npm run test:port-totality && npm run test:ci-coverage && npm run test:ci-coverage-filters && npm run test:bmad-output-gated && npm run test:release-metadata && npm run test:lockfile-age && npm run test:lockfile-age-cache && npm run test:licences && npm run test:supply-chain && npm run test:boundary && npm run test:direction && npm run test:lineage && npm run test:guard-publish && npm run test:layering-boundary-lineage && npm run test:changelog && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
+    "test": "npm run test:conflict-markers && npm run test:schemas && npm run test:install && npm run test:evaluate-guidance && npm run test:knowledge && npm run test:criteria-fragments && npm run test:doc-count-sources && npm run test:doc-counts && npm run test:doc-claim-sources && npm run test:doc-claims && npm run test:doc-invocation-entry && npm run test:doc-invocations && npm run test:enforce-hook && npm run test:framework-scaffold && npm run test:atdd-isolation && npm run test:atdd-net-guard && npm run test:atdd-scoring && npm run test:atdd-workflow-guidance && npm run test:framework-scaffold-install-isolation && npm run test:transcript-harness && npm run test:suite-manifest && npm run test:teach-me-testing-scoring && npm run test:eval-data && npm run test:eval-atdd-data && npm run test:eval-ci-data && npm run test:eval-framework-scaffold-data && npm run test:eval-nfr-data && npm run test:nfr-validate-corpus && npm run test:nfr-evidence-guidance && npm run test:eval-test-design-data && npm run test:eval-trace-data && npm run test:eval-routing-data && npm run test:eval-routing-boundaries && npm run test:eval-routing-evidence && npm run test:eval-transcript-data && npm run test:eval-teach-me-testing-data && npm run test:eval-schemas && npm run test:eval-diagnostics && npm run test:eval-replay && npm run test:eval-quality-corpus && npm run test:schema-versions && npm run test:contract-sources && npm run test:contracts && npm run test:contract-oracles && npm run test:probe-sources && npm run test:probe-corpus && npm run test:compare-dominance && npm run test:compare-eval-runs && npm run test:trial-set-scoring && npm run test:automate-eval-fixture && npm run test:eval-automate-data && npm run test:clock-port && npm run test:probe-conformance && npm run test:corpus-conformance && npm run test:file-system-conformance && npm run test:file-system-port && npm run test:probe-targets && npm run test:port-totality && npm run test:ci-coverage && npm run test:ci-coverage-filters && npm run test:bmad-output-gated && npm run test:release-metadata && npm run test:lockfile-age && npm run test:lockfile-age-cache && npm run test:licences && npm run test:supply-chain && npm run test:boundary && npm run test:direction && npm run test:lineage && npm run test:guard-publish && npm run test:layering-boundary-lineage && npm run test:changelog && npm run test:tea-workflow-descriptions && npm run validate:schemas && npm run lint && npm run lint:md && npm run format:check",
     "test:atdd-isolation": "node test/test-atdd-isolation.js",
     "test:atdd-net-guard": "node test/test-atdd-net-guard.js",
     "test:atdd-scoring": "node test/test-atdd-scoring.js",
@@ -130,6 +132,7 @@
     "test:eval-test-design-data": "node test/eval-test-design.js --validate-only && node test/test-test-design-grounding.js",
     "test:eval-trace-data": "node test/eval-trace.js --validate-only",
     "test:eval-transcript-data": "node test/eval-transcript.js --validate-only",
+    "test:evaluate-guidance": "node test/test-evaluate-guidance.js",
     "test:file-system-conformance": "node test/test-file-system-conformance.js",
     "test:file-system-port": "node test/test-file-system-port.js",
     "test:framework-scaffold": "node test/test-framework-scaffold.js",
@@ -154,7 +157,7 @@
     "test:schemas": "node test/test-agent-schema.js",
     "test:suite-manifest": "node test/test-suite-manifest.js",
     "test:supply-chain": "node test/test-supply-chain.js",
-    "test:tea-workflow-descriptions": "node tools/validate-tea-workflow-descriptions.js",
+    "test:tea-workflow-descriptions": "node test/test-tea-workflow-descriptions.js",
     "test:teach-me-testing-scoring": "node test/test-teach-me-testing-scoring.js",
     "test:transcript-harness": "node test/test-transcript-harness.js",
     "test:trial-set-scoring": "node test/test-trial-set-scoring.js",

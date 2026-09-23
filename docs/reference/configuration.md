@@ -54,6 +54,20 @@ test_artifacts: docs/testing-artifacts
 
 ---
 
+### tea_evaluations_folder
+
+Base folder for Evaluate (`bmad-testarch-evaluate`) evaluation folders.
+
+**Type:** `string` · **Default:** `evals`
+
+Resolves to `{project-root}/{value}`, independent of `test_artifacts`.
+
+```yaml
+tea_evaluations_folder: evals
+```
+
+---
+
 ### tea_use_playwright_utils
 
 Enable Playwright Utils integration for production-ready fixtures and utilities.

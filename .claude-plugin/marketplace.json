@@ -40,6 +40,7 @@
         "./src/workflows/testarch/bmad-testarch-atdd",
         "./src/workflows/testarch/bmad-testarch-automate",
         "./src/workflows/testarch/bmad-testarch-ci",
+        "./src/workflows/testarch/bmad-testarch-evaluate",
         "./src/workflows/testarch/bmad-testarch-framework",
         "./src/workflows/testarch/bmad-testarch-nfr",
         "./src/workflows/testarch/bmad-testarch-test-design",
