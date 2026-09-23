@@ -37,7 +37,7 @@ story_location: _bmad-output/implementation-artifacts/evaluate
 development_status:
   epic-1: in-progress
   1-1-export-eval-quality-s-http-target-policy-evaluation-and-pack: done
-  1-2-run-tea-s-gate-on-the-engine-evaluate-needs: review
+  1-2-run-tea-s-gate-on-the-engine-evaluate-needs: done
   1-3-register-evaluate-as-a-tea-skill: backlog
   1-4-ship-tea-evaluate-with-check-and-digest: backlog
   1-5-move-the-registry-records-and-provenance-into-the-runtime: backlog
