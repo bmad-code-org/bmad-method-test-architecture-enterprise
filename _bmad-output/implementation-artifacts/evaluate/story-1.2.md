@@ -175,6 +175,16 @@ Third round, coordinator's Opus final review over the local branch: six findings
 | 44 | opus | `eval-quality-facts.md` still read as describing an unreleased engine and package version 3.4.0, with no note that eval-quality has since released | medium | patch: a top note naming the 4.0.0 release and both source issues, plus the version-fact line corrected |
 | 45 | opus | `test-design-epic-1.md`'s R1-07 risk described "a plain `npm install` silently resets to 3.4.0," which stopped being true once Story 1.2 committed the exact `4.0.0` pin | low | patch: rescoped to the real residual risk, an unrestored revert-check downgrade, score held at 6 so the epic's risk-count summary stays accurate |
 
+Fourth round, CodeRabbit on PR #230: three findings.
+
+| # | Source | Finding | Verdict | Route |
+| --- | --- | --- | --- | --- |
+| 46 | coderabbit | `test-design-epic-1.md`'s Story 1.2 Coverage Plan manifest-diff row said manifests show "only" the version bump, contradicted by the new `test:trial-set-scoring` `package.json` script entry | medium: correct, same class as opus finding 43 but a parallel row I had not updated | patch: reworded to match `epics.md`'s already-corrected AC |
+| 47 | coderabbit | The same table's trial-set-scoring revert-check row said the 3.4.0 downgrade case fails because "`score` takes one record and the set is non-comparable"; that sentence describes the single-record case only, mislabeled onto the three-record downgrade | medium: correct, verified against the CLI error already recorded elsewhere in this file (`eval-quality: usage: --record given twice with different values`) | patch: reworded to name the CLI usage rejection |
+| 48 | coderabbit | `test/lib/compare-eval-runs.js:191`, claiming a function `reductionConsistencyIssuesOf` compares `trialIndex` values without requiring integers | false: no such function exists in this repository (`grep -rn reductionConsistencyIssuesOf test/`, zero matches); line 191 is `isComparableShaped`'s array-type check, which never reads individual `trialIndex` values. The finding's own static-analysis trace read eval-quality's internal `dist/core/score/reduction-consistency.js`, the vendor's own reduction logic, which AD-1 forbids TeA from duplicating or independently validating | reject |
+
+All three threads replied to individually and resolved.
+
 ## Design Notes
 
 Pre-release: worktree hygiene note for the tarball pass. Other stories' work was staged in the planning worktree at the time. Any `npm install` or `npm ci` reset `node_modules/eval-quality` to 3.4.0; it had to be followed by `npm install --no-save /Users/murat/opensource/_wt/_packs/eval-quality-local.tgz`. That worktree is retired; the story now lives in `/Users/murat/opensource/_wt/tea-evaluate-12` on `feat/evaluate-1.2`, `eval-quality` is a normal registry dependency at the exact pin `4.0.0`, and no tarball step remains. Engine check: `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"`.
