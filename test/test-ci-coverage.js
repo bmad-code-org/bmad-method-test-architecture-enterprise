@@ -24,7 +24,7 @@ const { DELIBERATELY_LOCAL, scriptsRunInCi, staleDeliberatelyLocalEntries, uncov
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 
-const colors = { reset: '[0m', red: '[31m', green: '[32m' };
+const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
 const failures = [];
 let checks = 0;

@@ -16,11 +16,14 @@
  * package's, it does not relax or duplicate what the package already does.
  *
  * Usage: `await compareStoredResults(a, b, severityFloor)`, where `a` and
- * `b` are each the `{outcomes, strength, comparabilityKey}` slice of a
- * stored `EvidenceArtifact` (`eval-quality`'s own `ComparableResult` shape),
- * and `severityFloor` is the scoring policy's own declared floor
- * (`test/probes/scoring-policy.json`'s `severityFloor`, read through
- * `scoringPolicy()` in `./eval-quality-inputs.js`).
+ * `b` are each the `{outcomes, strength, comparabilityKey, scoredProbeId,
+ * reducedProbeOutcomes, trials}` slice of a stored `EvidenceArtifact`
+ * (`eval-quality`'s own `ComparableResult` shape; the last three arrived
+ * with schema version 4, and the package recomputes each side's trial-set
+ * reduction from them before it compares), and `severityFloor` is the
+ * scoring policy's own declared floor (`test/probes/scoring-policy.json`'s
+ * `severityFloor`, read through `scoringPolicy()` in
+ * `./eval-quality-inputs.js`).
  */
 
 'use strict';
@@ -43,8 +46,19 @@ function refusalReason(a, b) {
 }
 
 /**
- * @param {{outcomes: object[], strength: object, comparabilityKey: string}} a
- * @param {{outcomes: object[], strength: object, comparabilityKey: string}} b
+ * The `ComparableResult` slice one stored result carries.
+ * @typedef {object} ComparableSlice
+ * @property {object[]} outcomes
+ * @property {object} strength
+ * @property {string} comparabilityKey
+ * @property {string|null} scoredProbeId
+ * @property {object[]} reducedProbeOutcomes
+ * @property {object} trials
+ */
+
+/**
+ * @param {ComparableSlice} a
+ * @param {ComparableSlice} b
  * @param {string} severityFloor
  * @returns {Promise<{ok: true, relation: string} | {ok: false, reason: string}>}
  */

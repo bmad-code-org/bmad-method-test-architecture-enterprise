@@ -338,6 +338,9 @@ jobs:
       - name: Prove two recorded eval:all runs compare correctly and refuse a version or config mismatch
         run: npm run test:compare-eval-runs
 
+      - name: Prove TEA's gate scores a three-trial set through the eval-quality score CLI
+        run: npm run test:trial-set-scoring
+
       - name: Prove the automate-eval fixture's seeded regression rolls back live
         run: npm run test:automate-eval-fixture
 

@@ -109,10 +109,10 @@ const SMOKE_PORT = 4320;
 const SMOKE_TIMEOUT_MS = 5000;
 
 const colors = {
-  reset: '[0m',
-  red: '[31m',
-  green: '[32m',
-  dim: '[2m',
+  reset: '\u001B[0m',
+  red: '\u001B[31m',
+  green: '\u001B[32m',
+  dim: '\u001B[2m',
 };
 
 function absolute(relativePath) {

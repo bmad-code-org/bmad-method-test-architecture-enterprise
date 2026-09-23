@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `npm run test:trial-set-scoring` scores three trials of one stored-replay probe through the `eval-quality score` CLI with a repeated `--record`. It checks the reduction for three agreeing trials, then for a set where trial 2 misses, which has to reduce to a catch at 2 of 3 against `catchThreshold` 0.5. A single-record score beside them has to stay non-comparable under the raised trial minimum. It runs in `npm test` and as its own CI step, and fails if the pin is downgraded to 3.4.0, which proves TeA's gate depends on trial-set scoring (eval-quality#143).
+
+### Changed
+
+- The `eval-quality` devDependency is raised from the exact pin 3.4.0 to the published exact pin 4.0.0, which carries eval-quality#143's trial-set scoring (`EvidenceArtifact` schema version 4) and Story 1.1's target-policy export (eval-quality#158). `docs/explanation/eval-quality-roadmap.md`'s "The pin is 4.0.0 now" and `docs/explanation/eval-quality-command-adapter.md`'s outcome count now name the new pin.
+- The stored comparable results TEA hands to `compareDominance` now carry the `EvidenceArtifact` schema version 4 fields the comparator verifies before comparing: `scoredProbeId`, `reducedProbeOutcomes`, `trials`, and a `trialIndex` on each outcome. `test/probes/expected-strength.json` is regenerated: no verdict, strength vector, or pre-flight result moved, and in 26 probes the detailed outcome severities changed, because the version 4 engine stamps the probe's own severity on every detailed outcome (test-review P-001's `critical` outcomes now read `material`). The dominance fixtures and the drift comparison fixtures carry a consistent reduction, and a stored result in the version 3 shape, or one missing any version 4 field the comparator dereferences, reads as not comparable, so it never reaches the comparator. Like the new check, `test:probe-corpus` reads this shape from the installed package and fails if the pin is downgraded to 3.4.0.
+
+### Fixed
+
+- Test and evaluation scripts whose color strings lacked the escape byte now print real ANSI colors in place of literal `[32m` text.
+
 ## [1.27.2] - 2026-09-18
 
 ### Added

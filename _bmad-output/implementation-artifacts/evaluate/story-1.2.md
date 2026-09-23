@@ -1,0 +1,210 @@
+---
+title: "Story 1.2: Run TeA's gate on the engine Evaluate needs"
+type: 'chore'
+created: '2026-09-22'
+status: 'review'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: 'da5f68d99ff7b82fbca07ec68cd8f206818da558'
+context: []
+---
+
+<!-- markdownlint-disable MD033 -->
+
+<frozen-after-approval reason="human-owned intent; do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** Evaluate needs eval-quality trial-set scoring (#143: `EvidenceArtifact` schema version 4, repeatable `score --record`, `reducedProbeOutcomes`), which only the local tarball from Story 1.1 carries. On that engine TeA's gate must be green, and nothing in the gate proves TeA depends on trial-set scoring.
+
+**Approach:** Install the tarball `--no-save`, repair every TeA test the version 4 engine breaks, and add `test:trial-set-scoring`, which scores a three-trial set through the `eval-quality score` CLI and fails on published 3.4.0.
+
+## Boundaries & Constraints
+
+**Always:** `package.json` and `package-lock.json` never reference the tarball; the engine check runs at start and end; the new script gets its own `quality.yaml` step; changes staged, uncommitted.
+
+**Never:** evaluate eval-quality itself (TeA's use of it is the system under test); weaken a check to make it pass; edit `sprint-status.yaml`.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+| --- | --- | --- | --- |
+| Trial set on the tarball | three sealed records of one probe, trial indices 1 to 3, policy `minimumTrialCount` 3 | exit 0 artifact, `trials.completed` 3, `reducedProbeOutcomes` for the probe, `strength.comparable` true | N/A |
+| Trial set on published 3.4.0 | same inputs | artifact lacks `reducedProbeOutcomes` or the CLI refuses the repeated flag | the test fails and names trial-set scoring |
+| v3-shaped stored result | a `ComparableResult` without `trials` | never reaches `compareDominance` | `isComparableShaped` reads it as not comparable |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `test/lib/compare-dominance.js` -- wrapper over `compareDominance`; its doc names the v3 slice `{outcomes, strength, comparabilityKey}`.
+- `test/test-probe-corpus.js:125` `comparableResultOf` -- slices each artifact for the baseline; must carry `scoredProbeId`, `reducedProbeOutcomes`, `trials`, and `trialIndex` on outcomes, since `reductionConsistencyIssuesOf` reads all of them.
+- `test/probes/expected-strength.json` -- baseline, regenerated with `node test/test-probe-corpus.js --write`.
+- `test/fixtures/dominance/comparable-results.json` -- hand-authored pairs; each side needs `trials`, `scoredProbeId`, `reducedProbeOutcomes`.
+- `test/test-compare-eval-runs.js:132` `comparableResult` -- builder of one probe `p1`; needs a consistent reduction.
+- `test/lib/compare-eval-runs.js:175` `isComparableShaped` -- structural gate before `compareStoredResults`.
+- `test/lib/probe-scoring.js` -- `suites`, `storedProbePort`, `preflightSuite`, `scoreProbe`, `sealContract`, `corpusDigestOf`: reuse to build the new test's inputs.
+- `test/lib/eval-quality-inputs.js` -- `sealedRunRecord` (takes `trialIndex`), `scoringPolicy`, `validateArtifact`.
+- `node_modules/eval-quality/dist/cli/run.js` `runScoreCommand` -- repeated `--record`; `application/score.js` sorts records by `trialIndex`.
+- `package.json` `test` chain, `.github/workflows/quality.yaml`, `tools/validate-ci-coverage.js` -- one step per script.
+
+## Tasks & Acceptance
+
+**Execution:**
+
+- [x] `test/test-probe-corpus.js`, `test/probes/expected-strength.json` -- carry the v4 comparable slice; regenerate the baseline.
+- [x] `test/fixtures/dominance/comparable-results.json`, `test/test-compare-eval-runs.js` -- v4-consistent comparable results.
+- [x] `test/lib/compare-dominance.js`, `test/lib/compare-eval-runs.js` -- doc and `isComparableShaped` read the v4 shape.
+- [x] `test/test-trial-set-scoring.js` -- new: seal the contract, build three records of one replayed probe, score through the CLI with three `--record`, assert the artifact.
+- [x] `package.json`, `.github/workflows/quality.yaml` -- `test:trial-set-scoring` script, chain entry, CI step.
+- [x] `CHANGELOG.md` -- `[Unreleased]` entry.
+
+**Acceptance Criteria:**
+
+- Given eval-quality 4.0.0 is published, when TeA's `eval-quality` devDependency is raised to it and `npm install` runs, then the engine check exits 0 and `git diff -- package.json package-lock.json` shows only the version bump, with no `file:` or `.tgz` spec.
+- Given the repair, when `npm test` runs on eval-quality 4.0.0, then it exits 0; reverting the repair re-fails `test:probe-corpus`, `test:compare-dominance`, `test:compare-eval-runs`.
+- Given `eval-quality` downgraded to published 3.4.0 (`npm install eval-quality@3.4.0 --no-save`, since `npm ci` now restores the committed 4.0.0 pin), when `test:trial-set-scoring` runs, then it fails.
+
+## Implementation Notes
+
+Outcome: landed in `/Users/murat/opensource/_wt/tea-evaluate-12` on `feat/evaluate-1.2`. The repair below was built and reviewed against the Story 1.1 local tarball before eval-quality 4.0.0 was published; this record's "Landing on the published release" section describes the second pass that moved TeA onto the real release.
+
+Pre-repair run (the AC's record). `npm test` scripts run one by one on the tarball with no repair: `test:probe-corpus` (exit 2), `test:compare-dominance` (exit 1) and `test:compare-eval-runs` (exit 1) fail, each with `TypeError: Cannot read properties of undefined (reading 'completedAttempts')` from the version 4 `compareDominance`, which recomputes each side's trial-set reduction and TEA's stored comparable results had no `trials`. `lint` and `lint:md` also failed, on the coordinator's staged `sprint-status.yaml` and Story 1.1's record; neither is an engine break. `test:eval-replay` and `test:schema-versions` pass unchanged on the tarball, so the story repaired neither. On published 3.4.0 before any change, every script passed except the same two lint failures.
+
+What changed:
+
+- `test/test-probe-corpus.js` `comparableResultOf` keeps `scoredProbeId`, `trials`, `reducedProbeOutcomes` and `trialIndex` on outcomes; `test/probes/expected-strength.json` regenerated. Verdicts, strength vectors and pre-flight results are unchanged; detailed outcome severities moved in 26 probes (for example test-review P-001 critical to material) because the version 4 engine stamps the probe's severity on every detailed outcome.
+- `test/fixtures/dominance/comparable-results.json` and `test/test-compare-eval-runs.js` carry a consistent reduction on each side.
+- `test/lib/compare-eval-runs.js` `isComparableShaped` requires every field the version 4 comparator dereferences, so a version 3 or half-migrated result never reaches it; a table-driven case holds each clause.
+- New `test/test-trial-set-scoring.js` (`test:trial-set-scoring`, chained after `test:compare-eval-runs`, own `quality.yaml` step). It seals test-review's contract and holds the brief to its schema, then runs `eval-quality score` (resolved from the package's `bin`) with three repeated `--record` flags. An agreeing set asserts exit 0, schema version 4 or later, `trials.completed` 3, one reduced outcome with votes for trials 1 to 3, `validCount` 3, `caughtCount` 3 and `strength.comparable` true. A disagreeing set (trial 2 missed) asserts `caughtCount` 2 and a catch at threshold 0.5, exiting 2 because the missed material defect is a FAIL rung. A single record under `minimumTrialCount` 3 asserts `trials.completed` 1 and a non-comparable strength.
+- `README.md` chain count seventy-five to seventy-six (`doc-counts`); `docs/explanation/eval-quality-command-adapter.md` inventory gains rows for the `score` CLI and `compareDominance`.
+- Outside the story, found on the way: `colors` in 15 test scripts lacked the ESC byte and printed literal `[32m`; fixed to `'\u001B[..m'` (eslint's `unicorn/no-hex-escape` rejects `\x1b`). Story 1.1's record failed `lint:md`; fixed with the repository's `markdownlint-disable MD033` precedent and blank lines around lists. `test-design-epic-1.md` named a `test:eval-replay` repair that never happened; the Replay row now names `test:trial-set-scoring`.
+
+Revert checks, each run once and restored:
+
+- Repair: the seven repaired files restored to `da5f68d` on the tarball: `test:probe-corpus` exit 2, `test:compare-dominance` exit 1, `test:compare-eval-runs` exit 1, each with the `completedAttempts` TypeError. Restored; the working tree matches the index again.
+- Trial-set dependency (pre-release, on the tarball): `npm ci` restored published 3.4.0 (engine check exit 1), and `test:trial-set-scoring` failed 4 of 8 checks, each naming trial-set scoring: `eval-quality: usage: --record given twice with different values`. Tarball reinstalled `--no-save`; engine check exit 0.
+- Manifests: `git diff -- package.json package-lock.json` carries no `file:` or `.tgz` spec; `package.json` changes only by the new script.
+
+## Landing on the published release
+
+The eval-quality maintainer merged #158 and released it as `eval-quality` 4.0.0, carrying the same target-policy export and trial-set scoring the tarball above carried. This section replaces the tarball with the release.
+
+What changed:
+
+- `package.json`'s `eval-quality` devDependency raised from `3.4.0` to `4.0.0`. TeA pins `eval-quality` exactly (`CHANGELOG.md`'s supply-chain entry and `eval-quality.config.json`'s `lockfile-age` exclusion both say why: a human drives each `eval-quality` adoption), so the new pin reads as the exact string `4.0.0`. `npm install` regenerated `package-lock.json` to resolve `eval-quality` from the registry; no `file:` or `.tgz` spec remains anywhere in either file.
+- `test/lib/doc-claim-sources.js`'s `EVAL_QUALITY_PIN_IS_3_4_0` export, and the matching `docs/explanation/eval-quality-roadmap.md` claim, renamed and updated to `EVAL_QUALITY_PIN_IS_4_0_0` / "The pin is 4.0.0 now" (`eval-quality.config.json`'s `doc-claims` entry updated to match); this is the doc-claims gate that would otherwise fail the moment the pin moved, by design.
+- `docs/explanation/eval-quality-command-adapter.md`'s "16 outcomes on the 3.4.0 TEA now runs" corrected to name 4.0.0; found stale while landing this change. No gate catches this sentence; it is free prose.
+- `_bmad-output/planning-artifacts/evaluate/epics.md`'s Story 1.2 acceptance criteria rewritten to name the published 4.0.0 release, replacing the Story 1.1 tarball and `npm ci` restoring 3.4.0. `npm ci` now restores the committed 4.0.0 pin, so the trial-set-scoring revert check downgrades explicitly with `npm install eval-quality@3.4.0 --no-save`. The corresponding acceptance criteria above and the CHANGELOG's `[Unreleased]` entries were updated to match.
+- `_bmad-output/implementation-artifacts/evaluate/sprint-status.yaml`: Story 1.1's row moved to `done` (eval-quality #158 merged and released), Story 1.2's row to `review`. `implementation-readiness.md`'s Story 1.1 tracking note updated to match. This story's frozen Boundaries state "Never: ... edit `sprint-status.yaml`," written for the tarball pass; the coordinator's landing instructions for this pass explicitly renegotiated that specific boundary, since Story 1.1's own status now has to change to reflect its release and no other worker owns that update in this relay. The frozen text is left as originally approved per the frozen-intent convention; this note and the Spec Change Log entry below record the renegotiation.
+- `epics.md`'s Epic Dependencies paragraph and `_bmad-output/implementation-artifacts/evaluate/epic-1-context.md`'s Cross-Story Dependencies section both said Story 1.2 installs Story 1.1's tarball and every later story runs on that local build; found stale while landing this change (the same claim this story replaces) and corrected to name the published release.
+- `test/test-trial-set-scoring.js` hardened past the tarball-era review round, against findings from this landing pass's own test-quality review: `runScoreCli`'s `spawnSync` gained `killSignal: 'SIGKILL'`, so a hung CLI process ignoring the default `SIGTERM` is force-killed on timeout; `checkTrialSetShape` and `checkBelowMinimum` now assert stderr is empty on an otherwise-expected run; the single-record case now validates its artifact against the published `evidence-artifact` schema and asserts `schemaVersion >= 4`, the same way the three-trial cases already did (this catches a real regression: on published 3.4.0 the single-record artifact is schema version 3, which the test previously never checked); `checkReduction` now compares `catchThreshold` against the test's own `policy.catchThreshold`, so a policy-fixture change is tracked automatically; `missedTrial` now throws immediately, naming the missing one, if the stored record has no finding for `P-001` or no disposition for `O-001`; and the detailed-outcomes check now asserts every trial index has an equal outcome count, which catches a duplicate-outcome bug a `Set`-based coverage check alone would miss.
+
+Revert checks, each run once and restored:
+
+- Engine pin, node_modules only: `eval-quality` downgraded to published `3.4.0` with `npm install eval-quality@3.4.0 --no-save`, exactly the command the trial-set-scoring acceptance criterion above names; `package.json`'s declared devDependency stays `4.0.0` throughout, since `--no-save` never writes it. Engine check exited 1 (`evaluateTarget` not exported by 3.4.0). `test:trial-set-scoring` failed 7 of 12 checks, the agreeing and disagreeing CLI calls with `eval-quality: usage: --record given twice with different values` and the single-record case additionally caught on its own terms: `the single-record EvidenceArtifact is schema version 3, and trial-set scoring needs 4 or later`. `test:probe-corpus` failed on `expected-strength.json` drift. `test:doc-claims` stayed green (0 disagreements): its predicate reads `package.json`'s declared pin, which `--no-save` leaves untouched, so this command does not exercise that gate. `test:compare-dominance` and `test:compare-eval-runs` also stayed green: both call the installed `compareDominance`, and 3.4.0's `compareDominance` does not require the version 4 fields this repair added to the fixtures, so it ignores them. Restored with `npm install` (which re-resolves the still-`4.0.0` declared pin); engine check exit 0.
+- Engine pin, declared pin: `package.json`'s `eval-quality` devDependency itself edited to `3.4.0` and `npm install` run, so both the declared pin and `node_modules` move. This is the scenario that exercises `test:doc-claims`, which failed as designed: "The pin is 4.0.0 now" no longer matched. Every check the node_modules-only scenario above failed, failed here too, for the same reasons. Restored to the declared and resolved `4.0.0`; engine check exit 0, full `npm test` green again.
+
+Left undone: nothing. The tarball-era CI caveat ("CI installs the pinned 3.4.0... until an eval-quality release... lands") no longer applies: the pin is 4.0.0 and CI installs it from the registry.
+
+## Spec Change Log
+
+- `epics.md`'s Story 1.2 acceptance criteria named the Story 1.1 tarball and `npm ci` restoring published 3.4.0. eval-quality #158 (Story 1.1's export plus #143's trial-set scoring) merged and released as eval-quality 4.0.0 before this story landed, so the acceptance criteria now name the published release: TeA's `eval-quality` devDependency raised to the exact pin `4.0.0`, and the trial-set-scoring revert check downgrades explicitly with `npm install eval-quality@3.4.0 --no-save` since `npm ci` now restores the committed 4.0.0 pin. See "Landing on the published release" above.
+
+## Review Triage Log
+
+Layers: blind hunter, edge-case hunter, verification gap (subagents); one adversarial peer session (eval-s12-rev, delivered, closed).
+
+| # | Source | Finding | Verdict | Route |
+| --- | --- | --- | --- | --- |
+| 1 | verification, blind, edge, peer | `isComparableShaped` clauses untested one by one; the v3 case's end-to-end assertion passed vacuously; half-migrated shapes still reached the comparator | medium | patch: stricter predicate, table-driven rows, a real change entry |
+| 2 | verification, edge, peer | new test's `colors` lacked the ESC byte; 14 older scripts too | low | patch, all 15 files |
+| 3 | blind, peer | CLI path hard-coded into `dist/` against the header | low | patch: resolved from the package `bin` |
+| 4 | blind, edge | `runScoreCli` hid spawn errors, signals and unparsed stdout | low | patch |
+| 5 | edge, peer | `scoreProbe` schema problems discarded; records and raised policy never schema-checked | medium | patch |
+| 6 | edge | a failed pre-flight let scoring run on | low | patch: early return |
+| 7 | blind, peer | no schema-version check; identical records could not tell a reduction from a copied vote; counts unasserted | medium | patch: version floor, counts, a disagreeing set |
+| 8 | blind | single-record case could be non-comparable for another reason | low | patch: `trials.completed` 1 |
+| 9 | peer | "seals a contract" in name only | low | patch: header says the brief is schema-held and `score` has no brief input |
+| 10 | edge, peer | `comparableResultOf` comment said the severity floor reads outcomes | low | patch |
+| 11 | peer | antithesis and em dash in edited comment blocks | low | patch |
+| 12 | blind | JSDoc slice type duplicated; overlong lines | low | patch |
+| 13 | blind | CI step name framed the vendor as the subject | low | patch |
+| 14 | blind, edge, peer | CI red on pinned 3.4.0 unstated; "no score moved" hid 26 severity moves | medium | patch: CHANGELOG states both |
+| 15 | blind, peer | command-adapter inventory lacks the `score` CLI and `compareDominance` | low | patch |
+| 16 | peer | completion notes and revert observations missing | medium | patch: this record |
+| 17 | peer | test design named a `test:eval-replay` repair that never happened | low | patch |
+| 18 | blind | baseline absent from the reviewed diff | false: scoped out of the layer diff for size; the peer reviewed it and found item 14 | reject |
+| 19 | edge | gate the chain until a release ships | false: the plan puts the release and pin move in Story H.1 | reject |
+| 20 | edge | empty `reducedProbeOutcomes` in fixtures loses severity-floor coverage | false: the version 3 fixtures had empty `outcomes`, so the override never fired there either | reject |
+| 21 | edge | an inconsistent reduction reads as `incomparable` drift | low: the package's rule, and drift is still reported | reject |
+| 22 | self | `require(PACKAGE_JSON)` broke `test:direction` (non-literal `require`) | medium | patch: literal specifier |
+
+Second round, landing on the published release: blind hunter, edge-case hunter, verification gap, and a test-quality reviewer (subagents), each scoped to this landing pass's own delta; one adversarial reviewer (subagent) over the whole staged diff.
+
+| # | Source | Finding | Verdict | Route |
+| --- | --- | --- | --- | --- |
+| 23 | blind | `epics.md`'s rewritten AC cited "(eval-quality #143)" for both the target-policy export and trial-set scoring; only trial-set scoring is #143, the export is Story 1.1 / eval-quality#158 | medium | patch: attributed separately |
+| 24 | blind | CHANGELOG's devDependency-bump sentence sat under `### Added`; Keep a Changelog (which this file's header names) treats a version bump as `### Changed` | low | patch: moved, and split into its own bullet |
+| 25 | blind | CHANGELOG had no entry for the two stale-doc-sentence corrections this pass makes, though AGENTS.md requires a documentation-change entry | low | patch: folded into the moved `### Changed` bullet |
+| 26 | blind | this story's frozen Boundaries still read "Never: ... edit `sprint-status.yaml`," unmodified, while this pass edits it anyway | low | patch: a note explaining the renegotiation added beside the frozen text, which is left as originally approved per the frozen-intent convention |
+| 27 | blind | Design Notes said the CLI is spawned from a hardcoded `dist/cli/main.js` path; item 3 above already patched that to resolve from the package's `bin` field | low | patch |
+| 28 | blind | CHANGELOG's ANSI-escape-byte bullet described a bug fix but sat under `### Changed` | low | patch: moved to a new `### Fixed` heading |
+| 29 | blind | bare `#143` citations read as a local TeA issue; `implementation-readiness.md` already links eval-quality's own `#158` in full | low | patch: `eval-quality#143` style in the sentences this pass wrote |
+| 30 | blind | this record's own prose used the banned "X rather than Y" antithesis three times, a rule this same file's Writing Rules states | medium | patch: rewritten as affirmative statements |
+| 31 | verification-gap | `test/lib/doc-claim-sources.js`'s JSDoc line-number pointers were already stale before this pass (off by 3 lines); this pass edits the exact comment block without correcting them | low | patch: line numbers corrected, plus a second antithesis found in the same comment |
+| 32 | test-quality | `checkBelowMinimum` never validated its artifact against the published schema or asserted `schemaVersion >= 4`, unlike the three-trial cases | medium: proven live, see below | patch |
+| 33 | test-quality | `runScoreCli`'s `spawnSync` set a `timeout` but no `killSignal`; a hung process ignoring `SIGTERM` would not be force-killed | low | patch: `killSignal: 'SIGKILL'` |
+| 34 | test-quality | the detailed-outcomes check deduped trial indices through a `Set`, so it verified which trial indices appeared, without checking whether they appeared evenly | medium, corrected: verified live that `outcomes.length === TRIAL_COUNT` (the finding's literal suggestion) is false against the real engine, which produced 39 outcomes across 3 trials; the real invariant is an equal count per trial index | patch: uniform-distribution check, sized from the observed data |
+| 35 | test-quality | `checkReduction` compared `catchThreshold` against a hardcoded `0.5`, ignoring the test's own policy fixture | low | patch: threaded `policy.catchThreshold` through |
+| 36 | test-quality | `missedTrial`'s `.filter()` and `.map()` would silently no-op if the stored record's finding or oracle disposition ever stopped matching, building a malformed fixture with no error | medium | patch: throws naming the missing finding or oracle |
+| 37 | test-quality | stderr from a run whose exit code and artifact already matched expectations was never asserted empty, so a new CLI warning on an otherwise-passing run would not be caught | low | patch |
+| 38 | adversarial | this record's revert-check claimed `npm install eval-quality@3.4.0 --no-save` makes `test:doc-claims` fail; verified live that it does not, since `--no-save` never edits `package.json` and the doc-claims predicate reads only the declared pin there | high: the record's own evidence was wrong | patch: split into the two scenarios that actually produce each observation, both re-verified live |
+| 39 | adversarial | `epic-1-context.md` (new file, carried from the tarball-era patch) said Story 1.2 installs a tarball and every later story runs on it, contradicting this very story | medium | patch, alongside the same stale sentence in `epics.md`'s Epic Dependencies paragraph |
+
+All 17 findings from this round were confirmed against the current diff or live-verified against the real eval-quality@4.0.0 install; none were rejected.
+
+Third round, coordinator's Opus final review over the local branch: six findings, all confirmed live and fixed.
+
+| # | Source | Finding | Verdict | Route |
+| --- | --- | --- | --- | --- |
+| 40 | opus | `CHANGELOG.md`'s `### Changed` bullet said `test:compare-dominance` and `test:compare-eval-runs` fail if the pin is downgraded to 3.4.0; verified live with `npm install eval-quality@3.4.0 --no-save` that both stay green (21/21, 68/68), since 3.4.0's `compareDominance` ignores the version 4 fields | high: false claim | patch: sentence narrowed to `test:probe-corpus`, and this record's own revert-check reason corrected the same way |
+| 41 | opus | `test-design-epic-1.md`'s Story 1.2 entry criterion, Coverage Plan rows, and its Story 1.2 row in "Acceptance Criteria Corrected" were still tarball-era, contradicting the corrected `epics.md` acceptance criteria | medium | patch: reworded to the published-release install, `git diff` with no `file:`/`.tgz` spec, and the explicit `npm install eval-quality@3.4.0 --no-save` revert |
+| 42 | opus | `epics.md` Story 1.11's "Engine consumption" note, Story 1.15's AC, and Story H.1's "checks red until release" framing and step 2 all still described an unpublished engine, a tarball re-install, or `npm ci` resolving 3.4.0 | medium | patch: all four spots updated to name the published `4.0.0` release and that the gate already closed at Story 1.2 |
+| 43 | opus | `epics.md`'s Story 1.2 AC said the manifest diff "shows only the version bump," but the diff also adds the `test:trial-set-scoring` script entry | low | patch: reworded to name the version bump specifically, without a claim that it is the diff's only content |
+| 44 | opus | `eval-quality-facts.md` still read as describing an unreleased engine and package version 3.4.0, with no note that eval-quality has since released | medium | patch: a top note naming the 4.0.0 release and both source issues, plus the version-fact line corrected |
+| 45 | opus | `test-design-epic-1.md`'s R1-07 risk described "a plain `npm install` silently resets to 3.4.0," which stopped being true once Story 1.2 committed the exact `4.0.0` pin | low | patch: rescoped to the real residual risk, an unrestored revert-check downgrade, score held at 6 so the epic's risk-count summary stays accurate |
+
+Fourth round, CodeRabbit on PR #230: three findings.
+
+| # | Source | Finding | Verdict | Route |
+| --- | --- | --- | --- | --- |
+| 46 | coderabbit | `test-design-epic-1.md`'s Story 1.2 Coverage Plan manifest-diff row said manifests show "only" the version bump, contradicted by the new `test:trial-set-scoring` `package.json` script entry | medium: correct, same class as opus finding 43 but a parallel row I had not updated | patch: reworded to match `epics.md`'s already-corrected AC |
+| 47 | coderabbit | The same table's trial-set-scoring revert-check row said the 3.4.0 downgrade case fails because "`score` takes one record and the set is non-comparable"; that sentence describes the single-record case only, mislabeled onto the three-record downgrade | medium: correct, verified against the CLI error already recorded elsewhere in this file (`eval-quality: usage: --record given twice with different values`) | patch: reworded to name the CLI usage rejection |
+| 48 | coderabbit | `test/lib/compare-eval-runs.js:191`, claiming a function `reductionConsistencyIssuesOf` compares `trialIndex` values without requiring integers | false: no such function exists in this repository (`grep -rn reductionConsistencyIssuesOf test/`, zero matches); line 191 is `isComparableShaped`'s array-type check, which never reads individual `trialIndex` values. The finding's own static-analysis trace read eval-quality's internal `dist/core/score/reduction-consistency.js`, the vendor's own reduction logic, which AD-1 forbids TeA from duplicating or independently validating | reject |
+
+All three threads replied to individually and resolved.
+
+## Design Notes
+
+Pre-release: worktree hygiene note for the tarball pass. Other stories' work was staged in the planning worktree at the time. Any `npm install` or `npm ci` reset `node_modules/eval-quality` to 3.4.0; it had to be followed by `npm install --no-save /Users/murat/opensource/_wt/_packs/eval-quality-local.tgz`. That worktree is retired; the story now lives in `/Users/murat/opensource/_wt/tea-evaluate-12` on `feat/evaluate-1.2`, `eval-quality` is a normal registry dependency at the exact pin `4.0.0`, and no tarball step remains. Engine check: `node --input-type=module -e "const m = await import('eval-quality'); if (typeof m.evaluateTarget !== 'function') process.exit(1)"`.
+
+The new test's probe is one the stored replay scores with contributing evidence (a caught defect or gameability probe), so the reduction has a vote to carry. Records differ only in `trialIndex`. The policy is TeA's `test/probes/scoring-policy.json` with `minimumTrialCount` 3, so a single-record score is below the minimum and non-comparable. Spawn the CLI resolved from the installed package's `bin` field (`require.resolve('eval-quality/package.json')` plus its `bin` entry, per Review Triage Log item 3), with `process.execPath`; write inputs to a temp directory removed afterwards. Revert checks are exercised by the build worker after implementation.
+
+Writing rules for comments and docs: no em dash or spaced hyphen as a clause connector, no "not X, but Y" antithesis, no filler; match the surrounding comment density.
+
+## Verification
+
+**Commands, run against the published eval-quality 4.0.0:**
+
+- engine check -- exit 0
+- `npm test` -- exit 0 (all 76 chained scripts, including `test:trial-set-scoring`, `lint`, `lint:md`, `format:check`)
+- `npm run test:release-metadata` -- exit 0
+- `npm run docs:validate-links`, `npm run docs:build` -- exit 0
+- Engine-pin revert check (downgrade to `eval-quality@3.4.0`, restore to `4.0.0`) -- see "Landing on the published release" above
+
+**Commands, run against the pre-release tarball (first pass, superseded above):**
+
+- engine check -- exit 1 at start (published 3.4.0), exit 0 after the tarball install and at the end
+- `npm test` scripts one by one -- 75 of 76 exit 0; `lint` failed only on the coordinator's then-staged `sprint-status.yaml`, since resolved
+- `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0

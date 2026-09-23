@@ -4,13 +4,13 @@
  * Reports what changed between two `eval:all` runs, suite by suite: a
  * `failureClass` change, a measurement change, and a suite present in one run
  * and not the other. This is a measurement diff over `suiteResultRecord`'s own
- * fields — `failureClass`, `measurements`, `thresholds`, `declaredRepetitions`.
+ * fields: `failureClass`, `measurements`, `thresholds`, `declaredRepetitions`.
  *
- * For a suite whose stored result carries `{outcomes, strength,
- * comparabilityKey}`, the comparison calls `test/lib/compare-dominance.js`'s
- * `compareStoredResults` (Story 5.1) directly, so a suite that does produce
- * `eval-quality`'s `ComparableResult` shape is compared through the package's
- * own dominance rule rather than through a second, home-grown one.
+ * For a suite whose stored result carries `eval-quality`'s `ComparableResult`
+ * fields (see `isComparableShaped`), the comparison calls
+ * `test/lib/compare-dominance.js`'s `compareStoredResults` (Story 5.1)
+ * directly, so a suite that does produce `eval-quality`'s `ComparableResult`
+ * shape is compared through the package's own dominance rule.
  *
  * WHAT COUNTS AS "THE SAME SUITE-MANIFEST CONFIGURATION"
  *
@@ -166,22 +166,39 @@ function measurementChanges(previousSuiteResult, currentSuiteResult) {
 /**
  * Whether a stored suite result carries the `ComparableResult` shape
  * `compareStoredResults` (TEA Story 5.1) reads: `{outcomes, strength,
- * comparabilityKey}`. No suite `eval:all` runs today produces this — see the
- * module comment — so this always reads false against a real stored record.
+ * comparabilityKey, scoredProbeId, reducedProbeOutcomes, trials}`. No suite
+ * `eval:all` runs today produces this (see the module comment), so this always
+ * reads false against a real stored record.
  * It is a structural check rather than a schema check on purpose: a schema-valid
  * `evalResultSchema` record can never carry these keys at all (the schema is
  * `.strict()`), so this is the only test that can ever say yes, the day a suite
  * genuinely starts carrying them under a schema revision that allows it.
  *
+ * The last three keys arrived with `EvidenceArtifact` schema version 4, whose
+ * `compareDominance` recomputes each side's trial-set reduction from them before
+ * comparing. A result stored in the version 3 shape lacks them, so it reads as
+ * not comparable here and never reaches the package. The same holds for a half
+ * migrated one: the recomputation dereferences `trials.completedAttempts`,
+ * `trials.invalidatedAttempts`, and each reduced entry's `trialVotes` and
+ * `invalidatedAttempts`, so each of those must be an array.
+ *
  * @param {object} suiteResult
  * @returns {boolean}
  */
 function isComparableShaped(suiteResult) {
+  const isObject = (value) => value !== null && typeof value === 'object';
   return (
     Array.isArray(suiteResult?.outcomes) &&
-    suiteResult?.strength !== null &&
-    typeof suiteResult?.strength === 'object' &&
-    typeof suiteResult?.comparabilityKey === 'string'
+    isObject(suiteResult?.strength) &&
+    typeof suiteResult?.comparabilityKey === 'string' &&
+    (suiteResult?.scoredProbeId === null || typeof suiteResult?.scoredProbeId === 'string') &&
+    Array.isArray(suiteResult?.reducedProbeOutcomes) &&
+    suiteResult.reducedProbeOutcomes.every(
+      (entry) => isObject(entry) && Array.isArray(entry.trialVotes) && Array.isArray(entry.invalidatedAttempts),
+    ) &&
+    isObject(suiteResult?.trials) &&
+    Array.isArray(suiteResult?.trials?.completedAttempts) &&
+    Array.isArray(suiteResult?.trials?.invalidatedAttempts)
   );
 }
 

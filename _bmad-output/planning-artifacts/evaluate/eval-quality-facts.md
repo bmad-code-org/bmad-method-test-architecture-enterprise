@@ -6,6 +6,8 @@ verified: 2026-09-22, five-slice source scan with path:line citations; load-bear
 
 # eval-quality facts
 
+**Update, Story 1.2 landing:** eval-quality has since released `4.0.0`, carrying both the target-policy export this file describes as Story 1.1's unpublished work (eval-quality#158) and the trial-set scoring below described as merged but unreleased (#143). Every "unreleased" or "published v3.4.0" claim in this file describes the state at the `verified` date above. TeA's own devDependency now pins the exact `4.0.0` release.
+
 This is the ground truth every Evaluate planning artifact builds on. It describes eval-quality `main`, which is ahead of the published v3.4.0: trial-set scoring (#143: repeatable `score --record`, `reducedProbeOutcomes`, `EvidenceArtifact` schema v4, BREAKING) is merged but unreleased. Against published v3.4.0, `score` takes one record per call, so every trial set completes one trial and falls below `minimumTrialCount`. Evaluate therefore needs the next eval-quality release. Each fact cites the eval-quality source (paths relative to that repository). If a planning artifact contradicts this file, the planning artifact is wrong; if this file contradicts the eval-quality source, re-verify and fix this file.
 
 ## What this means for Evaluate (coordinator summary)
@@ -109,7 +111,7 @@ Exit codes (`src/cli/exit-codes.ts:11-72`): `0` PASS, WAIVED, unpromoted CONCERN
 
 ## Public surface: CLI, gates, config, programmatic API, CI
 
-- Package `eval-quality` 3.4.0, ESM only, Node >=22.20.0, sole runtime dependency `zod`; optional peer `typescript >=5.7.0` (`package.json:2-3,21,78-88`).
+- Package `eval-quality` 3.4.0 at the `verified` date above, now released as `4.0.0`; ESM only, Node >=22.20.0, sole runtime dependency `zod`; optional peer `typescript >=5.7.0` (`package.json:2-3,21,78-88`).
 - Binaries: `eval-quality` (`dist/cli/main.js`) and `eval-quality-gates` (`dist/gates/gates-cli.js`) (`package.json:14-17`).
 - eval-quality runs nothing under evaluation itself; the caller supplies sealed run records (`src/index.ts:12`, `README.md:87`).
 
