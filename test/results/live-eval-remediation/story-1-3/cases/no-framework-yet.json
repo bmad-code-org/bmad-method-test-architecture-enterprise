@@ -1,0 +1,20 @@
+{
+  "id": "no-framework-yet",
+  "intent": {
+    "id": "no-framework-yet",
+    "intent": "Our repo has no browser test setup at all. No Playwright, no Cypress, no fixtures, nothing. Can you stand up a proper structure for us?"
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "TF",
+    "expectedWorkflow": "bmad-testarch-framework",
+    "decidingTokens": [
+      "playwright",
+      "cypress"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "There is no framework to expand or review, and nothing else on the menu can run until one exists. Naming both candidate tools back is the evidence the choice was made on the absence rather than on the word test."
+  },
+  "caseDigest": "sha256:a6a62655dfe46039ffc5c353d8148c1f9cc82e696dc29bc3cb90ed4d39aa17ed"
+}

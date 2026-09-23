@@ -1,0 +1,22 @@
+{
+  "id": "acceptance-tests-before-code",
+  "intent": {
+    "id": "acceptance-tests-before-code",
+    "intent": "Story 12.3 has its acceptance criteria signed off and nothing is built yet. I want failing acceptance tests and a checklist the developer can work through."
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "AT",
+    "expectedWorkflow": "bmad-testarch-atdd",
+    "decidingTokens": [
+      "acceptance criteria",
+      "failing"
+    ],
+    "scopeTokens": [
+      "12.3"
+    ],
+    "candidateCodes": [],
+    "rationale": "Criteria exist and the implementation does not, and the user asks for tests that fail. Tests meant to fail before code is the one item defined by that ordering; test automation assumes the opposite."
+  },
+  "caseDigest": "sha256:66eaff7d8d0dd6c27f1f71f0884a4b78a1ce8bc0b61197bd5107f19b5ad6e4ba"
+}

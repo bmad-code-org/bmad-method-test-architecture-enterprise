@@ -100,18 +100,12 @@ const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'test', 'eva
 if (!Array.isArray(manifest.deferred)) refuse('suite-manifest.json has no "deferred" array');
 const deferredSkills = new Set(manifest.deferred.map((entry) => entry.skill));
 
-/** suite-manifest.json's `deferred` array is empty: every TEA skill now carries a real suite. */
-exports.NO_SKILLS_DEFERRED = deferredSkills.size === 0;
-
 /** docs/explanation/eval-quality-adoption-guide.md, "none of the eight skills fragment selection spans is still listed as deferred." */
 const fragmentSelectionSuite = manifest.suites.find((suite) => suite.id === 'fragment-selection');
 if (fragmentSelectionSuite === undefined) refuse('suite-manifest.json registers no suite with id "fragment-selection"');
 const fragmentSelectionSkills = fragmentSelectionSuite.skills ?? [];
 if (fragmentSelectionSkills.length === 0) refuse('the fragment-selection suite names no skills');
 exports.NO_FRAGMENT_SELECTION_SKILL_DEFERRED = fragmentSelectionSkills.filter((skill) => deferredSkills.has(skill)).length === 0;
-
-/** docs/explanation/eval-quality-roadmap.md:10, "every TEA skill now has one." */
-exports.EVERY_SKILL_HAS_A_BEHAVIORAL_SUITE = deferredSkills.size === 0;
 
 /**
  * docs/explanation/eval-quality-adoption-guide.md:203, "the 34 CONCERNS the
@@ -265,5 +259,5 @@ exports.keyIsUnread = keyIsUnread;
 exports.RISK_THRESHOLD_UNREAD = keyIsUnread('risk_threshold');
 exports.OUTPUT_FOLDER_KEYS_UNREAD = ['test_design_output', 'test_review_output', 'trace_output'].every(keyIsUnread);
 exports.FOUR_FUTURE_KEYS_UNREAD = FUTURE_KEYS.length === 4 && FUTURE_KEYS.every(keyIsUnread);
-exports.TEN_WIRED_FOUR_FUTURE =
-  FUTURE_KEYS.length === 4 && promptedKeys.length - FUTURE_KEYS.length === 10 && exports.FOUR_FUTURE_KEYS_UNREAD;
+exports.ELEVEN_WIRED_FOUR_FUTURE =
+  FUTURE_KEYS.length === 4 && promptedKeys.length - FUTURE_KEYS.length === 11 && exports.FOUR_FUTURE_KEYS_UNREAD;

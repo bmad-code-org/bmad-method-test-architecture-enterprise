@@ -25,7 +25,7 @@
     "",
     "`contracts` names the eval contracts under test/contracts/ that express a suite. The same check fails when a",
     "listed path is missing and when a generated contract is claimed by no suite, so the link cannot rot in either",
-    "direction. It is an array because a suite can need more than one: `bmad-tea-routing` is eighteen intents and",
+    "direction. It is an array because a suite can need more than one: `bmad-tea-routing` is nineteen intents and",
     "eval-quality's AD-39 scripting bound caps an interaction plan at sixteen steps, so its corpus is expressed as",
     "an intents contract and a controls contract. test/contracts/README.md records the split.",
     "`bmad-teach-me-testing` ships no knowledge index at all, so fragment selection does not apply to it; its own",
@@ -194,7 +194,7 @@
         "maxUnstableCases": 2
       },
       "repetitions": 2,
-      "caseCount": 18,
+      "caseCount": 19,
       "ciTier": "full-matrix",
       "runnerCapabilities": ["read-only"]
     },
@@ -756,5 +756,12 @@
       "runnerCapabilities": ["scoped-artifact-writes"]
     }
   ],
-  "deferred": []
+  "deferred": [
+    {
+      "skill": "bmad-testarch-evaluate",
+      "owner": "TEA maintainer",
+      "missingEvidence": "no behavioral suite exists yet for bmad-testarch-evaluate",
+      "exitCondition": "Story 1.16 authors and lands bmad-testarch-evaluate's own behavioral suite"
+    }
+  ]
 }

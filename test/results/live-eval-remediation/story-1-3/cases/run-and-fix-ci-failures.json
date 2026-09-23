@@ -1,0 +1,20 @@
+{
+  "id": "run-and-fix-ci-failures",
+  "intent": {
+    "id": "run-and-fix-ci-failures",
+    "intent": "Our CI is red. Run the suite, find the failing tests, and fix them for me."
+  },
+  "groundTruth": {
+    "expectedAction": "decline",
+    "expectedMenuCode": null,
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "run",
+      "fix"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "No menu item executes a suite or repairs failing tests. CI scaffolds a pipeline and review judges tests; neither runs nor fixes anything, and dispatching either sends the user somewhere that cannot answer."
+  },
+  "caseDigest": "sha256:b7a8d3b1fb2a7c0e4d3f39081b6273b90902664967f01f5ddacc02357b7ff8bb"
+}

@@ -189,11 +189,11 @@ them, which is what the suite manifest's `contracts` array is an array for.
 The reason is a published bound rather than a preference. `eval-quality`'s AD-39 scripting bound caps
 an interaction plan at sixteen steps, in `core/compile/scripting-bound.js`, and it is exclusive: a
 plan of exactly sixteen is legal and seventeen is `plan-exceeds-scripting-bound`. The routing corpus
-is eighteen intents and each one is its own agent call with its own oracles, so one plan step per
-intent is the only binding under which a case's oracles read that case's answer. Eighteen steps is
+is nineteen intents and each one is its own agent call with its own oracles, so one plan step per
+intent is the only binding under which a case's oracles read that case's answer. Nineteen steps is
 past the ceiling.
 
-The split falls on the corpus's own line rather than at sixteen. One contract carries the ten intents
+The split falls on the corpus's own line rather than at sixteen. One contract carries the eleven intents
 with a right answer and asks whether the right answer came back; the other carries the eight controls,
 the four where asking is correct and the four nothing on the menu serves, and asks whether the skill
 declined to guess. The sensitivity witness each one needs differs with it: the intents contract

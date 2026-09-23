@@ -1,0 +1,20 @@
+{
+  "id": "pipeline-quality-gates",
+  "intent": {
+    "id": "pipeline-quality-gates",
+    "intent": "Our GitHub Actions workflow only runs unit tests on push. I want the pipeline to run the full suite with real quality gates and fail the build when they are not met."
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "CI",
+    "expectedWorkflow": "bmad-testarch-ci",
+    "decidingTokens": [
+      "pipeline",
+      "quality gate"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "The deliverable is pipeline configuration with gates in it, which is the only menu item that writes CI."
+  },
+  "caseDigest": "sha256:b92a6b85450671120610b92598b7175e98a37f9e512d5e260395b03108f20dbe"
+}

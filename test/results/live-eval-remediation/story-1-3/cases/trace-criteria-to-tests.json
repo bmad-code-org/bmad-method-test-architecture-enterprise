@@ -1,0 +1,22 @@
+{
+  "id": "trace-criteria-to-tests",
+  "intent": {
+    "id": "trace-criteria-to-tests",
+    "intent": "Epic 5's acceptance criteria are written and we have a decent suite. Map which criteria are actually covered and tell me whether we can ship."
+  },
+  "groundTruth": {
+    "expectedAction": "route",
+    "expectedMenuCode": "TR",
+    "expectedWorkflow": "bmad-testarch-trace",
+    "decidingTokens": [
+      "covered",
+      "ship"
+    ],
+    "scopeTokens": [
+      "epic 5"
+    ],
+    "candidateCodes": [],
+    "rationale": "Criteria on one side, an existing suite on the other, and a ship decision at the end. Mapping the two and deciding whether to ship is trace's two phases, and covered and ship are the two words that say which."
+  },
+  "caseDigest": "sha256:ddf0766497da0fd7dd6c196e1aeee5542dd6c19e62ea0e7fbc596036497c8e0d"
+}

@@ -47,7 +47,7 @@ Together, these utility libraries eliminate the need to reinvent core testing pr
 
 ### 2. Process: TEA (Test Engineering Architect)
 
-A quality operating model packaged as nine workflows spanning learning, test design, CI/CD gates, and release readiness. TEA encodes test architecture expertise into repeatable processes.
+A quality operating model packaged as ten workflows spanning learning, test design, evaluation, CI/CD gates, and release readiness. TEA encodes test architecture expertise into repeatable processes.
 
 | Workflow           | Purpose                                       |
 | ------------------ | --------------------------------------------- |
@@ -120,5 +120,5 @@ This approach is sometimes called _context engineering_: loading domain-specific
 - [Knowledge Base System](/docs/explanation/knowledge-base-system.md) - the manifest that loads the standards
 - [Test Quality Standards](/docs/explanation/test-quality-standards.md) - the Definition of Done those standards encode
 - [Network-First Patterns](/docs/explanation/network-first-patterns.md) - the determinism rule in detail
-- [TEA Overview](/docs/explanation/tea-overview.md) - the nine workflows in the lifecycle
+- [TEA Overview](/docs/explanation/tea-overview.md) - the ten workflows in the lifecycle
 - [Engagement Models](/docs/explanation/engagement-models.md) - the five ways to adopt TEA

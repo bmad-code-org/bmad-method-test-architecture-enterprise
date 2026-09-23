@@ -1,4 +1,15 @@
-/** Deterministic validation for Story 1.3's committed live routing evidence. */
+/**
+ * Deterministic validation for Story 1.3's committed live routing evidence.
+ *
+ * The evidence's `caseIds` and whole-file digests are frozen at the eighteen
+ * cases the live runs actually measured. The Evaluate initiative's own Story
+ * 1.3 (a later, unrelated story sharing this number) adds a nineteenth case to
+ * the same corpus, so the corpus is no longer byte-identical to what the
+ * evidence recorded. Each of the original eighteen cases is snapshotted under
+ * `cases/<id>.json`, extracted while the live corpus still matched the
+ * evidence's whole-file digests, so this test holds every recorded case
+ * byte-identical to its snapshot while admitting cases added after it.
+ */
 
 'use strict';
 
@@ -7,16 +18,52 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { loadCorpus } = require('./eval-bmad-tea-routing');
-const { digestFiles } = require('./lib/eval-record');
+const { digest } = require('./lib/eval-record');
 const { validateEvalResult } = require('./schema/eval-result');
 
-const PROJECT_ROOT = path.join(__dirname, '..');
 const EVIDENCE_ROOT = path.join(__dirname, 'results', 'live-eval-remediation', 'story-1-3');
-const RECORD_FIXTURES = ['test/fixtures/tea-routing-eval/intents.json'];
-const FIXTURES = [...RECORD_FIXTURES, 'test/fixtures/tea-routing-eval/ground-truth.json'];
+const CASES_ROOT = path.join(EVIDENCE_ROOT, 'cases');
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(path.join(EVIDENCE_ROOT, file), 'utf8'));
+}
+
+function readCaseSnapshot(id) {
+  return JSON.parse(fs.readFileSync(path.join(CASES_ROOT, `${id}.json`), 'utf8'));
+}
+
+const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
+
+/**
+ * Each recorded case id, held byte-identical to its frozen snapshot.
+ *
+ * The snapshot's own `caseDigest` is recomputed and checked first, so a hand
+ * edit of the snapshot file itself is caught before it could hide a live
+ * edit; only then is the live corpus entry compared to the snapshot. A
+ * missing or corrupt snapshot file is one failure among many rather than an
+ * uncaught exception, so every other recorded case still gets checked.
+ */
+function checkCaseSnapshots(failures, contract, corpus) {
+  const liveById = new Map(corpus.cases.map((item) => [item.id, item]));
+  for (const id of contract.caseIds) {
+    if (!liveById.has(id)) {
+      failures.push(`live corpus: recorded case "${id}" is missing`);
+      continue;
+    }
+    let snapshot;
+    try {
+      snapshot = readCaseSnapshot(id);
+    } catch (error) {
+      failures.push(`cases/${id}.json: ${error.message}`);
+      continue;
+    }
+    const recomputed = digest([JSON.stringify(snapshot.intent), JSON.stringify(snapshot.groundTruth)]);
+    checkEqual(failures, recomputed, snapshot.caseDigest, `cases/${id}.json self-digest`);
+
+    const live = liveById.get(id);
+    checkEqual(failures, { id: live.id, intent: live.intent }, snapshot.intent, `intents.json :: ${id} matches its snapshot`);
+    checkEqual(failures, live.expected, snapshot.groundTruth, `ground-truth.json :: ${id} matches its snapshot`);
+  }
 }
 
 function checkEqual(failures, actual, expected, label) {
@@ -27,11 +74,30 @@ function checkEqual(failures, actual, expected, label) {
   }
 }
 
-function qualityDiagnosticProjection(diagnostics, failures, file) {
+/**
+ * The deterministic prefix of `signatureOf`'s format (`action|menuCode|workflow|...`)
+ * a correct answer to this case must carry. The trailing `candidateCodesNamed`
+ * segment is left unconstrained: a clarify case's passing threshold does not
+ * fix which spellings the agent named, only that naming recall cleared it.
+ */
+function expectedSignaturePrefix(expected) {
+  if (expected.expectedAction === 'route') return `route|${expected.expectedMenuCode}|${expected.expectedWorkflow ?? ''}|`;
+  return `${expected.expectedAction}||`;
+}
+
+function qualityDiagnosticProjection(diagnostics, failures, file, expectedById) {
   const found = [];
   for (const entry of diagnostics) {
     if (entry.failureClass === 'none') {
       checkEqual(failures, [entry.rootCause, entry.reason, entry.triage], [null, null, []], `${file} neutral diagnostic`);
+      const expected = expectedById.get(entry.caseId);
+      if (expected === undefined) {
+        failures.push(`${file}: diagnostic names case "${entry.caseId}", which has no recorded ground truth`);
+      } else if (!entry.signature.startsWith(expectedSignaturePrefix(expected))) {
+        failures.push(
+          `${file} :: ${entry.caseId} rep ${entry.repetition}: signature "${entry.signature}" does not start with the expected "${expectedSignaturePrefix(expected)}"`,
+        );
+      }
       continue;
     }
     checkEqual(failures, entry.failureClass, 'quality', `${file} diagnostic failure class`);
@@ -53,6 +119,7 @@ async function main() {
   const contract = readJson('evidence-contract.json');
   const provenance = readJson('evidence-provenance.json');
   const corpus = await loadCorpus();
+  const expectedById = new Map(contract.caseIds.map((id) => [id, readCaseSnapshot(id).groundTruth]));
 
   checkEqual(failures, contract.version, 1, 'evidence contract version');
   checkEqual(
@@ -86,14 +153,15 @@ async function main() {
     },
     'runner substitution provenance',
   );
-  checkEqual(
-    failures,
-    corpus.cases.map((item) => item.id),
-    contract.caseIds,
-    'live corpus case ids',
-  );
-  checkEqual(failures, await digestFiles(PROJECT_ROOT, FIXTURES), contract.fixtureDigest, 'live fixture digest');
-  checkEqual(failures, await digestFiles(PROJECT_ROOT, RECORD_FIXTURES), contract.recordFixtureDigest, 'record fixture digest');
+  checkCaseSnapshots(failures, contract, corpus);
+
+  // Per-case snapshots superseded these as the live-corpus check once the
+  // corpus grew past the eighteen cases they were computed over, so they are
+  // no longer compared against anything live; this holds them to the shape a
+  // real digest has, so a corrupted field still fails rather than sitting
+  // unchecked.
+  if (!SHA256_PATTERN.test(contract.fixtureDigest)) failures.push('evidence contract fixtureDigest is not a sha256 digest');
+  if (!SHA256_PATTERN.test(contract.recordFixtureDigest)) failures.push('evidence contract recordFixtureDigest is not a sha256 digest');
 
   const expectedGrid = contract.caseIds.flatMap((caseId) => [
     [caseId, 1],
@@ -159,7 +227,7 @@ async function main() {
     );
     checkEqual(
       failures,
-      qualityDiagnosticProjection(runner.diagnostics, failures, file),
+      qualityDiagnosticProjection(runner.diagnostics, failures, file, expectedById),
       expected.qualityDiagnostics,
       `${file} quality diagnoses`,
     );

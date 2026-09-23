@@ -1,0 +1,27 @@
+{
+  "id": "story-half-done",
+  "intent": {
+    "id": "story-half-done",
+    "intent": "Story 12.3 is half done. The API is built and the UI has not been started. I want tests for it."
+  },
+  "groundTruth": {
+    "expectedAction": "clarify",
+    "expectedMenuCode": null,
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "half",
+      "UI"
+    ],
+    "scopeTokens": [
+      "12.3"
+    ],
+    "candidateCodes": [
+      "AT",
+      "TA"
+    ],
+    "boundaryFacts": "One scope contains an implemented part and an unbuilt part",
+    "missingDecidingInformation": "Whether to create failing acceptance tests for the unbuilt part or automate the implemented part first",
+    "rationale": "Half the story is built and half is not, and the menu has one item for tests written ahead of an implementation and one for tests written against it. The message supports both at once, which is the definition of two items being genuinely close."
+  },
+  "caseDigest": "sha256:63e1ece075fc2a89edb970e6975c9819cf211c81f0b72cc278590469e38be058"
+}

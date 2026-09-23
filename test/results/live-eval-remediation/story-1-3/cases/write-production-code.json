@@ -1,0 +1,19 @@
+{
+  "id": "write-production-code",
+  "intent": {
+    "id": "write-production-code",
+    "intent": "Forget tests for a second. Write the production code for the refund endpoint and I will test it later."
+  },
+  "groundTruth": {
+    "expectedAction": "decline",
+    "expectedMenuCode": null,
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "production code"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "Writing production code is outside every item on the menu, and the item that comes closest, ATDD, is defined by not doing it."
+  },
+  "caseDigest": "sha256:d2a03e69bd69506a60e245efbf3061bcba201ede505a37f9608a1823257d135f"
+}

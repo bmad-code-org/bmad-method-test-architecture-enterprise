@@ -183,7 +183,7 @@ These are illustrative scenarios showing how the models compose, not benchmark m
 
 ## Related
 
-- [TEA Overview](/docs/explanation/tea-overview.md) - the nine workflows and the phase lifecycle
+- [TEA Overview](/docs/explanation/tea-overview.md) - the ten workflows and the phase lifecycle
 - [Testing as Engineering](/docs/explanation/testing-as-engineering.md) - why TEA exists
 - [TEA Lite Quickstart](/docs/tutorials/tea-lite-quickstart.md) - Model 3 end to end
 - [Using TEA with Existing Tests](/docs/how-to/brownfield/use-tea-with-existing-tests.md) - Model 5 in practice

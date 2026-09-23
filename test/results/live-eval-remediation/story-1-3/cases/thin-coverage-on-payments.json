@@ -1,0 +1,28 @@
+{
+  "id": "thin-coverage-on-payments",
+  "intent": {
+    "id": "thin-coverage-on-payments",
+    "intent": "Coverage on the payments feature is thin and I want that dealt with before the next release."
+  },
+  "groundTruth": {
+    "expectedAction": "clarify",
+    "expectedMenuCode": null,
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "coverage",
+      "thin"
+    ],
+    "scopeTokens": [
+      "payments"
+    ],
+    "candidateCodes": [
+      "TD",
+      "TA",
+      "TR"
+    ],
+    "boundaryFacts": "Coverage is described as thin with no requested activity",
+    "missingDecidingInformation": "Whether to plan coverage, generate tests, or measure current requirement coverage",
+    "rationale": "Thin coverage is planning it, writing it, or measuring how thin it actually is, and three menu items each own one of those. The feature is named and has to survive the question."
+  },
+  "caseDigest": "sha256:e4710a957bfabe0419699746252a29323b24a51e287feea866a74ca77c8ab460"
+}

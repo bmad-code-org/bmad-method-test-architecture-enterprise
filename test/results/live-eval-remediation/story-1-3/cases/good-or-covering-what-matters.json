@@ -1,0 +1,25 @@
+{
+  "id": "good-or-covering-what-matters",
+  "intent": {
+    "id": "good-or-covering-what-matters",
+    "intent": "We have a lot of tests and I honestly do not know whether they are any good, or whether they cover the things that matter. Both worry me."
+  },
+  "groundTruth": {
+    "expectedAction": "clarify",
+    "expectedMenuCode": null,
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "good",
+      "cover"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [
+      "RV",
+      "TR"
+    ],
+    "boundaryFacts": "Existing tests raise both writing-quality and requirements-coverage concerns",
+    "missingDecidingInformation": "Whether to assess how well the tests are written or map what they cover and evaluate ship readiness",
+    "rationale": "The message asks two different questions in one breath and says both worry the user. Whether the tests are any good is the review item's sentence and whether they cover what matters is the trace item's, both readable off the menu, and nothing in the message says which to do first."
+  },
+  "caseDigest": "sha256:95842385e7a682b7fb7cd73ecfb25d20a197ed0e9d0c52cd0cd8120d6d8380c9"
+}

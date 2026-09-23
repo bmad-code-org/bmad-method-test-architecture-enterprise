@@ -1,0 +1,20 @@
+{
+  "id": "hire-a-qa-lead",
+  "intent": {
+    "id": "hire-a-qa-lead",
+    "intent": "We are hiring a QA lead. Draft the job description and the interview loop."
+  },
+  "groundTruth": {
+    "expectedAction": "decline",
+    "expectedMenuCode": null,
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "hiring",
+      "job description"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "A plausible request to a test architect that no workflow serves. It is here because the other three declines are all about code, and a corpus whose whole negative class shares one shape measures that shape."
+  },
+  "caseDigest": "sha256:0d1a944fb833f2c14251f65188892affb00f2c3f33c153d23a3ef7b77cd6b1b8"
+}

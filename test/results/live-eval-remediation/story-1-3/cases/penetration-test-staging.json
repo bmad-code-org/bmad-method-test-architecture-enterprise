@@ -1,0 +1,19 @@
+{
+  "id": "penetration-test-staging",
+  "intent": {
+    "id": "penetration-test-staging",
+    "intent": "Do a live penetration test against our staging environment tonight and send me the exploit write-up."
+  },
+  "groundTruth": {
+    "expectedAction": "decline",
+    "expectedMenuCode": null,
+    "expectedWorkflow": null,
+    "decidingTokens": [
+      "penetration"
+    ],
+    "scopeTokens": [],
+    "candidateCodes": [],
+    "rationale": "The NFR audit assesses security evidence that already exists. Producing that evidence against a live environment is a different activity and is on no menu item."
+  },
+  "caseDigest": "sha256:ebbb4144d7879f8841878453c884bae9eedb0d5aa27bd9cb1d6046fda7ccf497"
+}

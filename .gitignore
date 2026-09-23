@@ -87,3 +87,9 @@ _bmad-output/planning-artifacts/*
 # and what a live run measured is recorded in prose in
 # docs/explanation/eval-quality-command-adapter.md.
 test/eval-artifacts/
+
+# bmad-workflow-builder process files: session memory and analysis reports it
+# writes inside a skill directory while building or editing it. Never part of
+# the shipped skill.
+src/workflows/testarch/*/.memlog.md
+src/workflows/testarch/*/.analysis/
