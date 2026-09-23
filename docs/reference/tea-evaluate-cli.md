@@ -1,0 +1,71 @@
+---
+title: 'tea-evaluate CLI'
+description: 'The Evaluate runtime: check and digest an evaluation folder, with its rules and exit codes'
+---
+
+# tea-evaluate CLI
+
+`tea-evaluate` is the runtime behind the Evaluate workflow (`bmad-testarch-evaluate`). It validates an evaluation folder and digests its corpus, so a stale index or a malformed artifact fails before anything runs. This release ships two subcommands, `check` and `digest`; the preflight, run, score, compare and CI subcommands arrive with later Evaluate stories.
+
+## Prerequisites
+
+- Node.js 22.20 or later, with TeA installed (`npm install --save-dev bmad-method-test-architecture-enterprise`), which provides the `tea-evaluate` bin.
+- `eval-quality` 4.0.0 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`). TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it. Without it, `tea-evaluate` exits 12 and names the missing package.
+
+`tea-evaluate` reads no BMAD configuration. Every subcommand takes `--evaluation <path>`, naming the evaluation folder or its `evaluation.json`, and exits 64 when that flag is missing or resolves to no `evaluation.json`. Nothing defaults to the working directory.
+
+## The evaluation folder
+
+```text
+<evaluationId>/
+  evaluation.json               # TeA manifest: target kind, interface, workspace, arms, trials, tiers, strength floor
+  contract.json                 # the Behavioral Evaluation Contract
+  probes/P-NNN.probe.json       # one committed probe per file, authored fields only
+  mutations/M-NNN.mutation.json # one controlled mutation per file
+  corpus/                       # the corpus the probes run against
+  corpus-index.json             # written by tea-evaluate digest
+  baseline/                     # committed qualified probes and baseline/qualification/ evidence
+```
+
+The runtime owns the schemas of `evaluation.json`, the committed probe and the mutation file; they ship under `cli/lib/evaluate/schemas/` in the TeA package. `contract.json` meets the contract schema eval-quality publishes.
+
+## check
+
+```bash
+npx tea-evaluate check --evaluation evals/my-evaluation
+```
+
+`check` prints one line per finding, `<file>: [<rule>] <message>`, and lists every finding. It exits 0 when there are none and 10 when there is at least one. The rules:
+
+| Rule                     | Refuses                                                                                                                                                                                              |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stale-index`            | a `corpus-index.json` whose digest differs from the folder's current bytes                                                                                                                           |
+| `schema-version`         | an `evaluation.json` version the installed TeA does not know; the message names the installed TeA version and the versions it knows, and is reported alone                                           |
+| `runtime-owned-field`    | a committed probe carrying a field the runtime writes: lineage, the attested digests, the system identifier, evidence references, the rollback flag, or a qualification field the mutation file owns |
+| `mutation-operator`      | a mutation whose operator is not `replace-exact` with exactly one occurrence                                                                                                                         |
+| `provisioned-target`     | a mutation target inside a directory the workspace provisions read-only                                                                                                                              |
+| `web-interface`          | a contract interface of kind `web`; a web application is evaluated through `api`                                                                                                                     |
+| `written-file-signature` | a defect signature addressing a file the target wrote: the `artifact` channel, or a predicate pointer under `/interactions/<id>/artifact` on any channel                                             |
+| `oracle-count`           | a behavior discharged by a defect or gameability probe that does not declare exactly one oracle                                                                                                      |
+| `id-pattern`             | a probe, defect, behavior, oracle or mutation ID off its pattern                                                                                                                                     |
+| `qualification-digest`   | a public reference under `baseline/qualification/` whose recorded digest does not match the file                                                                                                     |
+| `clean-control`          | a clean control that is not `zero-action` with an expected-clean flag and no defects                                                                                                                 |
+
+Beside those eleven, `check` reports a file that does not parse (`json`), one that fails the runtime's schemas (`schema`) or eval-quality's (`engine-schema`), a file not named for its ID (`file-name`), a probe naming a behavior or mutation that does not exist (`reference`), a folder with no `contract.json` (`missing-file`), an ID declared twice in one file (`duplicate-id`), a symbolic link or file where `corpus/`, `probes/` or `mutations/` or an entry inside them should be (`corpus-file`), which `digest` refuses with exit 10 as well, and a symbolic link or other non-regular entry under `baseline/` (`baseline-file`). A `baseline/qualification/` reference must resolve to a regular file inside the folder.
+
+## digest
+
+```bash
+npx tea-evaluate digest --evaluation evals/my-evaluation
+```
+
+`digest` writes `corpus-index.json`: every file under `corpus/`, `probes/` and `mutations/` as a path relative to the folder and the SHA-256 of its bytes, sorted by path. It prints the corpus digest, which is eval-quality's artifact digest over that index, so any byte change in the corpus, the probes or the mutations moves it. Run it after every change to those folders; `check` refuses a stale index.
+
+## Exit codes
+
+| Exit | Meaning                                                                                        |
+| ---- | ---------------------------------------------------------------------------------------------- |
+| 0    | success                                                                                        |
+| 10   | authoring defect: `check` found at least one finding, or `digest` met an entry it cannot index |
+| 12   | infrastructure: eval-quality is not installed where the runtime can reach it                   |
+| 64   | wiring defect: no `--evaluation` resolves, or the command line is malformed                    |

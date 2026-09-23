@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "evaluationId": "atdd-red-phase",
+  "targetKind": "skill",
+  "interface": "cli",
+  "registry": {},
+  "launch": {},
+  "workspace": {
+    "kind": "copy",
+    "provision": [
+      "node_modules"
+    ]
+  },
+  "arms": [
+    "clean",
+    "mutated"
+  ],
+  "trials": 3,
+  "tiers": [
+    "pr",
+    "scheduled"
+  ],
+  "strengthFloor": {
+    "defect": 1,
+    "zero-action": 1
+  }
+}

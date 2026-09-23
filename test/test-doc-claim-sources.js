@@ -56,6 +56,7 @@ process.once('SIGTERM', removeStagingFile);
 const source = require('./lib/doc-claim-sources.js');
 const { EXIT, VERDICT_KEYS, SKIP_KEYS } = require('../cli/test-review.js');
 const { RECOMMENDATION_ENUM } = require('../cli/lib/parse-report.js');
+const { EXIT_CODES: EVALUATE_EXIT_CODES } = require('../cli/evaluate.js');
 
 check('RECOMMENDATION_ENUM is re-exported unchanged from cli/lib/parse-report.js', () => {
   assert.deepStrictEqual(source.RECOMMENDATION_ENUM, RECOMMENDATION_ENUM);
@@ -101,8 +102,10 @@ check('MOBILE_ROW_IDS and PLAYWRIGHT_UTILS_ROW_IDS match an independent read of 
   assert.deepStrictEqual(source.PLAYWRIGHT_UTILS_ROW_IDS, playwrightUtilsIds);
 });
 
-check('EXIT_CODE_STRINGS is every EXIT value from cli/test-review.js, stringified', () => {
-  assert.deepStrictEqual(source.EXIT_CODE_STRINGS, Object.values(EXIT).map(String));
+check('EXIT_CODE_STRINGS is every exit code cli/test-review.js and cli/evaluate.js declare, stringified, each once', () => {
+  const expected = [...new Set([...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES)].map(String))];
+  assert.deepStrictEqual(source.EXIT_CODE_STRINGS, expected);
+  for (const code of ['10', '12', '64']) assert.ok(source.EXIT_CODE_STRINGS.includes(code), `tea-evaluate's exit ${code} is missing`);
 });
 
 check('VERDICT_SCHEMA requires every VERDICT_KEYS.always key and rejects an undeclared one', () => {

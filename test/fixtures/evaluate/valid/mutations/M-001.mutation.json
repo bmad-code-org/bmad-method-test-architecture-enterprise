@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "mutationId": "M-001",
+  "mutationSource": "skill/steps-c/step-04-generate-tests.md",
+  "targetArtifact": "skill/steps-c/step-04-generate-tests.md",
+  "operator": {
+    "kind": "replace-exact",
+    "find": "test.skip(",
+    "replace": "test(",
+    "occurrences": 1
+  },
+  "expectedObservableFailure": "The runner exits non-zero because the scaffold it wrote is not a red-phase scaffold."
+}

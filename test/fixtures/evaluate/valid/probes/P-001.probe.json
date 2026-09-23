@@ -1,0 +1,12 @@
+{
+  "probeId": "P-001",
+  "probeClass": "zero-action",
+  "behaviorId": "B-001",
+  "expectedClean": true,
+  "rationale": "Clean control: the unmutated skill writes the scaffold the prompt names and exits 0.",
+  "defects": [],
+  "qualification": {
+    "route": "clean-control",
+    "noKnownDefectStatement": "The skill at the evaluated revision has no known defect in the generation command."
+  }
+}

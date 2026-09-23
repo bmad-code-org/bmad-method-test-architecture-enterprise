@@ -328,7 +328,26 @@
         "match": "prefix",
         "path": "cli/",
         "label": "cli/",
-        "imports": ["cli"]
+        "imports": ["cli"],
+        "externals": {
+          "policy": "allow",
+          "modules": [
+            "ajv/dist/2020",
+            "commander",
+            "eval-quality",
+            "js-yaml",
+            "node:child_process",
+            "node:crypto",
+            "node:dgram",
+            "node:dns",
+            "node:fs",
+            "node:http",
+            "node:net",
+            "node:os",
+            "node:path"
+          ],
+          "rule": "cli/ ships in the published package and runs in an adopter's project, so it reaches only what TeA's own dependencies provide (commander, js-yaml, ajv), Node builtins, and the optional eval-quality peer through cli/lib/evaluate/engine.js; an evaluation framework's code belongs in an adopter's evaluator/ folder and is refused here"
+        }
       },
       {
         "name": "tools",
