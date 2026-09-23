@@ -3,12 +3,12 @@
   "probeClass": "defect",
   "behaviorId": "B-001",
   "expectedClean": false,
-  "rationale": "Seeded defect: M-001 makes the generation step write active tests, and the runner reports that through its exit code.",
+  "rationale": "Seeded defect: M-001 makes the generation step write active tests, and the red-phase gate reports that by exiting 1.",
   "defects": [
     {
       "defectId": "D-001",
       "behaviorId": "B-001",
-      "summary": "The generation step writes active tests, so the runner exits non-zero.",
+      "summary": "The generation step writes active tests, so the red-phase gate exits 1.",
       "severity": "critical",
       "source": "controlled-mutation",
       "manifestationWitness": {
@@ -27,18 +27,13 @@
           }
         },
         "relation": {
-          "op": "not",
+          "op": "equality",
           "operands": [
             {
-              "op": "equality",
-              "operands": [
-                {
-                  "pointer": "/interactions/manifest-active-tests/exit-code"
-                },
-                {
-                  "literal": 0
-                }
-              ]
+              "pointer": "/interactions/manifest-active-tests/exit-code"
+            },
+            {
+              "literal": 1
             }
           ]
         }
@@ -71,18 +66,13 @@
         }
       },
       "predicate": {
-        "op": "not",
+        "op": "equality",
         "operands": [
           {
-            "op": "equality",
-            "operands": [
-              {
-                "pointer": "/interactions/observed/exit-code"
-              },
-              {
-                "literal": 0
-              }
-            ]
+            "pointer": "/interactions/observed/exit-code"
+          },
+          {
+            "literal": 1
           }
         ]
       }

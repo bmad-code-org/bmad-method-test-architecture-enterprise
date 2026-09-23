@@ -41,7 +41,8 @@
  *   stamp the package reads, through `schemaVersionProblems`, which is the reader
  *   a caller gets. A tree with no corpus or no contract fails: a walk over
  *   nothing holds nothing.
- * - No literal integer `schemaVersion` remains under `test/lib/` or `tools/`. A
+ * - No literal integer `schemaVersion` remains under `cli/lib/evaluate/`,
+ *   `test/lib/` or `tools/`. A
  *   revert to a literal that agrees with the package today passes every value
  *   comparison above and drifts on the next bump, so the source is scanned too.
  * - `artifact-reference`, the one published kind recorded as carrying no stamp
@@ -73,7 +74,7 @@ const CONTRACT_ROOT = path.join(PROJECT_ROOT, 'test', 'contracts');
 const POLICY_PATH = path.join(PROBE_ROOT, 'scoring-policy.json');
 const SCHEMA_ROOT = path.join(PROJECT_ROOT, 'node_modules', 'eval-quality', 'schemas');
 /** Where TEA stamps from, and so where a literal would be put back. */
-const SCANNED_ROOTS = ['test/lib', 'tools'];
+const SCANNED_ROOTS = ['cli/lib/evaluate', 'test/lib', 'tools'];
 
 /**
  * The constant each kind reads, by the name the package exports it under.
@@ -214,8 +215,8 @@ function main() {
     const stamped = inputs[builder]({}).schemaVersion;
     hold(
       stamped === expected[kind],
-      `${builder} in test/lib/eval-quality-inputs.js stamps ${kind} with ${expected[kind]}`,
-      `${builder} in test/lib/eval-quality-inputs.js stamps ${kind} with ${JSON.stringify(stamped)} where this build reads ${expected[kind]}`,
+      `${builder} (cli/lib/evaluate/records.js, through test/lib/eval-quality-inputs.js) stamps ${kind} with ${expected[kind]}`,
+      `${builder} (cli/lib/evaluate/records.js, through test/lib/eval-quality-inputs.js) stamps ${kind} with ${JSON.stringify(stamped)} where this build reads ${expected[kind]}`,
     );
   }
 
@@ -305,7 +306,7 @@ function main() {
   hold(
     fs.existsSync(referenceSchema) && !declaresSchemaVersion(JSON.parse(fs.readFileSync(referenceSchema, 'utf8'))),
     `${UNSTAMPED_KIND}.schema.json declares no schemaVersion, so the exemption stands`,
-    `${UNSTAMPED_KIND}.schema.json ${fs.existsSync(referenceSchema) ? 'now declares a schemaVersion property' : 'is not published'}; the exemption in test/lib/eval-quality-inputs.js is stale`,
+    `${UNSTAMPED_KIND}.schema.json ${fs.existsSync(referenceSchema) ? 'now declares a schemaVersion property' : 'is not published'}; the exemption in cli/lib/evaluate/engine.js is stale`,
   );
 
   // The helpers' other paths, driven here so the mismatch message is seen

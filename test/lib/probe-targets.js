@@ -1,182 +1,78 @@
 /**
- * TEA's command execution targets, and the eval-quality environment-probe port
- * over them.
+ * TEA's own command execution targets, as data, over the `tea-evaluate`
+ * runtime's registry.
  *
- * Every TEA harness used to spawn the command it measures itself: its own
- * `spawnSync`, its own argv assembly, its own timeout, its own
- * `existsSync` plus `JSON.parse` on whatever file the run wrote. Three copies,
- * none of them agreeing on what a command is allowed to do, and none of them
- * capping output at all. `eval-quality`'s `createCommandLineAdapter` is that
- * mechanism written once, with the decisions stated: `shell: false` always,
- * argv built options-then-positionals, the child environment closed to PATH plus
- * what the request declares, `maxElapsedMs` and `maxOutputBytes` enforced with
- * SIGKILL, an artifact capped before its bytes are read, and a non-zero exit
- * treated as an observation rather than a fault.
+ * The registry itself (the `RegistryEntry` shape, the default-deny
+ * `CommandTargetPolicy` builder, the environment widening, the probe port and
+ * the target checks) lives in `cli/lib/evaluate/registry.js` since Story 1.5,
+ * so TEA's harness and every adopter's `tea-evaluate` run go through one
+ * implementation (AD-5). What stays here is TEA's: the commands it ships,
+ * written as `RegistryEntry` data, and the mapping from a probe fault to one of
+ * the failure classes TEA's own eval result schema declares.
  *
- * What this module adds is the half `eval-quality` deliberately leaves to its
- * caller. `CommandTargetPolicy` denies by default and permits only what a
- * mapping names, and nothing in the contract says which real executable a
- * logical name resolves to. That mapping is TEA's, and it lives here:
- *
- *   contract says            policy says                    adapter spawns
- *   executable: "tea-test-review"  ->  target: <root>/cli/test-review.js  ->  that file
- *
- * The seam matters twice over. It keeps a machine-absolute path out of every
- * contract, and it is the only place a run's working directory, artifact map,
- * and budgets are decided, so a caller cannot quietly widen any of them.
+ *   contract says                  registry says                    adapter spawns
+ *   executable: "tea-test-review"  ->  target: cli/test-review.js  ->  <root>/cli/test-review.js
  *
  * A logical name with no entry below is denied before a process starts. That is
  * the check `test/test-probe-targets.js` runs against the contracts: an
  * interface the contracts declare and this registry does not carry is an
  * executable nobody ships, and a contract naming one is fiction that compiles.
  *
- * NOTHING HERE MOVES TO THE FILE-SYSTEM PORT
- *
- * Story 3.6 converted every read of a file's contents in the eval harnesses to
- * `test/lib/file-system-port.js`, and it converted nothing in this file, which is
- * a decision rather than an omission.
- *
- * This module reads no file's contents at all. Its two `fs` calls sit together in
- * `targetProblems`: an `existsSync` over a registered script, and a `statSync`
- * whose mode bits decide whether the file carries its executable bit. The port
- * declares `readFile` and `writeFile` and answers with bytes, so it cannot report
- * a mode at all, and the `existsSync` is what lets the `statSync` be skipped for
- * a script that is not there rather than throwing on it. Routing the first
- * through the port would mean reading every byte of a CLI to learn a boolean and
- * would still leave the second where it is.
- *
- * `targetProblems` therefore stays synchronous, which is what keeps its five
+ * `targetProblems` stays synchronous (an `existsSync` and a `statSync` over each
+ * registered script, which read no file's contents), which is what keeps its
  * callers unchanged.
  */
 
 'use strict';
 
-const fs = require('node:fs');
 const path = require('node:path');
 
-const { vendorEnvironmentNames } = require('../../cli/lib/runner-exit-codes');
+const {
+  MAX_OUTPUT_BYTES,
+  cliObservation,
+  createRegistry,
+  observedText,
+  probeRequest,
+  readEnvironment,
+} = require('../../cli/lib/evaluate/registry');
+const { EXIT_CODES, vendorEnvironmentNames } = require('../../cli/lib/runner-exit-codes');
+const { EXIT: TEST_REVIEW_EXIT } = require('../../cli/test-review');
 const { loadEvalQuality } = require('./eval-quality-inputs');
 const { publishedMember } = require('./vocabularies');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
 /**
- * Every environment key one target's authorization permits, including the names
- * a caller passes through on top of the target's own.
- *
- * `CommandTargetPolicy.permittedEnvironmentKeys` is required on 3.0.0 with no
- * default, and the adapter refuses any key a request declares that the
- * authorization does not name, before a process starts. So this is the
- * operator's half of the environment channel, and it is stated per target rather
- * than once for every command TEA ships: a key a command never reads has no
- * business reaching it.
- *
- * Each target's own list is the one its contract declares, read from the same
- * source the contract generator reads rather than transcribed:
- *
- * - `vendorEnvironmentNames()` carries every variable a shipped vendor adapter
- *   consumes, plus `HOME` and `USER`, because both shipped vendors resolve a
- *   stored login through `HOME` and the adapter passes the child nothing else
- *   that could reach one.
- * `CI` is deliberately on no list, and its absence is the decision that makes a
- * measured review reproducible. `cli/test-review.js:864` reads it to decide
- * filesystem isolation when `--isolate` is not stated, and no contract declares
- * it, so permitting it would let the host decide how the measured run executes:
- * isolation on in GitHub Actions, off on a laptop, with the two sealed records
- * indistinguishable afterwards. The adapter closes the child environment to
- * `PATH` plus what the request declares, so a command run through the port sees
- * no `CI` at all and isolates the same way on every host. `test/eval-test-review.js`
- * states `--isolate` explicitly and does not depend on the variable.
- *
- * The extra names are an operator's `--env-pass`, and a test harness's stub
- * variables. They widen one authorization deliberately and one call at a time,
- * which is what keeps the default deny.
- *
- * `PATH` appears on no list, and this function refuses one rather than leaving
- * it to be caught later: the schema refuses it by refine, the adapter refuses it
- * again at the request parse, and TEA parses no policy, so an operator's
- * `--env-pass PATH` would otherwise reach a built authorization before anything
- * objected. `target` may name a bare command and the child environment is what
- * resolves it, so a permitted `PATH` would choose which binary runs. The adapter
- * supplies its own.
- *
- * @param {string} interfaceId
- * @param {string[]} [extraNames]
- * @returns {string[]}
+ * The exit codes by which a TEA runner command reports that it could not run:
+ * `environment-configuration`, `-transport`, `-timeout` and `-parser` (3 to 6),
+ * and 1, which no runner emits on purpose and which Node uses for an uncaught
+ * exception, so it can only mean a crash. Exit 2 is a usage error, the
+ * caller's defect (AD-7).
  */
-function permittedEnvironmentKeys(interfaceId, extraNames = []) {
-  const target = EXECUTION_TARGETS.find((entry) => entry.interfaceId === interfaceId);
-  if (target === undefined) {
-    throw new Error(`no execution target is registered for interface ${interfaceId}; TEA ships no such command`);
-  }
-  const keys = [...new Set([...target.environmentKeys, ...extraNames])].sort();
-  // Refused here rather than left to the request parse. The widening is the one
-  // way an operator can introduce `PATH`, through `--env-pass PATH`, and a
-  // policy that carries it is already wrong whether or not a request later
-  // declares it. The schema refuses it too, and TEA parses no policy.
-  const path = keys.find((key) => key.toUpperCase() === 'PATH');
-  if (path !== undefined) {
-    throw new Error(
-      `${interfaceId} cannot permit the environment key ${JSON.stringify(path)}: target may name a bare command, so a declared PATH would choose which binary runs`,
-    );
-  }
-  return keys;
-}
+const UNCAUGHT_EXCEPTION_EXIT_CODE = 1;
+const RUNNER_INFRASTRUCTURE_EXIT_CODES = [
+  UNCAUGHT_EXCEPTION_EXIT_CODE,
+  ...Object.entries(EXIT_CODES)
+    .filter(([name]) => name.startsWith('environment-'))
+    .map(([, code]) => code),
+].sort((left, right) => left - right);
 
 /**
- * The values this host has for the keys one target's authorization permits.
+ * The commands TEA ships, as `RegistryEntry` data, keyed the way
+ * `evaluateCommandTarget` keys them: by interface and executable together.
+ * `target` is relative to the repository root the registry below resolves
+ * against.
  *
- * A request built from this can never carry a key the policy denies, which is
- * the pairing that keeps the adapter's refusal a real check on an operator's
- * mistake rather than a routine occurrence.
- *
- * A name absent from `process.env` is absent from the request. An empty string
- * is a declared value and passes through, since some variables are meaningful
- * when set to nothing.
- *
- * @param {string} interfaceId
- * @param {string[]} [extraNames] Names the caller also passes through, typically an operator's own `--env-pass`.
- * @returns {Record<string, string>}
- */
-function hostEnvironment(interfaceId, extraNames = []) {
-  return readEnvironment(permittedEnvironmentKeys(interfaceId, extraNames));
-}
-
-/**
- * The values this host has for a named list of keys.
- *
- * The list is the caller's, so a caller reading an authority of its own, such as
- * a contract's declared `permittedKeys`, reads the host through this rather than
- * intersecting two lists and hoping they agree.
- *
- * @param {string[]} names
- * @returns {Record<string, string>}
- */
-function readEnvironment(names) {
-  const environment = {};
-  for (const name of names) {
-    const value = process.env[name];
-    if (typeof value === 'string') environment[name] = value;
-  }
-  return environment;
-}
-
-/**
- * Eight megabytes of captured output per stream and per artifact.
- *
- * Nothing capped this before. `cli/lib/run-agent.js` sets a 64 MiB `maxBuffer`
- * on the vendor call one layer down, and the harnesses that spawned a TEA
- * command set nothing at all, so a runaway child was bounded only by the
- * harness's own memory. Eight megabytes is an order of magnitude above the
- * largest artifact this repository has produced (a full traceability matrix over
- * the seeded set is under 100 KB) and small enough that a loop printing forever
- * is killed in seconds.
- */
-const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
-
-/**
- * The commands TEA ships, keyed the way `evaluateCommandTarget` keys them: by
- * interface and executable together.
+ * Each entry's `environmentKeys` is the list its contract declares, read from
+ * the same source the contract generator reads: `vendorEnvironmentNames()`
+ * carries every variable a shipped vendor adapter consumes, plus `HOME` and
+ * `USER`, because both shipped vendors resolve a stored login through `HOME`.
+ * `CI` is deliberately on no list, and its absence is what makes a measured
+ * review reproducible: `cli/test-review.js` reads it to decide filesystem
+ * isolation when `--isolate` is not stated, so permitting it would let the host
+ * decide how the measured run executes. The adapter closes the child
+ * environment to `PATH` plus what the request declares, so a command run
+ * through the port sees no `CI` and isolates the same way on every host.
  *
  * `maxElapsedMs` is the outer wall clock, and it is deliberately longer than the
  * inner one each command applies to its own vendor call. The inner bound reports
@@ -189,7 +85,7 @@ const EXECUTION_TARGETS = [
   {
     interfaceId: 'tea-atdd-runner',
     executable: 'tea-atdd-runner',
-    script: path.join('cli', 'atdd-runner.js'),
+    target: 'cli/atdd-runner.js',
     subcommandPaths: [[]],
     // The one deliverable the atdd eval's own prompt asks generation to write,
     // at the default location a project without its own override gets. The
@@ -202,11 +98,12 @@ const EXECUTION_TARGETS = [
     // comment above EXECUTION_TARGETS gives: the inner clock classifies, and
     // this one only backstops.
     maxElapsedMs: 21 * 60_000,
+    infrastructureExitCodes: RUNNER_INFRASTRUCTURE_EXIT_CODES,
   },
   {
     interfaceId: 'tea-test-design-runner',
     executable: 'tea-test-design-runner',
-    script: path.join('cli', 'test-design-runner.js'),
+    target: 'cli/test-design-runner.js',
     subcommandPaths: [[]],
     // The one deliverable the epic-level test-design workflow writes, at the
     // workflow's own default location relative to the project root. A caller
@@ -224,11 +121,12 @@ const EXECUTION_TARGETS = [
     // reason the comment above EXECUTION_TARGETS gives: the inner clock
     // classifies, and this one only backstops.
     maxElapsedMs: 21 * 60_000,
+    infrastructureExitCodes: RUNNER_INFRASTRUCTURE_EXIT_CODES,
   },
   {
     interfaceId: 'tea-test-review',
     executable: 'tea-test-review',
-    script: path.join('cli', 'test-review.js'),
+    target: 'cli/test-review.js',
     subcommandPaths: [[]],
     // The names are the contract's artifact ids; the paths are what the
     // interaction plan passes on --json and --output, resolved against the run
@@ -236,11 +134,16 @@ const EXECUTION_TARGETS = [
     artifacts: { verdict: 'verdict.json', report: 'test-review.md' },
     environmentKeys: vendorEnvironmentNames(),
     maxElapsedMs: 16 * 60_000,
+    // cli/test-review.js reports an environment or configuration error as 2
+    // and an agent, parse or report-artifact failure as 3. It exits 1 on a
+    // failing verdict on purpose, so 1 cannot be listed here, and a crash of
+    // this command is indistinguishable from that verdict by exit code alone.
+    infrastructureExitCodes: [TEST_REVIEW_EXIT.ENV_ERROR, TEST_REVIEW_EXIT.AGENT_OR_PARSE_ERROR],
   },
   {
     interfaceId: 'tea-fragment-selection-runner',
     executable: 'tea-fragment-selection-runner',
-    script: path.join('cli', 'fragment-selection-runner.js'),
+    target: 'cli/fragment-selection-runner.js',
     subcommandPaths: [[]],
     // The selection is a stdout payload. The operation declares no artifact, so
     // authorizing one would let a run be scored off a file the contract never
@@ -248,11 +151,12 @@ const EXECUTION_TARGETS = [
     artifacts: {},
     environmentKeys: vendorEnvironmentNames(),
     maxElapsedMs: 6 * 60_000,
+    infrastructureExitCodes: RUNNER_INFRASTRUCTURE_EXIT_CODES,
   },
   {
     interfaceId: 'tea-routing-runner',
     executable: 'tea-routing-runner',
-    script: path.join('cli', 'routing-runner.js'),
+    target: 'cli/routing-runner.js',
     subcommandPaths: [[]],
     // The routing answer is a stdout payload, the same as a selection. The
     // operation declares no artifact, so authorizing one would let a run be
@@ -264,11 +168,12 @@ const EXECUTION_TARGETS = [
     // needs no other key.
     environmentKeys: vendorEnvironmentNames(),
     maxElapsedMs: 6 * 60_000,
+    infrastructureExitCodes: RUNNER_INFRASTRUCTURE_EXIT_CODES,
   },
   {
     interfaceId: 'tea-ci-runner',
     executable: 'tea-ci-runner',
-    script: path.join('cli', 'ci-runner.js'),
+    target: 'cli/ci-runner.js',
     subcommandPaths: [[]],
     // The one deliverable this harness reads back: the platform's own workflow
     // file, at the path GitHub Actions requires. A caller whose project root is
@@ -285,11 +190,12 @@ const EXECUTION_TARGETS = [
     // comment above EXECUTION_TARGETS gives: the inner clock classifies, and this
     // one only backstops.
     maxElapsedMs: 21 * 60_000,
+    infrastructureExitCodes: RUNNER_INFRASTRUCTURE_EXIT_CODES,
   },
   {
     interfaceId: 'tea-nfr-runner',
     executable: 'tea-nfr-runner',
-    script: path.join('cli', 'nfr-runner.js'),
+    target: 'cli/nfr-runner.js',
     subcommandPaths: [[]],
     // The one deliverable the NFR workflow writes, at the workflow's own default
     // location relative to the project root. A caller whose project root is not
@@ -305,11 +211,12 @@ const EXECUTION_TARGETS = [
     // comment above EXECUTION_TARGETS gives: the inner clock classifies, and this
     // one only backstops.
     maxElapsedMs: 21 * 60_000,
+    infrastructureExitCodes: RUNNER_INFRASTRUCTURE_EXIT_CODES,
   },
   {
     interfaceId: 'tea-trace-runner',
     executable: 'tea-trace-runner',
-    script: path.join('cli', 'trace-runner.js'),
+    target: 'cli/trace-runner.js',
     subcommandPaths: [[]],
     // The two deliverables the trace workflow writes, at the workflow's own
     // default location relative to the project root. A caller whose project
@@ -322,11 +229,12 @@ const EXECUTION_TARGETS = [
     // comment above EXECUTION_TARGETS gives: the inner clock classifies, and this
     // one only backstops.
     maxElapsedMs: 21 * 60_000,
+    infrastructureExitCodes: RUNNER_INFRASTRUCTURE_EXIT_CODES,
   },
   {
     interfaceId: 'tea-transcript-runner',
     executable: 'tea-transcript-runner',
-    script: path.join('cli', 'transcript-runner.js'),
+    target: 'cli/transcript-runner.js',
     subcommandPaths: [[]],
     // A turn's whole output is its reply on standard output; the transcript
     // harness records it directly rather than reading a file, so this target
@@ -349,123 +257,26 @@ const EXECUTION_TARGETS = [
     // only lower this ceiling, never raise it, so the backstop has to already be
     // wide enough for the heaviest caller.
     maxElapsedMs: 21 * 60_000,
+    infrastructureExitCodes: RUNNER_INFRASTRUCTURE_EXIT_CODES,
   },
 ];
 
-/** @returns {object|undefined} */
-function targetFor(interfaceId, executable) {
-  return EXECUTION_TARGETS.find((target) => target.interfaceId === interfaceId && target.executable === executable);
-}
-
 /**
- * The absolute path the adapter spawns for one target.
- *
- * Spawned directly rather than through `process.execPath`, because the executable
- * a contract names has to be one thing and `subcommandPath` is the contract's,
- * not the policy's. Each script carries a `#!/usr/bin/env node` line and is mode
- * 755 in the tree for exactly this reason.
+ * TEA's commands as one registry, resolved against this repository's root.
  */
-function scriptPath(target, projectRoot = PROJECT_ROOT) {
-  return path.join(projectRoot, target.script);
-}
+const registry = createRegistry(EXECUTION_TARGETS, { root: PROJECT_ROOT });
 
-/**
- * A `CommandTargetPolicy` over the requested targets.
- *
- * @param {object} options
- * @param {string} options.cwd - Working directory every authorized command runs in, and the root every relative artifact path resolves against.
- * @param {string[]} [options.interfaceIds] - Which targets to authorize; every one by default.
- * @param {object} [options.artifacts] - Per-interface artifact path overrides, merged over the registry's own names.
- * @param {object} [options.budgets] - Per-interface `{maxElapsedMs, maxOutputBytes}` overrides. A caller with a shorter deadline than the registry's backstop may lower either; nothing here raises one for it.
- * @param {object} [options.environmentKeys] - Per-interface environment names permitted on top of the target's own, typically an operator's `--env-pass`.
- * @param {string} [options.projectRoot]
- * @returns {{authorizations: object[]}}
- */
-function commandTargetPolicy({ cwd, interfaceIds, artifacts = {}, budgets = {}, environmentKeys = {}, projectRoot = PROJECT_ROOT }) {
-  if (typeof cwd !== 'string' || cwd.length === 0) {
-    throw new Error(
-      'commandTargetPolicy requires a cwd; an authorization with no working directory resolves every relative path somewhere else',
-    );
-  }
-  const selected =
-    interfaceIds === undefined ? EXECUTION_TARGETS : EXECUTION_TARGETS.filter((target) => interfaceIds.includes(target.interfaceId));
-  const missing = (interfaceIds ?? []).filter((id) => !EXECUTION_TARGETS.some((target) => target.interfaceId === id));
-  if (missing.length > 0) {
-    throw new Error(`no execution target is registered for interface(s) ${missing.join(', ')}; TEA ships no such command`);
-  }
-  // The three per-interface overrides are keyed by interface id, and a key this
-  // policy does not carry widens nothing. Silently ignoring one is expensive in
-  // the only place it happens: a misspelled `environmentKeys` key leaves every
-  // request carrying names the authorization never permitted, and the first
-  // signal is a live run that measures nothing.
-  const selectedIds = new Set(selected.map((target) => target.interfaceId));
-  for (const [label, override] of [
-    ['artifacts', artifacts],
-    ['budgets', budgets],
-    ['environmentKeys', environmentKeys],
-  ]) {
-    const unknown = Object.keys(override).filter((id) => !selectedIds.has(id));
-    if (unknown.length > 0) {
-      throw new Error(
-        `${label} names interface(s) ${unknown.join(', ')}, which this policy does not authorize; an override for an interface outside the policy applies to nothing`,
-      );
-    }
-  }
-  return {
-    authorizations: selected.map((target) => {
-      const budget = budgets[target.interfaceId] ?? {};
-      return {
-        interfaceId: target.interfaceId,
-        executable: target.executable,
-        target: scriptPath(target, projectRoot),
-        permittedSubcommandPaths: target.subcommandPaths,
-        permittedEnvironmentKeys: permittedEnvironmentKeys(target.interfaceId, environmentKeys[target.interfaceId]),
-        cwd,
-        artifacts: { ...target.artifacts, ...artifacts[target.interfaceId] },
-        maxElapsedMs: Math.min(target.maxElapsedMs, budget.maxElapsedMs ?? target.maxElapsedMs),
-        maxOutputBytes: Math.min(MAX_OUTPUT_BYTES, budget.maxOutputBytes ?? MAX_OUTPUT_BYTES),
-      };
-    }),
-  };
-}
-
-/** `eval-quality` is ESM and this repository is CommonJS, so every entry point through it is asynchronous. */
-async function loadAdapters() {
-  return import('eval-quality/adapters');
-}
-
-// `loadEvalQuality`, imported above from `./eval-quality-inputs`, is the root
-// barrel that is where the fault classes and the code registries live: a
-// second load beside `loadAdapters` because they are two subpaths, and
-// `eval-quality/adapters` publishes `createCommandLineAdapter` and does not
-// publish `RuntimeFault`, `StructuralFailure` or `RUNTIME_FAULT_CODES`.
-//
-// It was a second definition here, byte-identical to the one every other
-// caller of the root barrel already imports, until this comment replaced it:
-// two functions of the same name and the same one-line body are one function
-// that has not been noticed yet.
-//
-// The identity discipline matters more than which file the loader lives in.
-// `instanceof` is false across two copies of a package, so the classes a
-// narrowing tests against and the error it tests have to come from one
-// resolution. Every root-barrel reach in this repository is this same
-// `import('eval-quality')` specifier resolved from this same tree, and the
-// ESM loader caches a module namespace per resolved URL, so the class this
+// `loadEvalQuality`, imported above from `./eval-quality-inputs`, is the
+// runtime engine's own loader: the root barrel is where the fault classes and
+// the code registries live. The identity discipline matters: `instanceof` is
+// false across two copies of a package, so the classes a narrowing tests
+// against and the error it tests have to come from one resolution. The runtime
+// loads `eval-quality/adapters` and the root barrel from this same tree, and the
+// ESM loader caches one module namespace per resolved URL, so the class this
 // import hands back is the class the adapter threw with.
 // `test/test-probe-targets.js` holds that rather than assuming it: it
 // constructs a fault from its own import and drives it through
 // `failureClassForFault`.
-
-/**
- * The environment-probe port over TEA's commands.
- *
- * @returns {Promise<{port: object, policy: object}>}
- */
-async function createProbePort(options) {
-  const policy = commandTargetPolicy(options);
-  const { createCommandLineAdapter } = await loadAdapters();
-  return { port: createCommandLineAdapter(policy), policy };
-}
 
 /**
  * One thrown probe fault, as a TEA failure class.
@@ -563,60 +374,6 @@ function faultReason(error, failureClass) {
 }
 
 /**
- * A `ProbeRequest` for one operation, with every channel defaulted.
- *
- * The channels are total in the schema, so a caller that omits one is a parse
- * failure at the boundary rather than an empty channel. Defaulting them here is
- * what lets a caller name only the inputs it actually sets.
- */
-function probeRequest({
-  probeId,
-  interfaceId,
-  operationId,
-  executable,
-  subcommandPath = [],
-  argument = {},
-  option = {},
-  environment = {},
-  stdin,
-}) {
-  return {
-    probeId,
-    interfaceId,
-    operationId,
-    kind: 'cli',
-    executable: executable ?? interfaceId,
-    subcommandPath,
-    channels: { argument, option, environment, stdin: stdin ?? { kind: 'absent' } },
-  };
-}
-
-/**
- * One tagged observation channel as text a diagnostic can print.
- *
- * `stdout` and `stderr` come back as `{kind}`-tagged bodies, and the tag is
- * total: `text`, `json`, or `absent`. Reading `.value` without checking the tag
- * gives `undefined` on an absent channel, and the two things a caller then does
- * with it both fail. `JSON.stringify(undefined)` is the value `undefined` rather
- * than a string, so `.trim()` on it throws, in the error path, which is the
- * worst place to put a crash because it fires only when something else has
- * already gone wrong. Falling back to an empty string instead loses the exit
- * code's only diagnostic.
- *
- * `createCommandLineAdapter` never produces an absent stream today, because it
- * tags an empty capture as empty text. The port's own contract permits one, so
- * a caller that reads the tag keeps working when a different mechanism does.
- *
- * @param {{kind: string, value?: unknown}} channel
- * @returns {string} Empty when the channel carries nothing printable.
- */
-function observedText(channel) {
-  if (channel?.kind === 'text') return String(channel.value ?? '');
-  if (channel?.kind === 'json') return JSON.stringify(channel.value);
-  return '';
-}
-
-/**
  * Run one command through the port and return the observation, or the failure
  * class that says why nothing was observed.
  *
@@ -699,9 +456,9 @@ const PROBE_RETRY_ATTEMPTS = 3;
  * measurement, not a lost run. Only `{ok: false}` with a class this module
  * classifies as retryable gets another attempt, and every attempt beyond the
  * first prints which interface and probe id it is, which attempt, and what
- * failed, on `stderr`, so a flaky run reads as one in the transcript rather
- * than a silently clean one — a retry that leaves no trace is the same
- * defect class the rest of this story keeps finding elsewhere.
+ * failed, on `stderr`, so a flaky run reads as one in the transcript. A retry that leaves no
+ * trace is the same defect class the rest of this story keeps finding
+ * elsewhere.
  *
  * `portOrFactory` may be one port for calls that leave no attempt-owned state,
  * or an async factory for artifact-producing calls. The factory is invoked once
@@ -736,84 +493,25 @@ async function probeCommandWithRetry(portOrFactory, request, signal) {
   return result;
 }
 
-/**
- * One observation, narrowed to the member TEA reads.
- *
- * `ProbeObservation` is a three-member union tagged by `kind`, and every reader
- * in this repository goes on to read `exitCode`, `stdout` and `artifacts`, which
- * are the `cli` member's fields. On an `api` or `mcp` observation each of those
- * reads is `undefined`, so a harness would report a run that exited nowhere
- * rather than a port answering in a shape it does not read.
- *
- * TEA declares the `cli` interface kind in every contract it ships, so the other
- * two members are unreachable today. This is what keeps that true rather than
- * assumed, and what turns a fourth member added upstream into a named error at
- * the one place every harness gets an observation.
- * `test/test-port-totality.js` holds this function against the union the
- * installed package declares.
- *
- * @param {{kind?: string}} observation
- * @returns {object} The same observation, when it is the `cli` member.
- */
-function cliObservation(observation) {
-  if (observation?.kind === 'cli') return observation;
-  throw new Error(
-    `the port answered a ${JSON.stringify(observation?.kind ?? null)} observation and TEA reads the cli member of ProbeObservation alone; ` +
-      'every TEA contract declares the cli interface kind, so a member outside it is a port TEA never authorized',
-  );
-}
-
-/**
- * Every registered target's script is present and executable, or the reason it
- * is not. `interfaceIds` narrows the question to the targets a caller actually
- * spawns, which is how a harness's pre-flight asks about its own command and
- * not about every command TEA ships.
- *
- * @param {string} [projectRoot]
- * @param {string[]} [interfaceIds]
- * @returns {string[]}
- */
-function targetProblems(projectRoot = PROJECT_ROOT, interfaceIds) {
-  const problems = [];
-  const selected =
-    interfaceIds === undefined ? EXECUTION_TARGETS : EXECUTION_TARGETS.filter((target) => interfaceIds.includes(target.interfaceId));
-  for (const id of interfaceIds ?? []) {
-    if (!EXECUTION_TARGETS.some((target) => target.interfaceId === id))
-      problems.push(`${id}: no execution target is registered for this interface`);
-  }
-  for (const target of selected) {
-    const absolute = scriptPath(target, projectRoot);
-    if (!fs.existsSync(absolute)) {
-      problems.push(`${target.executable}: ${target.script} does not exist`);
-      continue;
-    }
-    // The adapter spawns the file itself, so the mode is load-bearing rather
-    // than cosmetic: without the bit the spawn fails EACCES before argv matters.
-    if ((fs.statSync(absolute).mode & 0o111) === 0) {
-      problems.push(`${target.executable}: ${target.script} is not executable (mode ${(fs.statSync(absolute).mode & 0o777).toString(8)})`);
-    }
-  }
-  return problems;
-}
-
 module.exports = {
   EXECUTION_TARGETS,
   MAX_OUTPUT_BYTES,
+  RUNNER_INFRASTRUCTURE_EXIT_CODES,
   cliObservation,
-  commandTargetPolicy,
-  createProbePort,
+  commandTargetPolicy: registry.commandTargetPolicy,
+  createProbePort: registry.createProbePort,
   failureClassForFault,
   faultReason,
-  hostEnvironment,
+  hostEnvironment: registry.hostEnvironment,
   loadEvalQuality,
   observedText,
-  permittedEnvironmentKeys,
+  permittedEnvironmentKeys: registry.permittedEnvironmentKeys,
   probeCommand,
   probeCommandWithRetry,
   PROBE_RETRY_ATTEMPTS,
   RETRYABLE_FAILURE_CLASSES,
   probeRequest,
   readEnvironment,
-  targetFor,
-  targetProblems,
+  targetFor: registry.targetFor,
+  targetProblems: registry.targetProblems,
 };

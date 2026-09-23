@@ -7,8 +7,12 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "mutationId", "mutationSource", "targetArtifact", "operator", "expectedObservableFailure"],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "mutationId": { "type": "string" },
+    "schemaVersion": {
+      "const": 1
+    },
+    "mutationId": {
+      "type": "string"
+    },
     "mutationSource": {
       "description": "Where the mutation came from, in the author's terms.",
       "type": "string",
@@ -18,18 +22,30 @@
       "description": "The mutated file, relative to the target's root, in POSIX form, with no drive letter and no \".\" or \"..\" segment.",
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\]+$"
+      "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+$"
     },
     "operator": {
       "type": "object",
       "required": ["kind"],
       "properties": {
-        "kind": { "type": "string" },
-        "find": { "type": "string", "minLength": 1 },
-        "replace": { "type": "string" },
-        "occurrences": { "type": "integer" }
+        "kind": {
+          "type": "string"
+        },
+        "find": {
+          "type": "string",
+          "minLength": 1
+        },
+        "replace": {
+          "type": "string"
+        },
+        "occurrences": {
+          "type": "integer"
+        }
       }
     },
-    "expectedObservableFailure": { "type": "string", "minLength": 1 }
+    "expectedObservableFailure": {
+      "type": "string",
+      "minLength": 1
+    }
   }
 }

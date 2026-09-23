@@ -243,7 +243,7 @@ Levels: static, integration.
 | `test/lib/` files keep only TeA data and import the runtime | `test:evaluate-boundaries`: `test/lib/probe-targets.js`, `eval-quality-inputs.js`, `eval-record.js` each `require` their `cli/lib/evaluate/` module; the definitions `function sealedRunRecord`, `function repositoryState` and the command-target-policy builder exist only in their `cli/lib/evaluate/` modules, checked in the named files (call sites elsewhere, such as `test/test-probe-conformance.js`, stay legal); the schema-version reader moves into `engine.js` and the purity layer is re-pointed | Static | P0 | Moving the code back fails the marker scan |
 | No `cli/` file imports `test/` | `test:boundary`, `test:direction`, and a boundaries case scanning `require(` targets | Static | P0 | An import from `test/` fails |
 | Existing harness unchanged | `test:probe-targets`, `test:probe-conformance`, `test:eval-replay`, `test:compare-eval-runs` | Replay, integration | P0 | Regression in any fails |
-| `infrastructureExitCodes` refuses a satisfiable signature | New `test:evaluate-check` case: signature `exitCode == 3` with the skill runner's codes 2 to 6 exits 10 | Integration | P1 | Removing the rule turns exit 0 |
+| `infrastructureExitCodes` refuses a satisfiable signature | New `test:evaluate-check` case: signature `exitCode == 3` with the skill runner's codes 3 to 6 exits 10 (amended 2026-09-23 in Story 1.5: exit 2 is the runner's usage error, so AD-7 and R1-10 name 3 to 6) | Integration | P1 | Removing the rule turns exit 0 |
 
 ### Story 1.6: Probe a skill through the generic runner and `tea-evaluate preflight`
 

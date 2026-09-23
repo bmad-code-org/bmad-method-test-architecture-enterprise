@@ -37,11 +37,15 @@
       "enum": ["cli", "api", "mcp"]
     },
     "registry": {
-      "description": "Execution-target registry entries. Story 1.5 defines their shape.",
-      "type": "object"
+      "description": "The execution-target registry: every command a run may spawn, each one RegistryEntry. The runtime builds eval-quality's default-deny CommandTargetPolicy from these entries, so a target the registry does not name is denied before a process starts.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/RegistryEntry"
+      }
     },
     "launch": {
-      "description": "How the target is launched. Story 1.5 defines its shape.",
+      "description": "How the target is launched. The story that first launches a target defines its shape; until then it is an open object.",
       "type": "object"
     },
     "workspace": {
@@ -61,7 +65,7 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^(?![A-Za-z]:)(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[^\\\\]+$"
+            "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+$"
           }
         }
       }
@@ -71,7 +75,9 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "enum": ["clean", "mutated"] }
+      "items": {
+        "enum": ["clean", "mutated"]
+      }
     },
     "trials": {
       "description": "Trials per probe per arm.",
@@ -83,13 +89,112 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "enum": ["pr", "merge", "scheduled", "release"] }
+      "items": {
+        "enum": ["pr", "merge", "scheduled", "release"]
+      }
     },
     "strengthFloor": {
       "description": "Minimum catch rate per probe class, from 0 to 1.",
       "type": "object",
-      "propertyNames": { "enum": ["defect", "gameability", "zero-action", "canary"] },
-      "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
+      "propertyNames": {
+        "enum": ["defect", "gameability", "zero-action", "canary"]
+      },
+      "additionalProperties": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      }
+    }
+  },
+  "$defs": {
+    "RegistryEntry": {
+      "description": "One command a run may spawn. interfaceId and executable key it the way eval-quality's command target policy keys an authorization; the pair is unique within the registry.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "interfaceId",
+        "executable",
+        "target",
+        "subcommandPaths",
+        "artifacts",
+        "environmentKeys",
+        "maxElapsedMs",
+        "infrastructureExitCodes"
+      ],
+      "properties": {
+        "interfaceId": {
+          "description": "The logical interface identifier the contract names (a kebab-case slug).",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "executable": {
+          "description": "The logical executable a contract operation's invocation names (a kebab-case slug).",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "target": {
+          "description": "What the adapter spawns: a POSIX path relative to the root the runtime resolves the registry against (the evaluated project), or a bare command name the adapter resolves through its own PATH. Never absolute, never with a \".\" or \"..\" segment or a control character, so a registry cannot point outside the project it describes.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+$"
+        },
+        "subcommandPaths": {
+          "description": "The exact subcommand paths this target may be invoked with; an empty inner array authorizes invoking it with no subcommand.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+            }
+          }
+        },
+        "artifacts": {
+          "description": "Default path of each artifact identifier the contract declares for this target, relative to the run's working directory: POSIX, never absolute, never with a \".\" or \"..\" segment or a control character, so a registry cannot read a file outside the run back as evidence. A caller may override a path per run.",
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+$"
+          }
+        },
+        "environmentKeys": {
+          "description": "Environment keys a request may carry into the process. PATH is never one: target may name a bare command, and a declared PATH would choose which binary runs.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "not": {
+              "pattern": "^[Pp][Aa][Tt][Hh]$"
+            }
+          }
+        },
+        "maxElapsedMs": {
+          "description": "Wall-clock ceiling for one invocation, in milliseconds. A caller may lower it per run; the ceiling is the most any run gets.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxOutputBytes": {
+          "description": "Ceiling on each captured stream and each artifact read back, in bytes. Defaults to 8 MiB. A caller may lower it per run; the ceiling is the most any run gets.",
+          "type": "integer",
+          "minimum": 1
+        },
+        "infrastructureExitCodes": {
+          "description": "The exit codes by which this target reports that it could not run: a launch, configuration, transport, timeout or parse failure, or a crash. tea-evaluate check refuses a defect signature or manifestation witness that could hold on an observation carrying one of these codes and no output (AD-7). Empty when the target reports no such failure through its exit code.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 255
+          }
+        }
+      }
     }
   }
 }

@@ -12,7 +12,15 @@
  *
  * eval-quality is an optional peer dependency of TeA: a project that never
  * runs Evaluate does not receive it, so a missing engine is reported as an
- * installation problem rather than a crash.
+ * installation problem (exit 12).
+ *
+ * This file also holds the runtime's one synchronous reading of the engine:
+ * the schema-version constants a record builder stamps, and the engine's
+ * `VERSION`. Record builders are called from synchronous code, so they cannot
+ * wait for the dynamic import. `eval-quality.config.json` declares this file as
+ * its own `dependency-direction` layer with a `purity` block, so an `await`, an
+ * async function or `new Date` here fails `npm run test:direction`; the loaders
+ * below return their promise without awaiting it.
  */
 
 'use strict';
@@ -36,7 +44,36 @@ class EngineUnavailableError extends Error {
   }
 }
 
+// The version constants come in through a synchronous `require`, read on
+// first use. `require(esm)` is stable on every Node the engines field admits
+// (>= 22.20.0), and it hands back the same module instance the dynamic
+// `import()` below resolves, so the two readings cannot disagree. Reading on
+// first use keeps loading this file free: a subcommand that never stamps a
+// record never evaluates the engine synchronously.
+//
+// The require is guarded, because the engine is an optional peer: a caller
+// that never asks for a schema version (a TeA check that prints a named skip
+// when the engine is absent) must not crash. A missing or broken engine is
+// reported, with its cause, the moment a caller asks `expectedSchemaVersion`
+// or `engineVersion` for a value.
+let packageVersions;
+let packageVersionsError;
+
+/** The engine's root barrel, required once; `null` when it cannot be loaded. */
+function engineConstants() {
+  if (packageVersions === undefined) {
+    try {
+      packageVersions = require('eval-quality');
+    } catch (error) {
+      packageVersions = null;
+      packageVersionsError = error;
+    }
+  }
+  return packageVersions;
+}
+
 let pending;
+let pendingAdapters;
 
 /**
  * The engine's library, imported once per process.
@@ -54,6 +91,116 @@ function loadEngine() {
     });
   }
   return pending;
+}
+
+/**
+ * The engine's `eval-quality/adapters` subpath (the command-line, MCP, corpus,
+ * file-system and clock adapters), imported once per process on the same terms
+ * as `loadEngine`.
+ *
+ * @returns {Promise<Record<string, unknown>>}
+ */
+function loadAdapters() {
+  if (pendingAdapters === undefined) {
+    pendingAdapters = import('eval-quality/adapters').catch((error) => {
+      pendingAdapters = undefined;
+      throw new EngineUnavailableError(error);
+    });
+  }
+  return pendingAdapters;
+}
+
+/**
+ * The installed engine's own version string.
+ *
+ * @returns {string}
+ */
+function engineVersion() {
+  const constants = engineConstants();
+  if (constants === null) throw new EngineUnavailableError(packageVersionsError);
+  if (typeof constants.VERSION !== 'string') {
+    throw new EngineUnavailableError(new Error(`the installed ${ENGINE_PACKAGE} exports no VERSION string`));
+  }
+  return constants.VERSION;
+}
+
+/**
+ * The `schemaVersion` of each artifact kind TeA writes or receives, keyed by the
+ * basename of the schema the engine publishes for it. Every value is the
+ * constant the installed engine exports for that kind; nothing here is stated,
+ * because a literal table drifts the way a copied number does.
+ *
+ * A value is `undefined` when the engine could not be loaded or renamed the
+ * constant; `expectedSchemaVersion` refuses to hand either back.
+ */
+const SCHEMA_VERSION_CONSTANTS = {
+  'sealed-run-record': 'SEALED_RUN_RECORD_SCHEMA_VERSION',
+  'isolation-manifest': 'ISOLATION_MANIFEST_SCHEMA_VERSION',
+  'evaluator-configuration': 'EVALUATOR_CONFIGURATION_SCHEMA_VERSION',
+  probe: 'PROBE_SCHEMA_VERSION',
+  'eval-contract': 'EVAL_CONTRACT_SCHEMA_VERSION',
+  'scoring-policy': 'SCORING_POLICY_SCHEMA_VERSION',
+  'evidence-artifact': 'EVIDENCE_ARTIFACT_SCHEMA_VERSION',
+  'sealed-evaluator-brief': 'SEALED_EVALUATOR_BRIEF_SCHEMA_VERSION',
+  'preflight-verdict': 'PREFLIGHT_VERDICT_SCHEMA_VERSION',
+};
+const SCHEMA_VERSIONS = Object.freeze(
+  Object.defineProperties(
+    {},
+    Object.fromEntries(
+      Object.entries(SCHEMA_VERSION_CONSTANTS).map(([kind, constant]) => [
+        kind,
+        { enumerable: true, get: () => engineConstants()?.[constant] },
+      ]),
+    ),
+  ),
+);
+
+/** The published kinds that carry no `schemaVersion` by design, each with the reason. */
+const UNSTAMPED_KINDS = Object.freeze({
+  'artifact-reference':
+    'it is a reference shape embedded inside other artifacts and never crosses the package boundary alone, so the package publishes it with no schemaVersion and no lineage',
+});
+
+/**
+ * The `schemaVersion` the installed engine reads for one kind.
+ *
+ * Throws on a kind with no stamp by design, on a kind the table does not cover,
+ * and when the engine could not be loaded or renamed the constant: a caller
+ * stamping `undefined` writes valid JSON with the field missing, since
+ * `JSON.stringify` drops it, which is a silent failure and a worse one.
+ *
+ * @param {string} kind The published schema basename, for example `probe`.
+ * @returns {number}
+ */
+function expectedSchemaVersion(kind) {
+  if (Object.hasOwn(UNSTAMPED_KINDS, kind)) throw new TypeError(`${kind} carries no schemaVersion by design: ${UNSTAMPED_KINDS[kind]}`);
+  if (!Object.hasOwn(SCHEMA_VERSIONS, kind)) {
+    throw new TypeError(`no schemaVersion is recorded for ${kind}; TEA writes or receives ${Object.keys(SCHEMA_VERSIONS).join(', ')}`);
+  }
+  const value = SCHEMA_VERSIONS[kind];
+  if (!Number.isInteger(value) || value <= 0) {
+    if (engineConstants() === null) throw new EngineUnavailableError(packageVersionsError);
+    throw new TypeError(`eval-quality exports no positive integer schemaVersion constant for ${kind}; read ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+/**
+ * One artifact's stamp against the version the installed engine reads for its
+ * kind. The message mirrors the engine's own `schema-version-mismatch` fault.
+ * A kind the table does not cover throws, because that is a caller bug.
+ *
+ * @param {string} kind The published schema basename.
+ * @param {unknown} value
+ * @returns {string[]} Empty when the stamp agrees.
+ */
+function schemaVersionProblems(kind, value) {
+  const expected = expectedSchemaVersion(kind);
+  const found = value !== null && typeof value === 'object' ? value.schemaVersion : undefined;
+  if (found === expected) return [];
+  if (found === undefined) return [`${kind} carries no "schemaVersion" where this build reads ${expected}`];
+  return [`${kind} carries "schemaVersion" ${JSON.stringify(found)} where this build reads ${expected}`];
 }
 
 /** The directory of the installed engine package, read through its exported `./package.json`. */
@@ -102,7 +249,13 @@ module.exports = {
   ENGINE_CLI_ENV,
   ENGINE_PACKAGE,
   EngineUnavailableError,
+  SCHEMA_VERSIONS,
+  UNSTAMPED_KINDS,
   engineCliPath,
   engineSchemaPath,
+  engineVersion,
+  expectedSchemaVersion,
+  loadAdapters,
   loadEngine,
+  schemaVersionProblems,
 };

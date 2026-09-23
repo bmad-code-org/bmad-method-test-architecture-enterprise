@@ -677,7 +677,8 @@ async function scoringCases() {
 
     console.log("\neval-quality's own published schemas are read through the port\n");
 
-    // compileValidator in test/lib/eval-quality-inputs.js compiles a schema the
+    // The validator test/lib/eval-quality-inputs.js wires from the runtime's
+    // records module, over this port's readJson, compiles a schema the
     // first time its kind is validated and caches the result, so nothing here
     // asserts about a second scoring run: the run itself only needs one probe to
     // reach it, and every probe validates an isolation manifest.

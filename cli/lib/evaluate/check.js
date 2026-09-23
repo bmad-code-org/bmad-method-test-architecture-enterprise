@@ -20,11 +20,17 @@
  * - `id-pattern`: a probe, defect, behavior, oracle or mutation ID is off its pattern.
  * - `qualification-digest`: a `baseline/qualification/` reference's digest does not match the file.
  * - `clean-control`: a clean control is not `zero-action` with `expectedClean: true` and no defects.
+ * - `infrastructure-exit-code`: a defect signature holds on an observation that carries only one of the
+ *   `infrastructureExitCodes` its executable's registry entry declares, so a target that could not run
+ *   would read as a caught defect (AD-7).
+ * - `unregistered-executable`: a `cli` defect signature names an executable no registry entry declares,
+ *   so no infrastructure code could be checked against it and no run could authorize it.
  *
  * Beside them, `contract.json` must exist (`missing-file`), every indexed
  * root and entry must be a real directory or regular file (`corpus-file`), as
  * must everything under `baseline/` (`baseline-file`), no ID may repeat within
- * its file (`duplicate-id`), and a file must
+ * its file (`duplicate-id`), no registry entry may repeat an interface and
+ * executable pair (`registry`), and a file must
  * parse (`json`), match its schema (`schema` for the runtime's own schemas,
  * `engine-schema` for eval-quality's), be named for its ID (`file-name`), and
  * name only behaviors and mutations that exist (`reference`).
@@ -39,6 +45,7 @@ const AjvModule = require('ajv/dist/2020');
 
 const { loadEngine, engineSchemaPath } = require('./engine');
 const { MANIFEST_NAME } = require('./folder');
+const { repeatedPairs } = require('./registry');
 const { CorpusIndexError, INDEX_NAME, corpusIndexProblem } = require('./corpus-index');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -50,6 +57,9 @@ const MUTATION_ID_PATTERN = '^M-[0-9]{3,}$';
 const PROBE_FILE = /^(.+)\.probe\.json$/;
 const MUTATION_FILE = /^(.+)\.mutation\.json$/;
 const WRITTEN_FILE_POINTER = /^\/interactions\/[^/]+\/artifact(?:\/|$)/;
+const INTERACTION_POINTER = /^\/interactions\/([^/]+)(?:\/|$)/;
+/** The step budget a signature's regular-expression operators get while `check` resolves them. */
+const REGEX_STEP_BUDGET = 100_000;
 const RFC3339_DATE_TIME = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/;
 
 /** Fields the runtime writes into a qualified probe; a committed probe carrying one is refused. */
@@ -233,6 +243,16 @@ function checkDuplicates(report, relative, ids, label) {
   }
 }
 
+/** The parsed `contract.json` when it parses to an object, for the rules that resolve expressions against it. */
+function contractFor(folder) {
+  try {
+    const contract = readJsonFile(path.join(folder, CONTRACT_NAME));
+    return contract !== null && typeof contract === 'object' && !Array.isArray(contract) ? contract : undefined;
+  } catch {
+    return;
+  }
+}
+
 function checkContract(report, folder, context) {
   if (!fs.existsSync(path.join(folder, CONTRACT_NAME))) {
     report.add(CONTRACT_NAME, 'missing-file', `the evaluation folder has no ${CONTRACT_NAME}`);
@@ -374,7 +394,224 @@ function checkRuntimeOwned(report, relative, probe) {
   return stripped;
 }
 
-function checkProbe(report, relative, probe, context, behaviors, mutations) {
+/**
+ * A synthetic command observation of a target that could not run: its exit
+ * code and no output. The command-line adapter tags an empty capture as empty
+ * text, so that is how both streams read.
+ */
+function infrastructureObservation(stepId, exitCode, callInputs = {}) {
+  return {
+    observationId: `${stepId}-infrastructure`,
+    sequence: 1,
+    operationId: stepId,
+    provenance: 'baseline',
+    principal: null,
+    callInputs: {
+      path: null,
+      query: null,
+      header: null,
+      body: null,
+      argument: callInputs.argument ?? null,
+      option: callInputs.option ?? null,
+      environment: callInputs.environment ?? null,
+      stdin: callInputs.stdin ?? null,
+      arguments: null,
+    },
+    responseBody: null,
+    responseHeaders: null,
+    responseStatus: null,
+    stdout: { kind: 'text', value: '' },
+    stderr: { kind: 'text', value: '' },
+    exitCode,
+    artifacts: {},
+  };
+}
+
+const CONNECTIVES = new Set(['all', 'any', 'not']);
+const CALL_INPUTS_POINTER = /^\/interactions\/[^/]+\/call-inputs(?:\/|$)/;
+/** More call-input clauses than this and the expression is reported unresolved instead of enumerated. */
+const MAX_CALL_INPUT_CLAUSES = 8;
+const ALWAYS = { op: 'equality', operands: [{ literal: 0 }, { literal: 0 }] };
+const NEVER = { op: 'equality', operands: [{ literal: 0 }, { literal: 1 }] };
+
+/**
+ * The expression with each clause that reads only call inputs replaced by a
+ * constant, once per assignment of true and false to those clauses. A run that
+ * could not start was still invoked with whatever inputs the defect needs, so a
+ * call-input clause can go either way. Returns `undefined` when a clause mixes
+ * call inputs with other evidence, or when there are too many to enumerate.
+ */
+function callInputVariants(expression) {
+  const clauses = [];
+  let mixed = false;
+  const collect = (node) => {
+    if (node === null || typeof node !== 'object') return;
+    if (CONNECTIVES.has(node.op)) {
+      for (const operand of node.operands ?? []) collect(operand);
+      return;
+    }
+    const pointers = pointersIn(node);
+    const reading = pointers.filter((pointer) => CALL_INPUTS_POINTER.test(pointer));
+    if (reading.length === 0) return;
+    if (reading.length === pointers.length) clauses.push(node);
+    else mixed = true;
+  };
+  collect(expression);
+  if (mixed || clauses.length > MAX_CALL_INPUT_CLAUSES) return;
+  const variants = [];
+  for (let mask = 0; mask < 2 ** clauses.length; mask += 1) {
+    const substitute = (node) => {
+      const index = clauses.indexOf(node);
+      if (index !== -1) return (mask >> index) & 1 ? ALWAYS : NEVER;
+      if (node !== null && typeof node === 'object' && CONNECTIVES.has(node.op)) {
+        return { ...node, operands: (node.operands ?? []).map(substitute) };
+      }
+      return node;
+    };
+    variants.push(substitute(expression));
+  }
+  return variants;
+}
+
+/**
+ * The infrastructure exit codes under which an expression (a defect
+ * signature's predicate, or a manifestation witness's relation) could hold,
+ * resolved by the engine's own `resolveCheck` over an observation that carries
+ * that code and no output, with the contract's reference sets in scope. A
+ * resolution other than `false` counts: `insufficient-evidence` means the
+ * expression cannot be shown to exclude the code. A witness's call inputs are
+ * the ones it declares; a signature's call-input clauses are tried both ways.
+ * An expression the engine cannot resolve at all is reported as `unresolved`,
+ * so the rule fails closed.
+ *
+ * @returns {{ satisfying: number[], unresolved: string|undefined }}
+ */
+function satisfyingInfrastructureCodes(context, expression, codes, callInputs) {
+  const { engine, contract } = context;
+  const stepIds = [
+    ...new Set(
+      pointersIn(expression)
+        .map((pointer) => INTERACTION_POINTER.exec(pointer)?.[1])
+        .filter((stepId) => stepId !== undefined),
+    ),
+  ];
+  if (stepIds.length === 0) stepIds.push('observed');
+  const referenceSets = Object.fromEntries(
+    Object.entries(contract?.referenceSets ?? {}).map(([id, set]) => [id, Array.isArray(set?.members) ? set.members : []]),
+  );
+  const variants = callInputs === undefined ? callInputVariants(expression) : [expression];
+  if (variants === undefined) {
+    return {
+      satisfying: [],
+      unresolved: 'a clause reads call inputs together with other evidence, or too many clauses read call inputs to try each way',
+    };
+  }
+  const satisfying = [];
+  let unresolved;
+  for (const code of codes) {
+    const observations = Object.fromEntries(stepIds.map((stepId) => [stepId, infrastructureObservation(stepId, code, callInputs)]));
+    for (const variant of variants) {
+      try {
+        const { resolution } = engine.resolveCheck(
+          variant,
+          engine.makeResolveOperand(observations, referenceSets),
+          () => false,
+          contract === undefined ? {} : engine.referenceSetKeysOf(contract),
+          REGEX_STEP_BUDGET,
+          'infrastructure-exit-code',
+        );
+        if (resolution !== 'false') {
+          satisfying.push(code);
+          break;
+        }
+      } catch (error) {
+        unresolved ??= error.message;
+      }
+    }
+  }
+  return { satisfying, unresolved };
+}
+
+/** The infrastructure exit codes the given registry entries declare, sorted and unique. */
+function infrastructureCodesOf(entries) {
+  return [...new Set(entries.flatMap((entry) => (Array.isArray(entry.infrastructureExitCodes) ? entry.infrastructureExitCodes : [])))]
+    .filter((code) => Number.isInteger(code))
+    .sort((left, right) => left - right);
+}
+
+/** Records an `infrastructure-exit-code` finding when `expression` could hold on one of `codes`. */
+function checkExpressionAgainstCodes(report, relative, context, { label, target, expression, codes, callInputs }) {
+  if (expression === null || typeof expression !== 'object') return;
+  const { satisfying, unresolved } = satisfyingInfrastructureCodes(context, expression, codes, callInputs);
+  if (satisfying.length > 0) {
+    report.add(
+      relative,
+      'infrastructure-exit-code',
+      `${label} could hold when ${target} exits ${satisfying.join(', ')}, which its registry entry declares as infrastructure exit codes; a target that could not run would read as the defect. Address an exit code, stream or body only the defect produces, or record the probe as refused`,
+    );
+  } else if (unresolved !== undefined) {
+    report.add(
+      relative,
+      'infrastructure-exit-code',
+      `${label} could not be resolved against ${target}'s infrastructure exit codes (${unresolved}), so it cannot be shown to exclude them`,
+    );
+  }
+}
+
+/**
+ * The defect signature and each manifestation witness, held against the
+ * infrastructure exit codes of the registry entries they name: the signature
+ * by its executable (a `cli` signature names no interface), each witness by
+ * its interface.
+ */
+function checkProbeAgainstRegistry(report, relative, probe, context, registry) {
+  if (!Array.isArray(registry)) return;
+  const signature = probe.defectSignature;
+  if (signature?.interfaceKind === 'cli' && typeof signature.invocation?.executable === 'string') {
+    const { executable } = signature.invocation;
+    const entries = registry.filter((entry) => entry?.executable === executable);
+    if (entries.length === 0) {
+      report.add(
+        relative,
+        'unregistered-executable',
+        `defectSignature names executable ${JSON.stringify(executable)}, which no ${MANIFEST_NAME} registry entry declares`,
+      );
+    } else {
+      checkExpressionAgainstCodes(report, relative, context, {
+        label: 'defectSignature',
+        target: executable,
+        expression: signature.condition?.predicate,
+        codes: infrastructureCodesOf(entries),
+      });
+    }
+  }
+  for (const [index, defect] of (Array.isArray(probe.defects) ? probe.defects : []).entries()) {
+    const witness = defect?.manifestationWitness;
+    if (witness === null || typeof witness !== 'object' || typeof witness.interfaceId !== 'string') continue;
+    const declared = (Array.isArray(context.contract?.permittedInterfaces) ? context.contract.permittedInterfaces : []).find(
+      (candidate) => candidate?.logicalId === witness.interfaceId,
+    );
+    if (declared !== undefined && declared.kind !== 'cli') continue;
+    const entries = registry.filter((entry) => entry?.interfaceId === witness.interfaceId);
+    if (entries.length === 0) {
+      report.add(
+        relative,
+        'unregistered-executable',
+        `defects[${index}].manifestationWitness names interface ${JSON.stringify(witness.interfaceId)}, which no ${MANIFEST_NAME} registry entry declares`,
+      );
+      continue;
+    }
+    checkExpressionAgainstCodes(report, relative, context, {
+      label: `defects[${index}].manifestationWitness.relation`,
+      target: witness.interfaceId,
+      expression: witness.relation,
+      codes: infrastructureCodesOf(entries),
+      callInputs: witness.inputs ?? {},
+    });
+  }
+}
+
+function checkProbe(report, relative, probe, context, behaviors, mutations, registry) {
   const stripped = checkRuntimeOwned(report, relative, probe);
   const shaped = validateInto(report, relative, 'schema', context.validate.probe, stripped);
   const defects = Array.isArray(probe.defects) ? probe.defects : [];
@@ -419,6 +656,7 @@ function checkProbe(report, relative, probe, context, behaviors, mutations) {
       );
     }
   }
+  checkProbeAgainstRegistry(report, relative, probe, context, registry);
 
   const route = probe.qualification?.route;
   if (
@@ -464,7 +702,7 @@ function checkProbe(report, relative, probe, context, behaviors, mutations) {
   }
 }
 
-function checkProbes(report, folder, context, behaviors, mutations) {
+function checkProbes(report, folder, context, behaviors, mutations, registry) {
   for (const entry of listDirectory(folder, 'probes') ?? []) {
     const relative = `probes/${entry.name}`;
     const match = PROBE_FILE.exec(entry.name);
@@ -481,7 +719,7 @@ function checkProbes(report, folder, context, behaviors, mutations) {
     if (typeof probe.probeId === 'string' && probe.probeId !== match[1]) {
       report.add(relative, 'file-name', `probe ID ${JSON.stringify(probe.probeId)} does not match its file name`);
     }
-    checkProbe(report, relative, probe, context, behaviors, mutations);
+    checkProbe(report, relative, probe, context, behaviors, mutations, registry);
   }
 }
 
@@ -591,13 +829,16 @@ async function checkEvaluation(folder) {
 
   const context = await buildContext();
   validateInto(report, MANIFEST_NAME, 'schema', context.validate.evaluation, evaluation);
+  const registry = Array.isArray(evaluation.registry) ? evaluation.registry : undefined;
+  for (const problem of registry === undefined ? [] : repeatedPairs(registry)) report.add(MANIFEST_NAME, 'registry', problem);
   const provision = Array.isArray(evaluation.workspace?.provision)
     ? evaluation.workspace.provision.filter((entry) => typeof entry === 'string' && entry.length > 0)
     : [];
 
   const behaviors = checkContract(report, folder, context);
+  context.contract = contractFor(folder);
   const mutations = checkMutations(report, folder, context, provision);
-  checkProbes(report, folder, context, behaviors, mutations);
+  checkProbes(report, folder, context, behaviors, mutations, registry);
   checkQualificationEvidence(report, folder, context);
 
   try {

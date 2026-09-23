@@ -3,7 +3,28 @@
   "evaluationId": "atdd-red-phase",
   "targetKind": "skill",
   "interface": "cli",
-  "registry": {},
+  "registry": [
+    {
+      "interfaceId": "tea-atdd-runner",
+      "executable": "tea-atdd-runner",
+      "target": "test/fixtures/evaluate/red-phase-gate.js",
+      "subcommandPaths": [
+        []
+      ],
+      "artifacts": {
+        "scaffold": "tests/api/reservations.spec.ts"
+      },
+      "environmentKeys": [
+        "ANTHROPIC_API_KEY",
+        "HOME",
+        "USER"
+      ],
+      "maxElapsedMs": 1260000,
+      "infrastructureExitCodes": [
+        3
+      ]
+    }
+  ],
   "launch": {},
   "workspace": {
     "kind": "copy",

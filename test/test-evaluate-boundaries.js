@@ -20,8 +20,10 @@
  *   `import(...)`, a static `import`/`export ... from`, a bare `import '...'`,
  *   or a call (or `.resolve` call) through an alias of `require` or a binding
  *   obtained from `createRequire(...)` under any local name.
- * - `dynamic-specifier`: under `cli/lib/evaluate/` and in `cli/evaluate.js`,
- *   every load takes a string literal or a template literal with no `${...}`.
+ * - `dynamic-specifier`: every load under `cli/` takes a string literal or a
+ *   template literal with no `${...}` (Story 1.4 held the runtime to this;
+ *   Story 1.5 widened it to all of `cli/`, which already met it, so a computed
+ *   path into `test/` cannot slip past `test-import`).
  * - `engine-stage`: the stages that decide enforced verdicts come only from the
  *   eval-quality CLI over persisted files.
  *   - `runScore`, `preflightFromObservations` and `seal` fail anywhere under
@@ -36,6 +38,34 @@
  *     such an identifier. Importing a `compile` specifier fails too.
  * - `bmad-config`: the string `_bmad` appears nowhere under
  *   `cli/lib/evaluate/`, since the runtime reads no BMAD configuration.
+ * - `test-import` (Story 1.5): no load under `cli/` takes a relative specifier
+ *   that resolves into the repository's `test/` tree, or a self-reference
+ *   through this package's own name into `test/`, which the published package
+ *   does not carry.
+ *
+ * Story 1.5 also holds the move of the registry, the record builders and the
+ * digest and provenance into the runtime (AD-5, R1-06), by definition in named
+ * files, since a text scan for a call site would hit the legal calls across
+ * `test/`:
+ *
+ * - `test/lib/probe-targets.js`, `test/lib/eval-quality-inputs.js` and
+ *   `test/lib/eval-record.js` each `require` their runtime module
+ *   (`cli/lib/evaluate/registry.js`, `records.js`, `digest.js`);
+ * - the moved definitions (`function commandTargetPolicy`, the command target
+ *   policy builder; `function sealedRunRecord`; `function repositoryState`) are
+ *   declared exactly once, in their runtime module, and defined in no other
+ *   runtime module;
+ * - no function a moved runtime module exports (`registry.js`, `records.js`,
+ *   `digest.js`, `bounded-probe.js`) is defined again under `test/lib/`: in any
+ *   form in the three named files (a declaration, an arrow bound or assigned
+ *   later, a method, or a local function exported under the name), and at the
+ *   top level or in the exports of any other `test/lib/` file, so a partial
+ *   move back or a copy of a runtime module fails; `digestFiles` in
+ *   `eval-record.js`, which hands the runtime TEA's file-system port, is the one
+ *   named wrapper;
+ * - `test/lib/eval-quality-schema-versions.js` is gone, `engine.js` declares
+ *   `expectedSchemaVersion` and `schemaVersionProblems`, and the `purity` block
+ *   of `eval-quality.config.json` names the exact layer over `engine.js`.
  *
  * The scanner proves itself first: each violating form, including every
  * evasion a review found, is planted in a temp copy of a `cli/` tree and must
@@ -57,7 +87,6 @@ const PROJECT_ROOT = path.join(__dirname, '..');
 const CLI_ROOT = path.join(PROJECT_ROOT, 'cli');
 const ENGINE_MODULE = path.join('lib', 'evaluate', 'engine.js');
 const RUNTIME_DIRECTORY = path.join('lib', 'evaluate');
-const RUNTIME_BIN = 'evaluate.js';
 const SOURCE_EXTENSIONS = new Set(['.js', '.cjs', '.mjs']);
 const DATA_EXTENSIONS = new Set(['.json', '.md', '.yml', '.yaml']);
 const ALWAYS_FORBIDDEN = new Set(['runScore', 'preflightFromObservations', 'seal']);
@@ -68,6 +97,8 @@ const FORBIDDEN_CONFIG = '_bmad';
 const UNKNOWN = Symbol('unknown binding');
 const AJV_IMPORT = Symbol('ajv import');
 const CREATE_REQUIRE_FUNCTION = Symbol('createRequire');
+const TEST_TREE = 'test';
+const PACKAGE_NAME = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).name;
 
 const colors = { reset: '\u001B[0m', red: '\u001B[31m', green: '\u001B[32m' };
 
@@ -378,7 +409,7 @@ function destructuredFrom(pattern, parentOf) {
 }
 
 /** Every boundary violation in one parsed file. */
-function fileViolations({ source, ast, isEngine, isRuntime }) {
+function fileViolations({ source, ast, isEngine, file, projectRoot }) {
   const found = [];
   const report = (node, rule, message) => found.push({ line: node.loc.start.line, rule, message });
   const excerpt = (node) => {
@@ -405,12 +436,16 @@ function fileViolations({ source, ast, isEngine, isRuntime }) {
         if (isEngine) engineImports += 1;
         else report(node, 'engine-import', `loads eval-quality in "${excerpt(node)}"; only cli/lib/evaluate/engine.js may`);
       }
-      if (isRuntime && value === undefined) {
-        report(
-          node,
-          'dynamic-specifier',
-          `"${excerpt(node)}" takes a computed specifier; the runtime names every module it loads as a literal`,
-        );
+      if (value !== undefined) {
+        const normalized = value.replaceAll('\\', '/');
+        const selfReference = normalized === `${PACKAGE_NAME}/${TEST_TREE}` || normalized.startsWith(`${PACKAGE_NAME}/${TEST_TREE}/`);
+        const reached = value.startsWith('.') ? path.relative(projectRoot, path.resolve(path.dirname(file), value)) : '';
+        if (selfReference || reached === TEST_TREE || reached.startsWith(`${TEST_TREE}${path.sep}`)) {
+          report(node, 'test-import', `loads ${value}, which resolves into test/; the published package does not carry test/`);
+        }
+      }
+      if (value === undefined) {
+        report(node, 'dynamic-specifier', `"${excerpt(node)}" takes a computed specifier; cli/ names every module it loads as a literal`);
       }
     }
 
@@ -464,7 +499,6 @@ function fileViolations({ source, ast, isEngine, isRuntime }) {
 function scanCli(cliRoot) {
   const engineFile = path.join(cliRoot, ENGINE_MODULE);
   const runtimeDirectory = path.join(cliRoot, RUNTIME_DIRECTORY) + path.sep;
-  const runtimeBin = path.join(cliRoot, RUNTIME_BIN);
   const violations = [];
   let engineImports = 0;
 
@@ -481,7 +515,6 @@ function scanCli(cliRoot) {
   for (const file of files) {
     const relative = toRelative(file);
     const source = fs.readFileSync(file, 'utf8');
-    const isRuntime = file.startsWith(runtimeDirectory) || file === runtimeBin;
     if (file.startsWith(runtimeDirectory)) {
       let offset = source.indexOf(FORBIDDEN_CONFIG);
       while (offset !== -1) {
@@ -513,7 +546,13 @@ function scanCli(cliRoot) {
       });
       continue;
     }
-    const { found, engineImports: imports } = fileViolations({ source, ast, isEngine: file === engineFile, isRuntime });
+    const { found, engineImports: imports } = fileViolations({
+      source,
+      ast,
+      isEngine: file === engineFile,
+      file,
+      projectRoot: path.dirname(cliRoot),
+    });
     engineImports += imports;
     const seen = new Set();
     for (const violation of found) {
@@ -542,6 +581,32 @@ const LOADER = "const { loadEngine } = require('./engine');\n";
 
 /** Each plant is written beside the engine stub (with any `extra` files) and must be reported under its rule, at its file, and nowhere else. */
 const PLANTS = [
+  // test-import
+  {
+    name: 'a runtime module requiring a test/lib file',
+    rule: 'test-import',
+    file: 'lib/evaluate/other.js',
+    source: "const { EXECUTION_TARGETS } = require('../../../test/lib/probe-targets');\nmodule.exports = { EXECUTION_TARGETS };\n",
+  },
+  {
+    name: 'a runner reaching test/ through the package name',
+    rule: 'test-import',
+    file: 'other-runner.js',
+    source: `const helpers = require('${PACKAGE_NAME}/test/lib/probe-targets');\nmodule.exports = { helpers };\n`,
+  },
+  {
+    name: 'a runner building a path into test/',
+    rule: 'dynamic-specifier',
+    file: 'other-runner.js',
+    source:
+      "const path = require('node:path');\nconst helpers = require(path.join(__dirname, '..', 'test', 'lib', 'x'));\nmodule.exports = { helpers };\n",
+  },
+  {
+    name: 'a runner requiring the test tree root',
+    rule: 'test-import',
+    file: 'other-runner.js',
+    source: "const helpers = require('../test');\nmodule.exports = { helpers };\n",
+  },
   // engine-import
   {
     name: 'a second synchronous require',
@@ -1072,9 +1137,457 @@ function scanRepository() {
   check(engineImports > 0, 'cli/lib/evaluate/engine.js names eval-quality nowhere; the runtime has no door to the engine');
 }
 
+// ---------------------------------------------------------------------------
+// The moved definitions (Story 1.5, R1-06)
+
+/** Each `test/lib/` file AD-5 generalizes, the runtime module it now requires, and the definitions that moved there. */
+const MOVES = [
+  {
+    testFile: 'test/lib/probe-targets.js',
+    runtimeModule: 'cli/lib/evaluate/registry.js',
+    specifier: '../../cli/lib/evaluate/registry',
+    definitions: ['commandTargetPolicy'],
+  },
+  {
+    testFile: 'test/lib/eval-quality-inputs.js',
+    runtimeModule: 'cli/lib/evaluate/records.js',
+    specifier: '../../cli/lib/evaluate/records',
+    definitions: ['sealedRunRecord'],
+  },
+  {
+    testFile: 'test/lib/eval-record.js',
+    runtimeModule: 'cli/lib/evaluate/digest.js',
+    specifier: '../../cli/lib/evaluate/digest',
+    definitions: ['repositoryState'],
+  },
+];
+/**
+ * Wrappers a `test/lib/` file may define under a runtime function's name, each
+ * with the reason. `digestFiles` hands the runtime digest TEA's own
+ * file-system port as its byte reader.
+ */
+const WRAPPER_EXEMPTIONS = { 'test/lib/eval-record.js': new Set(['digestFiles']) };
+const TEST_LIB = 'test/lib';
+/** The runtime modules Story 1.5 moved code into; every function each declares is guarded. */
+const GUARDED_MODULES = [...MOVES.map((move) => move.runtimeModule), 'cli/lib/evaluate/bounded-probe.js'];
+const SCHEMA_VERSIONS_FILE = 'test/lib/eval-quality-schema-versions.js';
+const SCHEMA_VERSION_DEFINITIONS = ['expectedSchemaVersion', 'schemaVersionProblems'];
+const ENGINE_FILE = 'cli/lib/evaluate/engine.js';
+const CONFIG_FILE = 'eval-quality.config.json';
+
+function isFunctionNode(node) {
+  return node?.type === 'FunctionExpression' || node?.type === 'ArrowFunctionExpression';
+}
+
+/**
+ * Every name a file defines as a function, with how often: a function
+ * declaration, a variable bound or assigned a function expression or arrow, an
+ * object property or method, a class method, a function assigned to a member
+ * (`exports.name = function () {}`), or a local function handed out under
+ * another name (`module.exports.name = local`, `{ name: local }`).
+ */
+function definedFunctions(ast) {
+  const defined = new Map();
+  const add = (name) => {
+    if (typeof name === 'string') defined.set(name, (defined.get(name) ?? 0) + 1);
+  };
+  const local = new Set();
+  const aliases = [];
+  walk(ast, (node, parent) => {
+    if (node.type === 'FunctionDeclaration' && node.id) {
+      add(node.id.name);
+      local.add(node.id.name);
+    }
+    if (node.type === 'VariableDeclarator' && node.id.type === 'Identifier' && isFunctionNode(node.init)) {
+      add(node.id.name);
+      local.add(node.id.name);
+    }
+    if (node.type === 'AssignmentExpression' && node.left.type === 'Identifier' && isFunctionNode(node.right)) {
+      add(node.left.name);
+      local.add(node.left.name);
+    }
+    if (node.type === 'Property' && parent?.type !== 'ObjectPattern' && (node.method || isFunctionNode(node.value))) add(propertyKey(node));
+    if (node.type === 'MethodDefinition') add(propertyKey(node));
+    if (node.type === 'AssignmentExpression' && node.left.type === 'MemberExpression' && isFunctionNode(node.right))
+      add(memberKey(node.left));
+    if (node.type === 'AssignmentExpression' && node.left.type === 'MemberExpression' && node.right.type === 'Identifier') {
+      aliases.push([memberKey(node.left), node.right.name]);
+    }
+    if (node.type === 'Property' && parent?.type === 'ObjectExpression' && node.value.type === 'Identifier') {
+      aliases.push([propertyKey(node), node.value.name]);
+    }
+  });
+  for (const [name, target] of aliases) {
+    if (local.has(target) && name !== target) add(name);
+  }
+  return defined;
+}
+
+/** Whether `node` is `module.exports` or `exports`. */
+function isExportsObject(node) {
+  return (
+    isIdentifier(node, 'exports') ||
+    (node?.type === 'MemberExpression' && isIdentifier(node.object, 'module') && memberKey(node) === 'exports')
+  );
+}
+
+/**
+ * The functions a file defines at its top level or hands out through its
+ * exports: a top-level function declaration or variable bound to a function,
+ * a function or local function assigned to `module.exports.name`, and each
+ * function, method or local function in an object assigned to
+ * `module.exports`. Methods of other objects are the file's own business.
+ */
+function topLevelFunctions(ast) {
+  const defined = new Map();
+  const add = (name) => {
+    if (typeof name === 'string') defined.set(name, (defined.get(name) ?? 0) + 1);
+  };
+  const local = new Set();
+  for (const statement of ast.body) {
+    if (statement.type === 'FunctionDeclaration' && statement.id) local.add(statement.id.name);
+    if (statement.type === 'VariableDeclaration') {
+      for (const declarator of statement.declarations) {
+        if (declarator.id.type === 'Identifier' && isFunctionNode(declarator.init)) local.add(declarator.id.name);
+      }
+    }
+  }
+  for (const name of local) add(name);
+  const handsOut = (value) => isFunctionNode(value) || (value?.type === 'Identifier' && local.has(value.name));
+  for (const statement of ast.body) {
+    if (statement.type !== 'ExpressionStatement' || statement.expression.type !== 'AssignmentExpression') continue;
+    const { left, right } = statement.expression;
+    if (left.type === 'MemberExpression' && isExportsObject(left.object) && handsOut(right)) add(memberKey(left));
+    if (isExportsObject(left) && right.type === 'ObjectExpression') {
+      for (const property of right.properties) {
+        if (
+          property.type === 'Property' &&
+          (property.method || handsOut(property.value)) &&
+          propertyKey(property) !== property.value?.name
+        ) {
+          add(propertyKey(property));
+        }
+      }
+    }
+  }
+  return defined;
+}
+
+/**
+ * The names a module exports as functions it declares at its top level: the
+ * keys of the object assigned to `module.exports` whose value is one of those
+ * functions. Nested helpers stay private names any file may reuse.
+ */
+function exportedFunctions(ast) {
+  const topLevel = new Set();
+  for (const statement of ast.body) {
+    if (statement.type === 'FunctionDeclaration' && statement.id) topLevel.add(statement.id.name);
+  }
+  const exported = new Set();
+  walk(ast, (node) => {
+    if (node.type !== 'AssignmentExpression' || !isExportsObject(node.left) || node.right.type !== 'ObjectExpression') return;
+    for (const property of node.right.properties) {
+      if (property.type === 'Property' && property.value.type === 'Identifier' && topLevel.has(property.value.name)) {
+        exported.add(propertyKey(property));
+      }
+    }
+  });
+  return exported;
+}
+
+/** Every `function <name>` declaration in a file, with how often. */
+function declaredFunctions(ast) {
+  const declared = new Map();
+  walk(ast, (node) => {
+    if (node.type === 'FunctionDeclaration' && node.id) declared.set(node.id.name, (declared.get(node.id.name) ?? 0) + 1);
+  });
+  return declared;
+}
+
+/** Every literal specifier a file passes to `require(...)`. */
+function requiredSpecifiers(ast) {
+  const specifiers = new Set();
+  walk(ast, (node) => {
+    if (node.type === 'CallExpression' && isIdentifier(node.callee, 'require')) {
+      const value = staticString(node.arguments[0] ?? {});
+      if (value !== undefined) specifiers.add(value.replace(/\.js$/, ''));
+    }
+  });
+  return specifiers;
+}
+
+/**
+ * Every way the move of the registry, the record builders and the digest and
+ * provenance into the runtime has been undone under `root`.
+ *
+ * @param {string} root A repository root.
+ * @returns {string[]}
+ */
+function moveViolations(root) {
+  const problems = [];
+  const parsed = new Map();
+  const parse = (relative) => {
+    if (!parsed.has(relative)) {
+      const file = path.join(root, relative);
+      let ast = null;
+      if (fs.existsSync(file)) {
+        try {
+          ast = parseSource(file, fs.readFileSync(file, 'utf8'));
+        } catch (error) {
+          problems.push(`${relative} does not parse, so its definitions cannot be checked: ${error.message}`);
+        }
+      }
+      parsed.set(relative, ast);
+    }
+    return parsed.get(relative);
+  };
+  const runtimeModules = filesUnder(path.join(root, 'cli', 'lib', 'evaluate'))
+    .files.filter((file) => SOURCE_EXTENSIONS.has(path.extname(file)))
+    .map((file) => path.relative(root, file).split(path.sep).join('/'));
+
+  for (const move of MOVES) {
+    const testAst = parse(move.testFile);
+    const runtimeAst = parse(move.runtimeModule);
+    if (testAst === null) problems.push(`${move.testFile} is missing or does not parse`);
+    if (runtimeAst === null) problems.push(`${move.runtimeModule} is missing or does not parse`);
+    if (testAst === null || runtimeAst === null) continue;
+    if (!requiredSpecifiers(testAst).has(move.specifier)) {
+      problems.push(`${move.testFile} does not require ${move.specifier}; it must import the runtime module that holds its logic`);
+    }
+    for (const name of move.definitions) {
+      const declared = declaredFunctions(runtimeAst).get(name) ?? 0;
+      if (declared !== 1)
+        problems.push(`${move.runtimeModule} declares function ${name} ${declared} time(s); it must declare it exactly once`);
+    }
+  }
+
+  // Every function a moved module declares lives only there: no other runtime
+  // module defines a named marker, the three named test/lib/ files define none
+  // of them in any form, and no other test/lib/ file defines one at its top
+  // level or in what it exports. So a partial move back, or a copy of a runtime
+  // module into test/lib/, fails too.
+  const owners = new Map();
+  const own = (name, module) => {
+    if (!owners.has(name)) owners.set(name, new Set());
+    owners.get(name).add(module);
+  };
+  for (const module of GUARDED_MODULES) {
+    const ast = parse(module);
+    if (ast === null) continue;
+    for (const name of exportedFunctions(ast)) own(name, module);
+  }
+  for (const name of SCHEMA_VERSION_DEFINITIONS) own(name, ENGINE_FILE);
+  for (const move of MOVES) for (const name of move.definitions) owners.set(name, new Set([move.runtimeModule]));
+
+  const testLibFiles = fs.existsSync(path.join(root, TEST_LIB))
+    ? filesUnder(path.join(root, TEST_LIB))
+        .files.filter((file) => SOURCE_EXTENSIONS.has(path.extname(file)))
+        .map((file) => path.relative(root, file).split(path.sep).join('/'))
+    : [];
+  const namedTestFiles = new Set(MOVES.map((move) => move.testFile));
+  const markers = new Set(MOVES.flatMap((move) => move.definitions));
+  for (const relative of [...testLibFiles, ...runtimeModules]) {
+    const ast = parse(relative);
+    if (ast === null) continue;
+    const isTestLib = relative.startsWith(`${TEST_LIB}/`);
+    const defined = isTestLib && !namedTestFiles.has(relative) ? topLevelFunctions(ast) : definedFunctions(ast);
+    for (const name of defined.keys()) {
+      const owning = owners.get(name);
+      if (owning === undefined || owning.has(relative) || WRAPPER_EXEMPTIONS[relative]?.has(name)) continue;
+      if (isTestLib || markers.has(name)) problems.push(`${relative} defines ${name}, which lives only in ${[...owning].join(', ')}`);
+    }
+  }
+
+  if (fs.existsSync(path.join(root, SCHEMA_VERSIONS_FILE))) {
+    problems.push(`${SCHEMA_VERSIONS_FILE} exists; the schema-version reader lives in ${ENGINE_FILE}`);
+  }
+  const engineAst = parse(ENGINE_FILE);
+  for (const name of SCHEMA_VERSION_DEFINITIONS) {
+    if (engineAst === null || (declaredFunctions(engineAst).get(name) ?? 0) !== 1) {
+      problems.push(`${ENGINE_FILE} does not declare function ${name} exactly once`);
+    }
+  }
+  const config = JSON.parse(fs.readFileSync(path.join(root, CONFIG_FILE), 'utf8'))['dependency-direction'];
+  const pureLayers = new Set(config?.purity?.layers ?? []);
+  const engineLayer = (config?.layers ?? []).find((layer) => layer.match === 'exact' && layer.path === ENGINE_FILE);
+  if (engineLayer === undefined || !pureLayers.has(engineLayer.name)) {
+    problems.push(`${CONFIG_FILE}'s dependency-direction purity block names no exact layer over ${ENGINE_FILE}`);
+  }
+  for (const layer of config?.layers ?? []) {
+    if (layer.path === SCHEMA_VERSIONS_FILE) problems.push(`${CONFIG_FILE} still declares a layer over ${SCHEMA_VERSIONS_FILE}`);
+  }
+  return problems;
+}
+
+/** Files a move plant reads, copied from the repository into a temp root. */
+const MOVE_FILES = [
+  ...new Set([...MOVES.flatMap((move) => [move.testFile, move.runtimeModule]), ...GUARDED_MODULES, ENGINE_FILE, CONFIG_FILE]),
+];
+
+/** Each plant undoes one part of the move in a temp copy and must be reported. */
+const MOVE_PLANTS = [
+  {
+    name: 'probe-targets.js no longer requiring the registry',
+    edit: {
+      'test/lib/probe-targets.js': (text) => text.replace("require('../../cli/lib/evaluate/registry')", "require('./registry-copy')"),
+    },
+    expect: 'does not require ../../cli/lib/evaluate/registry',
+  },
+  {
+    name: 'eval-quality-inputs.js no longer requiring the records module',
+    edit: {
+      'test/lib/eval-quality-inputs.js': (text) => text.replace("require('../../cli/lib/evaluate/records')", "require('./records-copy')"),
+    },
+    expect: 'does not require ../../cli/lib/evaluate/records',
+  },
+  {
+    name: 'eval-record.js no longer requiring the digest module',
+    edit: { 'test/lib/eval-record.js': (text) => text.replace("require('../../cli/lib/evaluate/digest')", "require('./digest-copy')") },
+    expect: 'does not require ../../cli/lib/evaluate/digest',
+  },
+  {
+    name: 'sealedRunRecord moved back into eval-quality-inputs.js',
+    edit: {
+      'test/lib/eval-quality-inputs.js': (text) =>
+        `${text.replace('  sealedRunRecord,\n} = require(', '} = require(')}\nfunction sealedRunRecord() {\n  return {};\n}\n`,
+    },
+    expect: 'test/lib/eval-quality-inputs.js defines sealedRunRecord',
+  },
+  {
+    name: 'repositoryState moved back into eval-record.js as an arrow',
+    edit: {
+      'test/lib/eval-record.js': (text) =>
+        `${text.replace('  repositoryState,\n} = require(', '} = require(')}\nconst repositoryState = () => ({ commit: null, dirty: false });\n`,
+    },
+    expect: 'test/lib/eval-record.js defines repositoryState',
+  },
+  {
+    name: 'commandTargetPolicy moved back into probe-targets.js as an exported method',
+    edit: { 'test/lib/probe-targets.js': (text) => `${text}\nmodule.exports.commandTargetPolicy = function commandTargetPolicy() {};\n` },
+    expect: 'test/lib/probe-targets.js defines commandTargetPolicy',
+  },
+  {
+    name: 'repositoryState removed from the digest module',
+    edit: { 'cli/lib/evaluate/digest.js': (text) => text.replace('function repositoryState(', 'function repositoryStateElsewhere(') },
+    expect: 'cli/lib/evaluate/digest.js declares function repositoryState 0 time(s)',
+  },
+  {
+    name: 'a second commandTargetPolicy in another runtime module',
+    edit: { 'cli/lib/evaluate/records.js': (text) => `${text}\nfunction commandTargetPolicy() {}\n` },
+    expect: 'cli/lib/evaluate/records.js defines commandTargetPolicy',
+  },
+  {
+    name: 'digest moved back into eval-record.js beside the runtime import',
+    edit: {
+      'test/lib/eval-record.js': (text) => `${text.replace('  digest,\n', '')}\nfunction digest(parts) {\n  return String(parts);\n}\n`,
+    },
+    expect: 'test/lib/eval-record.js defines digest',
+  },
+  {
+    name: 'repositoryState assigned back into eval-record.js after its declaration',
+    edit: {
+      'test/lib/eval-record.js': (text) =>
+        `${text.replace('  repositoryState,\n} = require(', '} = require(')}\nlet repositoryState;\nrepositoryState = () => ({ commit: null, dirty: false });\n`,
+    },
+    expect: 'test/lib/eval-record.js defines repositoryState',
+  },
+  {
+    name: 'the policy builder handed out under its name from a local function in probe-targets.js',
+    edit: {
+      'test/lib/probe-targets.js': (text) =>
+        `${text}\nfunction buildPolicy() {\n  return { authorizations: [] };\n}\nmodule.exports.commandTargetPolicy = buildPolicy;\n`,
+    },
+    expect: 'test/lib/probe-targets.js defines commandTargetPolicy',
+  },
+  {
+    name: 'a copy of the registry module under test/lib',
+    edit: { 'test/lib/registry-copy.js': () => fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'registry.js'), 'utf8') },
+    expect: 'test/lib/registry-copy.js defines createRegistry',
+  },
+  {
+    name: 'boundedProbe copied into another test/lib file',
+    edit: {
+      'test/lib/probe-helper.js': () =>
+        "'use strict';\nfunction boundedProbe() {\n  return { ok: false };\n}\nmodule.exports = { boundedProbe };\n",
+    },
+    expect: 'test/lib/probe-helper.js defines boundedProbe',
+  },
+  {
+    name: 'a test/lib helper reusing a private helper name of a runtime module (must stay clean)',
+    edit: {
+      'test/lib/fixture-helpers.js': () =>
+        "'use strict';\nfunction deepFreeze(value) {\n  return value;\n}\nmodule.exports = { deepFreeze };\n",
+    },
+    expect: null,
+  },
+  {
+    name: 'engine.js no longer declaring schemaVersionProblems',
+    edit: { [ENGINE_FILE]: (text) => text.replace('function schemaVersionProblems(', 'function schemaVersionFindings(') },
+    expect: `${ENGINE_FILE} does not declare function schemaVersionProblems exactly once`,
+  },
+  {
+    name: 'the config still declaring a layer over the old schema-version file',
+    edit: {
+      [CONFIG_FILE]: (text) =>
+        text.replace(
+          '"layers": [\n',
+          `"layers": [\n      { "name": "old", "match": "exact", "path": "${SCHEMA_VERSIONS_FILE}", "label": "old", "imports": [] },\n`,
+        ),
+    },
+    expect: `still declares a layer over ${SCHEMA_VERSIONS_FILE}`,
+  },
+  {
+    name: 'the schema-version reader restored under test/lib',
+    edit: { [SCHEMA_VERSIONS_FILE]: () => "'use strict';\nmodule.exports = {};\n" },
+    expect: `${SCHEMA_VERSIONS_FILE} exists`,
+  },
+  {
+    name: 'the purity block pointed away from engine.js',
+    edit: { [CONFIG_FILE]: (text) => text.replace('"layers": ["evaluate-engine"]', '"layers": []') },
+    expect: 'purity block names no exact layer',
+  },
+];
+
+function proveMoveCheck() {
+  for (const plant of MOVE_PLANTS) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-moves-'));
+    try {
+      for (const relative of MOVE_FILES) {
+        fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
+        fs.copyFileSync(path.join(PROJECT_ROOT, relative), path.join(root, relative));
+      }
+      for (const [relative, edit] of Object.entries(plant.edit)) {
+        const file = path.join(root, relative);
+        const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+        const after = edit(before);
+        check(after !== before, `the ${plant.name} plant changed nothing; its edit no longer matches the file`);
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, after);
+      }
+      const problems = moveViolations(root);
+      check(
+        !problems.some((problem) => problem.includes('does not parse')),
+        `the ${plant.name} plant left a file that does not parse: ${JSON.stringify(problems)}`,
+      );
+      check(
+        plant.expect === null ? problems.length === 0 : problems.some((problem) => problem.includes(plant.expect)),
+        `the move check missed ${plant.name}; it reported ${JSON.stringify(problems)}`,
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+}
+
+function checkRepositoryMoves() {
+  for (const problem of moveViolations(PROJECT_ROOT)) check(false, problem);
+}
+
 function main() {
   proveScanner();
   scanRepository();
+  proveMoveCheck();
+  checkRepositoryMoves();
   if (failures.length > 0) {
     console.error(`${colors.red}${failures.length} of ${checks} tea-evaluate boundary check(s) failed:${colors.reset}`);
     for (const failure of failures) console.error(`  - ${failure}`);
@@ -1086,4 +1599,4 @@ function main() {
 
 if (require.main === module) process.exitCode = main();
 
-module.exports = { scanCli };
+module.exports = { moveViolations, scanCli };

@@ -23,9 +23,10 @@
  * - `dependency-direction`'s `purity` option fails at exit 1 on a fixture
  *   where the one file it is declared against carries all three seeded
  *   violations (`await`, an async function, and `new Date`), naming the file
- *   and each violated rule; this is what turns
- *   `test/lib/eval-quality-schema-versions.js` staying synchronous from prose
- *   in `docs/explanation/eval-quality-command-adapter.md` into a check.
+ *   and each violated rule; this is what turns the one synchronous reading of
+ *   the schema-version constants (since Story 1.5, `cli/lib/evaluate/engine.js`)
+ *   staying synchronous from prose in
+ *   `docs/explanation/eval-quality-command-adapter.md` into a check.
  * - `dependency-direction` stays quiet on a fixture whose only construct is a
  *   `require(name) {` method shorthand inside an object literal: this is the
  *   exact shape eval-quality's own scanner used to misread as a `require()`
@@ -203,10 +204,12 @@ function checkDirectionSeed(binary) {
  * layer rules already are: a fixture whose one purity-scoped file carries all
  * three seeded violations at once (`async`, `new Date`, `await`), held
  * against a minimal config declaring exactly that layer and its purity
- * block. `eval-quality-schema-versions.js`'s own `expectedSchemaVersion`
- * carries all three here, which is the drift the real layer and purity
- * block, added to `eval-quality.config.json` alongside
- * `test/lib/eval-quality-schema-versions.js`, exist to catch. Each rule
+ * block. The fixture's `eval-quality-schema-versions.js` keeps the name of
+ * the file the purity block first held (Story 4.9; the real layer moved to
+ * `cli/lib/evaluate/engine.js` in Story 1.5), and its `expectedSchemaVersion`
+ * carries all three violations, which is the drift the real layer and purity
+ * block in `eval-quality.config.json` exist to catch. The fixture is its own
+ * self-contained tree, so the name it seeds is data. Each rule
  * fires independently and is asserted by its own specific tag and message,
  * not by the sentence prefix all three rule strings share.
  */
