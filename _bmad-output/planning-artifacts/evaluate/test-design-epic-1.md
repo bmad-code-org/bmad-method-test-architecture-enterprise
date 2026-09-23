@@ -23,9 +23,9 @@ inputDocuments:
   - 'test/test-schema-versions.js'
   - 'test/test-eval-quality-corpus.js'
   - 'test/test-automate-eval-fixture.js'
-  - '~/opensource/bmad-eval-quality/src/core/probe/target-policy.ts'
-  - '~/opensource/bmad-eval-quality/src/testing/probe-conformance.ts'
-  - '~/opensource/bmad-eval-quality/src/application/index.ts'
+  - 'eval-quality@467e3a3: src/core/probe/target-policy.ts'
+  - 'eval-quality@467e3a3: src/testing/probe-conformance.ts'
+  - 'eval-quality@467e3a3: src/application/index.ts'
   - 'knowledge: risk-governance, probability-impact, test-levels-framework, test-priorities-matrix'
 ---
 
@@ -126,7 +126,7 @@ Unknown threshold: no source states a limit on `npm test` wall time or on live p
 
 ## Entry Criteria
 
-- [ ] Story 1.1's tarball exists at `/Users/murat/opensource/_wt/_packs/eval-quality-local.tgz` and the engine check exits 0 in the TeA worktree
+- [ ] Story 1.1's tarball exists at `$PACK_DIR/eval-quality-local.tgz` and the engine check exits 0 in the TeA worktree
 - [ ] `npm test` is green on the TeA worktree before Story 1.2's change (the baseline every later failure is compared with)
 - [ ] The local Claude Code CLI runs non-interactively on the build machine (needed by Stories 1.3 and 1.16)
 
@@ -236,7 +236,7 @@ Levels: integration over real eval-quality, static, unit. File: `test/test-evalu
 | --- | --- | --- | --- | --- |
 | `cli/skill-runner.js`: explicit `--skill-root`, prompt on stdin, exits 3 to 6 on infrastructure failure and 2 on usage (`cli/lib/runner-exit-codes.js`), no install probing | Unit cases over the runner with the stub agent: missing `--skill-root` exits its usage code; stub timeout maps to the timeout code; boundaries test forbids `os.homedir()` and `.claude/skills` paths in the runner | Unit, static | P1 | Re-adding an install lookup fails the scan |
 | Mutation `targetArtifact` under the skill root | `test:evaluate-check` case with a `targetArtifact` outside it exits 10 | Integration | P1 | Rule removed turns exit 0 |
-| Preflight drives legs, persists observations, verdict from `eval-quality preflight` | `test:evaluate-preflight` runs `tea-evaluate preflight` on the stub and asserts `runs/<invocationId>/observations/` non-empty; with `TEA_EVALUATE_ENGINE_CLI` at a shim that logs argv and exits 5, `tea-evaluate preflight` exits 5 and the log shows `preflight --observations ... --run-id` | Integration over real eval-quality | P0 | A runtime that writes the `runPreflight` library verdict exits 0 under the shim with an empty log |
+| Preflight drives legs, persists observations, verdict from `eval-quality preflight` | `test:evaluate-preflight` runs `tea-evaluate preflight` on the stub and asserts `runs/<invocationId>/observations/` non-empty; with `TEA_EVALUATE_ENGINE_CLI` at a shim that logs argv, exits 0 for `compile` and `seal`, and exits 5 for `preflight --observations ... --run-id`, `tea-evaluate preflight` exits 5 and the log shows that preflight argv | Integration over real eval-quality | P0 | A runtime that writes the `runPreflight` library verdict exits 0 under the shim with an empty log |
 | Exit passed through | Same file: a fixture whose clean-control leg exits non-zero yields exit 3 from both `tea-evaluate` and the direct CLI | Integration | P0 | A mapped exit differs |
 | No authorization denial | Assert verdict `passed` and no `interface-not-authorized` or `executable-not-authorized` in observations | Integration | P0 | Removing the stub's registry entry produces `executable-not-authorized` and the test fails |
 

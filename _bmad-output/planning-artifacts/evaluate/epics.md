@@ -14,10 +14,10 @@ inputDocuments:
   - 'AGENTS.md'
   - 'package.json'
   - 'test/evals/suite-manifest.json'
-  - '~/opensource/bmad-eval-quality/package.json'
-  - '~/opensource/bmad-eval-quality/src/core/probe/target-policy.ts'
-  - '~/opensource/bmad-eval-quality/src/adapters/command-target-policy.ts'
-  - '~/opensource/bmad-eval-quality/CHANGELOG.md'
+  - 'eval-quality@467e3a3: package.json'
+  - 'eval-quality@467e3a3: src/core/probe/target-policy.ts'
+  - 'eval-quality@467e3a3: src/adapters/command-target-policy.ts'
+  - 'eval-quality@467e3a3: CHANGELOG.md'
 ---
 
 # TEA Evaluate: Epic Breakdown
@@ -182,7 +182,7 @@ An adopter gets a running, scored evaluation of their own target without hand-bu
 
 ### Story 1.1: Export eval-quality's HTTP target-policy evaluation and pack the engine locally
 
-**Repository:** `/Users/murat/opensource/bmad-eval-quality`. Create a worktree at `/Users/murat/opensource/_wt/eq-evaluate-export` on a new branch `feat/export-target-policy` from `origin/main` (467e3a3 or later). Touch no other eval-quality worktree.
+**Repository:** `eval-quality` at `467e3a3` or later. Set `EVAL_QUALITY_ROOT`, `EVAL_QUALITY_WORKTREE`, and `PACK_DIR` for the assigned checkouts. Create `EVAL_QUALITY_WORKTREE` on branch `feat/export-target-policy` from `origin/main`. Touch no other eval-quality worktree.
 
 As an adopter writing an HTTP `EnvironmentProbePort`,
 I want eval-quality to export the allow-or-deny decision it already defines for HTTP targets,
@@ -209,7 +209,7 @@ So that my port delegates every address decision to the engine and carries no co
 **Given** the branch is complete
 **When** `npm run validate` runs
 **Then** it exits 0
-**And** `mkdir -p /Users/murat/opensource/_wt/_packs` then `npm pack --pack-destination /Users/murat/opensource/_wt/_packs` runs, and the produced tarball is renamed to `eval-quality-local.tgz` in that folder
+**And** `mkdir -p "$PACK_DIR"` then `npm pack --pack-destination "$PACK_DIR"` runs, and the produced tarball is renamed to `eval-quality-local.tgz` in that folder
 **And** the changes are staged in the eval-quality worktree, uncommitted
 
 **Dependencies:** none.
@@ -224,7 +224,7 @@ So that every later failure is attributable to Evaluate.
 **Acceptance Criteria:**
 
 **Given** the tarball from Story 1.1 exists
-**When** `npm install --no-save /Users/murat/opensource/_wt/_packs/eval-quality-local.tgz` runs in the TeA worktree
+**When** `npm install --no-save "$PACK_DIR/eval-quality-local.tgz"` runs in the TeA worktree
 **Then** the engine check exits 0
 **And** `git diff -- package.json package-lock.json` is empty
 
@@ -344,7 +344,7 @@ So that a real observation reaches `eval-quality preflight` with no authorizatio
 **When** `tea-evaluate preflight --evaluation <path>` runs
 **Then** it runs `eval-quality compile` and `seal`, drives legs through `runPreflight` with a recording port over `createCommandLineAdapter` authorized from the registry, persists every observation under `runs/<invocationId>/`, and takes the verdict from `eval-quality preflight --observations --run-id` (AD-6)
 **And** it passes eval-quality's exit code through verbatim
-**And** with `TEA_EVALUATE_ENGINE_CLI` pointed at a shim that logs its argv and exits 5, `tea-evaluate preflight` exits 5 and the log shows `preflight --observations ... --run-id`, which proves the verdict comes from the CLI (the library verdict from `runPreflight` would be byte-identical, so a byte comparison alone cannot prove the source)
+**And** with `TEA_EVALUATE_ENGINE_CLI` pointed at a shim that logs its argv, exits 0 for `compile` and `seal`, and exits 5 for `preflight --observations ... --run-id`, `tea-evaluate preflight` exits 5 and the log shows that preflight argv, which proves the verdict comes from the CLI (the library verdict from `runPreflight` would be byte-identical, so a byte comparison alone cannot prove the source)
 **And** a deterministic test, `test/test-evaluate-preflight.js`, chained into `npm test` as `test:evaluate-preflight` with its own `quality.yaml` step, runs it against a stub agent command under `test/fixtures/evaluate/` and asserts a passed `PreflightVerdict` with no `interface-not-authorized` or `executable-not-authorized` denial
 **And** removing the stub's registry entry makes that test observe a denial and fail
 

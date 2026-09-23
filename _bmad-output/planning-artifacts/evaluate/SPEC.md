@@ -89,9 +89,12 @@ An adopter target, proven first against TeA's own next skill, gets a compiling, 
 
 ## Open Questions
 
-- Where does Evaluate live in the skill tree: one skill, or split across an authoring skill and a CI-wiring skill?
-- Adapter mechanics: does Evaluate generate a per-target runner command the way TeA's own `cli/*-runner.js` commands are generated (prompt on stdin, no vendor knowledge, one declared capability, registered in an execution-target registry), or a different shape for adopters outside TeA?
-- Does Evaluate's CI-enforcement-wiring capability (CAP-11) extend `bmad-testarch-ci`'s existing pipeline-generation and quality-gates steps, or own CI wiring for evaluation as a separate concern? `bmad-testarch-ci` today has no `eval-quality` integration at all.
-- Does Evaluate supersede TeA's own `tools/generate-contracts.js` and `tools/generate-probes.js` for TeA's own suites, wrap them, or coexist as a separate authoring path while TeA's suites keep their current generator?
 - Does Evaluate's three-exit-class discipline, if it adopts one matching TeA's existing 0 pass / 1 quality-failure / 2 environment-failure convention, get imposed on every adopter, or documented as a worked pattern without being required elsewhere?
-- How does CAP-11/CAP-12's CI wiring relate to the eight `eval-quality-gates` already configured for TeA's own repository in `eval-quality.config.json` today: a separate CI job, an extension of the same job, or something else?
+
+## Settled By Architecture
+
+- **Skill shape:** one skill, `bmad-testarch-evaluate`, not split across an authoring skill and a CI-wiring skill (AD-2).
+- **Adapter mechanics:** target kind picks the interface kind and the adapter Evaluate generates, per the AD-4 mapping table; contracts never carry target kind (AD-4).
+- **CI-enforcement-wiring ownership:** Evaluate composes with `bmad-testarch-ci` as one pipeline owner. Evaluate writes `ci/evaluation-ci-plan.json`; `bmad-testarch-ci` gains a step that detects evaluation plans and renders them with its existing platform templates (AD-11).
+- **Generator coexistence:** TeA's ten existing suites stay generator-owned, guarded by `--check`; Evaluate-authored evaluations are committed files guarded by `tea-evaluate check`. No suite has both (AD-14).
+- **CI tiers and `eval-quality-gates`:** `pr`, `merge`, `scheduled`, and `release` tiers each with a fixed check membership (AD-10). The eight `eval-quality-gates` stay in TeA's current `quality.yaml` jobs; Evaluate adds a section to `eval-quality.config.json` only for gates an adopter opts into (AD-11).

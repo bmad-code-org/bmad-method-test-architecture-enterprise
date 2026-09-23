@@ -1,6 +1,6 @@
 ---
 title: eval-quality facts for Evaluate planning
-source: /Users/murat/opensource/bmad-eval-quality at main 467e3a3 (npm latest is v3.4.0; main adds unreleased trial-set scoring, #143)
+source: eval-quality@467e3a3 (npm latest is v3.4.0; main adds unreleased trial-set scoring, #143)
 verified: 2026-09-22, five-slice source scan with path:line citations; load-bearing claims re-checked by the coordinator
 ---
 

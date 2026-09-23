@@ -9,7 +9,7 @@ One binary, `eval-quality`, chains four commands:
 1. **`compile`**: validates a contract against the `EvalContract` schema and the discipline rules, emits the compiled contract.
 2. **`seal`**: compiles, then reduces to a `SealedEvaluatorBrief` carrying the contract's digest.
 3. **`preflight`**: plans the probe legs a contract implies, reduces the observations it is handed, mints a `PreflightVerdict` for a named run. The adapter Evaluate scaffolds issues the requests; `preflight` issues none.
-4. **`score`**: chains ingest, score, and emit; validates each sealed run record, scores the trial set against the compiled contract, mints an `EvidenceArtifact` carrying the verdict.
+4. **`score`**: chains ingest, score, and emit; validates each sealed run record, scores the trial set against the compiled contract, mints an `EvidenceArtifact` carrying the verdict. Published v3.4.0 takes one sealed run record per call, so a multi-trial set needs one call per trial; repeatable `--record` (multiple sealed run records in one call) and `EvidenceArtifact` schema version 4 are next-release behavior, not yet published (`eval-quality-facts.md`, #143).
 
 A separate binary, `eval-quality-gates`, enforces deterministic repository policy (dependency direction, licences, lockfile age, package boundaries, documentation-claim drift). It alone reads `eval-quality.config.json`, keyed one section per gate; none of the four `eval-quality` commands above take a config file. `eval-quality-gates` has its own exit contract (`0` pass, `1` policy finding, `64` invocation error). Behavioral verdicts are enforced in CI through the `eval-quality` exit codes below; see the Constraints section of `SPEC.md`.
 
