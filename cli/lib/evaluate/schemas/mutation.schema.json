@@ -19,10 +19,10 @@
       "minLength": 1
     },
     "targetArtifact": {
-      "description": "The mutated file, relative to the target's root, in POSIX form, with no drive letter and no \".\" or \"..\" segment.",
+      "description": "The mutated file, relative to the target's root, in POSIX form, with no drive letter, no \".\" or \"..\" segment, no empty segment or trailing slash, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character.",
       "type": "string",
       "minLength": 1,
-      "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))[^\\\\\\u0000-\\u001f\\u007f]+$"
+      "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
     },
     "operator": {
       "type": "object",

@@ -16,6 +16,11 @@
  *   `eval-quality.config.json` carries a section for that gate.
  * - `package-boundary` fails at exit 1 on a fixture tree carrying one line
  *   matching a dev-only-path pattern, naming the file and the line.
+ * - `package-boundary`, run with this repository's own patterns over a seeded
+ *   `cli/` tree, fails on a relative climb and on a self-referencing package
+ *   path into `test/`, and stays quiet on a neighbouring name such as
+ *   `../testing` and on `@playwright/test`, so "no file under `cli/` loads
+ *   from `test/`" is held by `test:boundary` as well as by `test:direction`.
  * - `field-ownership` fails at exit 1 on a fixture where a file outside the
  *   declared `writers` list sets the owned field, naming the file and field.
  * - `dependency-direction` fails at exit 1 on a fixture where a `cli/` file
@@ -54,6 +59,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -177,6 +183,39 @@ function checkBoundarySeed(binary) {
   check(output.includes('2 violation(s)'), `package-boundary reported a different violation count than the two seeded leaks\n${output}`);
 }
 
+function checkBoundaryTestReach(binary, config) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-boundary-test-reach-'));
+  try {
+    fs.mkdirSync(path.join(root, 'cli'));
+    fs.writeFileSync(path.join(root, 'cli', 'climb.js'), "require('../../../test/lib/probe-targets');\n");
+    fs.writeFileSync(path.join(root, 'cli', 'self.js'), "require('bmad-method-test-architecture-enterprise/test/lib/probe-targets');\n");
+    fs.writeFileSync(
+      path.join(root, 'cli', 'clean.js'),
+      "require('../testing/helpers');\nrequire('@playwright/test');\nrequire('./lib/evaluate/registry');\n",
+    );
+    // The repository's own patterns over the seeded tree; the manifest scan is
+    // dropped because the seeded tree carries no package.json.
+    const boundary = { ...config['package-boundary'], paths: [{ path: 'cli' }] };
+    delete boundary.manifest;
+    const configPath = path.join(root, 'eval-quality.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ 'package-boundary': boundary }));
+    const { status, output } = runGate(binary, 'package-boundary', configPath, root);
+    check(
+      status === EXIT_GATE_FAILED,
+      `package-boundary exited ${status} on a cli/ file loading from test/; expected ${EXIT_GATE_FAILED}\n${output}`,
+    );
+    for (const file of ['cli/climb.js', 'cli/self.js']) {
+      check(
+        output.includes(file) && output.includes('[test-tree-reach]'),
+        `package-boundary did not report ${file} under test-tree-reach\n${output}`,
+      );
+    }
+    check(!output.includes('cli/clean.js'), `package-boundary flagged a neighbouring name as a reach into test/\n${output}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
 function checkLineageSeed(binary) {
   const fixture = path.join(FIXTURE_ROOT, 'lineage-violation', 'eval-quality.config.json');
   const { status, output } = runGate(binary, 'field-ownership', fixture, path.join(FIXTURE_ROOT, 'lineage-violation'));
@@ -276,6 +315,7 @@ function main() {
 
   checkWiring(config);
   checkBoundarySeed(binary);
+  checkBoundaryTestReach(binary, config);
   checkLineageSeed(binary);
   checkDirectionSeed(binary);
   checkPuritySeed(binary);

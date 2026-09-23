@@ -36,6 +36,33 @@ const NAME = 'tea-evaluate';
 
 class UsageError extends Error {}
 
+// C0 and C1 controls, DEL, the line and paragraph separators and the
+// bidirectional formatting characters: any of them in a printed finding could
+// start a forged finding line or reorder what a reader sees.
+// eslint-disable-next-line no-control-regex
+const UNPRINTABLE = /[\u0000-\u001F\u007F-\u009F\u061C\u200E\u200F\u2028\u2029\u202A-\u202E\u2066-\u2069]/gu;
+const SHORT_ESCAPES = { '\n': String.raw`\n`, '\r': String.raw`\r`, '\t': String.raw`\t` };
+
+/** `text` with every unprintable character written as an escape (`\n`, `\u202E`). */
+function escapeUnprintable(text) {
+  return String(text).replaceAll(
+    UNPRINTABLE,
+    (character) => SHORT_ESCAPES[character] ?? String.raw`\u` + character.codePointAt(0).toString(16).toUpperCase().padStart(4, '0'),
+  );
+}
+
+/**
+ * One finding as exactly one printed line. A file name holding an unprintable
+ * character is quoted as well as escaped, so the reader can tell the name from
+ * the text after it; a message is escaped in place.
+ */
+function findingLine(file, rule, message) {
+  const name = String(file);
+  const escaped = escapeUnprintable(name);
+  const printedName = escaped === name ? name : JSON.stringify(name).replaceAll(UNPRINTABLE, (character) => escapeUnprintable(character));
+  return `${printedName}: [${rule}] ${escapeUnprintable(message)}\n`;
+}
+
 function folderFrom(options) {
   const resolved = resolveEvaluationFolder(options.evaluation);
   if (!resolved.ok) throw new UsageError(resolved.reason);
@@ -49,7 +76,7 @@ async function runCheck(options) {
     process.stdout.write(`${NAME} check: ${folder} has no authoring defects\n`);
     return EXIT_CODES.ok;
   }
-  for (const finding of findings) process.stdout.write(`${finding.file}: [${finding.rule}] ${finding.message}\n`);
+  for (const finding of findings) process.stdout.write(findingLine(finding.file, finding.rule, finding.message));
   process.stdout.write(`${NAME} check: ${findings.length} authoring defect(s) in ${folder}\n`);
   return EXIT_CODES.authoring;
 }
@@ -115,7 +142,7 @@ async function main(argv) {
       return EXIT_CODES.usage;
     }
     if (error instanceof CorpusIndexError) {
-      process.stdout.write(`${error.file}: [corpus-file] ${error.message}\n`);
+      process.stdout.write(findingLine(error.file, 'corpus-file', error.message));
       return EXIT_CODES.authoring;
     }
     if (error instanceof EngineUnavailableError) {

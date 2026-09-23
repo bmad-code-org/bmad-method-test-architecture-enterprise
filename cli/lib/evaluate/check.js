@@ -45,6 +45,7 @@ const AjvModule = require('ajv/dist/2020');
 
 const { loadEngine, engineSchemaPath } = require('./engine');
 const { MANIFEST_NAME } = require('./folder');
+const { addFormats } = require('./formats');
 const { repeatedPairs } = require('./registry');
 const { CorpusIndexError, INDEX_NAME, corpusIndexProblem } = require('./corpus-index');
 
@@ -60,7 +61,6 @@ const WRITTEN_FILE_POINTER = /^\/interactions\/[^/]+\/artifact(?:\/|$)/;
 const INTERACTION_POINTER = /^\/interactions\/([^/]+)(?:\/|$)/;
 /** The step budget a signature's regular-expression operators get while `check` resolves them. */
 const REGEX_STEP_BUDGET = 100_000;
-const RFC3339_DATE_TIME = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/;
 
 /** Fields the runtime writes into a qualified probe; a committed probe carrying one is refused. */
 const RUNTIME_OWNED_PROBE_FIELDS = [
@@ -129,7 +129,7 @@ async function buildContext() {
   // about and which is no schema defect. The one format they use is declared
   // here so it is checked, not warned about and ignored.
   const ajv = new Ajv({ strict: false, allErrors: true });
-  ajv.addFormat('date-time', { type: 'string', validate: (value) => RFC3339_DATE_TIME.test(value) && !Number.isNaN(Date.parse(value)) });
+  addFormats(ajv);
   const probeSchema = readJsonFile(engineSchemaPath('probe.schema.json'));
   const contractSchema = readJsonFile(engineSchemaPath('eval-contract.schema.json'));
   ajv.addSchema(probeSchema);
@@ -438,8 +438,11 @@ const NEVER = { op: 'equality', operands: [{ literal: 0 }, { literal: 1 }] };
  * The expression with each clause that reads only call inputs replaced by a
  * constant, once per assignment of true and false to those clauses. A run that
  * could not start was still invoked with whatever inputs the defect needs, so a
- * call-input clause can go either way. Returns `undefined` when a clause mixes
- * call inputs with other evidence, or when there are too many to enumerate.
+ * call-input clause can go either way. Returns `{ unresolved }` instead, naming
+ * the reason, when a clause mixes call inputs with other evidence or when more
+ * than `MAX_CALL_INPUT_CLAUSES` clauses read them.
+ *
+ * @returns {{variants: object[]}|{unresolved: string}}
  */
 function callInputVariants(expression) {
   const clauses = [];
@@ -457,7 +460,12 @@ function callInputVariants(expression) {
     else mixed = true;
   };
   collect(expression);
-  if (mixed || clauses.length > MAX_CALL_INPUT_CLAUSES) return;
+  if (mixed) return { unresolved: 'a clause reads call inputs together with other evidence, so it cannot be tried each way' };
+  if (clauses.length > MAX_CALL_INPUT_CLAUSES) {
+    return {
+      unresolved: `too many clauses read call inputs (${clauses.length}; the limit is ${MAX_CALL_INPUT_CLAUSES}) to try each way`,
+    };
+  }
   const variants = [];
   for (let mask = 0; mask < 2 ** clauses.length; mask += 1) {
     const substitute = (node) => {
@@ -470,7 +478,7 @@ function callInputVariants(expression) {
     };
     variants.push(substitute(expression));
   }
-  return variants;
+  return { variants };
 }
 
 /**
@@ -499,13 +507,9 @@ function satisfyingInfrastructureCodes(context, expression, codes, callInputs) {
   const referenceSets = Object.fromEntries(
     Object.entries(contract?.referenceSets ?? {}).map(([id, set]) => [id, Array.isArray(set?.members) ? set.members : []]),
   );
-  const variants = callInputs === undefined ? callInputVariants(expression) : [expression];
-  if (variants === undefined) {
-    return {
-      satisfying: [],
-      unresolved: 'a clause reads call inputs together with other evidence, or too many clauses read call inputs to try each way',
-    };
-  }
+  const enumerated = callInputs === undefined ? callInputVariants(expression) : { variants: [expression] };
+  if (enumerated.variants === undefined) return { satisfying: [], unresolved: enumerated.unresolved };
+  const { variants } = enumerated;
   const satisfying = [];
   let unresolved;
   for (const code of codes) {

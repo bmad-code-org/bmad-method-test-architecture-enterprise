@@ -62,7 +62,13 @@
  *   top level or in the exports of any other `test/lib/` file, so a partial
  *   move back or a copy of a runtime module fails; `digestFiles` in
  *   `eval-record.js`, which hands the runtime TEA's file-system port, is the one
- *   named wrapper;
+ *   named wrapper; a function an exported factory builds and returns
+ *   (`createRegistry`'s `targetProblems`, `createArtifactValidator`'s
+ *   `validateArtifact`) counts as exported;
+ * - every runtime function the three named files hand out is the runtime's own
+ *   function object, checked by loading them in a child process, so a bound,
+ *   aliased or member function fails; `probe-targets.js` exports its registry,
+ *   which must be one `createRegistry` built, and frozen;
  * - `test/lib/eval-quality-schema-versions.js` is gone, `engine.js` declares
  *   `expectedSchemaVersion` and `schemaVersionProblems`, and the `purity` block
  *   of `eval-quality.config.json` names the exact layer over `engine.js`.
@@ -80,6 +86,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 
 const acorn = require('acorn');
 
@@ -1147,6 +1154,9 @@ const MOVES = [
     runtimeModule: 'cli/lib/evaluate/registry.js',
     specifier: '../../cli/lib/evaluate/registry',
     definitions: ['commandTargetPolicy'],
+    // The file hands out the functions of one registry it builds, exported as
+    // `registry`, so its re-exports are compared with that registry's own.
+    exportsRegistry: true,
   },
   {
     testFile: 'test/lib/eval-quality-inputs.js',
@@ -1274,14 +1284,70 @@ function topLevelFunctions(ast) {
 }
 
 /**
- * The names a module exports as functions it declares at its top level: the
- * keys of the object assigned to `module.exports` whose value is one of those
- * functions. Nested helpers stay private names any file may reuse.
+ * The functions a factory declares in its own body and hands out from a
+ * top-level `return`: the function itself (`return validateArtifact`), or each
+ * one named in a returned object literal, frozen or not
+ * (`return Object.freeze({ targetFor, targetProblems })`). A function a factory
+ * builds and returns is as much the module's export as a top-level one, so it
+ * is guarded the same way.
+ */
+function factoryProducts(factory) {
+  const body = factory.body?.type === 'BlockStatement' ? factory.body.body : [];
+  const inner = new Set();
+  const objects = new Map();
+  for (const statement of body) {
+    if (statement.type === 'FunctionDeclaration' && statement.id) inner.add(statement.id.name);
+    if (statement.type !== 'VariableDeclaration') continue;
+    for (const declarator of statement.declarations) {
+      if (declarator.id.type !== 'Identifier') continue;
+      if (isFunctionNode(declarator.init)) inner.add(declarator.id.name);
+      else objects.set(declarator.id.name, declarator.init);
+    }
+  }
+  const unwrap = (node) => {
+    let value = node;
+    if (value?.type === 'Identifier' && objects.has(value.name)) value = objects.get(value.name);
+    if (
+      value?.type === 'CallExpression' &&
+      value.callee.type === 'MemberExpression' &&
+      isIdentifier(value.callee.object, 'Object') &&
+      memberKey(value.callee) === 'freeze'
+    ) {
+      value = value.arguments[0];
+    }
+    return value;
+  };
+  const products = new Set();
+  for (const statement of body) {
+    if (statement.type !== 'ReturnStatement' || statement.argument === null) continue;
+    if (statement.argument.type === 'Identifier' && inner.has(statement.argument.name)) {
+      products.add(statement.argument.name);
+      continue;
+    }
+    const returned = unwrap(statement.argument);
+    if (returned?.type !== 'ObjectExpression') continue;
+    for (const property of returned.properties) {
+      if (property.type !== 'Property') continue;
+      if (property.method || isFunctionNode(property.value) || (property.value.type === 'Identifier' && inner.has(property.value.name))) {
+        products.add(propertyKey(property));
+      }
+    }
+  }
+  return products;
+}
+
+/**
+ * The names a module exports as functions: each key of the object assigned to
+ * `module.exports` whose value is a function the module declares at its top
+ * level, and every function such an exported factory declares and returns
+ * (`createRegistry`'s `targetProblems`, `createArtifactValidator`'s
+ * `validateArtifact`). Nested helpers a factory keeps to itself stay private
+ * names any file may reuse.
  */
 function exportedFunctions(ast) {
-  const topLevel = new Set();
+  const topLevel = new Map();
   for (const statement of ast.body) {
-    if (statement.type === 'FunctionDeclaration' && statement.id) topLevel.add(statement.id.name);
+    if (statement.type === 'FunctionDeclaration' && statement.id) topLevel.set(statement.id.name, statement);
   }
   const exported = new Set();
   walk(ast, (node) => {
@@ -1289,6 +1355,7 @@ function exportedFunctions(ast) {
     for (const property of node.right.properties) {
       if (property.type === 'Property' && property.value.type === 'Identifier' && topLevel.has(property.value.name)) {
         exported.add(propertyKey(property));
+        for (const product of factoryProducts(topLevel.get(property.value.name))) exported.add(product);
       }
     }
   });
@@ -1314,6 +1381,71 @@ function requiredSpecifiers(ast) {
     }
   });
   return specifiers;
+}
+
+/**
+ * The identity half of the move check, run in a child Node process over
+ * `root`: every function a named `test/lib/` file exports under a name its
+ * runtime module also exports must be the runtime's own function object, and
+ * each named definition must be exported at all. For `probe-targets.js` the
+ * runtime's functions include those of the registry the file exports, which
+ * must be one `createRegistry` built (`isRegistry`) and frozen.
+ *
+ * The syntax scan recognises a definition by its form; a move back written as
+ * `gitState.bind(null)`, `require('./git-state').gitState`, a member of a local
+ * object, or `const repositoryState = gitState` defines nothing it can see, and
+ * each of those is a different function object, which this half reports.
+ */
+const IDENTITY_SCRIPT = `
+'use strict';
+const path = require('node:path');
+const [moves, exemptions] = JSON.parse(process.argv[1]);
+const problems = [];
+for (const move of moves) {
+  let testModule;
+  let runtimeModule;
+  try {
+    testModule = require(path.resolve(move.testFile));
+    runtimeModule = require(path.resolve(move.runtimeModule));
+  } catch (error) {
+    problems.push(move.testFile + ' could not be loaded beside ' + move.runtimeModule + ' to compare what it exports: ' + error.message.split('\\n')[0]);
+    continue;
+  }
+  const own = new Map();
+  for (const [name, value] of Object.entries(runtimeModule)) {
+    if (typeof value === 'function') own.set(name, [value, move.runtimeModule]);
+  }
+  if (move.exportsRegistry) {
+    const { registry } = testModule;
+    if (!runtimeModule.isRegistry(registry)) {
+      problems.push(move.testFile + ' exports a registry that ' + move.runtimeModule + "'s createRegistry did not build");
+    } else {
+      if (!Object.isFrozen(registry)) problems.push(move.testFile + ' exports a registry that is not frozen');
+      for (const [name, value] of Object.entries(registry)) {
+        if (typeof value === 'function') own.set(name, [value, move.runtimeModule + "'s createRegistry"]);
+      }
+    }
+  }
+  for (const name of move.definitions) {
+    if (!Object.hasOwn(testModule, name)) problems.push(move.testFile + ' does not export ' + name);
+  }
+  for (const [name, value] of Object.entries(testModule)) {
+    if (!own.has(name) || (exemptions[move.testFile] ?? []).includes(name)) continue;
+    const [expected, source] = own.get(name);
+    if (value !== expected) problems.push(move.testFile + ' exports ' + name + ", which is not " + source + "'s own " + name);
+  }
+}
+process.stdout.write(JSON.stringify(problems));
+`;
+
+function identityViolations(root) {
+  const exemptions = Object.fromEntries(Object.entries(WRAPPER_EXEMPTIONS).map(([file, names]) => [file, [...names]]));
+  const result = spawnSync(process.execPath, ['-e', IDENTITY_SCRIPT, JSON.stringify([MOVES, exemptions])], {
+    cwd: root,
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) return [`the export identity check could not run under ${root} (exit ${result.status}): ${result.stderr}`];
+  return JSON.parse(result.stdout);
 }
 
 /**
@@ -1416,13 +1548,16 @@ function moveViolations(root) {
   for (const layer of config?.layers ?? []) {
     if (layer.path === SCHEMA_VERSIONS_FILE) problems.push(`${CONFIG_FILE} still declares a layer over ${SCHEMA_VERSIONS_FILE}`);
   }
+  problems.push(...identityViolations(root));
   return problems;
 }
 
-/** Files a move plant reads, copied from the repository into a temp root. */
-const MOVE_FILES = [
-  ...new Set([...MOVES.flatMap((move) => [move.testFile, move.runtimeModule]), ...GUARDED_MODULES, ENGINE_FILE, CONFIG_FILE]),
-];
+/**
+ * What a move plant's temp root holds: the trees the three named files load
+ * (so the identity half can require them), the config, and a link to this
+ * repository's `node_modules`.
+ */
+const MOVE_TREES = ['cli', 'test/lib', 'test/schema', 'package.json', CONFIG_FILE];
 
 /** Each plant undoes one part of the move in a temp copy and must be reported. */
 const MOVE_PLANTS = [
@@ -1500,6 +1635,112 @@ const MOVE_PLANTS = [
     expect: 'test/lib/probe-targets.js defines commandTargetPolicy',
   },
   {
+    name: 'targetProblems moved back into probe-targets.js',
+    edit: {
+      'test/lib/probe-targets.js': (text) =>
+        `${text.replace('  targetProblems: registry.targetProblems,\n', '  targetProblems,\n')}\nfunction targetProblems() {\n  return [];\n}\n`,
+    },
+    expect: 'test/lib/probe-targets.js defines targetProblems, which lives only in cli/lib/evaluate/registry.js',
+  },
+  {
+    name: 'validateArtifact moved back into eval-quality-inputs.js',
+    edit: {
+      'test/lib/eval-quality-inputs.js': (text) =>
+        text.replace(
+          'const validateArtifact = createArtifactValidator({ readJson });',
+          'async function validateArtifact() {\n  return [];\n}\nvoid createArtifactValidator;',
+        ),
+    },
+    expect: 'test/lib/eval-quality-inputs.js defines validateArtifact, which lives only in cli/lib/evaluate/records.js',
+  },
+  {
+    name: 'repositoryState handed out as a bound local function in eval-record.js',
+    edit: {
+      'test/lib/eval-record.js': (text) =>
+        `${text
+          .replace('  repositoryState,\n} = require(', '} = require(')
+          .replace(
+            '  repositoryState,\n  probeVersion,',
+            '  repositoryState: gitState.bind(null),\n  probeVersion,',
+          )}\nfunction gitState() {\n  return { commit: null, dirty: false };\n}\n`,
+    },
+    expect: "test/lib/eval-record.js exports repositoryState, which is not cli/lib/evaluate/digest.js's own repositoryState",
+  },
+  {
+    name: 'repositoryState handed out as a member of another test/lib module',
+    edit: {
+      'test/lib/eval-record.js': (text) =>
+        text
+          .replace('  repositoryState,\n} = require(', '} = require(')
+          .replace('  repositoryState,\n  probeVersion,', "  repositoryState: require('./git-state').gitState,\n  probeVersion,"),
+      'test/lib/git-state.js': () => "'use strict';\nmodule.exports.gitState = () => ({ commit: null, dirty: false });\n",
+    },
+    expect: "test/lib/eval-record.js exports repositoryState, which is not cli/lib/evaluate/digest.js's own repositoryState",
+  },
+  {
+    name: 'repositoryState aliased to a local function in eval-record.js',
+    edit: {
+      'test/lib/eval-record.js': (text) =>
+        text
+          .replace('  repositoryState,\n} = require(', '} = require(')
+          .replace(
+            "const { readBytes, writeText } = require('./file-system-port');\n",
+            "const { readBytes, writeText } = require('./file-system-port');\n\nfunction gitState() {\n  return { commit: null, dirty: false };\n}\nconst repositoryState = gitState;\n",
+          ),
+    },
+    expect: "test/lib/eval-record.js exports repositoryState, which is not cli/lib/evaluate/digest.js's own repositoryState",
+  },
+  {
+    name: 'sealedRunRecord aliased to a local function in eval-quality-inputs.js',
+    edit: {
+      'test/lib/eval-quality-inputs.js': (text) =>
+        text
+          .replace('  sealedRunRecord,\n} = require(', '} = require(')
+          .replace(
+            "const { readJson } = require('./file-system-port');\n",
+            "const { readJson } = require('./file-system-port');\n\nfunction buildRecord() {\n  return {};\n}\nconst sealedRunRecord = buildRecord;\n",
+          ),
+    },
+    expect: "test/lib/eval-quality-inputs.js exports sealedRunRecord, which is not cli/lib/evaluate/records.js's own sealedRunRecord",
+  },
+  {
+    name: 'the policy builder handed out bound in probe-targets.js',
+    edit: {
+      'test/lib/probe-targets.js': (text) =>
+        `${text.replace(
+          '  commandTargetPolicy: registry.commandTargetPolicy,\n',
+          '  commandTargetPolicy: buildPolicy.bind(null),\n',
+        )}\nfunction buildPolicy() {\n  return { authorizations: [] };\n}\n`,
+    },
+    expect:
+      "test/lib/probe-targets.js exports commandTargetPolicy, which is not cli/lib/evaluate/registry.js's createRegistry's own commandTargetPolicy",
+  },
+  {
+    name: 'the policy builder handed out as a member of a local object in probe-targets.js',
+    edit: {
+      'test/lib/probe-targets.js': (text) =>
+        text
+          .replace('  commandTargetPolicy: registry.commandTargetPolicy,\n', '  commandTargetPolicy: policies.build,\n')
+          .replace(
+            '\nmodule.exports = {\n',
+            '\nconst policies = {\n  build() {\n    return { authorizations: [] };\n  },\n};\n\nmodule.exports = {\n',
+          ),
+    },
+    expect:
+      "test/lib/probe-targets.js exports commandTargetPolicy, which is not cli/lib/evaluate/registry.js's createRegistry's own commandTargetPolicy",
+  },
+  {
+    name: 'a look-alike registry exported from probe-targets.js',
+    edit: {
+      'test/lib/probe-targets.js': (text) =>
+        text.replace(
+          '  registry,\n  targetFor:',
+          '  registry: Object.freeze({ ...registry, commandTargetPolicy: () => ({ authorizations: [] }) }),\n  targetFor:',
+        ),
+    },
+    expect: "test/lib/probe-targets.js exports a registry that cli/lib/evaluate/registry.js's createRegistry did not build",
+  },
+  {
     name: 'a copy of the registry module under test/lib',
     edit: { 'test/lib/registry-copy.js': () => fs.readFileSync(path.join(PROJECT_ROOT, 'cli', 'lib', 'evaluate', 'registry.js'), 'utf8') },
     expect: 'test/lib/registry-copy.js defines createRegistry',
@@ -1552,10 +1793,11 @@ function proveMoveCheck() {
   for (const plant of MOVE_PLANTS) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-evaluate-moves-'));
     try {
-      for (const relative of MOVE_FILES) {
+      for (const relative of MOVE_TREES) {
         fs.mkdirSync(path.dirname(path.join(root, relative)), { recursive: true });
-        fs.copyFileSync(path.join(PROJECT_ROOT, relative), path.join(root, relative));
+        fs.cpSync(path.join(PROJECT_ROOT, relative), path.join(root, relative), { recursive: true });
       }
+      fs.symlinkSync(path.join(PROJECT_ROOT, 'node_modules'), path.join(root, 'node_modules'), 'dir');
       for (const [relative, edit] of Object.entries(plant.edit)) {
         const file = path.join(root, relative);
         const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';

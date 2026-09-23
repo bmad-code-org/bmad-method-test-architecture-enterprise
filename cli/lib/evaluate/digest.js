@@ -40,14 +40,28 @@ const SECRET_TOKEN_PATTERN = /(^|[^A-Za-z0-9])(?:sk[-_]|gh[pousr]_|github_pat_|x
 const SENSITIVE_VALUE_PATTERN =
   /((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|credential|authorization|auth)(?:["']?)\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[redacted\]|[^\s,;}&\]]+)/gi;
 const REDACTED = '[redacted]';
+// The userinfo of an http or https URL (`https://user:pass@host`), which is a
+// credential whether or not it has a password half: a token is often passed as
+// the user name alone. The authority ends at the first `/`, `?` or `#`, and
+// the match runs to its last `@`, so a password holding an unescaped `@` is
+// redacted whole.
+const URL_USERINFO_PATTERN = /\b(https?:\/\/)[^\s/?#]+@/gi;
+/** What a missing file contributes to `digestFiles`. */
+const MISSING_MARKER = '<missing>';
 
 /** Any credential-shaped substring of `value`, replaced by `[redacted]`. */
 function redactSecrets(value) {
   return String(value)
+    .replaceAll(URL_USERINFO_PATTERN, `$1${REDACTED}@`)
     .replaceAll(/(\b(?:authorization|proxy-authorization)\b\s*[:=]\s*)(?:bearer|basic)\s+[^\s,;"'}]+/gi, `$1${REDACTED}`)
     .replaceAll(SENSITIVE_VALUE_PATTERN, `$1${REDACTED}`)
     .replaceAll(/([?&](?:api[_-]?key|access[_-]?token|token|secret|password|credential|auth)=)[^&\s]+/gi, `$1${REDACTED}`)
     .replaceAll(SECRET_TOKEN_PATTERN, `$1${REDACTED}`);
+}
+
+/** A digest part as the bytes it is hashed as: a typed-array view's own bytes, anything else as UTF-8 text. */
+function bytesOf(part) {
+  return ArrayBuffer.isView(part) ? Buffer.from(part.buffer, part.byteOffset, part.byteLength) : Buffer.from(String(part), 'utf8');
 }
 
 /**
@@ -70,7 +84,7 @@ function digest(parts) {
   const list = Array.isArray(parts) ? parts : [parts];
   const hash = createHash('sha256');
   for (const part of list) {
-    const bytes = ArrayBuffer.isView(part) ? Buffer.from(part.buffer, part.byteOffset, part.byteLength) : Buffer.from(String(part), 'utf8');
+    const bytes = bytesOf(part);
     hash.update(`${bytes.length}\u0000`);
     hash.update(bytes);
   }
@@ -104,6 +118,12 @@ async function readBytesFromDisk(file) {
  * `.present` is what is tested, because a zero-byte file is present and
  * contributes its own empty bytes.
  *
+ * A present file whose bytes are exactly the marker would read the same as a
+ * missing one, so it contributes its path with a NUL appended instead. No real
+ * path holds a NUL, so that part can only mean "this file is present and holds
+ * the marker's bytes", and every other digest, a missing file's included, is
+ * the one this function has always produced.
+ *
  * `readBytes` is how a file is read, so a caller that routes its reads through
  * a file-system port of its own passes that port's reader here.
  *
@@ -117,7 +137,12 @@ async function digestFiles(projectRoot, relativePaths, { readBytes = readBytesFr
   const parts = [];
   for (const relative of [...relativePaths].sort()) {
     const read = await readBytes(path.join(projectRoot, relative));
-    parts.push(relative, read.present ? read.bytes : '<missing>');
+    if (!read.present) {
+      parts.push(relative, MISSING_MARKER);
+      continue;
+    }
+    const holdsMarker = bytesOf(read.bytes).equals(bytesOf(MISSING_MARKER));
+    parts.push(holdsMarker ? `${relative}\u0000` : relative, read.bytes);
   }
   return digest(parts);
 }

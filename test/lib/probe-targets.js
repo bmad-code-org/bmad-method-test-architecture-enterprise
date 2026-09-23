@@ -92,7 +92,7 @@ const EXECUTION_TARGETS = [
     // harness overrides this per run with the project root and test directory
     // its ground truth declares, the same way the nfr and trace targets below
     // are overridden with a bundle's or a fixture set's own project root.
-    artifacts: { scaffold: path.join('tests', 'api', 'reservations.spec.ts') },
+    artifacts: { scaffold: 'tests/api/reservations.spec.ts' },
     environmentKeys: vendorEnvironmentNames(),
     // One minute above RUN_TIMEOUT_MS in test/eval-atdd.js, for the reason the
     // comment above EXECUTION_TARGETS gives: the inner clock classifies, and
@@ -181,7 +181,7 @@ const EXECUTION_TARGETS = [
     // own path through `commandTargetPolicy`'s artifact override; this is what a
     // run gets when it supplies none. The workflow also writes helper scripts,
     // documentation and a progress file this harness never reads.
-    artifacts: { workflow: path.join('.github', 'workflows', 'test.yml') },
+    artifacts: { workflow: '.github/workflows/test.yml' },
     // The vendor variables and nothing else, which is the list cli/ci-runner.js
     // declares through CI_REQUEST_KEYS and the list ci.contract.json carries. A
     // scaffold reads the staged project off disk and needs no other key.
@@ -512,6 +512,10 @@ module.exports = {
   RETRYABLE_FAILURE_CLASSES,
   probeRequest,
   readEnvironment,
+  // The runtime registry itself, so a test can hold every re-export above to
+  // being that registry's own function (identity), whatever syntax a move
+  // back into this file would use.
+  registry,
   targetFor: registry.targetFor,
   targetProblems: registry.targetProblems,
 };

@@ -50,6 +50,9 @@ const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
 let validateEntry;
 
+/** Every registry `createRegistry` has built, so `isRegistry` can tell one from a look-alike object. */
+const BUILT_REGISTRIES = new WeakSet();
+
 /**
  * The `RegistryEntry` validator, compiled on first use from the runtime's own
  * `evaluation.json` schema, so loading this module reads nothing.
@@ -215,7 +218,7 @@ function isBareCommand(target) {
  *
  * @param {unknown} entries RegistryEntry objects.
  * @param {object} options
- * @param {string} options.root The directory each relative `target` resolves against.
+ * @param {string} options.root The directory each relative `target` resolves against; a relative one is resolved against the working directory once, here.
  * @returns {object}
  * @throws {Error} Naming every problem `registryProblems` finds.
  */
@@ -223,6 +226,10 @@ function createRegistry(entries, { root } = {}) {
   if (typeof root !== 'string' || root.length === 0) {
     throw new Error('createRegistry requires a root: every relative target resolves against it');
   }
+  // A relative root would resolve against whatever the process's working
+  // directory is when a target is spawned, so it is fixed to an absolute path
+  // once, here.
+  const registryRoot = path.resolve(root);
   const problems = registryProblems(entries);
   if (problems.length > 0) throw new Error(`the execution-target registry is not valid:\n  ${problems.join('\n  ')}`);
   const registered = deepFreeze(structuredClone(entries));
@@ -252,10 +259,12 @@ function createRegistry(entries, { root } = {}) {
    * What the adapter spawns for one entry: a relative target joined to the root,
    * or a bare command name as written. A joined target that lands outside the
    * root is refused here as well as by the schema's pattern, so containment does
-   * not rest on one regular expression.
+   * not rest on one regular expression. A relative `projectRoot` override is
+   * resolved to an absolute path, as the registry's own root is.
    */
-  function targetPath(entry, projectRoot = root) {
+  function targetPath(entry, projectRootOverride = registryRoot) {
     if (isBareCommand(entry.target)) return entry.target;
+    const projectRoot = path.resolve(projectRootOverride);
     const resolved = path.join(projectRoot, ...entry.target.split('/'));
     const inside = path.relative(projectRoot, resolved);
     if (inside === '' || inside === '..' || inside.startsWith(`..${path.sep}`) || path.isAbsolute(inside)) {
@@ -333,7 +342,7 @@ function createRegistry(entries, { root } = {}) {
    * @param {string} [options.projectRoot] The root relative targets resolve against; the registry's own by default.
    * @returns {{authorizations: object[]}}
    */
-  function commandTargetPolicy({ cwd, interfaceIds, artifacts = {}, budgets = {}, environmentKeys = {}, projectRoot = root }) {
+  function commandTargetPolicy({ cwd, interfaceIds, artifacts = {}, budgets = {}, environmentKeys = {}, projectRoot = registryRoot }) {
     if (typeof cwd !== 'string' || cwd.length === 0) {
       throw new Error(
         'commandTargetPolicy requires a cwd; an authorization with no working directory resolves every relative path somewhere else',
@@ -388,17 +397,18 @@ function createRegistry(entries, { root } = {}) {
   }
 
   /**
-   * Every requested entry whose target is a file that is missing or lacks its
-   * executable bit, as one line each. The adapter spawns the file itself, so
-   * the mode is load-bearing: without the bit the spawn fails EACCES before argv
-   * matters. A bare command name resolves through PATH at spawn time and is not
-   * checked here.
+   * Every requested entry whose target is missing, is not a regular file, or
+   * lacks its executable bit, as one line each. The adapter spawns the file
+   * itself, so the mode is load-bearing: without the bit the spawn fails EACCES
+   * before argv matters, and a directory carries the bit yet cannot be spawned.
+   * A bare command name resolves through PATH at spawn time and is not checked
+   * here.
    *
    * @param {string} [projectRoot]
    * @param {string[]} [interfaceIds]
    * @returns {string[]}
    */
-  function targetProblems(projectRoot = root, interfaceIds) {
+  function targetProblems(projectRoot = registryRoot, interfaceIds) {
     const problems = [];
     const selected = interfaceIds === undefined ? registered : registered.filter((entry) => interfaceIds.includes(entry.interfaceId));
     for (const id of interfaceIds ?? []) {
@@ -411,7 +421,12 @@ function createRegistry(entries, { root } = {}) {
         problems.push(`${entry.executable}: ${entry.target} does not exist`);
         continue;
       }
-      const mode = fs.statSync(absolute).mode;
+      const stat = fs.statSync(absolute);
+      if (!stat.isFile()) {
+        problems.push(`${entry.executable}: ${entry.target} is not a file`);
+        continue;
+      }
+      const { mode } = stat;
       if ((mode & 0o111) === 0) {
         problems.push(`${entry.executable}: ${entry.target} is not executable (mode ${(mode & 0o777).toString(8)})`);
       }
@@ -419,9 +434,9 @@ function createRegistry(entries, { root } = {}) {
     return problems;
   }
 
-  return Object.freeze({
+  const registry = Object.freeze({
     entries: registered,
-    root,
+    root: registryRoot,
     commandTargetPolicy,
     createProbePort,
     hostEnvironment,
@@ -430,6 +445,19 @@ function createRegistry(entries, { root } = {}) {
     targetPath,
     targetProblems,
   });
+  BUILT_REGISTRIES.add(registry);
+  return registry;
+}
+
+/**
+ * Whether `value` is a registry `createRegistry` built, as opposed to an object
+ * of the same shape assembled elsewhere.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isRegistry(value) {
+  return value !== null && typeof value === 'object' && BUILT_REGISTRIES.has(value);
 }
 
 /**
@@ -448,6 +476,7 @@ module.exports = {
   REGISTRY_ENTRY_DEFINITION,
   cliObservation,
   createRegistry,
+  isRegistry,
   observedText,
   probeRequest,
   readEnvironment,

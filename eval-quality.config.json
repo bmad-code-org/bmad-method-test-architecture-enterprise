@@ -421,6 +421,11 @@
     },
     "patterns": [
       {
+        "name": "test-tree-reach",
+        "match": "(?:(?:\\.\\./)+|\\bbmad-method-test-architecture-enterprise/)test(?=[/'\"`]|$)",
+        "reason": "a relative climb or a self-referencing package path into this repository's test/ tree, which the published tarball does not carry, so the load fails in an adopter's project; cli/ reaches test/ in no other way"
+      },
+      {
         "name": "tea-dev-test-file",
         "match": "(?<!/)\\btest/[\\w./-]+\\.(?:js|json)\\b",
         "reason": "a file under this repository's own dev tree, not part of the published tarball"

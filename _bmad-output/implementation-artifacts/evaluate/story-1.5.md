@@ -4,7 +4,7 @@ type: 'refactor'
 created: '2026-09-23'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 1
 baseline_commit: 'cdf6e112546fbf6e47a4a65bb39a1de65814cbb7'
 context:
   - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md#story-15-move-the-registry-records-and-provenance-into-the-runtime (the Story 1.5 section and Build Rules For Every Story)'
@@ -72,7 +72,7 @@ context:
 - **TeA's codes.** Runners declare 1 and 3 to 6: Node exits 1 on an uncaught exception and no runner emits 1 on purpose. `tea-test-review` declares 2 and 3, since 1 is its failing verdict. AD-7's "3 to 6 for the skill runner" concerns the future generic runner and is unchanged.
 - **Fixture.** `test/fixtures/evaluate/valid/`'s registry entry points at `test/fixtures/evaluate/red-phase-gate.js`, a gate that exits 1 on purpose on an active test and maps every other failure to 3, so its `exit-code == 1` signature is honest; P-002's witness relation and M-001's expected failure say the same.
 - **The CommandTargetPolicy check.** eval-quality publishes no JSON Schema or parser for a command target policy, so `test/test-evaluate-check.js` imports the Zod schema from `dist/core/schemas/probe-policy.js` in a child process (the `dependency-direction` gate admits no computed import and no relative path out of the scan roots) and also proves that schema refuses an unknown key.
-- **Boundary scanner.** `dynamic-specifier` now covers all of `cli/` (every file already met it). `test-import` refuses a relative or self-referencing load into `test/`. The move check guards the three named markers by declaration and every function the moved modules declare against redefinition under `test/lib/` (any form in the three named files; top level and exports elsewhere), with `digestFiles` the one named wrapper. Only exported names are guarded, so a private helper name stays free.
+- **Boundary scanner.** `dynamic-specifier` now covers all of `cli/` (every file already met it). `test-import` refuses a relative or self-referencing load into `test/`. The move check guards the three named markers by declaration and every function the moved modules export against redefinition under `test/lib/` (any form in the three named files; top level and exports elsewhere), with `digestFiles` the one named wrapper. An exported factory's products count as exports: `createRegistry`'s returned functions and `createArtifactValidator`'s `validateArtifact`. Only exported names are guarded, so a private helper name stays free. A syntax scan cannot see a move written as `gitState.bind(null)`, `require('./git-state').gitState`, a member of a local object or an alias, so an identity half loads the three files and their runtime modules in a child process and requires every runtime function they hand out to be the runtime's own function object; `probe-targets.js` exports its registry, which `isRegistry` must recognize and which must be frozen.
 - **Gaps closed on the way.** The relative-path pattern Story 1.4 wrote for `targetArtifact` and `provision` missed a `..` after a newline; fixed for every path field. `docs/explanation/eval-quality-command-adapter.md`, `eval-quality-adoption-guide.md`, the layering-lineage test's header, `test/lib/file-system-port.js` and `test/test-schema-versions.js` named the old locations. `evaluation.schema.json`'s `launch` description promised a Story 1.5 shape. An em dash in `probe-targets.js` prose. `test:schema-versions` now scans `cli/lib/evaluate/` for a literal stamp.
 
 ### Revert checks exercised
@@ -90,6 +90,9 @@ context:
 
 - 2026-09-23: epics.md Story 1.5, second criterion, amended. The `test/lib/` files keep TeA data and TeA's own eval-result vocabulary (fault-to-failure-class mapping, suite-result, run-summary and diagnostic records), because those belong to `test/schema/eval-result.js`, which the published package does not carry.
 - 2026-09-23: test-design-epic-1.md Story 1.5 last row said "the skill runner's codes 2 to 6"; AD-7 and R1-10 say 3 to 6 (2 is a usage error). Amended.
+- 2026-09-23 (review round 1): ARCHITECTURE-SPINE.md AD-5 "Module format", epics.md "Framework neutrality" and the Story 1.4 CHANGELOG line said the `cli` layer's allow list names `eval-quality`. This story moved `eval-quality` onto a separate exact `evaluate-engine` layer over `engine.js`; all three now say so.
+- 2026-09-23 (review round 1): test-design-epic-1.md Story 1.5 second row still read "`test/lib/` files keep only TeA data"; amended to match the rewritten epics.md criterion, and its test column names the identity check.
+- 2026-09-23 (review round 1): epics.md Story 1.5 said `test:boundary` enforces "no file under `cli/` imports from `test/`", which it did not: its only `test/` pattern needs a file extension. `eval-quality.config.json` gains a `test-tree-reach` pattern, proven in `test:layering-boundary-lineage`, and the criterion and the test-design row name `test:direction`, `test:evaluate-boundaries` and `test:boundary` with what each holds.
 
 ## Review Triage Log
 
@@ -123,6 +126,32 @@ Three layers ran on opus: `bmad-code-review` (four sub-layers), `bmad-review` ad
 | R2-4 | second round | low | `targetPath` refused a directory named `..tools` | fixed, with a case |
 | R2-5 | second round | low | the move check guarded nested private helper names | fixed: it guards exported names; a clean plant reuses `deepFreeze` |
 | R2-6 | second round | nit | path patterns admitted DEL | fixed |
+
+## Review round 1 (PR #234)
+
+Each finding was verified against the branch at `0a6e8a1` before acting.
+
+| # | Finding | Resolution |
+| --- | --- | --- |
+| A1 | C1 controls, U+2028/U+2029 and bidi controls passed the path patterns | fixed: every path field refuses C0, DEL, C1, both separators and the Bidi_Control set (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069); a `check` case per class and field |
+| A2 | a directory passed `targetProblems`; `a/` and `a//b` passed the pattern | fixed: `targetProblems` requires a regular file ("is not a file"); target, artifact and `targetArtifact` refuse a trailing slash and every path field refuses an empty segment (a `provision` directory keeps a trailing slash, which `check` already normalizes); cases for each |
+| A3 | `path.join` artifact paths in `probe-targets.js` | fixed: POSIX literals |
+| A4 | a file name with a newline forged a finding line | fixed: `cli/evaluate.js` escapes unprintable characters in the file name (quoted) and the message; the message carried the raw name too; a case for `check` and `digest` |
+| B1 | the move check missed functions an exported factory returns | fixed: factory products are guarded; plants move `targetProblems` and `validateArtifact` back |
+| B2 | spine, epics and CHANGELOG said the `cli` list names `eval-quality` | fixed (Spec Change Log) |
+| B3 | test-design row 2 unamended | fixed (Spec Change Log) |
+| C1 | bind, member and alias moves survived the syntax scan | fixed: identity half in the move check, `isRegistry` brand, `registry` exported from `probe-targets.js`; six plants (bind, member of another module, alias, twice for the policy builder, look-alike registry), each failing on the identity message |
+| C2 | `else mixed = true` untested | fixed: the unresolved reason is now specific ("together with other evidence") and a case asserts it |
+| C3 | the non-`cli` witness skip untested | fixed: a clean case with eval-quality's `thing-api` interface; removing the skip exits 10 |
+| C4 | the stdout silent-failure channel untested | fixed: a case over `existence(stdout)` beside `exit == 3` |
+| C5 | `MAX_CALL_INPUT_CLAUSES` untested | fixed: nine clauses exits 10 naming "too many clauses"; two and eight clauses stay clean |
+| C6 | `test:boundary` did not hold the no-`test/`-import criterion | fixed: a `test-tree-reach` pattern, a seeded-tree case, and the amended criterion |
+| D1 | `digestFiles` encoded a missing file and a file holding `<missing>` alike | fixed without moving any digest: only a present file whose bytes equal the marker changes encoding (its path gains a NUL, which no path holds), so stored `fixtureDigest` values, the missing-file encoding `test:file-system-port` asserts and every ordinary digest are unchanged |
+| D2 | URL userinfo survived `redactSecrets` | fixed: userinfo of an http or https URL is redacted, scheme and host kept; cases |
+| D3 | `date-time` was not checked by the record validator | fixed: `cli/lib/evaluate/formats.js` registers one calendar-checked RFC 3339 format on the record validator and on `check`, whose own `Date.parse` check accepted `2026-02-30` and hour 24; no dependency added, since this is the only format the engine schemas use; cases for the format and for the validator (no warning, malformed refused) |
+| D4 | a relative registry root or `projectRoot` override was kept relative | fixed: `path.resolve` once in `createRegistry` and on each override; cases that change the working directory afterwards |
+
+Revert checks: each fix above was undone once and the named case failed (C2 to C5, A2, A4, D1 to D4 in `test:evaluate-check`; B1 and C1 in `test:evaluate-boundaries`; C6 in `test:layering-boundary-lineage`).
 
 ## Needs a decision: eval-quality export for CommandTargetPolicy
 

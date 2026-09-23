@@ -27,6 +27,7 @@ const fs = require('node:fs');
 const AjvModule = require('ajv/dist/2020');
 
 const { SCHEMA_VERSIONS, engineSchemaPath, expectedSchemaVersion, schemaVersionProblems } = require('./engine');
+const { addFormats } = require('./formats');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -75,11 +76,13 @@ async function readJsonFromDisk(file) {
  * @returns {(kind: string, value: unknown) => Promise<string[]>}
  */
 function createArtifactValidator({ readJson = readJsonFromDisk } = {}) {
-  // `strict: false` because the published schemas use `propertyNames` and a
-  // `date-time` format Ajv does not carry by default, and neither is a schema
-  // defect. `allErrors` because a caller fixing a hand-built artifact wants
-  // every field named at once.
+  // `strict: false` because the published schemas use `propertyNames` and
+  // keywords without a sibling `type`, which is no schema defect. The one
+  // format they use, `date-time`, is registered so it is checked; unregistered,
+  // Ajv would warn and accept any string. `allErrors` because a caller fixing a
+  // hand-built artifact wants every field named at once.
   const ajv = new Ajv({ strict: false, allErrors: true });
+  addFormats(ajv);
   const validators = new Map();
 
   async function compileValidator(kind) {

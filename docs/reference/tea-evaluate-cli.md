@@ -35,7 +35,7 @@ The runtime owns the schemas of `evaluation.json`, the committed probe and the m
 npx tea-evaluate check --evaluation evals/my-evaluation
 ```
 
-`check` prints one line per finding, `<file>: [<rule>] <message>`, and lists every finding. It exits 0 when there are none and 10 when there is at least one. The rules:
+`check` prints one line per finding, `<file>: [<rule>] <message>`, and lists every finding. A control, line-separator or bidirectional formatting character in a finding is printed as an escape (`\n`, `\u202E`), and a file name holding one is quoted, so no file name can print a line of its own. It exits 0 when there are none and 10 when there is at least one. The rules:
 
 | Rule                       | Refuses                                                                                                                                                                                              |
 | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -73,9 +73,9 @@ Beside those thirteen, `check` reports a file that does not parse (`json`), one 
 ```
 
 - `interfaceId`, `executable`: the logical interface and executable a contract operation names; the pair is unique in the registry.
-- `target`: a POSIX path relative to the evaluated project's root, or a bare command name resolved through the adapter's own `PATH`; never absolute, with no `.` or `..` segment.
+- `target`: a POSIX path relative to the evaluated project's root, or a bare command name resolved through the adapter's own `PATH`; never absolute, with no `.`, `..` or empty segment, no trailing slash, and no control, line-separator or bidirectional formatting character. The runtime's target check refuses a relative target that is missing, is not a regular file, or lacks its executable bit.
 - `subcommandPaths`: the exact subcommand paths allowed; `[[]]` allows none.
-- `artifacts`: the default path of each contract artifact, relative to the run's working directory.
+- `artifacts`: the default path of each contract artifact, relative to the run's working directory, under the same path rules as `target`.
 - `environmentKeys`: the keys a request may carry into the process; `PATH` is refused.
 - `maxElapsedMs`, and optional `maxOutputBytes` (8 MiB by default): ceilings a run may lower.
 - `infrastructureExitCodes`: the exit codes by which the target reports that it could not run. TeA's runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3.
