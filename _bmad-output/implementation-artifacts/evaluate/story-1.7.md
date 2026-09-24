@@ -258,7 +258,10 @@ Final review round 1 (after the rebase onto ccde995 and the fixes):
 - `npm test` -- exit 0 (`test:evaluate-mutation` 381 checks, `test:evaluate-boundaries` 296)
 - `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
 - the Build Rules engine check -- exit 0
-- `npm run eval:preflight` -- run live after the staging and cache fixes; recorded below when it finishes.
+- `npm run eval:preflight` -- run live after the staging and cache fixes: 28 legs run, 162 answered from the cache, 4524 s in the model, exit 2 with eight preflight outcomes moved.
+  NFR (P-001 to P-004 passed), CI (P-001 to P-003 failing `seeded-fault-fired` and `seeded-faults-scoped`, P-004 passed), trace, test-review, routing and every other fragment-selection suite reduce to `test/probes/expected-strength.json`.
+  Six moves are test-design's, whose legs are staged for the first time: P-008 to P-010 now pass where the baseline recorded `seeded-fault-fired`, P-012 to P-014 fail `seeded-faults-scoped` where it recorded `seeded-fault-fired`, and the other ten reduce to the baseline; the baseline's test-design outcomes were measured by agents running in an empty directory, so re-recording them is the owner's call.
+  Two moves are `fragment-selection/bmad-testarch-ci` P-001 and P-002, `input-sensitivity` resolving `insufficient-evidence`: one live witness leg (a request #236's rebase made new) returned `{"fragments":[]}`, a model sample in a suite whose staging this story did not change.
 
 Build and review round:
 
