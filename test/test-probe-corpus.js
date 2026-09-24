@@ -42,7 +42,7 @@ const prettier = require('prettier');
 const { loadEvalQuality, scoringPolicy, validateArtifact } = require('./lib/eval-quality-inputs');
 const { publishedMember } = require('./lib/vocabularies');
 const { ladderExitCode, ladderVerdict, runSuite, storedProbePort, suites } = require('./lib/probe-scoring');
-const { baselineDifferences, stagedWorkspaceFor } = require('./eval-contract-strength');
+const { baselineDifferences, cacheDirectoryFor, stagedWorkspaceFor, stagingOf } = require('./eval-contract-strength');
 const { digestTree, stageWorkspace } = require('./eval-trace');
 const { compareStoredResults } = require('./lib/compare-dominance');
 
@@ -402,6 +402,18 @@ async function main() {
   // The NFR, CI and test-design legs are staged the same way, each fixture set
   // by its own suite's harness: until Story 1.7 they ran in an empty directory,
   // and every live agent reported its skill and project missing.
+  // The leg cache is keyed by how a suite's legs are staged, so a leg staged
+  // from its fixture set is never answered by one run in an empty directory.
+  const cacheOptions = { cache: path.join('cache-root'), agent: 'claude' };
+  const emptyStaging = cacheDirectoryFor(cacheOptions, 'fragment-selection/bmad-testarch-ci');
+  for (const suiteId of ['trace', 'nfr', 'ci', 'test-design', 'test-review']) {
+    const directory = cacheDirectoryFor(cacheOptions, suiteId);
+    if (path.basename(directory) !== stagingOf(suiteId) || stagingOf(suiteId) === path.basename(emptyStaging)) {
+      problems.push(
+        `${suiteId}: the leg cache path ${directory} does not carry a staging name of its own, so a leg could be answered by a run staged another way`,
+      );
+    }
+  }
   const traceGroundTruth = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'trace-eval', 'ground-truth.json'), 'utf8'));
   for (const [suiteId, fixtureDirectory, runner] of [
     ['trace', 'trace-eval', 'tea-trace-runner'],

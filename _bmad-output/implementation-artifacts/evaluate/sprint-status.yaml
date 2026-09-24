@@ -62,6 +62,8 @@ development_status:
   1-24-evaluate-authors-strong-suites-for-two-more-target-kinds: backlog
   1-25-close-seeded-weaknesses-through-the-gap-loop: backlog
   1-26-learn-an-unfamiliar-evaluation-framework-on-the-go: backlog
+  1-27-tell-a-documented-guard-from-an-invented-risk-in-the-test-d: backlog
+  1-28-recover-from-a-killed-run: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

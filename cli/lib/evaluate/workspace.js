@@ -451,13 +451,18 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     throw new WorkspaceRefusal(`the temp directory ${os.tmpdir()} cannot be used: ${error.message}; point TMPDIR at an existing directory`);
   }
   const repositoryTop = basis === null ? (repository?.top ?? null) : basis.repository;
-  // Inside the repository, a workspace would show in its own git status and the
-  // run would read its own files as a change to the adopter's tree; inside
-  // launch.root, a copy would copy itself.
-  const contains = repositoryTop ?? root;
-  if (isInside(contains, temp)) {
+  // Inside launch.root, a copy would copy itself. Inside the repository, a
+  // workspace would show in its own git status and the run would read its own
+  // files as a change to the adopter's tree, unless the repository ignores
+  // the temp directory, whose contents git status then never reports.
+  if (!worktree && isInside(root, temp)) {
     throw new WorkspaceRefusal(
-      `the temp directory ${temp} is inside ${repositoryTop === null ? 'launch.root' : 'the repository'} ${contains}, so the workspace would sit in the project it evaluates; point TMPDIR outside the evaluated project`,
+      `the temp directory ${temp} is inside launch.root ${root}, so the workspace would sit in the project it evaluates; point TMPDIR outside the evaluated project`,
+    );
+  }
+  if (repositoryTop !== null && isInside(repositoryTop, temp) && !runGit(['-C', repositoryTop, 'check-ignore', '-q', temp]).ok) {
+    throw new WorkspaceRefusal(
+      `the temp directory ${temp} is inside the repository ${repositoryTop} and not ignored by it, so the workspace would read as a change to the project it evaluates; point TMPDIR outside the evaluated project or at a directory the repository ignores`,
     );
   }
   let directory;
@@ -622,7 +627,15 @@ function worktreeMetadataOf(workspace) {
  */
 function removeWorkspace(workspace) {
   unlockDirectories(workspace.directory);
-  if (workspace.kind === 'git-worktree' && workspace.repository !== null && fs.existsSync(workspace.top)) {
+  // A target may have swapped the worktree for a link (to the adopter's own
+  // tree, say); git is never asked to remove a worktree at a path that is a link.
+  let topIsLink = false;
+  try {
+    topIsLink = fs.lstatSync(workspace.top).isSymbolicLink();
+  } catch {
+    // Gone already.
+  }
+  if (workspace.kind === 'git-worktree' && workspace.repository !== null && !topIsLink && fs.existsSync(workspace.top)) {
     runGit(['-C', workspace.repository, 'worktree', 'remove', '--force', '--force', workspace.top]);
   }
   fs.rmSync(workspace.directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -641,9 +654,11 @@ function removeWorkspace(workspace) {
  *
  * @param {object[]} workspaces a live list: a workspace pushed later is removed too
  * @param {AbortController} controller
+ * @param {object} [options]
+ * @param {string[]} [options.paths] a live list of files the run retracts when it is interrupted (the CLI's probe list)
  * @returns {() => void} removes the handlers
  */
-function cleanUpOnSignal(workspaces, controller) {
+function cleanUpOnSignal(workspaces, controller, { paths = [] } = {}) {
   const signals = process.platform === 'win32' ? ['SIGINT', 'SIGTERM', 'SIGHUP'] : ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGQUIT'];
   const handlers = new Map();
   const release = () => {
@@ -653,6 +668,7 @@ function cleanUpOnSignal(workspaces, controller) {
     const handler = () => {
       release();
       controller.abort();
+      for (const file of paths) fs.rmSync(file, { force: true });
       for (const workspace of workspaces) {
         try {
           removeWorkspace(workspace);

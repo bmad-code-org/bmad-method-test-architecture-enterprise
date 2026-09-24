@@ -38,6 +38,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const { expectedSchemaVersion, loadEngine } = require('./engine');
+const { isInside } = require('./workspace');
 
 /** AD-10's exits for a qualification that stops. */
 const QUALIFICATION_EXITS = Object.freeze({ authoring: 10, weakness: 11, infrastructure: 12 });
@@ -64,20 +65,22 @@ function countOccurrences(bytes, find) {
  * The bytes a `replace-exact` mutation turns the target into, without writing
  * them: the file, its original bytes and its mutated bytes.
  *
+ * The directory holding the file must resolve, links followed, inside
+ * `within` (the workspace directory), and that real directory is recorded,
+ * so the cycle can refuse to write or read through a path an arm later
+ * swapped for a link, `launch.root` itself or any directory above it
+ * included. A link inside the workspace (one the workspace already contains)
+ * is followed like any directory.
+ *
  * @param {string} root the workspace's `launch.root`
  * @param {{mutationId: string, targetArtifact: string, operator: {find: string, replace: string}}} mutation
- * @returns {{ file: string, original: Buffer, mutated: Buffer, mode: number }}
- * @throws {QualificationError} exit 10 for a target that is not a regular file or a `find` that does not occur exactly once
+ * @param {object} [options]
+ * @param {string} [options.within] the directory every write and read must stay inside; `root` by default
+ * @returns {{ file: string, original: Buffer, mutated: Buffer, mode: number, realDirectory: string }}
+ * @throws {QualificationError} exit 10 for a target that is not a regular file or a `find` that does not occur exactly once, exit 12 for one outside `within`
  */
-function planReplaceExact(root, mutation) {
+function planReplaceExact(root, mutation, { within = root } = {}) {
   const file = path.join(root, ...mutation.targetArtifact.split('/'));
-  const escape = pathEscape(root, mutation.targetArtifact);
-  if (escape !== null) {
-    throw new QualificationError(
-      QUALIFICATION_EXITS.infrastructure,
-      `${mutation.mutationId}: ${escape}, so a write to targetArtifact ${mutation.targetArtifact} would leave the workspace`,
-    );
-  }
   let stats;
   try {
     stats = fs.lstatSync(file);
@@ -87,10 +90,24 @@ function planReplaceExact(root, mutation) {
       `${mutation.mutationId}: targetArtifact ${mutation.targetArtifact} does not exist in the workspace`,
     );
   }
+  if (stats.isFile() && stats.nlink > 1) {
+    throw new QualificationError(
+      QUALIFICATION_EXITS.infrastructure,
+      `${mutation.mutationId}: targetArtifact ${mutation.targetArtifact} shares its data with ${stats.nlink - 1} other path(s) (a hard link), which a write could reach outside the workspace`,
+    );
+  }
   if (!stats.isFile()) {
     throw new QualificationError(
       QUALIFICATION_EXITS.authoring,
       `${mutation.mutationId}: targetArtifact ${mutation.targetArtifact} is ${stats.isSymbolicLink() ? 'a symbolic link' : 'not a regular file'}; name the file itself`,
+    );
+  }
+  const realWithin = fs.realpathSync.native(within);
+  const realDirectory = fs.realpathSync.native(path.dirname(file));
+  if (!isInside(realWithin, realDirectory)) {
+    throw new QualificationError(
+      QUALIFICATION_EXITS.infrastructure,
+      `${mutation.mutationId}: the directory holding targetArtifact ${mutation.targetArtifact} resolves to ${realDirectory}, outside the workspace ${realWithin}, so a write to it would leave the workspace`,
     );
   }
   const original = fs.readFileSync(file);
@@ -108,49 +125,59 @@ function planReplaceExact(root, mutation) {
     Buffer.from(mutation.operator.replace, 'utf8'),
     original.subarray(at + find.length),
   ]);
-  return { root, relative: mutation.targetArtifact, file, original, mutated, mode: stats.mode & 0o7777 };
+  return { file, original, mutated, mode: stats.mode & 0o7777, realDirectory };
 }
 
 /**
- * Why a path under `root` does not stay inside it, or null when it does: each
- * directory from `root` down to the file must be a real directory, not a
- * symbolic link, and the file itself must not be a link. A target that swaps
- * a directory on the path for a link (to the adopter's tree, say) would
- * otherwise carry the runtime's own write or read out of the workspace.
+ * Why the planned target no longer stays where it was planned, or null: the
+ * directory holding it must still resolve, links followed, to the real
+ * directory recorded at plan time, and the file must not have become a link.
+ * An arm that swaps a directory on the path, `launch.root` or one above it
+ * for a link (to the adopter's tree, say) would otherwise carry the runtime's
+ * own write or read out of the workspace.
  */
-function pathEscape(root, relative) {
-  const segments = relative.split('/');
-  let current = root;
-  for (const [index, segment] of segments.entries()) {
-    current = path.join(current, segment);
-    let stats;
-    try {
-      stats = fs.lstatSync(current);
-    } catch {
-      return null;
-    }
-    const last = index === segments.length - 1;
-    if (stats.isSymbolicLink()) return `${segments.slice(0, index + 1).join('/')} is a symbolic link`;
-    if (!last && !stats.isDirectory()) return `${segments.slice(0, index + 1).join('/')} is not a directory`;
+function containmentProblem(planned) {
+  let realDirectory;
+  try {
+    realDirectory = fs.realpathSync.native(path.dirname(planned.file));
+  } catch {
+    return 'the directory holding it no longer exists';
+  }
+  if (realDirectory !== planned.realDirectory) {
+    return `the directory holding it now resolves to ${realDirectory}, not the workspace's ${planned.realDirectory}`;
+  }
+  try {
+    const stats = fs.lstatSync(planned.file);
+    if (stats.isSymbolicLink()) return 'it is now a symbolic link';
+    if (stats.isFile() && stats.nlink > 1) return 'it now shares its data with another path (a hard link)';
+  } catch {
+    // A missing file is the restore's to report.
   }
   return null;
 }
 
-/** Stops the cycle (exit 12) when the target's path no longer stays inside the workspace; an arm may have rewritten it. */
+/** Stops the cycle (exit 12) when the target no longer stays where it was planned; an arm may have rewritten the path. */
 function assertContained(planned, mutation, evidence, when) {
-  const escape = pathEscape(planned.root, planned.relative);
-  if (escape === null) return;
+  const problem = containmentProblem(planned);
+  if (problem === null) return;
   throw new QualificationError(
     QUALIFICATION_EXITS.infrastructure,
-    `${mutation.mutationId}: ${when}, ${escape}, so the runtime will not write or read ${mutation.targetArtifact} through it`,
+    `${mutation.mutationId}: ${when}, ${problem}, so the runtime will not write or read ${mutation.targetArtifact} through it`,
     evidence,
   );
 }
 
-/** Writes `bytes` to `file`, a failure being an infrastructure stop (exit 12) naming `what`. */
-function writeOrStop(file, bytes, what, evidence) {
+/**
+ * Replaces `file` with a new file holding `bytes` at `mode`: the old one is
+ * removed first, so the write lands in a file of its own even when the old
+ * one shared its data with another path (a hard link). A failure is an
+ * infrastructure stop (exit 12) naming `what`.
+ */
+function writeOrStop(file, bytes, mode, what, evidence) {
   try {
-    fs.writeFileSync(file, bytes);
+    fs.rmSync(file, { force: true });
+    fs.writeFileSync(file, bytes, { mode });
+    fs.chmodSync(file, mode);
   } catch (error) {
     throw new QualificationError(QUALIFICATION_EXITS.infrastructure, `${what} could not be written: ${error.message}`, evidence);
   }
@@ -162,9 +189,9 @@ function writeOrStop(file, bytes, what, evidence) {
  * @returns {{ file: string, original: Buffer, mutated: Buffer }}
  * @throws {QualificationError}
  */
-function applyReplaceExact(root, mutation) {
-  const planned = planReplaceExact(root, mutation);
-  writeOrStop(planned.file, planned.mutated, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, null);
+function applyReplaceExact(root, mutation, options) {
+  const planned = planReplaceExact(root, mutation, options);
+  writeOrStop(planned.file, planned.mutated, planned.mode, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, null);
   return planned;
 }
 
@@ -191,6 +218,7 @@ function digestOfFile(file, digestBytes) {
  *
  * @param {object} options
  * @param {string} options.root the workspace's `launch.root`
+ * @param {string} [options.within] the workspace directory every write and read must stay inside; `root` by default
  * @param {object} options.mutation the parsed mutation file
  * @param {(phase: string) => Promise<{verdict: 'held'|'violated'|'inconclusive'}>} options.runArm
  *   the phase is `baseline`, `mutated`, or `re-pass-<n>`; anything else the arm returns is kept as evidence
@@ -200,9 +228,9 @@ function digestOfFile(file, digestBytes) {
  * @returns {Promise<object>} the evidence: the three digests, each arm's result, and `rollbackVerified`
  * @throws {QualificationError}
  */
-async function runMutationCycle({ root, mutation, runArm, reExecutionCap, digestBytes, log = () => {} }) {
+async function runMutationCycle({ root, within = root, mutation, runArm, reExecutionCap, digestBytes, log = () => {} }) {
   const digestOf = digestBytes ?? (await loadEngine()).digestBytes;
-  const planned = planReplaceExact(root, mutation);
+  const planned = planReplaceExact(root, mutation, { within });
   const evidence = {
     mutationId: mutation.mutationId,
     targetArtifact: mutation.targetArtifact,
@@ -245,7 +273,7 @@ async function runMutationCycle({ root, mutation, runArm, reExecutionCap, digest
 
   log(`${mutation.mutationId}: step 2, the mutation applied to ${mutation.targetArtifact}`);
   assertContained(planned, mutation, evidence, 'after the clean arm');
-  writeOrStop(planned.file, planned.mutated, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, evidence);
+  writeOrStop(planned.file, planned.mutated, planned.mode, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, evidence);
   evidence.mutatedDigest = digestOfFile(planned.file, digestOf);
   try {
     log(`${mutation.mutationId}: step 3, the mutated arm`);
@@ -254,6 +282,7 @@ async function runMutationCycle({ root, mutation, runArm, reExecutionCap, digest
     log(`${mutation.mutationId}: step 4, the original bytes restored`);
     assertContained(planned, mutation, evidence, 'after the mutated arm');
     restoreArtifact(planned, mutation, evidence);
+    assertContained(planned, mutation, evidence, 'after the restore');
     evidence.restoredDigest = digestOfFile(planned.file, digestOf);
   }
 
@@ -281,6 +310,7 @@ async function runMutationCycle({ root, mutation, runArm, reExecutionCap, digest
     log(`${mutation.mutationId}: step 6, the baseline re-run (attempt ${attempt} of ${attempts})`);
     const rePass = await arm(`re-pass-${attempt}`);
     evidence.rePasses.push(rePass);
+    assertContained(planned, mutation, evidence, `after re-pass ${attempt}`);
     if (rePass.verdict === 'held') break;
   }
   const rePassed = evidence.rePasses.at(-1)?.verdict === 'held';
@@ -300,22 +330,12 @@ async function runMutationCycle({ root, mutation, runArm, reExecutionCap, digest
 }
 
 /**
- * Step 4: the original bytes back in place, as a regular file with its
- * original mode: whatever the mutated arm left at the path (a symbolic link,
- * say) is removed first, and a directory there makes the restore fail.
+ * Step 4: the original bytes back in place, as a regular file of its own with
+ * its original mode: whatever the mutated arm left at the path (a link, a hard
+ * link) is removed first, and a directory there makes the restore fail.
  */
 function restoreArtifact(planned, mutation, evidence) {
-  try {
-    fs.rmSync(planned.file, { force: true });
-    fs.writeFileSync(planned.file, planned.original, { mode: planned.mode });
-    fs.chmodSync(planned.file, planned.mode);
-  } catch (error) {
-    throw new QualificationError(
-      QUALIFICATION_EXITS.infrastructure,
-      `the restore of ${mutation.targetArtifact} could not be written: ${error.message}`,
-      evidence,
-    );
-  }
+  writeOrStop(planned.file, planned.original, planned.mode, `the restore of ${mutation.targetArtifact}`, evidence);
 }
 
 /** The free-text operator eval-quality records, spelled from the operator itself. */

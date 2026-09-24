@@ -155,6 +155,7 @@ Each fix was undone once in the working tree, `node test/test-evaluate-mutation.
 - 2026-09-24: epics.md Story 1.6, the probe-list criterion, marked superseded: a controlled-mutation probe now reaches the CLI, and another route still exits 12.
 - 2026-09-24: test-design-epic-1.md, Story 1.7's workspace row amended: it said a non-git target records `dirty: true`, which the corrected criterion contradicts, and named read-only links.
 - 2026-09-24 (review round 1): the Design Notes' single pristine workspace became one pristine workspace for the legs and one qualification workspace per seeded probe, every later workspace reproducing the first; a re-pass failure exits 12, since eval-quality reads an exceeded re-execution cap as an unfit harness; the adopter's project is read after the legs as well, refs, configuration and hooks included; the evaluation folder is left out of every workspace. None of these contradicts a criterion's text, so epics.md is unchanged by them.
+- 2026-09-24 (owner): Stories 1.27 (test-design contract guard rows, from the staged live run) and 1.28 (recover from a killed run: supervisor and leader SIGKILLed together, and workspaces a SIGKILLed preflight leaves) appended to Epic 1.
 
 ## Review Triage Log
 
@@ -248,6 +249,31 @@ Each fix was undone once in the working tree, the named suite run, the failure o
 - T6, the `AssignmentPattern` clause removed: both destructuring-default plants are missed.
 - H3, `force` without the written set: "under force, a second leg sending one request spawned 2 time(s)".
 - H4, NFR staging removed from `stagedWorkspaceFor`: `test:probe-corpus` reports "nfr gapped-harbor-billing-ledger: the staged workspace holds no harbor-billing-ledger/" and "no skill/".
+
+## Final review round 2
+
+Two reviewers (runtime by execution, tests and compliance) read head 9274413; each finding was verified against the code first.
+
+| ID | Severity | Finding | Outcome |
+| --- | --- | --- | --- |
+| S1 | high | an arm that swapped `launch.root` (or a directory above it) for a link bypassed round 1's path walk, which started at `launch.root`, so the restore could write into the adopter's tree | fixed: `planReplaceExact` requires the real directory holding the target to lie inside the real workspace directory and records it; the cycle checks the same real path before the mutation, before and after the restore and after every re-run (exit 12); test: a mutated arm that moves its working directory aside and links the project in its place, with an uncommitted project edit the restore would have overwritten, exits 12 with the project unchanged. The suggested pinning of each arm's `cwd` is not done: a `cwd` is a path string, and after a swap the cycle's next step is always one of these checks, so no arm of the cycle runs in a swapped directory; a pristine-workspace leg that swaps its root and writes is caught by the reading after the legs |
+| S2 | medium | round 1's walk refused a committed in-project link on the target's path (`rules -> config/rules`) | fixed by S1's real-path containment, which follows a link that stays in the workspace; test: that project qualifies with exit 0 |
+| S3 | low | an interrupting signal or an engine stage that could not run left `probes.json` | fixed: the probe list is removed in a `finally` unless the verdict stage completed, and `cleanUpOnSignal` removes it from a live list; test: a shim whose verdict stage exits an undocumented 2 gives exit 12 with no `probes.json` (the signal path shares the list with the workspace cleanup the interrupt case already holds) |
+| S4 | low | round 1 refused a `TMPDIR` the repository ignores | fixed: inside the repository and outside `launch.root`, a temp directory is refused only when `git check-ignore` says it is not ignored; inside `launch.root` a copy is still refused; test: an ignored temp directory inside the repository runs with exit 0 and leaves nothing behind, beside round 1's refused one |
+| S5 | medium | a clean arm that hard-linked the target to an adopter file made the runtime's mutation write reach that file | fixed: a regular file with more than one link is refused at plan time and before every write (exit 12), and the mutation and the restore each remove the file and write a new one; unit test: an arm that hard-links the target to a file outside the workspace stops the cycle with 12 and the outside file keeps its bytes |
+| S6 | low | nothing failed if the staging segment left the cache path | fixed: `cacheDirectoryFor` is exported and `test:probe-corpus` asserts each set-staged suite's and test-review's cache path ends in a staging name of its own, distinct from the empty one; a digest of what is staged was not adopted, since staging a leg to learn its cache key would stage every cached leg |
+| S7 | low | H2 was held only by the corpus digest | fixed: `test:contract-oracles` resolves the NFR UNKNOWN witness over a clean report naming the word in prose (false) and over a recorded `**Threshold:** UNKNOWN` (true) |
+| S8 | low | the schema said the adopter's tree is never written | fixed with the suggested wording |
+
+### Final review round 2 revert checks
+
+- S1, the real-path comparison disabled: seven failures, "preflight with a mutated arm that links the target directory out of its workspace exited 0; expected 12" among them.
+- S2, round 1's link refusal restored on the first path segment: "preflight whose targetArtifact sits behind an in-project link exited 12; expected 0".
+- S3, the `finally` retraction removed: "a run whose verdict stage could not run kept its probe list" and "a run stopped after its legs kept the probe list it handed the CLI".
+- S4, every temp directory in the repository treated as unignored: "preflight with a TMPDIR the repository ignores exited 12; expected 0".
+- S5, the hard-link refusal removed: "a clean arm that hard-linked the target outside the workspace stopped with no error"; removing only the removal before each write passes, since the refusal stops the cycle first, so the two are layered defenses of one case.
+- S6, the staging name dropped from the cache path: `test:probe-corpus` exits 1 naming each suite.
+- S7, the witness back on the bare `UNKNOWN`: `test:contract-oracles` fails one check.
 
 ## Coordinator decisions after round 1
 

@@ -317,7 +317,8 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
   const runsDirectory = ensureRunsDirectory(folder);
   const workspaces = [];
   const controller = new AbortController();
-  const release = cleanUpOnSignal(workspaces, controller);
+  const retractOnSignal = [];
+  const release = cleanUpOnSignal(workspaces, controller, { paths: retractOnSignal });
   try {
     const readTree = () => adopterTreeState(root, { exclude: [runsDirectory] });
     const before = readTree();
@@ -357,6 +358,7 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
       before,
       readTree,
       runsDirectory,
+      retractOnSignal,
       env,
       log,
       signal: controller.signal,
@@ -377,7 +379,21 @@ async function runPreflightCommand(folder, { fromWorkingTree = false, env = proc
   }
 }
 
-async function runInWorkspaces({ folder, evaluation, seeded, pristine, make, discard, before, readTree, runsDirectory, env, log, signal }) {
+async function runInWorkspaces({
+  folder,
+  evaluation,
+  seeded,
+  pristine,
+  make,
+  discard,
+  before,
+  readTree,
+  runsDirectory,
+  retractOnSignal,
+  env,
+  log,
+  signal,
+}) {
   const registry = registryFromEvaluation(evaluation, { root: pristine.root });
   const problems = registry.targetProblems(pristine.root);
   if (problems.length > 0) {
@@ -498,80 +514,79 @@ async function runInWorkspaces({ folder, evaluation, seeded, pristine, make, dis
     }
   }
 
-  // The CLI's probe list. A run that stops before the CLI's verdict removes it,
-  // so no qualified probe outlives a run that failed.
+  let verdict;
+  // The CLI's probe list. A run that stops before the CLI's verdict completes
+  // (a leg fault, a tree change, an engine stage that could not run, an
+  // interrupting signal) removes it, so no qualified probe outlives a run
+  // that failed.
   const probesPath = path.join(runDirectory, 'probes.json');
   const probes = qualified.map((entry) => entry.probe);
   writeJson(probesPath, probes);
-  const retract = (result) => {
-    fs.rmSync(probesPath, { force: true });
-    return result;
-  };
-  const recorder = recordingPort({
-    pristine: { label: 'pristine', cwd: pristine.root, port: pristineAdapter },
-    routes,
-    registry,
-    runDirectory,
-  });
+  retractOnSignal.push(probesPath);
+  let settled = false;
   try {
-    await engine.runPreflight({
-      contract,
-      probes,
-      runId: invocationId,
-      port: recorder.port,
-      signal,
-      // Leg progress only. The library's closing line reports the verdict this
-      // command discards, and printing it would name a second verdict source.
-      sink: (diagnostic) => {
-        if (diagnostic.message.startsWith('leg ')) log(diagnostic.message);
-      },
+    const recorder = recordingPort({
+      pristine: { label: 'pristine', cwd: pristine.root, port: pristineAdapter },
+      routes,
+      registry,
+      runDirectory,
     });
-  } catch (error) {
-    const fault = recorder.fault();
-    if (fault !== null) {
-      return retract(
-        outcome({
+    try {
+      await engine.runPreflight({
+        contract,
+        probes,
+        runId: invocationId,
+        port: recorder.port,
+        signal,
+        // Leg progress only. The library's closing line reports the verdict this
+        // command discards, and printing it would name a second verdict source.
+        sink: (diagnostic) => {
+          if (diagnostic.message.startsWith('leg ')) log(diagnostic.message);
+        },
+      });
+    } catch (error) {
+      const fault = recorder.fault();
+      if (fault !== null) {
+        return outcome({
           stage: 'leg',
           exitCode: fault.code === DENIAL_FAULT ? 10 : 12,
           message: `leg ${fault.legId} ${fault.code === DENIAL_FAULT ? 'was denied by the registry' : 'could not run'}: ${fault.message}`,
-        }),
-      );
+        });
+      }
+      const planning =
+        recorder.calls() === 0 &&
+        (error?.name === 'StructuralFailure' || (error?.name === 'RuntimeFault' && PLANNING_FAULTS.has(error.code)));
+      if (!planning) {
+        return outcome({ stage: 'leg', exitCode: 12, message: `the legs could not finish: ${error?.message ?? error}` });
+      }
+      // The plan itself refused before any leg ran. The CLI plans from the same
+      // contract and probes, so it reports that refusal with its own exit below.
+      log(`runPreflight refused the plan: ${error.message}`);
     }
-    const planning =
-      recorder.calls() === 0 &&
-      (error?.name === 'StructuralFailure' || (error?.name === 'RuntimeFault' && PLANNING_FAULTS.has(error.code)));
-    if (!planning) {
-      return retract(outcome({ stage: 'leg', exitCode: 12, message: `the legs could not finish: ${error?.message ?? error}` }));
-    }
-    // The plan itself refused before any leg ran. The CLI plans from the same
-    // contract and probes, so it reports that refusal with its own exit below.
-    log(`runPreflight refused the plan: ${error.message}`);
-  }
-  const observationsPath = path.join(runDirectory, 'observations.json');
-  writeJson(observationsPath, recorder.observations);
-  try {
+    const observationsPath = path.join(runDirectory, 'observations.json');
+    writeJson(observationsPath, recorder.observations);
     treeUnchanged('legs');
-  } catch (error) {
-    retract();
-    throw error;
-  }
 
-  const verdict = runEngineStage(
-    'preflight',
-    [
-      '--contract',
-      contractPath,
-      '--probes',
-      probesPath,
-      '--observations',
-      observationsPath,
-      '--run-id',
-      invocationId,
-      '--out',
-      path.join(runDirectory, 'preflight-verdict.json'),
-    ],
-    { runDirectory, env, log },
-  );
+    verdict = runEngineStage(
+      'preflight',
+      [
+        '--contract',
+        contractPath,
+        '--probes',
+        probesPath,
+        '--observations',
+        observationsPath,
+        '--run-id',
+        invocationId,
+        '--out',
+        path.join(runDirectory, 'preflight-verdict.json'),
+      ],
+      { runDirectory, env, log },
+    );
+    settled = true;
+  } finally {
+    if (!settled) fs.rmSync(probesPath, { force: true });
+  }
   for (const entry of qualified) writeJson(path.join(runDirectory, 'probes', `${entry.probe.probeId}.probe.json`), entry.probe);
   return outcome({
     stage: 'verdict',
@@ -613,7 +628,7 @@ async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log
   const workspace = make(`mutated-${mutation.mutationId}`, pristine);
   let applied;
   try {
-    applied = applyReplaceExact(workspace.root, mutation);
+    applied = applyReplaceExact(workspace.root, mutation, { within: workspace.directory });
   } catch (error) {
     if (!(error instanceof QualificationError)) throw error;
     throw stop({ stage: 'qualification', exitCode: error.exitCode, message: error.message });
@@ -710,6 +725,7 @@ async function qualifySeededProbe({
   try {
     evidence = await runMutationCycle({
       root: workspace.root,
+      within: workspace.directory,
       mutation,
       runArm: runArmFor,
       reExecutionCap: policy.reExecutionCap,

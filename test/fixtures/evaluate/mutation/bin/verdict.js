@@ -40,6 +40,9 @@
  *                           directory VERDICT_LINK names, outside the workspace
  *   sabotage: exclude       append a line to info/exclude in the git directory
  *                           the worktree shares with the adopter's repository
+ *   sabotage: swap-root     after answering, move this working directory aside
+ *                           and put a symbolic link to VERDICT_LINK in its
+ *                           place, as a target that swaps its own root would
  *   sabotage: leg-writes    append to VERDICT_TOUCH only when the request is
  *                           `Judge alpha.`, which a preflight leg sends and no
  *                           arm does
@@ -129,6 +132,12 @@ if (text.includes('sabotage: link') && process.env.VERDICT_LINK) {
 if (text.includes('sabotage: locked')) {
   fs.mkdirSync('locked/inner', { recursive: true });
   fs.chmodSync('locked', 0o000);
+}
+if (text.includes('sabotage: swap-root') && process.env.VERDICT_LINK) {
+  const here = process.cwd();
+  process.chdir('..');
+  fs.renameSync(here, `${here}.moved`);
+  fs.symlinkSync(process.env.VERDICT_LINK, here);
 }
 if (text.includes('sabotage: restore')) {
   fs.rmSync(POLICY);

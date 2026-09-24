@@ -224,6 +224,11 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * A selection leg gets an empty directory, which is what its `read-only`
  * declaration is for.
  */
+/** Where one suite's legs are cached: by agent, by suite, and by how its legs are staged. */
+function cacheDirectoryFor(options, suiteId) {
+  return path.join(options.cache, slug(options.agent), slug(suiteId), stagingOf(suiteId));
+}
+
 /**
  * How a suite's legs are staged, named in the leg cache's path. Change the
  * name whenever `stagedWorkspaceFor` changes what a suite's leg runs in.
@@ -331,7 +336,7 @@ async function runOneSuite(suite, options, stats) {
   // says nothing about the directory the leg ran in, so a change to staging
   // (the NFR and CI legs ran in an empty directory until Story 1.7) must move
   // the cache, or every leg would be answered by a run in the old workspace.
-  const cacheDir = path.join(options.cache, slug(options.agent), slug(suite.id), stagingOf(suite.id));
+  const cacheDir = cacheDirectoryFor(options, suite.id);
   const interfaceIds = suite.contract.permittedInterfaces.map((iface) => iface.logicalId);
 
   let port;
@@ -613,6 +618,7 @@ if (require.main === module) {
 
 module.exports = {
   baselineDifferences,
+  cacheDirectoryFor,
   cachingPort,
   parseArgs,
   requestKey,

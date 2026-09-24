@@ -65,7 +65,7 @@
       }
     },
     "workspace": {
-      "description": "The disposable workspace a run and a mutation happen in (AD-8); the adopter's tree is never written.",
+      "description": "The disposable workspace a run and a mutation happen in (AD-8). The runtime writes nothing into the adopter's tree; a target that writes outside its workspace is detected and the run exits 12.",
       "type": "object",
       "additionalProperties": false,
       "required": ["kind", "provision"],

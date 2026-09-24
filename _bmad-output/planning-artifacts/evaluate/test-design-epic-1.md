@@ -38,7 +38,7 @@ inputDocuments:
 
 ## Executive Summary
 
-**Scope:** full epic-level test design for Stories 1.1 to 1.26 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
+**Scope:** full epic-level test design for Stories 1.1 to 1.28 of `epics.md`. The 2026-09-23 amendment added Stories 1.17 to 1.26 and extended Stories 1.3, 1.4, 1.12, 1.13, 1.14 and 1.16 to close the plan gap audit; their scenarios, risks and gates are below, and sections appear in execution order. The stories are built overnight by `/bmad-build` workers in order, uncommitted, so every acceptance criterion here names the check that fails when its story's work is reverted. A worker treats this file and `epics.md` together as the story's test plan.
 
 **Risk summary:**
 
@@ -510,6 +510,27 @@ File: `test/test-evaluate-learned-framework.js` (`test:evaluate-learned-framewor
 | Minimal example executed against a known pass and fail before mapping | Transcript order in completion notes | Live evidence | P1 | Recorded evidence |
 | Clean `passed-clean-control`; mutated `caught`; no `cli/` change | Deterministic re-run; `git diff --stat -- cli/` recorded | Integration over real eval-quality | P0 | Breaking the mapping changes the outcome |
 
+### Story 1.27: Tell a documented guard from an invented risk in the test-design contract
+
+Levels: unit, integration, live evidence. Files: `test/test-contract-oracles.js` (`test:contract-oracles`), `test/test-probe-corpus.js` (`test:probe-corpus`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Fix placed in the oracles or the skill, with the reason recorded | Outcome record | Static | P1 | Recorded evidence |
+| Guard row versus scored risk | Two `test:contract-oracles` cases: a "Document" guard row leaves O-008 unfired; the same category scored as a risk fires it | Unit | P0 | Reverting the oracle change fails one case |
+| Witness equals the negated oracle; contract, probes and replays move together | `test:contracts`, `test:probe-corpus` | Integration | P0 | A witness edited alone fails the corpus digest and the generator check |
+| Live test-design reduces to the baseline | `node test/eval-contract-strength.js --suite test-design --preflight-only` on the staged harness, recorded | Live evidence | P1 | Recorded evidence |
+
+### Story 1.28: Recover from a killed run
+
+Levels: integration. Files: the supervision tests for `cli/lib/agent-supervisor.js`, `test/test-evaluate-mutation.js` (`test:evaluate-mutation`).
+
+| AC | Test | Level | P | Revert check |
+| --- | --- | --- | --- | --- |
+| Leader and supervisor killed together: the group stops and the runner returns in bounded time | Kill both, assert no process of the group remains and the runner returns a transport failure | Integration | P0 | Reverting the change makes the case time out |
+| A dead run's workspaces and worktree registration reclaimed | Kill a run during qualification, run `preflight` again, assert the temp directory and `git worktree list` are clean and the adopter's status and refs unchanged | Integration | P0 | Reverting the reclaim leaves the workspace and the registration |
+| A live run's workspace left alone | A marker naming a live process survives the next run | Integration | P1 | Reclaiming every marked workspace fails it |
+
 ## The Dogfood Proof (AD-15)
 
 ### What the run must produce
@@ -554,7 +575,7 @@ Staged, uncommitted overnight: `test/evaluations/bmad-testarch-evaluate/` (`eval
 | P0 | 81 | 71 to 106 hours |
 | P1 | 67 | 37 to 61 hours |
 | P2 | 12 | 5 to 9 hours |
-| Total | 160 | 113 to 176 hours, spread over twenty-six stories |
+| Total | 160 | 113 to 176 hours, spread over twenty-eight stories |
 
 ## Quality Gate Criteria
 

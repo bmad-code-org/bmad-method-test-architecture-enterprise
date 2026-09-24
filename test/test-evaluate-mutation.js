@@ -79,6 +79,7 @@ const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
 const EVALUATE = path.join(PROJECT_ROOT, 'cli', 'evaluate.js');
+const SHIM = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'engine-shim.js');
 const FIXTURE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'mutation');
 const EVALUATION = path.join('evals', 'verdict');
 const POLICY = path.join('rules', 'policy.txt');
@@ -567,7 +568,7 @@ function checkFailures() {
       edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: link')),
       env: (fixture) => ({ VERDICT_LINK: path.join(fixture.project, 'rules') }),
       exit: 12,
-      says: 'rules is a symbolic link',
+      says: 'now resolves to',
     },
     {
       name: 'a seeded probe with no defect signature',
@@ -803,6 +804,42 @@ async function checkUnits() {
   );
 
   check(countOccurrences(Buffer.from('ababab'), Buffer.from('abab')) === 2, 'overlapping occurrences of the find text count once');
+
+  // A clean arm that swaps the target for a hard link to a file outside the
+  // workspace: the mutation must not be written into that file.
+  const linkRoot = path.join(root, 'hard-link');
+  fs.mkdirSync(path.join(linkRoot, 'rules'), { recursive: true });
+  fs.writeFileSync(path.join(linkRoot, POLICY), 'mode: strict\n');
+  const outside = path.join(root, 'adopter-policy.txt');
+  fs.writeFileSync(outside, 'mode: strict\n');
+  let hardLinked = null;
+  try {
+    await runMutationCycle({
+      root: linkRoot,
+      mutation: {
+        mutationId: 'M-003',
+        targetArtifact: 'rules/policy.txt',
+        operator: { kind: 'replace-exact', find: 'mode: strict', replace: 'mode: lenient', occurrences: 1 },
+      },
+      digestBytes: sha256,
+      reExecutionCap: 0,
+      runArm: async (phase) => {
+        if (phase === 'baseline') {
+          fs.rmSync(path.join(linkRoot, POLICY));
+          fs.linkSync(outside, path.join(linkRoot, POLICY));
+        }
+        return { verdict: phase === 'mutated' ? 'violated' : 'held' };
+      },
+    });
+  } catch (error) {
+    if (!(error instanceof QualificationError)) throw error;
+    hardLinked = error;
+  }
+  check(
+    hardLinked?.exitCode === 12 && hardLinked.message.includes('hard link'),
+    `a clean arm that hard-linked the target outside the workspace stopped with ${hardLinked?.exitCode ?? 'no error'}: ${hardLinked?.message}; expected 12 naming the hard link`,
+  );
+  check(fs.readFileSync(outside, 'utf8') === 'mode: strict\n', 'the mutation was written into the file the target was hard-linked to');
 
   check(
     dispositionOf('true', 'expects-hold') === 'held' && dispositionOf('false', 'expects-hold') === 'violated',
@@ -1258,6 +1295,82 @@ function checkRepositoryShape() {
   }
 }
 
+/**
+ * The round-two containment and cleanup cases: a mutated arm that swaps its
+ * whole working directory for a link to the project cannot carry the restore
+ * into the project, an in-project link on the target's path is followed like
+ * any directory, an engine stage that cannot run leaves no probe list, and a
+ * temp directory the repository ignores is accepted inside it.
+ */
+function checkRound2() {
+  const swapped = makeProject('swap-root', {
+    edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: swap-root')),
+  });
+  // An uncommitted edit the restore would overwrite with the committed bytes if it followed the link.
+  fs.appendFileSync(path.join(swapped.project, POLICY), '# a local edit\n');
+  const swappedBefore = adopterState(swapped.project);
+  const swappedResult = evaluate(['preflight', '--evaluation', swapped.folder], { ...swapped.temp.env, VERDICT_LINK: swapped.project });
+  check(
+    swappedResult.status === 12 && swappedResult.stdout.includes('now resolves to'),
+    `preflight whose mutated arm swapped its working directory for a link exited ${swappedResult.status}; expected 12\n${swappedResult.output}`,
+  );
+  check(qualifiedProbes(runDirectoryOf(swapped.folder)).length === 0, 'a run whose arm swapped its root wrote a qualified probe');
+  checkUntouched('the swapped root', swapped, swappedBefore);
+
+  const linkedPath = makeProject('in-project-link', {
+    edit: ({ project }) => {
+      fs.mkdirSync(path.join(project, 'config'));
+      fs.renameSync(path.join(project, 'rules'), path.join(project, 'config', 'rules'));
+      fs.symlinkSync(path.join('config', 'rules'), path.join(project, 'rules'));
+    },
+  });
+  const linkedBefore = adopterState(linkedPath.project);
+  const linkedResult = runPreflight(linkedPath);
+  check(
+    linkedResult.status === 0 && qualifiedProbes(runDirectoryOf(linkedPath.folder)).length === 1,
+    `preflight whose targetArtifact sits behind an in-project link exited ${linkedResult.status}; expected 0 and a qualified probe\n${linkedResult.output}`,
+  );
+  checkUntouched('the in-project link', linkedPath, linkedBefore);
+
+  const shimmed = makeProject('engine-stage');
+  const shimLog = path.join(tempDir('engine-stage-log'), 'argv.log');
+  const shimResult = evaluate(['preflight', '--evaluation', shimmed.folder], {
+    ...shimmed.temp.env,
+    [ENGINE_CLI_ENV]: SHIM,
+    TEA_EVALUATE_SHIM_LOG: shimLog,
+    TEA_EVALUATE_SHIM_EXIT_PREFLIGHT: '2',
+  });
+  check(
+    shimResult.status === 12,
+    `preflight whose verdict stage exits an undocumented 2 exited ${shimResult.status}; expected 12\n${shimResult.output}`,
+  );
+  const shimRun = runDirectoryOf(shimmed.folder);
+  check(
+    shimRun !== null && fs.existsSync(path.join(shimRun, 'engine', 'preflight.json')),
+    'the shimmed run never reached its verdict stage',
+  );
+  check(
+    shimRun !== null && !fs.existsSync(path.join(shimRun, 'probes.json')),
+    'a run whose verdict stage could not run kept its probe list',
+  );
+  check(qualifiedProbes(shimRun).length === 0, 'a run whose verdict stage could not run wrote a qualified probe');
+
+  const ignored = makeProject('ignored-temp');
+  fs.appendFileSync(path.join(ignored.project, '.gitignore'), 'ignored-tmp/\n');
+  const ignoredTemp = path.join(ignored.project, 'ignored-tmp');
+  fs.mkdirSync(ignoredTemp);
+  const ignoredResult = evaluate(['preflight', '--evaluation', ignored.folder], {
+    TMPDIR: ignoredTemp,
+    TMP: ignoredTemp,
+    TEMP: ignoredTemp,
+  });
+  check(
+    ignoredResult.status === 0,
+    `preflight with a TMPDIR the repository ignores exited ${ignoredResult.status}; expected 0\n${ignoredResult.output}`,
+  );
+  check(fs.readdirSync(ignoredTemp).length === 0, 'the run left a workspace in the ignored temp directory');
+}
+
 async function main() {
   try {
     await checkCycle();
@@ -1268,6 +1381,7 @@ async function main() {
     checkFailures();
     checkAdopterTreeGuard();
     checkHookEnvironment();
+    checkRound2();
     checkSharedRepository();
     checkLockedLeftovers();
     checkRepositoryShape();

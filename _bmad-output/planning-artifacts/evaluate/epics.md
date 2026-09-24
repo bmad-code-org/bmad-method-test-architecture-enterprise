@@ -151,6 +151,7 @@ None. Evaluate has no graphical interface.
 ### Epic 1: The Evaluate authoring loop
 
 An adopter describes a target, answers Evaluate's questions, chooses or builds the evaluation layer and gets a compiling, sealed, preflighted, scored Behavioral Evaluation Contract whose clean arm passes and whose mutated arm catches the seeded defect, with the gaps named and closed. The epic closes by running Evaluate on `bmad-testarch-evaluate` itself, then proving the guidance on two more target kinds, on seeded weaknesses and on an evaluation framework its guides never name.
+Findings made while building it that a story's pull request does not close are appended as stories at the end of the epic, starting with Stories 1.27 and 1.28.
 
 **FRs covered:** FR1 to FR10, FR13, FR14.
 
@@ -192,12 +193,14 @@ Story 1.1 runs first, in the eval-quality repository. Story 1.2 raises TeA's `ev
 | 24 | 1.24 | 1.16 |
 | 25 | 1.25 | 1.24 |
 | 26 | 1.26 | 1.23, 1.25 |
-| 27 | 2.1 | 1.16, 1.26 |
-| 28 | 2.2 | 2.1 |
-| 29 | 2.3 | 2.2 |
-| 30 | 2.4 | 2.3 |
-| 31 | 2.5 | 2.4 |
-| 32 | H.1 | 2.5 |
+| 27 | 1.27 | 1.7 |
+| 28 | 1.28 | 1.7 |
+| 29 | 2.1 | 1.16, 1.26 |
+| 30 | 2.2 | 2.1 |
+| 31 | 2.3 | 2.2 |
+| 32 | 2.4 | 2.3 |
+| 33 | 2.5 | 2.4 |
+| 34 | H.1 | 2.5 |
 
 ## Epic 1: The Evaluate authoring loop
 
@@ -885,6 +888,51 @@ So that TeA's support for evaluation frameworks has no fixed list (CAP-13, AD-21
 
 **Dependencies:** 1.23, 1.25.
 **Gate:** `npm test`, `npm run test:release-metadata`.
+
+### Story 1.27: Tell a documented guard from an invented risk in the test-design contract
+
+Added 2026-09-24 by the owner from Story 1.7's staged live run.
+
+As a maintainer of TeA's test-design evaluation,
+I want the contract to tell a risk the epic rules out and the document records as a guard from a risk the skill invented,
+So that the live `eval:preflight` measures the skill's real over-reporting and every test-design probe reduces to its baseline live.
+
+**Acceptance Criteria:**
+
+**Given** Story 1.7's staged live run, in which `bmad-testarch-test-design` registers risks its epic rules out as low-score rows ("Document", score 1 to 3), and oracles O-008 to O-010 and O-012 to O-014 read vocabulary across the whole document, so P-008 to P-010 pass and P-012 to P-014 fail `seeded-faults-scoped` against `test/probes/expected-strength.json` (evidence in `story-1.7.md`, "Coordinator decisions after round 1")
+**When** the story decides where the fix belongs, by reading the skill's instructions and the live documents recorded there
+**Then** either the oracles read the risk register row by row and count a ruled-out category only when its row carries a score above the guard band, or the skill's instructions keep ruled-out categories out of the register; the story records which, and why, in its outcome record
+**And** each probe's witness stays equal to the oracle it negates, as the probe generator requires
+**And** `test/contracts/test-design.contract.json`, `test/probes/test-design.probes.json` and the stored replays under `test/replay/test-design/` change together, and `test:contracts`, `test:contract-oracles` and `test:probe-corpus` pass
+**And** a `test:contract-oracles` case holds a clean register recording a ruled-out category as a "Document" guard row and asserts O-008 unfired, and a second holds the same category scored as a risk and asserts it fired; reverting the oracle change fails one of them
+**And** a live `node test/eval-contract-strength.js --suite test-design --preflight-only` run on the staged harness reduces every test-design probe to the outcome `expected-strength.json` records, and the outcome record holds the run
+
+**Dependencies:** 1.7.
+**Gate:** `npm test`.
+
+### Story 1.28: Recover from a killed run
+
+Added 2026-09-24 by the owner from the gaps Stories 1.6 and 1.7 accepted.
+
+As an adopter whose CI job or terminal killed a run,
+I want the agent's processes stopped and the run's workspaces reclaimed,
+So that a `SIGKILL` leaves no running agent, no temp copy and no worktree registered in my repository.
+
+**Acceptance Criteria:**
+
+**Given** Story 1.6's supervision, where a `SIGKILL` to the group leader and the supervisor together leaves the agent's process group running and the runner waiting for good (`story-1.6.md`, round 4 execution probes)
+**When** both are killed together
+**Then** the agent's group stops and the runner returns a transport failure within a bounded time the reference names, held by a case in the supervision tests; reverting the change makes that case time out
+
+**Given** a `tea-evaluate preflight` killed by `SIGKILL` while its workspaces exist
+**When** the next `preflight` runs against the same project
+**Then** it removes every workspace a dead run left, identified by a marker the runtime writes into each workspace naming its run and process, and removes the detached worktree's registration from the adopter's repository, touching nothing it did not create, and reports what it reclaimed
+**And** a case in `test/test-evaluate-mutation.js` kills a run during qualification, asserts the temp directory holds its workspace and `git worktree list` shows its worktree, runs `preflight` again, and asserts both are gone and the adopter's `git status --porcelain` and refs are unchanged; reverting the reclaim fails it
+**And** a workspace whose marker names a live process is left alone, and a case asserts it
+**And** `docs/reference/tea-evaluate-cli.md` states what a killed run leaves and when it is reclaimed
+
+**Dependencies:** 1.7.
+**Gate:** `npm test`.
 
 ## Epic 2: Continuous proof in CI
 
