@@ -1,11 +1,14 @@
 /**
- * Shared machinery behind `--json <path>`: one digest helper, the run identity
- * the record needs, and the record builders themselves.
+ * TEA's eval result records behind `--json <path>`: the suite result, the
+ * `eval:all` run summary, the per-repetition diagnostics, and the writers that
+ * validate each against TEA's own `test/schema/eval-result.js`.
  *
- * There is exactly one digest function here and every caller uses it. Two
- * digest implementations produce two answers for the same bytes, and the whole
- * point of carrying a digest is that a later run can decide whether it looked
- * at the same input.
+ * The digest and the provenance a record carries (`digest`, `digestFiles`,
+ * `digestPrompts`, `repositoryState`, `probeVersion`, `redactArgs`,
+ * `redactSecrets`) live in `cli/lib/evaluate/digest.js` since Story 1.5, so
+ * TEA's harness and every adopter's `tea-evaluate` run compute them one way
+ * (AD-5). They are re-exported here under the same names. What stays here is
+ * TEA's own result format, which no adopter writes.
  *
  * WHAT STILL REACHES `fs` DIRECTLY, AND WHY
  *
@@ -15,8 +18,8 @@
  * record is written into is made here and the bytes go through the port.
  *
  * Every read of a file's contents goes through `test/lib/file-system-port.js`:
- * `digestFiles` reads bytes, because a digest over decoded text is a digest over
- * something the file does not contain.
+ * `digestFiles` hands the runtime the port's `readBytes`, because a digest over
+ * decoded text is a digest over something the file does not contain.
  */
 
 'use strict';
@@ -27,16 +30,23 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
 
-const { boundedProbe } = require('./bounded-probe');
+const {
+  digest,
+  digestFiles: digestFilesThrough,
+  digestPrompts,
+  probeVersion,
+  redactArgs,
+  redactSecrets,
+  repositoryState,
+} = require('../../cli/lib/evaluate/digest');
+const { engineVersion } = require('../../cli/lib/evaluate/engine');
 const { readBytes, writeText } = require('./file-system-port');
 
-// `require(esm)` is stable on every Node the engines field admits (>= 22.20.0);
-// see test/lib/eval-quality-inputs.js for the same reasoning applied to the
-// package's schema-version constants. Unguarded on purpose: `runSummaryRecord`
+// Read when this module loads, and unguarded on purpose: `runSummaryRecord`
 // cannot honestly stamp `evalQualityVersion` without it, and a run that cannot
-// even resolve its own scoring package is not one that should keep going far
-// enough to write a record that omits the fact.
-const { VERSION: EVAL_QUALITY_VERSION } = require('eval-quality');
+// resolve its own scoring package is not one that should keep going far enough
+// to write a record that omits the fact.
+const EVAL_QUALITY_VERSION = engineVersion();
 
 const {
   validateEvalResult,
@@ -46,193 +56,27 @@ const {
   SCHEMA_VERSION,
 } = require('../schema/eval-result');
 
-// A passthrough argument can carry a credential, and a result file is meant to
-// be uploaded from CI. Flags whose name says "secret" get their value dropped,
-// and any value shaped like a known token is dropped wherever it appears.
-const SECRET_FLAG_PATTERN = /key|token|secret|password|credential|auth/i;
-// The token prefix is searched for anywhere in the value, not only at its start.
-// A start-anchored pattern read `--extra=https://example.test?token=ghp_x` and
-// `Authorization: Bearer ghp_x` as ordinary text and published both.
-//
-// The boundary in front is what keeps the search from redacting real
-// configuration. A prefix counts only where it is not preceded by a letter or a
-// digit, which is where a credential actually sits: at the start of the value, or
-// after `=`, `:`, `?`, `&`, `/` or a space. Without it, `sk-` alone would match
-// inside "risk-based" and "task-runner" and erase the runner arguments the record
-// exists to report. `-` and `_` are deliberately outside the boundary set, so
-// `prefix_github_pat_x` is still caught.
-const SECRET_TOKEN_PATTERN = /(^|[^A-Za-z0-9])(?:sk[-_]|gh[pousr]_|github_pat_|xox[abprs]-|AIza|AKIA|ya29\.)[A-Za-z0-9._~+/=-]*/g;
-const SENSITIVE_VALUE_PATTERN =
-  /((?:["']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|credential|authorization|auth)(?:["']?)\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\[redacted\]|[^\s,;}&\]]+)/gi;
-const REDACTED = '[redacted]';
 const MAX_DIAGNOSTIC_METRICS = 64;
 const MAX_DIAGNOSTIC_METRIC_KEY = 128;
 
 function boundedDiagnosticText(value, maxLength) {
   const text = String(value);
   if (text.length <= maxLength) return text;
-  const digest = createHash('sha256').update(text).digest('hex');
-  const suffix = `…sha256:${digest}`;
+  const hash = createHash('sha256').update(text).digest('hex');
+  const suffix = `…sha256:${hash}`;
   return `${text.slice(0, maxLength - suffix.length)}${suffix}`;
 }
 
-function redactSecrets(value) {
-  return String(value)
-    .replaceAll(/(\b(?:authorization|proxy-authorization)\b\s*[:=]\s*)(?:bearer|basic)\s+[^\s,;"'}]+/gi, `$1${REDACTED}`)
-    .replaceAll(SENSITIVE_VALUE_PATTERN, `$1${REDACTED}`)
-    .replaceAll(/([?&](?:api[_-]?key|access[_-]?token|token|secret|password|credential|auth)=)[^&\s]+/gi, `$1${REDACTED}`)
-    .replaceAll(SECRET_TOKEN_PATTERN, `$1${REDACTED}`);
-}
-
 /**
- * sha256 over canonical bytes.
- *
- * Each part is length-prefixed before it is hashed, so ['ab', 'c'] and
- * ['a', 'bc'] cannot collide. That matters because the callers hash lists of
- * path/content pairs, where a collision would silently claim two different
- * fixture sets were the same input.
- *
- * The length and the bytes are separated by a NUL, spelled as a unicode escape.
- * It was a raw NUL byte in this source until now, which made git treat the whole
- * file as binary and print "Binary files differ" where a reviewer needed a diff.
- * The escape hashes to the same byte, so no recorded digest moves.
- *
- * Any typed-array view is hashed as the bytes it holds. That is not a detail:
- * `eval-quality`'s corpus port returns `bytes` as a plain `Uint8Array`, and a
- * `Uint8Array` reaching the branch below unconverted would be stringified to its
- * decimal spelling and hashed as the text "1,2,3". Every digest taken that way
- * would be wrong and none of them would look wrong, so the conversion is here
- * rather than left to each caller to remember.
- *
- * @param {string|Buffer|Uint8Array|Array<string|Buffer|Uint8Array>} parts
- * @returns {string} `sha256:<hex>`
- */
-function digest(parts) {
-  const list = Array.isArray(parts) ? parts : [parts];
-  const hash = createHash('sha256');
-  for (const part of list) {
-    const bytes = ArrayBuffer.isView(part) ? Buffer.from(part.buffer, part.byteOffset, part.byteLength) : Buffer.from(String(part), 'utf8');
-    hash.update(`${bytes.length}\u0000`);
-    hash.update(bytes);
-  }
-  return `sha256:${hash.digest('hex')}`;
-}
-
-/**
- * Digest over a set of repository files: sorted by path, each contributing its
- * relative path and then its bytes, so a rename changes the digest.
- *
- * A missing file contributes a marker instead of throwing. This is called on the
- * way out of a run that may already have failed because that file is missing,
- * and a reporting path that crashes on the condition it is reporting is worse
- * than a digest that says the file was not there.
- *
- * The existence check that used to ask has gone: `readBytes` answers absence as a
- * value and raises everything else, so the marker is written where the port says
- * the file was not there and a permission error or a directory in place of a file
- * still reaches the caller. `.present` is tested rather than the bytes, because a
- * zero-byte fixture is present and empty and has always contributed its own empty
- * bytes to the digest.
+ * Digest over a set of repository files, each read through the file-system
+ * port; see `digestFiles` in the runtime's digest module for the rules.
  *
  * @param {string} projectRoot
  * @param {string[]} relativePaths
  * @returns {Promise<string>}
  */
-async function digestFiles(projectRoot, relativePaths) {
-  const parts = [];
-  for (const relative of [...relativePaths].sort()) {
-    const read = await readBytes(path.join(projectRoot, relative));
-    parts.push(relative, read.present ? read.bytes : '<missing>');
-  }
-  return digest(parts);
-}
-
-/**
- * Digest over the case prompts of a whole suite, keyed by case id so a
- * reordering of the cases does not change the answer.
- *
- * @param {Array<{id: string, prompt: string}>} cases
- * @returns {string}
- */
-function digestPrompts(cases) {
-  const parts = [];
-  for (const item of [...cases].sort((left, right) => left.id.localeCompare(right.id))) {
-    parts.push(item.id, item.prompt);
-  }
-  return digest(parts);
-}
-
-/**
- * The commit the run measured, and whether the tree was clean.
- *
- * A dirty tree is recorded rather than rejected: local debugging runs are the
- * normal case, and the flag is what stops a later comparison from treating the
- * result as a property of the commit.
- *
- * @param {string} projectRoot
- * @returns {{commit: string|null, dirty: boolean}}
- */
-function repositoryState(projectRoot) {
-  const rev = boundedProbe('git', ['rev-parse', 'HEAD'], { cwd: projectRoot });
-  if (!rev.ok) return { commit: null, dirty: false };
-  const status = boundedProbe('git', ['status', '--porcelain'], { cwd: projectRoot });
-  return {
-    commit: rev.stdout.trim(),
-    dirty: status.ok && status.stdout.trim().length > 0,
-  };
-}
-
-/**
- * What `<executable> --version` printed, or null when the probe failed.
- *
- * @param {string} executable
- * @returns {string|null}
- */
-function probeVersion(executable) {
-  if (!executable) return null;
-  const probe = boundedProbe(executable, ['--version']);
-  if (!probe.ok) return null;
-  const line = String(probe.stdout || probe.stderr || '')
-    .trim()
-    .split('\n')[0];
-  return line.length > 0 ? line : null;
-}
-
-/**
- * Passthrough argv with anything credential-shaped removed.
- *
- * @param {string[]} args
- * @returns {string[]}
- */
-function redactArgs(args = []) {
-  const redacted = [];
-  let dropNextValue = false;
-  for (const argument of args) {
-    if (dropNextValue) {
-      redacted.push(REDACTED);
-      dropNextValue = false;
-      continue;
-    }
-    const separator = argument.indexOf('=');
-    if (argument.startsWith('-') && separator > 0) {
-      const flag = argument.slice(0, separator);
-      // The value half is tested too. `--extra=sk-live-abc` names nothing
-      // credential-shaped, so the flag test alone let a real token through into a
-      // file CI uploads, which is the one thing this function exists to stop.
-      const value = argument.slice(separator + 1);
-      const sanitized = redactSecrets(value);
-      redacted.push(`${flag}=${SECRET_FLAG_PATTERN.test(flag) || sanitized !== value ? REDACTED : value}`);
-      continue;
-    }
-    if (argument.startsWith('-') && SECRET_FLAG_PATTERN.test(argument)) {
-      redacted.push(argument);
-      dropNextValue = true;
-      continue;
-    }
-    const sanitized = redactSecrets(argument);
-    redacted.push(sanitized === argument ? argument : REDACTED);
-  }
-  return redacted;
+function digestFiles(projectRoot, relativePaths) {
+  return digestFilesThrough(projectRoot, relativePaths, { readBytes });
 }
 
 /**

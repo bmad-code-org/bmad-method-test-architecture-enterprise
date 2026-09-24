@@ -19,6 +19,12 @@
  *   repository's own engine) runs `tea-evaluate check` to exit 0, which proves
  *   every module the runtime needs ships in TeA's `dependencies`.
  *
+ * Story 1.5 adds the registry: the fixture's `evaluation.json` registry builds a
+ * `CommandTargetPolicy` that eval-quality's own `CommandTargetPolicy` schema
+ * accepts, a registry entry the runtime's `RegistryEntry` schema refuses is
+ * refused by the builder, and a defect signature one of an entry's
+ * `infrastructureExitCodes` could satisfy exits 10 (AD-7).
+ *
  * Usage: node test/test-evaluate-check.js
  */
 
@@ -35,6 +41,10 @@ const AjvModule = require('ajv/dist/2020');
 const { buildCorpusIndex, writeCorpusIndex } = require('../cli/lib/evaluate/corpus-index');
 const { engineCliPath, engineSchemaPath, loadEngine, ENGINE_CLI_ENV } = require('../cli/lib/evaluate/engine');
 const { resolveEvaluationFolder } = require('../cli/lib/evaluate/folder');
+const { createRegistry, registryFromEvaluation } = require('../cli/lib/evaluate/registry');
+const { digest, digestFiles, redactArgs, redactSecrets } = require('../cli/lib/evaluate/digest');
+const { isDateTime } = require('../cli/lib/evaluate/formats');
+const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 
 const Ajv = AjvModule.default ?? AjvModule;
 
@@ -79,6 +89,45 @@ function editJson(folder, relative, edit) {
   fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+/** Sets the fixture's one registry entry's infrastructure exit codes. */
+function setInfrastructureCodes(folder, codes) {
+  editJson(folder, 'evaluation.json', (value) => (value.registry[0].infrastructureExitCodes = codes));
+}
+
+/** Replaces P-002's defect signature predicate. */
+function setSignature(folder, predicate) {
+  editJson(folder, 'probes/P-002.probe.json', (value) => (value.defectSignature.condition.predicate = predicate));
+}
+
+const EXIT_CODE = { pointer: '/interactions/observed/exit-code' };
+const exitEquals = (code) => ({ op: 'equality', operands: [EXIT_CODE, { literal: code }] });
+/** A clause reading only one call-input option of the observed interaction. */
+const optionEquals = (name, value) => ({
+  op: 'equality',
+  operands: [{ pointer: `/interactions/observed/call-inputs/option/${name}` }, { literal: value }],
+});
+/** `count` call-input clauses beside `rest`, all joined by `all`. */
+const withOptionClauses = (count, ...rest) => ({
+  op: 'all',
+  operands: [...Array.from({ length: count }, (_, index) => optionEquals(`flag${index + 1}`, 'on')), ...rest],
+});
+
+/**
+ * Characters a path field refuses beyond C0 and DEL, one per class: C1
+ * controls, the line and paragraph separators, and the bidirectional
+ * formatting characters (embeddings and overrides, isolates, marks).
+ */
+const UNPRINTABLE_PATH_CHARACTERS = [
+  ['a C1 control (U+0085)', '\u0085'],
+  ['a C1 control (U+009B)', '\u009B'],
+  ['a line separator (U+2028)', '\u2028'],
+  ['a paragraph separator (U+2029)', '\u2029'],
+  ['a right-to-left override (U+202E)', '\u202E'],
+  ['a left-to-right isolate (U+2066)', '\u2066'],
+  ['a right-to-left mark (U+200F)', '\u200F'],
+  ['an Arabic letter mark (U+061C)', '\u061C'],
+];
+
 function sha256Hex(bytes) {
   return crypto.createHash('sha256').update(bytes).digest('hex');
 }
@@ -107,6 +156,266 @@ async function checkValidFixture() {
     validateProbe(qualified),
     `the fixture's qualified baseline probe does not meet eval-quality's probe schema: ${JSON.stringify(validateProbe.errors)}`,
   );
+}
+
+// ---------------------------------------------------------------------------
+// The registry (Story 1.5)
+
+/**
+ * Problems eval-quality's own `CommandTargetPolicy` parser finds in `policy`,
+ * or an empty list when it accepts it.
+ *
+ * `parseCommandTargetPolicy` on `eval-quality/adapters` refuses an invalid
+ * mapping with a `RuntimeFault` whose `cause` is the `ZodError` carrying every
+ * issue. A child Node process runs it, because the test tree loads the engine
+ * as an ES module, and prints the issues it reports.
+ */
+function commandTargetPolicyProblems(policy) {
+  const script = [
+    "import { readFileSync } from 'node:fs';",
+    "import { parseCommandTargetPolicy } from 'eval-quality/adapters';",
+    'try {',
+    "  parseCommandTargetPolicy(JSON.parse(readFileSync(0, 'utf8')));",
+    "  process.stdout.write('[]');",
+    '} catch (error) {',
+    "  if (error?.code !== 'schema-parse-failure' || !Array.isArray(error.cause?.issues)) throw error;",
+    '  process.stdout.write(JSON.stringify(error.cause.issues));',
+    '}',
+  ].join('\n');
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: PROJECT_ROOT,
+    input: JSON.stringify(policy),
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    throw new Error(`eval-quality's parseCommandTargetPolicy could not be run\n${result.stderr}`);
+  }
+  return JSON.parse(result.stdout);
+}
+
+function checkRegistry() {
+  const evaluation = JSON.parse(fs.readFileSync(path.join(VALID, 'evaluation.json'), 'utf8'));
+  const registry = registryFromEvaluation(evaluation, { root: PROJECT_ROOT });
+  const policy = registry.commandTargetPolicy({ cwd: tempDir('registry-cwd') });
+  const problems = commandTargetPolicyProblems(policy);
+  check(
+    problems.length === 0,
+    `the policy the fixture registry builds does not meet eval-quality's CommandTargetPolicy schema: ${JSON.stringify(problems)}`,
+  );
+  const leaked = commandTargetPolicyProblems({
+    authorizations: [{ ...policy.authorizations[0], infrastructureExitCodes: [3] }],
+  });
+  check(leaked.length > 0, "eval-quality's CommandTargetPolicy schema accepted an unknown key, so this case proves nothing");
+  check(policy.authorizations.length === evaluation.registry.length, 'the policy does not carry one authorization per registry entry');
+  check(
+    policy.authorizations.every((authorization) => !Object.hasOwn(authorization, 'infrastructureExitCodes')),
+    'an authorization carries infrastructureExitCodes, which eval-quality would refuse as an unknown key',
+  );
+  check(
+    policy.authorizations[0]?.target === path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'red-phase-gate.js'),
+    `the fixture's relative target did not resolve against the registry root: ${policy.authorizations[0]?.target}`,
+  );
+  check(
+    registry.targetProblems().length === 0,
+    `the fixture's registered target is missing or not executable: ${registry.targetProblems().join('; ')}`,
+  );
+
+  // The builder reads the RegistryEntry schema: an entry it refuses never
+  // becomes an authorization.
+  const [entry] = evaluation.registry;
+  const { infrastructureExitCodes, ...withoutCodes } = entry;
+  let refused;
+  try {
+    createRegistry([withoutCodes], { root: PROJECT_ROOT });
+  } catch (error) {
+    refused = error;
+  }
+  check(
+    refused !== undefined && refused.message.includes('infrastructureExitCodes'),
+    `createRegistry accepted an entry with no infrastructureExitCodes (${infrastructureExitCodes.join(', ')} removed): ${refused?.message}`,
+  );
+  // Two executables on one interface with different keys: each authorization
+  // carries its own entry's keys, and a request's environment is read for the
+  // one executable it targets.
+  const shared = createRegistry(
+    [
+      { ...entry, environmentKeys: ['HOME'] },
+      { ...entry, executable: 'tea-atdd-report', environmentKeys: ['TEA_REPORT_TOKEN'] },
+    ],
+    { root: PROJECT_ROOT },
+  );
+  const sharedPolicy = shared.commandTargetPolicy({ cwd: PROJECT_ROOT });
+  check(
+    JSON.stringify(sharedPolicy.authorizations.map((authorization) => authorization.permittedEnvironmentKeys)) ===
+      JSON.stringify([['HOME'], ['TEA_REPORT_TOKEN']]),
+    `entries sharing an interface did not keep their own keys: ${JSON.stringify(sharedPolicy.authorizations.map((a) => a.permittedEnvironmentKeys))}`,
+  );
+  const reportEnvironment = shared.hostEnvironment(entry.interfaceId, [], 'tea-atdd-report');
+  check(!Object.hasOwn(reportEnvironment, 'HOME'), "hostEnvironment for one executable read another entry's key");
+  let ambiguous;
+  try {
+    shared.hostEnvironment(entry.interfaceId);
+  } catch (error) {
+    ambiguous = error;
+  }
+  check(ambiguous !== undefined, 'hostEnvironment answered for an interface with two executables without being told which');
+  let dotted;
+  try {
+    dotted = createRegistry([{ ...entry, target: '..tools/gate.js' }], { root: PROJECT_ROOT }).commandTargetPolicy({ cwd: PROJECT_ROOT });
+  } catch (error) {
+    dotted = error;
+  }
+  check(!(dotted instanceof Error), `a target in a directory named "..tools" was refused: ${dotted?.message}`);
+
+  let unknownField;
+  try {
+    createRegistry([{ ...entry, shell: true }], { root: PROJECT_ROOT });
+  } catch (error) {
+    unknownField = error;
+  }
+  check(unknownField !== undefined && unknownField.message.includes('shell'), 'createRegistry accepted an entry with an unknown field');
+
+  // A directory carries the executable bit and still cannot be spawned.
+  const directoryTarget = createRegistry([{ ...entry, target: 'test/fixtures/evaluate/valid' }], { root: PROJECT_ROOT });
+  const directoryProblems = directoryTarget.targetProblems();
+  check(
+    directoryProblems.length === 1 && directoryProblems[0].includes('is not a file'),
+    `targetProblems accepted a directory as a target: ${JSON.stringify(directoryProblems)}`,
+  );
+
+  // A relative root, and a relative projectRoot override, are fixed to absolute
+  // paths, so a later change of working directory cannot move a target.
+  const expectedTarget = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'red-phase-gate.js');
+  const startDirectory = process.cwd();
+  try {
+    process.chdir(PROJECT_ROOT);
+    const relative = createRegistry([entry], { root: '.' });
+    const overridden = createRegistry([entry], { root: os.tmpdir() });
+    process.chdir(os.tmpdir());
+    check(relative.root === PROJECT_ROOT, `a relative registry root was kept as ${JSON.stringify(relative.root)}`);
+    const relativeTarget = relative.commandTargetPolicy({ cwd: PROJECT_ROOT }).authorizations[0].target;
+    check(relativeTarget === expectedTarget, `a relative registry root resolved its target to ${relativeTarget}`);
+    check(relative.targetProblems().length === 0, `a relative registry root broke targetProblems: ${relative.targetProblems().join('; ')}`);
+    process.chdir(path.join(PROJECT_ROOT, 'test'));
+    const override = overridden.commandTargetPolicy({ cwd: PROJECT_ROOT, projectRoot: '..' }).authorizations[0].target;
+    check(override === expectedTarget, `a relative projectRoot override resolved the target to ${override}`);
+    check(
+      overridden.targetPath(entry, '..') === expectedTarget,
+      `targetPath kept a relative projectRoot override: ${overridden.targetPath(entry, '..')}`,
+    );
+    check(
+      overridden.targetProblems('..').length === 0,
+      `targetProblems kept a relative projectRoot override: ${overridden.targetProblems('..').join('; ')}`,
+    );
+  } finally {
+    process.chdir(startDirectory);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Digest, redaction and record formats (review round 1)
+
+async function checkRuntimeUnits() {
+  // A missing file and a file holding the marker's bytes digest apart; a
+  // missing file and an ordinary file digest as they always have.
+  const folder = tempDir('digest-files');
+  fs.writeFileSync(path.join(folder, 'marker.txt'), '<missing>');
+  fs.writeFileSync(path.join(folder, 'plain.txt'), 'bytes');
+  const markerPresent = await digestFiles(folder, ['marker.txt']);
+  fs.rmSync(path.join(folder, 'marker.txt'));
+  const markerMissing = await digestFiles(folder, ['marker.txt']);
+  check(markerPresent !== markerMissing, 'a file holding "<missing>" digests the same as a missing file');
+  check(markerMissing === digest(['marker.txt', '<missing>']), 'a missing file no longer digests as its path and the <missing> marker');
+  check(
+    (await digestFiles(folder, ['plain.txt'])) === digest(['plain.txt', Buffer.from('bytes')]),
+    'an ordinary file no longer digests as its path and its bytes',
+  );
+
+  // URL userinfo is a credential with or without a password half.
+  for (const [input, expected] of [
+    ['--endpoint=https://user:pass@host.example/path?x=1', '--endpoint=https://[redacted]@host.example/path?x=1'],
+    ['clone http://ghs_token@github.example/org/repo', 'clone http://[redacted]@github.example/org/repo'],
+    ['https://user:p@ss@host.example/', 'https://[redacted]@host.example/'],
+    ['https://host.example/users/a@b', 'https://host.example/users/a@b'],
+    ['mail someone@example.com', 'mail someone@example.com'],
+  ]) {
+    check(redactSecrets(input) === expected, `redactSecrets(${JSON.stringify(input)}) gave ${JSON.stringify(redactSecrets(input))}`);
+  }
+  const args = redactArgs(['--endpoint=https://user:pass@host.example', 'https://user:pass@host.example']);
+  check(
+    JSON.stringify(args) === JSON.stringify(['--endpoint=[redacted]', '[redacted]']),
+    `redactArgs kept URL userinfo: ${JSON.stringify(args)}`,
+  );
+
+  // date-time is checked, calendar and clock included, with no warning.
+  for (const value of ['2026-09-23T10:00:00Z', '2024-02-29T23:59:60.5+05:30', '2026-01-01t00:00:00z']) {
+    check(isDateTime(value), `isDateTime refused ${value}`);
+  }
+  for (const value of [
+    '2026-02-30T00:00:00Z',
+    '2023-02-29T00:00:00Z',
+    '2026-01-01T24:00:00Z',
+    '2026-13-01T00:00:00Z',
+    '2026-01-01 00:00:00Z',
+    '2026-01-01T00:00:00+24:00',
+    'yesterday',
+  ]) {
+    check(!isDateTime(value), `isDateTime accepted ${value}`);
+  }
+  const stampSchema = { type: 'object', properties: { at: { type: 'string', format: 'date-time' } } };
+  const validateArtifact = createArtifactValidator({ readJson: async () => ({ present: true, value: stampSchema }) });
+  const warnings = [];
+  const warn = console.warn;
+  console.warn = (...parts) => warnings.push(parts.join(' '));
+  let malformed;
+  let wellFormed;
+  try {
+    malformed = await validateArtifact('stamp', { at: '2026-02-30T00:00:00Z' });
+    wellFormed = await validateArtifact('stamp', { at: '2026-09-23T10:00:00Z' });
+  } finally {
+    console.warn = warn;
+  }
+  check(malformed.length > 0, 'createArtifactValidator accepted a malformed date-time');
+  check(wellFormed.length === 0, `createArtifactValidator refused a well-formed date-time: ${JSON.stringify(wellFormed)}`);
+  check(warnings.length === 0, `createArtifactValidator warned while compiling a date-time format: ${warnings.join('; ')}`);
+}
+
+// ---------------------------------------------------------------------------
+// The optional engine is absent
+
+const HIDE_ENGINE = path.join(PROJECT_ROOT, 'test', 'fixtures', 'evaluate', 'engine-absent', 'hide-engine.cjs');
+const ENGINE_ABSENT_MESSAGE = 'eval-quality is not installed where tea-evaluate can reach it';
+
+/**
+ * With eval-quality hidden from every resolution, the runtime still loads
+ * (its synchronous schema-version reading is guarded), each subcommand exits
+ * 12 naming the package to install, and asking the runtime for a schema version
+ * or the engine version names the missing package too.
+ */
+function checkEngineAbsent() {
+  for (const subcommand of ['check', 'digest']) {
+    const result = spawnSync(process.execPath, ['--require', HIDE_ENGINE, CLI, subcommand, '--evaluation', copyValid()], {
+      encoding: 'utf8',
+    });
+    check(
+      result.status === 12,
+      `${subcommand} with the engine absent exited ${result.status}; expected 12\n${result.stdout}${result.stderr}`,
+    );
+    check(
+      result.stderr.includes(ENGINE_ABSENT_MESSAGE),
+      `${subcommand} with the engine absent did not name the missing package\n${result.stderr}`,
+    );
+  }
+  for (const [label, expression] of [
+    ['a record builder', "require('./cli/lib/evaluate/records').sealedRunRecord({})"],
+    ['the engine version', "require('./cli/lib/evaluate/engine').engineVersion()"],
+  ]) {
+    const result = spawnSync(process.execPath, ['--require', HIDE_ENGINE, '-e', expression], { cwd: PROJECT_ROOT, encoding: 'utf8' });
+    check(
+      result.status !== 0 && result.stderr.includes(ENGINE_ABSENT_MESSAGE),
+      `${label} with the engine absent did not report the missing package (exit ${result.status})\n${result.stderr}`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +597,29 @@ const DEFECT_CASES = [
     rule: 'clean-control',
     plant: (folder) => editJson(folder, 'probes/P-001.probe.json', (value) => (value.expectedClean = false)),
   },
+  {
+    name: 'a defect signature exitCode == 3 against a registry entry declaring 3 to 6 as infrastructure codes',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) => {
+      setInfrastructureCodes(folder, [3, 4, 5, 6]);
+      setSignature(folder, exitEquals(3));
+    },
+    expect: (output) => [[output.includes('exits 3, which'), 'the finding does not name exactly the satisfying code 3']],
+  },
+  {
+    name: 'a defect signature naming an executable no registry entry declares',
+    file: 'probes/P-002.probe.json',
+    rule: 'unregistered-executable',
+    plant: (folder) =>
+      editJson(folder, 'probes/P-002.probe.json', (value) => (value.defectSignature.invocation.executable = 'tea-other-runner')),
+  },
+  {
+    name: 'a registry that repeats an interface and executable pair',
+    file: 'evaluation.json',
+    rule: 'registry',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => value.registry.push({ ...value.registry[0] })),
+  },
 ];
 
 const STORY_RULES = [
@@ -302,6 +634,9 @@ const STORY_RULES = [
   'id-pattern',
   'qualification-digest',
   'clean-control',
+  'infrastructure-exit-code',
+  'unregistered-executable',
+  'registry',
 ];
 
 /** A file outside the evaluation folder, for the symbolic-link cases to point at. */
@@ -433,6 +768,18 @@ const HARDENING_CASES = [
     plant: (folder) => editJson(folder, 'mutations/M-001.mutation.json', (value) => (value.targetArtifact = 'C:/x')),
   },
   {
+    name: 'a targetArtifact hiding a climb out of the folder after a newline',
+    file: 'mutations/M-001.mutation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'mutations/M-001.mutation.json', (value) => (value.targetArtifact = 'skill\n/../../x')),
+  },
+  {
+    name: 'a provisioned directory hiding a climb after a newline',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.workspace.provision = ['node_modules\n/..'])),
+  },
+  {
     name: 'an evaluation.json that is null',
     file: 'evaluation.json',
     rule: 'schema',
@@ -449,7 +796,330 @@ const HARDENING_CASES = [
     plant: (folder) => fs.writeFileSync(path.join(folder, 'evaluation.json'), '[]\n'),
     expect: (output) => [[!output.includes('[schema-version]'), 'a non-object manifest was told to upgrade TeA']],
   },
+  {
+    name: 'a defect signature any non-zero exit satisfies',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) => {
+      setInfrastructureCodes(folder, [3, 4, 5, 6]);
+      setSignature(folder, { op: 'not', operands: [exitEquals(0)] });
+    },
+    expect: (output) => [[output.includes('exits 3, 4, 5, 6, which'), 'the finding does not name every satisfying code']],
+  },
+  {
+    name: 'a defect signature whose stream clause holds on a silent failure',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) =>
+      setSignature(folder, {
+        op: 'all',
+        operands: [exitEquals(3), { op: 'existence', operands: [{ pointer: '/interactions/observed/stderr' }] }],
+      }),
+  },
+  {
+    name: 'a defect signature with no pointer that always holds',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) => setSignature(folder, { op: 'equality', operands: [{ literal: 1 }, { literal: 1 }] }),
+  },
+  {
+    name: 'a defect signature testing the exit code against a contract reference set',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) => {
+      editJson(folder, 'contract.json', (value) => {
+        value.referenceSets = {
+          'gate-failures': { keys: ['code'], members: [{ code: 3 }], commentary: 'The exit codes the gate reports a failure with.' },
+        };
+      });
+      setSignature(folder, { op: 'set-membership', operands: [EXIT_CODE, { referenceSet: 'gate-failures' }] });
+    },
+    expect: (output) => [
+      [output.includes('exits 3, which'), 'the finding does not name the code the reference set admits'],
+      [!output.includes('[engine-schema]'), 'the planted contract is not valid, so the case proves nothing'],
+    ],
+  },
+  {
+    name: 'a defect signature the engine cannot resolve',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) => setSignature(folder, { op: 'set-membership', operands: [EXIT_CODE, { referenceSet: 'undeclared-set' }] }),
+    expect: (output) => [[output.includes('could not be resolved'), 'an unresolvable signature did not fail closed']],
+  },
+  {
+    name: 'a manifestation witness any non-zero exit satisfies',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) =>
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.defects[0].manifestationWitness.relation = {
+          op: 'not',
+          operands: [{ op: 'equality', operands: [{ pointer: '/interactions/manifest-active-tests/exit-code' }, { literal: 0 }] }],
+        };
+      }),
+    expect: (output) => [[output.includes('manifestationWitness.relation could hold'), 'the finding does not name the witness relation']],
+  },
+  {
+    name: 'a defect signature whose call-input clause a failed run with the same inputs meets',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) => {
+      setInfrastructureCodes(folder, [3]);
+      setSignature(folder, {
+        op: 'all',
+        operands: [
+          { op: 'equality', operands: [{ pointer: '/interactions/observed/call-inputs/option/agent' }, { literal: 'claude' }] },
+          { op: 'not', operands: [exitEquals(0)] },
+        ],
+      });
+    },
+  },
+  {
+    name: 'a manifestation witness reading its own declared inputs beside a non-zero exit',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) =>
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.defects[0].manifestationWitness.relation = {
+          op: 'all',
+          operands: [
+            {
+              op: 'equality',
+              operands: [{ pointer: '/interactions/manifest-active-tests/call-inputs/option/agent' }, { literal: 'claude' }],
+            },
+            {
+              op: 'not',
+              operands: [{ op: 'equality', operands: [{ pointer: '/interactions/manifest-active-tests/exit-code' }, { literal: 0 }] }],
+            },
+          ],
+        };
+      }),
+  },
+  {
+    name: 'a manifestation witness naming an interface no registry entry declares',
+    file: 'probes/P-002.probe.json',
+    rule: 'unregistered-executable',
+    plant: (folder) =>
+      editJson(folder, 'probes/P-002.probe.json', (value) => (value.defects[0].manifestationWitness.interfaceId = 'tea-other')),
+  },
+  {
+    name: 'a registry entry with no infrastructureExitCodes',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => delete value.registry[0].infrastructureExitCodes),
+    expect: (output) => [[output.includes('infrastructureExitCodes'), 'the finding does not name infrastructureExitCodes']],
+  },
+  {
+    name: 'a registry entry permitting PATH',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => value.registry[0].environmentKeys.push('PATH')),
+  },
+  {
+    name: 'a registry entry whose target hides a climb out of the project after a newline',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = 'a\n/../../../etc/x')),
+  },
+  {
+    name: 'a registry entry reading an absolute artifact path back',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].artifacts.scaffold = '/etc/passwd')),
+  },
+  {
+    name: 'a registry entry whose target climbs out of the project',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = '../outside/runner.js')),
+  },
+  ...UNPRINTABLE_PATH_CHARACTERS.flatMap(([label, character]) => [
+    {
+      name: `a registry target holding ${label}`,
+      file: 'evaluation.json',
+      rule: 'schema',
+      plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = `test/fix${character}tures/gate.js`)),
+    },
+    {
+      name: `a registry artifact path holding ${label}`,
+      file: 'evaluation.json',
+      rule: 'schema',
+      plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].artifacts.scaffold = `tests/${character}x.ts`)),
+    },
+    {
+      name: `a provisioned directory holding ${label}`,
+      file: 'evaluation.json',
+      rule: 'schema',
+      plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.workspace.provision = [`node${character}_modules`])),
+    },
+    {
+      name: `a targetArtifact holding ${label}`,
+      file: 'mutations/M-001.mutation.json',
+      rule: 'schema',
+      plant: (folder) => editJson(folder, 'mutations/M-001.mutation.json', (value) => (value.targetArtifact = `skill/${character}x.md`)),
+    },
+  ]),
+  {
+    name: 'a registry target with a trailing slash',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = 'test/fixtures/evaluate/')),
+  },
+  {
+    name: 'a registry target with an empty segment',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) =>
+      editJson(folder, 'evaluation.json', (value) => (value.registry[0].target = 'test//fixtures/evaluate/red-phase-gate.js')),
+  },
+  {
+    name: 'a registry artifact path with a trailing slash',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].artifacts.scaffold = 'tests/api/')),
+  },
+  {
+    name: 'a targetArtifact with an empty segment',
+    file: 'mutations/M-001.mutation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'mutations/M-001.mutation.json', (value) => (value.targetArtifact = 'skill//x.md')),
+  },
+  {
+    name: 'a provisioned directory with an empty segment',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.workspace.provision = ['vendor//cache'])),
+  },
+  {
+    name: 'a defect signature whose one clause compares a call input with a stream',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) =>
+      setSignature(folder, {
+        op: 'all',
+        operands: [
+          {
+            op: 'equality',
+            operands: [{ pointer: '/interactions/observed/call-inputs/option/agent' }, { pointer: '/interactions/observed/stdout' }],
+          },
+          { op: 'not', operands: [exitEquals(0)] },
+        ],
+      }),
+    expect: (output) => [
+      [output.includes('could not be resolved'), 'a clause mixing call inputs with a stream did not fail closed'],
+      [output.includes('together with other evidence'), 'the finding does not say a clause mixes call inputs with other evidence'],
+    ],
+  },
+  {
+    name: 'a defect signature whose stdout clause holds on a silent failure',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) => {
+      setInfrastructureCodes(folder, [3, 4, 5, 6]);
+      setSignature(folder, {
+        op: 'all',
+        operands: [exitEquals(3), { op: 'existence', operands: [{ pointer: '/interactions/observed/stdout' }] }],
+      });
+    },
+    expect: (output) => [[output.includes('exits 3, which'), 'the finding does not name the satisfying code 3']],
+  },
+  {
+    name: 'a defect signature with nine call-input clauses',
+    file: 'probes/P-002.probe.json',
+    rule: 'infrastructure-exit-code',
+    plant: (folder) => setSignature(folder, withOptionClauses(9, exitEquals(1))),
+    expect: (output) => [
+      [output.includes('could not be resolved'), 'nine call-input clauses did not fail closed'],
+      [output.includes('too many clauses'), 'the finding does not say there are too many clauses'],
+    ],
+  },
 ];
+
+/** Legitimate folders the Story 1.5 rules must leave alone: each exits 0. */
+const CLEAN_CASES = [
+  {
+    name: 'two entries sharing an interface with different executables',
+    plant: (folder) =>
+      editJson(folder, 'evaluation.json', (value) => value.registry.push({ ...value.registry[0], executable: 'tea-atdd-report' })),
+  },
+  {
+    name: 'a signature whose call-input clause sits beside an exit code only the defect produces',
+    plant: (folder) =>
+      setSignature(folder, {
+        op: 'all',
+        operands: [
+          { op: 'equality', operands: [{ pointer: '/interactions/observed/call-inputs/option/agent' }, { literal: 'claude' }] },
+          exitEquals(1),
+        ],
+      }),
+  },
+  {
+    name: 'a signature that needs the exit code and output only the defect produces',
+    plant: (folder) => {
+      setInfrastructureCodes(folder, [3, 4, 5, 6]);
+      setSignature(folder, {
+        op: 'all',
+        operands: [
+          exitEquals(3),
+          { op: 'equality', operands: [{ pointer: '/interactions/observed/stdout' }, { literal: 'active tests found' }] },
+        ],
+      });
+    },
+  },
+  {
+    name: 'a signature with two call-input clauses beside an exit code only the defect produces',
+    plant: (folder) => setSignature(folder, withOptionClauses(2, exitEquals(1))),
+  },
+  {
+    name: 'a signature with eight call-input clauses, the most the rule enumerates',
+    plant: (folder) => {
+      setInfrastructureCodes(folder, [3, 4, 5, 6]);
+      setSignature(folder, withOptionClauses(8, exitEquals(1)));
+    },
+  },
+  {
+    name: 'a manifestation witness on an api interface, which no command registry entry serves',
+    plant: (folder) => {
+      const example = JSON.parse(
+        fs.readFileSync(
+          path.join(
+            path.dirname(path.dirname(engineSchemaPath('probe.schema.json'))),
+            'corpus',
+            'dev',
+            'compile-seal-example',
+            'contract.json',
+          ),
+          'utf8',
+        ),
+      );
+      const api = structuredClone(example.permittedInterfaces.find((candidate) => candidate.logicalId === 'thing-api'));
+      api.operations = [api.operations[0]];
+      editJson(folder, 'contract.json', (value) => value.permittedInterfaces.push(api));
+      editJson(folder, 'probes/P-002.probe.json', (value) => {
+        value.defects[0].manifestationWitness = {
+          legId: 'manifest-api',
+          interfaceId: api.logicalId,
+          operationId: api.operations[0].operationId,
+          inputs: { body: { kind: 'json', value: { name: 'alpha' } }, header: {}, path: {}, query: {} },
+          relation: {
+            op: 'not',
+            operands: [{ op: 'equality', operands: [{ pointer: '/interactions/manifest-api/response-status' }, { literal: 201 }] }],
+          },
+        };
+      });
+    },
+  },
+];
+
+async function runCleanCases() {
+  for (const testCase of CLEAN_CASES) {
+    const folder = copyValid();
+    testCase.plant(folder);
+    await writeCorpusIndex(folder);
+    const result = runCli(['check', '--evaluation', folder]);
+    check(result.status === 0, `${testCase.name}: check exited ${result.status}; expected 0\n${result.output}`);
+  }
+}
 
 async function runCases(cases) {
   for (const testCase of cases) {
@@ -481,6 +1151,7 @@ async function checkDefectCases() {
   const covered = new Set(DEFECT_CASES.map((testCase) => testCase.rule));
   for (const rule of STORY_RULES) check(covered.has(rule), `no defect case covers the story's ${rule} rule`);
   await runCases(HARDENING_CASES);
+  await runCleanCases();
 
   // Two defects in one copy: both are listed, not only the first.
   const folder = copyValid();
@@ -503,6 +1174,27 @@ function checkSymlinkRefused() {
     const result = runCli([subcommand, '--evaluation', folder]);
     check(result.status === 10, `${subcommand} over a symbolic link in corpus/ exited ${result.status}; expected 10\n${result.output}`);
     check(result.stdout.includes('corpus/linked.md: [corpus-file]'), `${subcommand} did not name the symbolic link\n${result.output}`);
+  }
+}
+
+/**
+ * A file name holding a newline cannot print a finding line of its own: the
+ * name is quoted and escaped, and every line either subcommand prints is a
+ * finding naming the file or the summary.
+ */
+function checkForgedFindingLine() {
+  const folder = copyValid();
+  const forged = 'x\nforged.md: [schema] forged';
+  fs.symlinkSync(path.join(folder, 'corpus', 'reservations', 'docs', 'story.md'), path.join(folder, 'corpus', forged));
+  for (const subcommand of ['check', 'digest']) {
+    const result = runCli([subcommand, '--evaluation', folder]);
+    check(result.status === 10, `${subcommand} over a file name holding a newline exited ${result.status}; expected 10\n${result.output}`);
+    const lines = result.stdout.split('\n').filter((line) => line.length > 0);
+    check(!lines.some((line) => line.startsWith('forged.md')), `${subcommand} printed a line the file name forged\n${result.stdout}`);
+    check(
+      lines.some((line) => line.startsWith(`${JSON.stringify(`corpus/${forged}`)}: [corpus-file]`)),
+      `${subcommand} did not print the file name quoted and escaped\n${result.stdout}`,
+    );
   }
 }
 
@@ -659,14 +1351,38 @@ function checkPackedInstall() {
     run.status === 0,
     `tea-evaluate check from the packed install exited ${run.status}; expected 0\n${run.stdout}${run.stderr}${run.error ?? ''}`,
   );
+
+  // The runtime modules no subcommand loads yet still load from the tarball,
+  // with their dependencies: a registry builds a policy, a record builder
+  // stamps its version, and a digest runs.
+  const installed = path.join(project, 'node_modules', TEA_MANIFEST.name, 'cli', 'lib', 'evaluate');
+  const script = [
+    `const registry = require(${JSON.stringify(path.join(installed, 'registry.js'))});`,
+    `const records = require(${JSON.stringify(path.join(installed, 'records.js'))});`,
+    `const digest = require(${JSON.stringify(path.join(installed, 'digest.js'))});`,
+    `const probe = require(${JSON.stringify(path.join(installed, 'bounded-probe.js'))});`,
+    `const formats = require(${JSON.stringify(path.join(installed, 'formats.js'))});`,
+    `const entries = require(${JSON.stringify(path.join(VALID, 'evaluation.json'))}).registry;`,
+    'const policy = registry.createRegistry(entries, { root: process.cwd() }).commandTargetPolicy({ cwd: process.cwd() });',
+    'if (policy.authorizations.length !== entries.length) process.exit(3);',
+    'if (!Number.isInteger(records.sealedRunRecord({}).schemaVersion)) process.exit(4);',
+    "if (!/^sha256:/.test(digest.digest('x')) || typeof probe.boundedProbe !== 'function') process.exit(5);",
+    "if (!formats.isDateTime('2026-09-23T00:00:00Z')) process.exit(6);",
+  ].join('\n');
+  const modules = spawnSync(process.execPath, ['-e', script], { cwd: project, encoding: 'utf8' });
+  check(modules.status === 0, `the runtime modules do not load from the packed install (exit ${modules.status})\n${modules.stderr}`);
 }
 
 async function main() {
   try {
     await checkValidFixture();
+    checkRegistry();
+    checkEngineAbsent();
     checkUsage();
     await checkDefectCases();
     checkSymlinkRefused();
+    checkForgedFindingLine();
+    await checkRuntimeUnits();
     await checkDigestUnit();
     await checkDigestIntegration();
     checkEngineCliPath();

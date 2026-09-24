@@ -61,7 +61,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             name: 'ai-terms',
-            content: `AI-optimized documentation: ${siteUrl}/llms-full.txt (plain text, ~111k tokens, complete TEA reference). Index: ${siteUrl}/llms.txt`,
+            content: `AI-optimized documentation: ${siteUrl}/llms-full.txt (plain text, complete TEA reference). Index: ${siteUrl}/llms.txt`,
           },
         },
         {

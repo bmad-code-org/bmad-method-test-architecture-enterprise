@@ -16,6 +16,11 @@
  *   `eval-quality.config.json` carries a section for that gate.
  * - `package-boundary` fails at exit 1 on a fixture tree carrying one line
  *   matching a dev-only-path pattern, naming the file and the line.
+ * - `package-boundary`, run with this repository's own patterns over a seeded
+ *   `cli/` tree, fails on a relative climb and on a self-referencing package
+ *   path into `test/`, and stays quiet on a neighbouring name such as
+ *   `../testing` and on `@playwright/test`, so "no file under `cli/` loads
+ *   from `test/`" is held by `test:boundary` as well as by `test:direction`.
  * - `field-ownership` fails at exit 1 on a fixture where a file outside the
  *   declared `writers` list sets the owned field, naming the file and field.
  * - `dependency-direction` fails at exit 1 on a fixture where a `cli/` file
@@ -23,9 +28,10 @@
  * - `dependency-direction`'s `purity` option fails at exit 1 on a fixture
  *   where the one file it is declared against carries all three seeded
  *   violations (`await`, an async function, and `new Date`), naming the file
- *   and each violated rule; this is what turns
- *   `test/lib/eval-quality-schema-versions.js` staying synchronous from prose
- *   in `docs/explanation/eval-quality-command-adapter.md` into a check.
+ *   and each violated rule; this is what turns the one synchronous reading of
+ *   the schema-version constants (since Story 1.5, `cli/lib/evaluate/engine.js`)
+ *   staying synchronous from prose in
+ *   `docs/explanation/eval-quality-command-adapter.md` into a check.
  * - `dependency-direction` stays quiet on a fixture whose only construct is a
  *   `require(name) {` method shorthand inside an object literal: this is the
  *   exact shape eval-quality's own scanner used to misread as a `require()`
@@ -53,6 +59,7 @@
 'use strict';
 
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
@@ -176,6 +183,39 @@ function checkBoundarySeed(binary) {
   check(output.includes('2 violation(s)'), `package-boundary reported a different violation count than the two seeded leaks\n${output}`);
 }
 
+function checkBoundaryTestReach(binary, config) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tea-boundary-test-reach-'));
+  try {
+    fs.mkdirSync(path.join(root, 'cli'));
+    fs.writeFileSync(path.join(root, 'cli', 'climb.js'), "require('../../../test/lib/probe-targets');\n");
+    fs.writeFileSync(path.join(root, 'cli', 'self.js'), "require('bmad-method-test-architecture-enterprise/test/lib/probe-targets');\n");
+    fs.writeFileSync(
+      path.join(root, 'cli', 'clean.js'),
+      "require('../testing/helpers');\nrequire('@playwright/test');\nrequire('./lib/evaluate/registry');\n",
+    );
+    // The repository's own patterns over the seeded tree; the manifest scan is
+    // dropped because the seeded tree carries no package.json.
+    const boundary = { ...config['package-boundary'], paths: [{ path: 'cli' }] };
+    delete boundary.manifest;
+    const configPath = path.join(root, 'eval-quality.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ 'package-boundary': boundary }));
+    const { status, output } = runGate(binary, 'package-boundary', configPath, root);
+    check(
+      status === EXIT_GATE_FAILED,
+      `package-boundary exited ${status} on a cli/ file loading from test/; expected ${EXIT_GATE_FAILED}\n${output}`,
+    );
+    for (const file of ['cli/climb.js', 'cli/self.js']) {
+      check(
+        output.includes(file) && output.includes('[test-tree-reach]'),
+        `package-boundary did not report ${file} under test-tree-reach\n${output}`,
+      );
+    }
+    check(!output.includes('cli/clean.js'), `package-boundary flagged a neighbouring name as a reach into test/\n${output}`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
 function checkLineageSeed(binary) {
   const fixture = path.join(FIXTURE_ROOT, 'lineage-violation', 'eval-quality.config.json');
   const { status, output } = runGate(binary, 'field-ownership', fixture, path.join(FIXTURE_ROOT, 'lineage-violation'));
@@ -203,10 +243,12 @@ function checkDirectionSeed(binary) {
  * layer rules already are: a fixture whose one purity-scoped file carries all
  * three seeded violations at once (`async`, `new Date`, `await`), held
  * against a minimal config declaring exactly that layer and its purity
- * block. `eval-quality-schema-versions.js`'s own `expectedSchemaVersion`
- * carries all three here, which is the drift the real layer and purity
- * block, added to `eval-quality.config.json` alongside
- * `test/lib/eval-quality-schema-versions.js`, exist to catch. Each rule
+ * block. The fixture's `eval-quality-schema-versions.js` keeps the name of
+ * the file the purity block first held (Story 4.9; the real layer moved to
+ * `cli/lib/evaluate/engine.js` in Story 1.5), and its `expectedSchemaVersion`
+ * carries all three violations, which is the drift the real layer and purity
+ * block in `eval-quality.config.json` exist to catch. The fixture is its own
+ * self-contained tree, so the name it seeds is data. Each rule
  * fires independently and is asserted by its own specific tag and message,
  * not by the sentence prefix all three rule strings share.
  */
@@ -273,6 +315,7 @@ function main() {
 
   checkWiring(config);
   checkBoundarySeed(binary);
+  checkBoundaryTestReach(binary, config);
   checkLineageSeed(binary);
   checkDirectionSeed(binary);
   checkPuritySeed(binary);

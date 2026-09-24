@@ -58,7 +58,7 @@ A runner command is small and has a fixed shape. Read `cli/fragment-selection-ru
 - **It declares one capability.** `tea-fragment-selection-runner` declares `read-only`, because a selection is a reply and needs no file. `tea-trace-runner` declares `scoped-artifact-writes`, because its deliverable is two files. Under `read-only`, claude runs with no write tool and codex under its read-only sandbox.
 - **Its exit codes are failure classes.** Both commands import one table, `cli/lib/runner-exit-codes.js`: `0` none, `2` usage, `3` `environment-configuration`, `4` `environment-transport`, `5` `environment-timeout`, `6` `environment-parser`. The adapter that runs the command records an exit code as an observation and never as a fault, so the code is the only channel a failure class survives the boundary through. Two commands spelling one class with two numbers would leave the caller guessing which command it held.
 - **It exports its own request shape.** `SELECTION_REQUEST_KEYS` in the selection runner declares which arguments, options, environment names, and standard-input keys the command accepts. `tools/generate-contracts.js` reads that export. `test/contracts/README.md` records why a transcription would have been worse: the transcribed version of `tea-test-review`'s verdict descriptor had drifted by seven keys before anybody measured it.
-- **It is registered twice.** Once in `package.json` under `bin`, once in `test/lib/probe-targets.js` as an execution target with its script path, its permitted subcommand paths, its artifact map, and its wall-clock backstop.
+- **It is registered twice.** Once in `package.json` under `bin`, once in `test/lib/probe-targets.js` as an execution target in the runtime's registry-entry shape: its script path, its permitted subcommand paths, its artifact map, its wall-clock backstop, and the exit codes by which it reports that it could not run.
 
 One more cost is invisible until you pay it. `eval-quality` is ESM and TEA is CommonJS, so every entry point through it is asynchronous. The harnesses were synchronous from `main()` down, and converting one touched every scoring loop in it. `docs/explanation/eval-quality-command-adapter.md` calls that the real cost of the rewiring.
 
@@ -66,7 +66,7 @@ One more cost is invisible until you pay it. `eval-quality` is ESM and TEA is Co
 
 Before `eval-quality` 1.0.0, each TEA harness owned the mechanism it measured with: its own `spawnSync`, its own argv assembly, its own timeout, its own `existsSync` followed by `JSON.parse` in a `try`. Three copies, disagreeing about what a command may do, none capping output, and nothing anywhere deciding which executable a harness was allowed to run.
 
-`createCommandLineAdapter` is that mechanism written once. `test/lib/probe-targets.js` is the TEA-owned half around it and is worth copying wholesale:
+`createCommandLineAdapter` is that mechanism written once. The registry around it ships in TEA's own package as `cli/lib/evaluate/registry.js`, the `tea-evaluate` runtime's registry, and `test/lib/probe-targets.js` declares TEA's commands as data over it. An adopter declares its own entries in `evaluation.json` and gets the same builder:
 
 - a `CommandTargetPolicy` that denies by default, so a logical name with no registry entry is refused before a process starts;
 - `permittedEnvironmentKeys` on every target, required from `eval-quality` 3.0.0 with no default: declare exactly the variable names the command actually reads, because a target with no list authorizes nothing and a request declaring a key the target's own list does not name is refused before a process spawns. `cli/lib/runner-exit-codes.js`'s `vendorEnvironmentNames()` is TEA's own pattern, read once and shared by every target rather than declared per command; see [The environment channel](./eval-quality-command-adapter.md#the-environment-channel) for what TEA authorizes and, as importantly, what it never does;
@@ -192,7 +192,7 @@ Name a metric for what it actually measures. TEA's review precision metric penal
 
 Every artifact kind `eval-quality` defines publishes its own `schemaVersion` constant, and `eval-quality`'s top-level entry point exports one per kind: `SEALED_RUN_RECORD_SCHEMA_VERSION`, `PROBE_SCHEMA_VERSION`, `EVAL_CONTRACT_SCHEMA_VERSION`, and the rest. A harness that writes a literal number instead has invented a second source for a value the package already owns, and the two can disagree with nothing to notice.
 
-`test/lib/eval-quality-schema-versions.js`'s `SCHEMA_VERSIONS` table reads each constant off `require('eval-quality')` once, keyed by kind, so a stamp this repository writes and a stamp it reads back are both held to the same source rather than to each other. `dependency-direction`'s `purity` option holds that one file to staying synchronous, since `test/lib/eval-quality-inputs.js`, which requires it and re-exports the table under the same name, also builds the package's genuinely asynchronous artifact readers. `npm run test:schema-versions` holds every `schemaVersion` TEA commits, in source and on disk, to that same table, and names the artifact, the stamp found, and the stamp the installed package now exports when they differ. It runs before the generator's own `--check` diff, so a version bump is named as a version bump rather than reported as unexplained changed bytes.
+The `SCHEMA_VERSIONS` table in the runtime's engine module, `cli/lib/evaluate/engine.js`, reads each constant off `require('eval-quality')` once, keyed by kind, so a stamp this repository writes and a stamp it reads back are both held to the same source. `dependency-direction`'s `purity` option holds that one file to staying synchronous, and `test/lib/eval-quality-inputs.js` re-exports the table under the same name. `npm run test:schema-versions` holds every `schemaVersion` TEA commits, in source and on disk, to that same table, and names the artifact, the stamp found, and the stamp the installed package now exports when they differ. It runs before the generator's own `--check` diff, so a version bump is named as a version bump rather than reported as unexplained changed bytes.
 
 ### The rule this repository learned the hard way
 
@@ -393,14 +393,14 @@ TEA's contracts lean on the fact that TEA workflows write files. A skill whose o
 
 ## Where to look
 
-| You want                                  | Read                                                                 |
-| ----------------------------------------- | -------------------------------------------------------------------- |
-| The plan and what each item cost          | `docs/explanation/eval-quality-roadmap.md`                           |
-| What the adapter replaced, and its limits | `docs/explanation/eval-quality-command-adapter.md`                   |
-| The contract record and its findings      | `test/contracts/README.md`                                           |
-| How a suite declares itself               | `test/evals/suite-manifest.json` and `test/schema/suite-manifest.js` |
-| The execution-target registry             | `test/lib/probe-targets.js`                                          |
-| A runner command, twice                   | `cli/fragment-selection-runner.js`, `cli/trace-runner.js`            |
-| The contract generator                    | `tools/generate-contracts.js`                                        |
-| The result record and its failure classes | `test/schema/eval-result.js`                                         |
-| A worked corpus                           | `test/fixtures/test-review-eval/`, `test/fixtures/trace-eval/`       |
+| You want                                  | Read                                                                             |
+| ----------------------------------------- | -------------------------------------------------------------------------------- |
+| The plan and what each item cost          | `docs/explanation/eval-quality-roadmap.md`                                       |
+| What the adapter replaced, and its limits | `docs/explanation/eval-quality-command-adapter.md`                               |
+| The contract record and its findings      | `test/contracts/README.md`                                                       |
+| How a suite declares itself               | `test/evals/suite-manifest.json` and `test/schema/suite-manifest.js`             |
+| The execution-target registry             | `cli/lib/evaluate/registry.js`, and TEA's entries in `test/lib/probe-targets.js` |
+| A runner command, twice                   | `cli/fragment-selection-runner.js`, `cli/trace-runner.js`                        |
+| The contract generator                    | `tools/generate-contracts.js`                                                    |
+| The result record and its failure classes | `test/schema/eval-result.js`                                                     |
+| A worked corpus                           | `test/fixtures/test-review-eval/`, `test/fixtures/trace-eval/`                   |

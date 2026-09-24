@@ -30,10 +30,15 @@ const REPO_URL = 'https://github.com/bmad-code-org/bmad-method-test-architecture
 const LLM_MAX_CHARS = 600_000;
 const LLM_WARN_CHARS = 500_000;
 
+// Every pattern must match at least one document: the build fails on one that
+// matches nothing, so a renamed or deleted page cannot leave a dead exclusion
+// behind that silently spends the budget. Three inherited patterns
+// ('changelog', 'downloads/', 'reference/glossary/') matched nothing here and
+// were removed for that reason; TEA's glossary lives at glossary/index.md and
+// stays in the bundle as terminology an agent needs.
 const LLM_EXCLUDE_PATTERNS = [
-  'changelog',
-  'downloads/',
-  'reference/glossary/',
+  // The site's not-found page, which is navigation chrome and carries no content.
+  '404.md',
   // Maintainer handoff documents. They record what this repository still owes
   // itself, how its own evaluation surface is built, and how another BMAD module
   // would build one, which is of no use to an agent consuming TEA to do testing
@@ -43,6 +48,9 @@ const LLM_EXCLUDE_PATTERNS = [
   'explanation/eval-quality-roadmap',
   'explanation/eval-quality-command-adapter',
   'explanation/eval-quality-adoption-guide',
+  // How TEA's own test suite and evals prove TEA's behavior: the same maintainer
+  // audience as the three above, about 12k characters.
+  'explanation/how-tea-is-tested',
   // Note: Files/dirs starting with _ (like _STYLE_GUIDE.md, _archive/) are excluded in shouldExcludeFromLlm()
 ];
 
@@ -216,6 +224,12 @@ function generateLlmsFullTxt(docsDir, outputDir) {
     '',
   ];
 
+  const deadPatterns = LLM_EXCLUDE_PATTERNS.filter((pattern) => !files.some((file) => file.includes(pattern)));
+  if (deadPatterns.length > 0) {
+    console.error(`    ERROR: LLM exclusion patterns match no document: ${deadPatterns.join(', ')}`);
+    process.exit(1);
+  }
+
   let fileCount = 0;
   let skippedCount = 0;
 
@@ -227,7 +241,7 @@ function generateLlmsFullTxt(docsDir, outputDir) {
 
     const fullPath = path.join(docsDir, mdPath);
     try {
-      const content = readMarkdownContent(fullPath);
+      const content = compactTables(readMarkdownContent(fullPath));
       output.push(`<document path="${mdPath}">`, content, '</document>', '');
       fileCount++;
     } catch (error) {
@@ -263,7 +277,7 @@ function getAllMarkdownFiles(dir, baseDir = dir) {
       files.push(...getAllMarkdownFiles(fullPath, baseDir));
     } else if (entry.name.endsWith('.md')) {
       // Return relative path from baseDir
-      const relativePath = path.relative(baseDir, fullPath);
+      const relativePath = path.relative(baseDir, fullPath).split(path.sep).join('/');
       files.push(relativePath);
     }
   }
@@ -298,6 +312,39 @@ function readMarkdownContent(filePath) {
   }
 
   return content;
+}
+
+/**
+ * Remove the alignment padding Prettier writes into Markdown tables.
+ *
+ * Prettier pads every cell to its column's widest value, so a table with one long
+ * cell carries hundreds of spaces per row that say nothing to a model and cost
+ * tokens. Collapsing each run of spaces in a table row to one space, and each
+ * separator dash run to three dashes, keeps every cell's text and the table's
+ * structure; this saved about 63k characters of the 600k budget when it was added.
+ * Fenced code blocks and inline code spans are left untouched.
+ * @param {string} content - Markdown source.
+ * @returns {string} The same Markdown with table padding collapsed.
+ */
+function compactTables(content) {
+  let fence = null;
+  return content
+    .split('\n')
+    .map((line) => {
+      const marker = line.match(/^\s*(`{3,}|~{3,})/);
+      if (marker) {
+        if (fence === null) fence = marker[1];
+        else if (marker[1][0] === fence[0] && marker[1].length >= fence.length && line.trim() === marker[1]) fence = null;
+        return line;
+      }
+      if (fence !== null || !/^\s*\|/.test(line)) return line;
+      if (/^\s*\|[\s:|-]+\|\s*$/.test(line)) return line.replaceAll(/-{3,}/g, '---').replaceAll(/ {2,}/g, ' ');
+      return line
+        .split(/(`+[^`]*`+)/)
+        .map((part, index) => (index % 2 === 1 ? part : part.replaceAll(/ {2,}/g, ' ')))
+        .join('');
+    })
+    .join('\n');
 }
 
 function validateLlmSize(content) {

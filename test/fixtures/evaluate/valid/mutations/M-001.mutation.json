@@ -9,5 +9,5 @@
     "replace": "test(",
     "occurrences": 1
   },
-  "expectedObservableFailure": "The runner exits non-zero because the scaffold it wrote is not a red-phase scaffold."
+  "expectedObservableFailure": "The red-phase gate exits 1 because the scaffold the generation step wrote is not a red-phase scaffold."
 }

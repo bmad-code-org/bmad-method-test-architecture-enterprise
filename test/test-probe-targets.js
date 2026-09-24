@@ -64,7 +64,7 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 const {
   EXECUTION_TARGETS,
@@ -1443,6 +1443,40 @@ function checkTestDesignHarnessSmoke(runDir) {
   );
 }
 
+/** The reservations fixture's default port, the one its own playwright.config.ts falls back to. */
+const FIXTURE_DEFAULT_PORT = 4310;
+
+/**
+ * Take `port` on 127.0.0.1 in a child process that accepts and drops every
+ * connection, so the port is busy and answers no HTTP. A child, because the
+ * harness runs under spawnSync and a listener in this process would sit
+ * unserviced while it does. When something else already holds the port, the
+ * condition under test exists anyway and `held` is false.
+ *
+ * @param {number} port
+ * @returns {Promise<{held: boolean, release: () => void}>}
+ */
+function holdPort(port) {
+  const script = [
+    "const server = require('node:net').createServer((socket) => socket.destroy());",
+    "server.once('error', () => { console.log('busy'); process.exit(0); });",
+    `server.listen(${port}, '127.0.0.1', () => console.log('held'));`,
+  ].join('\n');
+  const child = spawn(process.execPath, ['-e', script], { stdio: ['ignore', 'pipe', 'inherit'] });
+  const release = () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+  };
+  return new Promise((resolve, reject) => {
+    let output = '';
+    child.once('error', reject);
+    child.stdout.on('data', (chunk) => {
+      output += chunk;
+      if (output.includes('\n')) resolve({ held: output.startsWith('held'), release });
+    });
+    child.once('exit', () => resolve({ held: false, release }));
+  });
+}
+
 function runAtddHarness(runDir, stubMode, extraArgs) {
   return runHarnessAgainstStub(ATDD_HARNESS, ATDD_STUB_AGENT, path.join(runDir, `atdd-harness-${stubMode}.json`), stubMode, extraArgs);
 }
@@ -1464,13 +1498,24 @@ function runAtddHarness(runDir, stubMode, extraArgs) {
  * existed in `test/fixtures/atdd-runner/stub-agent.js` with nothing to invoke
  * it until this check.
  */
-function checkAtddHarnessSmoke(runDir) {
+async function checkAtddHarnessSmoke(runDir) {
   console.log('\nthe atdd harness end to end against the stub');
 
-  const correct = runAtddHarness(runDir, 'correct-run', ['--runs', '1']);
+  // The fixture's default port held by a listener that answers nothing, the
+  // state another run on the host leaves it in. The red-check serves the
+  // fixture on an OS-assigned port, and Playwright's webServer must reuse that
+  // server; pointed at 4310 it started a second server there and failed to
+  // load every spec file whenever 4310 was taken.
+  const held = await holdPort(FIXTURE_DEFAULT_PORT);
+  let correct;
+  try {
+    correct = runAtddHarness(runDir, 'correct-run', ['--runs', '1']);
+  } finally {
+    held.release();
+  }
   assert(
     correct.status === 0,
-    'a correct generation, executed for real under isolation, meets every threshold',
+    `a correct generation, executed for real under isolation, meets every threshold${held.held ? ` with port ${FIXTURE_DEFAULT_PORT} taken` : ''}`,
     correct.stderr.trim().split('\n').slice(-5).join(' | '),
   );
   assert(
@@ -1495,7 +1540,11 @@ function checkAtddHarnessSmoke(runDir) {
   // stub standing in for a misbehaving agent, caught by the same before/after
   // digest AC3 relies on, driven for real rather than asserted from the source.
   const mutate = runAtddHarness(runDir, 'mutate', ['--runs', '1']);
-  assert(mutate.status === 1, 'a generation run that edits a file outside tests/ exits 1', `exit ${mutate.status}`);
+  assert(
+    mutate.status === 1,
+    'a generation run that edits a file outside tests/ exits 1',
+    `exit ${mutate.status}: ${mutate.stderr.trim().split('\n').slice(-5).join(' | ')}`,
+  );
   assert(
     mutate.record?.failureClass === 'quality' && (mutate.record?.runners?.[0]?.measurements?.productionMutations ?? 0) > 0,
     'the record carries a quality failure and counts the production mutation the stub made',
@@ -1505,6 +1554,21 @@ function checkAtddHarnessSmoke(runDir) {
     recordedFailures(mutate)?.some((entry) => entry.includes('production mutation')),
     'the failure list names the production mutation',
     JSON.stringify(recordedFailures(mutate)),
+  );
+
+  // A scaffold that does not load leaves no mapped test, so the red-for-intended-
+  // reason rate has an empty denominator. The harness used to skip that null,
+  // and the result schema then refused the record as a harness bug (exit 2);
+  // the same crash turned a fixture-server port collision into a flaky
+  // `test:probe-targets`. Unmeasurable is a quality failure that names the metric.
+  const loadError = runAtddHarness(runDir, 'load-error', ['--runs', '1']);
+  assert(loadError.status === 1, 'a scaffold that does not load exits 1 with a written record', `exit ${loadError.status}`);
+  assert(
+    loadError.record?.failureClass === 'quality' &&
+      recordedFailures(loadError)?.includes('redForIntendedReasonRate (unmeasurable)') &&
+      loadError.record?.runners?.[0]?.measurements?.loadErrors === 1,
+    'the record names the unmeasurable rate and counts the load error',
+    JSON.stringify(recordedFailures(loadError)),
   );
 
   // A vendor that writes no scaffold leaves the staged test directory empty,
@@ -2103,7 +2167,7 @@ async function main() {
     checkCiHarnessSmoke(runDir);
     checkTraceHarnessSmoke(runDir);
     checkTestDesignHarnessSmoke(runDir);
-    checkAtddHarnessSmoke(runDir);
+    await checkAtddHarnessSmoke(runDir);
   } finally {
     fs.rmSync(runDir, { recursive: true, force: true });
   }

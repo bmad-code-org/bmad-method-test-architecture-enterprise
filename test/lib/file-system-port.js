@@ -41,12 +41,9 @@
  *
  * Bytes in, bytes out. `readText` decodes UTF-8 for the callers that want text,
  * and `readBytes` hands back what the port returned, because a digest over
- * decoded text is a digest over something the file does not contain. Nothing in
- * this repository imports `readBytes` yet: `digestFiles` in
- * `test/lib/eval-record.js` is the caller that needs it, and moving that is
- * Story 3.6's. It is exported rather than private because the byte reader is
- * half of what this module is for, and the wrapper check exercises it through
- * every `readText`.
+ * decoded text is a digest over something the file does not contain.
+ * `digestFiles` in `test/lib/eval-record.js` hands `readBytes` to the runtime's
+ * digest, so every fixture a record digests is read through this port.
  */
 
 'use strict';

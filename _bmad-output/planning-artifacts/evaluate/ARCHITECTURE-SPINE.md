@@ -124,7 +124,12 @@ flowchart LR
 | interpret | new (AD-23) |
 
 - **Harness:** TeA's `test/` harness imports these modules and keeps only TeA data. It maps runtime exits through the AD-10 table.
-- **Module format:** `cli/lib/evaluate` is CommonJS like the rest of TeA and reaches the ESM-only engine through one async loader generalized from `loadEvalQuality`. Moved code drops every `test/` path (package-boundary gate), and the `dependency-direction` section of `eval-quality.config.json` gives the `cli` layer an `allow` list naming every external `cli/` uses, `eval-quality` among them. `cli/lib/evaluate/engine.js` is the one file that names `eval-quality` in an `import(` or `require(`. Every module the runtime needs ships in TeA's `dependencies` (`ajv` moves there).
+- **Module format:** `cli/lib/evaluate` is CommonJS like the rest of TeA and reaches the ESM-only engine through one async loader generalized from `loadEvalQuality`.
+  Moved code drops every `test/` path (package-boundary gate).
+  The `dependency-direction` section of `eval-quality.config.json` gives `cli/lib/evaluate/engine.js` its own exact `evaluate-engine` layer, declared ahead of the `cli` prefix layer, whose `allow` list names `eval-quality`, `eval-quality/adapters`, `node:fs` and `node:path`.
+  The `cli` layer's `allow` list names every other external `cli/` uses and leaves `eval-quality` out, so `engine.js` is the one file that names `eval-quality` in an `import(` or `require(`, and `test:direction` refuses an engine import from any other `cli/` file.
+  Every module the runtime needs ships in TeA's `dependencies` (`ajv` moves there).
+  (Amended 2026-09-23 in Story 1.5: this decision first put `eval-quality` on the `cli` layer's list; the engine's own layer replaced that.)
 - **Packaging:** TeA's `package.json` declares `eval-quality` under `peerDependencies`, floored at `>=4.0.0`, the first published release carrying the target-policy export and trial-set scoring (#143) Evaluate needs, since an older engine admitted by the range could not run Evaluate. (Amended 2026-09-23: the floor was `>=3.4.0` with a later raise in Story H.1, written before 4.0.0 shipped.) `peerDependenciesMeta` marks it optional so projects that never run Evaluate do not receive it, and the bin is `tea-evaluate`; the release-metadata and guard-publish checks cover both. One engine version serves a run.
 - **Inputs:** the runtime reads no `_bmad/` config. Every subcommand takes `--evaluation <path>` and exits 64 when none resolves.
 - **Schemas:** the runtime owns the JSON schemas of `evaluation.json` and `evaluation-ci-plan.json`. `npm test` validates the skill's templates and `bmad-testarch-ci`'s plan reader against them.

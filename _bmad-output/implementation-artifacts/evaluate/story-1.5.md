@@ -1,0 +1,201 @@
+---
+title: 'Story 1.5: Move the registry, records and provenance into the runtime'
+type: 'refactor'
+created: '2026-09-23'
+status: 'in-review'
+route: 'dispatch'
+review_loop_iteration: 1
+baseline_commit: 'cdf6e112546fbf6e47a4a65bb39a1de65814cbb7'
+context:
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/epics.md#story-15-move-the-registry-records-and-provenance-into-the-runtime (the Story 1.5 section and Build Rules For Every Story)'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/test-design-epic-1.md (the Story 1.5 section, R1-06, R1-10)'
+  - '{project-root}/_bmad-output/planning-artifacts/evaluate/ARCHITECTURE-SPINE.md (AD-5, AD-6, AD-7, AD-10)'
+  - '{project-root}/AGENTS.md'
+---
+
+<!-- markdownlint-disable MD033 -->
+
+<frozen-after-approval reason="human-owned intent; do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** TeA's execution-target registry, its eval-quality record builders and its digest and provenance helpers live under `test/lib/`, which the published package does not ship. An adopter's `tea-evaluate` run would need a second copy of each, and two copies drift.
+
+**Approach:** Move the logic AD-5 names into `cli/lib/evaluate/registry.js`, `records.js` and `digest.js`, with one `RegistryEntry` schema in the runtime's `evaluation.schema.json`, and reduce the three `test/lib/` files to TeA data plus imports. Move the schema-version reader into `engine.js`. Give every registry entry `infrastructureExitCodes` and make `check` refuse a defect signature one of them could satisfy.
+
+## Boundaries & Constraints
+
+**Always:** `engine.js` stays the only file under `cli/` that loads `eval-quality`, subpaths included; no file under `cli/` imports from `test/` or names a `test/` file; every existing test passes with its assertions unchanged; `engine.js` stays free of `await`, async functions and `new Date` (the re-pointed purity layer).
+
+**Never:** move TeA's own eval-result vocabulary (failure classes, suite and run-summary records, diagnostics) into the runtime, since adopters never write TeA's result schema; build `preflight` or `run` (Stories 1.6 and 1.8).
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+| --- | --- | --- | --- |
+| Valid fixture | `test/fixtures/evaluate/valid/` with a registry entry | `check` exits 0; the registry yields a `CommandTargetPolicy` eval-quality's schema accepts | N/A |
+| Satisfiable signature | signature `exit-code == 3`, entry codes 3 to 6 | `check` exits 10, rule `infrastructure-exit-code` | every finding listed |
+| Unregistered executable | signature names an executable no entry declares | `check` exits 10, rule `unregistered-executable` | N/A |
+| Malformed entry | entry missing `infrastructureExitCodes` | `createRegistry` throws naming the field; `check` reports `schema` | N/A |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `test/lib/probe-targets.js` -- `EXECUTION_TARGETS` (TeA data), `commandTargetPolicy`, `permittedEnvironmentKeys`, `hostEnvironment`, `readEnvironment`, `targetFor`, `targetProblems`, `createProbePort`, `probeRequest`, `observedText`, `cliObservation` move; `failureClassForFault`, `faultReason`, `probeCommand`, `probeCommandWithRetry` stay (TeA's failure classes, held by `test/test-port-totality.js` against this file).
+- `test/lib/eval-quality-inputs.js` -- builders and `validateArtifact` move to `records.js`; `scoringPolicy` stays (TeA's policy path). Schema reads keep going through `test/lib/file-system-port.js` (asserted by `test/test-file-system-port.js`), so `records.js` takes an injected reader.
+- `test/lib/eval-record.js` -- `digest`, `digestFiles` (injected byte reader, same reason), `digestPrompts`, `repositoryState`, `probeVersion`, `redactArgs`, `redactSecrets` move to `digest.js`; the suite-result machinery stays.
+- `test/lib/bounded-probe.js` -- moves to `cli/lib/evaluate/bounded-probe.js` because `repositoryState` needs it; the test file re-exports.
+- `test/lib/eval-quality-schema-versions.js` -- deleted; its cluster moves into `engine.js`.
+- `eval-quality.config.json` -- a new exact layer for `engine.js` ahead of `cli`, carrying the purity block and its own allow list.
+
+## Tasks & Acceptance
+
+**Execution:**
+
+- [x] `cli/lib/evaluate/{engine,registry,records,digest,bounded-probe}.js`, `schemas/evaluation.schema.json` -- the runtime modules and the `RegistryEntry` definition.
+- [x] `cli/lib/evaluate/check.js` -- `infrastructure-exit-code` and `unregistered-executable` rules.
+- [x] `test/lib/{probe-targets,eval-quality-inputs,eval-record,bounded-probe}.js` -- TeA data plus imports.
+- [x] `test/test-evaluate-check.js`, `test/test-evaluate-boundaries.js`, fixture -- the new cases.
+- [x] `eval-quality.config.json`, docs, CHANGELOG, sprint-status.
+
+**Acceptance Criteria:** epics.md Story 1.5; each revert check in test-design-epic-1.md's Story 1.5 table is exercised once.
+
+## Implementation Notes
+
+- **Registry.** `cli/lib/evaluate/registry.js` compiles `$defs/RegistryEntry` from the runtime's `evaluation.schema.json` on first use and validates every entry before building anything, so TeA's `EXECUTION_TARGETS` and an adopter's `evaluation.json` go through one schema and one builder. `createRegistry(entries, { root })` returns the policy builder (`function commandTargetPolicy`), `createProbePort`, `permittedEnvironmentKeys`, `hostEnvironment`, `targetFor` and `targetProblems`; `test/lib/probe-targets.js` re-exports them bound to TeA's root, so every caller keeps its signature. `hostEnvironment` takes the `executable` when several entries share an interface. A registry `target` is a POSIX path relative to the root or a bare command name; `targetPath` refuses a joined path outside the root beside the schema pattern. `permittedEnvironmentKeys(interfaceId)` unions the entries under one interface, and each authorization carries its own entry's keys. The authorization never carries `infrastructureExitCodes`; eval-quality's strict `CommandTargetPolicy` would refuse it.
+- **What stays in `test/lib/`.** TeA's data, its scoring-policy path, and TeA's own eval-result vocabulary: `failureClassForFault`, `faultReason`, `probeCommand` and the retry (they speak the failure classes of `test/schema/eval-result.js`, and `test/test-port-totality.js` holds them against `probe-targets.js`), `classifyAgentError`, and the suite-result, run-summary and diagnostic records. Moving them would ship TeA's harness format to adopters; epics.md's criterion is amended to say so (Spec Change Log).
+- **Injected readers.** `test/test-file-system-port.js` asserts that schema reads and `digestFiles` go through TeA's file-system port. The runtime's `createArtifactValidator({ readJson })` and `digestFiles(root, paths, { readBytes })` take the reader, defaulting to disk; TeA passes its port.
+- **Engine.** The schema-version cluster lives in `engine.js`, read on first use through a guarded synchronous `require` that keeps its load error; `SCHEMA_VERSIONS` is a frozen object of getters. A missing engine throws `EngineUnavailableError` from `expectedSchemaVersion` and `engineVersion`, and the CLI maps it to exit 12. `eval-quality.config.json` declares an exact `evaluate-engine` layer over `engine.js` ahead of the `cli` prefix layer, with the `purity` block and an allow list of `eval-quality`, `eval-quality/adapters`, `node:fs`, `node:path`; `eval-quality` left the `cli` layer's allow list, so `test:direction` now also refuses an engine import from any other `cli/` file.
+- **`bounded-probe.js`** moved into the runtime because `repositoryState` and `probeVersion` need it; `test/lib/bounded-probe.js` re-exports it.
+- **The rule.** `infrastructure-exit-code` resolves each defect signature (entries matched by executable; a `cli` signature names no interface) and each manifestation witness on a `cli` interface (entries matched by interface) through the engine's `resolveCheck` over an observation carrying one declared code and empty-text streams, with the contract's reference sets in scope, a witness's declared inputs, and each call-input clause of a signature tried true and false; any resolution other than `false` is a finding, and an expression the engine cannot resolve fails closed. `unregistered-executable` names a signature executable or witness interface no entry declares; `registry` names a repeated pair.
+- **TeA's codes.** Runners declare 1 and 3 to 6: Node exits 1 on an uncaught exception and no runner emits 1 on purpose. `tea-test-review` declares 2 and 3, since 1 is its failing verdict. AD-7's "3 to 6 for the skill runner" concerns the future generic runner and is unchanged.
+- **Fixture.** `test/fixtures/evaluate/valid/`'s registry entry points at `test/fixtures/evaluate/red-phase-gate.js`, a gate that exits 1 on purpose on an active test and maps every other failure to 3, so its `exit-code == 1` signature is honest; P-002's witness relation and M-001's expected failure say the same.
+- **The CommandTargetPolicy check.** `test/test-evaluate-check.js` parses the registry's policy with `parseCommandTargetPolicy` from `eval-quality/adapters` (eval-quality 4.1.0, released for this story as eval-quality#159) in a child process, and also proves the parser refuses an unknown key such as `infrastructureExitCodes`.
+- **Boundary scanner.** `dynamic-specifier` now covers all of `cli/` (every file already met it). `test-import` refuses a relative or self-referencing load into `test/`. The move check guards the three named markers by declaration and every function the moved modules export against redefinition under `test/lib/` (any form in the three named files; top level and exports elsewhere), with `digestFiles` the one named wrapper. An exported factory's products count as exports: `createRegistry`'s returned functions and `createArtifactValidator`'s `validateArtifact`. Only exported names are guarded, so a private helper name stays free. A syntax scan cannot see a move written as `gitState.bind(null)`, `require('./git-state').gitState`, a member of a local object or an alias, so an identity half loads the three files and their runtime modules in a child process and requires every runtime function they hand out to be the runtime's own function object; `probe-targets.js` exports its registry, which `isRegistry` must recognize and which must be frozen.
+- **Gaps closed on the way.** The relative-path pattern Story 1.4 wrote for `targetArtifact` and `provision` missed a `..` after a newline; fixed for every path field. `docs/explanation/eval-quality-command-adapter.md`, `eval-quality-adoption-guide.md`, the layering-lineage test's header, `test/lib/file-system-port.js` and `test/test-schema-versions.js` named the old locations. `evaluation.schema.json`'s `launch` description promised a Story 1.5 shape. An em dash in `probe-targets.js` prose. `test:schema-versions` now scans `cli/lib/evaluate/` for a literal stamp.
+
+### Revert checks exercised
+
+- Registry schema read (skipping `validateEntry`): `test:evaluate-check` fails "createRegistry accepted an entry with no infrastructureExitCodes" and "... with an unknown field".
+- The three `test/lib/` files restored from `cdf6e11` (and the schema-versions file restored): `test:evaluate-boundaries` reports each missing `require`, `commandTargetPolicy`, `sealedRunRecord` and `repositoryState` defined in `test/lib/`, and the restored schema-versions file. Partial moves (`digest` back into `eval-record.js`, an assigned arrow, an exported alias, a copy of `registry.js` or `boundedProbe` under `test/lib/`) are each a planted case that must be reported.
+- A `cli/` file requiring `../../../test/lib/probe-targets`: `test:evaluate-boundaries` reports `test-import` and `test:direction` reports "cli/ may not import test/".
+- Existing harness: `test:probe-targets`, `test:probe-conformance`, `test:eval-replay`, `test:compare-eval-runs` pass with their files untouched; they are regression checks, so their revert is the move itself going wrong, which the runs above cover.
+- Removing the signature check call in `check.js`: the `exitCode == 3 against 3 to 6` case exits 0 and fails, with the other rule cases. Removing the witness check: the witness case exits 0 and fails.
+- An `async function` with `await` appended to `engine.js`: `test:direction` reports both purity rules against `engine.js`.
+- Removing the guard around the engine's synchronous `require`: the engine-absent cases for a record builder and `engineVersion` fail (exit 1, no package named).
+- The Story 1.4 path pattern restored: the three newline-climb cases exit 0 and fail.
+
+## Spec Change Log
+
+- 2026-09-23: epics.md Story 1.5, second criterion, amended. The `test/lib/` files keep TeA data and TeA's own eval-result vocabulary (fault-to-failure-class mapping, suite-result, run-summary and diagnostic records), because those belong to `test/schema/eval-result.js`, which the published package does not carry.
+- 2026-09-23: test-design-epic-1.md Story 1.5 last row said "the skill runner's codes 2 to 6"; AD-7 and R1-10 say 3 to 6 (2 is a usage error). Amended.
+- 2026-09-23 (review round 1): ARCHITECTURE-SPINE.md AD-5 "Module format", epics.md "Framework neutrality" and the Story 1.4 CHANGELOG line said the `cli` layer's allow list names `eval-quality`. This story moved `eval-quality` onto a separate exact `evaluate-engine` layer over `engine.js`; all three now say so.
+- 2026-09-23 (review round 1): test-design-epic-1.md Story 1.5 second row still read "`test/lib/` files keep only TeA data"; amended to match the rewritten epics.md criterion, and its test column names the identity check.
+- 2026-09-23 (review round 1): epics.md Story 1.5 said `test:boundary` enforces "no file under `cli/` imports from `test/`", which it did not: its only `test/` pattern needs a file extension. `eval-quality.config.json` gains a `test-tree-reach` pattern, proven in `test:layering-boundary-lineage`, and the criterion and the test-design row name `test:direction`, `test:evaluate-boundaries` and `test:boundary` with what each holds.
+
+## Review Triage Log
+
+Three layers ran on opus: `bmad-code-review` (four sub-layers), `bmad-review` adversarial, and a `bmad-testarch-test-review` pass; a second adversarial round reviewed the fixes.
+
+| # | Source | Severity | Finding | Resolution |
+| --- | --- | --- | --- | --- |
+| 1 | code review | high | `target` pattern lookahead used `.`, so `a\n/../../../etc/x` passed and resolved outside the project | fixed: `[\s\S]*` lookahead and no control characters on every path field, plus a runtime containment check in `targetPath`; newline cases added |
+| 2 | code review, adversarial | medium | artifact paths had no containment | fixed: the same pattern on `artifacts` values; per-run overrides stay the caller's code |
+| 3 | code review | medium | entries sharing an `interfaceId` got the first entry's keys | fixed: per-entry keys in the policy, union for the interface query |
+| 4 | code review, adversarial | high | infra rule used `absent` streams, swallowed throws, ignored pointer-free predicates, reference sets and `insufficient-evidence` | fixed as described in Implementation Notes; one case per bypass |
+| 4c | code review | medium | signature matched by executable, ignoring interface | skipped: a `cli` defect signature carries no `interfaceId` in eval-quality's probe schema; witnesses are matched by interface |
+| 5 | code review, adversarial, test review | medium | move check guarded one sentinel per module | fixed: every function of the moved modules guarded, aliases and assignments detected, all `test/lib/` scanned; plants for each evasion |
+| 5b | code review, adversarial | medium | `test-import` missed computed and self-referencing specifiers | fixed: `dynamic-specifier` widened to all of `cli/`, self-reference refused |
+| 6 | code review, adversarial | medium | missing engine misreported, cause dropped, untested | fixed: cause kept, `EngineUnavailableError` everywhere, engine-absent cases |
+| 7 | code review | low | the check test reads an unexported eval-quality module | kept, with a named failure; no public eval-quality surface can hold the check, and closed by eval-quality#159: 4.1.0 publishes `parseCommandTargetPolicy`, and the test now uses it |
+| 8 | code review, test review | low | new rules outside `STORY_RULES`; no pass-side cases; loose `exits 3` assertion | fixed |
+| 9 | code review, test review | low | doc said 3 to 6 for every TeA target; test-design said 2 to 6 | fixed in the doc and the plan |
+| 10 | code review, adversarial | medium | fixture exit 1 was a crash code for `tea-atdd-runner`; fixture codes drifted from TeA's | fixed: the fixture targets its own gate; TeA's runners declare 1 |
+| A5 | adversarial | medium | witness relations unchecked | fixed |
+| A9 | adversarial | medium | docs and schema overclaimed ("yields no record") | fixed: wording matches the rule; the unconsumed claim is gone |
+| A12 | adversarial | low | module-load work (sync engine require, schema compile) | fixed: both lazy |
+| A13 | adversarial | low | packed install loaded only `check` | fixed: every runtime module loads from the tarball |
+| A14 | adversarial | low | `targetFor` returns frozen clones; messages print `target` | skipped: no consumer mutates entries or reads the message text; the CHANGELOG claim is about assertions |
+| A15 | adversarial | low | "never", "rather than" antithesis in new prose | fixed in every new sentence |
+| T4 | test review | low | two move-check branches had no plant | fixed |
+| T5 | test review | low | stale file names in `test-schema-versions.js` messages | fixed |
+| R2-1 | second round | medium | `hostEnvironment` read the union of keys across entries sharing an interface, which one entry's authorization refuses | fixed: it reads one entry's keys and takes the `executable` when the interface has several; a case with differing keys |
+| R2-2 | second round | medium | a predicate reading call inputs resolved them as absent, so `call-inputs == claude and exit != 0` passed | fixed: a witness resolves against its declared inputs; each call-input clause of a signature is tried true and false, and a clause mixing call inputs with other evidence fails closed; cases both ways |
+| R2-3 | second round | low | a witness on an `api` or `mcp` interface was reported as unregistered | fixed: only witnesses on `cli` interfaces are checked; no case, since a valid non-`cli` fixture contract needs Story 1.18's adapters |
+| R2-4 | second round | low | `targetPath` refused a directory named `..tools` | fixed, with a case |
+| R2-5 | second round | low | the move check guarded nested private helper names | fixed: it guards exported names; a clean plant reuses `deepFreeze` |
+| R2-6 | second round | nit | path patterns admitted DEL | fixed |
+
+## Review round 1 (PR #234)
+
+Each finding was verified against the branch at `0a6e8a1` before acting.
+
+| # | Finding | Resolution |
+| --- | --- | --- |
+| A1 | C1 controls, U+2028/U+2029 and bidi controls passed the path patterns | fixed: every path field refuses C0, DEL, C1, both separators and the Bidi_Control set (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069); a `check` case per class and field |
+| A2 | a directory passed `targetProblems`; `a/` and `a//b` passed the pattern | fixed: `targetProblems` requires a regular file ("is not a file"); target, artifact and `targetArtifact` refuse a trailing slash and every path field refuses an empty segment (a `provision` directory keeps a trailing slash, which `check` already normalizes); cases for each |
+| A3 | `path.join` artifact paths in `probe-targets.js` | fixed: POSIX literals |
+| A4 | a file name with a newline forged a finding line | fixed: `cli/evaluate.js` escapes unprintable characters in the file name (quoted) and the message; the message carried the raw name too; a case for `check` and `digest` |
+| B1 | the move check missed functions an exported factory returns | fixed: factory products are guarded; plants move `targetProblems` and `validateArtifact` back |
+| B2 | spine, epics and CHANGELOG said the `cli` list names `eval-quality` | fixed (Spec Change Log) |
+| B3 | test-design row 2 unamended | fixed (Spec Change Log) |
+| C1 | bind, member and alias moves survived the syntax scan | fixed: identity half in the move check, `isRegistry` brand, `registry` exported from `probe-targets.js`; six plants (bind, member of another module, alias, twice for the policy builder, look-alike registry), each failing on the identity message |
+| C2 | `else mixed = true` untested | fixed: the unresolved reason is now specific ("together with other evidence") and a case asserts it |
+| C3 | the non-`cli` witness skip untested | fixed: a clean case with eval-quality's `thing-api` interface; removing the skip exits 10 |
+| C4 | the stdout silent-failure channel untested | fixed: a case over `existence(stdout)` beside `exit == 3` |
+| C5 | `MAX_CALL_INPUT_CLAUSES` untested | fixed: nine clauses exits 10 naming "too many clauses"; two and eight clauses stay clean |
+| C6 | `test:boundary` did not hold the no-`test/`-import criterion | fixed: a `test-tree-reach` pattern, a seeded-tree case, and the amended criterion |
+| D1 | `digestFiles` encoded a missing file and a file holding `<missing>` alike | fixed without moving any digest: only a present file whose bytes equal the marker changes encoding (its path gains a NUL, which no path holds), so stored `fixtureDigest` values, the missing-file encoding `test:file-system-port` asserts and every ordinary digest are unchanged |
+| D2 | URL userinfo survived `redactSecrets` | fixed: userinfo of an http or https URL is redacted, scheme and host kept; cases |
+| D3 | `date-time` was not checked by the record validator | fixed: `cli/lib/evaluate/formats.js` registers one calendar-checked RFC 3339 format on the record validator, and `check` shares it; `check` shows no behavior change, because eval-quality's own `expiresAt` pattern already refused `2026-02-30` and hour 24 (round 2 corrected an earlier claim here); no dependency added, since this is the only format the engine schemas use; cases for the format and for the validator (no warning, malformed refused) |
+| D4 | a relative registry root or `projectRoot` override was kept relative | fixed: `path.resolve` once in `createRegistry` and on each override; cases that change the working directory afterwards |
+
+Revert checks: each fix above was undone once and the named case failed (C2 to C5, A2, A4, D1 to D4 in `test:evaluate-check`; B1 and C1 in `test:evaluate-boundaries`; C6 in `test:layering-boundary-lineage`).
+
+## eval-quality export for CommandTargetPolicy
+
+The first build read eval-quality's Zod `CommandTargetPolicy` from `dist/core/schemas/probe-policy.js`, a module 4.0.0's `exports` map does not name, because no public surface could parse a command target policy.
+eval-quality#159 added `parseCommandTargetPolicy` and `parseMcpTargetPolicy` to `eval-quality/adapters`, each throwing `RuntimeFault('schema-parse-failure', ...)` with the `ZodError` as its `cause`, and gated its release script on doc-claims after the 4.0.0 release had left that check failing on its main.
+It shipped as eval-quality 4.1.0.
+This story raises the devDependency pin to 4.1.0, moves the roadmap's pin claim and its `EVAL_QUALITY_PIN_IS_4_1_0` source with it, and switches the test to the public parser.
+
+## Gaps closed after review
+
+- `llms-full.txt` stood at 599,796 of its 600,000-character cap after this story.
+  The cap's rationale (an agent's context window of roughly 200k tokens) still holds, so the cap stays.
+  `tools/build-docs.js` now collapses Prettier's table alignment padding outside code, which saves about 63k characters and keeps every cell's text; each bundled document matched its source after whitespace normalization, 39 of 39.
+  It also excludes `404.md` and `docs/explanation/how-tea-is-tested.md`, which has the same maintainer audience as the eval-quality documents already excluded.
+  Three exclusion patterns that matched no document are gone, and the build fails on a pattern that matches nothing.
+  The bundle measures 525,244 characters, 74,756 under the cap.
+  The stale "~111k tokens" in the site's `ai-terms` meta tag is removed.
+- The `test:doc-invocations` flake was `test:probe-targets` failing its ATDD harness smoke.
+  `test/fixtures/atdd-eval/reservations/playwright.config.ts` pointed Playwright's `webServer` at the default port 4310, while `tea-atdd-red-check` serves the fixture on an OS-assigned port and passes it only as `LOCKER_BASE_URL`.
+  Playwright therefore never reused that server and started its own on 4310 for every spec file, which failed ("Process from config.webServer was not able to start") whenever anything else held 4310, such as a concurrent run in another worktree or a lingering server.
+  The config now derives the `webServer` URL from `LOCKER_BASE_URL`.
+  A second defect surfaced with it: the harness skipped an unmeasurable `redForIntendedReasonRate` when no spec loaded, and the result schema then refused the record as a harness bug (exit 2).
+  It now reports `redForIntendedReasonRate (unmeasurable)` as a quality failure, as the other harnesses do; `STUB_MODE=load-error` had hit the same crash every time.
+  With 4310 held by a listener that answers nothing, the correct-run harness failed 1 of 1 before and passes after.
+  Twelve concurrent `test:probe-targets` runs for 3 rounds failed 2 of 36 before, one per failure form above.
+  The same stress passed 84 of 84 after the fix (seven rounds of twelve).
+  One further round lost all twelve `mutate` runs while files in this worktree were being edited: the ATDD harness refuses a run when `git status` gains a line during generation, which is its guard against a runner writing into the repository, and it cannot tell that write from an operator's edit.
+  That guard is working as designed, so editing the worktree while `npm test` runs remains a way to fail `test:probe-targets`; the harness names the changed paths on stderr.
+  `test:probe-targets` now holds 4310 during the correct-run case (reverting the config fails it) and adds a load-error case.
+
+## Verification
+
+**Commands:**
+
+- `npm test` -- exit 0
+- `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
+- the Build Rules engine check -- exit 0 before and after
+
+## Review round 2
+
+Round 2 confirmed every round 1 fix by reverting it and watching its test fail, and found three items, all fixed.
+
+| ID | Finding | Outcome |
+| --- | --- | --- |
+| R2-1 | The CHANGELOG and row D3 claimed `check` had accepted `2026-02-30`; eval-quality's `expiresAt` pattern already refused it | fixed: both now name the record validator as the defect and `check` as sharing the format |
+| R2-2 | `tools/build-docs.js` compared exclusion patterns against `path.relative` output, which carries backslashes on Windows, so the new dead-pattern check would fail the build there | fixed: `getAllMarkdownFiles` returns POSIX separators |
+| R2-3 | Two new comments in `check.js` and `registry.js` named a rejected alternative | fixed: both state only the affirmative |
