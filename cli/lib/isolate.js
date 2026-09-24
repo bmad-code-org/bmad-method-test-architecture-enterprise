@@ -106,7 +106,7 @@ function assertProfileSafePath(filePath) {
 }
 
 // The skill's own step contract hard-codes /tmp: steps-c/step-03a..03e each
-// declare `outputFile: /tmp/tea-test-review-<dimension>-<timestamp>.json`, and
+// declare `outputFile: /tmp/tea-test-review-<dimension>-<run_key>-<timestamp>.json`, and
 // step-03 section 5 aborts the workflow when any of them is missing. On darwin
 // os.tmpdir() is /var/folders/.../T, so /tmp needs its own entry or every
 // isolated run fails inside the skill rather than at the gate.

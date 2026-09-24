@@ -113,15 +113,15 @@ If epic-level:
 **CLI Exploration Steps:**
 All commands use the same named session to target the correct browser:
 
-1. `playwright-cli -s=tea-explore open <target_url>`
-2. `playwright-cli -s=tea-explore snapshot` → capture page structure and element refs
-3. `playwright-cli -s=tea-explore screenshot --filename={test_artifacts}/test-design/exploration/explore-<page>.png`
+1. `playwright-cli -s=tea-test-design-{run_key} open <target_url>`
+2. `playwright-cli -s=tea-test-design-{run_key} snapshot` → capture page structure and element refs
+3. `playwright-cli -s=tea-test-design-{run_key} screenshot --filename={test_artifacts}/test-design/exploration/explore-{run_key}-<page>.png`
 4. Analyze snapshot output to identify testable elements and flows
-5. `playwright-cli -s=tea-explore close`
+5. `playwright-cli -s=tea-test-design-{run_key} close`
 
 Store artifacts under `{test_artifacts}/test-design/exploration/`
 
-> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-explore close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
+> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-test-design-{run_key} close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
 
 ---
 

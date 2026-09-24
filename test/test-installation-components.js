@@ -5,6 +5,7 @@
  * - Agent YAML structure validation
  * - Module.yaml validation
  * - Path references validation
+ * - Scoped output layout of the per-scope workflows
  *
  * These are deterministic unit tests that don't require full installation.
  * Usage: node test/test-installation-components.js
@@ -661,6 +662,138 @@ async function runTests() {
       await fs.rm(plantedReport, { force: true });
       if (!memlogPreexisted) await fs.rm(plantedMemlog, { force: true });
       if (!analysisDirPreexisted) await fs.rm(plantedAnalysisDir, { recursive: true, force: true });
+    }
+  }
+
+  console.log('');
+
+  // ============================================================
+  // Test Suite 6: Scoped Output Layout
+  // ============================================================
+  console.log(`${colors.yellow}Test Suite 6: Scoped Output Layout${colors.reset}\n`);
+
+  // Issue #228: every per-scope workflow wrote one fixed file per project, so a
+  // trace for epic 16 appended to epic 15's matrix and replaced its gate decision.
+  // That every declared output sits in its workflow's own folder is settled for
+  // all eight workflows by OUTPUTS_IN_WORKFLOW_FOLDERS in
+  // test/lib/doc-claim-sources.js, behind the configuration.md sentence it backs.
+  // This suite holds the other half on the workflows that write one file per
+  // scope: each create step names the scope in its file name, and the resume step
+  // finds this workflow's files in the folder and the pre-folder file at its old
+  // flat path, so an interrupted run from before the change can still be migrated.
+  const SCOPED_WORKFLOWS = {
+    trace: { tokens: ['{run_key}'], legacy: 'traceability-matrix.md' },
+    nfr: { tokens: ['{run_key}'], legacy: 'nfr-assessment.md' },
+    automate: { tokens: ['{run_key}'], legacy: 'automation-summary.md' },
+    'test-review': { tokens: ['{run_key}'], legacy: 'test-review.md' },
+    // One checklist per story, so the story key is the whole scope.
+    atdd: { tokens: ['{story_key}'], legacy: 'atdd-checklist-{story_key}.md' },
+    // Steps 1 to 4 write the checkpoint, named by run_key. Step 5 writes the epic
+    // plan, named by the epic_num step 1 resolved together with the checkpoint's
+    // epic-{epic_num} key, and keeps the checkpoint as its progressFile.
+    'test-design': { tokens: ['{run_key}', '{epic_num}'], legacy: 'test-design-progress.md' },
+  };
+  // The two workflows whose checkpoint exists once per project keep a plain name.
+  const ONCE_PER_PROJECT_CHECKPOINTS = { ci: 'ci-pipeline-progress.md', framework: 'framework-setup-progress.md' };
+  // Deliverables test-design declares that exist once per project.
+  const ONCE_PER_PROJECT_DELIVERABLES = new Set(['test-design-architecture.md', 'test-design-qa.md', '{project_name}-handoff.md']);
+
+  async function stepFrontmatter(workflow, stepsDir, fileName) {
+    const text = await fs.readFile(
+      path.join(projectRoot, 'src/workflows/testarch', `bmad-testarch-${workflow}`, stepsDir, fileName),
+      'utf8',
+    );
+    return yaml.load(extractFrontmatter(text)) ?? {};
+  }
+
+  for (const [workflow, { tokens, legacy }] of Object.entries(SCOPED_WORKFLOWS)) {
+    const folder = `{test_artifacts}/${workflow}/`;
+    const carriesScope = (value) => typeof value === 'string' && value.startsWith(folder) && tokens.some((token) => value.includes(token));
+    try {
+      const stepsCDir = path.join(projectRoot, 'src/workflows/testarch', `bmad-testarch-${workflow}`, 'steps-c');
+      const stepFiles = (await fs.readdir(stepsCDir)).filter((name) => name.endsWith('.md')).sort();
+      let outputSteps = 0;
+      for (const fileName of stepFiles) {
+        const frontmatter = await stepFrontmatter(workflow, 'steps-c', fileName);
+        for (const key of ['outputFile', 'progressFile']) {
+          const value = frontmatter[key];
+          if (typeof value !== 'string' || !value.startsWith('{test_artifacts}/')) continue;
+          if (key === 'outputFile') outputSteps += 1;
+          assert(
+            carriesScope(value),
+            `${workflow}/steps-c/${fileName} ${key} sits in ${folder} and carries ${tokens.join(' or ')}`,
+            `found ${value}`,
+          );
+        }
+        // A progress checkpoint is always the run_key one, even beside test-design's epic plan.
+        if (typeof frontmatter.progressFile === 'string' && workflow === 'test-design') {
+          assert(
+            frontmatter.progressFile.includes('{run_key}'),
+            `${workflow}/steps-c/${fileName} progressFile carries {run_key}`,
+            `found ${frontmatter.progressFile}`,
+          );
+        }
+      }
+      assert(outputSteps > 0, `${workflow} declares at least one create-mode outputFile under {test_artifacts}`);
+
+      const workflowYaml = yaml.load(
+        await fs.readFile(path.join(projectRoot, 'src/workflows/testarch', `bmad-testarch-${workflow}`, 'workflow.yaml'), 'utf8'),
+      );
+      const deliverables = [
+        ...Object.entries(workflowYaml)
+          .filter(([key, value]) => (key === 'default_output_file' || key.endsWith('_output')) && typeof value === 'string')
+          .map(([key, value]) => ({ key, value })),
+        ...(Array.isArray(workflowYaml.outputs) ? workflowYaml.outputs : []).map((output) => ({
+          key: `outputs.${output.id}`,
+          value: output.path,
+        })),
+      ].filter(({ value }) => typeof value === 'string' && value.startsWith('{test_artifacts}/'));
+      assert(deliverables.length > 0, `${workflow}/workflow.yaml declares at least one deliverable under {test_artifacts}`);
+      for (const { key, value } of deliverables) {
+        if (ONCE_PER_PROJECT_DELIVERABLES.has(value.split('/').pop())) continue;
+        assert(
+          carriesScope(value),
+          `${workflow}/workflow.yaml ${key} sits in ${folder} and carries ${tokens.join(' or ')}`,
+          `found ${value}`,
+        );
+      }
+
+      const resume = await stepFrontmatter(workflow, 'steps-c', 'step-01b-resume.md');
+      assert(
+        typeof resume.progressGlob === 'string' && resume.progressGlob.startsWith(folder) && resume.progressGlob.includes('*'),
+        `${workflow}/steps-c/step-01b-resume.md declares a progressGlob under ${folder}`,
+        `found ${resume.progressGlob}`,
+      );
+      assert(
+        resume.legacyOutputFile === `{test_artifacts}/${legacy}`,
+        `${workflow}/steps-c/step-01b-resume.md declares the pre-folder file {test_artifacts}/${legacy} as legacyOutputFile`,
+        `found ${resume.legacyOutputFile}`,
+      );
+      assert(
+        carriesScope(resume.outputFile),
+        `${workflow}/steps-c/step-01b-resume.md resumes into a scoped file under ${folder}`,
+        `found ${resume.outputFile}`,
+      );
+    } catch (error) {
+      assert(false, `${workflow} scoped output layout validates`, error.message);
+    }
+  }
+
+  for (const [workflow, name] of Object.entries(ONCE_PER_PROJECT_CHECKPOINTS)) {
+    try {
+      const resume = await stepFrontmatter(workflow, 'steps-c', 'step-01b-resume.md');
+      assert(
+        resume.outputFile === `{test_artifacts}/${workflow}/${name}`,
+        `${workflow}/steps-c/step-01b-resume.md resumes {test_artifacts}/${workflow}/${name}`,
+        `found ${resume.outputFile}`,
+      );
+      assert(
+        resume.legacyOutputFile === `{test_artifacts}/${name}`,
+        `${workflow}/steps-c/step-01b-resume.md declares the pre-folder file {test_artifacts}/${name} as legacyOutputFile`,
+        `found ${resume.legacyOutputFile}`,
+      );
+    } catch (error) {
+      assert(false, `${workflow} checkpoint layout validates`, error.message);
     }
   }
 

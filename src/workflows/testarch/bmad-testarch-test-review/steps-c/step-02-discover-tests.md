@@ -234,13 +234,13 @@ convention from the reviewed files themselves is circular; do not do it.
 **CLI Evidence Collection:**
 All commands use the same named session to target the correct browser:
 
-1. `playwright-cli -s=tea-review open <target_url>`
-2. `playwright-cli -s=tea-review tracing-start`
-3. Execute the flow under review (using `-s=tea-review` on each command)
-4. `playwright-cli -s=tea-review tracing-stop` → saves trace.zip
-5. `playwright-cli -s=tea-review screenshot --filename={test_artifacts}/test-review/review-evidence-{run_key}.png`
-6. `playwright-cli -s=tea-review network` → capture network request log
-7. `playwright-cli -s=tea-review close`
+1. `playwright-cli -s=tea-test-review-{run_key} open <target_url>`
+2. `playwright-cli -s=tea-test-review-{run_key} tracing-start`
+3. Execute the flow under review (using `-s=tea-test-review-{run_key}` on each command)
+4. `playwright-cli -s=tea-test-review-{run_key} tracing-stop` → saves trace.zip
+5. `playwright-cli -s=tea-test-review-{run_key} screenshot --filename={test_artifacts}/test-review/review-evidence-{run_key}.png`
+6. `playwright-cli -s=tea-test-review-{run_key} network` → capture network request log
+7. `playwright-cli -s=tea-test-review-{run_key} close`
 
 After capturing `trace.zip`, prefer Playwright's newer trace CLI for local or downloaded artifact analysis:
 
@@ -249,7 +249,7 @@ After capturing `trace.zip`, prefer Playwright's newer trace CLI for local or do
 - `npx playwright trace action <n>` / `trace snapshot <n> --name after` for root-cause details
 - `npx playwright trace close` when done
 
-> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-review close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
+> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-test-review-{run_key} close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
 
 ---
 

@@ -2,7 +2,7 @@
 name: 'step-04b-subagent-performance'
 description: 'Subagent: Performance NFR evidence audit'
 subagent: true
-outputFile: '/tmp/tea-nfr-performance-{{timestamp}}.json'
+outputFile: '/tmp/tea-nfr-performance-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 4B: Performance NFR Evidence Audit

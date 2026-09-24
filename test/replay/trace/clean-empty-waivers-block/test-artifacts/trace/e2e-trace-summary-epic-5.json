@@ -125,7 +125,7 @@
     }
   ],
   "links": {
-    "trace_report_path": "api-token-lifecycle/test-artifacts/traceability-matrix.md",
+    "trace_report_path": "api-token-lifecycle/test-artifacts/trace/traceability-matrix-epic-5.md",
     "trace_report_url": "",
     "artifact_url": "",
     "journey_evidence_url": ""

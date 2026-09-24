@@ -17,11 +17,11 @@
   ],
   "id": "seeded-ac2-title-matched",
   "suite": "trace",
-  "scorerVersion": 4,
+  "scorerVersion": 14,
   "storedOutput": {
     "origin": "constructed",
-    "summary": "test-artifacts/e2e-trace-summary.json",
-    "matrix": "test-artifacts/traceability-matrix.md"
+    "summary": "test-artifacts/trace/e2e-trace-summary-epic-4.json",
+    "matrix": "test-artifacts/trace/traceability-matrix-epic-4.md"
   },
   "inputs": {
     "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
@@ -55,7 +55,7 @@
     "Rejected evidence: the array is present, so the first check passes; its length is 0 against 1, and it",
     "names nothing at line 30 to 38. 1 of 3.",
     "",
-    "Oracle resolution 7 of 7, run metadata 10 of 10 and live 13 of 13 are untouched by the misjudgment:",
+    "Oracle resolution 7 of 7, run metadata 12 of 12 and live 13 of 13 are untouched by the misjudgment:",
     "the live records still land as one stale and one invalid, and requirements_live_only stays 0 because",
     "AC-2 now has a static test in the run's own view."
   ],
@@ -108,7 +108,7 @@
       ]
     },
     "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
-    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "runMetadata": { "checks": 12, "passed": 12, "failed": [] },
     "rejectedEvidence": {
       "checks": 3,
       "passed": 1,

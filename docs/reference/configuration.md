@@ -480,7 +480,7 @@ Paths are relative to `{test_artifacts}` unless noted. Deliverables are declared
 | `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)                   |
 | `test-design`      | `test-design/test-design-epic-{epic_num}.md` (epic-level)                                                       |
 | `test-design`      | `test-design/test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`) |
-| `test-design`      | `test-design/exploration/explore-<page>.png` (browser exploration screenshots)                                  |
+| `test-design`      | `test-design/exploration/explore-{run_key}-<page>.png` (browser exploration screenshots)                        |
 | `framework`        | `{project-root}/tests/README.md`                                                                                |
 | `framework`        | `framework/framework-setup-progress.md` (resume checkpoint)                                                     |
 | `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)                    |
@@ -490,7 +490,7 @@ Paths are relative to `{test_artifacts}` unless noted. Deliverables are declared
 | `test-review`      | `test-review/test-review-{run_key}.md` (a non-empty `output_file_override` replaces this path for one run)      |
 | `test-review`      | `test-review/review-evidence-{run_key}.png` (browser evidence screenshot)                                       |
 | `nfr-assess`       | `nfr/nfr-assessment-{run_key}.md`                                                                               |
-| `nfr-assess`       | `nfr/perf-<page>.png` (browser evidence screenshots)                                                            |
+| `nfr-assess`       | `nfr/perf-{run_key}-<page>.png` (browser evidence screenshots)                                                  |
 | `trace`            | `trace/traceability-matrix-{run_key}.md`                                                                        |
 | `trace`            | `trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI/CD and reporting)                     |
 | `trace`            | `trace/gate-decision-{run_key}.json` (emitted only when the collection is gate-eligible)                        |

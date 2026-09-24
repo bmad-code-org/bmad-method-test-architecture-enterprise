@@ -19,13 +19,16 @@
  *   test-design         design.md, the document a test-design run leaves on disk,
  *                       read by readDesign and scored by scoreRun against one
  *                       fixture set of the eval's real ground truth
- *   trace               test-artifacts/e2e-trace-summary.json and
- *                       test-artifacts/traceability-matrix.md, the two files a
- *                       trace run leaves in a staged workspace, read by
+ *   trace               test-artifacts/trace/e2e-trace-summary-{run_key}.json and
+ *                       test-artifacts/trace/traceability-matrix-{run_key}.md,
+ *                       the two files a trace run leaves in a staged workspace,
+ *                       with run_key the set's epic-{epic_num}, read by
  *                       readSummary and readMatrix and scored by scoreRun against
  *                       one fixture set of the eval's real ground truth
- *   nfr                 test-artifacts/nfr-assessment.md, the one file an NFR run
- *                       leaves in a staged workspace, read by readReport and scored
+ *   nfr                 test-artifacts/nfr/nfr-assessment-system.md, the one file
+ *                       an NFR run leaves in a staged workspace (every bundle
+ *                       audits a whole service, so its run_key is system), read
+ *                       by readReport and scored
  *                       by scoreRun against one evidence bundle of the eval's real
  *                       ground truth
  *   ci                  .github/workflows/test.yml, the one file a CI run leaves in
@@ -177,7 +180,7 @@ const path = require('node:path');
 const { parseReport } = require('../cli/lib/parse-report');
 const { scoreVerdict } = require('./eval-test-review');
 const { parseSelection, scoreCase } = require('./eval-fragment-selection');
-const { readSummary, readMatrix, scoreRun, signatureOf } = require('./eval-trace');
+const { readSummary, readMatrix, scoreRun, signatureOf, traceOutputsOf } = require('./eval-trace');
 const { parseRouting } = require('../cli/lib/parse-routing');
 const { scoreCase: scoreRoutingCase, signatureOf: routingSignatureOf } = require('./eval-bmad-tea-routing');
 const { readDesign: readTestDesign, scoreRun: scoreTestDesignRun, signatureOf: testDesignSignatureOf } = require('./eval-test-design');
@@ -188,6 +191,7 @@ const {
   parseReport: parseNfrReport,
   canonicalCitation: canonicalNfrCitation,
   DOMAINS: NFR_DOMAINS,
+  NFR_REPORT,
 } = require('./eval-nfr');
 const {
   readWorkflow: readCiWorkflow,
@@ -373,8 +377,22 @@ const ATDD_GROUND_TRUTH = path.join(__dirname, 'fixtures', 'atdd-eval', 'ground-
  * also excludes `Threshold Source` lines from implementation evidence. The new
  * clean-equivalent-citation-spellings case holds all three readings against the
  * clean control. No unrelated replay suite moved.
+ *
+ * 14 is the trace run-metadata group scoring `target.type` and `target.id`.
+ * Trace step-01 now resolves the gate target before its first save and persists
+ * it in the matrix frontmatter, and step-04 carries it into the summary unchanged,
+ * so an epic gate over either fixture set has one correct answer: `epic` and the
+ * epic's number. Before this version step-04 read the target from a runtime hook
+ * no step defined, and the scorer left it out for that reason. Every trace case
+ * that scores at all grew two passing checks in runMetadata, because every stored
+ * summary already carried the right target; nothing failed that had passed. The
+ * same change moved every trace and nfr deliverable into its workflow's folder
+ * with the run key in its name, and the stored artifacts moved with them without
+ * a byte of scored content changing beyond `links.trace_report_path`, which names
+ * the matrix at its new path. No test-review, fragment-selection, test-design,
+ * routing, ci, atdd or nfr case moved.
  */
-const SCORER_VERSION = 13;
+const SCORER_VERSION = 14;
 
 const colors = {
   reset: '[0m',
@@ -923,12 +941,18 @@ function verdictDriftFromReport(verdict, reportPath) {
  *
  * @returns {Promise<{result: object, scored?: object}>}
  */
-async function replayTraceCase(item, set, groundTruth) {
-  for (const name of ['e2e-trace-summary.json', 'traceability-matrix.md']) {
-    if (!fs.existsSync(path.join(item.directory, 'test-artifacts', name)))
-      unreadable(`${item.id}: no test-artifacts/${name} beside expected.json`);
+async function replayTraceCase(item, expected, set, groundTruth) {
+  const outputs = traceOutputsOf(set);
+  // test/test-contract-oracles.js reads the stored pair through storedOutput, so it
+  // has to name the files this reader opens or the two suites score different bytes.
+  const stored = (key) => path.normalize(String(expected.storedOutput?.[key] ?? ''));
+  if (stored('summary') !== outputs.summary || stored('matrix') !== outputs.matrix) {
+    unreadable(`${item.id}: storedOutput must name ${outputs.summary} and ${outputs.matrix}, the files a run for ${set.id} writes`);
   }
-  const summary = await readSummary(item.directory);
+  for (const relative of Object.values(outputs)) {
+    if (!fs.existsSync(path.join(item.directory, relative))) unreadable(`${item.id}: no ${relative} beside expected.json`);
+  }
+  const summary = await readSummary(item.directory, set);
   if (!summary.ok) return { result: { unmeasurable: summary.failureClass } };
   const matrix = await readMatrix(item.directory, set);
   if (matrix === null) return { result: { unmeasurable: 'environment-missing-artifact' } };
@@ -973,9 +997,13 @@ function replayRoutingCase(item, expected) {
  *
  * @returns {{result: object, scored?: object}}
  */
-async function replayNfrCase(item, set) {
-  if (!fs.existsSync(path.join(item.directory, 'test-artifacts', 'nfr-assessment.md'))) {
-    unreadable(`${item.id}: no test-artifacts/nfr-assessment.md beside expected.json`);
+async function replayNfrCase(item, expected, set) {
+  // test/test-contract-oracles.js reads the stored report through storedOutput, so
+  // it has to name the file this reader opens.
+  if (path.normalize(String(expected.storedOutput?.report ?? '')) !== NFR_REPORT)
+    unreadable(`${item.id}: storedOutput.report must name ${NFR_REPORT}`);
+  if (!fs.existsSync(path.join(item.directory, NFR_REPORT))) {
+    unreadable(`${item.id}: no ${NFR_REPORT} beside expected.json`);
   }
   const report = await readNfrReport(item.directory);
   if (!report.ok) return { result: { unmeasurable: report.failureClass } };
@@ -1591,7 +1619,7 @@ async function replayCase(item, expected, context) {
             'with it. --accept will not do this one.',
         };
       }
-      const replayed = await replayNfrCase(item, set);
+      const replayed = await replayNfrCase(item, expected, set);
       if (replayed.scored) context.nfrReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
       return { observed: replayed.result };
     }
@@ -1653,7 +1681,7 @@ async function replayCase(item, expected, context) {
             'updated with it. --accept will not do this one.',
         };
       }
-      const replayed = await replayTraceCase(item, set, context.traceGroundTruth);
+      const replayed = await replayTraceCase(item, expected, set, context.traceGroundTruth);
       if (replayed.scored) context.traceReplayed.push({ id: item.id, set: setId, result: replayed.result, scored: replayed.scored });
       return { observed: replayed.result };
     }

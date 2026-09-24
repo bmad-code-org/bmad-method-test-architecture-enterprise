@@ -2,7 +2,7 @@
 name: 'step-03a-subagent-api'
 description: 'Subagent: Generate API tests only'
 subagent: true
-outputFile: '/tmp/tea-automate-api-tests-{{timestamp}}.json'
+outputFile: '/tmp/tea-automate-api-tests-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 3A: Generate API Tests
@@ -237,7 +237,7 @@ Identify fixtures needed for API tests:
 
 ## OUTPUT FORMAT
 
-Write JSON to temp file: `/tmp/tea-automate-api-tests-{{timestamp}}.json`
+Write JSON to temp file: `/tmp/tea-automate-api-tests-{run_key}-{{timestamp}}.json`
 
 ```json
 {

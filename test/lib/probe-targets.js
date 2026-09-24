@@ -111,7 +111,7 @@ const EXECUTION_TARGETS = [
     // workspace, supplies its own path through `commandTargetPolicy`'s artifact
     // override; this is what a run gets when it supplies none. The epic number
     // is the workflow's own placeholder and a caller always overrides it.
-    artifacts: { design: 'test-artifacts/test-design-epic-1.md' },
+    artifacts: { design: 'test-artifacts/test-design/test-design-epic-1.md' },
     // The same list the other three carry: every variable a shipped vendor
     // adapter consumes, plus HOME and USER, because both shipped vendors resolve
     // a stored login through HOME. The contract declares the same set, and
@@ -201,8 +201,9 @@ const EXECUTION_TARGETS = [
     // location relative to the project root. A caller whose project root is not
     // the run directory, which is every staged eval workspace, supplies its own
     // path through `commandTargetPolicy`'s artifact override; this is what a run
-    // gets when it supplies none.
-    artifacts: { report: 'test-artifacts/nfr-assessment.md' },
+    // gets when it supplies none. The run key is `system`, the one step-01
+    // resolves when the project carries no story or epic to narrow the audit.
+    artifacts: { report: 'test-artifacts/nfr/nfr-assessment-system.md' },
     // The vendor variables and nothing else, which is the list cli/nfr-runner.js
     // declares through NFR_REQUEST_KEYS and the list nfr.contract.json carries.
     // An audit reads the staged bundle off disk and needs no other key.
@@ -222,8 +223,13 @@ const EXECUTION_TARGETS = [
     // default location relative to the project root. A caller whose project
     // root is not the run directory, which is every staged eval workspace,
     // supplies its own paths through `commandTargetPolicy`'s artifact override;
-    // these are what a run gets when it supplies none.
-    artifacts: { summary: 'test-artifacts/e2e-trace-summary.json', matrix: 'test-artifacts/traceability-matrix.md' },
+    // these are what a run gets when it supplies none. The run key is `system`,
+    // the one step-01 resolves when the project carries no story, epic, release
+    // or hotfix to narrow the trace.
+    artifacts: {
+      summary: 'test-artifacts/trace/e2e-trace-summary-system.json',
+      matrix: 'test-artifacts/trace/traceability-matrix-system.md',
+    },
     environmentKeys: vendorEnvironmentNames(),
     // One minute above RUN_TIMEOUT_MS in test/eval-trace.js, for the reason the
     // comment above EXECUTION_TARGETS gives: the inner clock classifies, and this

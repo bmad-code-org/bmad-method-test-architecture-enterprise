@@ -1476,7 +1476,7 @@ function allOf(operands) {
 }
 
 /**
- * The key set of `e2e-trace-summary.json`, read out of step-05's own object
+ * The key set of `e2e-trace-summary-{run_key}.json`, read out of step-05's own object
  * literal rather than transcribed here.
  *
  * Step-05 section 3b builds the summary as one `const e2eTraceSummary = {...}`
@@ -2420,8 +2420,8 @@ function buildTraceContract() {
       'No credential value appears in a prompt, an artifact, a log, or a result file.',
     ],
     requiredEvidence: [
-      'The e2e-trace-summary.json each run wrote, in full.',
-      'The traceability-matrix.md each run wrote, in full.',
+      'The trace/e2e-trace-summary-{run_key}.json each run wrote, in full.',
+      'The trace/traceability-matrix-{run_key}.md each run wrote, in full.',
       'The exit code of each invocation.',
       'The digest of the prompt each run was given, so an edit that changed the question is visible in the record.',
     ],
@@ -2923,7 +2923,7 @@ function buildNfrContract() {
       'No credential value appears in a prompt, an artifact, a log, or a result file.',
     ],
     requiredEvidence: [
-      'The nfr-assessment.md each run wrote, in full.',
+      'The nfr/nfr-assessment-{run_key}.md each run wrote, in full.',
       'The exit code of each invocation.',
       'The digest of the prompt each run was given, so an edit that changed the question is visible in the record.',
     ],
@@ -4166,7 +4166,7 @@ function matcherExpression(pointer, groups) {
  * WHY THESE ORACLES ARE THE WEAK READING, AND WHY THAT IS STATED RATHER THAN HIDDEN
  *
  * `bmad-testarch-test-design` declares one output and it is prose:
- * `{test_artifacts}/test-design-epic-{epic_num}.md` and nothing machine-readable
+ * `{test_artifacts}/test-design/test-design-epic-{epic_num}.md` and nothing machine-readable
  * beside it. `bmad-testarch-trace` is the contrast, and the comment in
  * buildTraceContract says why it matters: its markdown matrix "is markdown, which
  * the operator vocabulary addresses only as a whole document", so trace states the

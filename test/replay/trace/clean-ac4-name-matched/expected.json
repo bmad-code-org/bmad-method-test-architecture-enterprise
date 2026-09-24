@@ -12,11 +12,11 @@
   ],
   "id": "clean-ac4-name-matched",
   "suite": "trace",
-  "scorerVersion": 4,
+  "scorerVersion": 14,
   "storedOutput": {
     "origin": "constructed",
-    "summary": "test-artifacts/e2e-trace-summary.json",
-    "matrix": "test-artifacts/traceability-matrix.md"
+    "summary": "test-artifacts/trace/e2e-trace-summary-epic-5.json",
+    "matrix": "test-artifacts/trace/traceability-matrix-epic-5.md"
   },
   "inputs": {
     "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
@@ -43,7 +43,7 @@
     "overall_coverage_actual 80% against 100%. overall_status stays MET because 80 meets the 80% minimum,",
     "so it passes. 3 failed, 9 passed.",
     "",
-    "Oracle resolution 7 of 7, run metadata 10 of 10, rejected evidence 2 of 2 over an empty array, live",
+    "Oracle resolution 7 of 7, run metadata 12 of 12, rejected evidence 2 of 2 over an empty array, live",
     "3 of 3 with present false and no blocker.",
     "",
     "cleanFalsePositives: one status below FULL (1), no blocker, no rejected evidence, no waivers block, no",
@@ -82,7 +82,7 @@
       ]
     },
     "oracleResolution": { "checks": 7, "passed": 7, "failed": [] },
-    "runMetadata": { "checks": 10, "passed": 10, "failed": [] },
+    "runMetadata": { "checks": 12, "passed": 12, "failed": [] },
     "rejectedEvidence": { "checks": 2, "passed": 2, "failed": [] },
     "waivers": { "scored": false, "checks": 0, "passed": 0, "failed": [] },
     "live": { "checks": 3, "passed": 3, "failed": [] },

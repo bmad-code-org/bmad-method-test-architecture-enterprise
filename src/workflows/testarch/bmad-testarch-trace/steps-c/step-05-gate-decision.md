@@ -42,7 +42,7 @@ outputFile: '{test_artifacts}/trace/traceability-matrix-{run_key}.md'
 
 ### 1. Read Phase 1 Coverage Matrix
 
-Read `{outputFile}` frontmatter for `tempCoverageMatrixPath`. Halt when missing — the fallback timestamp cannot be reconstructed reliably in a different execution context:
+Read `{outputFile}` frontmatter for `tempCoverageMatrixPath`. Halt when missing, because the timestamp in the temp file name cannot be reconstructed reliably in a different execution context:
 
 ```javascript
 const progressDoc = fs.readFileSync('{outputFile}', 'utf8');

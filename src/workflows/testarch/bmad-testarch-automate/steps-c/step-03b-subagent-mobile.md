@@ -2,7 +2,7 @@
 name: 'step-03b-subagent-mobile'
 description: 'Subagent: Generate mobile tests only (Maestro device flows plus unit/component)'
 subagent: true
-outputFile: '/tmp/tea-automate-mobile-tests-{{timestamp}}.json'
+outputFile: '/tmp/tea-automate-mobile-tests-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 3B-mobile: Generate Mobile Tests
@@ -102,7 +102,7 @@ Identify what the suite needs but do not create it yet:
 
 ## OUTPUT FORMAT
 
-Write JSON to temp file: `/tmp/tea-automate-mobile-tests-{{timestamp}}.json`
+Write JSON to temp file: `/tmp/tea-automate-mobile-tests-{run_key}-{{timestamp}}.json`
 
 ```json
 {

@@ -39,8 +39,9 @@
     "sets are separate coverage oracles with separate gate decisions, and combining them changes",
     "every percentage below.",
     "",
-    "Skill citations are pinned to commit 7ba2130. The line numbers are the ones in that commit;",
-    "the section names are stable and should be preferred if the lines drift.",
+    "Skill citations were re-pinned to the tree that moved each workflow's outputs into its own",
+    "folder (issue #228); the line numbers are the ones in that tree. The section names are stable",
+    "and should be preferred if the lines drift.",
     "",
     "AC-4 of the clean set said the CONSOLE list shows an expired token, and its only evidence is",
     "two api tests. Every other criterion here that names a rendered surface carries evidence at that",
@@ -57,49 +58,49 @@
     "gateRule1P0": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
       "section": "2. Apply Gate Decision Logic",
-      "lines": "268-272",
+      "lines": "270-276",
       "rule": "Rule 1: P0 coverage must be 100%; anything lower is FAIL."
     },
     "gateRule2Overall": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
       "section": "2. Apply Gate Decision Logic",
-      "lines": "273-277",
+      "lines": "277-281",
       "rule": "Rule 2: overall coverage below 80% is FAIL."
     },
     "gateRule3P1Floor": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
       "section": "2. Apply Gate Decision Logic",
-      "lines": "278-284",
+      "lines": "282-288",
       "rule": "Rule 3: P1 coverage below 80% is FAIL."
     },
     "gateRule4Pass": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
       "section": "2. Apply Gate Decision Logic",
-      "lines": "285-291",
+      "lines": "289-295",
       "rule": "Rule 4: P0 at 100%, overall at or above 80%, and P1 at or above 90% is PASS."
     },
     "gateRule5Concerns": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
       "section": "2. Apply Gate Decision Logic",
-      "lines": "292-298",
+      "lines": "296-302",
       "rule": "Rule 5: P1 coverage between 80% and 89% with the other two met is CONCERNS."
     },
     "gateRule6WaiverNeverDerived": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
       "section": "2. Apply Gate Decision Logic",
-      "lines": "300-307",
+      "lines": "304-311",
       "rule": "Rule 6: WAIVED is never computed by the workflow. Rules 1 to 5 are the only rules that set a decision. A waiver is a human override applied after the fact, and it must carry the full contract from trace-template.md."
     },
     "gateEligibility": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
       "section": "2. Apply Gate Decision Logic",
-      "lines": "260",
+      "lines": "262",
       "rule": "A gate is evaluated only when allow_gate is true and collection_status is COLLECTED."
     },
     "liveEvidenceCap": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-05-gate-decision.md",
       "section": "2. Apply Gate Decision Logic",
-      "lines": "322-334",
+      "lines": "326-338",
       "rule": "A requirement covered only by recorded live verification caps the run at CONCERNS. The overlay can lower a PASS and can never lift a FAIL."
     },
     "liveDispositionRules": {
@@ -111,7 +112,7 @@
     "liveBlockerSeverity": {
       "file": "src/workflows/testarch/bmad-testarch-trace/steps-c/step-04-analyze-gaps.md",
       "section": "2b. Roll Up Live Evidence",
-      "lines": "217-234",
+      "lines": "223-242",
       "rule": "stale, unverifiable, fail, and contradicted records are high severity blockers. blocked, skipped, unmatched, and invalid records are medium severity blockers."
     },
     "coverageStatusEnum": {
@@ -129,13 +130,13 @@
     "singleLevelFullPrecedent": {
       "file": "src/workflows/testarch/bmad-testarch-trace/resources/traceability-matrix.example.md",
       "section": "Detailed Mapping",
-      "lines": "61-73",
+      "lines": "67-79",
       "rule": "The skill's own worked example marks AC-3 FULL on one API test and AC-4 FULL on one component test. Coverage at a single appropriate level is FULL, not UNIT-ONLY or INTEGRATION-ONLY, when that level establishes the whole criterion."
     },
     "waiverContract": {
       "file": "src/workflows/testarch/bmad-testarch-trace/trace-template.md",
       "section": "Waiver Details (For WAIVED only)",
-      "lines": "488-522",
+      "lines": "494-528",
       "rule": "A waiver must carry a business justification, a named approver with a role, an approval date, an expiry date that does not carry into the next release, a monitoring plan, and a remediation plan with a fix target, a due date, an owner, and a verification step."
     },
     "waiverScenarios": {

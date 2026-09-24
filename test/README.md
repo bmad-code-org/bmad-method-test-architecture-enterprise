@@ -146,10 +146,11 @@ The harness stages each set into a disposable workspace holding the fixture set,
 resolved `_bmad/tea/config.yaml`, and a copy of the skill, then probes
 `tea-trace-runner` through `eval-quality`'s command-line adapter with that workspace as
 the authorization's working directory and scores the two artifacts the run leaves in
-`test-artifacts/`. `e2e-trace-summary.json` at schema_version 0.3.x is
+`test-artifacts/trace/`, each named with the run key `epic-{epic_num}` of the set's
+epic. `e2e-trace-summary-{run_key}.json` at schema_version 0.3.x is
 the contract and carries every deterministic oracle. It carries no per-criterion
 matrix at any version, so the per-criterion coverage statuses are read from
-`traceability-matrix.md`.
+`traceability-matrix-{run_key}.md`.
 
 Staging is what keeps the two sets apart. The seeded workspace resolves
 `{test_artifacts}` to that set's own `test-artifacts/`, which is the only way its live
@@ -232,10 +233,10 @@ with no model call and no network, so a change to how an eval parses a reply or
 scores it has to reproduce the recorded result or declare itself. The corpus is
 one directory per case under `replay/<suite>/<case>/`: a verdict and the report
 it points at for `test-review`, a captured stdout for `fragment-selection` and for
-`bmad-tea-routing`, the one markdown document a run leaves in `test-artifacts/` for
+`bmad-tea-routing`, the one markdown document a run leaves in `test-artifacts/test-design/` for
 `test-design`, the
-`e2e-trace-summary.json` and `traceability-matrix.md` a run leaves in
-`test-artifacts/` for `trace`, and an `expected.json` holding the result, the
+`e2e-trace-summary-{run_key}.json` and `traceability-matrix-{run_key}.md` a run leaves in
+`test-artifacts/trace/` for `trace`, and an `expected.json` holding the result, the
 arithmetic that produced it by hand, and whether the stored output is a real
 capture or was constructed.
 
@@ -333,7 +334,8 @@ cleared by a workflow that never passes anything.
 
 The harness stages each bundle the way the trace harness stages a fixture set and
 probes `tea-nfr-runner` through the adapter. The workflow declares one deliverable,
-`nfr-assessment.md`, and its Gate YAML snippet carries `overall_status`, the eight ADR
+`nfr/nfr-assessment-{run_key}.md`, which every bundle names `system` because none
+carries a story or an epic, and its Gate YAML snippet carries `overall_status`, the eight ADR
 checklist categories, and the `audited_domains` block that declares a status for each of the
 four domains Step 4 evaluates. That block is the status this suite scores. The
 `## <Domain> Assessment` section is read beside it and the two are held to agreeing by

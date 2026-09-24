@@ -50,14 +50,14 @@ Read outputs from parallel subagents (API + E2E red-phase test generation), aggr
 **Read API test subagent output:**
 
 ```javascript
-const apiTestsPath = '/tmp/tea-atdd-api-tests-{{timestamp}}.json';
+const apiTestsPath = '/tmp/tea-atdd-api-tests-{run_key}-{{timestamp}}.json';
 const apiTestsOutput = JSON.parse(fs.readFileSync(apiTestsPath, 'utf8'));
 ```
 
 **Read E2E test subagent output:**
 
 ```javascript
-const e2eTestsPath = '/tmp/tea-atdd-e2e-tests-{{timestamp}}.json';
+const e2eTestsPath = '/tmp/tea-atdd-e2e-tests-{run_key}-{{timestamp}}.json';
 const e2eTestsOutput = JSON.parse(fs.readFileSync(e2eTestsPath, 'utf8'));
 ```
 
@@ -345,7 +345,7 @@ const summary = {
 **Store summary for Step 5:**
 
 ```javascript
-fs.writeFileSync('/tmp/tea-atdd-summary-{{timestamp}}.json', JSON.stringify(summary, null, 2), 'utf8');
+fs.writeFileSync('/tmp/tea-atdd-summary-{run_key}-{{timestamp}}.json', JSON.stringify(summary, null, 2), 'utf8');
 ```
 
 ---

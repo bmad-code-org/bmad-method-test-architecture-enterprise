@@ -9,7 +9,7 @@
  * to stdout, exit nonzero on failure.
  *
  * A real test-design run leaves one document at
- * `{project-root}/test-artifacts/test-design-epic-{epic_num}.md`. This stub copies a
+ * `{project-root}/test-artifacts/test-design/test-design-epic-{epic_num}.md`. This stub copies a
  * checked-in document there, chosen by the staged fixture set and by STUB_MODE. The
  * documents are the replay corpus's own, under test/replay/test-design, which
  * `npm run test:eval-replay` already pins to a scored result; a second copy here
@@ -116,7 +116,7 @@ const source = path.join(__dirname, '..', '..', 'replay', 'test-design', storedC
 if (!fs.existsSync(source)) refuse(`no stored document at ${source}`);
 
 const projectRoot = path.join(process.cwd(), namedRoot);
-const artifactsDir = path.join(projectRoot, 'test-artifacts');
+const artifactsDir = path.join(projectRoot, 'test-artifacts', 'test-design');
 fs.mkdirSync(artifactsDir, { recursive: true });
 const designPath = path.join(artifactsDir, `test-design-epic-${epicNum}.md`);
 fs.copyFileSync(source, designPath);

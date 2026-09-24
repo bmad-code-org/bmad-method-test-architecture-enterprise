@@ -2,7 +2,7 @@
 name: 'step-03b-subagent-e2e'
 description: 'Subagent: Generate E2E tests only'
 subagent: true
-outputFile: '/tmp/tea-automate-e2e-tests-{{timestamp}}.json'
+outputFile: '/tmp/tea-automate-e2e-tests-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 3B: Generate E2E Tests
@@ -54,22 +54,22 @@ From the coverage plan (Step 2 output), identify:
 If `auto` (fall back to MCP if CLI unavailable; if neither available, generate from best practices):
 
 - Open the target page first, then verify selectors with a snapshot:
-  `playwright-cli -s=tea-automate-{{timestamp}} open <target_url>`
-  `playwright-cli -s=tea-automate-{{timestamp}} snapshot` → map refs to Playwright locators
+  `playwright-cli -s=tea-automate-{run_key}-{{timestamp}} open <target_url>`
+  `playwright-cli -s=tea-automate-{run_key}-{{timestamp}} snapshot` → map refs to Playwright locators
   - ref `{role: "button", name: "Submit"}` → `page.getByRole('button', { name: 'Submit' })`
   - ref `{role: "textbox", name: "Email"}` → `page.getByRole('textbox', { name: 'Email' })`
-- `playwright-cli -s=tea-automate-{{timestamp}} close` when done
+- `playwright-cli -s=tea-automate-{run_key}-{{timestamp}} close` when done
 
 If `cli` (CLI only — do NOT fall back to MCP; generate from best practices if CLI unavailable):
 
 - Open the target page first, then verify selectors with a snapshot:
-  `playwright-cli -s=tea-automate-{{timestamp}} open <target_url>`
-  `playwright-cli -s=tea-automate-{{timestamp}} snapshot` → map refs to Playwright locators
+  `playwright-cli -s=tea-automate-{run_key}-{{timestamp}} open <target_url>`
+  `playwright-cli -s=tea-automate-{run_key}-{{timestamp}} snapshot` → map refs to Playwright locators
   - ref `{role: "button", name: "Submit"}` → `page.getByRole('button', { name: 'Submit' })`
   - ref `{role: "textbox", name: "Email"}` → `page.getByRole('textbox', { name: 'Email' })`
-- `playwright-cli -s=tea-automate-{{timestamp}} close` when done
+- `playwright-cli -s=tea-automate-{run_key}-{{timestamp}} close` when done
 
-> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-automate-{{timestamp}} close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
+> **Session Hygiene:** Always close sessions using `playwright-cli -s=tea-automate-{run_key}-{{timestamp}} close`. Do NOT use `close-all` — it kills every session on the machine and breaks parallel execution.
 
 If `mcp`:
 
@@ -186,7 +186,7 @@ Identify fixtures needed for E2E tests:
 
 ## OUTPUT FORMAT
 
-Write JSON to temp file: `/tmp/tea-automate-e2e-tests-{{timestamp}}.json`
+Write JSON to temp file: `/tmp/tea-automate-e2e-tests-{run_key}-{{timestamp}}.json`
 
 ```json
 {

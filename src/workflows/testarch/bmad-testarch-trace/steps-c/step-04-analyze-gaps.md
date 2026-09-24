@@ -3,7 +3,7 @@ name: 'step-04-analyze-gaps'
 description: 'Complete Phase 1 with adaptive orchestration (agent-team, subagent, or sequential)'
 nextStepFile: '{skill-root}/steps-c/step-05-gate-decision.md'
 outputFile: '{test_artifacts}/trace/traceability-matrix-{run_key}.md'
-tempOutputFile: '/tmp/tea-trace-coverage-matrix-{{timestamp}}.json'
+tempOutputFile: '/tmp/tea-trace-coverage-matrix-{run_key}-{{timestamp}}.json'
 ---
 
 # Step 4: Complete Phase 1 - Coverage Matrix Generation
@@ -700,7 +700,8 @@ After writing the temp file, update the YAML frontmatter in `{outputFile}` to in
 tempCoverageMatrixPath: '<resolved outputPath>'
 ```
 
-Step 5 reads `tempCoverageMatrixPath` from the frontmatter first; falls back to reconstructing `{tempOutputFile}` only when the key is absent.
+Step 5 reads `tempCoverageMatrixPath` from the frontmatter and halts when the key is absent.
+The temp file name carries this run's `run_key` before the timestamp. `/tmp` is shared by every worktree and parallel run on the machine, and an agent without a shell invents a round timestamp, so the timestamp alone cannot keep two trace runs for different scopes apart.
 
 ---
 

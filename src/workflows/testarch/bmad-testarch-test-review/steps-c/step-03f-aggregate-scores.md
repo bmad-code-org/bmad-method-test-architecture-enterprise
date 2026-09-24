@@ -37,16 +37,17 @@ Read outputs from 4 quality subagents, aggregate violations by severity, and cal
 ### 1. Read All Subagent Outputs
 
 ```javascript
-// Use the SAME timestamp generated in Step 3 (do not regenerate).
+// Use the SAME run_key and timestamp Step 3 used (do not regenerate).
+const runKey = subagentContext?.run_key;
 const timestamp = subagentContext?.timestamp;
-if (!timestamp) {
-  throw new Error('Missing timestamp from Step 3 context. Pass Step 3 timestamp into Step 3F.');
+if (!runKey || !timestamp) {
+  throw new Error('Missing run_key or timestamp from Step 3 context. Pass both Step 3 values into Step 3F.');
 }
 const dimensions = ['determinism', 'isolation', 'maintainability', 'performance'];
 const results = {};
 
 dimensions.forEach((dim) => {
-  const outputPath = `/tmp/tea-test-review-${dim}-${timestamp}.json`;
+  const outputPath = `/tmp/tea-test-review-${dim}-${runKey}-${timestamp}.json`;
   results[dim] = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
 });
 ```
@@ -373,7 +374,7 @@ const reviewSummary = {
 };
 
 // Save for Step 4 (report generation)
-fs.writeFileSync(`/tmp/tea-test-review-summary-${timestamp}.json`, JSON.stringify(reviewSummary, null, 2), 'utf8');
+fs.writeFileSync(`/tmp/tea-test-review-summary-${runKey}-${timestamp}.json`, JSON.stringify(reviewSummary, null, 2), 'utf8');
 ```
 
 ---

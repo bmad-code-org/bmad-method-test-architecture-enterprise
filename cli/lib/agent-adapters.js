@@ -87,7 +87,7 @@ const COMMAND_TOOLS = ['Bash'];
 //
 // It is granted from `scoped-artifact-writes` upward, that being the first tier
 // at which the workers' declared outputs can exist: each writes
-// /tmp/tea-test-review-<dimension>-<timestamp>.json, and step-03 section 5 aborts
+// /tmp/tea-test-review-<dimension>-<run_key>-<timestamp>.json, and step-03 section 5 aborts
 // the workflow when one of them is missing. A `read-only` runner cannot finish
 // that step in any mode, so handing it a launcher would widen the tool surface
 // while enabling nothing.

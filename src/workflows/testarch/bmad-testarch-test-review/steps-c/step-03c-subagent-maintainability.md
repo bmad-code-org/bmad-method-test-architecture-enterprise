@@ -2,7 +2,7 @@
 name: 'step-03c-subagent-maintainability'
 description: 'Subagent: Check test maintainability (readability, structure, DRY)'
 subagent: true
-outputFile: '/tmp/tea-test-review-maintainability-{{timestamp}}.json'
+outputFile: '/tmp/tea-test-review-maintainability-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 3C: Maintainability Quality Check
@@ -130,8 +130,8 @@ const score = Math.max(0, 100 - totalPenalty);
 
 ## OUTPUT FORMAT
 
-Write this JSON to `/tmp/tea-test-review-maintainability-<timestamp>.json`, using the
-`timestamp` the dispatching step handed you. Do not generate one: step-03
+Write this JSON to `/tmp/tea-test-review-maintainability-<run_key>-<timestamp>.json`, using the
+`run_key` and `timestamp` the dispatching step handed you. Do not generate either: step-03
 section 5 aborts the workflow when the path it expects does not exist, and a
 worker that invented its own timestamp writes a file nobody looks for.
 

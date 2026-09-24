@@ -324,11 +324,17 @@ async function testReviewEvidence(contract) {
 // evidence: trace
 // ---------------------------------------------------------------------------
 
+/**
+ * The stored pair one trace replay case holds, at the paths its expected.json
+ * names. The run key in both file names belongs to the case's fixture set, and
+ * test/test-eval-replay.js holds storedOutput equal to the harness's own paths.
+ */
 async function traceArtifacts(caseId) {
-  const root = path.join(REPLAY_ROOT, 'trace', caseId, 'test-artifacts');
+  const directory = path.join(REPLAY_ROOT, 'trace', caseId);
+  const { storedOutput } = await readJson(path.join(directory, 'expected.json'));
   return {
-    summary: { kind: 'json', value: stripComment(await readJson(path.join(root, 'e2e-trace-summary.json'))) },
-    matrix: { kind: 'text', value: await readText(path.join(root, 'traceability-matrix.md')) },
+    summary: { kind: 'json', value: stripComment(await readJson(path.join(directory, storedOutput.summary))) },
+    matrix: { kind: 'text', value: await readText(path.join(directory, storedOutput.matrix)) },
   };
 }
 
@@ -604,7 +610,9 @@ async function testDesignEvidence(contract) {
 
 /** The stored audit one evidence bundle produced, as the bytes on disk. */
 async function storedNfrReport(caseId) {
-  return readText(path.join(REPLAY_ROOT, 'nfr', caseId, 'test-artifacts', 'nfr-assessment.md'));
+  const directory = path.join(REPLAY_ROOT, 'nfr', caseId);
+  const { storedOutput } = await readJson(path.join(directory, 'expected.json'));
+  return readText(path.join(directory, storedOutput.report));
 }
 
 /** The one artifact an nfr run leaves behind, as the stored case for one evidence bundle holds it. */

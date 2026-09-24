@@ -446,13 +446,13 @@ function projectRootOf(set) {
  * Where the workflow's epic-level deliverable lands for one set, relative to the
  * workspace root.
  *
- * `steps-c/step-05-generate-output.md` writes `{test_artifacts}/test-design-epic-{epic_num}.md`,
+ * `steps-c/step-05-generate-output.md` writes `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`,
  * and the prompt resolves both placeholders against this set's staged project root.
  * Two sets therefore declare two paths, which is what lets one authorization serve
  * either without the artifact map naming a file the other run wrote.
  */
 function designArtifactPaths(set) {
-  return { design: path.posix.join(projectRootOf(set), 'test-artifacts', `test-design-epic-${set.epicNum}.md`) };
+  return { design: path.posix.join(projectRootOf(set), 'test-artifacts', 'test-design', `test-design-epic-${set.epicNum}.md`) };
 }
 
 /** Whitespace-collapsed, lowercased text, which is what every token and quote test reads. */
@@ -883,7 +883,7 @@ function buildPrompt(set, { designLevel = 'full' } = {}) {
     '----- what to produce -----',
     'Write the one deliverable epic-level mode declares:',
     '',
-    `- \`${root}/test-artifacts/test-design-epic-${set.epicNum}.md\`, from \`skill/test-design-template.md\`, carrying`,
+    `- \`${root}/test-artifacts/test-design/test-design-epic-${set.epicNum}.md\`, from \`skill/test-design-template.md\`, carrying`,
     '  the risk assessment and the test coverage plan the template lays out, with each risk row stating its',
     '  category, probability, impact and score, and each coverage row naming its test level and the risk it',
     '  covers.',

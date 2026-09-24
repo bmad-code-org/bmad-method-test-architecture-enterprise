@@ -212,9 +212,9 @@ of the binding being correct, and it is paid by a generated file rather than by 
 
 One honest limitation shapes every oracle in this contract, so it is recorded first.
 
-`bmad-testarch-test-design` declares one deliverable in the epic-level mode this contract exercises, and it is prose: `{test_artifacts}/test-design-epic-{epic_num}.md`, with nothing machine-readable beside it.
+`bmad-testarch-test-design` declares one deliverable in the epic-level mode this contract exercises, and it is prose: `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`, with nothing machine-readable beside it.
 `bmad-testarch-trace` is the contrast that makes the gap legible.
-It writes `e2e-trace-summary.json` beside its markdown matrix, which is why `trace.contract.json` can state the matrix's content through the arithmetic consequences the summary carries and declare the matrix a volatile pointer.
+It writes `e2e-trace-summary-{run_key}.json` beside its markdown matrix, which is why `trace.contract.json` can state the matrix's content through the arithmetic consequences the summary carries and declare the matrix a volatile pointer.
 Test-design has no summary to point its oracles at.
 
 So every oracle in this contract addresses the document as a whole, and the generator pairs each one with `documentMentions`, `test/eval-test-design.js`'s own document-global predicate, rather than with the row-scoped scorer result.

@@ -82,10 +82,12 @@
  *
  * WHAT IS PARSED
  *
- * `test-artifacts/e2e-trace-summary.json` at schema_version 0.3.x is the contract and
- * carries every deterministic oracle. It carries no per-criterion matrix, so the
- * per-criterion statuses are read from `test-artifacts/traceability-matrix.md`, the
- * deliverable the summary itself links. Both are read off the probe observation's
+ * `test-artifacts/trace/e2e-trace-summary-{run_key}.json` at schema_version 0.3.x is
+ * the contract and carries every deterministic oracle. It carries no per-criterion
+ * matrix, so the per-criterion statuses are read from
+ * `test-artifacts/trace/traceability-matrix-{run_key}.md`, the deliverable the summary
+ * itself links. `run_key` is `epic-{epic_num}` for the set's oracle epic, the key
+ * step-01 resolves for an epic gate. Both are read off the probe observation's
  * artifact map. An absent or unparseable artifact is an environment failure and
  * exits 2, never a low score.
  *
@@ -260,23 +262,78 @@ function projectRootOf(set) {
 }
 
 /**
+ * The epic number of the set's oracle document, read off its file name the way
+ * step-01 section 4 resolves `epic_num` from an epic document, or null when the
+ * file name carries none. validateCorpus refuses a set this returns null for and
+ * holds the number to the document's own H1.
+ *
+ * @param {object} set
+ * @returns {string|null}
+ */
+function epicNumOf(set) {
+  return /^epic-(\d+)-/.exec(path.basename(set.oracle?.document ?? ''))?.[1] ?? null;
+}
+
+/**
+ * The run key step-01 section 4 resolves for a set: the prompt states
+ * `gate_type` `epic` and points the run at the one epic under `docs/epics/`, so
+ * the key is `epic-{epic_num}`.
+ *
+ * @param {object} set
+ * @returns {string}
+ */
+function runKeyOf(set) {
+  return `epic-${epicNumOf(set)}`;
+}
+
+/**
+ * The two deliverables a run writes, relative to the set's project root: the
+ * workflow's `{test_artifacts}/trace/` folder with the run key in both names.
+ *
+ * @param {object} set
+ * @returns {{summary: string, matrix: string}}
+ */
+function traceOutputsOf(set) {
+  const runKey = runKeyOf(set);
+  return {
+    summary: path.join('test-artifacts', 'trace', `e2e-trace-summary-${runKey}.json`),
+    matrix: path.join('test-artifacts', 'trace', `traceability-matrix-${runKey}.md`),
+  };
+}
+
+/**
  * The two artifacts the runner leaves behind, as the authorization's artifact map
  * names them.
  *
  * The paths are relative to the authorization's working directory, which is the
  * staged workspace, so they name the set's own project root rather than the
- * workflow's default of `test-artifacts/` under a project root that is the working
- * directory.
+ * workflow's default of `test-artifacts/trace/` under a project root that is the
+ * working directory.
  *
  * @param {object} set
  * @returns {{summary: string, matrix: string}}
  */
 function traceArtifactPaths(set) {
   const root = projectRootOf(set);
+  const outputs = traceOutputsOf(set);
   return {
-    summary: path.join(root, 'test-artifacts', 'e2e-trace-summary.json'),
-    matrix: path.join(root, 'test-artifacts', 'traceability-matrix.md'),
+    summary: path.join(root, outputs.summary),
+    matrix: path.join(root, outputs.matrix),
   };
+}
+
+/**
+ * The matrix path the summary's `links.trace_report_path` must carry: the
+ * prompt's resolved `{test_artifacts}` (the set's project root plus
+ * `test-artifacts`, as the agent's working directory sees it) joined with the
+ * matrix's name in the workflow's `trace/` folder. Spelled with `/` on every
+ * platform, because it is a string the run copies, not a path this process opens.
+ *
+ * @param {object} set
+ * @returns {string}
+ */
+function traceReportPathOf(set) {
+  return path.posix.join(projectRootOf(set), 'test-artifacts', 'trace', `traceability-matrix-${runKeyOf(set)}.md`);
 }
 
 // The summary contract this harness scores. The waivers block arrived in 0.3.0, so a
@@ -855,7 +912,7 @@ async function validateCorpus(groundTruth) {
     const prompt = buildPrompt(set);
     const requiredPromptLines = [
       '- `decision_mode`: `deterministic`',
-      `- \`links.trace_report_path\`: \`${projectRootOf(set)}/test-artifacts/traceability-matrix.md\``,
+      `- \`links.trace_report_path\`: \`${traceReportPathOf(set)}\``,
       '- `links.trace_report_url`, `links.artifact_url`, and `links.journey_evidence_url`: empty strings',
       '- `tests.skipped_cases`, `tests.fixme_cases`, and `tests.pending_cases`: zero when no such cases exist',
       '- `heuristics.ui_journey_status` and `heuristics.ui_state_status`: `not_applicable` for this formal requirements oracle',
@@ -867,8 +924,10 @@ async function validateCorpus(groundTruth) {
   }
 
   // Every skill rule the corpus cites must still exist under the section it names.
-  // The section name is the stable anchor; the line span is pinned to commit 7ba2130
-  // and drifts whenever a step file is edited, which is a notice rather than a failure.
+  // The section name is the stable anchor; the line span is pinned to the tree the
+  // ground truth's comment names and drifts whenever a step file is edited, which is a
+  // notice rather than a failure. A span that drifts while staying inside its section
+  // raises nothing, so re-read the cited lines whenever the notice fires for any of them.
   for (const [key, citation] of Object.entries(groundTruth.skillRuleCitations ?? {})) {
     const absolute = path.join(PROJECT_ROOT, citation.file);
     // Unreadable is reported rather than thrown. The port answers absence and
@@ -938,6 +997,21 @@ async function validateCorpus(groundTruth) {
         continue;
       }
       if (!fs.existsSync(path.join(FIXTURE_ROOT, relative))) problems.push(`${label}: ${field} ${relative} does not exist`);
+    }
+
+    // The run key names both deliverables, and step-01 resolves it from the epic's
+    // number. The harness reads that number off the file name, so the document's own
+    // H1 has to state the same one, or a correct run would write where nothing reads.
+    const epicNum = epicNumOf(set);
+    if (epicNum === null) {
+      problems.push(`${label}: oracle.document ${set.oracle?.document} is not named epic-<number>-<title>.md`);
+    } else {
+      // Absence is already reported by the declaration loop above.
+      const epic = await readText(path.join(FIXTURE_ROOT, set.oracle.document));
+      const heading = epic.present ? (/^#\s+(.*)$/m.exec(epic.text)?.[1] ?? '') : null;
+      if (heading !== null && !new RegExp(`^Epic ${epicNum}:`).test(heading)) {
+        problems.push(`${label}: oracle.document's H1 "${heading}" does not state Epic ${epicNum}, the number its file name carries`);
+      }
     }
 
     // A clean set that grew a test-artifacts directory would hand the control run a
@@ -1422,6 +1496,9 @@ async function assertGroundTruthAbsent(dir) {
  */
 function buildPrompt(set, { allowGate = true } = {}) {
   const root = projectRootOf(set);
+  const runKey = runKeyOf(set);
+  const matrixPath = traceReportPathOf(set);
+  const summaryPath = path.posix.join(root, 'test-artifacts', 'trace', `e2e-trace-summary-${runKey}.json`);
   return [
     `You are running the TEA workflow \`bmad-testarch-trace\` against the project in \`${root}/\`.`,
     '',
@@ -1446,20 +1523,20 @@ function buildPrompt(set, { allowGate = true } = {}) {
     '- `coverage_levels`: `e2e,api,component,unit,live`',
     '',
     `The trace target is the epic under \`${root}/docs/epics/\`. Resolve the coverage oracle from it the`,
-    'way step-01 says to.',
+    `way step-01 says to. Step-01 resolves this run's \`run_key\` from the same epic, and it is \`${runKey}\`.`,
     '',
     '----- what to produce -----',
     'Write both deliverables the workflow declares:',
     '',
-    `- \`${root}/test-artifacts/traceability-matrix.md\`, from \`skill/trace-template.md\`, carrying the`,
+    `- \`${matrixPath}\`, from \`skill/trace-template.md\`, carrying the`,
     '  detailed mapping with one section per criterion, each stating its coverage status and the tests',
     '  that establish it as `file:line`.',
-    `- \`${root}/test-artifacts/e2e-trace-summary.json\` at schema_version 0.3.0, exactly as`,
+    `- \`${summaryPath}\` at schema_version 0.3.0, exactly as`,
     '  `skill/steps-c/step-05-gate-decision.md` section 3b defines it.',
     '',
     'The summary metadata is a contract. Copy these resolved values exactly:',
     `- \`decision_mode\`: \`deterministic\``,
-    `- \`links.trace_report_path\`: \`${root}/test-artifacts/traceability-matrix.md\``,
+    `- \`links.trace_report_path\`: \`${matrixPath}\``,
     '- `links.trace_report_url`, `links.artifact_url`, and `links.journey_evidence_url`: empty strings',
     '- `tests.skipped_cases`, `tests.fixme_cases`, and `tests.pending_cases`: zero when no such cases exist',
     '- `heuristics.ui_journey_status` and `heuristics.ui_state_status`: `not_applicable` for this formal requirements oracle',
@@ -1511,10 +1588,10 @@ async function caseIds() {
  */
 function summaryFromArtifact(artifact) {
   if (!artifact || artifact.kind === 'absent') {
-    return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no e2e-trace-summary.json was written' };
+    return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no e2e trace summary was written' };
   }
   if (artifact.kind !== 'json' || artifact.value === null || typeof artifact.value !== 'object' || Array.isArray(artifact.value)) {
-    return { ok: false, failureClass: 'environment-parser', reason: 'e2e-trace-summary.json is not a JSON object' };
+    return { ok: false, failureClass: 'environment-parser', reason: 'the e2e trace summary is not a JSON object' };
   }
   const summary = artifact.value;
   const version = String(summary.schema_version ?? '');
@@ -1524,7 +1601,7 @@ function summaryFromArtifact(artifact) {
     return {
       ok: false,
       failureClass: 'environment-parser',
-      reason: `e2e-trace-summary.json declares schema_version "${version || '(missing)'}", this harness scores ${SUMMARY_SCHEMA_MAJOR_MINOR}.x`,
+      reason: `the e2e trace summary declares schema_version "${version || '(missing)'}", this harness scores ${SUMMARY_SCHEMA_MAJOR_MINOR}.x`,
     };
   }
   return { ok: true, summary };
@@ -1540,10 +1617,11 @@ function summaryFromArtifact(artifact) {
  * the artifact reader decides what each means.
  *
  * @param {string} projectDir
+ * @param {object} set The fixture set, whose run key names the file.
  * @returns {Promise<{ok: true, summary: object}|{ok: false, failureClass: string, reason: string}>}
  */
-async function readSummary(projectDir) {
-  const read = await readText(path.join(projectDir, 'test-artifacts', 'e2e-trace-summary.json'));
+async function readSummary(projectDir, set) {
+  const read = await readText(path.join(projectDir, traceOutputsOf(set).summary));
   if (!read.present) return summaryFromArtifact({ kind: 'absent' });
   try {
     return summaryFromArtifact({ kind: 'json', value: JSON.parse(read.text) });
@@ -1670,7 +1748,7 @@ function parseMatrix(text, set) {
 
 /** The matrix as a file on disk, for a stored replay case; a live run reads it off the observation. */
 async function readMatrix(projectDir, set) {
-  const read = await readText(path.join(projectDir, 'test-artifacts', 'traceability-matrix.md'));
+  const read = await readText(path.join(projectDir, traceOutputsOf(set).matrix));
   return read.present ? parseMatrix(read.text, set) : null;
 }
 
@@ -1794,17 +1872,23 @@ function scoreOracleResolution(summary, set) {
 
 /**
  * Metadata the run must report correctly regardless of which criterion statuses it
- * derives: the workflow's decision mode, the artifact links it emits, the hygiene of
- * the tests it counted, and the two UI heuristics that state whether they applied.
+ * derives: the workflow's decision mode, the gate target it names, the artifact links
+ * it emits, the hygiene of the tests it counted, and the two UI heuristics that state
+ * whether they applied.
  *
  * Every field here has exactly one correct value for a formal-requirements run over
  * this corpus, the same "no defensible second reading" bar gate_criteria is held to.
  * decision_mode is workflow.yaml's own default, stated to the agent verbatim in
  * buildPrompt's run-configuration block, and neither fixture set's config overrides it.
+ * target.type and target.id are what step-01 section 4 resolves and persists in the
+ * matrix frontmatter, and step-04 carries into the summary unchanged: the prompt states
+ * gate_type `epic` and names the one epic under docs/epics/, so the type is `epic` and
+ * the id is that epic's number, which validateCorpus holds equal between the
+ * document's file name and its H1.
  * links.trace_report_path is that same block's `{test_artifacts}` (the set's own project
  * root plus `test-artifacts`, prefixed for the agent's actual working directory, which is
- * the workspace root rather than the project root) joined with the template's default
- * filename; the other three link
+ * the workspace root rather than the project root) joined with the matrix's name in the
+ * workflow's `trace/` folder, which carries the run key; the other three link
  * fields are hardcoded to the empty string in step-05's own template outside of a CI/CD
  * run that populates them after upload. Neither fixture set plants a
  * skipped, fixme, or pending test, so tests.skipped_cases, tests.fixme_cases, and
@@ -1813,12 +1897,11 @@ function scoreOracleResolution(summary, set) {
  * not synthetic, before it ever inspects a gap count, so both UI heuristics read
  * 'not_applicable' no matter how many UI gaps the run finds.
  *
- * target, evaluator, source_sha, and recommendations text are deliberately not scored
- * here. target.id and target.label come from a runtime extraction step-04 describes
- * only in prose ("story_id / epic_num / release_version / hotfix identifier from Step
- * 1"), with no fixed algorithm this harness can reproduce and check against; evaluator
- * is the operator's own identity; source_sha is the workspace's git commit, which
- * changes on every run; and a recommendation's `action` is free text, so only the
+ * target.label, evaluator, source_sha, and recommendations text are deliberately not
+ * scored here. target.label is a human-readable heading whose wording step-01 gives
+ * only by example; evaluator is the operator's own identity; source_sha is the
+ * workspace's git commit, which changes on every run; and a recommendation's `action`
+ * is free text, so only the
  * requirement ids it names are scored, in scoreArithmetic beside the gap buckets they
  * come from. Each of the rest would need either a semantic grader or a fixture-carried
  * fact that does not exist, and a wrong guess would fail a correct run, which this
@@ -1830,7 +1913,9 @@ function scoreRunMetadata(summary, set) {
   const heuristics = summary.heuristics ?? {};
   return [
     check('decision_mode', 'deterministic', summary.decision_mode),
-    check('links.trace_report_path', `${projectRootOf(set)}/test-artifacts/traceability-matrix.md`, links.trace_report_path),
+    check('target.type', 'epic', summary.target?.type),
+    check('target.id', epicNumOf(set), summary.target?.id),
+    check('links.trace_report_path', traceReportPathOf(set), links.trace_report_path),
     check('links.trace_report_url', '', links.trace_report_url),
     check('links.artifact_url', '', links.artifact_url),
     check('links.journey_evidence_url', '', links.journey_evidence_url),
@@ -2280,7 +2365,7 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
 
     const matrixArtifact = observation.artifacts.matrix;
     if (!matrixArtifact || matrixArtifact.kind === 'absent') {
-      return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no traceability-matrix.md was written' };
+      return { ok: false, failureClass: 'environment-missing-artifact', reason: 'no traceability matrix was written' };
     }
     // The adapter tags a stream or file that JSON.parse accepts as `json`. A
     // matrix is markdown, so a `json` tag here is a file that is not a matrix.
@@ -2289,7 +2374,7 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
       return {
         ok: false,
         failureClass: 'environment-missing-artifact',
-        reason: 'traceability-matrix.md is missing or declares no section for any criterion the oracle names',
+        reason: 'the traceability matrix is missing or declares no section for any criterion the oracle names',
       };
     }
 
@@ -2865,7 +2950,10 @@ module.exports = {
   expectedRejectedEvidence,
   digestTree,
   stageWorkspace,
+  runKeyOf,
+  traceOutputsOf,
   traceArtifactPaths,
+  traceReportPathOf,
   assertGroundTruthAbsent,
   buildPrompt,
   caseIndex,

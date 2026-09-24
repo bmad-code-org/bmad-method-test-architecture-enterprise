@@ -2,7 +2,7 @@
 name: 'step-04c-subagent-reliability'
 description: 'Subagent: Reliability NFR evidence audit'
 subagent: true
-outputFile: '/tmp/tea-nfr-reliability-{{timestamp}}.json'
+outputFile: '/tmp/tea-nfr-reliability-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 4C: Reliability NFR Evidence Audit

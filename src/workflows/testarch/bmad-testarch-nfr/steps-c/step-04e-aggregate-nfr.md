@@ -32,7 +32,7 @@ const domains = ['security', 'performance', 'reliability', 'maintainability'];
 const assessments = {};
 
 domains.forEach((domain) => {
-  const outputPath = `/tmp/tea-nfr-${domain}-{{timestamp}}.json`;
+  const outputPath = `/tmp/tea-nfr-${domain}-{run_key}-{{timestamp}}.json`;
   assessments[domain] = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
 });
 ```
@@ -447,7 +447,7 @@ const executiveSummary = {
 };
 
 // Save for Step 5 (report generation)
-fs.writeFileSync('/tmp/tea-nfr-summary-{{timestamp}}.json', JSON.stringify(executiveSummary, null, 2), 'utf8');
+fs.writeFileSync('/tmp/tea-nfr-summary-{run_key}-{{timestamp}}.json', JSON.stringify(executiveSummary, null, 2), 'utf8');
 ```
 
 ---

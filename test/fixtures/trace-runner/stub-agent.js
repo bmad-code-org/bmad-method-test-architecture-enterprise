@@ -8,15 +8,17 @@
  * working directory, write the artifacts the prompt names, print the final
  * response to stdout, exit nonzero on failure.
  *
- * A real trace run leaves two files under the project's test-artifacts directory.
- * This stub copies a checked-in pair there, chosen by which epic the workspace
- * carries, so the whole trace harness can be driven against it. The pairs are the
+ * A real trace run leaves two files in the project's test-artifacts/trace/ folder,
+ * each named with the run key step-01 resolves: `epic-{epic_num}` for an epic, and
+ * `system` when no scope resolves. This stub copies a checked-in pair there, chosen
+ * by which epic the workspace carries, so the whole trace harness can be driven
+ * against it. The pairs are the
  * replay corpus's own correct runs, test/replay/trace/seeded-correct-run and
  * test/replay/trace/clean-correct-run, which `npm run test:eval-replay` already
  * pins to a scored result of every threshold met; a second copy here would be a
  * second thing to keep in step with the ground truth. A workspace carrying
- * neither epic gets the seeded pair, which is what a bare probe with no staged
- * project reads back.
+ * neither epic gets the seeded pair under the `system` key, which is what a bare
+ * probe with no staged project reads back.
  *
  * The project root is `project/` under the working directory when that exists,
  * which is how test/eval-trace.js stages a workspace, and the working directory
@@ -101,18 +103,24 @@ const projectRoot =
       : process.cwd();
 const epicsDir = path.join(projectRoot, 'docs', 'epics');
 const epics = fs.existsSync(epicsDir) ? fs.readdirSync(epicsDir) : [];
-const fixtureSet = epics.some((name) => name.startsWith('epic-5-')) ? 'clean' : 'seeded';
-const source = path.join(__dirname, '..', '..', 'replay', 'trace', `${fixtureSet}-correct-run`, 'test-artifacts');
-const artifactsDir = path.join(projectRoot, 'test-artifacts');
+const clean = epics.some((name) => name.startsWith('epic-5-'));
+const seeded = epics.some((name) => name.startsWith('epic-4-'));
+const fixtureSet = clean ? 'clean' : 'seeded';
+// The stored pair is named by the run key of the set it was frozen from; the copy
+// is named by the run key this workspace resolves to.
+const storedKey = clean ? 'epic-5' : 'epic-4';
+const runKey = clean ? 'epic-5' : seeded ? 'epic-4' : 'system';
+const source = path.join(__dirname, '..', '..', 'replay', 'trace', `${fixtureSet}-correct-run`, 'test-artifacts', 'trace');
+const artifactsDir = path.join(projectRoot, 'test-artifacts', 'trace');
 fs.mkdirSync(artifactsDir, { recursive: true });
 
-const summaryPath = path.join(artifactsDir, 'e2e-trace-summary.json');
-const matrixPath = path.join(artifactsDir, 'traceability-matrix.md');
-fs.copyFileSync(path.join(source, 'traceability-matrix.md'), matrixPath);
+const summaryPath = path.join(artifactsDir, `e2e-trace-summary-${runKey}.json`);
+const matrixPath = path.join(artifactsDir, `traceability-matrix-${runKey}.md`);
+fs.copyFileSync(path.join(source, `traceability-matrix-${storedKey}.md`), matrixPath);
 if (mode === 'invalid-json') {
   fs.writeFileSync(summaryPath, '{"schema_version": "0.3.0", "gate_status": FAIL\n', 'utf8');
 } else {
-  fs.copyFileSync(path.join(source, 'e2e-trace-summary.json'), summaryPath);
+  fs.copyFileSync(path.join(source, `e2e-trace-summary-${storedKey}.json`), summaryPath);
   const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
   summary.links.trace_report_path = path.relative(process.cwd(), matrixPath);
   fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');

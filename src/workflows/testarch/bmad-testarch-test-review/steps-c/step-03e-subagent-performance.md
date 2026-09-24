@@ -2,7 +2,7 @@
 name: 'step-03e-subagent-performance'
 description: 'Subagent: Check test performance (speed, efficiency, parallelization)'
 subagent: true
-outputFile: '/tmp/tea-test-review-performance-{{timestamp}}.json'
+outputFile: '/tmp/tea-test-review-performance-{run_key}-{{timestamp}}.json'
 ---
 
 # Subagent 3E: Performance Quality Check
@@ -84,8 +84,8 @@ const score = Math.max(0, 100 - totalPenalty);
 
 ## OUTPUT FORMAT
 
-Write this JSON to `/tmp/tea-test-review-performance-<timestamp>.json`, using the
-`timestamp` the dispatching step handed you. Do not generate one: step-03
+Write this JSON to `/tmp/tea-test-review-performance-<run_key>-<timestamp>.json`, using the
+`run_key` and `timestamp` the dispatching step handed you. Do not generate either: step-03
 section 5 aborts the workflow when the path it expects does not exist, and a
 worker that invented its own timestamp writes a file nobody looks for.
 
