@@ -1,7 +1,7 @@
 ---
 name: 'step-04-validate-and-summarize'
 description: 'Validate outputs and produce automation summary'
-outputFile: '{test_artifacts}/automation-summary.md'
+outputFile: '{test_artifacts}/automate/automation-summary-{run_key}.md'
 ---
 
 # Step 4: Validate & Summarize
@@ -65,6 +65,7 @@ Before finalizing, review the complete output document for quality:
 
 Write `{outputFile}` including:
 
+- The run's scope (`runKey`), and a note when it is `system` only because no narrower scope could be resolved
 - Coverage plan by test level and priority
 - Files created/updated
 - Key assumptions and risks
@@ -86,6 +87,9 @@ Name in the same section any RECOMMENDED utility the run wanted but could not wi
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'completed'
   stepsCompleted: ['step-04-validate-and-summarize']
   lastStep: 'step-04-validate-and-summarize'
   lastSaved: '{date}'
@@ -94,7 +98,9 @@ Name in the same section any RECOMMENDED utility the run wanted but could not wi
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists** (written earlier in this same run), update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'completed'`
   - Add `'step-04-validate-and-summarize'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-validate-and-summarize'`
   - Set `lastSaved: '{date}'`

@@ -74,6 +74,7 @@ When `headless: true` is resolved (from `workflow.yaml` defaults, a `customize.t
 - Execute **Create mode** directly, starting at `{skill-root}/steps-c/step-01-load-context.md`.
 - Never prompt the user — resolve every input from configuration and supplied values.
 - Honor `review_files` (authoritative review set), `context_files` (read-only context set), `output_file_override` (replaces `default_output_file` for the run), and `generate_inline_comments` (inline `// TODO (TEA Review)` comments) as first-class inputs, as documented in `workflow.yaml` and `instructions.md`.
+- Resolve the run's scope without asking. The report defaults to `{test_artifacts}/test-review/test-review-{run_key}.md`; step 1 derives `run_key` from a story or epic named in the invocation or in `context_files`, else from the reviewed target, and starts over when an unfinished report for that key exists.
 - Never go looking for a story, PRD, or test design that `context_files` did not name. With no human to confirm what was found, an unrequested artifact is a nondeterministic input.
 
 When `headless` is false (default), the interactive path below is unchanged.

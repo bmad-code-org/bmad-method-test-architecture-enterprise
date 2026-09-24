@@ -46,7 +46,7 @@ Base output folder for TEA-generated artifacts (test designs, reports, traceabil
 
 **Type:** `string` · **Default:** `{output_folder}/test-artifacts`
 
-Resolves to `{project-root}/{value}`, so it can live outside the core BMM output folder.
+Resolves to `{project-root}/{value}`, so it can live outside the core BMM output folder. Each workflow writes into its own folder under it, as described in [Output Layout](#output-layout).
 
 ```yaml
 test_artifacts: docs/testing-artifacts
@@ -450,47 +450,133 @@ document_output_language: english
 
 ## Declared but Not Yet Wired
 
-`src/module.yaml` declares four more keys and marks them FUTURE. The installer prompts for them and writes them to `_bmad/tea/config.yaml`, but no workflow reads them yet. Setting them changes nothing today:
+`src/module.yaml` declares one more key and marks it FUTURE. The installer prompts for it and writes it to `_bmad/tea/config.yaml`, but no workflow reads it yet. Setting it changes nothing today:
 
-| Key                  | Prompted default | Intended purpose                     |
-| -------------------- | ---------------- | ------------------------------------ |
-| `risk_threshold`     | `p1`             | Risk level requiring mandatory tests |
-| `test_design_output` | `test-design`    | Subfolder for test design documents  |
-| `test_review_output` | `test-reviews`   | Subfolder for test review reports    |
-| `trace_output`       | `traceability`   | Subfolder for traceability reports   |
+| Key              | Prompted default | Intended purpose                     |
+| ---------------- | ---------------- | ------------------------------------ |
+| `risk_threshold` | `p1`             | Risk level requiring mandatory tests |
 
-Outputs currently land directly under `{test_artifacts}` at the paths listed below.
+Earlier releases also declared three FUTURE output-folder keys: `test_design_output`, `test_review_output`, and `trace_output`. No workflow ever read them, and they are removed. Every workflow now writes to a fixed folder of its own, described in [Output Layout](#output-layout).
+
+Wiring the three keys was turned down for two reasons. First, the installer cannot carry them reliably. It fills `{test_artifacts}` inside a `result:` template from the raw install answer, so the key is saved as a relative path without `{project-root}`, and an unattended `--yes` install skips the key altogether. Upstream BMAD's main branch has since dropped `result:` processing. Second, a configurable folder per workflow multiplies the places every workflow that reads another workflow's output has to search.
+
+A `_bmad/tea/config.yaml` written by an earlier install can still carry the three keys. Nothing reads them, so they are safe to delete.
 
 ---
 
-## TEA Output Files
+## Output Layout
+
+Outputs currently land in one folder per workflow under `{test_artifacts}`, named after the workflow's skill without its `bmad-testarch-` prefix: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`. The folder names are fixed, and no configuration key moves them. `teach-me-testing` keeps its per-learner folders, and Evaluate writes under [`tea_evaluations_folder`](#tea_evaluations_folder).
+
+A file produced once per scope carries that scope's `run_key` in its name, so a trace run for epic 16 never opens, rewrites, or appends to epic 15's matrix or gate decision. A file that exists once per project keeps a plain name: `test-design-architecture.md`, `test-design-qa.md`, `{project_name}-handoff.md`, `ci-pipeline-progress.md`, and `framework-setup-progress.md`.
+
+### TEA Output Files
 
 Paths are relative to `{test_artifacts}` unless noted. Deliverables are declared in the workflow's `workflow.yaml`; resume checkpoints are declared in the step files that write them.
 
-| Workflow           | Output                                                                                              |
-| ------------------ | --------------------------------------------------------------------------------------------------- |
-| `test-design`      | `test-design-architecture.md` and `test-design-qa.md` (system-level writes both)                    |
-| `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)       |
-| `test-design`      | `test-design-epic-{epic_num}.md` (epic-level)                                                       |
-| `test-design`      | `test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`) |
-| `framework`        | `{project-root}/tests/README.md`                                                                    |
-| `atdd`             | `atdd-checklist-{story_key}.md`                                                                     |
-| `automate`         | `automation-summary.md`                                                                             |
-| `test-review`      | `test-review.md` (override per run with the `output_file_override` variable)                        |
-| `nfr-assess`       | `nfr-assessment.md`                                                                                 |
-| `trace`            | `traceability-matrix.md`                                                                            |
-| `trace`            | `e2e-trace-summary.json` (machine-readable summary for CI/CD and reporting)                         |
-| `trace`            | `gate-decision.json` (emitted only when the collection is gate-eligible)                            |
-| `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)        |
-| `teach-me-testing` | `teaching-progress/{user_name}-tea-progress.yaml`                                                   |
-| `teach-me-testing` | `tea-academy/{user_name}/session-{N}-notes.md`                                                      |
-| `teach-me-testing` | `tea-academy/{user_name}/tea-completion-summary.md`                                                 |
+| Workflow           | Output                                                                                                          |
+| ------------------ | --------------------------------------------------------------------------------------------------------------- |
+| `test-design`      | `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` (system-level writes both)        |
+| `test-design`      | `test-design/{project_name}-handoff.md` (system-level; feeds BMAD `create-epics-and-stories`)                   |
+| `test-design`      | `test-design/test-design-epic-{epic_num}.md` (epic-level)                                                       |
+| `test-design`      | `test-design/test-design-progress-{run_key}.md` (resume checkpoint; `run_key` is `system` or `epic-{epic_num}`) |
+| `test-design`      | `test-design/exploration/explore-<page>.png` (browser exploration screenshots)                                  |
+| `framework`        | `{project-root}/tests/README.md`                                                                                |
+| `framework`        | `framework/framework-setup-progress.md` (resume checkpoint)                                                     |
+| `ci`               | `{project-root}/.github/workflows/test.yml` (GitHub Actions default; per-platform otherwise)                    |
+| `ci`               | `ci/ci-pipeline-progress.md` (resume checkpoint)                                                                |
+| `atdd`             | `atdd/atdd-checklist-{story_key}.md`                                                                            |
+| `automate`         | `automate/automation-summary-{run_key}.md`                                                                      |
+| `test-review`      | `test-review/test-review-{run_key}.md` (a non-empty `output_file_override` replaces this path for one run)      |
+| `test-review`      | `test-review/review-evidence-{run_key}.png` (browser evidence screenshot)                                       |
+| `nfr-assess`       | `nfr/nfr-assessment-{run_key}.md`                                                                               |
+| `nfr-assess`       | `nfr/perf-<page>.png` (browser evidence screenshots)                                                            |
+| `trace`            | `trace/traceability-matrix-{run_key}.md`                                                                        |
+| `trace`            | `trace/e2e-trace-summary-{run_key}.json` (machine-readable summary for CI/CD and reporting)                     |
+| `trace`            | `trace/gate-decision-{run_key}.json` (emitted only when the collection is gate-eligible)                        |
+| `teach-me-testing` | `teaching-progress/{user_name}-tea-progress.yaml`                                                               |
+| `teach-me-testing` | `tea-academy/{user_name}/session-{N}-notes.md`                                                                  |
+| `teach-me-testing` | `tea-academy/{user_name}/tea-completion-summary.md`                                                             |
 
-`trace` also reads an optional input it never writes: `live-verification-results.json`. Any producer may write it (an agent, a shell script, a CI job, or a person recording an outcome by hand). See [Live Verification Results](/docs/reference/live-verification-results.md) for the contract.
+`trace` also reads two optional inputs it never writes, and both stay at the root of `{test_artifacts}` because other tools and people produce them: `live-verification-results.json` and `gate-waivers.md`. Any producer may write `live-verification-results.json` (an agent, a shell script, a CI job, or a person recording an outcome by hand). See [Live Verification Results](/docs/reference/live-verification-results.md) for the contract.
+
+### Run Keys
+
+Each workflow that runs once per scope resolves its `run_key` in its first step, before it writes anything, and records it as `runScope` and `runKey` in the output's frontmatter. Later steps carry both forward unchanged.
+
+- `system`: the whole project or system, or no narrower scope could be resolved.
+- `epic-{epic_num}`: one epic. An epic with no number uses the slug of its title.
+- `story-{story_key}`: one story. `story_key` is the BMM story file basename without `.md` (for example `1-2-user-authentication`). Without a story file, it is the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+- `release-{slug}` and `hotfix-{slug}`: `trace` only, from `gate_type` and the release version or hotfix id.
+- `target-{slug}`: `automate` and `test-review` only, when no story or epic applies. The slug comes from the automated or reviewed path or feature name. A `test-review` run with `review_scope: suite` and no story or epic is `system`.
+
+The slug rule applies to every `{slug}` and to an epic title with no number: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters. For example, release `v1.2.0` becomes `release-v1-2-0`, and the review target `tests/e2e/checkout.spec.ts` becomes `target-tests-e2e-checkout-spec-ts`.
+
+A workflow resolves the scope in this order:
+
+1. The scope you name when you invoke it ("run trace for epic 16").
+2. The scope the loaded artifacts carry: a story file name, an epic document's metadata, heading, or filename, or trace's `gate_type` and its id.
+3. When several candidates remain, an interactive run lists them, asks which one this run covers, and waits. A headless or autonomous run never asks: it uses `system`, or `target-{slug}` where a target applies, and says so in its output.
+
+`atdd` runs once per story, so its checklist is named by `story_key` directly. `test-design` uses `system` or `epic-{epic_num}`.
+
+### Re-running a Scope
+
+A run reads and writes only its own `run_key`'s files. Files for other scopes are never opened.
+
+When a file for the same `run_key` already exists:
+
+- **No file:** a fresh run.
+- **An earlier run of this scope was interrupted** (the file is marked in progress): an interactive run asks whether to resume or start over, and a headless run starts over.
+- **An earlier run of this scope finished:** the new run replaces the file entirely.
+
+Two runs are never merged into one file. A file grows only while the run that created it is still adding its later sections. To keep an earlier result for the same scope, commit or copy it before you re-run. A `trace` run that evaluates no gate also removes an earlier `gate-decision-{run_key}.json` for the same `run_key`, so the folder never pairs a new summary with a stale decision.
+
+`ci` and `framework` scaffold once per project, so each keeps one fixed checkpoint in its folder and resumes it the same way.
+
+### Files From Earlier TEA Versions
+
+Earlier TEA versions wrote everything flat under `{test_artifacts}` with fixed names, such as `traceability-matrix.md`, `gate-decision.json`, `test-review.md`, `nfr-assessment.md`, and `automation-summary.md`. Upgrading leaves those files where they are:
+
+- New runs never treat an old flat file as their own output, so they never rewrite it or append to it.
+- Workflows that read another workflow's output look in the producing workflow's folder first, then at the old root location, and name both. For example, `nfr-assess` looks for test-design documents in `test-design/` and then at the root of `{test_artifacts}`, and `automate` looks for ATDD checklists in `atdd/` and then at the root.
+- Resume picks up an in-progress file at its old path. It asks which scope the file covers, writes it to the new scoped path with `runScope` and `runKey` added, deletes the old file, and continues. `test-design` checkpoints that already carry a `runKey` (`test-design-progress-{run_key}.md` at the root) move into `test-design/` unchanged. `ci` and `framework` move their root checkpoint into their folder.
+
+Once nothing you run still reads an old file, archive or delete it.
+
+### Upgrading Scripts That Read Old Paths
+
+CI jobs, dashboards, and scripts that read TEA's old flat paths need the new ones:
+
+| Old path under `{test_artifacts}`                                    | New path under `{test_artifacts}`                                          |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `gate-decision.json`                                                 | `trace/gate-decision-{run_key}.json`                                       |
+| `e2e-trace-summary.json`                                             | `trace/e2e-trace-summary-{run_key}.json`                                   |
+| `traceability-matrix.md`                                             | `trace/traceability-matrix-{run_key}.md`                                   |
+| `test-review.md`                                                     | `test-review/test-review-{run_key}.md`                                     |
+| `nfr-assessment.md`                                                  | `nfr/nfr-assessment-{run_key}.md`                                          |
+| `automation-summary.md`                                              | `automate/automation-summary-{run_key}.md`                                 |
+| `atdd-checklist-{story_key}.md`                                      | `atdd/atdd-checklist-{story_key}.md`                                       |
+| `test-design-architecture.md`, `test-design-qa.md`                   | `test-design/test-design-architecture.md`, `test-design/test-design-qa.md` |
+| `test-design-epic-{epic_num}.md`                                     | `test-design/test-design-epic-{epic_num}.md`                               |
+| `test-design-progress-{run_key}.md`                                  | `test-design/test-design-progress-{run_key}.md`                            |
+| `ci-pipeline-progress.md`                                            | `ci/ci-pipeline-progress.md`                                               |
+| `framework-setup-progress.md`                                        | `framework/framework-setup-progress.md`                                    |
+| `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` | the same name inside the workflow's folder                                 |
+
+A job that gates one scope reads that scope's file, for example `trace/gate-decision-epic-16.json` or `trace/gate-decision-release-v1-2-0.json`. A job that wants the latest gate of any scope globs `trace/gate-decision-*.json` and picks the file with the newest `evaluated_at`; the `target` field in each file names the scope it covers.
+
+The `tea-test-review` CLI is unaffected: it passes its own `--output` path (default `test-review.md` in the working directory) as `output_file_override`, which replaces the workflow's default path.
+
+### Rebinding `{test_artifacts}` From a Customization
+
+Before this layout existed, some projects got per-workflow folders with an `activation_steps_append` rule in `_bmad/custom/bmad-testarch-*.toml` that rebinds `{test_artifacts}` to a subfolder before the first step runs. Remove that rule when you upgrade. Each workflow already appends its own folder, so a rebound `{test_artifacts}` nests a second level, such as `test-artifacts/traceability/trace/`.
+
+The rule was fragile even before, because `{test_artifacts}` also locates files that are shared across workflows and live at its root. `trace` reads its optional inputs `live-verification-results.json` and `gate-waivers.md` from `{test_artifacts}`, and the workflows that read another workflow's output (`nfr-assess` and `automate` looking for test-design documents, `trace` looking for test reviews and NFR assessments) resolve those paths through the same variable. A rebound value points each of those reads into a subfolder, where it finds nothing and the run proceeds as if the input never existed.
 
 ### Validation Report History
 
-Validate mode preserves every report as a separate artifact. The eight artifact-producing workflows write `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` under `{test_artifacts}`. The workflow identifier is `atdd`, `automate`, `ci`, `framework`, `nfr-assess`, `test-design`, `test-review`, or `trace`.
+Validate mode preserves every report as a separate artifact. The eight artifact-producing workflows write `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` into their own folder under `{test_artifacts}`, next to the outputs they validate. The workflow identifier is `atdd`, `automate`, `ci`, `framework`, `nfr-assess`, `test-design`, `test-review`, or `trace`; `nfr-assess` reports land in `nfr/`.
 
 `validation_scope` identifies what was checked, such as `story-1-2`, `epic-9`, `system`, or `pull-request-123`. `run_timestamp` is the UTC start time with milliseconds in `YYYYMMDDTHHmmssSSSZ` format. Each report also records the exact project-relative paths of its validated artifacts. Validate mode atomically reserves the resolved path with exclusive creation. A collision produces a fresh timestamp and retry, so two concurrent runs cannot claim the same report.
 

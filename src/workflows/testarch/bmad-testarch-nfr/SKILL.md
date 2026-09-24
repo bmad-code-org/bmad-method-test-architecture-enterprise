@@ -83,3 +83,7 @@ This workflow uses **tri-modal step-file architecture**:
 - **If R:** Load `{skill-root}/steps-c/step-01b-resume.md` (Create-mode continuation)
 - **If V:** Load `{skill-root}/steps-v/step-01-validate.md`
 - **If E:** Load `{skill-root}/steps-e/step-01-assess.md`
+
+Each run writes its audit to `{test_artifacts}/nfr/nfr-assessment-{run_key}.md`, where `run_key` is `system`, `epic-{epic_num}`, or `story-{story_key}`. Step 1 resolves it before the first save, so an audit for one scope never overwrites or merges into another scope's audit. Browser evidence screenshots also live under `{test_artifacts}/nfr/`.
+
+Resume mode selects the output document matching the run being resumed, asks when several exist and no scope was named, and refuses to continue a document whose `runKey` belongs to a different run.

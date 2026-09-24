@@ -2,7 +2,7 @@
 name: 'step-04-analyze-gaps'
 description: 'Complete Phase 1 with adaptive orchestration (agent-team, subagent, or sequential)'
 nextStepFile: '{skill-root}/steps-c/step-05-gate-decision.md'
-outputFile: '{test_artifacts}/traceability-matrix.md'
+outputFile: '{test_artifacts}/trace/traceability-matrix-{run_key}.md'
 tempOutputFile: '/tmp/tea-trace-coverage-matrix-{{timestamp}}.json'
 ---
 
@@ -587,12 +587,21 @@ const deduplicatedTestInventory = {
     })),
 };
 
-const extractedTargetId = runtime.getTraceTargetId?.() || null;
-const extractedTargetLabel = runtime.getTraceTargetLabel?.() || null;
+// Step 1 section 4 resolved the gate target and persisted it in the frontmatter of {outputFile}.
+// Read it here, locally, so this section stays self-contained when workers run in parallel.
+// The target is never re-derived after Step 1.
+const targetDoc = fs.readFileSync('{outputFile}', 'utf8');
+const targetFrontmatterMatch = targetDoc.match(/^---\n([\s\S]*?)\n---/);
+const targetFrontmatter = targetFrontmatterMatch ? yaml.parse(targetFrontmatterMatch[1]) : {};
+// An empty value or an unsubstituted `{placeholder}` means Step 1 resolved nothing for that field.
+const persistedTargetValue = (value) => {
+  const text = value === undefined || value === null ? '' : String(value).trim();
+  return text && !(text.startsWith('{') && text.endsWith('}')) ? text : null;
+};
 const traceTarget = {
-  type: '{gate_type}',
-  id: extractedTargetId, // story_id / epic_num / release_version / hotfix identifier from Step 1
-  label: extractedTargetLabel || null,
+  type: persistedTargetValue(targetFrontmatter.targetType) || '{gate_type}',
+  id: persistedTargetValue(targetFrontmatter.targetId), // story id / epic_num / release version / hotfix id; null for run_key `system`
+  label: persistedTargetValue(targetFrontmatter.targetLabel),
 };
 ```
 
@@ -769,23 +778,15 @@ If `resolvedMode` is `sequential`, execute sections 1→7 in order.
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-- **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
+`{outputFile}` is this run's file: Step 1 created it for this `run_key`, or Resume selected it after checking its `runKey`. If it is missing, this run has lost its output: **halt** and ask the user to start a fresh run with **[C] Create**.
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-04-analyze-gaps']
-  lastStep: 'step-04-analyze-gaps'
-  lastSaved: '{date}'
-  ---
-  ```
+Update it in place:
 
-  Then write this step's output below the frontmatter.
-
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-04-analyze-gaps'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-04-analyze-gaps'`
-  - Set `lastSaved: '{date}'`
-  - Append this step's output to the appropriate section of the document.
+- Add `'step-04-analyze-gaps'` to `stepsCompleted` array (only if not already present)
+- Set `lastStep: 'step-04-analyze-gaps'`
+- Set `lastSaved: '{date}'`
+- Keep `runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` unchanged
+- Append this step's output to the appropriate section of the document. Appending is safe because the file holds only this run's work.
 
 Load next step: `{nextStepFile}`
 

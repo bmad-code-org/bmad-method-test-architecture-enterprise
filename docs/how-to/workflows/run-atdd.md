@@ -253,7 +253,7 @@ TEA records additional display, validation-error, and other secondary E2E journe
 
 #### Implementation Checklist
 
-TEA also provides an implementation checklist:
+TEA also provides an implementation checklist, saved as `{test_artifacts}/atdd/atdd-checklist-{story_key}.md` (for example `atdd-checklist-1-2-user-authentication.md`):
 
 ```markdown
 ## Implementation Checklist

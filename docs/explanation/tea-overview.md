@@ -96,7 +96,7 @@ graph TB
         Automate --> TestReview1
         TestReview1 --> Trace1
         Trace1 -.->|next story| CreateStory
-        TestDesignNote["<b>Test design: 'How do I test THIS epic?'</b><br/>Creates test-design-epic-N.md per epic"]
+        TestDesignNote["<b>Test design: 'How do I test THIS epic?'</b><br/>Creates test-design/test-design-epic-N.md per epic"]
         TestDesign -.-> TestDesignNote
     end
 
@@ -137,8 +137,8 @@ Phase 3 order matters: run `test-design` first so NFR evidence needs can influen
 
 Both modes use the same workflow command. Make the scope explicit in your prompt.
 
-- **System-level (Phase 3):** run immediately after architecture/ADR drafting. Produces `test-design-architecture.md` (for Architecture and Dev: testability gaps, ASRs, NFR requirements, planned evidence) and `test-design-qa.md` (for QA: test execution recipe, coverage plan, Sprint 0 setup, NFR coverage plan). Feeds the implementation-readiness gate. When an ADR or architecture draft is produced, run this before that gate so the ADR carries a testability review and an ADR → test mapping, and keep it updated if ADRs change.
-- **Epic-level (Phase 4):** run per epic. Produces `test-design-epic-N.md` with risk, priorities, coverage plan, and epic-specific NFR planning when relevant.
+- **System-level (Phase 3):** run immediately after architecture/ADR drafting. Produces `test-design/test-design-architecture.md` (for Architecture and Dev: testability gaps, ASRs, NFR requirements, planned evidence) and `test-design/test-design-qa.md` (for QA: test execution recipe, coverage plan, Sprint 0 setup, NFR coverage plan). Feeds the implementation-readiness gate. When an ADR or architecture draft is produced, run this before that gate so the ADR carries a testability review and an ADR → test mapping, and keep it updated if ADRs change.
+- **Epic-level (Phase 4):** run per epic. Produces `test-design/test-design-epic-N.md` with risk, priorities, coverage plan, and epic-specific NFR planning when relevant.
 
 #### Phase 3 system-level example
 

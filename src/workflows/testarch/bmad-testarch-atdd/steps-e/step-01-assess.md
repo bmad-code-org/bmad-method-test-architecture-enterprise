@@ -44,6 +44,15 @@ Identify which output should be edited and load it.
 
 Ask the user to provide the output file path or select from known outputs.
 
+Known outputs for this workflow:
+
+- `{test_artifacts}/atdd/atdd-checklist-{story_key}.md` (one per story)
+- the red-phase test files listed in that checklist
+
+Files written by older TEA versions sit at the root of `{test_artifacts}`: `{test_artifacts}/atdd-checklist-{story_key}.md`. Offer them as candidates when present.
+
+When several files match, list each one with its scope and ask which to edit. Do not guess.
+
 ### 2. Load Target
 
 Read the provided output file in full.

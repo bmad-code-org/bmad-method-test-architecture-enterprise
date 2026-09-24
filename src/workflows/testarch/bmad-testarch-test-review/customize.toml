@@ -53,7 +53,9 @@ headless = false
 review_files = ""
 
 # Scalar: report output path. When non-empty, replaces the workflow's
-# default_output_file ({test_artifacts}/test-review.md) for this run.
+# default_output_file ({test_artifacts}/test-review/test-review-{run_key}.md,
+# where step 1 resolves run_key from the story, epic, or reviewed target)
+# for this run. The run's scope is still recorded in the report frontmatter.
 # Override wins.
 
 output_file_override = ""

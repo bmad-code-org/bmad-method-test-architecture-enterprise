@@ -1,7 +1,7 @@
 ---
 name: 'step-03-test-strategy'
 description: 'Map acceptance criteria to test levels and priorities'
-outputFile: '{test_artifacts}/atdd-checklist-{story_key}.md'
+outputFile: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-04-generate-tests.md'
 ---
 
@@ -89,6 +89,9 @@ For each declared criterion, confirm that its single red-phase scaffold reaches 
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03-test-strategy']
   lastStep: 'step-03-test-strategy'
   lastSaved: '{date}'
@@ -97,7 +100,9 @@ For each declared criterion, confirm that its single red-phase scaffold reaches 
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists** (written earlier in this same run), update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03-test-strategy'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-test-strategy'`
   - Set `lastSaved: '{date}'`

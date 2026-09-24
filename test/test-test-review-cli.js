@@ -2003,7 +2003,10 @@ async function runTests() {
         'prompt makes the file list authoritative over the discovery glob',
       );
       assert(prompt.includes("overrides step-02's glob for this run only"), 'prompt scopes the glob override to this run only');
-      assert(prompt.includes('{test_artifacts}/test-review.md'), 'prompt overrides the default outputFile from step frontmatter');
+      assert(
+        prompt.includes('{test_artifacts}/test-review/test-review-{run_key}.md'),
+        'prompt overrides the default outputFile from step frontmatter',
+      );
 
       const absoluteOutput = path.join(fixtureProject, 'test-review.md');
       assert(prompt.includes(`Write ${absoluteOutput}.`), 'prompt names the report as the file to write');

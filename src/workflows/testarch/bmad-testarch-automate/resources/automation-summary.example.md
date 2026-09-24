@@ -1,4 +1,7 @@
 ---
+runScope: 'target'
+runKey: 'target-src-orders-refunds'
+workflowStatus: 'completed'
 stepsCompleted: ['step-01-preflight-and-context', 'step-02-identify-targets', 'step-03c-aggregate', 'step-04-validate-and-summarize']
 lastStep: 'step-04-validate-and-summarize'
 lastSaved: '2026-08-15'

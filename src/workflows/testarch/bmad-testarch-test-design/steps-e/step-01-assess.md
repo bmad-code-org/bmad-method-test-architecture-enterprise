@@ -44,6 +44,17 @@ Identify which output should be edited and load it.
 
 Ask the user to provide the output file path or select from known outputs.
 
+Known outputs for this workflow:
+
+- `{test_artifacts}/test-design/test-design-architecture.md` (system-level architecture document)
+- `{test_artifacts}/test-design/test-design-qa.md` (system-level QA document)
+- `{test_artifacts}/test-design/test-design-epic-{epic_num}.md` (one per epic)
+- `{test_artifacts}/test-design/{project_name}-handoff.md` (BMAD handoff document)
+
+Files written by older TEA versions sit at the root of `{test_artifacts}`: `{test_artifacts}/test-design-architecture.md`, `{test_artifacts}/test-design-qa.md`, and `{test_artifacts}/test-design-epic-{epic_num}.md`. Offer them as candidates when present.
+
+When several files match, list each one with its scope and ask which to edit. Do not guess.
+
 ### 2. Load Target
 
 Read the provided output file in full.

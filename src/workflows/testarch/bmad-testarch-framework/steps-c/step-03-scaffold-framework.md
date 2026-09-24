@@ -3,7 +3,7 @@ name: 'step-03-scaffold-framework'
 description: 'Create framework scaffold with adaptive orchestration (agent-team, subagent, or sequential)'
 nextStepFile: '{skill-root}/steps-c/step-04-docs-and-scripts.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/framework-setup-progress.md'
+outputFile: '{test_artifacts}/framework/framework-setup-progress.md'
 ---
 
 # Step 3: Scaffold Framework

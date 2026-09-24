@@ -160,9 +160,9 @@ Don't have:
 
 ### 5. Review NFR Evidence Audit Report
 
-TEA generates a comprehensive evidence audit report.
+TEA generates a comprehensive evidence audit report and writes it to `{test_artifacts}/nfr/nfr-assessment-{run_key}.md`. The `run_key` is `epic-{epic_num}` or `story-{story_key}` for the epic or story you audited, and `system` for a project-wide audit, so an audit of one epic never overwrites another's.
 
-#### Evidence Audit Report (`nfr-assessment.md`):
+#### Evidence Audit Report (`nfr/nfr-assessment-{run_key}.md`):
 
 ````markdown
 # NFR Evidence Audit

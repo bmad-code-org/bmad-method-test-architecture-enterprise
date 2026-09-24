@@ -63,9 +63,9 @@ Requirements: PRD.md (with compliance requirements)
 Test location: tests/
 ```
 
-Phase 1 produces `traceability-matrix.md` with the requirement-to-test mapping, compliance requirement coverage, gap prioritization, and recommendations.
+Phase 1 produces `trace/traceability-matrix-{run_key}.md` under `{test_artifacts}`, with the requirement-to-test mapping, compliance requirement coverage, gap prioritization, and recommendations. The `run_key` names the scope, such as `epic-4` or `release-v1-2-0`, so each audit period keeps its own matrix.
 
-Phase 2 produces `gate-decision-{gate_type}-{story_id}.md` with evidence references, approver signatures, a compliance checklist, and the decision rationale.
+Phase 2 adds the gate decision to the same report: an evidence summary, the decision criteria, the rationale, and a sign-off section for approvers. When the collection is gate-eligible, it also writes the machine-readable decision to `trace/gate-decision-{run_key}.json` for CI.
 
 ### Test Design with Compliance Focus (`/bmad-testarch-test-design`)
 
@@ -84,7 +84,7 @@ Focus areas:
 - Compliance (HIPAA PHI handling, audit logging)
 ```
 
-System-level mode produces two documents: `test-design-architecture.md` (security gaps, compliance requirements, performance SLOs, audit logging validation) for the Architecture team, and `test-design-qa.md` (security testing strategy, compliance test mapping, performance testing plan) for QA.
+System-level mode produces two documents in `test-design/`: `test-design-architecture.md` (security gaps, compliance requirements, performance SLOs, audit logging validation) for the Architecture team, and `test-design-qa.md` (security testing strategy, compliance test mapping, performance testing plan) for QA.
 
 ## Enterprise TEA Lifecycle
 
@@ -98,7 +98,7 @@ Run the BMM `research` workflow on industry compliance (SOC 2, HIPAA, GDPR), sec
 
 **1. Define NFRs early.** Run the BMM `prd` workflow and include security requirements (authentication, encryption), performance SLAs (response time, throughput), reliability targets (uptime, RTO, RPO), and compliance mandates (data retention, audit logs).
 
-**2. Plan NFR evidence.** Run `/bmad-testarch-test-design` at system-level scope, focused on NFR thresholds, planned validation, and required evidence. It produces `test-design-architecture.md` and `test-design-qa.md` with thresholds and unknowns documented, planned evidence sources defined, and NFR coverage planned.
+**2. Plan NFR evidence.** Run `/bmad-testarch-test-design` at system-level scope, focused on NFR thresholds, planned validation, and required evidence. It produces `test-design/test-design-architecture.md` and `test-design/test-design-qa.md` with thresholds and unknowns documented, planned evidence sources defined, and NFR coverage planned.
 
 **3. Baseline (brownfield only).** Run `/bmad-testarch-trace` Phase 1 to establish baseline coverage before new work.
 
@@ -127,7 +127,7 @@ Per epic:
 
 **2. Final quality audit.** Run `/bmad-testarch-test-review` over the full suite, answering `tests/` for scope. Enterprise quality target: above 85.
 
-**3. Gate decision.** Run `/bmad-testarch-trace` Phase 2. It needs `traceability-matrix.md` from Phase 1, `test-review.md` from the quality audit, `nfr-assessment.md` from the NFR evidence audit, and actual test execution results. Without execution results, Phase 2 is skipped. The decision is PASS, CONCERNS, FAIL, or WAIVED.
+**3. Gate decision.** Run `/bmad-testarch-trace` Phase 2. It needs the Phase 1 matrix from `trace/`, the quality audit from `test-review/`, the NFR evidence audit from `nfr/`, and actual test execution results. Without execution results, Phase 2 is skipped. The decision is PASS, CONCERNS, FAIL, or WAIVED.
 
 **4. Archive for audit.** Keep all test results, coverage reports, NFR evidence audits, gate decisions, and approver signatures for as long as your compliance regime requires (7 years for HIPAA).
 
@@ -151,10 +151,14 @@ Per epic:
 compliance/
 ├── 2026-Q1/
 │   ├── release-1.2.0/
-│   │   ├── traceability-matrix.md
-│   │   ├── test-review.md
-│   │   ├── nfr-assessment.md
-│   │   ├── gate-decision-release-v1.2.0.md
+│   │   ├── trace/
+│   │   │   ├── traceability-matrix-release-v1-2-0.md
+│   │   │   ├── e2e-trace-summary-release-v1-2-0.json
+│   │   │   └── gate-decision-release-v1-2-0.json
+│   │   ├── test-review/
+│   │   │   └── test-review-system.md
+│   │   ├── nfr/
+│   │   │   └── nfr-assessment-system.md
 │   │   ├── test-results/
 │   │   ├── security-scans/
 │   │   └── approvals.pdf

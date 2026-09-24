@@ -3,7 +3,7 @@
  * tea-nfr-runner — the command the NFR behavioral contract names.
  *
  * `bmad-testarch-nfr` audits the evidence a team already holds and writes one
- * deliverable, `{test_artifacts}/nfr-assessment.md`. Measuring that needs a
+ * deliverable, `{test_artifacts}/nfr/nfr-assessment-{run_key}.md`. Measuring that needs a
  * command to point at, and TEA shipped none: `tea-test-review`,
  * `tea-fragment-selection-runner`, and `tea-trace-runner` all exist and an NFR
  * runner did not. This file is that command, and its whole surface is one turn:

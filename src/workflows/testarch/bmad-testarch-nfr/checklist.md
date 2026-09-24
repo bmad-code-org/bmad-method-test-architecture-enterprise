@@ -225,7 +225,8 @@ Note: `nfr-assess` is the NFR Evidence Audit. It evaluates existing implementati
 
 ### NFR Evidence Audit Report
 
-- [ ] File created at `{test_artifacts}/nfr-assessment.md`
+- [ ] File created at `{test_artifacts}/nfr/nfr-assessment-{run_key}.md`
+- [ ] Frontmatter carries `runScope` and `runKey` resolved in step 1, and `run_key` names the audited story, epic, or `system`
 - [ ] Template from `nfr-report-template.md` used
 - [ ] Executive summary included (overall status, critical issues)
 - [ ] Assessment by category included (performance, security, reliability, maintainability)
@@ -305,9 +306,9 @@ The template ends with this snippet and every audit writes it. It is the machine
 - [ ] Reliability SLAs extracted
 - [ ] Architectural decisions considered
 
-### With test-design.md
+### With test-design outputs
 
-- [ ] Test design loaded for NFR test plan
+- [ ] Test design loaded for NFR test plan (`test-design-architecture.md`, `test-design-qa.md`, or `test-design-epic-{epic_num}.md` from `{test_artifacts}/test-design/`, or the legacy root `{test_artifacts}/`)
 - [ ] Test priorities referenced (P0/P1/P2/P3)
 - [ ] Assessment aligned with planned NFR validation
 

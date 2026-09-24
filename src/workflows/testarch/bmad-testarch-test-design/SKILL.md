@@ -84,6 +84,8 @@ This workflow uses **tri-modal step-file architecture**:
 - **If V:** Load `{skill-root}/steps-v/step-01-validate.md`
 - **If E:** Load `{skill-root}/steps-e/step-01-assess.md`
 
-Each run writes its own progress checkpoint at `{test_artifacts}/test-design-progress-{run_key}.md`, where `run_key` is `system` for a system-level run and `epic-{epic_num}` for an epic-level one. Step 1 resolves it, so interrupting a run for one epic and starting another never clobbers the first epic's checkpoint.
+Every output lives under `{test_artifacts}/test-design/`: the system-level `test-design-architecture.md` and `test-design-qa.md`, the epic plan `test-design-epic-{epic_num}.md`, the `{project_name}-handoff.md` document, and exploration screenshots under `exploration/`.
+
+Each run writes its own progress checkpoint at `{test_artifacts}/test-design/test-design-progress-{run_key}.md`, where `run_key` is `system` for a system-level run and `epic-{epic_num}` for an epic-level one. Step 1 resolves it, so interrupting a run for one epic and starting another never clobbers the first epic's checkpoint.
 
 Resume mode selects the checkpoint matching the run being resumed, asks when several exist and no scope was named, and refuses to continue a checkpoint whose `runKey` belongs to a different run. It reads explicit progress metadata (`workflowStatus`, `nextStep`, `totalSteps`) and falls back to legacy `lastStep` data when needed.

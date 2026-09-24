@@ -1,7 +1,7 @@
 ---
 name: 'step-04-generate-report'
 description: 'Create test-review report and validate'
-outputFile: '{test_artifacts}/test-review.md'
+outputFile: '{test_artifacts}/test-review/test-review-{run_key}.md'
 ---
 
 # Step 4: Generate Report & Validate
@@ -42,6 +42,7 @@ Use `test-review-template.md` to produce `{outputFile}` including:
 - Critical findings with fixes
 - Warnings and recommendations
 - Context references (story/test-design if available)
+- Run identity: when step 1 keyed a headless run to its reviewed target because the context named several stories or epics, say so under Context and Integration
 - Coverage boundary note: `test-review` does not score coverage. Direct coverage findings to `trace`.
 - `**Execution Mode**:` in the Executive Summary, set to step 3F's `execution_mode`, which is the mode
   step-03's capability probe actually resolved. Write `agent-team`, `subagent`, or `sequential`; never
@@ -66,7 +67,7 @@ Key Weaknesses.
 
 Before finalizing, review the complete output document for quality:
 
-1. **Remove duplication**: Progressive-append workflow may have created repeated sections — consolidate
+1. **Remove duplication**: This run's step-by-step appends may have created repeated sections. Consolidate them
 2. **Verify consistency**: Ensure terminology, risk scores, and references are consistent throughout
 3. **Check completeness**: Required template sections should be populated.
    Omit optional Key Weaknesses and Advisory Observations sections when empty;
@@ -80,19 +81,22 @@ Before finalizing, review the complete output document for quality:
 Validate against `checklist.md` and fix any gaps.
 
 - [ ] CLI sessions cleaned up (no orphaned browsers)
-- [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
+- [ ] Evidence artifacts stored in `{test_artifacts}/test-review/` with this run's `{run_key}` in their names
 
 ---
 
 ## 4. Save Progress
 
-**Save this step's accumulated work to `{outputFile}`.** When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
+**Save this step's accumulated work to `{outputFile}`.** `run_key` is the value step 1 resolved; never re-derive it. When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
 
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
   workflowType: 'testarch-test-review'
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'completed'
   stepsCompleted: ['step-04-generate-report']
   lastStep: 'step-04-generate-report'
   lastSaved: '{date}'
@@ -101,7 +105,9 @@ Validate against `checklist.md` and fix any gaps.
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists**, it is this run's report: step 1 created it or Resume selected it, so it never holds another run's work. Update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'completed'`
   - Add `'step-04-generate-report'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-generate-report'`
   - Set `lastSaved: '{date}'`
@@ -114,6 +120,7 @@ Validate against `checklist.md` and fix any gaps.
 Report:
 
 - Scope reviewed
+- Report path (`{outputFile}`) and its `run_key`
 - Overall score
 - Critical blockers
 - Next recommended workflow (e.g., `automate` or `trace`)

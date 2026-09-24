@@ -1,7 +1,8 @@
 ---
 name: 'step-01b-resume'
 description: 'Resume interrupted workflow from last completed step'
-outputFile: '{test_artifacts}/framework-setup-progress.md'
+outputFile: '{test_artifacts}/framework/framework-setup-progress.md'
+legacyOutputFile: '{test_artifacts}/framework-setup-progress.md'
 ---
 
 # Step 1b: Resume Workflow
@@ -35,13 +36,17 @@ Resume an interrupted workflow by loading the existing progress document, verify
 
 ### 1. Load Output Document
 
+**Legacy checkpoint migration.** Runs from older TEA versions wrote the checkpoint to `{legacyOutputFile}`, at the root of `{test_artifacts}`.
+If `{outputFile}` does not exist and `{legacyOutputFile}` exists, move `{legacyOutputFile}` to `{outputFile}` unchanged (create the `framework/` folder if needed), tell the user the checkpoint was moved, and continue from the moved file.
+If both exist, `{outputFile}` is the current checkpoint: resume from it and leave `{legacyOutputFile}` untouched.
+
 Read `{outputFile}` and parse YAML frontmatter for:
 
 - `stepsCompleted` — array of completed step names
 - `lastStep` — last completed step name
 - `lastSaved` — timestamp of last save
 
-**If `{outputFile}` does not exist**, display:
+**If neither `{outputFile}` nor `{legacyOutputFile}` exists**, display:
 
 "⚠️ **No previous progress found.** There is no output document to resume from. Please use **[C] Create** to start a fresh workflow run."
 

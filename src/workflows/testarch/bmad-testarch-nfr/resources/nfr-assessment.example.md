@@ -1,4 +1,7 @@
 ---
+runScope: 'story'
+runKey: 'story-LEDGER-482-bulk-invoice-export'
+workflowStatus: 'completed'
 stepsCompleted:
   ['step-01-load-context', 'step-02-define-thresholds', 'step-03-gather-evidence', 'step-04e-aggregate-nfr', 'step-05-generate-report']
 lastStep: 'step-05-generate-report'
@@ -8,7 +11,7 @@ inputDocuments:
   - 'docs/tech-specs/bulk-invoice-export-tech-spec.md'
   - 'docs/prd/invoicing-prd.md'
   - 'docs/stories/LEDGER-482-bulk-invoice-export.md'
-  - 'test-artifacts/test-design-bulk-invoice-export.md'
+  - 'test-artifacts/test-design/test-design-qa.md'
 ---
 
 # NFR Evidence Audit: Bulk Invoice Export
@@ -448,7 +451,7 @@ nfr_assessment:
 - **Story File:** `docs/stories/LEDGER-482-bulk-invoice-export.md`
 - **Tech Spec:** `docs/tech-specs/bulk-invoice-export-tech-spec.md`
 - **PRD:** `docs/prd/invoicing-prd.md`
-- **Test Design:** `test-artifacts/test-design-bulk-invoice-export.md`
+- **Test Design:** `test-artifacts/test-design/test-design-qa.md`
 - **Evidence Sources:**
   - Test Results: `test-results/`
   - Metrics: `metrics/`

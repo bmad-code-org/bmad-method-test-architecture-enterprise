@@ -1,7 +1,7 @@
 ---
 name: 'step-05-validate-and-summary'
 description: 'Validate against checklist and summarize'
-outputFile: '{test_artifacts}/framework-setup-progress.md'
+outputFile: '{test_artifacts}/framework/framework-setup-progress.md'
 ---
 
 # Step 5: Validate & Summarize

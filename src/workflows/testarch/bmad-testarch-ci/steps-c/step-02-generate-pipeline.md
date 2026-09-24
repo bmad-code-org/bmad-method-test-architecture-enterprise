@@ -3,7 +3,7 @@ name: 'step-02-generate-pipeline'
 description: 'Generate CI pipeline configuration with adaptive orchestration (agent-team, subagent, or sequential)'
 nextStepFile: '{skill-root}/steps-c/step-03-configure-quality-gates.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/ci-pipeline-progress.md'
+outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
 ---
 
 # Step 2: Generate CI Pipeline

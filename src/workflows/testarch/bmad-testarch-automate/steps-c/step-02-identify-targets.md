@@ -1,7 +1,7 @@
 ---
 name: 'step-02-identify-targets'
 description: 'Identify automation targets and create coverage plan'
-outputFile: '{test_artifacts}/automation-summary.md'
+outputFile: '{test_artifacts}/automate/automation-summary-{run_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-03-generate-tests.md'
 ---
 
@@ -41,7 +41,7 @@ Determine what needs to be tested and select appropriate test levels and priorit
 **BMad-Integrated:**
 
 - Map acceptance criteria to test scenarios
-- Check for existing ATDD outputs to avoid duplication
+- Check for existing ATDD outputs to avoid duplication. Look for the story's checklist at `{test_artifacts}/atdd/atdd-checklist-{story_key}.md` first, then the legacy root `{test_artifacts}/atdd-checklist-{story_key}.md`. For an epic or wider scope, check every `atdd-checklist-*.md` for the in-scope stories in both locations. Name the checklists you found, and read their `generatedTestFiles` to see which scaffolds already exist.
 - Expand coverage with edge cases and negative paths
 
 **Standalone:**
@@ -154,6 +154,9 @@ Produce a concise coverage plan:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-02-identify-targets']
   lastStep: 'step-02-identify-targets'
   lastSaved: '{date}'
@@ -162,7 +165,9 @@ Produce a concise coverage plan:
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists** (written earlier in this same run), update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-02-identify-targets'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-identify-targets'`
   - Set `lastSaved: '{date}'`

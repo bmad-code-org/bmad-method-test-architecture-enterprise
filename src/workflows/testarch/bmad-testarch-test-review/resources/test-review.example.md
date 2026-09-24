@@ -3,10 +3,13 @@ stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03f-agg
 lastStep: 'step-04-generate-report'
 lastSaved: '2026-08-17'
 workflowType: 'testarch-test-review'
+runScope: 'story'
+runKey: 'story-5-2-notification-preferences'
+workflowStatus: 'completed'
 inputDocuments:
   - 'tests/e2e/profile-notifications.spec.ts'
   - 'docs/stories/5-2-notification-preferences.md'
-  - 'test-artifacts/test-design-epic-5.md'
+  - 'test-artifacts/test-design/test-design-epic-5.md'
   - 'playwright.config.ts'
   - 'src/workflows/testarch/bmad-testarch-test-review/steps-c/criteria-registry.md'
 ---
@@ -243,7 +246,7 @@ Story 5.2 requires saving email and push preferences, preserving the saved state
 ### Related Artifacts
 
 - **Story File**: `docs/stories/5-2-notification-preferences.md`
-- **Test Design**: `test-artifacts/test-design-epic-5.md`
+- **Test Design**: `test-artifacts/test-design/test-design-epic-5.md`
 - **Risk Assessment**: Medium
 - **Priority Framework**: P0 through P3 applied independently from risk score
 
@@ -301,5 +304,5 @@ No earlier review exists for this file.
 ## Review Context
 
 - docs/stories/5-2-notification-preferences.md
-- test-artifacts/test-design-epic-5.md
+- test-artifacts/test-design/test-design-epic-5.md
 - src/profile/notification-preferences.ts

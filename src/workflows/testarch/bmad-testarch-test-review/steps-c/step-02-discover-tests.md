@@ -2,7 +2,7 @@
 name: 'step-02-discover-tests'
 description: 'Find and parse test files'
 nextStepFile: '{skill-root}/steps-c/step-03-quality-evaluation.md'
-outputFile: '{test_artifacts}/test-review.md'
+outputFile: '{test_artifacts}/test-review/test-review-{run_key}.md'
 ---
 
 # Step 2: Discover & Parse Tests
@@ -238,7 +238,7 @@ All commands use the same named session to target the correct browser:
 2. `playwright-cli -s=tea-review tracing-start`
 3. Execute the flow under review (using `-s=tea-review` on each command)
 4. `playwright-cli -s=tea-review tracing-stop` → saves trace.zip
-5. `playwright-cli -s=tea-review screenshot --filename={test_artifacts}/review-evidence.png`
+5. `playwright-cli -s=tea-review screenshot --filename={test_artifacts}/test-review/review-evidence-{run_key}.png`
 6. `playwright-cli -s=tea-review network` → capture network request log
 7. `playwright-cli -s=tea-review close`
 
@@ -255,13 +255,16 @@ After capturing `trace.zip`, prefer Playwright's newer trace CLI for local or do
 
 ## 4. Save Progress
 
-**Save this step's accumulated work to `{outputFile}`.** When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
+**Save this step's accumulated work to `{outputFile}`.** `run_key` is the value step 1 resolved; never re-derive it. When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
 
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
   workflowType: 'testarch-test-review'
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-02-discover-tests']
   lastStep: 'step-02-discover-tests'
   lastSaved: '{date}'
@@ -270,7 +273,9 @@ After capturing `trace.zip`, prefer Playwright's newer trace CLI for local or do
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists**, it is this run's report: step 1 created it or Resume selected it, so it never holds another run's work. Update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-02-discover-tests'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-discover-tests'`
   - Set `lastSaved: '{date}'`

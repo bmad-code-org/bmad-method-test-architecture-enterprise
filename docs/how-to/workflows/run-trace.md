@@ -68,22 +68,22 @@ TEA will first look for the best available coverage oracle.
 
 **Options:**
 
-| Source          | Example                          | Best For                                                         |
-| --------------- | -------------------------------- | ---------------------------------------------------------------- |
-| **Story file**  | `story-profile-management.md`    | Single story coverage                                            |
-| **Test design** | `test-design-epic-1.md`          | Epic coverage                                                    |
-| **PRD**         | `PRD.md`                         | System-level coverage                                            |
-| **Spec**        | `openapi.yaml`                   | API/contract coverage                                            |
-| **Pointer**     | `requirements.md -> tracker/doc` | External system of record (for example Jira, Linear, Confluence) |
-| **Synthetic**   | inferred from `src/`             | Brownfield UI fallback                                           |
-| **Multiple**    | All of the above                 | Comprehensive analysis                                           |
+| Source          | Example                             | Best For                                                         |
+| --------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| **Story file**  | `story-profile-management.md`       | Single story coverage                                            |
+| **Test design** | `test-design/test-design-epic-1.md` | Epic coverage                                                    |
+| **PRD**         | `PRD.md`                            | System-level coverage                                            |
+| **Spec**        | `openapi.yaml`                      | API/contract coverage                                            |
+| **Pointer**     | `requirements.md -> tracker/doc`    | External system of record (for example Jira, Linear, Confluence) |
+| **Synthetic**   | inferred from `src/`                | Brownfield UI fallback                                           |
+| **Multiple**    | All of the above                    | Comprehensive analysis                                           |
 
 **Example Response:**
 
 ```text
 Coverage sources:
 - story-profile-management.md (acceptance criteria)
-- test-design-epic-1.md (test priorities)
+- test-design/test-design-epic-1.md (test priorities)
 ```
 
 If none of those exist and `allow_synthetic_oracle` is enabled, TEA should infer provisional journeys from routes/pages/screens, major user actions, auth flows, and important UI states, then trace tests against those inferred journeys with an explicit confidence level.
@@ -124,7 +124,9 @@ Focus on:
 
 TEA generates a comprehensive traceability matrix.
 
-#### Traceability Matrix (`traceability-matrix.md`):
+Every trace output lands in `{test_artifacts}/trace/` and carries the run's scope in its name: `epic-1` here, `story-{story_key}` for one story, `release-{slug}` or `hotfix-{slug}` for a release or hotfix gate, and `system` for the whole project. A run for epic 2 writes its own files and never opens epic 1's. Re-running the same scope replaces that scope's files. See [Output Layout](/docs/reference/configuration.md#output-layout) for the full rules.
+
+#### Traceability Matrix (`trace/traceability-matrix-epic-1.md`):
 
 ````markdown
 # Requirements Traceability Matrix
@@ -441,26 +443,26 @@ TEA will request:
 **Phase 1 Results:**
 
 ```text
-traceability-matrix.md (from Phase 1)
+trace/traceability-matrix-epic-1.md (from Phase 1)
 ```
 
 **Test Quality (Optional):**
 
 ```text
-test-review.md (from test-review)
+test-review/test-review-epic-1.md (from test-review)
 ```
 
 **NFR Evidence Audit (Optional):**
 
 ```text
-nfr-assessment.md (from nfr-assess)
+nfr/nfr-assessment-epic-1.md (from nfr-assess)
 ```
 
 ### 10. Review Gate Decision
 
-TEA makes evidence-based gate decision and writes to separate file.
+TEA makes an evidence-based gate decision and writes it into the Phase 2 section of the same report, `trace/traceability-matrix-epic-1.md`. When the collection is gate-eligible, it also writes the machine-readable gate signal to `trace/gate-decision-epic-1.json` for CI, next to the full summary in `trace/e2e-trace-summary-epic-1.json`.
 
-#### Gate Decision (`gate-decision-{gate_type}-{story_id}.md`):
+#### Gate Decision (Phase 2 section of `trace/traceability-matrix-epic-1.md`):
 
 ```markdown
 ---

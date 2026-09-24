@@ -29,7 +29,7 @@ variables:
   source_dir: "{project-root}" # Source code directory (customize if needed, e.g., {project-root}/src or {project-root}/lib)
 
 # Output configuration
-default_output_file: "{test_artifacts}/automation-summary.md"
+default_output_file: "{test_artifacts}/automate/automation-summary-{run_key}.md"
 
 # Required tools
 required_tools:

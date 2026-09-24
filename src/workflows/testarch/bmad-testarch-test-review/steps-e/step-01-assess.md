@@ -44,6 +44,15 @@ Identify which output should be edited and load it.
 
 Ask the user to provide the output file path or select from known outputs.
 
+Known outputs for this workflow:
+
+- `{test_artifacts}/test-review/test-review-{run_key}.md` (one per run scope), or the `output_file_override` path when the run set one
+
+`{run_key}` names the run's scope, such as `system`, `epic-3`, or `story-1-2-user-authentication`.
+Files written by older TEA versions sit at the root of `{test_artifacts}`: `{test_artifacts}/test-review.md`. Offer them as candidates when present.
+
+When several files match, list each one with its scope and ask which to edit. Do not guess.
+
 ### 2. Load Target
 
 Read the provided output file in full.

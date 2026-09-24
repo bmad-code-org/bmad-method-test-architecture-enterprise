@@ -2,7 +2,7 @@
 name: 'step-03-gather-evidence'
 description: 'Collect evidence for each NFR category'
 nextStepFile: '{skill-root}/steps-c/step-04-evaluate-and-score.md'
-outputFile: '{test_artifacts}/nfr-assessment.md'
+outputFile: '{test_artifacts}/nfr/nfr-assessment-{run_key}.md'
 ---
 
 # Step 3: Gather Evidence
@@ -146,10 +146,15 @@ a remembered, inferred, or example path or value to the ledger.
 
 **Save this step's accumulated work to `{outputFile}`.**
 
+Step 1 created `{outputFile}` for this run's `run_key`, so the file holds only this run's work.
+
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03-gather-evidence']
   lastStep: 'step-03-gather-evidence'
   lastSaved: '{date}'
@@ -159,6 +164,8 @@ a remembered, inferred, or example path or value to the ledger.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03-gather-evidence'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-gather-evidence'`
   - Set `lastSaved: '{date}'`

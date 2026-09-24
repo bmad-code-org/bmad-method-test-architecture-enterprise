@@ -1,14 +1,16 @@
 ---
 name: 'step-01b-resume'
-description: 'Resume interrupted workflow from last completed step'
-outputFile: '{test_artifacts}/automation-summary.md'
+description: 'Resume an interrupted run from its own automation summary, matched by run identity'
+outputFile: '{test_artifacts}/automate/automation-summary-{run_key}.md'
+progressGlob: '{test_artifacts}/automate/automation-summary-*.md'
+legacyOutputFile: '{test_artifacts}/automation-summary.md'
 ---
 
 # Step 1b: Resume Workflow
 
 ## STEP GOAL
 
-Resume an interrupted workflow by loading the existing output document, displaying progress, and routing to the next incomplete step.
+Resume an interrupted workflow by selecting the automation summary that belongs to the run being resumed, loading its progress, displaying it, and routing to the next incomplete step.
 
 ## MANDATORY EXECUTION RULES
 
@@ -24,34 +26,64 @@ Resume an interrupted workflow by loading the existing output document, displayi
 
 ## CONTEXT BOUNDARIES:
 
-- Available context: Output document with progress frontmatter
-- Focus: Load progress and route to next step
-- Limits: Do not re-execute completed steps
-- Dependencies: Output document must exist from a previous run
+- Available context: automation summaries written by previous runs
+- Focus: Select the correct run's summary, load its progress, and route to the next step
+- Limits: Do not re-execute completed steps; do not resume a summary belonging to a different run
+- Dependencies: A summary must exist from a previous run of the same scope
 
 ## MANDATORY SEQUENCE
 
-**CRITICAL:** Follow this sequence exactly.
+**CRITICAL:** Follow this sequence exactly. Do not skip, reorder, or improvise.
 
-### 1. Load Output Document
+### 1. Select the Run to Resume
 
-Read `{outputFile}` and parse YAML frontmatter for:
+Each run writes its own summary at `{outputFile}`, where `run_key` is `story-{story_key}`, `epic-{epic_num}`, `target-{slug}`, or `system`. Build the candidate list:
 
+1. List every file matching `{progressGlob}`.
+2. Also check `{legacyOutputFile}`. Runs from before summaries carried run identity wrote to that fixed name.
+
+Then select one:
+
+- **No candidates:** display "⚠️ **No previous progress found.** There is no automation summary to resume from. Please use **[C] Create** to start a fresh workflow run." **Halt.**
+
+- **The user named a scope in this invocation** (a story, an epic, a feature or path, or the whole system): resolve `run_key` exactly as `step-01-preflight-and-context.md` does, then select `{outputFile}` for that key. If no summary exists for it, display "⚠️ **No progress found for `{run_key}`.** Summaries exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." **Halt.** Never fall back to another scope's summary.
+
+- **Exactly one candidate and no scope named:** select it and state which run it belongs to before continuing.
+
+- **More than one candidate and no scope named:** list each candidate with its `runKey` (or `legacy, scope unknown`), `lastStep`, and `lastSaved`, and ask which run to resume. **Halt** until the user answers.
+
+---
+
+### 2. Load the Selected Summary
+
+Read the selected summary and parse YAML frontmatter for:
+
+- `runScope` — `story`, `epic`, `target`, or `system`
+- `runKey` — this run's identity
+- `workflowStatus` — overall workflow state (`in-progress` or `completed`)
 - `stepsCompleted` — array of completed step names
 - `lastStep` — last completed step name
 - `lastSaved` — timestamp of last save
 
-**If `{outputFile}` does not exist**, display:
+**Run identity check.** When the user named a scope in this invocation, `runKey` must equal the `run_key` resolved for it. If it does not, display "⚠️ **Summary belongs to a different run** (`{runKey}`, not `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no scope, adopt the summary's own `runScope` and `runKey` as this run's identity.
 
-"⚠️ **No previous progress found.** There is no output document to resume from. Please use **[C] Create** to start a fresh workflow run."
+**Legacy summary migration.** If `runKey` is absent, the summary predates run identity and cannot be proven to belong to any scope. Ask the user which run it covers (a story, an epic, a feature or path, or the whole system) and **halt** until they answer. Resolve `run_scope` and `run_key` from their answer exactly as `step-01-preflight-and-context.md` does. Create the `{test_artifacts}/automate/` folder if it does not exist, write the summary's content to `{outputFile}` with `runScope` and `runKey` added, delete `{legacyOutputFile}`, and continue from the migrated file. If `{outputFile}` already exists for that key, do not overwrite it: report both files and halt.
 
-**THEN:** Halt. Do not proceed.
+If `workflowStatus` is missing (legacy summary), infer it from `lastStep`: `'step-04-validate-and-summarize'` means `completed`; any other known step means `in-progress`.
 
 ---
 
-### 2. Display Progress Dashboard
+### 3. Display Progress Dashboard
 
-Display progress with ✅/⬜ indicators:
+Display:
+
+"📋 **Workflow Resume — Test Automation Expansion**
+
+**Run:** {runKey} ({runScope})
+**Workflow status:** {workflowStatus}
+**Last saved:** {lastSaved}"
+
+Then display progress with ✅/⬜ indicators:
 
 1. ✅/⬜ Preflight & Context (step-01-preflight-and-context)
 2. ✅/⬜ Identify Targets (step-02-identify-targets)
@@ -60,20 +92,24 @@ Display progress with ✅/⬜ indicators:
 
 ---
 
-### 3. Route to Next Step
+### 4. Route to Next Step
+
+If `workflowStatus` is `'completed'`, display:
+"✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions."
+
+**THEN:** Halt.
 
 Based on `lastStep`, load the next incomplete step:
 
 - `'step-01-preflight-and-context'` → load `./step-02-identify-targets.md`
 - `'step-02-identify-targets'` → load `./step-03-generate-tests.md`
 - `'step-03c-aggregate'` → load `./step-04-validate-and-summarize.md`
-- `'step-04-validate-and-summarize'` → **Workflow already complete.** Display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
 
-**If `lastStep` does not match any value above**, display: "⚠️ **Unknown progress state** (`lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.
+**If `lastStep` does not match any value above**, display: "⚠️ **Unknown progress state** (`workflowStatus`: {workflowStatus}, `lastStep`: {lastStep}). Please use **[C] Create** to start fresh." Then halt.
 
 **Otherwise**, load the identified step file, read completely, and execute.
 
-The existing content in `{outputFile}` provides context from previously completed steps.
+The existing content in the selected summary provides context from previously completed steps. Every later step continues writing to that same summary, so `runScope` and `runKey` stay unchanged for the rest of the run.
 
 ---
 
@@ -81,14 +117,19 @@ The existing content in `{outputFile}` provides context from previously complete
 
 ### ✅ SUCCESS:
 
-- Output document loaded and parsed correctly
-- Progress dashboard displayed accurately
+- The summary belonging to the requested run was selected, and any ambiguity was resolved by asking
+- A legacy `{legacyOutputFile}` was migrated into `{test_artifacts}/automate/` with `runScope` and `runKey` added before continuing
+- Summary loaded and parsed correctly
+- Progress dashboard displayed accurately, including run identity
 - Routed to correct next step
 
 ### ❌ SYSTEM FAILURE:
 
-- Not loading output document
+- Resuming a summary whose `runKey` differs from the run being resumed
+- Silently picking one summary when several exist
+- Not loading the summary
 - Incorrect progress display
 - Routing to wrong step
+- Re-executing completed steps
 
-**Master Rule:** Resume MUST route to the exact next incomplete step. Never re-execute completed steps.
+**Master Rule:** Resume MUST route to the exact next incomplete step of the run it was asked to resume. Never re-execute completed steps, and never continue another run's summary.

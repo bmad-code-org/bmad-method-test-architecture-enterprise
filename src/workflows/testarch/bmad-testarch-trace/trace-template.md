@@ -1,4 +1,10 @@
 ---
+runScope: ''
+runKey: ''
+targetType: ''
+targetId: ''
+targetLabel: ''
+workflowStatus: ''
 stepsCompleted: []
 lastStep: ''
 lastSaved: ''

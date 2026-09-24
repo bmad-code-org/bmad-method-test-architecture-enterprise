@@ -41,4 +41,4 @@ Load, read completely, and execute:
 If the user selects **Resume** mode, load, read completely, and execute:
 `{skill-root}/steps-c/step-01b-resume.md`
 
-This checks the output document for progress tracking frontmatter and routes to the next incomplete step.
+Each run writes one checklist per story at `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`, with `runScope: story` and `runKey: story-{story_key}` in its frontmatter. Resume selects the checklist for the story being resumed (moving a legacy `{test_artifacts}/atdd-checklist-{story_key}.md` into the `atdd/` folder first), reads its progress tracking frontmatter, and routes to the next incomplete step.

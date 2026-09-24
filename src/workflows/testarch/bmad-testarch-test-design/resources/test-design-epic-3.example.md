@@ -1,6 +1,6 @@
 ---
 runScope: 'epic-level'
-runKey: 'epic-3-team-invitations'
+runKey: 'epic-3'
 workflowStatus: 'completed'
 totalSteps: 5
 stepsCompleted:

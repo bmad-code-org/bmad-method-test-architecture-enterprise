@@ -1,7 +1,7 @@
 ---
 name: 'step-05-validate-and-complete'
 description: 'Validate ATDD outputs and summarize'
-outputFile: '{test_artifacts}/atdd-checklist-{story_key}.md'
+outputFile: '{test_artifacts}/atdd/atdd-checklist-{story_key}.md'
 ---
 
 # Step 5: Validate & Complete
@@ -90,6 +90,9 @@ Report:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'completed'
   stepsCompleted: ['step-05-validate-and-complete']
   lastStep: 'step-05-validate-and-complete'
   lastSaved: '{date}'
@@ -103,7 +106,9 @@ Report:
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists** (written earlier in this same run), update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'completed'`
   - Add `'step-05-validate-and-complete'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-05-validate-and-complete'`
   - Set `lastSaved: '{date}'`

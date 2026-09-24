@@ -65,7 +65,7 @@ TEA generates test design document(s) based on mode.
 
 ## Interrupting and Resuming a Run
 
-Each run saves its progress to its own checkpoint under `{test_artifacts}`:
+Each run saves its progress to its own checkpoint under `{test_artifacts}/test-design/`:
 
 | Run          | Checkpoint                         |
 | ------------ | ---------------------------------- |
@@ -74,11 +74,13 @@ Each run saves its progress to its own checkpoint under `{test_artifacts}`:
 
 The workflow resolves that name in its first step, from the mode and the epic you named. Interrupting a run for one epic and then running test design for another epic leaves the first epic's checkpoint untouched, so you can come back to it.
 
-Pick **[R] Resume** to continue. Name the scope you want (for example "resume epic 3") when checkpoints exist for more than one run; without a scope TEA lists the candidates and asks. TEA refuses to resume a checkpoint that belongs to a different run rather than continuing into it.
+Pick **[R] Resume** to continue. Name the scope you want (for example "resume epic 3") when checkpoints exist for more than one run; without a scope TEA lists the candidates and asks. TEA refuses to resume a checkpoint that belongs to a different run.
 
-Checkpoints written before this behavior existed use the old fixed name `test-design-progress.md`. Resume picks that file up, asks you to confirm which run it belongs to, and migrates it to the new name.
+Checkpoints written by earlier TEA versions sit at the root of `{test_artifacts}`, under the old fixed name `test-design-progress.md` or a scoped `test-design-progress-{run_key}.md`. Resume picks those up too. It asks you to confirm which run a fixed-name checkpoint belongs to and migrates it to its scoped name in `test-design/`, and it moves a scoped checkpoint into `test-design/` unchanged.
 
 ## What You Get
+
+Every test design document lands in `{test_artifacts}/test-design/`. The system-level documents and the handoff exist once per project; each epic gets its own document. See [Output Layout](/docs/reference/configuration.md#output-layout) for how every TEA workflow names and places its files.
 
 **System-Level Output (TWO Documents):**
 

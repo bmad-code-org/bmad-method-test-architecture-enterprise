@@ -179,9 +179,10 @@ if (atddStepFiles.length === 0) refuse(`${atddStepsRoot} has no step files`);
 exports.ATDD_EMITS_TEST_SKIP = atddStepFiles.some((name) => fs.readFileSync(path.join(atddStepsRoot, name), 'utf8').includes('test.skip('));
 
 /**
- * README.md:316, configuration.md:439, and the two per-key lines at
- * README.md:328-329: `src/module.yaml`'s FUTURE-marked keys against a grep of
- * readers under `src/workflows/`.
+ * README.md's "Eleven are wired" sentence and its `risk_threshold` line, and
+ * configuration.md's "Declared but Not Yet Wired" sentence:
+ * `src/module.yaml`'s FUTURE-marked keys against a grep of readers under
+ * `src/workflows/`.
  */
 const moduleYamlText = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'module.yaml'), 'utf8');
 const moduleYaml = yaml.parse(moduleYamlText);
@@ -193,7 +194,7 @@ const promptedKeys = Object.keys(moduleYaml).filter(
  * The keys a "⏭️ FUTURE" comment actually annotates, read from the marker's
  * position rather than hand-listed: a hardcoded list would keep matching a
  * fixed marker *count* even if a different key were swapped in under an
- * existing marker, which is exactly the drift a "ten wired, four future"
+ * existing marker, which is exactly the drift an "eleven wired, one future"
  * claim exists to catch.
  */
 const moduleYamlLines = moduleYamlText.split('\n');
@@ -207,9 +208,8 @@ const TOP_LEVEL_KEY = /^([A-Za-z_][A-Za-z0-9_-]*):/;
 const FUTURE_KEYS = [];
 for (const [index, line] of moduleYamlLines.entries()) {
   if (!/⏭️\s*FUTURE/.test(line)) continue;
-  // A marker's comment names one group ("Test output folders"), which can cover
-  // several consecutive prompted variables, not only the first key line after
-  // it; the group ends explicitly at the first following top-level key line
+  // A marker's comment names one group, which can cover several consecutive
+  // prompted variables, not only the first key line after it; the group ends explicitly at the first following top-level key line
   // (matched with no restriction on which characters that key spells), not
   // merely at whichever line the scan's own regex happens to notice.
   let named = 0;
@@ -236,12 +236,11 @@ exports.FUTURE_KEYS = FUTURE_KEYS;
  * "this key is genuinely referenced nowhere" a claim about the whole codebase
  * rather than about one reference style.
  */
-// `keyIsUnread` is called once per candidate key below, up to eight times in
-// this module load (`RISK_THRESHOLD_UNREAD`, three calls folded into
-// `OUTPUT_FOLDER_KEYS_UNREAD`, four folded into `FOUR_FUTURE_KEYS_UNREAD`).
-// Walking every file under `src/workflows` from disk on each call multiplies
-// that cost by eight for no reason: the tree does not change mid-load, so the
-// walk and every file's contents are read once and reused.
+// `keyIsUnread` is called once per prompted key below (every wired key for
+// `ELEVEN_WIRED_ONE_FUTURE`, plus the FUTURE ones). Walking every file under
+// `src/workflows` from disk on each call multiplies that cost by the key count
+// for no reason: the tree does not change mid-load, so the walk and every
+// file's contents are read once and reused.
 let workflowFileBodies = null;
 function readWorkflowFileBodies() {
   if (workflowFileBodies === null) {
@@ -261,7 +260,111 @@ function keyIsUnread(key) {
 exports.keyIsUnread = keyIsUnread;
 
 exports.RISK_THRESHOLD_UNREAD = keyIsUnread('risk_threshold');
-exports.OUTPUT_FOLDER_KEYS_UNREAD = ['test_design_output', 'test_review_output', 'trace_output'].every(keyIsUnread);
-exports.FOUR_FUTURE_KEYS_UNREAD = FUTURE_KEYS.length === 4 && FUTURE_KEYS.every(keyIsUnread);
-exports.ELEVEN_WIRED_FOUR_FUTURE =
-  FUTURE_KEYS.length === 4 && promptedKeys.length - FUTURE_KEYS.length === 11 && exports.FOUR_FUTURE_KEYS_UNREAD;
+
+/** configuration.md, "no workflow reads it yet": exactly one FUTURE key, and nothing reads it. */
+exports.ONE_FUTURE_KEY_UNREAD = FUTURE_KEYS.length === 1 && FUTURE_KEYS.every(keyIsUnread);
+
+/**
+ * README.md, "Eleven are wired into workflows today": eleven prompted keys carry
+ * no FUTURE marker, every one of them is genuinely read somewhere under
+ * `src/workflows/`, and the one FUTURE key is read nowhere.
+ */
+const wiredKeys = promptedKeys.filter((key) => !FUTURE_KEYS.includes(key));
+exports.ELEVEN_WIRED_ONE_FUTURE = wiredKeys.length === 11 && !wiredKeys.some(keyIsUnread) && exports.ONE_FUTURE_KEY_UNREAD;
+
+// ---------------------------------------------------------------------------
+// output layout
+// ---------------------------------------------------------------------------
+
+/**
+ * The folder rule configuration.md's "Output Layout" section states: every
+ * testarch workflow writes under `{test_artifacts}/<workflow>/`, where
+ * `<workflow>` is the skill directory name without its `bmad-testarch-` prefix.
+ *
+ * A workflow's declared output paths are every `{test_artifacts}/...` string in
+ * its `workflow.yaml` (any depth, so `outputs[].path` and trace's named
+ * `*_output` keys count) and every `{test_artifacts}/...` value in the YAML
+ * frontmatter of its `steps-c/`, `steps-e/` and `steps-v/` files. Two kinds of
+ * value are inputs rather than outputs and are left out on purpose: a
+ * `workflow.yaml` key ending in `_input` (trace's `live-verification-results.json`
+ * and `gate-waivers.md`, whose published contract is the root of
+ * `{test_artifacts}`), and a frontmatter key starting with `legacy` (the flat
+ * pre-folder path a resume step migrates from).
+ */
+function frontmatterOf(text) {
+  if (!text.startsWith('---\n')) return {};
+  const end = text.indexOf('\n---', 4);
+  if (end === -1) return {};
+  const parsed = yaml.parse(text.slice(4, end));
+  return parsed !== null && typeof parsed === 'object' ? parsed : {};
+}
+
+function collectTestArtifactPaths(value, key, found) {
+  if (typeof value === 'string') {
+    if (value.startsWith('{test_artifacts}/')) found.push({ key, value });
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectTestArtifactPaths(item, key, found);
+    return;
+  }
+  if (value !== null && typeof value === 'object') {
+    for (const [childKey, child] of Object.entries(value)) collectTestArtifactPaths(child, childKey, found);
+  }
+}
+
+function declaredOutputPaths(skillDir) {
+  const found = [];
+  const workflowYamlPath = path.join(skillDir, 'workflow.yaml');
+  if (fs.existsSync(workflowYamlPath)) {
+    const fromYaml = [];
+    collectTestArtifactPaths(yaml.parse(fs.readFileSync(workflowYamlPath, 'utf8')), null, fromYaml);
+    for (const entry of fromYaml) {
+      if (entry.key !== null && entry.key.endsWith('_input')) continue;
+      found.push({ source: 'workflow.yaml', ...entry });
+    }
+  }
+  for (const stepsDir of ['steps-c', 'steps-e', 'steps-v']) {
+    const root = path.join(skillDir, stepsDir);
+    if (!fs.existsSync(root)) continue;
+    for (const name of fs.readdirSync(root).filter((each) => each.endsWith('.md'))) {
+      const frontmatter = frontmatterOf(fs.readFileSync(path.join(root, name), 'utf8'));
+      for (const [key, value] of Object.entries(frontmatter)) {
+        if (key.startsWith('legacy')) continue;
+        if (typeof value === 'string' && value.startsWith('{test_artifacts}/')) found.push({ source: `${stepsDir}/${name}`, key, value });
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * The declared output paths of one skill directory that sit outside its own
+ * `{test_artifacts}/<workflow>/` folder. Takes the directory so the test file
+ * can point it at a staged fixture skill as well as a real one.
+ */
+function misplacedOutputs(skillDir) {
+  const folder = path.basename(skillDir).replace(/^bmad-testarch-/, '');
+  return declaredOutputPaths(skillDir).filter((entry) => !entry.value.startsWith(`{test_artifacts}/${folder}/`));
+}
+exports.declaredOutputPaths = declaredOutputPaths;
+exports.misplacedOutputs = misplacedOutputs;
+
+// Evaluate is the one `bmad-testarch-*` skill that writes nowhere under
+// `{test_artifacts}`: its evaluation folders live under its own
+// `tea_evaluations_folder` key, so the folder rule does not govern it.
+const testarchRoot = path.join(PROJECT_ROOT, 'src', 'workflows', 'testarch');
+const layoutSkillDirs = fs
+  .readdirSync(testarchRoot)
+  .filter((name) => name.startsWith('bmad-testarch-') && name !== 'bmad-testarch-evaluate')
+  .map((name) => path.join(testarchRoot, name));
+if (layoutSkillDirs.length === 0) refuse(`${testarchRoot} has no bmad-testarch-* skill directories`);
+
+/**
+ * configuration.md, "Outputs currently land in one folder per workflow": every
+ * governed workflow declares at least one output path, and none of them sits
+ * outside that workflow's own folder.
+ */
+exports.OUTPUTS_IN_WORKFLOW_FOLDERS = layoutSkillDirs.every(
+  (skillDir) => declaredOutputPaths(skillDir).length > 0 && misplacedOutputs(skillDir).length === 0,
+);

@@ -41,7 +41,7 @@ Live baselines across the complete suite are recorded in `test/results/eval-all/
 
 ### An observable output
 
-The skill has to leave something behind that is not the conversation. `test-review` writes a JSON verdict and a markdown report. `trace` writes `test-artifacts/e2e-trace-summary.json` and `test-artifacts/traceability-matrix.md`. Fragment selection answers with a JSON object on standard output. Each of those is a thing an oracle can address.
+The skill has to leave something behind that is not the conversation. `test-review` writes a JSON verdict and a markdown report. `trace` writes `test-artifacts/trace/e2e-trace-summary-{run_key}.json` and `test-artifacts/trace/traceability-matrix-{run_key}.md`. Fragment selection answers with a JSON object on standard output. Each of those is a thing an oracle can address.
 
 If the skill's only output is a transcript, the rest of this guide does not apply to it yet. See [What does not transfer](#what-does-not-transfer).
 

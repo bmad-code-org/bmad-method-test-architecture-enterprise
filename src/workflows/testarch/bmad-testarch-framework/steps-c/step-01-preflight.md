@@ -2,7 +2,7 @@
 name: 'step-01-preflight'
 description: 'Verify prerequisites and gather project context'
 nextStepFile: '{skill-root}/steps-c/step-02-select-framework.md'
-outputFile: '{test_artifacts}/framework-setup-progress.md'
+outputFile: '{test_artifacts}/framework/framework-setup-progress.md'
 ---
 
 # Step 1: Preflight Checks

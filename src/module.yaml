@@ -25,7 +25,8 @@ agents:
 # IMPORTANT: tea_use_playwright_utils, tea_use_pactjs_utils, tea_pact_mcp, tea_browser_automation,
 # tea_execution_mode, tea_capability_probe, test_stack_type, ci_platform,
 # test_framework, and tea_evaluations_folder are ACTIVELY USED in workflows
-# Other variables are FUTURE placeholders for Phase 10 enhancements
+# risk_threshold is the one FUTURE placeholder: prompted and saved, read by no workflow
+# Output folders are fixed: every testarch workflow writes under {test_artifacts}/<workflow>/
 
 test_artifacts:
   prompt: "Where should test artifacts be stored? (test plans, coverage reports, quality audits)"
@@ -199,7 +200,7 @@ test_framework:
     - value: "other"
       label: "Other/Custom"
 
-# ⏭️ FUTURE - Risk threshold (not currently used in test-design workflow, marked for Phase 10)
+# ⏭️ FUTURE - Risk threshold (prompted and saved; no workflow reads it)
 risk_threshold:
   prompt: "What risk level requires mandatory testing?"
   default: "p1"
@@ -213,23 +214,6 @@ risk_threshold:
       label: "P2+ (Medium, High & Critical)"
     - value: "p3"
       label: "All (P0-P3)"
-
-# ⏭️ FUTURE - Test output folders (not currently wired into workflows, marked for Phase 10)
-# IMPORTANT: test_artifacts already resolves to {project-root}/..., so don't re-prepend {project-root}
-test_design_output:
-  prompt: "Where should test design documents be stored?"
-  default: "test-design"
-  result: "{test_artifacts}/{value}"
-
-test_review_output:
-  prompt: "Where should test review reports be stored?"
-  default: "test-reviews"
-  result: "{test_artifacts}/{value}"
-
-trace_output:
-  prompt: "Where should traceability reports be stored?"
-  default: "traceability"
-  result: "{test_artifacts}/{value}"
 
 post-install-notes:
   test_stack_type:

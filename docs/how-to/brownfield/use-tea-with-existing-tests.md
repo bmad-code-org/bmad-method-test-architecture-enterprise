@@ -42,7 +42,7 @@ Run the trace workflow and select Phase 1 (Requirements Traceability):
 - Test location (`tests/` or wherever tests live)
 - Focus areas (specific features if large codebase)
 
-**Output:** `traceability-matrix.md` showing:
+**Output:** `trace/traceability-matrix-{run_key}.md` under `{test_artifacts}` (`run_key` is `system` for a whole-project baseline) showing:
 
 - Which requirements have tests
 - Which requirements lack coverage
@@ -76,7 +76,7 @@ Run the test review workflow and answer `tests/` when it asks for scope:
 /bmad-testarch-test-review
 ```
 
-**Output:** `test-review.md` with quality score and issues.
+**Output:** `test-review/test-review-{run_key}.md` under `{test_artifacts}` with quality score and issues.
 
 **Common Brownfield Issues:**
 

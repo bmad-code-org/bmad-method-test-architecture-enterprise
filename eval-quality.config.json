@@ -1271,7 +1271,7 @@
           "reason": "a hand-read count of test/evals/suite-manifest.json's deferred array; no export replaced NO_SKILLS_DEFERRED because the invariant this sentence states (exactly one named skill, not zero) legitimately changes as skills are deferred and un-deferred, so it is pinned to the file's hash instead of a boolean. When this claim's hash goes stale after a legitimate manifest edit: re-count the deferred array, update the sentence if the count or the named skill changed, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "6b9796a396eb7281c9512398dd0a93229ef19777b2e08682527ced68bd1bd82d"
+            "hash": "c7d0cd0c526c7c357f552a31923e707675d1ccf1bf7e2acfc7777a4ef6ab8530"
           }
         },
         {
@@ -1336,30 +1336,21 @@
         },
         {
           "file": "README.md",
-          "key": "`test_design_output`, `test_review_output`, `trace_output`",
-          "settles": {
-            "module": "test/lib/doc-claim-sources.js",
-            "export": "OUTPUT_FOLDER_KEYS_UNREAD"
-          },
-          "reason": "a grep of src/workflows/ for each of the three keys"
-        },
-        {
-          "file": "README.md",
           "key": "Eleven are wired into workflows today",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "ELEVEN_WIRED_FOUR_FUTURE"
+            "export": "ELEVEN_WIRED_ONE_FUTURE"
           },
-          "reason": "src/module.yaml's FUTURE-marked key count and a grep of src/workflows/ for each one"
+          "reason": "src/module.yaml's prompted keys split by its FUTURE marker, and a grep of src/workflows/ finding each of the eleven wired keys read and the one FUTURE key unread"
         },
         {
           "file": "docs/reference/configuration.md",
-          "key": "no workflow reads them yet",
+          "key": "no workflow reads it yet",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "FOUR_FUTURE_KEYS_UNREAD"
+            "export": "ONE_FUTURE_KEY_UNREAD"
           },
-          "reason": "a grep of src/workflows/ for each FUTURE-marked key"
+          "reason": "src/module.yaml's FUTURE marker names exactly one key, and a grep of src/workflows/ finds it unread"
         },
         {
           "file": "docs/explanation/eval-quality-adoption-guide.md",
@@ -1368,7 +1359,7 @@
           "reason": "an intro label for the table that follows, transcribed by hand from test/evals/suite-manifest.json's own suites and deferred entries; no predicate reads the manifest and regenerates the table, but the transcription can be pinned to the file it was read against. When this claim's hash goes stale after a legitimate manifest edit: re-read the table above against the new manifest, update it if it drifted, then run `node tools/regenerate-doc-claim-hash.mjs test/evals/suite-manifest.json` and paste the printed hash in below",
           "asOf": {
             "subject": "test/evals/suite-manifest.json",
-            "hash": "6b9796a396eb7281c9512398dd0a93229ef19777b2e08682527ced68bd1bd82d"
+            "hash": "c7d0cd0c526c7c357f552a31923e707675d1ccf1bf7e2acfc7777a4ef6ab8530"
           }
         },
         {
@@ -1436,12 +1427,12 @@
         },
         {
           "file": "docs/reference/configuration.md",
-          "key": "Outputs currently land directly under",
+          "key": "Outputs currently land in one folder per workflow",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
-            "export": "OUTPUT_FOLDER_KEYS_UNREAD"
+            "export": "OUTPUTS_IN_WORKFLOW_FOLDERS"
           },
-          "reason": "a grep of src/workflows/ for each of the three output-folder keys"
+          "reason": "every {test_artifacts}/ output path each bmad-testarch-* workflow except evaluate declares, in its workflow.yaml and in its step files' frontmatter, sits under {test_artifacts}/<workflow>/; _input keys and legacy* resume keys are inputs and are left out"
         },
         {
           "file": "docs/explanation/eval-quality-command-adapter.md",

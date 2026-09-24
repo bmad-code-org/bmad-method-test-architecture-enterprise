@@ -1,8 +1,8 @@
 ---
 name: 'step-05-generate-output'
 description: 'Generate output documents with adaptive orchestration (agent-team, subagent, or sequential)'
-outputFile: '{test_artifacts}/test-design-epic-{epic_num}.md'
-progressFile: '{test_artifacts}/test-design-progress-{run_key}.md'
+outputFile: '{test_artifacts}/test-design/test-design-epic-{epic_num}.md'
+progressFile: '{test_artifacts}/test-design/test-design-progress-{run_key}.md'
 ---
 
 # Step 5: Generate Outputs & Validate
@@ -109,8 +109,8 @@ Resolution precedence:
 
 Generate **two** documents:
 
-- `{test_artifacts}/test-design-architecture.md` using `test-design-architecture-template.md`
-- `{test_artifacts}/test-design-qa.md` using `test-design-qa-template.md`
+- `{test_artifacts}/test-design/test-design-architecture.md` using `test-design-architecture-template.md`
+- `{test_artifacts}/test-design/test-design-qa.md` using `test-design-qa-template.md`
 
 If `resolvedMode` is `agent-team` or `subagent`, these two documents can be generated in parallel as independent workers, then reconciled for consistency.
 
@@ -146,7 +146,7 @@ Validate the output(s) against:
 
 - `checklist.md` in this workflow folder
 - [ ] CLI sessions cleaned up (no orphaned browsers)
-- [ ] Temp artifacts stored in `{test_artifacts}/` not random locations
+- [ ] Temp artifacts stored under `{test_artifacts}/test-design/`
 
 If any checklist criteria are missing, fix before completion.
 

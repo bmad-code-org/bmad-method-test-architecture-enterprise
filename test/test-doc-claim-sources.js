@@ -22,6 +22,7 @@
 
 const assert = require('node:assert');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const failures = [];
@@ -141,7 +142,7 @@ check('FUTURE_KEYS matches an independent walk of module.yaml’s "⏭️ FUTURE
   for (let index = 0; index < lines.length; index += 1) {
     if (!/⏭️\s*FUTURE/.test(lines[index])) continue;
     // A marker's group runs through every consecutive prompted key that
-    // follows it, not only the first one: "Test output folders" covers three.
+    // follows it, not only the first one.
     for (const candidate of lines.slice(index + 1)) {
       if (/⏭️\s*FUTURE/.test(candidate)) break;
       const match = candidate.match(/^([A-Za-z_][A-Za-z0-9_-]*):/);
@@ -187,6 +188,64 @@ check('keyIsUnread’s word-boundary check finds a real bare-word reference, not
   // re-implementing its search, and a positive result here can only come from
   // the word-boundary regex actually matching prose.
   assert.strictEqual(source.keyIsUnread(probeKey), false, 'a bare-word reference with no surrounding braces should be found');
+});
+
+check('misplacedOutputs flags a flat output path and leaves inputs and legacy paths alone', () => {
+  // A staged fixture skill outside src/workflows, so the real tree's current
+  // state cannot make this pass or fail: one output inside the skill's own
+  // folder, one flat at the root (the misplacement), one `_input` key and one
+  // `legacy*` frontmatter key that are both flat on purpose.
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-sources-'));
+  try {
+    const skillDir = path.join(scratch, 'bmad-testarch-probe');
+    fs.mkdirSync(path.join(skillDir, 'steps-c'), { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'workflow.yaml'),
+      [
+        'variables:',
+        '  some_input: "{test_artifacts}/some-input.json"',
+        'default_output_file: "{test_artifacts}/probe/probe-report-{run_key}.md"',
+        'summary_output: "{test_artifacts}/probe-summary.json"',
+        '',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(skillDir, 'steps-c', 'step-01b-resume.md'),
+      [
+        '---',
+        "outputFile: '{test_artifacts}/probe/probe-report-{run_key}.md'",
+        "legacyOutputFile: '{test_artifacts}/probe-report.md'",
+        '---',
+        '',
+        '# Resume',
+        '',
+      ].join('\n'),
+    );
+    const declared = source.declaredOutputPaths(skillDir).map((entry) => entry.value);
+    assert.deepStrictEqual([...declared].sort(), [
+      '{test_artifacts}/probe-summary.json',
+      '{test_artifacts}/probe/probe-report-{run_key}.md',
+      '{test_artifacts}/probe/probe-report-{run_key}.md',
+    ]);
+    assert.deepStrictEqual(
+      source.misplacedOutputs(skillDir).map((entry) => entry.value),
+      ['{test_artifacts}/probe-summary.json'],
+    );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+check('ELEVEN_WIRED_ONE_FUTURE agrees with an independent read of module.yaml', () => {
+  const parsed = require('yaml').parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'module.yaml'), 'utf8'));
+  const prompted = Object.keys(parsed).filter((key) => typeof parsed[key] === 'object' && parsed[key] !== null && 'prompt' in parsed[key]);
+  const wired = prompted.filter((key) => !source.FUTURE_KEYS.includes(key));
+  const expected =
+    source.FUTURE_KEYS.length === 1 &&
+    wired.length === 11 &&
+    wired.every((key) => !source.keyIsUnread(key)) &&
+    source.FUTURE_KEYS.every(source.keyIsUnread);
+  assert.strictEqual(source.ELEVEN_WIRED_ONE_FUTURE, expected);
 });
 
 check('THIRTY_FOUR_CONCERNS matches an independent count of "CONCERNS" verdicts in expected-strength.json', () => {

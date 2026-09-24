@@ -68,7 +68,7 @@ Epic or release gate
 
 Phase 3 order matters and is deliberate: run `test-design` first so NFR evidence needs can shape the infrastructure, then `framework` once the architecture and the test design have settled the stack, then `ci` once the framework exists so the pipeline wires to real commands.
 
-`test-design` is dual-mode. At system level it produces an architecture-facing document and a QA-facing one. Per epic it produces `test-design-epic-N.md`. `teach-me-testing` sits outside the lifecycle and runs once per learner.
+`test-design` is dual-mode. At system level it produces an architecture-facing document and a QA-facing one. Per epic it produces `test-design/test-design-epic-N.md`. `teach-me-testing` sits outside the lifecycle and runs once per learner.
 
 `module-help.csv`'s single `phase` column records the phase a workflow's catalog row is sequenced under (its `preceded-by`/`followed-by` chain), not every phase the workflow can run in. `test-design`'s row is `3-solutioning` because that is the chain the row encodes (`test-design` → `framework`); the epic-level Phase 4 invocation above has no dependency edges of its own and so gets no second row, only this prose.
 
@@ -189,7 +189,7 @@ flowchart TB
 
 **3. Steps.** Each step file declares its own wiring in YAML frontmatter: `outputFile`, `nextStepFile`, and where relevant `knowledgeIndex` and `resumeStepFile`. A step loads on its own, pulls only the fragments its mode and config flags call for, fills any `*-template.md` placeholders, writes its output, and names the next step. Nothing loads the whole workflow at once, and the step files say so in as many words: "Do not load the next step until this step is complete."
 
-**4. Progress and resume.** Every create step appends itself to a checkpoint file's YAML frontmatter (`stepsCompleted`, `lastStep`, `lastSaved`), so an interrupted run resumes at the next incomplete step rather than from the top. `test-design` checkpoints additionally carry run identity: `runScope` and `runKey` are resolved before anything is saved, the file is named `test-design-progress-{run_key}.md`, and Resume refuses to continue a checkpoint whose `runKey` belongs to a different run. Interrupting a system-level run and starting an epic-level one no longer clobbers the first. `framework` and `ci` scaffold once per project, so a single fixed checkpoint is the right shape there and they keep one.
+**4. Progress and resume.** Every create step appends itself to a checkpoint file's YAML frontmatter (`stepsCompleted`, `lastStep`, `lastSaved`), so an interrupted run resumes at the next incomplete step. Every workflow that runs once per scope also records run identity: `runScope` and `runKey` are resolved before anything is saved, the file name carries the `run_key` (`test-design/test-design-progress-epic-3.md`, `trace/traceability-matrix-epic-16.md`), and Resume refuses to continue a file whose `runKey` belongs to a different run. A trace run for epic 16 never opens epic 15's matrix or gate decision, and interrupting a system-level run to start an epic-level one leaves the first intact. `framework` and `ci` scaffold once per project, so each keeps a single fixed checkpoint in its own folder.
 
 **5. Validation.** `steps-v/` scores the finished output against `checklist.md`.
 
@@ -314,9 +314,9 @@ A copy-paste workflow lives at `cli/examples/pr-test-review.yml`, and the full f
 
 ## Configuration
 
-TEA variables are defined in `src/module.yaml` and prompted during install. Eleven are wired into workflows today; the last four are placeholders that nothing reads yet.
+TEA variables are defined in `src/module.yaml` and prompted during install. Eleven are wired into workflows today; the last one is a placeholder that nothing reads yet.
 
-- `test_artifacts` — base output folder for test artifacts
+- `test_artifacts` — base output folder for test artifacts. Each workflow writes into its own folder under it (`test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, `framework/`), and a file produced once per story, epic, or release carries that scope in its name, such as `trace/gate-decision-epic-16.json`. See [Output Layout](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/#output-layout)
 - `tea_evaluations_folder` — base folder for Evaluate's own evaluation folders (string, default `evals`), resolved as `{project-root}/{value}`
 - `tea_use_playwright_utils` — enable Playwright Utils integration (boolean, default true). When true **and the package is installed**, `@seontechnologies/playwright-utils` becomes the default implementation for everything it covers: generated Playwright tests use `interceptNetworkCall`, `apiRequest`, `recurse`, and `log` without being asked, and `test-review` flags a vanilla equivalent that carries no stated reason. See [Integrate Playwright Utils](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/how-to/customization/integrate-playwright-utils/)
 - `tea_use_pactjs_utils` — enable Pact.js Utils integration for contract testing (boolean, default true). It decides how Pact suites are written, not whether a project gets one: TEA still requires a real consumer-provider boundary before scaffolding a contract test. When on **and the package is installed**, generated Pact code uses `createProviderState`, `buildVerifierOptions`, and `createRequestFilter` rather than raw Pact boilerplate. A flag with no install generates the raw path and reports one recommendation rather than flagging every file
@@ -328,7 +328,6 @@ TEA variables are defined in `src/module.yaml` and prompted during install. Elev
 - `ci_platform` — CI platform (auto, github-actions, gitlab-ci, jenkins, azure-devops, harness, circle-ci, other)
 - `test_framework` — detected or configured test framework (auto, Playwright, Cypress, Jest, Vitest, pytest, JUnit, Go test, dotnet test, RSpec, Maestro, other)
 - `risk_threshold` — risk cutoff for mandatory testing. Prompted at install, not yet read by any workflow
-- `test_design_output`, `test_review_output`, `trace_output` — subfolders under `test_artifacts`. Prompted at install, not yet read by any workflow
 
 Full option reference: [Configuration](https://bmad-code-org.github.io/bmad-method-test-architecture-enterprise/reference/configuration/).
 

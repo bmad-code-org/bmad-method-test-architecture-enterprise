@@ -2,7 +2,7 @@
 name: 'step-03f-aggregate-scores'
 description: 'Aggregate quality dimension scores into overall 0-100 score'
 nextStepFile: '{skill-root}/steps-c/step-04-generate-report.md'
-outputFile: '{test_artifacts}/test-review.md'
+outputFile: '{test_artifacts}/test-review/test-review-{run_key}.md'
 ---
 
 # Step 3F: Aggregate Quality Scores
@@ -411,13 +411,16 @@ fs.writeFileSync(`/tmp/tea-test-review-summary-${timestamp}.json`, JSON.stringif
 
 ### 7. Save Progress
 
-**Save this step's accumulated work to `{outputFile}`.** When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
+**Save this step's accumulated work to `{outputFile}`.** `run_key` is the value step 1 resolved; never re-derive it. When `output_file_override` is non-empty it IS `{outputFile}`, replacing the step frontmatter default.
 
 - **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
 
   ```yaml
   ---
   workflowType: 'testarch-test-review'
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03f-aggregate-scores']
   lastStep: 'step-03f-aggregate-scores'
   lastSaved: '{date}'
@@ -426,7 +429,9 @@ fs.writeFileSync(`/tmp/tea-test-review-summary-${timestamp}.json`, JSON.stringif
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists**, it is this run's report: step 1 created it or Resume selected it, so it never holds another run's work. Update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03f-aggregate-scores'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03f-aggregate-scores'`
   - Set `lastSaved: '{date}'`

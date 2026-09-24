@@ -2,7 +2,7 @@
 name: 'step-03-map-criteria'
 description: 'Map coverage oracle items to tests and build traceability matrix'
 nextStepFile: '{skill-root}/steps-c/step-04-analyze-gaps.md'
-outputFile: '{test_artifacts}/traceability-matrix.md'
+outputFile: '{test_artifacts}/trace/traceability-matrix-{run_key}.md'
 ---
 
 # Step 3: Map Coverage Oracle to Tests
@@ -147,23 +147,15 @@ Ensure:
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-- **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
+`{outputFile}` is this run's file: Step 1 created it for this `run_key`, or Resume selected it after checking its `runKey`. If it is missing, this run has lost its output: **halt** and ask the user to start a fresh run with **[C] Create**.
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-03-map-criteria']
-  lastStep: 'step-03-map-criteria'
-  lastSaved: '{date}'
-  ---
-  ```
+Update it in place:
 
-  Then write this step's output below the frontmatter.
-
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-03-map-criteria'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-03-map-criteria'`
-  - Set `lastSaved: '{date}'`
-  - Append this step's output to the appropriate section of the document.
+- Add `'step-03-map-criteria'` to `stepsCompleted` array (only if not already present)
+- Set `lastStep: 'step-03-map-criteria'`
+- Set `lastSaved: '{date}'`
+- Keep `runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` unchanged
+- Append this step's output to the appropriate section of the document. Appending is safe because the file holds only this run's work.
 
 Load next step: `{nextStepFile}`
 

@@ -23,6 +23,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking: output paths.** Every TEA workflow now writes into its own folder under `{test_artifacts}`, and a file produced once per scope carries that scope in its name (#228).
+  The folders are `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`.
+  Trace writes `trace/traceability-matrix-{run_key}.md`, `trace/e2e-trace-summary-{run_key}.json`, and `trace/gate-decision-{run_key}.json`; nfr-assess writes `nfr/nfr-assessment-{run_key}.md`; test-review writes `test-review/test-review-{run_key}.md`; automate writes `automate/automation-summary-{run_key}.md`; ATDD keeps `atdd-checklist-{story_key}.md` inside `atdd/`; test-design's documents and checkpoints move into `test-design/`; validation reports move into their workflow's folder.
+  `run_key` is `system`, `epic-{epic_num}`, `story-{story_key}`, trace's `release-{slug}` or `hotfix-{slug}`, or `target-{slug}` for automate and test-review, resolved in the first step before anything is written and recorded as `runScope` and `runKey` in the output's frontmatter.
+  Before this change, trace for epic 16 replaced epic 15's `gate-decision.json` and `e2e-trace-summary.json` and appended its report into epic 15's `traceability-matrix.md`, reproduced live against 1.27.2's skill; the same run now leaves every epic 15 file byte-identical.
+  A re-run of the same scope resumes an interrupted file or replaces a finished one, and two runs are never merged into one file.
+  Files written by earlier versions stay where they are: resume migrates an in-progress flat file into the scoped path, and workflows that read another workflow's output look in its folder first and at the old root location second.
+  Scripts and CI jobs that read the old flat paths need the new ones; `docs/reference/configuration.md` has an old-to-new table under "Upgrading Scripts That Read Old Paths".
+  The `tea-test-review` CLI and its GitHub Action pass an explicit `--output` path and are unaffected.
+- The eight workflows' Edit mode lists each workflow's concrete known outputs, including the old root locations, in place of a generic "select from known outputs".
 - The `eval-quality` devDependency is raised from the exact pin 4.0.0 to 4.1.0, which publishes `parseCommandTargetPolicy` on `eval-quality/adapters` (eval-quality#159); `test:evaluate-check` now validates the registry's command target policy through it, and the roadmap's pin claim names 4.1.0.
 - The execution-target registry, the eval-quality record builders and the digest and provenance helpers move from `test/lib/` into the shipped runtime (Story 1.5, AD-5): `cli/lib/evaluate/registry.js`, `records.js`, `digest.js` and `bounded-probe.js`.
   `test/lib/probe-targets.js`, `eval-quality-inputs.js` and `eval-record.js` keep TeA's data (its nine commands as `RegistryEntry` data, its scoring policy path, its own eval result records and failure classes) and import the runtime modules, so TeA's harness and every adopter run go through one implementation; every existing test passes with its assertions unchanged.
@@ -43,8 +53,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Three inherited exclusion patterns matched no document here (`changelog`, `downloads/`, `reference/glossary/`) and are removed, and the build now fails on an exclusion pattern that matches nothing.
   The site's `ai-terms` meta tag no longer states a token count that had gone stale.
 
+### Removed
+
+- The three FUTURE output-folder keys `test_design_output`, `test_review_output`, and `trace_output` are removed from `src/module.yaml`, so install no longer prompts for them. No workflow ever read them, and the folder rule above replaces them. The installer saved them as relative paths without `{project-root}` and skipped them under `--yes`, and a configurable folder per workflow would multiply the places cross-workflow readers search. A `_bmad/tea/config.yaml` that still carries them is harmless. `risk_threshold` is now the one FUTURE key, and the README and configuration reference claims about FUTURE keys are rebound to checks that prove them.
+
 ### Fixed
 
+- Trace's step 4 read the gate target "from Step 1", but step 1 never resolved it; step 1 now resolves the gate type, target id and label, and step 4 reads them from the matrix frontmatter.
+  Trace's step 5 both rewrote the whole matrix and said "do NOT overwrite it"; it now replaces the report body once, keeps the frontmatter, and only updates the frontmatter afterwards.
+  A trace run that evaluates no gate removes an earlier `gate-decision-{run_key}.json` for the same scope, so a new summary is never paired with a stale decision.
+- ATDD's resume step read `{outputFile}` without resolving `story_key` first; it now selects the checklist by story like test-design's resume.
+- test-design's mode detection used `{implementation_artifacts}`, a BMM variable TEA never loads; it now names its source, `_bmad/bmm/config.yaml`, and falls back to `{output_folder}/implementation-artifacts`.
+- `docs/how-to/workflows/run-trace.md` and `docs/how-to/brownfield/use-tea-for-enterprise.md` described a `gate-decision-{gate_type}-{story_id}.md` file that trace never wrote.
 - `npm run test:probe-targets` failed intermittently (and with it `test:doc-invocations`, which runs it again) whenever another process on the host held port 4310, for example a second worktree's `npm test`.
   The ATDD fixture's `playwright.config.ts` pointed its `webServer` at the default port 4310 while `tea-atdd-red-check` served the fixture on an OS-assigned port, so Playwright started a second server on 4310 for every spec file and failed to load it when the port was taken.
   The config now points `webServer` at the server `LOCKER_BASE_URL` names, so Playwright reuses it and starts nothing.

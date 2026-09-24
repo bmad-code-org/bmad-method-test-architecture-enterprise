@@ -46,7 +46,7 @@ Before starting this workflow, verify:
 - [ ] Component tests: UI component behavior and interactions identified
 - [ ] Unit tests: Pure logic and edge cases identified (if applicable)
 - [ ] Duplicate coverage avoided (same behavior not tested at multiple levels unnecessarily)
-- [ ] Tests prioritized using P0-P3 framework (if test-design document exists)
+- [ ] Tests prioritized using P0-P3 framework (if a test-design document exists in `{test_artifacts}/test-design/` or, for older runs, the `{test_artifacts}/` root)
 - [ ] Primary test level set in `primary_level` variable (typically E2E or API)
 - [ ] Test levels documented in ATDD checklist
 
@@ -179,7 +179,9 @@ Before starting this workflow, verify:
 
 ### ATDD Checklist Document Created
 
-- [ ] Output file created at `{test_artifacts}/atdd-checklist-{story_key}.md`
+- [ ] Output file created at `{test_artifacts}/atdd/atdd-checklist-{story_key}.md`
+- [ ] Frontmatter carries `runScope: story` and `runKey: story-{story_key}`, matching the story this run covers
+- [ ] No checklist for another story was read or written, and no earlier run's content was merged into this checklist
 - [ ] Document follows template structure from `atdd-checklist-template.md`
 - [ ] Document includes all required sections:
   - [ ] Story summary
@@ -310,6 +312,8 @@ Per `pactjs-utils-mandate.md`. Skip entirely when the flag is false, when `@seon
 - [ ] Naming conventions consistent with framework standards
 
 ### With test-design Workflow (If Available)
+
+Test-design documents live in `{test_artifacts}/test-design/` (`test-design-epic-{epic_num}.md`, or the system-level `test-design-qa.md` and `test-design-architecture.md`); older runs left them in the `{test_artifacts}/` root.
 
 - [ ] P0 scenarios from test-design prioritized in ATDD
 - [ ] Risk assessment from test-design considered in test coverage

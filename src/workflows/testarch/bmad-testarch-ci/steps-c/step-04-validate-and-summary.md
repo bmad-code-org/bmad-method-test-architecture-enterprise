@@ -1,7 +1,7 @@
 ---
 name: 'step-04-validate-and-summary'
 description: 'Validate pipeline and summarize'
-outputFile: '{test_artifacts}/ci-pipeline-progress.md'
+outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
 ---
 
 # Step 4: Validate & Summarize

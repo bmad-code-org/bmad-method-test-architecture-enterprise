@@ -3,7 +3,7 @@ name: 'step-01-detect-mode'
 description: 'Determine system-level vs epic-level mode, resolve run identity, and validate prerequisites'
 nextStepFile: '{skill-root}/steps-c/step-02-load-context.md'
 resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
-outputFile: '{test_artifacts}/test-design-progress-{run_key}.md'
+outputFile: '{test_artifacts}/test-design/test-design-progress-{run_key}.md'
 ---
 
 # Step 1: Detect Mode & Prerequisites
@@ -65,6 +65,8 @@ If user intent is unclear:
 - If `{implementation_artifacts}/sprint-status.yaml` exists → **Epic-Level Mode**
 - Otherwise → **System-Level Mode**
 
+`{implementation_artifacts}` is a BMM variable that TEA's config does not define. Read it from `implementation_artifacts` in `{project-root}/_bmad/bmm/config.yaml` when that file exists. Otherwise use `{output_folder}/implementation-artifacts`.
+
 ### C) Ambiguous → Ask
 
 If mode still unclear, ask the user to choose (A) or (B) and **halt** until they respond.
@@ -120,12 +122,11 @@ Set `run_key` to `epic-{epic_num}`.
 If the epic carries no number, derive a stable slug from its title and use that in place of the number:
 
 - lowercase the title
-- collapse runs of whitespace to a single `-`
-- strip every character that is not alphanumeric or `-`
-- trim leading and trailing hyphens
+- replace every run of characters outside `a-z` and `0-9` with a single `-`
+- trim leading and trailing `-`
 - truncate to 64 characters
 
-Carry `epic_num`, `run_scope`, and `run_key` forward through every remaining step. Step 5 writes `{test_artifacts}/test-design-epic-{epic_num}.md` from the same `epic_num`, so a plan and its checkpoint always name the same run.
+Carry `epic_num`, `run_scope`, and `run_key` forward through every remaining step. Step 5 writes `{test_artifacts}/test-design/test-design-epic-{epic_num}.md` from the same `epic_num`, so a plan and its checkpoint always name the same run.
 
 ---
 

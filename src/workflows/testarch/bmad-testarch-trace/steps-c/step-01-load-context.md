@@ -1,16 +1,17 @@
 ---
 name: 'step-01-load-context'
-description: 'Resolve coverage oracle, load knowledge base, and gather related artifacts'
+description: 'Resolve coverage oracle, load knowledge base, gather related artifacts, and resolve run identity'
 nextStepFile: '{skill-root}/steps-c/step-02-discover-tests.md'
+resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
 knowledgeIndex: './resources/tea-index.csv'
-outputFile: '{test_artifacts}/traceability-matrix.md'
+outputFile: '{test_artifacts}/trace/traceability-matrix-{run_key}.md'
 ---
 
 # Step 1: Resolve Coverage Oracle & Load Knowledge Base
 
 ## STEP GOAL
 
-Resolve the best available coverage oracle, capture confidence and provenance, and gather supporting artifacts for traceability.
+Resolve the best available coverage oracle, capture confidence and provenance, gather supporting artifacts for traceability, and resolve the gate target and run identity that name this run's outputs.
 
 ## MANDATORY EXECUTION RULES
 
@@ -114,7 +115,7 @@ The fragment list for this step is a closed set. Start empty and add every fragm
 If available:
 
 - Story file and acceptance criteria
-- Test design doc (priorities)
+- Test design doc (priorities) from `{test_artifacts}/test-design/`: `test-design-epic-{epic_num}.md` for an epic, or `test-design-architecture.md` and `test-design-qa.md` at system level. Fall back to the same names at the legacy root `{test_artifacts}/`, where runs before the `test-design/` folder wrote them.
 - Tech spec / PRD
 - OpenAPI or similar contract/spec files
 - Placeholder files that reference external requirements systems
@@ -124,37 +125,104 @@ Summarize what was found and explicitly state the resolved oracle, its confidenc
 
 ---
 
-### 4. Save Progress
+## 4. Resolve Run Identity
+
+Every run writes its outputs under `{test_artifacts}/trace/` with filenames that carry the run's identity, so a trace for one scope never reads, appends to, or replaces another scope's matrix, summary, or gate decision.
+Resolve the gate target, `run_scope`, and `run_key` **now**, before anything is saved.
+
+### A) Gate Type
+
+Resolve the gate type in this order:
+
+1. The gate type the user named in this invocation (for example "trace epic 16" is `epic`, "release gate for 2.4.0" is `release`).
+2. The kind of target the loaded artifacts identify: a story file is `story`, an epic document is `epic`.
+3. The configured `{gate_type}`.
+
+### B) Target ID and Label
+
+Resolve the target for that gate type in the same order: the target the user named in this invocation first, then the target the loaded artifacts carry.
+
+- **story:** the story id as the story states it (for example `1.2`), and `story_key`, the BMM story file basename without `.md` (for example `1-2-user-authentication`). Without a story file, `story_key` is the story id with `.` replaced by `-` (`1.2` becomes `1-2`).
+- **epic:** `epic_num`, read from the epic document metadata, its H1 heading, or its filename. If the epic carries no number, use the slug of its title (slug rule below) in place of the number.
+- **release:** the release version, from this invocation or from the release notes or version the loaded artifacts name.
+- **hotfix:** the hotfix id, from this invocation or from the loaded artifacts.
+
+The target label is the human-readable name the report heading shows, for example `Story 1.2: User Authentication`, `Epic 6: Scheduled Report Delivery`, or `Release 2.4.0`.
+
+If several candidate targets remain and the user named none of them (for example two story files were loaded), handle it by run type:
+
+- **Interactive run:** list the candidates and ask which one this run covers. **Halt** until the user answers.
+- **Headless or autonomous run:** use `system` as below and say so in the output.
+
+If no target can be resolved at all, the run covers the whole project or system: use `system`.
+
+### C) Run Key
+
+Set `run_key` from the gate type and target:
+
+- `story-{story_key}`: one story.
+- `epic-{epic_num}`: one epic.
+- `release-{slug}`: one release, where `{slug}` is the slug of the release version.
+- `hotfix-{slug}`: one hotfix, where `{slug}` is the slug of the hotfix id.
+- `system`: the whole project or system, or no narrower scope could be resolved. Target id and label stay empty, the gate type stays the one resolved in A, and the output states "No story, epic, release, or hotfix target could be resolved; this run is scoped to `system`."
+
+Slug rule, used for every `{slug}` and for an epic title with no number: lowercase; replace every run of characters outside `a-z` and `0-9` with a single `-`; trim leading and trailing `-`; truncate to 64 characters.
+
+Set `run_scope` to the kind of key: `story`, `epic`, `release`, `hotfix`, or `system`.
+
+Carry `run_scope`, `run_key`, and the target (`target_type`, `target_id`, `target_label`) forward through every remaining step.
+Every output of this workflow substitutes the same `run_key`: `{outputFile}`, `{e2e_trace_summary_output}`, and `{gate_decision_output}`. The matrix, the summary, and the gate decision of one run always name the same scope.
+
+---
+
+## 5. Check for an Existing Output
+
+Check whether `{outputFile}` already exists. A file at this path belongs to a previous run of the **same** scope; outputs for other scopes live under their own filenames and are never read or written here.
+
+A file that carries no `workflowStatus` predates that key: treat it as `'completed'` when its `lastStep` is `'step-05-gate-decision'` or it has no `lastStep`, and as `'in-progress'` otherwise.
+
+- **Does not exist:** this is a fresh run. Proceed to Save Progress.
+- **Exists with `workflowStatus: 'in-progress'`:** a previous run for this scope was interrupted. Display its `lastStep` and `lastSaved`, then ask:
+
+  > "An unfinished trace run for `{run_key}` was last saved {lastSaved} at step {lastStep}. Resume it, or start over? Starting over replaces the traceability matrix."
+
+  **Halt** until the user answers. A headless or autonomous run starts over without asking. If they resume, load `{resumeStepFile}`, read it completely, and execute it. If they start over, replace `{outputFile}` entirely in Save Progress.
+
+- **Exists with `workflowStatus: 'completed'`:** a finished run for this scope. Replace `{outputFile}` entirely in Save Progress. Step 5 replaces `{e2e_trace_summary_output}` and `{gate_decision_output}` for this `run_key` the same way.
+
+**Never merge two runs into one file.** A `stepsCompleted` array or a matrix section carried over from a prior run makes the resume dashboard report steps this run never performed and puts another run's evidence into this run's gate.
+
+---
+
+### 6. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-- **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
+Create the `{test_artifacts}/trace/` folder if it does not exist.
+Write the file using the workflow template (if available), replacing any prior content as decided in the previous section, with YAML frontmatter:
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-01-load-context']
-  lastStep: 'step-01-load-context'
-  lastSaved: '{date}'
-  coverageBasis: '{resolved coverage_basis}'
-  oracleConfidence: '{resolved oracle_confidence}'
-  oracleResolutionMode: '{resolved oracle_resolution_mode}'
-  oracleSources: ['{resolved oracle source 1}', '{resolved oracle source 2}']
-  externalPointerStatus: '{resolved external_pointer_status}'
-  ---
-  ```
+```yaml
+---
+runScope: '{run_scope}'
+runKey: '{run_key}'
+targetType: '{resolved gate type}'
+targetId: '{resolved target id, empty for system}'
+targetLabel: '{resolved target label, empty for system}'
+workflowStatus: 'in-progress'
+stepsCompleted: ['step-01-load-context']
+lastStep: 'step-01-load-context'
+lastSaved: '{date}'
+coverageBasis: '{resolved coverage_basis}'
+oracleConfidence: '{resolved oracle_confidence}'
+oracleResolutionMode: '{resolved oracle_resolution_mode}'
+oracleSources: ['{resolved oracle source 1}', '{resolved oracle source 2}']
+externalPointerStatus: '{resolved external_pointer_status}'
+---
+```
 
-  Then write this step's output below the frontmatter.
+Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-01-load-context'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-01-load-context'`
-  - Set `lastSaved: '{date}'`
-  - Set `coverageBasis` to the resolved oracle basis
-  - Set `oracleConfidence` to the resolved oracle confidence
-  - Set `oracleResolutionMode` to the resolved oracle resolution mode
-  - Set `oracleSources` to the resolved oracle sources
-  - Set `externalPointerStatus` to the resolved external pointer status
-  - Append this step's output to the appropriate section of the document.
+`runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` are this run's identity. Later steps carry them forward unchanged and never re-derive them: Step 4 reads the target from this frontmatter, and Resume mode refuses to continue a file whose `runKey` does not match the run being resumed.
 
 Load next step: `{nextStepFile}`
 
@@ -163,8 +231,12 @@ Load next step: `{nextStepFile}`
 ### ✅ SUCCESS:
 
 - Step completed in full with required outputs
+- Gate target, `run_scope`, and `run_key` resolved before the first save, persisted in the frontmatter, and the output written to the path they name
+- Any pre-existing output for this scope was reported to the user and either resumed or replaced
 
 ### ❌ SYSTEM FAILURE:
 
 - Skipped sequence steps or missing outputs
+- Saving progress before run identity is resolved, or writing to an output path that carries no run identity
+- Appending this run's progress to an output left by a previous run, or reading or writing another scope's output
   **Master Rule:** Skipping steps is FORBIDDEN.

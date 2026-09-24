@@ -1,7 +1,7 @@
 ---
 name: 'step-03c-aggregate'
 description: 'Aggregate subagent outputs and complete test infrastructure'
-outputFile: '{test_artifacts}/automation-summary.md'
+outputFile: '{test_artifacts}/automate/automation-summary-{run_key}.md'
 nextStepFile: '{skill-root}/steps-c/step-04-validate-and-summarize.md'
 ---
 
@@ -457,6 +457,9 @@ Proceed to Step 4 when:
 
   ```yaml
   ---
+  runScope: '{run_scope}'
+  runKey: '{run_key}'
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03c-aggregate']
   lastStep: 'step-03c-aggregate'
   lastSaved: '{date}'
@@ -465,7 +468,9 @@ Proceed to Step 4 when:
 
   Then write this step's output below the frontmatter.
 
-- **If `{outputFile}` already exists**, update:
+- **If `{outputFile}` already exists** (written earlier in this same run), update:
+  - Leave `runScope` and `runKey` exactly as step 1 wrote them
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03c-aggregate'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03c-aggregate'`
   - Set `lastSaved: '{date}'`

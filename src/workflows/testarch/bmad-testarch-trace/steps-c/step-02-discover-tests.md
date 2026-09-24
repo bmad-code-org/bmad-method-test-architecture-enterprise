@@ -2,7 +2,7 @@
 name: 'step-02-discover-tests'
 description: 'Discover and catalog tests by level'
 nextStepFile: '{skill-root}/steps-c/step-03-map-criteria.md'
-outputFile: '{test_artifacts}/traceability-matrix.md'
+outputFile: '{test_artifacts}/trace/traceability-matrix-{run_key}.md'
 ---
 
 # Step 2: Discover & Catalog Tests
@@ -256,27 +256,17 @@ Record these findings in step output as `coverage_heuristics` for Step 3/4.
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-- **If `{outputFile}` does not exist** (first save), create it using the workflow template (if available) with YAML frontmatter:
+`{outputFile}` is this run's file: Step 1 created it for this `run_key`, or Resume selected it after checking its `runKey`. If it is missing, this run has lost its output: **halt** and ask the user to start a fresh run with **[C] Create**.
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-02-discover-tests']
-  lastStep: 'step-02-discover-tests'
-  lastSaved: '{date}'
-  collectionStatus: '{resolved collectionStatus}'
-  sourceSha: '{resolved currentSourceSha}'
-  ---
-  ```
+Update it in place:
 
-  Then write this step's output below the frontmatter.
-
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-02-discover-tests'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-02-discover-tests'`
-  - Set `lastSaved: '{date}'`
-  - Set `collectionStatus` to the value resolved in section 1b
-  - Set `sourceSha` to the resolved `currentSourceSha` (empty string when unresolvable)
-  - Append this step's output to the appropriate section of the document.
+- Add `'step-02-discover-tests'` to `stepsCompleted` array (only if not already present)
+- Set `lastStep: 'step-02-discover-tests'`
+- Set `lastSaved: '{date}'`
+- Set `collectionStatus` to the value resolved in section 1b
+- Set `sourceSha` to the resolved `currentSourceSha` (empty string when unresolvable)
+- Keep `runScope`, `runKey`, `targetType`, `targetId`, and `targetLabel` unchanged
+- Append this step's output to the appropriate section of the document. Appending is safe because the file holds only this run's work.
 
 Load next step: `{nextStepFile}`
 
