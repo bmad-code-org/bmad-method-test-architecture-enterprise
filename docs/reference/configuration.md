@@ -458,7 +458,7 @@ document_output_language: english
 
 Earlier releases also declared three FUTURE output-folder keys: `test_design_output`, `test_review_output`, and `trace_output`. No workflow ever read them, and they are removed. Every workflow now writes to a fixed folder of its own, described in [Output Layout](#output-layout).
 
-Wiring the three keys was turned down for two reasons. First, the installer cannot carry them reliably. It fills `{test_artifacts}` inside a `result:` template from the raw install answer, so the key is saved as a relative path without `{project-root}`, and an unattended `--yes` install skips the key altogether. Upstream BMAD's main branch has since dropped `result:` processing. Second, a configurable folder per workflow multiplies the places every workflow that reads another workflow's output has to search.
+Wiring the three keys was turned down for two reasons. First, the installer cannot carry them reliably. It fills `{test_artifacts}` inside a `result:` template from the raw install answer, so the key is saved as a relative path without `{project-root}`. Upstream BMAD's main branch has since dropped `result:` processing. Second, a configurable folder per workflow multiplies the places every workflow that reads another workflow's output has to search.
 
 A `_bmad/tea/config.yaml` written by an earlier install can still carry the three keys. Nothing reads them, so they are safe to delete.
 
@@ -466,7 +466,9 @@ A `_bmad/tea/config.yaml` written by an earlier install can still carry the thre
 
 ## Output Layout
 
-Outputs currently land in one folder per workflow under `{test_artifacts}`, named after the workflow's skill without its `bmad-testarch-` prefix: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`. The folder names are fixed, and no configuration key moves them. `teach-me-testing` keeps its per-learner folders, and Evaluate writes under [`tea_evaluations_folder`](#tea_evaluations_folder).
+Outputs land in one folder per workflow under `{test_artifacts}`, named after the workflow's skill without its `bmad-testarch-` prefix: `test-design/`, `atdd/`, `automate/`, `test-review/`, `nfr/`, `trace/`, `ci/`, and `framework/`. The folder names are fixed, and no configuration key moves them. `teach-me-testing` keeps its per-learner folders, and Evaluate writes under [`tea_evaluations_folder`](#tea_evaluations_folder).
+
+Earlier releases wrote every output flat into the root of `{test_artifacts}` with fixed names. That layout was a placeholder carried over from the module migration. Per-workflow folders with scoped file names are the recommended layout at any project size, from one story to a monorepo with dozens of epics. Commit the outputs to version control to keep a history per scope: each scope's files change only when that scope is re-run.
 
 A file produced once per scope carries that scope's `run_key` in its name, so a trace run for epic 16 never opens, rewrites, or appends to epic 15's matrix or gate decision. A file that exists once per project keeps a plain name: `test-design-architecture.md`, `test-design-qa.md`, `{project_name}-handoff.md`, `ci-pipeline-progress.md`, and `framework-setup-progress.md`.
 
@@ -516,7 +518,7 @@ A workflow resolves the scope in this order:
 
 1. The scope you name when you invoke it ("run trace for epic 16").
 2. The scope the loaded artifacts carry: a story file name, an epic document's metadata, heading, or filename, or trace's `gate_type` and its id.
-3. When several candidates remain, an interactive run lists them, asks which one this run covers, and waits. A headless or autonomous run never asks: it uses `system`, or `target-{slug}` where a target applies, and says so in its output.
+3. When several candidates remain, an interactive run lists them, asks which one this run covers, and waits. A headless or autonomous run never asks: it uses `system`, or `target-{slug}` where a target applies, and says so in its output. The one exception is a `test-design` epic plan, which has no system-level fallback: a headless epic-level run whose epic stays ambiguous halts with a message naming the candidate epics.
 
 `atdd` runs once per story, so its checklist is named by `story_key` directly. `test-design` uses `system` or `epic-{epic_num}`.
 
@@ -527,12 +529,12 @@ A run reads and writes only its own `run_key`'s files. Files for other scopes ar
 When a file for the same `run_key` already exists:
 
 - **No file:** a fresh run.
-- **An earlier run of this scope was interrupted** (the file is marked in progress): an interactive run asks whether to resume or start over, and a headless run starts over.
+- **An earlier run of this scope was interrupted** (the file is marked in progress): an interactive run asks whether to resume or start over, and a headless or autonomous run starts over.
 - **An earlier run of this scope finished:** the new run replaces the file entirely.
 
 Two runs are never merged into one file. A file grows only while the run that created it is still adding its later sections. To keep an earlier result for the same scope, commit or copy it before you re-run. A `trace` run that evaluates no gate also removes an earlier `gate-decision-{run_key}.json` for the same `run_key`, so the folder never pairs a new summary with a stale decision.
 
-`ci` and `framework` scaffold once per project, so each keeps one fixed checkpoint in its folder and resumes it the same way.
+`ci` and `framework` scaffold once per project, so each keeps one fixed checkpoint in its folder with no `run_key` in its name. The same three cases apply to that checkpoint, and a new run never merges into it.
 
 ### Files From Earlier TEA Versions
 
@@ -540,7 +542,11 @@ Earlier TEA versions wrote everything flat under `{test_artifacts}` with fixed n
 
 - New runs never treat an old flat file as their own output, so they never rewrite it or append to it.
 - Workflows that read another workflow's output look in the producing workflow's folder first, then at the old root location, and name both. For example, `nfr-assess` looks for test-design documents in `test-design/` and then at the root of `{test_artifacts}`, and `automate` looks for ATDD checklists in `atdd/` and then at the root.
-- Resume picks up an in-progress file at its old path. It asks which scope the file covers, writes it to the new scoped path with `runScope` and `runKey` added, deletes the old file, and continues. `test-design` checkpoints that already carry a `runKey` (`test-design-progress-{run_key}.md` at the root) move into `test-design/` unchanged. `ci` and `framework` move their root checkpoint into their folder.
+- Resume migrates an old file only while it is still in progress. A completed flat file stays where it is.
+  Resume first resolves the file's scope. `atdd` recovers the story from the checklist's `storyKey`, a `test-design` checkpoint that already carries a `runKey` (`test-design-progress-{run_key}.md` at the root) keeps it, and for any other old file Resume asks which scope it covers.
+  It then writes the file into the workflow's folder under its scoped name with `runScope` and `runKey` added, deletes the old copy, and continues.
+  It never writes over a scoped file that already exists for the same scope.
+  `ci` and `framework` have no scope to resolve, so they move their root checkpoint into their folder under the same rules.
 
 Once nothing you run still reads an old file, archive or delete it.
 
@@ -560,19 +566,20 @@ CI jobs, dashboards, and scripts that read TEA's old flat paths need the new one
 | `test-design-architecture.md`, `test-design-qa.md`                   | `test-design/test-design-architecture.md`, `test-design/test-design-qa.md` |
 | `test-design-epic-{epic_num}.md`                                     | `test-design/test-design-epic-{epic_num}.md`                               |
 | `test-design-progress-{run_key}.md`                                  | `test-design/test-design-progress-{run_key}.md`                            |
+| `test-design-progress.md`                                            | `test-design/test-design-progress-{run_key}.md` (after Resume migrates it) |
 | `ci-pipeline-progress.md`                                            | `ci/ci-pipeline-progress.md`                                               |
 | `framework-setup-progress.md`                                        | `framework/framework-setup-progress.md`                                    |
 | `{workflow}-validation-report-{validation_scope}-{run_timestamp}.md` | the same name inside the workflow's folder                                 |
 
-A job that gates one scope reads that scope's file, for example `trace/gate-decision-epic-16.json` or `trace/gate-decision-release-v1-2-0.json`. A job that wants the latest gate of any scope globs `trace/gate-decision-*.json` and picks the file with the newest `evaluated_at`; the `target` field in each file names the scope it covers.
+A job that gates one scope reads that scope's file, for example `trace/gate-decision-epic-16.json` or `trace/gate-decision-release-v1-2-0.json`. A job that wants the latest gate of any scope globs `trace/gate-decision-*.json` and picks the file with the newest `evaluated_at`. The `run_key` in each file name identifies the scope, and the `target` field inside gives the gate type and target id.
 
-The `tea-test-review` CLI is unaffected: it passes its own `--output` path (default `test-review.md` in the working directory) as `output_file_override`, which replaces the workflow's default path.
+The `tea-test-review` CLI is unaffected: it passes its own `--output` path (default `test-review.md`, resolved under `--project-root`, which defaults to the working directory) as `output_file_override`, which replaces the workflow's default path.
 
 ### Rebinding `{test_artifacts}` From a Customization
 
 Before this layout existed, some projects got per-workflow folders with an `activation_steps_append` rule in `_bmad/custom/bmad-testarch-*.toml` that rebinds `{test_artifacts}` to a subfolder before the first step runs. Remove that rule when you upgrade. Each workflow already appends its own folder, so a rebound `{test_artifacts}` nests a second level, such as `test-artifacts/traceability/trace/`.
 
-The rule was fragile even before, because `{test_artifacts}` also locates files that are shared across workflows and live at its root. `trace` reads its optional inputs `live-verification-results.json` and `gate-waivers.md` from `{test_artifacts}`, and the workflows that read another workflow's output (`nfr-assess` and `automate` looking for test-design documents, `trace` looking for test reviews and NFR assessments) resolve those paths through the same variable. A rebound value points each of those reads into a subfolder, where it finds nothing and the run proceeds as if the input never existed.
+The rule was fragile even before, because `{test_artifacts}` also locates files that are shared across workflows and live at its root. `trace` reads its optional inputs `live-verification-results.json` and `gate-waivers.md` from `{test_artifacts}`, and the workflows that read another workflow's output (`nfr-assess`, `automate`, and `trace` looking for test-design documents, `automate` looking for ATDD checklists, and `trace` looking for the NFR audit) resolve those paths through the same variable. A rebound value points each of those reads into a subfolder, where it finds nothing and the run proceeds as if the input never existed.
 
 ### Validation Report History
 

@@ -81,6 +81,7 @@ TEA will first look for the best available coverage oracle.
 **Example Response:**
 
 ```text
+Run trace for epic 1.
 Coverage sources:
 - story-profile-management.md (acceptance criteria)
 - test-design/test-design-epic-1.md (test priorities)
@@ -124,7 +125,7 @@ Focus on:
 
 TEA generates a comprehensive traceability matrix.
 
-Every trace output lands in `{test_artifacts}/trace/` and carries the run's scope in its name: `epic-1` here, `story-{story_key}` for one story, `release-{slug}` or `hotfix-{slug}` for a release or hotfix gate, and `system` for the whole project. A run for epic 2 writes its own files and never opens epic 1's. Re-running the same scope replaces that scope's files. See [Output Layout](/docs/reference/configuration.md#output-layout) for the full rules.
+Every trace output lands in `{test_artifacts}/trace/` and carries the run's scope in its name: `epic-1` for this epic 1 run, `story-{story_key}` for one story, `release-{slug}` or `hotfix-{slug}` for a release or hotfix gate, and `system` for the whole project. A run for epic 2 writes its own files and never opens epic 1's. Re-running the same scope replaces that scope's files. See [Output Layout](/docs/reference/configuration.md#output-layout) for the full rules.
 
 #### Traceability Matrix (`trace/traceability-matrix-epic-1.md`):
 
@@ -426,7 +427,7 @@ TEA will ask for:
 
 **Decision Mode:**
 
-- **Deterministic** - Rule-based (coverage %, quality scores)
+- **Deterministic** - Rule-based (coverage thresholds)
 - **Manual** - Team decision with TEA guidance
 
 **Example:**
@@ -438,7 +439,7 @@ Decision mode: Deterministic
 
 ### 9. Provide Supporting Evidence
 
-TEA will request:
+TEA loads these inputs itself when they exist. Name a different file when yours lives elsewhere.
 
 **Phase 1 Results:**
 
@@ -446,17 +447,28 @@ TEA will request:
 trace/traceability-matrix-epic-1.md (from Phase 1)
 ```
 
-**Test Quality (Optional):**
+**Test Design (Optional):**
 
 ```text
-test-review/test-review-epic-1.md (from test-review)
+test-design/test-design-epic-1.md (from test-design)
 ```
+
+A story-level run uses its epic's plan, and a system-level run uses `test-design/test-design-architecture.md` and `test-design/test-design-qa.md`.
 
 **NFR Evidence Audit (Optional):**
 
 ```text
 nfr/nfr-assessment-epic-1.md (from nfr-assess)
 ```
+
+TEA takes the first NFR audit it finds, in this order:
+
+1. `nfr/nfr-assessment-{run_key}.md`, the audit for this run's own scope.
+2. For a story, its epic's `nfr/nfr-assessment-epic-{epic_num}.md`.
+3. `nfr/nfr-assessment-system.md`.
+4. `nfr-assessment.md` at the root of `{test_artifacts}`, written by TEA versions before the `nfr/` folder.
+
+Test-review reports are a separate quality record, and trace does not read them.
 
 ### 10. Review Gate Decision
 
@@ -483,7 +495,6 @@ TEA makes an evidence-based gate decision and writes it into the Phase 2 section
 - P0 coverage: 100% (5/5 requirements)
 - P1 coverage: 100% (6/6 requirements)
 - P2 coverage: 33% (1/3 requirements) - acceptable
-- Test quality score: 84/100
 - NFR evidence audit: PASS
 
 ## Coverage Analysis
@@ -503,11 +514,10 @@ TEA makes an evidence-based gate decision and writes it into the Phase 2 section
 
 ## Quality Metrics
 
-| Metric             | Threshold        | Actual      | Status |
-| ------------------ | ---------------- | ----------- | ------ |
-| P0/P1 Coverage     | P0=100%, P1>=90% | 100% / 100% | ✅     |
-| Test Quality Score | >80              | 84          | ✅     |
-| NFR Status         | PASS             | PASS        | ✅     |
+| Metric         | Threshold        | Actual      | Status |
+| -------------- | ---------------- | ----------- | ------ |
+| P0/P1 Coverage | P0=100%, P1>=90% | 100% / 100% | ✅     |
+| NFR Status     | PASS             | PASS        | ✅     |
 
 ## Risks and Mitigations
 
@@ -961,7 +971,7 @@ Result: PARTIAL coverage (3/4 criteria)
 ## Related Guides
 
 - [How to Run Test Design](/docs/how-to/workflows/run-test-design.md) - Provides requirements for traceability
-- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - Quality scores feed gate
+- [How to Run Test Review](/docs/how-to/workflows/run-test-review.md) - Test quality audit, a separate record from the gate
 - [How to Run NFR Evidence Audit](/docs/how-to/workflows/run-nfr-assess.md) - NFR status feeds gate
 
 ## Understanding the Concepts

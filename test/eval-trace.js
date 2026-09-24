@@ -202,7 +202,7 @@ const {
 } = require('./lib/eval-record');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
-const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
+const { workingTreeState, workingTreeChanges, misplacedDeliverables, misplacedEvidence } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const {
   createProbePort,
@@ -275,6 +275,30 @@ function epicNumOf(set) {
 }
 
 /**
+ * The first ATX H1 of a markdown document outside fenced code blocks, or '' when it
+ * has none. `#` has to be followed by a space or tab on the same line, so a `#!`
+ * shebang or a `#` comment inside a fence never counts.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function firstH1(text) {
+  let fence = null;
+  for (const line of text.split(/\r?\n/)) {
+    const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+    if (marker) {
+      if (fence === null) fence = marker[0];
+      else if (marker[0] === fence) fence = null;
+      continue;
+    }
+    if (fence !== null) continue;
+    const heading = /^#[ \t]+(.*)$/.exec(line);
+    if (heading) return heading[1];
+  }
+  return '';
+}
+
+/**
  * The run key step-01 section 4 resolves for a set: the prompt states
  * `gate_type` `epic` and points the run at the one epic under `docs/epics/`, so
  * the key is `epic-{epic_num}`.
@@ -283,7 +307,13 @@ function epicNumOf(set) {
  * @returns {string}
  */
 function runKeyOf(set) {
-  return `epic-${epicNumOf(set)}`;
+  const epicNum = epicNumOf(set);
+  if (epicNum === null) {
+    throw new Error(
+      `runKeyOf: set ${set.id ?? '(unnamed)'} has no epic number; its oracle document ${JSON.stringify(set.oracle?.document ?? null)} must be named epic-<n>-*.md`,
+    );
+  }
+  return `epic-${epicNum}`;
 }
 
 /**
@@ -1008,7 +1038,7 @@ async function validateCorpus(groundTruth) {
     } else {
       // Absence is already reported by the declaration loop above.
       const epic = await readText(path.join(FIXTURE_ROOT, set.oracle.document));
-      const heading = epic.present ? (/^#\s+(.*)$/m.exec(epic.text)?.[1] ?? '') : null;
+      const heading = epic.present ? firstH1(epic.text) : null;
       if (heading !== null && !new RegExp(`^Epic ${epicNum}:`).test(heading)) {
         problems.push(`${label}: oracle.document's H1 "${heading}" does not state Epic ${epicNum}, the number its file name carries`);
       }
@@ -1914,7 +1944,9 @@ function scoreRunMetadata(summary, set) {
   return [
     check('decision_mode', 'deterministic', summary.decision_mode),
     check('target.type', 'epic', summary.target?.type),
-    check('target.id', epicNumOf(set), summary.target?.id),
+    // step-01 writes the id as the epic's number, and a JSON number and its string
+    // both name the same epic, so the comparison is on the string form.
+    check('target.id', epicNumOf(set), String(summary.target?.id ?? '')),
     check('links.trace_report_path', traceReportPathOf(set), links.trace_report_path),
     check('links.trace_report_url', '', links.trace_report_url),
     check('links.artifact_url', '', links.artifact_url),
@@ -2281,6 +2313,43 @@ function runnerOptions(options) {
   return option;
 }
 
+/** The matrix a run that wrote none is scored against: no section for any criterion. */
+const EMPTY_MATRIX = Object.freeze({ byCriterion: new Map(), invented: [], duplicates: [] });
+
+/**
+ * The outcome of a run that wrote its deliverables under another run key: scored
+ * as a run that delivered nothing at the path the prompt resolved, so every metric
+ * reads the miss, with the files it did write named in the reason and the evidence.
+ *
+ * @param {string[]} misplaced File names found in the workflow's output folder.
+ * @param {object} scored scoreRun over the empty deliverable.
+ * @param {number} mutations What corpusMutations counted for the run.
+ */
+function misplacedRun(misplaced, scored, mutations) {
+  const { reason, evidence } = misplacedEvidence('test-artifacts/trace', misplaced);
+  return { ok: true, scored, mutations, misplaced: reason, artifactEvidence: evidence };
+}
+
+/**
+ * Corpus files the run changed or removed, plus files it added outside
+ * `test-artifacts/` and `_bmad/`. The workflow states that it does not generate
+ * tests, so a run that wrote one has moved the benchmark, and the next run would
+ * be measured against a corpus this one edited. Null counts as a mutation rather
+ * than as equality with anything: a member that stopped resolving is a corpus file
+ * the run removed.
+ */
+async function corpusMutations(workspace) {
+  const afterRun = await digestTree(workspace.projectDir, workspace.corpusFiles);
+  const changed = afterRun !== null && afterRun === workspace.corpusDigest ? 0 : 1;
+  const added = filesUnder(workspace.projectDir).filter(
+    (relative) =>
+      !relative.startsWith(`test-artifacts${path.sep}`) &&
+      !relative.startsWith(`_bmad${path.sep}`) &&
+      !workspace.corpusFiles.includes(relative),
+  );
+  return changed + added.length;
+}
+
 /**
  * One complete trace run of one fixture set in a fresh workspace, through
  * eval-quality's command-line adapter.
@@ -2360,6 +2429,25 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
       };
     }
 
+    // Both deliverables absent while the trace folder holds the same pair under
+    // another run key is a run that resolved the wrong scope. That is the run's
+    // answer, so it is scored as a run that delivered nothing where the prompt
+    // pointed it, and the file it did write is named.
+    const outputs = traceOutputsOf(set);
+    if (
+      observation.artifacts.summary?.kind === 'absent' &&
+      (!observation.artifacts.matrix || observation.artifacts.matrix.kind === 'absent')
+    ) {
+      const misplaced = misplacedDeliverables(
+        path.join(workspace.projectDir, 'test-artifacts', 'trace'),
+        /^(?:e2e-trace-summary-.+\.json|traceability-matrix-.+\.md)$/,
+        [path.basename(outputs.summary), path.basename(outputs.matrix)],
+      );
+      if (misplaced.length > 0) {
+        return misplacedRun(misplaced, scoreRun(set, {}, EMPTY_MATRIX, tolerance, pctTolerance), await corpusMutations(workspace));
+      }
+    }
+
     const summary = summaryFromArtifact(observation.artifacts.summary);
     if (!summary.ok) return summary;
 
@@ -2378,25 +2466,13 @@ async function runCase(set, options, agent, runIndex, tolerance, pctTolerance) {
       };
     }
 
-    // The workflow states that it does not generate tests. A run that wrote one has
-    // moved the benchmark, and the next run would be measured against a corpus this
-    // one edited.
-    // Null counts as a mutation rather than as equality with anything: a member
-    // that stopped resolving is a corpus file the run removed.
-    const afterRun = await digestTree(workspace.projectDir, workspace.corpusFiles);
-    const mutations = afterRun !== null && afterRun === workspace.corpusDigest ? 0 : 1;
-    const added = filesUnder(workspace.projectDir).filter(
-      (relative) =>
-        !relative.startsWith(`test-artifacts${path.sep}`) &&
-        !relative.startsWith(`_bmad${path.sep}`) &&
-        !workspace.corpusFiles.includes(relative),
-    );
+    const mutations = await corpusMutations(workspace);
 
     const paths = traceArtifactPaths(set);
     return {
       ok: true,
       scored: scoreRun(set, summary.summary, matrix, tolerance, pctTolerance),
-      mutations: mutations + added.length,
+      mutations,
       artifactEvidence: [...artifactEvidence(paths.summary, summary.summary), ...artifactEvidence(paths.matrix, matrixArtifact.value)],
     };
   } finally {
@@ -2714,6 +2790,7 @@ async function main() {
           );
           continue;
         }
+        if (outcome.misplaced) console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.misplaced}${colors.reset}`);
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
         const signature = signatureOf(outcome.scored, outcome.mutations);

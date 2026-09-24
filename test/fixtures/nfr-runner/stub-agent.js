@@ -27,6 +27,9 @@
  *   nothing   exit 0 without writing the report, so the caller reads `absent`
  *   fail      exits 3 without writing, so the runner reports environment-transport
  *   delete    write the report, remove one evidence file, exit 0
+ *   wrong-key write the report under `epic-1` in place of `system`, so the harness
+ *             finds its own path absent and the report beside it, and scores the run
+ *             as a behavior failure
  *
  * A real vendor CLI answers --version, and every harness pre-flight probes for it
  * before it will run anything. Answering it here is what lets the runner be driven
@@ -84,7 +87,7 @@ const source = path.join(__dirname, '..', '..', 'replay', 'nfr', `${bundle}-corr
 const artifactsDir = path.join(projectRoot, 'test-artifacts', 'nfr');
 fs.mkdirSync(artifactsDir, { recursive: true });
 
-const reportPath = path.join(artifactsDir, 'nfr-assessment-system.md');
+const reportPath = path.join(artifactsDir, mode === 'wrong-key' ? 'nfr-assessment-epic-1.md' : 'nfr-assessment-system.md');
 fs.copyFileSync(source, reportPath);
 
 // The one thing the workflow says it never does. An NFR run audits evidence and

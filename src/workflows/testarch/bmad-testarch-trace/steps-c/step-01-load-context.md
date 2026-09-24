@@ -115,7 +115,8 @@ The fragment list for this step is a closed set. Start empty and add every fragm
 If available:
 
 - Story file and acceptance criteria
-- Test design doc (priorities) from `{test_artifacts}/test-design/`: `test-design-epic-{epic_num}.md` for an epic, or `test-design-architecture.md` and `test-design-qa.md` at system level. Fall back to the same names at the legacy root `{test_artifacts}/`, where runs before the `test-design/` folder wrote them.
+- Test design doc (priorities) from `{test_artifacts}/test-design/`, chosen by the target this invocation or the loaded artifacts name (the same target section 4 resolves): `test-design-epic-{epic_num}.md` for an epic; for a story, its epic's plan `test-design-epic-{epic_num}.md`, with the epic number taken from the story id (story `1.2` belongs to epic `1`); `test-design-architecture.md` and `test-design-qa.md` at system level. Fall back to the same names at the legacy root `{test_artifacts}/`, where runs before the `test-design/` folder wrote them.
+- NFR evidence audit, chosen by the same target. Use the first file that exists: `{test_artifacts}/nfr/nfr-assessment-{run_key}.md` for the target's own scope (`story-{story_key}` or `epic-{epic_num}`, keyed as section 4 describes); for a story, its epic's audit `{test_artifacts}/nfr/nfr-assessment-epic-{epic_num}.md`; `{test_artifacts}/nfr/nfr-assessment-system.md`; then the legacy root `{test_artifacts}/nfr-assessment.md`. Name the file used.
 - Tech spec / PRD
 - OpenAPI or similar contract/spec files
 - Placeholder files that reference external requirements systems

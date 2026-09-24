@@ -1,4 +1,9 @@
 ---
+runScope: 'epic'
+runKey: 'epic-5'
+targetType: 'epic'
+targetId: '5'
+targetLabel: 'Epic 5: API Token Lifecycle'
 workflowType: 'testarch-trace'
 stepsCompleted: ['step-01-load-context', 'step-02-discover-tests', 'step-03-map-criteria', 'step-04-analyze-gaps', 'step-05-gate-decision']
 coverageBasis: 'acceptance_criteria'

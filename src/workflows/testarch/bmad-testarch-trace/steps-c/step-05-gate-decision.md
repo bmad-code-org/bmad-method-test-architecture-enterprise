@@ -816,7 +816,12 @@ The report replaces the working notes Steps 1 to 4 of this run accumulated below
 ```javascript
 // `reportContent` is the rendered report body, without a frontmatter block of its own.
 const existingDoc = fs.readFileSync('{outputFile}', 'utf8');
-const existingFrontmatter = (existingDoc.match(/^---\n[\s\S]*?\n---\n/) || [''])[0];
+const existingFrontmatter = existingDoc.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n/)?.[0];
+if (!existingFrontmatter) {
+  throw new Error(
+    'TRACE ERROR: {outputFile} has no frontmatter from Step 1; re-run from Step 1 so the matrix carries runScope, runKey, and the gate target.',
+  );
+}
 fs.writeFileSync('{outputFile}', `${existingFrontmatter}\n${reportContent}`, 'utf8');
 ```
 

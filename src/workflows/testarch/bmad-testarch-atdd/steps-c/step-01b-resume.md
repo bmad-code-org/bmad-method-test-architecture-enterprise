@@ -41,9 +41,9 @@ Resume an interrupted workflow by selecting the checklist that belongs to the st
 Each run writes its own checklist at `{outputFile}`, and its `run_key` is `story-{story_key}`. Build the candidate list:
 
 1. List every file matching `{progressGlob}`.
-2. Also list every file matching `{legacyProgressGlob}`. Runs from before ATDD checklists moved into the `atdd/` folder wrote to the `{test_artifacts}/` root under the same file name, so a named story's legacy checklist is `{legacyOutputFile}`.
+2. Also list every file matching `{legacyProgressGlob}`. Runs from before ATDD checklists moved into the `atdd/` folder wrote to the `{test_artifacts}/` root under the same file name, so a named story's legacy checklist is `{legacyOutputFile}`. A legacy root checklist is a candidate only while it is in progress: read its `workflowStatus`, or infer it from `lastStep` as section 2 describes when the field is absent. A completed legacy checklist stays where it is and is never moved or deleted.
 
-Identify each candidate's story by its frontmatter `storyKey`, falling back to the `{story_key}` part of its file name. If a folder checklist and a legacy root checklist name the same story, the folder checklist is the candidate; leave the legacy file untouched and mention that it exists.
+Identify each candidate's story by its frontmatter `storyKey`, falling back to the `{story_key}` part of its file name. If a folder checklist and an in-progress legacy root checklist name the same story, they form one candidate for that story. Selecting it selects the legacy checklist, so the legacy checklist migration in section 2 asks which file to keep.
 
 Then select one:
 
@@ -75,8 +75,9 @@ Read the selected checklist and parse YAML frontmatter for:
 
 1. Set `story_key` to the checklist's `storyKey`, or to the `{story_key}` part of its file name when `storyKey` is absent. If the user named a story and it differs, apply the run identity check above and halt.
 2. Set `run_scope` to `story` and `run_key` to `story-{story_key}`.
-3. Create the `{test_artifacts}/atdd/` folder if it does not exist, and write the checklist's content to `{outputFile}` with `runScope` and `runKey` added to its frontmatter and `atddChecklistPath` set to `{outputFile}`.
-4. If the checklist came from the legacy root, delete the legacy file. Continue from the migrated file.
+3. If the checklist came from the legacy root and `{outputFile}` already exists for that story, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder checklist deletes the legacy file and continues from `{outputFile}`; keeping the legacy checklist continues with item 4. A headless run keeps the folder checklist, leaves the legacy file untouched, and says so.
+4. Create the `{test_artifacts}/atdd/` folder if it does not exist, and write the checklist's content to `{outputFile}` with `runScope` and `runKey` added to its frontmatter and `atddChecklistPath` set to `{outputFile}`.
+5. If the checklist came from the legacy root, delete the legacy file only after that write succeeds. Continue from the migrated file.
 
 If `workflowStatus` is missing (legacy checklist), infer it from `lastStep`: `'step-05-validate-and-complete'` means `completed`; any other known step means `in-progress`.
 

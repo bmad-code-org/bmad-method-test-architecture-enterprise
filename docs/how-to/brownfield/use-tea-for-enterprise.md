@@ -127,7 +127,7 @@ Per epic:
 
 **2. Final quality audit.** Run `/bmad-testarch-test-review` over the full suite, answering `tests/` for scope. Enterprise quality target: above 85.
 
-**3. Gate decision.** Run `/bmad-testarch-trace` Phase 2. It needs the Phase 1 matrix from `trace/`, the quality audit from `test-review/`, the NFR evidence audit from `nfr/`, and actual test execution results. Without execution results, Phase 2 is skipped. The decision is PASS, CONCERNS, FAIL, or WAIVED.
+**3. Gate decision.** Run `/bmad-testarch-trace` Phase 2. It reads the Phase 1 matrix from `trace/`, the test-design documents from `test-design/`, the NFR evidence audit from `nfr/`, and actual test execution results. The quality audit from step 2 goes into the release record beside the gate decision; trace does not read it. Without execution results, Phase 2 is skipped. The decision is PASS, CONCERNS, FAIL, or WAIVED.
 
 **4. Archive for audit.** Keep all test results, coverage reports, NFR evidence audits, gate decisions, and approver signatures for as long as your compliance regime requires (7 years for HIPAA).
 
@@ -150,7 +150,7 @@ Per epic:
 ```text
 compliance/
 ├── 2026-Q1/
-│   ├── release-1.2.0/
+│   ├── release-v1.2.0/
 │   │   ├── trace/
 │   │   │   ├── traceability-matrix-release-v1-2-0.md
 │   │   │   ├── e2e-trace-summary-release-v1-2-0.json

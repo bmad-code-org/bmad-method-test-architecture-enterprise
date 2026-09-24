@@ -199,7 +199,9 @@ If you see orphaned browser processes:
 # List active sessions
 playwright-cli list
 
-# Close a specific session (TEA names each one tea-<workflow>-<run_key>)
+# Close a specific session. TEA names each one tea-<workflow>-<run_key>;
+# atdd and automate add a timestamp suffix, and ci and framework,
+# which have no run_key, use tea-<workflow>-<timestamp>.
 playwright-cli -s=tea-test-design-epic-3 close
 
 # Emergency cleanup (kills ALL sessions -- use only manually)

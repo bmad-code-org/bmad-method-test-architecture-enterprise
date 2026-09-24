@@ -290,13 +290,57 @@ exports.ELEVEN_WIRED_ONE_FUTURE = wiredKeys.length === 11 && !wiredKeys.some(key
  * and `gate-waivers.md`, whose published contract is the root of
  * `{test_artifacts}`), and a frontmatter key starting with `legacy` (the flat
  * pre-folder path a resume step migrates from).
+ *
+ * A step body can name a write target too, for example a screenshot's
+ * `--filename={test_artifacts}/<file>.png`, so every `{test_artifacts}/<file>.<ext>`
+ * that sits flat at the root in a step body is a misplaced output as well.
+ * A body line that marks the path as an older location (legacy, pre-folder,
+ * pre-scoping, or written by older TEA versions) names a place to read from,
+ * and trace's two root inputs keep their published root location, so both
+ * are left out.
  */
-function frontmatterOf(text) {
-  if (!text.startsWith('---\n')) return {};
-  const end = text.indexOf('\n---', 4);
-  if (end === -1) return {};
-  const parsed = yaml.parse(text.slice(4, end));
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
+
+function frontmatterOf(text, file = '(unnamed file)') {
+  const match = FRONTMATTER.exec(text);
+  if (match === null) return {};
+  let parsed;
+  try {
+    parsed = yaml.parse(match[1]);
+  } catch (error) {
+    refuse(`${file} has frontmatter that is not valid YAML: ${error.message}`);
+  }
   return parsed !== null && typeof parsed === 'object' ? parsed : {};
+}
+
+function bodyOf(text) {
+  const match = FRONTMATTER.exec(text);
+  return match === null ? text : text.slice(match[0].length);
+}
+
+// A line naming an older location reads from it; it never writes there.
+const LEGACY_LINE = /legacy|pre-folder|pre-scoping|older TEA versions/i;
+// trace's workflow.yaml `*_input` files, whose published contract is the root of `{test_artifacts}`.
+const ROOT_INPUTS = new Set(['live-verification-results.json', 'gate-waivers.md']);
+const FLAT_TARGET = /\{test_artifacts\}\/([^/\s`'"()[\]]+\.[A-Za-z0-9]+)(?![^\s`'"()[\]]*\/)/g;
+
+function flatBodyTargets(skillDir) {
+  const found = [];
+  for (const stepsDir of ['steps-c', 'steps-e', 'steps-v']) {
+    const root = path.join(skillDir, stepsDir);
+    if (!fs.existsSync(root)) continue;
+    for (const name of fs.readdirSync(root).filter((each) => each.endsWith('.md'))) {
+      const lines = bodyOf(fs.readFileSync(path.join(root, name), 'utf8')).split(/\r?\n/);
+      for (const line of lines) {
+        if (LEGACY_LINE.test(line)) continue;
+        for (const match of line.matchAll(FLAT_TARGET)) {
+          if (ROOT_INPUTS.has(match[1])) continue;
+          found.push({ source: `${stepsDir}/${name}`, key: null, value: `{test_artifacts}/${match[1]}` });
+        }
+      }
+    }
+  }
+  return found;
 }
 
 function collectTestArtifactPaths(value, key, found) {
@@ -328,7 +372,8 @@ function declaredOutputPaths(skillDir) {
     const root = path.join(skillDir, stepsDir);
     if (!fs.existsSync(root)) continue;
     for (const name of fs.readdirSync(root).filter((each) => each.endsWith('.md'))) {
-      const frontmatter = frontmatterOf(fs.readFileSync(path.join(root, name), 'utf8'));
+      const file = path.join(root, name);
+      const frontmatter = frontmatterOf(fs.readFileSync(file, 'utf8'), file);
       for (const [key, value] of Object.entries(frontmatter)) {
         if (key.startsWith('legacy')) continue;
         if (typeof value === 'string' && value.startsWith('{test_artifacts}/')) found.push({ source: `${stepsDir}/${name}`, key, value });
@@ -345,9 +390,13 @@ function declaredOutputPaths(skillDir) {
  */
 function misplacedOutputs(skillDir) {
   const folder = path.basename(skillDir).replace(/^bmad-testarch-/, '');
-  return declaredOutputPaths(skillDir).filter((entry) => !entry.value.startsWith(`{test_artifacts}/${folder}/`));
+  return [
+    ...declaredOutputPaths(skillDir).filter((entry) => !entry.value.startsWith(`{test_artifacts}/${folder}/`)),
+    ...flatBodyTargets(skillDir),
+  ];
 }
 exports.declaredOutputPaths = declaredOutputPaths;
+exports.flatBodyTargets = flatBodyTargets;
 exports.misplacedOutputs = misplacedOutputs;
 
 // Evaluate is the one `bmad-testarch-*` skill that writes nowhere under
@@ -361,7 +410,7 @@ const layoutSkillDirs = fs
 if (layoutSkillDirs.length === 0) refuse(`${testarchRoot} has no bmad-testarch-* skill directories`);
 
 /**
- * configuration.md, "Outputs currently land in one folder per workflow": every
+ * configuration.md, "Outputs land in one folder per workflow": every
  * governed workflow declares at least one output path, and none of them sits
  * outside that workflow's own folder.
  */

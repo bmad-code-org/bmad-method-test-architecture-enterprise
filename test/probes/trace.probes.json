@@ -7,9 +7,9 @@
     "probeClass": "defect",
     "behaviorId": "B-001",
     "systemId": "tea-trace-seeded-tenant-data-export",
-    "implementationDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
-    "artifactDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
-    "commitDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
+    "implementationDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "artifactDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "commitDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
     "rationale": "AC-2 is P0 and its true coverage is NONE: Export is denied to a member without the admin role. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
     "qualification": {
       "route": "controlled-mutation",
@@ -19,7 +19,7 @@
         "storage": "public",
         "path": "test/fixtures/trace-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a"
+        "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
       },
       "expectedObservableFailure": "The traceability matrix classifies AC-2 as NONE and the summary counts it in the gap buckets.",
       "baselinePassEvidence": {
@@ -48,7 +48,7 @@
             "storage": "public",
             "path": "test/fixtures/trace-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a"
+            "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
           }
         ],
         "source": "controlled-mutation",
@@ -128,9 +128,9 @@
     "probeClass": "defect",
     "behaviorId": "B-001",
     "systemId": "tea-trace-seeded-tenant-data-export",
-    "implementationDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
-    "artifactDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
-    "commitDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
+    "implementationDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "artifactDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "commitDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
     "rationale": "AC-8 is P2 and its true coverage is PARTIAL: The audit log records the actor and the time of every export request. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
     "qualification": {
       "route": "controlled-mutation",
@@ -140,7 +140,7 @@
         "storage": "public",
         "path": "test/fixtures/trace-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a"
+        "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
       },
       "expectedObservableFailure": "The traceability matrix classifies AC-8 as PARTIAL and the summary counts it in the partial coverage items.",
       "baselinePassEvidence": {
@@ -169,7 +169,7 @@
             "storage": "public",
             "path": "test/fixtures/trace-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a"
+            "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
           }
         ],
         "source": "controlled-mutation",
@@ -249,9 +249,9 @@
     "probeClass": "defect",
     "behaviorId": "B-001",
     "systemId": "tea-trace-seeded-tenant-data-export",
-    "implementationDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
-    "artifactDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
-    "commitDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
+    "implementationDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "artifactDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "commitDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
     "rationale": "AC-10 is P3 and its true coverage is NONE: The archive filename carries the tenant slug and the request date. The gap is the plant, and O-001 is the oracle that has to see its consequence in the derived gate.",
     "qualification": {
       "route": "controlled-mutation",
@@ -261,7 +261,7 @@
         "storage": "public",
         "path": "test/fixtures/trace-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a"
+        "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
       },
       "expectedObservableFailure": "The traceability matrix classifies AC-10 as NONE and the summary counts it in the gap buckets.",
       "baselinePassEvidence": {
@@ -290,7 +290,7 @@
             "storage": "public",
             "path": "test/fixtures/trace-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a"
+            "digest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935"
           }
         ],
         "source": "controlled-mutation",
@@ -370,9 +370,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-016",
     "systemId": "tea-trace-clean-api-token-lifecycle",
-    "implementationDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
-    "artifactDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
-    "commitDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
+    "implementationDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "artifactDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
+    "commitDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
     "rationale": "clean-api-token-lifecycle has adequate evidence for all 5 of its criteria, so any gap the run reports is a false positive. It is the control that stops a trace suite scoring well by calling everything a gap.",
     "qualification": {
       "route": "clean-control",
@@ -382,7 +382,7 @@
         "privateRef": null,
         "digest": "sha256:11b17cf4979dcf3f360b46a8960ab7945285b0c0f53094e6796e9cb8c0189497"
       },
-      "revisionCommitDigest": "sha256:350ba6da9d9dc68ce34bd60efcb30462b6c5aec66d88d9ab27582e0cf236319a",
+      "revisionCommitDigest": "sha256:fe911f2778b667740ba72038923576507163dd097d12bf46e503c074281cf935",
       "noKnownDefectStatement": "Negative control. Every criterion has adequate evidence, so any reported gap is a false positive and the harness counts it as one."
     },
     "expectedClean": true,

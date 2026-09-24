@@ -325,13 +325,34 @@ async function testReviewEvidence(contract) {
 // ---------------------------------------------------------------------------
 
 /**
+ * The `storedOutput` block of one replay case's expected.json, refused with the
+ * case and the missing field named when it is absent or incomplete, so a
+ * malformed case fails as unreadable corpus rather than as a TypeError on
+ * `undefined`.
+ *
+ * @param {string} directory The replay case directory.
+ * @param {string[]} fields The paths the caller reads off the block.
+ */
+async function storedOutputOf(directory, fields) {
+  const expectedPath = path.join(directory, 'expected.json');
+  const { storedOutput } = await readJson(expectedPath);
+  const absent = fields.filter((field) => typeof storedOutput?.[field] !== 'string' || storedOutput[field].length === 0);
+  if (absent.length > 0) {
+    throw new Error(
+      `${path.relative(PROJECT_ROOT, expectedPath)} names no ${absent.map((field) => `storedOutput.${field}`).join(' and ')}, so the scoring corpus cannot be assembled`,
+    );
+  }
+  return storedOutput;
+}
+
+/**
  * The stored pair one trace replay case holds, at the paths its expected.json
  * names. The run key in both file names belongs to the case's fixture set, and
  * test/test-eval-replay.js holds storedOutput equal to the harness's own paths.
  */
 async function traceArtifacts(caseId) {
   const directory = path.join(REPLAY_ROOT, 'trace', caseId);
-  const { storedOutput } = await readJson(path.join(directory, 'expected.json'));
+  const storedOutput = await storedOutputOf(directory, ['summary', 'matrix']);
   return {
     summary: { kind: 'json', value: stripComment(await readJson(path.join(directory, storedOutput.summary))) },
     matrix: { kind: 'text', value: await readText(path.join(directory, storedOutput.matrix)) },
@@ -611,7 +632,7 @@ async function testDesignEvidence(contract) {
 /** The stored audit one evidence bundle produced, as the bytes on disk. */
 async function storedNfrReport(caseId) {
   const directory = path.join(REPLAY_ROOT, 'nfr', caseId);
-  const { storedOutput } = await readJson(path.join(directory, 'expected.json'));
+  const storedOutput = await storedOutputOf(directory, ['report']);
   return readText(path.join(directory, storedOutput.report));
 }
 

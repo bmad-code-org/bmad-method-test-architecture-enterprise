@@ -699,7 +699,7 @@ async function checkTraceProbe(runDir) {
       JSON.stringify(observation.artifacts.matrix).slice(0, 200),
     );
     assert(
-      observation.stdout.kind === 'text' && /Wrote .*trace\/traceability-matrix-system\.md/.test(observation.stdout.value),
+      observation.stdout.kind === 'text' && /Wrote .*trace[\\/]traceability-matrix-system\.md/.test(observation.stdout.value),
       'the runner forwards what the agent printed',
       JSON.stringify(observation.stdout).slice(0, 200),
     );
@@ -707,6 +707,13 @@ async function checkTraceProbe(runDir) {
       observation.artifacts.summary.value,
       'test-artifacts/trace/traceability-matrix-system.md',
       'the default trace summary',
+    );
+    // step-01 section 4 leaves the target id and label empty under `system`.
+    const target = observation.artifacts.summary.value?.target;
+    assert(
+      target?.id === null && target?.label === null,
+      'the default trace summary names no target id or label under the system run key',
+      JSON.stringify(target),
     );
   }
 
@@ -822,7 +829,7 @@ async function checkNfrProbe(runDir) {
       JSON.stringify(observation.artifacts.report).slice(0, 200),
     );
     assert(
-      observation.stdout.kind === 'text' && /Wrote .*nfr\/nfr-assessment-system\.md/.test(observation.stdout.value),
+      observation.stdout.kind === 'text' && /Wrote .*nfr[\\/]nfr-assessment-system\.md/.test(observation.stdout.value),
       'the runner forwards what the agent printed',
       JSON.stringify(observation.stdout).slice(0, 200),
     );

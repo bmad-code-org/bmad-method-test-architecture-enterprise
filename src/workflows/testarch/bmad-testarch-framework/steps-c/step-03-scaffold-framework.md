@@ -424,6 +424,7 @@ Regardless of mode, outputs must be identical in structure and quality.
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03-scaffold-framework']
   lastStep: 'step-03-scaffold-framework'
   lastSaved: '{date}'
@@ -433,6 +434,7 @@ Regardless of mode, outputs must be identical in structure and quality.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03-scaffold-framework'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-scaffold-framework'`
   - Set `lastSaved: '{date}'`

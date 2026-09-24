@@ -144,14 +144,14 @@ Both modes use the same workflow command. Make the scope explicit in your prompt
 
 ```text
 /bmad-testarch-test-design
-Run system-level test-design for Phase 3 using docs/prd.md, docs/architecture.md, and docs/adr/*.md. Focus on architecture testability, ASRs, NFR thresholds, planned NFR evidence, integration risks, and Sprint 0 setup. Produce test-design-architecture.md and test-design-qa.md before implementation-readiness.
+Run system-level test-design for Phase 3 using docs/prd.md, docs/architecture.md, and docs/adr/*.md. Focus on architecture testability, ASRs, NFR thresholds, planned NFR evidence, integration risks, and Sprint 0 setup. Produce test-design/test-design-architecture.md and test-design/test-design-qa.md before implementation-readiness.
 ```
 
 #### Phase 4 per-epic example
 
 ```text
 /bmad-testarch-test-design
-Run epic-level test-design for Phase 4 on Epic 3 using docs/epics/epic-3.md and its stories. Use prior system-level test-design outputs if present. Produce test-design-epic-3.md with risk scores, P0-P3 scenarios, regression/integration/NFR coverage, and follow-on guidance for atdd and automate.
+Run epic-level test-design for Phase 4 on Epic 3 using docs/epics/epic-3.md and its stories. Use prior system-level test-design outputs if present. Produce test-design/test-design-epic-3.md with risk scores, P0-P3 scenarios, regression/integration/NFR coverage, and follow-on guidance for atdd and automate.
 ```
 
 Codex users run `$bmad-testarch-test-design` with the same scope-setting prompt.

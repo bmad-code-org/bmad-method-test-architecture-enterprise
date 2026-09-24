@@ -591,8 +591,13 @@ const deduplicatedTestInventory = {
 // Read it here, locally, so this section stays self-contained when workers run in parallel.
 // The target is never re-derived after Step 1.
 const targetDoc = fs.readFileSync('{outputFile}', 'utf8');
-const targetFrontmatterMatch = targetDoc.match(/^---\n([\s\S]*?)\n---/);
-const targetFrontmatter = targetFrontmatterMatch ? yaml.parse(targetFrontmatterMatch[1]) : {};
+const targetFrontmatterMatch = targetDoc.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+if (!targetFrontmatterMatch) {
+  throw new Error(
+    'TRACE ERROR: {outputFile} has no frontmatter from Step 1; re-run from Step 1 so the matrix carries runScope, runKey, and the gate target.',
+  );
+}
+const targetFrontmatter = yaml.parse(targetFrontmatterMatch[1]) || {};
 // An empty value or an unsubstituted `{placeholder}` means Step 1 resolved nothing for that field.
 const persistedTargetValue = (value) => {
   const text = value === undefined || value === null ? '' : String(value).trim();

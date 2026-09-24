@@ -118,7 +118,7 @@
     "coverageStatusEnum": {
       "file": "src/workflows/testarch/bmad-testarch-trace/checklist.md",
       "section": "Coverage Classification",
-      "lines": "72-82",
+      "lines": "73-83",
       "rule": "FULL is all scenarios validated at the appropriate level or levels. PARTIAL is some coverage with missing edge cases or levels. NONE is no coverage at any level. UNIT-ONLY is only unit tests. INTEGRATION-ONLY is only API or component tests."
     },
     "coverageArithmetic": {
@@ -142,13 +142,13 @@
     "waiverScenarios": {
       "file": "src/workflows/testarch/bmad-testarch-trace/checklist.md",
       "section": "Waiver Scenarios",
-      "lines": "585-605",
+      "lines": "586-606",
       "rule": "A waiver applies only to a FAIL decision. Its justification must be business, not technical convenience. Its approver must hold authority such as VP, CTO, or PO. It must have an expiry date and a remediation plan with a concrete due date. Security vulnerabilities are not waived."
     },
     "decisionIntegrity": {
       "file": "src/workflows/testarch/bmad-testarch-trace/checklist.md",
       "section": "Decision Integrity",
-      "lines": "486-493",
+      "lines": "487-494",
       "rule": "The decision follows the rules rather than judgment. P0 failures produce FAIL unless waived. Security issues produce FAIL and should never be waived. A waiver needs a business justification and an approver."
     },
     "p0IsSecurityCritical": {

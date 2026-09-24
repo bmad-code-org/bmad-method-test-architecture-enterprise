@@ -182,6 +182,7 @@ Add a short section to `{outputFile}` naming the installed rules, the fact that 
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-04-docs-and-scripts']
   lastStep: 'step-04-docs-and-scripts'
   lastSaved: '{date}'
@@ -191,6 +192,7 @@ Add a short section to `{outputFile}` naming the installed rules, the fact that 
   Then write this step's output below the frontmatter.
 
 - **If `{progressFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-04-docs-and-scripts'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-04-docs-and-scripts'`
   - Set `lastSaved: '{date}'`

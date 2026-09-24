@@ -1,0 +1,104 @@
+{
+  "$comment": [
+    "Why this case is in the corpus: it is the one negative case for the run identity trace's step-01 now",
+    "resolves itself. The run found the epic, traced it correctly and wrote under the epic's run key, and then",
+    "published a summary whose target is shaped the way step-01 section 4 shapes a `system` run: the gate type",
+    "kept, the id and label left empty. A consumer reading the summary cannot tell which epic it gates, which",
+    "is the defect the target.type and target.id checks exist to catch, and without this case neither check",
+    "had a stored output that fails it.",
+    "",
+    "The artifacts are CONSTRUCTED, as seeded-correct-run's with target.id and target.label set to null."
+  ],
+  "id": "seeded-system-shaped-target",
+  "suite": "trace",
+  "scorerVersion": 14,
+  "storedOutput": {
+    "origin": "constructed",
+    "summary": "test-artifacts/trace/e2e-trace-summary-epic-4.json",
+    "matrix": "test-artifacts/trace/traceability-matrix-epic-4.md"
+  },
+  "inputs": {
+    "groundTruth": "test/fixtures/trace-eval/ground-truth.json",
+    "fixtureSet": "seeded-tenant-data-export",
+    "scoringInputsDigest": "sha256:83568a9a932ae1ffd63400e61643e3408130912f3a1567a701d4d036682c8ad9"
+  },
+  "derivation": [
+    "Everything but target.id and target.label is seeded-correct-run's and derives the same way.",
+    "",
+    "Run metadata: target.type is still epic, so it passes. target.id is compared on its string form, so the",
+    "null reads as the empty string against the epic number 4 the oracle document's file name carries, and it",
+    "fails. target.label is not scored. The other ten checks are seeded-correct-run's. 11 of 12."
+  ],
+  "result": {
+    "isCleanSet": false,
+    "statuses": {
+      "AC-1": "FULL",
+      "AC-2": "NONE",
+      "AC-3": "FULL",
+      "AC-4": "FULL",
+      "AC-5": "FULL",
+      "AC-6": "FULL",
+      "AC-7": "FULL",
+      "AC-8": "PARTIAL",
+      "AC-9": "FULL",
+      "AC-10": "NONE"
+    },
+    "statusMisses": [],
+    "invented": [],
+    "duplicates": [],
+    "gate": {
+      "expected": "FAIL",
+      "reported": "FAIL",
+      "ok": true
+    },
+    "citations": {
+      "total": 10,
+      "resolved": 10,
+      "misattributed": [],
+      "unresolved": []
+    },
+    "arithmetic": {
+      "checks": 40,
+      "passed": 40,
+      "failed": []
+    },
+    "gateCriteria": {
+      "checks": 12,
+      "passed": 12,
+      "failed": []
+    },
+    "oracleResolution": {
+      "checks": 7,
+      "passed": 7,
+      "failed": []
+    },
+    "runMetadata": {
+      "checks": 12,
+      "passed": 11,
+      "failed": [
+        {
+          "field": "target.id",
+          "expected": "4",
+          "actual": ""
+        }
+      ]
+    },
+    "rejectedEvidence": {
+      "checks": 3,
+      "passed": 3,
+      "failed": []
+    },
+    "waivers": {
+      "scored": true,
+      "checks": 12,
+      "passed": 12,
+      "failed": []
+    },
+    "live": {
+      "checks": 13,
+      "passed": 13,
+      "failed": []
+    },
+    "cleanFalsePositives": 0
+  }
+}

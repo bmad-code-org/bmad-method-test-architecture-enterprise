@@ -7,9 +7,9 @@
     "probeClass": "defect",
     "behaviorId": "B-004",
     "systemId": "tea-nfr-gapped-harbor-billing-ledger",
-    "implementationDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "artifactDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "commitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+    "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "artifactDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "rationale": "performance is CONCERNS on gapped-harbor-billing-ledger, under skillRuleCitations.undefinedThresholdIsConcerns: A finding whose threshold was marked UNKNOWN in Step 2 must be CONCERNS, never PASS. An absent measurement is not evidence that the target was met. The bundle is the plant, and O-004 is the oracle that has to see its consequence in the report the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -19,7 +19,7 @@
         "storage": "public",
         "path": "test/fixtures/nfr-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+        "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
       },
       "expectedObservableFailure": "The performance findings of the report are recorded as CONCERNS, and the Gate YAML publishes overall_status FAIL.",
       "baselinePassEvidence": {
@@ -48,7 +48,7 @@
             "storage": "public",
             "path": "test/fixtures/nfr-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+            "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
           }
         ],
         "source": "controlled-mutation",
@@ -155,9 +155,9 @@
     "probeClass": "defect",
     "behaviorId": "B-003",
     "systemId": "tea-nfr-gapped-harbor-billing-ledger",
-    "implementationDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "artifactDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "commitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+    "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "artifactDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "rationale": "reliability is FAIL on gapped-harbor-billing-ledger, under skillRuleCitations.failIsEvidenceBelowThreshold: FAIL is evidence that exists and does not meet the threshold. The bundle is the plant, and O-003 is the oracle that has to see its consequence in the report the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -167,7 +167,7 @@
         "storage": "public",
         "path": "test/fixtures/nfr-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+        "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
       },
       "expectedObservableFailure": "The reliability findings of the report are recorded as FAIL, and the Gate YAML publishes overall_status FAIL.",
       "baselinePassEvidence": {
@@ -196,7 +196,7 @@
             "storage": "public",
             "path": "test/fixtures/nfr-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+            "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
           }
         ],
         "source": "controlled-mutation",
@@ -330,9 +330,9 @@
     "probeClass": "defect",
     "behaviorId": "B-003",
     "systemId": "tea-nfr-gapped-harbor-billing-ledger",
-    "implementationDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "artifactDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "commitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+    "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "artifactDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "rationale": "maintainability is CONCERNS on gapped-harbor-billing-ledger, under skillRuleCitations.missingEvidenceIsConcerns: If evidence is missing for a category, mark that category as CONCERNS. The bundle is the plant, and O-003 is the oracle that has to see its consequence in the report the run wrote.",
     "qualification": {
       "route": "controlled-mutation",
@@ -342,7 +342,7 @@
         "storage": "public",
         "path": "test/fixtures/nfr-eval/ground-truth.json",
         "privateRef": null,
-        "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+        "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
       },
       "expectedObservableFailure": "The maintainability findings of the report are recorded as CONCERNS, and the Gate YAML publishes overall_status FAIL.",
       "baselinePassEvidence": {
@@ -371,7 +371,7 @@
             "storage": "public",
             "path": "test/fixtures/nfr-eval/ground-truth.json",
             "privateRef": null,
-            "digest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b"
+            "digest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279"
           }
         ],
         "source": "controlled-mutation",
@@ -505,9 +505,9 @@
     "probeClass": "zero-action",
     "behaviorId": "B-008",
     "systemId": "tea-nfr-clean-atlas-notification-relay",
-    "implementationDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "artifactDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
-    "commitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+    "implementationDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "artifactDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
+    "commitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
     "rationale": "clean-atlas-notification-relay states a threshold for all 4 of its domains and meets every one, so any gap the run reports is a false positive. It is the control that stops an nfr suite scoring well by refusing to pass anything.",
     "qualification": {
       "route": "clean-control",
@@ -517,7 +517,7 @@
         "privateRef": null,
         "digest": "sha256:6a7a65b704585caada186c324aa5200b6bc7b2c454352f540799cfabf8606233"
       },
-      "revisionCommitDigest": "sha256:0d3db84c4f91073130312832723289f552ef93f863b30748fbf18ebd2216a02b",
+      "revisionCommitDigest": "sha256:e032331924aa66cb132dbee95d2b5ce70a1e150d4b632347b702cc6430422279",
       "noKnownDefectStatement": "A relay service whose every threshold is stated and met"
     },
     "expectedClean": true,

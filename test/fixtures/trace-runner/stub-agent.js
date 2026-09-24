@@ -29,6 +29,9 @@
  *   complete      both artifacts, exit 0 (the default)
  *   nothing       exit 0 without writing either artifact, so the caller reads `absent`
  *   invalid-json  the matrix, and a summary that is not JSON, so the caller reads `text`
+ *   wrong-key     both artifacts under the `system` key whatever epic the workspace
+ *                 carries, so the harness finds its own paths absent and the pair
+ *                 beside them, and scores the run as a behavior failure
  *   mutate        both artifacts plus a new test file under the project's tests/, which
  *                 the harness must count as a fixture mutation
  *   slow          sleeps past every budget, so the caller reports a killed process
@@ -109,7 +112,9 @@ const fixtureSet = clean ? 'clean' : 'seeded';
 // The stored pair is named by the run key of the set it was frozen from; the copy
 // is named by the run key this workspace resolves to.
 const storedKey = clean ? 'epic-5' : 'epic-4';
-const runKey = clean ? 'epic-5' : seeded ? 'epic-4' : 'system';
+// wrong-key writes the complete pair under `system` in a workspace that carries
+// an epic, which is a run that resolved the wrong scope.
+const runKey = mode === 'wrong-key' ? 'system' : clean ? 'epic-5' : seeded ? 'epic-4' : 'system';
 const source = path.join(__dirname, '..', '..', 'replay', 'trace', `${fixtureSet}-correct-run`, 'test-artifacts', 'trace');
 const artifactsDir = path.join(projectRoot, 'test-artifacts', 'trace');
 fs.mkdirSync(artifactsDir, { recursive: true });
@@ -117,12 +122,25 @@ fs.mkdirSync(artifactsDir, { recursive: true });
 const summaryPath = path.join(artifactsDir, `e2e-trace-summary-${runKey}.json`);
 const matrixPath = path.join(artifactsDir, `traceability-matrix-${runKey}.md`);
 fs.copyFileSync(path.join(source, `traceability-matrix-${storedKey}.md`), matrixPath);
+// Under the `system` key step-01 resolves no target, so the id and label stay
+// empty and the run identity the matrix frontmatter carries says so. The stored
+// pair was frozen from an epic run and carries that epic's identity.
+if (runKey === 'system') {
+  const matrix = fs
+    .readFileSync(matrixPath, 'utf8')
+    .replace(/^runScope: .*$/m, "runScope: 'system'")
+    .replace(/^runKey: .*$/m, "runKey: 'system'")
+    .replace(/^targetId: .*$/m, "targetId: ''")
+    .replace(/^targetLabel: .*$/m, "targetLabel: ''");
+  fs.writeFileSync(matrixPath, matrix, 'utf8');
+}
 if (mode === 'invalid-json') {
   fs.writeFileSync(summaryPath, '{"schema_version": "0.3.0", "gate_status": FAIL\n', 'utf8');
 } else {
   fs.copyFileSync(path.join(source, `e2e-trace-summary-${storedKey}.json`), summaryPath);
   const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
   summary.links.trace_report_path = path.relative(process.cwd(), matrixPath);
+  if (runKey === 'system') summary.target = { ...summary.target, id: null, label: null };
   fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`, 'utf8');
 }
 

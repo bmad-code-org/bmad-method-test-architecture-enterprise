@@ -103,6 +103,7 @@ State the selected framework and reasoning.
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-02-select-framework']
   lastStep: 'step-02-select-framework'
   lastSaved: '{date}'
@@ -112,6 +113,7 @@ State the selected framework and reasoning.
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-02-select-framework'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-02-select-framework'`
   - Set `lastSaved: '{date}'`

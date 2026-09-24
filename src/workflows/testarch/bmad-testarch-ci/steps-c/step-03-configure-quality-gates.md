@@ -142,6 +142,7 @@ Configure:
 
   ```yaml
   ---
+  workflowStatus: 'in-progress'
   stepsCompleted: ['step-03-configure-quality-gates']
   lastStep: 'step-03-configure-quality-gates'
   lastSaved: '{date}'
@@ -151,6 +152,7 @@ Configure:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'in-progress'`
   - Add `'step-03-configure-quality-gates'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-03-configure-quality-gates'`
   - Set `lastSaved: '{date}'`

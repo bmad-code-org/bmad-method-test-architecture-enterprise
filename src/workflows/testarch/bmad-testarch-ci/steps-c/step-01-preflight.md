@@ -3,6 +3,8 @@ name: 'step-01-preflight'
 description: 'Verify prerequisites and detect CI platform'
 nextStepFile: '{skill-root}/steps-c/step-02-generate-pipeline.md'
 outputFile: '{test_artifacts}/ci/ci-pipeline-progress.md'
+legacyOutputFile: '{test_artifacts}/ci-pipeline-progress.md'
+resumeStepFile: '{skill-root}/steps-c/step-01b-resume.md'
 ---
 
 # Step 1: Preflight Checks
@@ -137,27 +139,42 @@ Also record whether `@seontechnologies/playwright-utils` is in `package.json`. I
 
 ---
 
-### 7. Save Progress
+## 7. Check for an Existing Checkpoint
+
+Check whether `{outputFile}` already exists. A project has one CI pipeline setup, so a checkpoint at this path belongs to a previous run of this workflow.
+When it does not exist, also check `{legacyOutputFile}`, where runs before the `ci/` folder wrote the checkpoint. Only an in-progress legacy checkpoint counts here; a completed one stays where it is and this run starts fresh in the folder.
+
+A checkpoint that carries no `workflowStatus` predates that key: treat it as `'completed'` when its `lastStep` is `'step-04-validate-and-summary'`, and as `'in-progress'` otherwise.
+
+- **No checkpoint:** this is a fresh run. Proceed to Save Progress.
+- **Exists with `workflowStatus: 'in-progress'`:** a previous run was interrupted. Display its `lastStep` and `lastSaved`, then ask:
+
+  > "An unfinished CI pipeline setup was last saved {lastSaved} at step {lastStep}. Resume it, or start over? Starting over replaces the checkpoint."
+
+  **Halt** until the user answers. A headless or autonomous run starts over. If they resume, load `{resumeStepFile}`, read it completely, and execute it. If they start over, replace `{outputFile}` entirely in Save Progress and leave any legacy checkpoint untouched.
+
+- **Exists with `workflowStatus: 'completed'`:** a finished run. Replace `{outputFile}` entirely in Save Progress.
+
+**Never merge two runs into one checkpoint.** A `stepsCompleted` array carried over from a prior run makes the resume dashboard and its routing report steps this run never performed.
+
+---
+
+### 8. Save Progress
 
 **Save this step's accumulated work to `{outputFile}`.**
 
-- **If `{outputFile}` does not exist** (first save), create it with YAML frontmatter:
+Create the `{test_artifacts}/ci/` folder if it does not exist. Write the file with YAML frontmatter, replacing any prior content as decided in the previous section:
 
-  ```yaml
-  ---
-  stepsCompleted: ['step-01-preflight']
-  lastStep: 'step-01-preflight'
-  lastSaved: '{date}'
-  ---
-  ```
+```yaml
+---
+workflowStatus: 'in-progress'
+stepsCompleted: ['step-01-preflight']
+lastStep: 'step-01-preflight'
+lastSaved: '{date}'
+---
+```
 
-  Then write this step's output below the frontmatter.
-
-- **If `{outputFile}` already exists**, update:
-  - Add `'step-01-preflight'` to `stepsCompleted` array (only if not already present)
-  - Set `lastStep: 'step-01-preflight'`
-  - Set `lastSaved: '{date}'`
-  - Append this step's output to the appropriate section of the document.
+Then write this step's output below the frontmatter.
 
 Load next step: `{nextStepFile}`
 

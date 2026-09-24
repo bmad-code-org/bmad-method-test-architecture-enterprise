@@ -1030,6 +1030,10 @@
           "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
         },
         {
+          "token": "storyKey",
+          "reason": "a workflow step-file frontmatter key, a template instruction field rather than a JS declaration"
+        },
+        {
           "token": "Jenkinsfile",
           "reason": "a third-party tool or config name TEA integrates with, not a TEA declaration"
         },
@@ -1252,6 +1256,9 @@
         },
         {
           "match": "\\bsince \\d+\\.\\d+\\.\\d+\\b"
+        },
+        {
+          "match": "Outputs land in one folder per workflow"
         }
       ],
       "claims": [
@@ -1427,7 +1434,7 @@
         },
         {
           "file": "docs/reference/configuration.md",
-          "key": "Outputs currently land in one folder per workflow",
+          "key": "Outputs land in one folder per workflow",
           "settles": {
             "module": "test/lib/doc-claim-sources.js",
             "export": "OUTPUTS_IN_WORKFLOW_FOLDERS"

@@ -52,7 +52,7 @@ playwright-cli -s=tea-test-design-<run_key> screenshot --filename=login-flow.png
 playwright-cli -s=tea-test-design-<run_key> close
 ```
 
-The `-s=tea-test-design-<run_key>` flag scopes every command to a named session that belongs to one workflow run. `<run_key>` is the scope key the workflow resolves in its first step (such as `story-1-2`, `epic-3`, or `system`), so a second run on the same machine opens its own browser. See [Session Isolation](#session-isolation).
+The `-s=tea-test-design-<run_key>` flag scopes every command to a named session that belongs to one workflow run. `<run_key>` is the scope key the workflow resolves in its first step (such as `story-1-2-user-authentication`, `epic-3`, or `system`), so a second run on the same machine opens its own browser. See [Session Isolation](#session-isolation).
 
 ## What TEA Uses It For
 
@@ -131,20 +131,20 @@ This gives the agent the full HTTP conversation — wrong payload, expired auth 
 
 ## Session Isolation
 
-Every CLI command targets a named session. Session names are global to the machine: two runs that use the same name drive one browser, and either run's `close` shuts it for both. Name the session `tea-<workflow>-<run_key>`, where `<run_key>` is the scope key the workflow resolved in its first step, and use that exact name on every `open`, command, and `close` of the run:
+Every CLI command targets a named session. Session names are global to the machine: two runs that use the same name drive one browser, and either run's `close` shuts it for both. Name the session `tea-<workflow>-<run_key>`, where `<run_key>` is the scope key the workflow resolved in its first step, and use that exact name on every `open`, command, and `close` of the run. Workflows that resolve no `run_key` (`ci` and `framework`) name the session `tea-<workflow>-<timestamp>`.
 
 ```bash
 # test-design run for epic 3
 playwright-cli -s=tea-test-design-epic-3 open https://app.com
 
-# ATDD run for story 1-2 on the same machine, in parallel
-playwright-cli -s=tea-atdd-story-1-2 open https://app.com/admin
+# NFR run for story 1.2 on the same machine, in parallel
+playwright-cli -s=tea-nfr-story-1-2-user-authentication open https://app.com/admin
 ```
 
-When one run opens several sessions at once (for example, parallel subagents), append a unique suffix to the run's session name:
+When one run opens several sessions at once (for example, parallel subagents), append a unique suffix to the run's session name. `atdd` adds a timestamp suffix to every session it opens, and `automate` adds one to the sessions its E2E subagent opens:
 
 ```bash
-playwright-cli -s=tea-atdd-story-1-2-<timestamp> open https://app.com
+playwright-cli -s=tea-atdd-story-1-2-user-authentication-<timestamp> open https://app.com
 ```
 
 Close sessions by name with `close`. `close-all` kills every session on the machine, including the browsers of other runs.

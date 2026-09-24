@@ -2003,9 +2003,19 @@ async function runTests() {
         'prompt makes the file list authoritative over the discovery glob',
       );
       assert(prompt.includes("overrides step-02's glob for this run only"), 'prompt scopes the glob override to this run only');
+      // Read from the step itself, so the skill's outputFile and the prompt that
+      // overrides it cannot drift together while a hardcoded string still matches.
+      const stepOneFrontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(
+        fs.readFileSync(
+          path.join(__dirname, '..', 'src', 'workflows', 'testarch', 'bmad-testarch-test-review', 'steps-c', 'step-01-load-context.md'),
+          'utf8',
+        ),
+      );
+      const stepOneOutputFile = stepOneFrontmatter ? require('yaml').parse(stepOneFrontmatter[1])?.outputFile : undefined;
       assert(
-        prompt.includes('{test_artifacts}/test-review/test-review-{run_key}.md'),
-        'prompt overrides the default outputFile from step frontmatter',
+        typeof stepOneOutputFile === 'string' && stepOneOutputFile.length > 0 && prompt.includes(stepOneOutputFile),
+        "prompt overrides the default outputFile step-01's frontmatter declares",
+        stepOneOutputFile,
       );
 
       const absoluteOutput = path.join(fixtureProject, 'test-review.md');

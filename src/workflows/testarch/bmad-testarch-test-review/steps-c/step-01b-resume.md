@@ -42,13 +42,13 @@ Resume an interrupted workflow by selecting the report that belongs to the run b
 Otherwise, each run writes its own report at `{outputFile}`, where `run_key` is `story-{story_key}`, `epic-{epic_num}`, `system`, or `target-{slug}` as `step-01-load-context.md` resolves it. Build the candidate list:
 
 1. List every file matching `{progressGlob}`, skipping validation reports (`test-review-validation-report-*.md`).
-2. Also check `{legacyOutputFile}`. Runs from before reports carried run identity wrote to that fixed name.
+2. Also check `{legacyOutputFile}`. Runs from before reports carried run identity wrote to that fixed name. It is a candidate only while it is in progress: read its `workflowStatus`, or infer it from `lastStep` as section 2 describes when the field is absent. A completed legacy report stays where it is and is never moved or deleted.
 
 Then select one:
 
 - **No candidates:** display "No previous progress found. There is no output document to resume from. Please use **[C] Create** to start a fresh workflow run." Then halt.
 
-- **The user named a scope in this invocation** (a story, an epic, the whole suite, or a reviewed file or directory): resolve `run_key` exactly as `step-01-load-context.md` does, then select `{outputFile}` for that key. If no report exists for it, display "No progress found for `{run_key}`. Reports exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." Then halt. Never fall back to another scope's report.
+- **The user named a scope in this invocation** (a story, an epic, the whole suite, or a reviewed file or directory): resolve `run_key` exactly as `step-01-load-context.md` does, then select `{outputFile}` for that key. When it does not exist and `{legacyOutputFile}` is a candidate, offer to migrate the legacy report to `{run_key}` and halt until the user answers; if they accept, select it. If nothing was selected for that key, display "No progress found for `{run_key}`. Reports exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." Then halt. Never fall back to another scope's report.
 
 - **Exactly one candidate and no scope named:** select it and state which run it belongs to before continuing.
 
@@ -69,9 +69,12 @@ Read the selected report and parse YAML frontmatter for:
 
 **Run identity check.** When the user named a scope in this invocation, `runKey` must equal the `run_key` resolved for it. If it does not, display "Report belongs to a different run (`{runKey}`, not `{run_key}`). Refusing to resume." Then halt. Do not read its progress state and do not report its `workflowStatus`. When the user named no scope, adopt the report's own `runScope` and `runKey` as this run's identity.
 
-**Legacy report migration.** If `runKey` is absent, the report predates run identity and cannot be proven to belong to any scope. Ask the user which scope it covers (a story, an epic, the whole suite, or a reviewed file or directory) and halt until they answer. Resolve `run_scope` and `run_key` from their answer exactly as `step-01-load-context.md` does, then:
+**Legacy report migration.** If `runKey` is absent, the report predates run identity and cannot be proven to belong to any scope, so the run identity check above does not apply to it. Use the scope the user named in this invocation. When they named none, ask which scope it covers (a story, an epic, the whole suite, or a reviewed file or directory) and halt until they answer. Resolve `run_scope` and `run_key` exactly as `step-01-load-context.md` does, then:
 
-- **Selected from `{legacyOutputFile}`:** write its content to `{outputFile}` with `runScope` and `runKey` added, delete `{legacyOutputFile}`, and continue from the migrated file. If a report for the same `runKey` already exists in the `test-review/` folder, list both with their `lastSaved` and ask which one to keep. Halt until the user answers, then delete the other.
+- **Selected from `{legacyOutputFile}`:**
+  1. If `{outputFile}` already exists for that key, list both files with their `lastSaved` and ask which one to keep. Halt until the user answers. Keeping the folder report deletes `{legacyOutputFile}` and continues from `{outputFile}`; keeping the legacy report continues with item 2. A headless run keeps the folder report, leaves `{legacyOutputFile}` untouched, and says so.
+  2. Create the `{test_artifacts}/test-review/` folder if it does not exist and write the legacy report's content to `{outputFile}` with `runScope` and `runKey` added.
+  3. Only after that write succeeds, delete `{legacyOutputFile}`. Continue from the migrated file.
 - **Selected through `output_file_override`:** add `runScope` and `runKey` to its frontmatter in place and continue from it. The override path is the caller's, so the report stays there.
 
 If `workflowStatus` is missing (legacy report), infer it from `lastStep`: `step-04-generate-report` means `completed`, and any other step means `in-progress`.

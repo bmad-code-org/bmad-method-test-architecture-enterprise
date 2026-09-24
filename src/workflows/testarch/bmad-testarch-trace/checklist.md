@@ -28,7 +28,8 @@ This checklist covers **two sequential phases**:
 - [ ] Story file read successfully (if applicable)
 - [ ] Oracle items extracted or inferred correctly
 - [ ] Story ID identified (e.g., 1.3)
-- [ ] Test design loaded (if available): `{test_artifacts}/test-design/test-design-epic-{epic_num}.md`, or `test-design-architecture.md` and `test-design-qa.md` at system level, falling back to the same names at the legacy root `{test_artifacts}/`
+- [ ] Test design loaded (if available): `{test_artifacts}/test-design/test-design-epic-{epic_num}.md` for an epic or for a story's epic (epic number from the story id), or `test-design-architecture.md` and `test-design-qa.md` at system level, falling back to the same names at the legacy root `{test_artifacts}/`
+- [ ] NFR evidence audit loaded (if available), first match of `nfr/nfr-assessment-{run_key}.md`, then for a story `nfr/nfr-assessment-epic-{epic_num}.md`, then `nfr/nfr-assessment-system.md`, then the legacy root `nfr-assessment.md`, with the file used named
 - [ ] `tech-spec.md` loaded (if available)
 - [ ] `PRD.md` loaded (if available)
 - [ ] Relevant knowledge fragments loaded from `tea-index.csv`
@@ -266,7 +267,7 @@ Knowledge fragments referenced:
 - [ ] Test design document discovered in `{test_artifacts}/test-design/` (legacy: the root of `{test_artifacts}`) or explicitly provided (if available)
 - [ ] Traceability matrix discovered or explicitly provided (available from Phase 1)
 - [ ] Waiver register read from `{waiver_register_input}` when the file exists (see Waiver Scenarios)
-- [ ] NFR evidence audit discovered in `{test_artifacts}/nfr/` (legacy: the root of `{test_artifacts}`) or explicitly provided (if available)
+- [ ] NFR evidence audit discovered in `{test_artifacts}/nfr/` in the Step 1 lookup order (legacy: `nfr-assessment.md` at the root of `{test_artifacts}`) or explicitly provided (if available)
 - [ ] Code coverage report discovered or explicitly provided (if available)
 - [ ] Burn-in results discovered or explicitly provided (if available)
 
@@ -312,11 +313,11 @@ Knowledge fragments referenced:
 
 **Quality Assessments:**
 
-- [ ] P0/P1/P2/P3 scenarios extracted from `test-design/test-design-epic-{epic_num}.md` or the system-level test design docs (if available; legacy: same names at the root of `{test_artifacts}`)
+- [ ] P0/P1/P2/P3 scenarios extracted from `test-design/test-design-epic-{epic_num}.md` (for a story, its epic's plan) or the system-level test design docs (if available; legacy: same names at the root of `{test_artifacts}`)
 - [ ] Risk scores extracted from the same test design docs (if available)
 - [ ] Coverage percentages extracted from `trace/traceability-matrix-{run_key}.md` (available from Phase 1)
 - [ ] Coverage gaps extracted from `trace/traceability-matrix-{run_key}.md` (available from Phase 1)
-- [ ] NFR status extracted from `nfr/nfr-assessment-{run_key}.md` (if available; legacy: `nfr-assessment*.md` at the root of `{test_artifacts}`)
+- [ ] NFR status extracted from the NFR audit Step 1 loaded (if available): `nfr/nfr-assessment-{run_key}.md`, then for a story `nfr/nfr-assessment-epic-{epic_num}.md`, then `nfr/nfr-assessment-system.md`, then the legacy root `nfr-assessment.md`
 - [ ] Security issues count extracted from the same NFR assessment (if available)
 
 **Code Coverage:**

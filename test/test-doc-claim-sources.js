@@ -236,16 +236,83 @@ check('misplacedOutputs flags a flat output path and leaves inputs and legacy pa
   }
 });
 
-check('ELEVEN_WIRED_ONE_FUTURE agrees with an independent read of module.yaml', () => {
+check('misplacedOutputs flags a flat write target in a step body and leaves legacy lines and trace root inputs alone', () => {
+  // A staged fixture skill whose declared outputs all sit in its own folder, so
+  // the one misplacement is the screenshot a step body writes flat at the root.
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-sources-'));
+  try {
+    const skillDir = path.join(scratch, 'bmad-testarch-probe');
+    fs.mkdirSync(path.join(skillDir, 'steps-c'), { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'steps-c', 'step-02-capture.md'),
+      [
+        '---',
+        "outputFile: '{test_artifacts}/probe/probe-report-{run_key}.md'",
+        '---',
+        '',
+        '# Capture',
+        '',
+        '1. `playwright-cli -s=tea-probe-{run_key} screenshot --filename={test_artifacts}/probe-{run_key}-home.png`',
+        '2. `playwright-cli -s=tea-probe-{run_key} screenshot --filename={test_artifacts}/probe/probe-{run_key}-home.png`',
+        '3. Fall back to the legacy root `{test_artifacts}/probe-report.md` when the scoped report is absent.',
+        '4. Read waivers from `{test_artifacts}/gate-waivers.md` and live results from `{test_artifacts}/live-verification-results.json`.',
+        '',
+      ].join('\n'),
+    );
+    assert.deepStrictEqual(
+      source.misplacedOutputs(skillDir).map((entry) => `${entry.source} ${entry.value}`),
+      ['steps-c/step-02-capture.md {test_artifacts}/probe-{run_key}-home.png'],
+    );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+check('declaredOutputPaths refuses step frontmatter that is not valid YAML, naming the file', () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'doc-claim-sources-'));
+  try {
+    const skillDir = path.join(scratch, 'bmad-testarch-probe');
+    fs.mkdirSync(path.join(skillDir, 'steps-c'), { recursive: true });
+    fs.writeFileSync(
+      path.join(skillDir, 'steps-c', 'step-01-broken.md'),
+      "---\noutputFile: '{test_artifacts}/probe/x.md\n---\n\n# Broken\n",
+    );
+    assert.throws(
+      () => source.declaredOutputPaths(skillDir),
+      /doc-claim-sources: .*step-01-broken\.md has frontmatter that is not valid YAML/,
+    );
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+check('ELEVEN_WIRED_ONE_FUTURE agrees with a literal list of the eleven wired keys and risk_threshold as the FUTURE one', () => {
+  // Literal on purpose: recomputing the lists with the module's own helpers would
+  // agree with the module whatever module.yaml said. A key added, removed or
+  // re-marked in module.yaml has to be restated here to pass.
+  const WIRED = [
+    'test_artifacts',
+    'tea_evaluations_folder',
+    'tea_use_playwright_utils',
+    'tea_use_pactjs_utils',
+    'tea_pact_mcp',
+    'tea_browser_automation',
+    'tea_execution_mode',
+    'tea_capability_probe',
+    'test_stack_type',
+    'ci_platform',
+    'test_framework',
+  ];
   const parsed = require('yaml').parse(fs.readFileSync(path.join(__dirname, '..', 'src', 'module.yaml'), 'utf8'));
   const prompted = Object.keys(parsed).filter((key) => typeof parsed[key] === 'object' && parsed[key] !== null && 'prompt' in parsed[key]);
-  const wired = prompted.filter((key) => !source.FUTURE_KEYS.includes(key));
-  const expected =
-    source.FUTURE_KEYS.length === 1 &&
-    wired.length === 11 &&
-    wired.every((key) => !source.keyIsUnread(key)) &&
-    source.FUTURE_KEYS.every(source.keyIsUnread);
-  assert.strictEqual(source.ELEVEN_WIRED_ONE_FUTURE, expected);
+  assert.deepStrictEqual(source.FUTURE_KEYS, ['risk_threshold']);
+  assert.deepStrictEqual(
+    prompted.filter((key) => key !== 'risk_threshold'),
+    WIRED,
+  );
+  for (const key of WIRED) assert.strictEqual(source.keyIsUnread(key), false, `${key} is wired, so some workflow file reads it`);
+  assert.strictEqual(source.keyIsUnread('risk_threshold'), true, 'risk_threshold is FUTURE, so no workflow file reads it');
+  assert.strictEqual(source.ELEVEN_WIRED_ONE_FUTURE, true);
 });
 
 check('THIRTY_FOUR_CONCERNS matches an independent count of "CONCERNS" verdicts in expected-strength.json', () => {

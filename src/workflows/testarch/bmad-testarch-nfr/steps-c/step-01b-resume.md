@@ -40,13 +40,13 @@ Resume an interrupted workflow by selecting the output document that belongs to 
 Each run writes its own output document at `{outputFile}`, where `run_key` is `system`, `epic-{epic_num}`, or `story-{story_key}`. Build the candidate list:
 
 1. List every file matching `{progressGlob}`.
-2. Also check `{legacyOutputFile}`. Runs from before output files carried run identity wrote to that fixed name.
+2. Also check `{legacyOutputFile}`. Runs from before output files carried run identity wrote to that fixed name. It is a candidate only while it is in progress: read its `workflowStatus`, or infer it from `lastStep` as section 2 describes when the field is absent. A completed legacy file stays where it is and is never moved or deleted.
 
 Then select one:
 
 - **No candidates:** display "No previous progress found. There is no output document to resume from. Please use **[C] Create** to start a fresh workflow run." **Halt.**
 
-- **The user named a scope in this invocation** (a story, an epic, or the whole system): resolve `run_key` exactly as `step-01-load-context.md` does, then select `{outputFile}` for that key. If no output document exists for it, display "**No progress found for `{run_key}`.** Output documents exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." **Halt.** Never fall back to another scope's output document.
+- **The user named a scope in this invocation** (a story, an epic, or the whole system): resolve `run_key` exactly as `step-01-load-context.md` does, then select `{outputFile}` for that key. When it does not exist and `{legacyOutputFile}` is a candidate, offer to migrate the legacy file to `{run_key}` and **halt** until the user answers; if they accept, select it. If nothing was selected for that key, display "**No progress found for `{run_key}`.** Output documents exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." **Halt.** Never fall back to another scope's output document.
 
 - **Exactly one candidate and no scope named:** select it and state which run it belongs to before continuing.
 
@@ -67,7 +67,12 @@ Read the selected output document and parse YAML frontmatter for:
 
 **Run identity check.** When the user named a scope in this invocation, `runKey` must equal the `run_key` resolved for it. If it does not, display "**Output document belongs to a different run** (`{runKey}`, requested `{run_key}`). Refusing to resume." **Halt.** Do not read its progress state and do not report its `workflowStatus`. When the user named no scope, adopt the document's own `runScope` and `runKey` as this run's identity.
 
-**Legacy output migration.** If the selected document is `{legacyOutputFile}` and carries no `runKey`, it predates run identity and cannot be proven to belong to any scope. Ask the user which run it covers (a story, an epic, or the whole system) and **halt** until they answer. Resolve `run_scope` and `run_key` from their answer exactly as `step-01-load-context.md` does. If `{outputFile}` already exists for that key, list both with their `lastSaved` and ask which one to keep; **halt** until the user answers, and delete the one not kept. Otherwise write the legacy document's content to `{outputFile}` with `runScope` and `runKey` added, delete `{legacyOutputFile}`, and continue from the migrated file.
+**Legacy output migration.** If the selected document is `{legacyOutputFile}` and carries no `runKey`, it predates run identity and cannot be proven to belong to any scope, so the run identity check above does not apply to it. Migrate it before continuing:
+
+1. Use the scope the user named in this invocation. When they named none, ask which run it covers (a story, an epic, or the whole system) and **halt** until they answer. Resolve `run_scope` and `run_key` exactly as `step-01-load-context.md` does.
+2. If `{outputFile}` already exists for that key, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder file deletes `{legacyOutputFile}` and continues from `{outputFile}`; keeping the legacy file continues with item 3. A headless run keeps the folder file, leaves `{legacyOutputFile}` untouched, and says so.
+3. Create the `{test_artifacts}/nfr/` folder if it does not exist and write the legacy document's content to `{outputFile}` with `runScope` and `runKey` added.
+4. Only after that write succeeds, delete `{legacyOutputFile}`. Continue from the migrated file.
 
 If `workflowStatus` is missing (legacy output document), infer it from `lastStep`: `'step-05-generate-report'` means `completed`; every other step means `in-progress`.
 

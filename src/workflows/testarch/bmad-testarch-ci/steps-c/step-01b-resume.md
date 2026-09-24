@@ -36,17 +36,23 @@ Resume an interrupted workflow by loading the existing progress document, displa
 
 ### 1. Load Output Document
 
+A checkpoint that carries no `workflowStatus` predates that key: treat it as `'completed'` when its `lastStep` is `'step-04-validate-and-summary'`, and as `'in-progress'` otherwise.
+
 **Legacy checkpoint migration.** Runs from older TEA versions wrote the checkpoint to `{legacyOutputFile}`, at the root of `{test_artifacts}`.
-If `{outputFile}` does not exist and `{legacyOutputFile}` exists, move `{legacyOutputFile}` to `{outputFile}` unchanged (create the `ci/` folder if needed), tell the user the checkpoint was moved, and continue from the moved file.
-If both exist, `{outputFile}` is the current checkpoint: resume from it and leave `{legacyOutputFile}` untouched.
+Migrate it only while it is in progress. A completed legacy checkpoint stays where it is and is never moved or deleted.
+
+1. If `{outputFile}` also exists, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder checkpoint deletes `{legacyOutputFile}` and continues from `{outputFile}`; keeping the legacy checkpoint continues with item 2. A headless run keeps the folder checkpoint, leaves `{legacyOutputFile}` untouched, and says so.
+2. Create the `{test_artifacts}/ci/` folder if it does not exist and write the legacy checkpoint's content to `{outputFile}` unchanged.
+3. Only after that write succeeds, delete `{legacyOutputFile}`. Tell the user the checkpoint was moved and continue from the moved file.
 
 Read `{outputFile}` and parse YAML frontmatter for:
 
+- `workflowStatus` — overall workflow state (`in-progress` or `completed`)
 - `stepsCompleted` — array of completed step names
 - `lastStep` — last completed step name
 - `lastSaved` — timestamp of last save
 
-**If neither `{outputFile}` nor `{legacyOutputFile}` exists**, display:
+**If `{outputFile}` does not exist and no in-progress `{legacyOutputFile}` exists**, display:
 
 "⚠️ **No previous progress found.** There is no output document to resume from. Please use **[C] Create** to start a fresh workflow run."
 
@@ -80,6 +86,8 @@ Display:
 ---
 
 ### 4. Route to Next Step
+
+If `workflowStatus` is `'completed'`, display: "✅ **All steps completed.** Use **[V] Validate** to review outputs or **[E] Edit** to make revisions." Then halt.
 
 Based on `lastStep`, load the next incomplete step:
 

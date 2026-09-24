@@ -29,6 +29,9 @@
  *   arithmetic-off    a document whose score cell disagrees with probability x impact
  *   band-misfiled     a document filing a score-9 risk under the Score 1-2 heading
  *   generic-register  a register of four risks the epic rules out in as many words
+ *   wrong-key         the correct document under the next epic's number, so the harness
+ *                     finds its own path absent and the document beside it, and scores
+ *                     the run as a behavior failure
  *
  * The three defect documents belong to the seeded set, because each defect is scored
  * against the risks that set declares. Asking for one while the clean set is staged is
@@ -87,6 +90,7 @@ const FIXTURE_SETS = {
 const DOCUMENT_FOR = {
   complete: (set) => `${set}-correct-run`,
   mutate: (set) => `${set}-correct-run`,
+  'wrong-key': (set) => `${set}-correct-run`,
   nothing: () => null,
   'arithmetic-off': (set) => (set === 'seeded' ? 'seeded-arithmetic-off' : null),
   'band-misfiled': (set) => (set === 'seeded' ? 'seeded-band-misfiled' : null),
@@ -118,7 +122,8 @@ if (!fs.existsSync(source)) refuse(`no stored document at ${source}`);
 const projectRoot = path.join(process.cwd(), namedRoot);
 const artifactsDir = path.join(projectRoot, 'test-artifacts', 'test-design');
 fs.mkdirSync(artifactsDir, { recursive: true });
-const designPath = path.join(artifactsDir, `test-design-epic-${epicNum}.md`);
+const writtenEpic = mode === 'wrong-key' ? String(Number(epicNum) + 1) : epicNum;
+const designPath = path.join(artifactsDir, `test-design-epic-${writtenEpic}.md`);
 fs.copyFileSync(source, designPath);
 
 if (mode === 'mutate') {

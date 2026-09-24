@@ -48,6 +48,8 @@ Known outputs for this workflow:
 
 - `{test_artifacts}/test-review/test-review-{run_key}.md` (one per run scope), or the `output_file_override` path when the run set one
 
+Skip validation reports (`test-review-validation-report-*.md`) when listing files that match this pattern; Validate mode writes them into the same folder.
+
 `{run_key}` names the run's scope, such as `system`, `epic-3`, or `story-1-2-user-authentication`.
 Files written by older TEA versions sit at the root of `{test_artifacts}`: `{test_artifacts}/test-review.md`. Offer them as candidates when present.
 

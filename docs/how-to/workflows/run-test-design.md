@@ -76,7 +76,9 @@ The workflow resolves that name in its first step, from the mode and the epic yo
 
 Pick **[R] Resume** to continue. Name the scope you want (for example "resume epic 3") when checkpoints exist for more than one run; without a scope TEA lists the candidates and asks. TEA refuses to resume a checkpoint that belongs to a different run.
 
-Checkpoints written by earlier TEA versions sit at the root of `{test_artifacts}`, under the old fixed name `test-design-progress.md` or a scoped `test-design-progress-{run_key}.md`. Resume picks those up too. It asks you to confirm which run a fixed-name checkpoint belongs to and migrates it to its scoped name in `test-design/`, and it moves a scoped checkpoint into `test-design/` unchanged.
+Checkpoints written by earlier TEA versions sit at the root of `{test_artifacts}`, under the old fixed name `test-design-progress.md` or a scoped `test-design-progress-{run_key}.md`. Resume picks those up too while they are still in progress; a completed one stays where it is. It asks you to confirm which run a fixed-name checkpoint belongs to and migrates it to its scoped name in `test-design/`, and it moves a scoped checkpoint into `test-design/` unchanged. It never writes over a checkpoint that `test-design/` already holds for the same run.
+
+A headless run never asks. It starts an interrupted run of the same scope over, and an epic-level run whose epic it cannot resolve halts with a message naming the candidate epics.
 
 ## What You Get
 

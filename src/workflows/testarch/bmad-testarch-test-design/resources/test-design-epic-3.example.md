@@ -1,5 +1,5 @@
 ---
-runScope: 'epic-level'
+runScope: 'epic'
 runKey: 'epic-3'
 workflowStatus: 'completed'
 totalSteps: 5

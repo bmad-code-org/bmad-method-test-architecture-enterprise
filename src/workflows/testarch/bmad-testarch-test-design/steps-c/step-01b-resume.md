@@ -44,11 +44,13 @@ Each run writes its own checkpoint at `{outputFile}`, where `run_key` is `system
 2. Also list every file matching `{legacyScopedGlob}`. Runs from before the `test-design/` folder wrote scoped checkpoints to the root of `{test_artifacts}`.
 3. Also check `{legacyOutputFile}`. Runs from before checkpoints carried run identity wrote to that fixed name.
 
+A legacy checkpoint from item 2 or 3 is a candidate only while it is in progress: read its `workflowStatus`, or infer it from `lastStep` as section 2 describes when the field is absent. A completed legacy checkpoint stays where it is and is never moved or deleted.
+
 Then select one:
 
 - **No candidates:** display "⚠️ **No previous progress found.** There is no checkpoint to resume from. Please use **[C] Create** to start a fresh workflow run." **Halt.**
 
-- **The user named a scope in this invocation** (a specific epic, or system-level): resolve `run_key` exactly as `step-01-detect-mode.md` does, then select `{outputFile}` for that key. When only the pre-folder checkpoint `{test_artifacts}/test-design-progress-{run_key}.md` exists for that key, select it. If no checkpoint exists for it, display "⚠️ **No progress found for `{run_key}`.** Checkpoints exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." **Halt.** Never fall back to another scope's checkpoint.
+- **The user named a scope in this invocation** (a specific epic, or system-level): resolve `run_key` exactly as `step-01-detect-mode.md` does, then select `{outputFile}` for that key. When only the pre-folder checkpoint `{test_artifacts}/test-design-progress-{run_key}.md` is a candidate for that key, select it. When neither exists and `{legacyOutputFile}` is a candidate, offer to migrate it to `{run_key}` and **halt** until the user answers; if they accept, select it. If nothing was selected for that key, display "⚠️ **No progress found for `{run_key}`.** Checkpoints exist for: {list of candidate run keys}. Use **[C] Create** to start a run for `{run_key}`, or name one of the listed scopes." **Halt.** Never fall back to another scope's checkpoint.
 
 - **Exactly one candidate and no scope named:** select it and state which run it belongs to before continuing.
 
@@ -60,7 +62,7 @@ Then select one:
 
 Read the selected checkpoint and parse YAML frontmatter for:
 
-- `runScope` — `system-level` or `epic-level`
+- `runScope` — `system` or `epic`. Checkpoints written before this rename carry `system-level` or `epic-level`; read those as `system` and `epic`.
 - `runKey` — this run's identity
 - `workflowStatus` — overall workflow state (`in-progress` or `completed`)
 - `totalSteps` — total number of create-mode workflow steps
@@ -73,8 +75,12 @@ Read the selected checkpoint and parse YAML frontmatter for:
 
 **Legacy checkpoint migration.** Migrate a selected checkpoint that lives outside the `test-design/` folder before continuing:
 
-- **Pre-folder scoped checkpoint** (matched `{legacyScopedGlob}`): it already carries `runScope` and `runKey`, so apply the run identity check above as for any other checkpoint. Then move it unchanged to `{outputFile}` for its `runKey` and continue from the moved file. If a checkpoint for the same `runKey` already exists in the folder, list both with their `lastSaved` and ask which one to keep. **Halt** until the user answers, then delete the other.
-- **Fixed-name checkpoint** (`{legacyOutputFile}`): if `runKey` is absent, the checkpoint predates run identity and cannot be proven to belong to any scope. Ask the user which run it covers (a specific epic, or system-level) and **halt** until they answer. Resolve `run_scope` and `run_key` from their answer exactly as `step-01-detect-mode.md` does, write the checkpoint's content to `{outputFile}` with `runScope` and `runKey` added, delete `{legacyOutputFile}`, and continue from the migrated file.
+1. Resolve its run identity.
+   - **Pre-folder scoped checkpoint** (matched `{legacyScopedGlob}`): it already carries `runScope` and `runKey`, so apply the run identity check above as for any other checkpoint.
+   - **Fixed-name checkpoint** (`{legacyOutputFile}`): if `runKey` is absent, the checkpoint predates run identity and cannot be proven to belong to any scope, so the run identity check above does not apply to it. Use the scope the user named in this invocation. When they named none, ask which run it covers (a specific epic, or system-level) and **halt** until they answer. Resolve `run_scope` and `run_key` exactly as `step-01-detect-mode.md` does.
+2. If `{outputFile}` already exists for that key, list both files with their `lastSaved` and ask which one to keep. **Halt** until the user answers. Keeping the folder checkpoint deletes the legacy checkpoint and continues from `{outputFile}`; keeping the legacy checkpoint continues with item 3. A headless run keeps the folder checkpoint, leaves the legacy checkpoint untouched, and says so.
+3. Create the `{test_artifacts}/test-design/` folder if it does not exist and write the checkpoint to `{outputFile}`: a pre-folder scoped checkpoint unchanged, a fixed-name checkpoint with `runScope` and `runKey` added.
+4. Only after that write succeeds, delete the legacy checkpoint. Continue from the migrated file.
 
 If `workflowStatus`, `totalSteps`, or `nextStep` are missing (legacy progress file), infer them from `lastStep` using this mapping:
 

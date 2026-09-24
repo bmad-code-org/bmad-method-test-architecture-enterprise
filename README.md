@@ -596,7 +596,7 @@ npm ci
 npm run test:eval-data          # fragment-selection corpus, static
 npm run test:eval-trace-data    # trace corpus, static
 npm run test:eval-schemas       # manifest against harness constants, and the preflight argv
-npm run test:eval-replay        # 108 stored outputs against the scorers
+npm run test:eval-replay        # 123 stored outputs against the scorers
 ```
 
 Run live evals in a scheduled or manually triggered CI job after installing and authenticating the selected agent CLI:

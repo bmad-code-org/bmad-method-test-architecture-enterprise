@@ -195,7 +195,7 @@ const {
   writeSuiteResult,
 } = require('./lib/eval-record');
 const { worstFailureClass, exitCodeForFailureClass } = require('./schema/eval-result');
-const { workingTreeState, workingTreeChanges } = require('./lib/runner-capabilities');
+const { workingTreeState, workingTreeChanges, misplacedDeliverables, misplacedEvidence } = require('./lib/runner-capabilities');
 const { PROBE_TIMEOUT_MS, boundedProbe } = require('./lib/bounded-probe');
 const { nowMs, nowIso, elapsedMsSince } = require('./lib/clock');
 const {
@@ -1536,9 +1536,12 @@ function canonicalCitations(citations, projectRoot) {
  * other.
  *
  * @param {string} text The report, as the probe observation's `report` artifact carries it.
+ * @param {{allowEmpty?: boolean}} [options] `allowEmpty` returns the empty reading in
+ *   place of null for a document with no domain section, which is what a run that
+ *   wrote its report under another run key is scored as.
  * @returns {{domains: Map<string, object>, gateDomains: Map<string, string>, gateSelfContradictions: string[], gateBlockDeclared: boolean, duplicateDomainSections: string[], overallStatus: string|null, evidenceGaps: string[], unknownThresholdDeclared: boolean}|null}
  */
-function parseReport(text) {
+function parseReport(text, { allowEmpty = false } = {}) {
   const document = String(text);
   // A run that quotes the example the workflow ships is quoting a complete
   // assessment of another service: four `## <Domain> Assessment` sections, a
@@ -1717,7 +1720,7 @@ function parseReport(text) {
     }
   }
 
-  if (domains.size === 0) return null;
+  if (domains.size === 0 && !allowEmpty) return null;
   for (const entry of domains.values()) {
     entry.status = rollupStatus(entry.statuses);
     entry.thresholdText = normalizeThreshold(entry.thresholdLines.join(' | '));
@@ -2267,6 +2270,23 @@ function runnerOptions(options) {
  *
  * @returns {Promise<{ok: true, scored: object, mutations: number}|{ok: false, failureClass: string, reason: string}>}
  */
+/**
+ * Bundle files the run changed, plus files it added outside `test-artifacts/` and
+ * `_bmad/`. The workflow audits evidence and generates none, so a run that wrote
+ * into the bundle has moved the benchmark, and the next run would be measured
+ * against a bundle this one edited.
+ */
+async function bundleMutations(workspace) {
+  const changed = (await digestTree(workspace.projectDir, workspace.bundleFiles)) === workspace.bundleDigest ? 0 : 1;
+  const added = filesUnder(workspace.projectDir).filter(
+    (relative) =>
+      !relative.startsWith(`test-artifacts${path.sep}`) &&
+      !relative.startsWith(`_bmad${path.sep}`) &&
+      !workspace.bundleFiles.includes(relative),
+  );
+  return changed + added.length;
+}
+
 async function runCase(set, options, agent, runIndex) {
   let workspace = await stageWorkspace(set);
   try {
@@ -2325,24 +2345,33 @@ async function runCase(set, options, agent, runIndex) {
       };
     }
 
+    // No report at the resolved path while the nfr folder holds one under another
+    // run key is a run that resolved the wrong scope. That is the run's answer, so
+    // it is scored as a report with no domain section, and the file it did write is
+    // named.
+    if (observation.artifacts.report?.kind === 'absent') {
+      const misplaced = misplacedDeliverables(path.join(workspace.projectDir, 'test-artifacts', 'nfr'), /^nfr-assessment-.+\.md$/, [
+        path.basename(NFR_REPORT),
+      ]);
+      if (misplaced.length > 0) {
+        const { reason, evidence } = misplacedEvidence('test-artifacts/nfr', misplaced);
+        return {
+          ok: true,
+          scored: scoreRun(set, parseReport('', { allowEmpty: true })),
+          mutations: await bundleMutations(workspace),
+          misplaced: reason,
+          artifactEvidence: evidence,
+        };
+      }
+    }
+
     const report = reportFromArtifact(observation.artifacts.report);
     if (!report.ok) return report;
-
-    // The workflow audits evidence and generates none. A run that wrote into the
-    // bundle has moved the benchmark, and the next run would be measured against
-    // a bundle this one edited.
-    const mutations = (await digestTree(workspace.projectDir, workspace.bundleFiles)) === workspace.bundleDigest ? 0 : 1;
-    const added = filesUnder(workspace.projectDir).filter(
-      (relative) =>
-        !relative.startsWith(`test-artifacts${path.sep}`) &&
-        !relative.startsWith(`_bmad${path.sep}`) &&
-        !workspace.bundleFiles.includes(relative),
-    );
 
     return {
       ok: true,
       scored: scoreRun(set, report.report),
-      mutations: mutations + added.length,
+      mutations: await bundleMutations(workspace),
       artifactEvidence: artifactEvidence(nfrArtifactPaths(set).report, report.text),
     };
   } finally {
@@ -2621,6 +2650,7 @@ async function main() {
           );
           continue;
         }
+        if (outcome.misplaced) console.error(`  ${colors.red}${set.id} run ${runIndex + 1}: ${outcome.misplaced}${colors.reset}`);
         caseScores.push(outcome.scored);
         totals.mutations += outcome.mutations;
         const signature = signatureOf(outcome.scored, outcome.mutations);

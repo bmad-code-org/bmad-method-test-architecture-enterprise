@@ -67,6 +67,7 @@ Report:
 
   ```yaml
   ---
+  workflowStatus: 'completed'
   stepsCompleted: ['step-05-validate-and-summary']
   lastStep: 'step-05-validate-and-summary'
   lastSaved: '{date}'
@@ -76,6 +77,7 @@ Report:
   Then write this step's output below the frontmatter.
 
 - **If `{outputFile}` already exists**, update:
+  - Set `workflowStatus: 'completed'`
   - Add `'step-05-validate-and-summary'` to `stepsCompleted` array (only if not already present)
   - Set `lastStep: 'step-05-validate-and-summary'`
   - Set `lastSaved: '{date}'`

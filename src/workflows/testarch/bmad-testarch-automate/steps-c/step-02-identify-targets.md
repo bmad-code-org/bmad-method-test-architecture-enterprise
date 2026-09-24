@@ -41,7 +41,7 @@ Determine what needs to be tested and select appropriate test levels and priorit
 **BMad-Integrated:**
 
 - Map acceptance criteria to test scenarios
-- Check for existing ATDD outputs to avoid duplication. Look for the story's checklist at `{test_artifacts}/atdd/atdd-checklist-{story_key}.md` first, then the legacy root `{test_artifacts}/atdd-checklist-{story_key}.md`. For an epic or wider scope, check every `atdd-checklist-*.md` for the in-scope stories in both locations. Name the checklists you found, and read their `generatedTestFiles` to see which scaffolds already exist.
+- Check for existing ATDD outputs to avoid duplication. Look for the story's checklist at `{test_artifacts}/atdd/atdd-checklist-{story_key}.md` first, then the legacy root `{test_artifacts}/atdd-checklist-{story_key}.md`. When this run has no story file, `story_key` is only the dashed story id (`1-2`) while ATDD named its checklist from the story file (`1-2-user-authentication`): if neither exact name exists, look for `{test_artifacts}/atdd/atdd-checklist-{dashed story id}-*.md`, then the same pattern at the legacy root, and accept a match only when its frontmatter `storyId` or `storyKey` names this story. For an epic or wider scope, check every `atdd-checklist-*.md` for the in-scope stories in both locations. Name the checklists you found, and read their `generatedTestFiles` to see which scaffolds already exist.
 - Expand coverage with edge cases and negative paths
 
 **Standalone:**
