@@ -398,15 +398,40 @@ async function main() {
   // checkout instead of the staged fixture, and the first signal would be a paid
   // live run measuring the wrong tree. Staging is pure plumbing with no model
   // call in it, so it belongs in this check rather than behind a credential.
+  //
+  // The NFR, CI and test-design legs are staged the same way, each fixture set
+  // by its own suite's harness: until Story 1.7 they ran in an empty directory,
+  // and every live agent reported its skill and project missing.
   const traceGroundTruth = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'trace-eval', 'ground-truth.json'), 'utf8'));
-  for (const set of traceGroundTruth.fixtureSets) {
-    const staged = await stagedWorkspaceFor('trace', { channels: { stdin: { value: `\`{project-root}\`: \`${set.projectRoot}\`` } } });
-    try {
-      if (typeof staged?.cwd !== 'string' || !fs.existsSync(staged.cwd)) {
-        problems.push(`${set.id}: the contract-strength harness staged no working directory (${JSON.stringify(staged?.cwd ?? null)})`);
+  for (const [suiteId, fixtureDirectory, runner] of [
+    ['trace', 'trace-eval', 'tea-trace-runner'],
+    ['nfr', 'nfr-eval', 'tea-nfr-runner'],
+    ['ci', 'ci-eval', 'tea-ci-runner'],
+    ['test-design', 'test-design-eval', 'tea-test-design-runner'],
+  ]) {
+    const groundTruth = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', fixtureDirectory, 'ground-truth.json'), 'utf8'));
+    for (const set of groundTruth.fixtureSets) {
+      const staged = await stagedWorkspaceFor(suiteId, { channels: { stdin: { value: `\`{project-root}\`: \`${set.projectRoot}\`` } } });
+      try {
+        if (typeof staged?.cwd !== 'string' || !fs.existsSync(staged.cwd)) {
+          problems.push(
+            `${suiteId} ${set.id}: the contract-strength harness staged no working directory (${JSON.stringify(staged?.cwd ?? null)})`,
+          );
+          continue;
+        }
+        for (const expected of [set.projectRoot, 'skill']) {
+          if (!fs.existsSync(path.join(staged.cwd, expected))) {
+            problems.push(`${suiteId} ${set.id}: the staged workspace holds no ${expected}/, so the leg's agent would find nothing to run`);
+          }
+        }
+        if (Object.keys(staged.artifacts?.[runner] ?? {}).length === 0) {
+          problems.push(
+            `${suiteId} ${set.id}: the staged workspace names no artifact path for ${runner}, so the leg's report would never be read back`,
+          );
+        }
+      } finally {
+        if (typeof staged?.root === 'string') fs.rmSync(staged.root, { recursive: true, force: true });
       }
-    } finally {
-      if (typeof staged?.root === 'string') fs.rmSync(staged.root, { recursive: true, force: true });
     }
   }
 

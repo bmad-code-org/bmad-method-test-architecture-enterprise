@@ -104,6 +104,7 @@ const {
 const { readJson, writeText } = require('./lib/file-system-port');
 const ciHarness = require('./eval-ci');
 const nfrHarness = require('./eval-nfr');
+const testDesignHarness = require('./eval-test-design');
 const traceHarness = require('./eval-trace');
 
 const PROJECT_ROOT = path.join(__dirname, '..');
@@ -121,6 +122,11 @@ const SET_STAGED_SUITES = {
   trace: { harness: traceHarness, interfaceId: 'tea-trace-runner', artifactPaths: traceHarness.traceArtifactPaths },
   nfr: { harness: nfrHarness, interfaceId: 'tea-nfr-runner', artifactPaths: nfrHarness.nfrArtifactPaths },
   ci: { harness: ciHarness, interfaceId: 'tea-ci-runner', artifactPaths: ciHarness.ciArtifactPaths },
+  'test-design': {
+    harness: testDesignHarness,
+    interfaceId: 'tea-test-design-runner',
+    artifactPaths: testDesignHarness.designArtifactPaths,
+  },
 };
 
 const colors = {
@@ -193,16 +199,17 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * The run directory one suite's legs execute in, and the artifact paths that
  * directory makes true.
  *
- * A trace, NFR or CI leg is staged by its suite's own harness, so the set arrives
- * exactly as `npm run eval:trace`, `eval:nfr` or `eval:ci` stages it, under the
+ * A trace, NFR, CI or test-design leg is staged by its suite's own harness, so
+ * the set arrives exactly as `npm run eval:trace`, `eval:nfr`, `eval:ci` or
+ * `eval:test-design` stages it, under the
  * same project root its artifact override names. Which set that is comes out of
  * the leg's own prompt: each fixture set has its own project root and the prompt
  * is written against it, so a leg that traces the clean set asks for the clean
  * set. Staging one set for every leg is what made the trace contract's two
  * witness legs seeded runs, which is the scoping failure `seeded-faults-scoped`
- * reported against all three defect probes. NFR and CI legs ran in an empty
- * directory until Story 1.7's live run found every one of them reporting that
- * its skill and project were missing.
+ * reported against all three defect probes. NFR, CI and test-design legs ran in
+ * an empty directory until Story 1.7's live run found every one of them
+ * reporting that its skill and project were missing.
  *
  * A test-review leg is the coupling `docs/explanation/eval-quality-command-adapter.md`
  * records: its `--files` are repository-relative, its `--json` is a bare
@@ -217,6 +224,15 @@ const slug = (suiteId) => suiteId.replaceAll(/[^a-z\d]+/gi, '-');
  * A selection leg gets an empty directory, which is what its `read-only`
  * declaration is for.
  */
+/**
+ * How a suite's legs are staged, named in the leg cache's path. Change the
+ * name whenever `stagedWorkspaceFor` changes what a suite's leg runs in.
+ */
+function stagingOf(suiteId) {
+  if (SET_STAGED_SUITES[suiteId] !== undefined) return 'fixture-set-v1';
+  return suiteId === 'test-review' ? 'review-tree-v1' : 'empty-v1';
+}
+
 async function stagedWorkspaceFor(suiteId, request) {
   const setStaged = SET_STAGED_SUITES[suiteId];
   if (setStaged !== undefined) {
@@ -311,8 +327,11 @@ async function runOneSuite(suite, options, stats) {
   // share one entry and a run against the second would be answered by the first
   // while reporting itself cached. The agent is what changes the answer, and the
   // environment values that also reach the child are credentials that must not
-  // be hashed into a path.
-  const cacheDir = path.join(options.cache, slug(options.agent), slug(suite.id));
+  // be hashed into a path. Keyed by how a leg is staged as well: the request
+  // says nothing about the directory the leg ran in, so a change to staging
+  // (the NFR and CI legs ran in an empty directory until Story 1.7) must move
+  // the cache, or every leg would be answered by a run in the old workspace.
+  const cacheDir = path.join(options.cache, slug(options.agent), slug(suite.id), stagingOf(suite.id));
   const interfaceIds = suite.contract.permittedInterfaces.map((iface) => iface.logicalId);
 
   let port;
@@ -592,4 +611,13 @@ if (require.main === module) {
     });
 }
 
-module.exports = { baselineDifferences, cachingPort, parseArgs, requestKey, stageDirectories, stagedWorkspaceFor, validateArtifact };
+module.exports = {
+  baselineDifferences,
+  cachingPort,
+  parseArgs,
+  requestKey,
+  stageDirectories,
+  stagedWorkspaceFor,
+  stagingOf,
+  validateArtifact,
+};

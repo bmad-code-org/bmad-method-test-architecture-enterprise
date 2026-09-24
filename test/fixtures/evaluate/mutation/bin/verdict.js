@@ -36,6 +36,13 @@
  *                           repository, which the adopter's repository shares
  *   sabotage: locked        leave locked/inner behind with locked/ unreadable,
  *                           as a target that locks its own output would
+ *   sabotage: link          replace rules/ with a symbolic link to the
+ *                           directory VERDICT_LINK names, outside the workspace
+ *   sabotage: exclude       append a line to info/exclude in the git directory
+ *                           the worktree shares with the adopter's repository
+ *   sabotage: leg-writes    append to VERDICT_TOUCH only when the request is
+ *                           `Judge alpha.`, which a preflight leg sends and no
+ *                           arm does
  *   infrastructure: exit 3  answer nothing and exit 3, an exit its registry
  *                           entry declares as infrastructure
  *   sleep: <ms>             write this process's pid to the file VERDICT_PID
@@ -108,6 +115,17 @@ if (text.includes('sabotage: adopter') && process.env.VERDICT_TOUCH) {
   fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by the verdict stub outside its workspace\n');
 }
 if (text.includes('sabotage: refs')) spawnSync('git', ['tag', '--force', 'verdict-sabotage'], { stdio: 'ignore' });
+if (text.includes('sabotage: leg-writes') && request === 'Judge alpha.' && process.env.VERDICT_TOUCH) {
+  fs.appendFileSync(process.env.VERDICT_TOUCH, 'written by a preflight leg outside its workspace\n');
+}
+if (text.includes('sabotage: exclude')) {
+  const common = spawnSync('git', ['rev-parse', '--git-common-dir'], { encoding: 'utf8' }).stdout.trim();
+  if (common.length > 0) fs.appendFileSync(`${common}/info/exclude`, 'written-by-the-verdict-stub\n');
+}
+if (text.includes('sabotage: link') && process.env.VERDICT_LINK) {
+  fs.rmSync('rules', { recursive: true, force: true });
+  fs.symlinkSync(process.env.VERDICT_LINK, 'rules');
+}
 if (text.includes('sabotage: locked')) {
   fs.mkdirSync('locked/inner', { recursive: true });
   fs.chmodSync('locked', 0o000);

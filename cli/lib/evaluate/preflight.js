@@ -15,17 +15,17 @@
  *      evaluated (exit 12 when the workspace cannot be made);
  *   4. `eval-quality compile` and `eval-quality seal` over the run's copy of
  *      `contract.json` (a documented non-zero exit passes through);
- *   5. each seeded probe qualified through AD-8's six steps on the pristine
- *      workspace (`mutation.js`), with the single-trial arm executor
+ *   5. each seeded probe qualified through AD-8's six steps (`mutation.js`) in
+ *      a workspace of its own (`qualify-<probeId>`, reproducing the pristine
+ *      one and removed after its cycle), with the single-trial arm executor
  *      (`arm.js`) and the deterministic evaluator (`evaluator.js`); its
  *      evidence is written under `runs/<invocationId>/qualification/<probeId>/`
  *      as far as the cycle got, and a step that fails exits 10, 11 or 12 with
  *      no qualified probe written;
- *   6. the adopter's tree compared with its state before the workspace was
- *      made (exit 12 when `git status` or its uncommitted changes moved), and
- *      only then the qualified probes written to `runs/<invocationId>/probes/`;
- *   7. one mutated workspace per mutation, its mutation applied and its digest
- *      held to the one the cycle measured;
+ *   6. the adopter's project read again and compared with its reading before
+ *      the workspaces were made (exit 12 on any change);
+ *   7. one mutated workspace per mutation, reproducing the pristine one, its
+ *      mutation applied and its digest held to the one the cycle measured;
  *   8. the legs, planned and driven by eval-quality's `runPreflight` through a
  *      recording port: a leg a defect's manifestation witness names runs in
  *      that defect's mutated workspace, every other leg in the pristine one,
@@ -33,8 +33,11 @@
  *      workspace and working directory it ran in; a leg the adapter refuses or
  *      cannot run is written under `faults/` and ends the run (exit 10 for a
  *      denial, 12 otherwise);
- *   9. `eval-quality preflight --observations ... --run-id <invocationId>` over
- *      the persisted files, whose exit code is the command's exit code.
+ *   9. the adopter's project read again (exit 12 on any change, with the
+ *      probe list removed), then `eval-quality preflight --observations ...
+ *      --run-id <invocationId>` over the persisted files, whose exit code is
+ *      the command's exit code, and last the qualified probes written to
+ *      `runs/<invocationId>/probes/`.
  *
  * `runPreflight` also returns a verdict. It is discarded: an enforced verdict
  * comes from the CLI over persisted files, so CI can reproduce it by hand, and
@@ -437,9 +440,9 @@ async function runInWorkspaces({ folder, evaluation, seeded, pristine, make, dis
     writeJson(runPath, run);
     if (!unchanged) {
       throw stop({
-        stage: when,
+        stage: when === 'qualification' ? 'qualification' : 'leg',
         exitCode: 12,
-        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents, refs or configuration)`} changed during the ${when === 'qualification' ? 'qualification' : 'legs'}, so no rollback is proved and no qualified probe is written; if you edited files meanwhile, run again`,
+        message: `the adopter's ${before.repository === null ? 'project (launch.root)' : `tree at ${before.repository} (its git status, file contents or shared git state)`} changed during the ${when}, so no rollback is proved and no qualified probe is written; if you edited files meanwhile, run again`,
       });
     }
   };
@@ -495,9 +498,15 @@ async function runInWorkspaces({ folder, evaluation, seeded, pristine, make, dis
     }
   }
 
+  // The CLI's probe list. A run that stops before the CLI's verdict removes it,
+  // so no qualified probe outlives a run that failed.
   const probesPath = path.join(runDirectory, 'probes.json');
   const probes = qualified.map((entry) => entry.probe);
   writeJson(probesPath, probes);
+  const retract = (result) => {
+    fs.rmSync(probesPath, { force: true });
+    return result;
+  };
   const recorder = recordingPort({
     pristine: { label: 'pristine', cwd: pristine.root, port: pristineAdapter },
     routes,
@@ -520,17 +529,19 @@ async function runInWorkspaces({ folder, evaluation, seeded, pristine, make, dis
   } catch (error) {
     const fault = recorder.fault();
     if (fault !== null) {
-      return outcome({
-        stage: 'leg',
-        exitCode: fault.code === DENIAL_FAULT ? 10 : 12,
-        message: `leg ${fault.legId} ${fault.code === DENIAL_FAULT ? 'was denied by the registry' : 'could not run'}: ${fault.message}`,
-      });
+      return retract(
+        outcome({
+          stage: 'leg',
+          exitCode: fault.code === DENIAL_FAULT ? 10 : 12,
+          message: `leg ${fault.legId} ${fault.code === DENIAL_FAULT ? 'was denied by the registry' : 'could not run'}: ${fault.message}`,
+        }),
+      );
     }
     const planning =
       recorder.calls() === 0 &&
       (error?.name === 'StructuralFailure' || (error?.name === 'RuntimeFault' && PLANNING_FAULTS.has(error.code)));
     if (!planning) {
-      return outcome({ stage: 'leg', exitCode: 12, message: `the legs could not finish: ${error?.message ?? error}` });
+      return retract(outcome({ stage: 'leg', exitCode: 12, message: `the legs could not finish: ${error?.message ?? error}` }));
     }
     // The plan itself refused before any leg ran. The CLI plans from the same
     // contract and probes, so it reports that refusal with its own exit below.
@@ -538,6 +549,12 @@ async function runInWorkspaces({ folder, evaluation, seeded, pristine, make, dis
   }
   const observationsPath = path.join(runDirectory, 'observations.json');
   writeJson(observationsPath, recorder.observations);
+  try {
+    treeUnchanged('legs');
+  } catch (error) {
+    retract();
+    throw error;
+  }
 
   const verdict = runEngineStage(
     'preflight',
@@ -555,13 +572,35 @@ async function runInWorkspaces({ folder, evaluation, seeded, pristine, make, dis
     ],
     { runDirectory, env, log },
   );
-  treeUnchanged('verdict');
   for (const entry of qualified) writeJson(path.join(runDirectory, 'probes', `${entry.probe.probeId}.probe.json`), entry.probe);
   return outcome({
     stage: 'verdict',
     exitCode: verdict.exitCode,
     message: `eval-quality preflight exited ${verdict.exitCode}; its verdict and diagnostics are in ${path.relative(folder, runDirectory)}`,
   });
+}
+
+/**
+ * Why a qualified probe may not reach the CLI, or null when it may: it must
+ * meet eval-quality's published probe schema and pass eval-quality's own
+ * qualification gate (`qualifyProbe`, against the operation its signature
+ * names), so the runtime hands the CLI admitted probes only.
+ *
+ * @param {object} options
+ * @param {object} options.candidate the qualified probe
+ * @param {object} options.contract
+ * @param {object} options.engine the loaded eval-quality library
+ * @param {(kind: string, value: unknown) => Promise<string[]>} options.validate
+ * @returns {Promise<string|null>}
+ */
+async function admissionRefusal({ candidate, contract, engine, validate }) {
+  const problems = await validate('probe', candidate);
+  if (problems.length > 0) return `the qualified probe does not meet eval-quality's probe schema: ${problems.join('; ')}`;
+  const home =
+    candidate.defectSignature === null ? null : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
+  const admission = engine.qualifyProbe(candidate, home);
+  if (admission.qualified) return null;
+  return `eval-quality's qualification gate refuses the qualified probe: ${admission.failures.map((failure) => `${failure.code} (${failure.detail})`).join('; ')}`;
 }
 
 /**
@@ -601,8 +640,9 @@ async function mutatedRoute({ entry, pristine, make, registry, engine, stop, log
 }
 
 /**
- * One seeded probe through AD-8's six steps on the pristine workspace, its
- * evidence written as far as the cycle got, and the qualified probe built,
+ * One seeded probe through AD-8's six steps in its own qualification
+ * workspace, its evidence written as far as the cycle got, and the qualified
+ * probe built,
  * validated against eval-quality's probe schema and admitted by its
  * qualification gate. Throws a `RunStop` with the cycle's exit when a step
  * fails.
@@ -695,26 +735,10 @@ async function qualifySeededProbe({
     mutatedFailEvidence: referenceTo(folder, files['mutated-fail'], engine.digestBytes),
     rollbackVerified: evidence.rollbackVerified,
   });
-  const problems = await validate('probe', candidate);
-  if (problems.length > 0) {
-    throw stop({
-      stage: 'qualification',
-      exitCode: 10,
-      message: `${file}: the qualified probe does not meet eval-quality's probe schema: ${problems.join('; ')}`,
-    });
-  }
-  const home =
-    candidate.defectSignature === null ? null : engine.resolveHomeOperation(candidate.defectSignature, contract.permittedInterfaces);
-  const admission = engine.qualifyProbe(candidate, home);
-  if (!admission.qualified) {
-    throw stop({
-      stage: 'qualification',
-      exitCode: 10,
-      message: `${file}: eval-quality's qualification gate refuses the qualified probe: ${admission.failures.map((failure) => `${failure.code} (${failure.detail})`).join('; ')}`,
-    });
-  }
+  const refusal = await admissionRefusal({ candidate, contract, engine, validate });
+  if (refusal !== null) throw stop({ stage: 'qualification', exitCode: 10, message: `${file}: ${refusal}` });
   log(`${file}: qualified; the restored digest matched and the baseline passed again`);
   return { probe: candidate, mutation, mutatedDigest: evidence.mutatedDigest };
 }
 
-module.exports = { PreflightOutcome, newInvocationId, recordingPort, runPreflightCommand };
+module.exports = { PreflightOutcome, admissionRefusal, armVerdict, newInvocationId, recordingPort, runPreflightCommand };

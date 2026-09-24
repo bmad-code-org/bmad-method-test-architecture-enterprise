@@ -199,16 +199,75 @@ Each finding was checked against the code before acting; every fix below has a t
 | T12 | low | no check that the automate fixture's copy is removed | fixed |
 | T13 | low | pid reuse in the interrupt case | fixed: alive means the pid still runs the stub (`ps`) |
 
+## Final review round 1
+
+The final review of PR #237 at 7e84609, worked after rebasing onto `main` at ccde995 (#236, TEA outputs scoped into per-workflow folders with run keys).
+The rebase conflicted in `CHANGELOG.md` only, and both entries are kept under `## [Unreleased]`.
+The semantic interactions: #236 moved the NFR and CI harnesses' report paths and prompts (run keys), which `stagedWorkspaceFor` now reads through each harness's own artifact-path function, so the staged legs follow them; every request key in those suites changed with the prompts.
+The runtime reads no `_bmad` configuration and writes only under the evaluation folder's `runs/`, so no output folder or run key reaches it.
+Each finding was verified against the code first.
+
+| ID | Severity | Finding | Outcome |
+| --- | --- | --- | --- |
+| R1 | high | an arm that replaced a directory on the `targetArtifact`'s path with a link to the adopter's tree carried the runtime's own restore out of the workspace | fixed: `planReplaceExact` and the cycle check every directory on the path is real before the mutation, before the restore and so before the step 5 digest (exit 12, `rollbackVerified` false); test: a mutated arm that links `rules/` to the project's `rules/` exits 12 with the project unchanged |
+| R2 | medium | preflight legs exiting an infrastructure code pass, while the docs promised exit 12 | skipped in code, fixed in wording: Story 1.6's criterion and test-design row require a leg's non-zero exit to reach the CLI's verdict (a failing control leg exits 3), and AD-10 classifies that exit 3 as infrastructure from the persisted verdict; faulting the leg would break that pass-through. The exit-12 promise now names qualification arm steps, where it holds, and the preflight section says how a leg's infrastructure exit reads |
+| R3 | medium | submodules are checked out empty in a worktree | fixed: a gitlink under `launch.root` at the evaluated commit is refused with exit 12 naming it; test with a gitlink `libs/shared` |
+| R4 | medium | `info/exclude`, `info/attributes` and `description` escaped the shared-state reading | fixed: the reading digests the whole common git directory except `objects`, `logs`, `worktrees`, `index`, `modules`, `lfs` and lock files, which every existing case confirms git's own worktree add and remove leave unchanged; test: a target appending to `info/exclude` exits 12 |
+| R5 | low | a run that stopped after its legs left `probes.json` (with `rollbackVerified: true`) and a passing verdict | fixed: the project is read after the legs and before the CLI, and any stop after `probes.json` is written removes it; test: a seeded run whose `Judge alpha.` leg writes into the project exits 12 with no `probes.json`, no `preflight-verdict.json` and no `probes/` |
+| R6 | low | a copy workspace refused a `TMPDIR` only inside `launch.root`, so one inside the repository failed every run as a tree change | fixed: the containment root is the repository top for every kind; test in the monorepo shape |
+| T1 | medium | `armVerdict` reading `not-attempted` as held passed | fixed: `armVerdict` exported and unit-tested (an unsettled oracle is inconclusive, a violated one violated), and scripted cycles with an inconclusive baseline or mutated arm exit 11; an end-to-end `insufficient-evidence` oracle needs a quantifier over a declared collection the stub fixture does not have, so the unit carries it |
+| T2 | medium | the schema validation and the qualification gate could be bypassed unnoticed | fixed: `admissionRefusal` extracted and unit-tested (a probe without `schemaVersion` fails the schema, a signature-less defect probe fails `signature-absent`), and end to end a seeded probe with no defect signature exits 10 |
+| T3 | medium | constant `implementationDigest` and `commitDigest` passed | fixed: a worktree probe's `commitDigest` is asserted as the SHA-256 of the commit id, a copy's as its tree digest, and the implementation digest moves with `bin/verdict.js` and stays with `vendor/` |
+| T4 | low | the stdin text branch was unasserted | fixed: the stub's echoed request is `Judge the request.` |
+| T5 | low | moving the mutated verdict ahead of step 5 passed | fixed: a drifted restore beside a mutated arm that held exits 12 |
+| T6 | low | a destructuring default evaded `rollback-literal` | fixed: two `AssignmentPattern` plants (`{ rollbackVerified = true }`, `{ rollbackVerified: verified = true }`) |
+| T7 | low | two shared-repository and nesting cases asserted only the exit | fixed: messages and an empty temp directory asserted |
+| H1 | high | the leg cache key ignored staging, so CI hits were the empty-directory observations | fixed: the cache path carries a staging name per suite (`fixture-set-v1`, `review-tree-v1`, `empty-v1`); the CI entries were deleted, the NFR entries kept only after checking each names its written report, and the others moved to their staging names; found on the way: test-design legs had the same gap (every cached observation says the workspace was empty), so test-design is staged through `eval-test-design.js` too and its empty entries deleted |
+| H2 | medium | the NFR UNKNOWN witness matched the bare word | fixed in `tools/generate-probes.js`: `**Threshold:** UNKNOWN`; the corpus regenerated, and `test/probes/expected-strength.json` moved only in the NFR `corpusDigest` |
+| H3 | medium | `--force` re-spawned shared requests and overwrote the evidence | fixed: a set of keys this port wrote; unit test: two forced legs of one request spawn once and keep the first answer |
+| H4 | medium | nothing failed if NFR or CI staging were reverted | fixed: `test:probe-corpus` stages every trace, NFR, CI and test-design fixture set and asserts `<projectRoot>/`, `skill/` and the runner's artifact paths |
+| H5 | — | the record called `nfr P-001`'s failure a measurement | corrected in Verification |
+| C1 | — | the preflight header and the qualification JSDoc still described qualifying on the pristine workspace | fixed |
+| CR1 | — | AD-8 said `targetArtifact` is repo-relative | valid: the runtime, `check` and the schema resolve it against `launch.root`; AD-8 is amended (dated), and the schema and the docs now say relative to `launch.root`, not the repository, when they differ |
+| CR2 | — | the docs promised no write to adopter state | valid: the workspace section now says the runtime writes nothing into the tree and a target that writes outside its workspace (an absolute path, the shared git state) is detected afterwards with exit 12, not prevented |
+
+### Final review round 1 revert checks
+
+Each fix was undone once in the working tree, the named suite run, the failure observed, and the fix restored.
+
+- R1, the path check made a no-op: "preflight with a mutated arm that links the target directory out of its workspace exited 0; expected 12".
+- R3, the gitlink refusal disabled: "preflight over a project holding a submodule exited 0; expected 12 naming it" (the stub never reads the submodule, so the empty checkout passed unnoticed).
+- R4, the shared-state digest left out: "preflight whose target wrote the shared info/exclude exited 0".
+- R5, the probe list not removed: "a run stopped after its legs kept the probe list it handed the CLI".
+- R6, the containment root back at `launch.root` for copies: "preflight of a copy workspace with TMPDIR inside the repository exited 12; expected 12 naming TMPDIR" (it exited 12 for the tree change, the misleading stop the finding describes).
+- T1, an unsettled oracle read as held: "an arm with an unsettled oracle reads as held".
+- T2, the schema validation made empty: "a qualified probe with no schemaVersion was admitted"; the gate forced open: "a defect probe with no signature passed the qualification gate" and "preflight with a seeded probe with no defect signature exited 0; expected 10".
+- T3, a constant implementation digest: "the implementation digest did not move with bin/verdict.js".
+- T4, the stdin text branch removed: "the arm sent stdin {"prompt":"Judge the request."}".
+- T5, a drifted restore beside a mutated arm that held: covered by the new scripted case, which expects 12 where the old order gave 11.
+- T6, the `AssignmentPattern` clause removed: both destructuring-default plants are missed.
+- H3, `force` without the written set: "under force, a second leg sending one request spawned 2 time(s)".
+- H4, NFR staging removed from `stagedWorkspaceFor`: `test:probe-corpus` reports "nfr gapped-harbor-billing-ledger: the staged workspace holds no harbor-billing-ledger/" and "no skill/".
+
 ## Verification
 
 **Commands:**
+
+Final review round 1 (after the rebase onto ccde995 and the fixes):
+
+- `npm test` -- exit 0 (`test:evaluate-mutation` 381 checks, `test:evaluate-boundaries` 296)
+- `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
+- the Build Rules engine check -- exit 0
+- `npm run eval:preflight` -- run live after the staging and cache fixes; recorded below when it finishes.
+
+Build and review round:
 
 - `npm test` -- exit 0, after the review round's fixes (81 checks; `test:evaluate-mutation` 321 checks)
 - the Build Rules engine check -- exit 0 at the start and at the end; `git diff -- package.json package-lock.json` shows no `file:` or `.tgz` spec
 - `npm run test:release-metadata`, `npm run docs:validate-links`, `npm run docs:build` -- exit 0
 - `npm run eval:preflight` -- run once live through the local Claude Code CLI after the harness moved onto the runtime's `cachingPort` and `stageDirectories`: 35 legs run and 155 answered from the cache, about an hour in the model, exit 2 with eight preflight outcomes moved, every one in the NFR and CI suites (for example `nfr P-001: pre-flight failed: input-sensitivity, seeded-fault-fired, recorded passed`); the other suites matched the baseline.
   The cause was the unstaged NFR and CI legs (Implementation Notes).
-  After the fix, a rerun of the NFR suite with `--force` (stopped after its first probe, since each leg takes about five minutes) staged every bundle: the witness legs wrote real assessments, and `nfr P-001` now fails only `seeded-faults-scoped` ("the manifestation witness fires on clean leg witness-custom-category-named"), a live measurement of the NFR contract's witness against today's model that `test/probes/expected-strength.json` records as passed; it is the owner's to judge and re-record, not a Story 1.7 behavior.
+  After the fix, a rerun of the NFR suite with `--force` staged every bundle and the witness legs wrote real assessments; its first probe, `nfr P-001`, then failed `seeded-faults-scoped` on one clean leg. Corrected in final review round 1 (H5): that was not a measurement of the contract. `--force` re-ran every leg whose request another probe also sends and overwrote the shared cache entry (H3), so the evidence the failing verdict was reduced from no longer existed, and the witness's bare `UNKNOWN` literal fired on a clean report that mentioned the word (H2). From the staged cache the NFR suite reduces to its baseline, P-001 to P-004 passed; the final round's live run is recorded below.
 
 Planned:
 

@@ -71,6 +71,13 @@ function countOccurrences(bytes, find) {
  */
 function planReplaceExact(root, mutation) {
   const file = path.join(root, ...mutation.targetArtifact.split('/'));
+  const escape = pathEscape(root, mutation.targetArtifact);
+  if (escape !== null) {
+    throw new QualificationError(
+      QUALIFICATION_EXITS.infrastructure,
+      `${mutation.mutationId}: ${escape}, so a write to targetArtifact ${mutation.targetArtifact} would leave the workspace`,
+    );
+  }
   let stats;
   try {
     stats = fs.lstatSync(file);
@@ -101,7 +108,43 @@ function planReplaceExact(root, mutation) {
     Buffer.from(mutation.operator.replace, 'utf8'),
     original.subarray(at + find.length),
   ]);
-  return { file, original, mutated, mode: stats.mode & 0o7777 };
+  return { root, relative: mutation.targetArtifact, file, original, mutated, mode: stats.mode & 0o7777 };
+}
+
+/**
+ * Why a path under `root` does not stay inside it, or null when it does: each
+ * directory from `root` down to the file must be a real directory, not a
+ * symbolic link, and the file itself must not be a link. A target that swaps
+ * a directory on the path for a link (to the adopter's tree, say) would
+ * otherwise carry the runtime's own write or read out of the workspace.
+ */
+function pathEscape(root, relative) {
+  const segments = relative.split('/');
+  let current = root;
+  for (const [index, segment] of segments.entries()) {
+    current = path.join(current, segment);
+    let stats;
+    try {
+      stats = fs.lstatSync(current);
+    } catch {
+      return null;
+    }
+    const last = index === segments.length - 1;
+    if (stats.isSymbolicLink()) return `${segments.slice(0, index + 1).join('/')} is a symbolic link`;
+    if (!last && !stats.isDirectory()) return `${segments.slice(0, index + 1).join('/')} is not a directory`;
+  }
+  return null;
+}
+
+/** Stops the cycle (exit 12) when the target's path no longer stays inside the workspace; an arm may have rewritten it. */
+function assertContained(planned, mutation, evidence, when) {
+  const escape = pathEscape(planned.root, planned.relative);
+  if (escape === null) return;
+  throw new QualificationError(
+    QUALIFICATION_EXITS.infrastructure,
+    `${mutation.mutationId}: ${when}, ${escape}, so the runtime will not write or read ${mutation.targetArtifact} through it`,
+    evidence,
+  );
 }
 
 /** Writes `bytes` to `file`, a failure being an infrastructure stop (exit 12) naming `what`. */
@@ -201,6 +244,7 @@ async function runMutationCycle({ root, mutation, runArm, reExecutionCap, digest
   }
 
   log(`${mutation.mutationId}: step 2, the mutation applied to ${mutation.targetArtifact}`);
+  assertContained(planned, mutation, evidence, 'after the clean arm');
   writeOrStop(planned.file, planned.mutated, `${mutation.mutationId}'s mutation of ${mutation.targetArtifact}`, evidence);
   evidence.mutatedDigest = digestOfFile(planned.file, digestOf);
   try {
@@ -208,6 +252,7 @@ async function runMutationCycle({ root, mutation, runArm, reExecutionCap, digest
     evidence.mutated = await arm('mutated');
   } finally {
     log(`${mutation.mutationId}: step 4, the original bytes restored`);
+    assertContained(planned, mutation, evidence, 'after the mutated arm');
     restoreArtifact(planned, mutation, evidence);
     evidence.restoredDigest = digestOfFile(planned.file, digestOf);
   }

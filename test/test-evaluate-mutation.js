@@ -70,8 +70,10 @@ const { spawn, spawnSync } = require('node:child_process');
 
 const { ENGINE_CLI_ENV } = require('../cli/lib/evaluate/engine');
 const { ArmError, runArm } = require('../cli/lib/evaluate/arm');
+const { loadEngine } = require('../cli/lib/evaluate/engine');
+const { admissionRefusal, armVerdict } = require('../cli/lib/evaluate/preflight');
 const { dispositionOf } = require('../cli/lib/evaluate/evaluator');
-const { QualificationError, countOccurrences, runMutationCycle } = require('../cli/lib/evaluate/mutation');
+const { QualificationError, countOccurrences, qualifiedProbe, runMutationCycle } = require('../cli/lib/evaluate/mutation');
 const { cacheOnlyPort, cachingPort, requestKey, treeDigest } = require('../cli/lib/evaluate/workspace');
 const { createArtifactValidator } = require('../cli/lib/evaluate/records');
 
@@ -335,6 +337,10 @@ async function checkGitTarget() {
     `the mutated arm's own stdout names digest ${stubField(armStdout(mutated), 'digest')}; expected mutatedDigest ${rollback.mutatedDigest}`,
   );
   check(stubField(armStdout(baseline), 'digest') === rollback.preDigest, "the baseline arm's stdout does not name preDigest");
+  check(
+    stubField(armStdout(baseline), 'request') === 'Judge the request.',
+    `the arm sent stdin ${JSON.stringify(stubField(armStdout(baseline), 'request'))}; a one-key stdin binding is sent as its text`,
+  );
   check(baseline.verdict === 'held' && mutated.verdict === 'violated', `the arms' verdicts are ${baseline.verdict} and ${mutated.verdict}`);
   check(
     stubField(armStdout(baseline), 'workspace') === 'git-worktree',
@@ -358,6 +364,10 @@ async function checkGitTarget() {
   check(probe.qualification?.rollbackVerified === true, 'the qualified probe does not carry rollbackVerified: true');
   check(probe.artifactDigest === preDigest, `the probe's artifactDigest is ${probe.artifactDigest}; expected ${preDigest}`);
   gitTargetImplementationDigest = probe.implementationDigest;
+  check(
+    probe.commitDigest === sha256(Buffer.from(head, 'utf8')),
+    `the worktree probe's commitDigest is ${probe.commitDigest}; expected the SHA-256 of the evaluated commit id ${head}`,
+  );
   for (const field of ['baselinePassEvidence', 'mutatedFailEvidence']) {
     const reference = probe.qualification?.[field];
     check(reference !== undefined, `the qualified probe carries no ${field}`);
@@ -503,6 +513,11 @@ function checkCopyWorkspaces() {
       `${label}'s arm ran in a "${stubField(armStdout(baseline), 'workspace')}" directory`,
     );
     check(qualifiedProbes(runDirectory).length === 1, `${label} wrote no qualified probe`);
+    const copyProbe = evidenceOf(path.join(runDirectory, 'probes', 'P-002.probe.json'));
+    check(
+      copyProbe.commitDigest === run.workspace.treeDigest,
+      `${label}'s probe commitDigest is ${copyProbe.commitDigest}; a copy names no commit, so it is the tree digest ${run.workspace.treeDigest}`,
+    );
   }
 }
 
@@ -548,6 +563,19 @@ function checkFailures() {
       says: 'the restore of rules/policy.txt could not be written',
     },
     {
+      name: 'a mutated arm that links the target directory out of its workspace',
+      edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: link')),
+      env: (fixture) => ({ VERDICT_LINK: path.join(fixture.project, 'rules') }),
+      exit: 12,
+      says: 'rules is a symbolic link',
+    },
+    {
+      name: 'a seeded probe with no defect signature',
+      edit: ({ folder }) => editJson(path.join(folder, 'probes', 'P-002.probe.json'), (probe) => delete probe.defectSignature),
+      exit: 10,
+      says: 'signature-absent',
+    },
+    {
       name: 'a target exiting an infrastructure code',
       edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'infrastructure: exit 3')),
       exit: 12,
@@ -583,7 +611,7 @@ function checkFailures() {
     const fixture = makeProject(failure.name.split(' ').slice(-2).join('-'), { edit: failure.edit ?? (() => {}) });
     const before = adopterState(fixture.project);
     failure.before?.(fixture);
-    const result = runPreflight(fixture);
+    const result = evaluate(['preflight', '--evaluation', fixture.folder], { ...fixture.temp.env, ...failure.env?.(fixture) });
     fs.chmodSync(fixture.temp.directory, 0o755);
     check(
       result.status === failure.exit,
@@ -697,6 +725,33 @@ async function checkCycle() {
     JSON.stringify(flaky.phases) === JSON.stringify(['baseline', 'mutated', 're-pass-1', 're-pass-2']),
     `the cycle ran its arms as ${JSON.stringify(flaky.phases)}; AD-8 orders baseline, mutated, then the re-runs`,
   );
+  // Step 5 comes before the mutated verdict: a drifted restore stops with 12
+  // even when the mutated arm did not fail.
+  let heldSeen = false;
+  const driftingHeld = await outcome({
+    ...scripted({ mutated: 'held' }),
+    reExecutionCap: 0,
+    digestBytes: (bytes) => {
+      const original = Buffer.from(bytes).toString('utf8') === 'mode: strict\n';
+      if (!original) heldSeen = true;
+      return original && heldSeen ? 'sha256:restored-bytes-that-differ' : sha256(bytes);
+    },
+  });
+  check(
+    driftingHeld.error?.exitCode === 12,
+    `a drifted restore beside a mutated arm that held stopped with ${driftingHeld.error?.exitCode ?? 'no error'}; expected 12, step 5 before the mutated verdict`,
+  );
+  for (const [phase, verdicts] of [
+    ['baseline', { baseline: 'inconclusive' }],
+    ['mutated', { mutated: 'inconclusive' }],
+  ]) {
+    const unsettled = await outcome({ ...scripted(verdicts), reExecutionCap: 0 });
+    check(
+      unsettled.error?.exitCode === 11,
+      `an inconclusive ${phase} arm stopped with ${unsettled.error?.exitCode ?? 'no error'}; expected 11`,
+    );
+  }
+
   const first = scripted({ mutated: 'violated' });
   await outcome({ runArm: first.runArm, reExecutionCap: 2 });
   check(
@@ -813,6 +868,39 @@ async function checkUnits() {
   fs.writeFileSync(path.join(tree, 'a', 'b.txt'), 'two\n');
   check(treeDigest(tree) !== first, 'the tree digest did not move with a file');
 
+  // An arm is held only when every oracle holds; one the evidence cannot settle leaves it inconclusive.
+  check(
+    armVerdict([{ disposition: 'held' }, { disposition: 'not-attempted' }]) === 'inconclusive',
+    'an arm with an unsettled oracle reads as held',
+  );
+  check(
+    armVerdict([{ disposition: 'not-attempted' }, { disposition: 'violated' }]) === 'violated',
+    'an arm with a violated oracle does not read as violated',
+  );
+  check(armVerdict([{ disposition: 'held' }]) === 'held', 'an arm whose oracles hold does not read as held');
+
+  // A qualified probe reaches the CLI only past eval-quality's schema and qualification gate.
+  const engine = await loadEngine();
+  const validate = createArtifactValidator();
+  const probe = readJson(path.join(FIXTURE, EVALUATION, 'probes', 'P-002.probe.json'));
+  const reference = { storage: 'public', path: 'runs/x/qualification/P-002/baseline-pass.json', privateRef: null, digest: sha256('x') };
+  const candidate = qualifiedProbe({
+    probe,
+    mutation: readJson(path.join(FIXTURE, EVALUATION, 'mutations', 'M-001.mutation.json')),
+    systemId: 'verdict-mutation',
+    digests: { implementationDigest: sha256('i'), commitDigest: sha256('c'), artifactDigest: sha256('a') },
+    baselinePassEvidence: reference,
+    mutatedFailEvidence: reference,
+    rollbackVerified: true,
+  });
+  check((await admissionRefusal({ candidate, contract, engine, validate })) === null, 'a well-formed qualified probe was refused');
+  const { schemaVersion, ...unstamped } = candidate;
+  void schemaVersion;
+  const malformed = await admissionRefusal({ candidate: unstamped, contract, engine, validate });
+  check(String(malformed).includes("eval-quality's probe schema"), `a qualified probe with no schemaVersion was admitted: ${malformed}`);
+  const unsigned = await admissionRefusal({ candidate: { ...candidate, defectSignature: null }, contract, engine, validate });
+  check(String(unsigned).includes('signature-absent'), `a defect probe with no signature passed the qualification gate: ${unsigned}`);
+
   // The leg cache: a pinned key, one live call per request, credentials kept out of the record.
   const request = {
     probeId: 'leg-a',
@@ -860,6 +948,36 @@ async function checkUnits() {
   );
   const record = fs.readFileSync(path.join(cacheDir, `${requestKey(request)}.json`), 'utf8');
   check(record.includes('"TOKEN"') && !record.includes(SECRET), 'the cached record holds a credential value, or not its key');
+  let forcedSpawns = 0;
+  const forced = cachingPort({
+    cacheDir,
+    force: true,
+    makePort: async () => {
+      const workspace = { root: fs.mkdtempSync(path.join(root, 'leg-')) };
+      return {
+        workspace,
+        port: {
+          probe: async (augmented) => {
+            forcedSpawns += 1;
+            return {
+              probeId: augmented.probeId,
+              kind: 'cli',
+              exitCode: 0,
+              stdout: { kind: 'text', value: `run ${forcedSpawns}` },
+              stderr: { kind: 'text', value: '' },
+              artifacts: {},
+            };
+          },
+        },
+      };
+    },
+  });
+  await forced.probe(request);
+  const shared = await forced.probe({ ...request, probeId: 'leg-d' });
+  check(
+    forcedSpawns === 1 && shared.stdout.value === 'run 1',
+    `under force, a second leg sending one request spawned ${forcedSpawns} time(s); the first leg's evidence must stand`,
+  );
   const cached = await cacheOnlyPort({ cacheDir }).probe({ ...request, probeId: 'leg-c' });
   check(cached.probeId === 'leg-c', 'the cache-only port answered with another leg id');
   let missed = null;
@@ -971,8 +1089,48 @@ function checkSharedRepository() {
   const refsBefore = git(tagged.project, ['for-each-ref']);
   const result = runPreflight(tagged);
   check(result.status === 12, `preflight whose target tagged the shared repository exited ${result.status}; expected 12\n${result.output}`);
+  check(result.stdout.includes("the adopter's tree"), `the refusal does not name the adopter's tree:\n${result.output}`);
+  check(fs.readdirSync(tagged.temp.directory).length === 0, 'the run whose target tagged the repository left a workspace behind');
   check(git(tagged.project, ['for-each-ref']) !== refsBefore, 'the stub never tagged the shared repository, so the case proves nothing');
   check(qualifiedProbes(runDirectoryOf(tagged.folder)).length === 0, 'a run whose target tagged the repository wrote a qualified probe');
+
+  // info/exclude sits in the git directory the worktree shares, beside the refs and the configuration.
+  const excluded = makeProject('exclude', {
+    edit: ({ folder }) => editMutation(folder, (operator) => (operator.replace = 'mode: lenient\nsabotage: exclude')),
+  });
+  const excludeFile = path.join(excluded.project, '.git', 'info', 'exclude');
+  const excludeBefore = fs.existsSync(excludeFile) ? fs.readFileSync(excludeFile, 'utf8') : '';
+  const excludedResult = runPreflight(excluded);
+  check(
+    excludedResult.status === 12 && excludedResult.stdout.includes("the adopter's tree"),
+    `preflight whose target wrote the shared info/exclude exited ${excludedResult.status}; expected 12 naming the adopter's tree\n${excludedResult.output}`,
+  );
+  check(
+    (fs.existsSync(excludeFile) ? fs.readFileSync(excludeFile, 'utf8') : '') !== excludeBefore,
+    'the stub never wrote the shared info/exclude, so the case proves nothing',
+  );
+
+  // A leg of a seeded evaluation that writes into the project stops the run
+  // after the legs, and nothing the run wrote reads as a qualified pass.
+  const legWrites = makeProject('leg-writes', {
+    edit: ({ project }) => fs.writeFileSync(path.join(project, POLICY), 'mode: strict\nsabotage: leg-writes\n'),
+  });
+  const legTouched = path.join(legWrites.project, 'notes.txt');
+  const legWritesResult = evaluate(['preflight', '--evaluation', legWrites.folder], { ...legWrites.temp.env, VERDICT_TOUCH: legTouched });
+  check(
+    legWritesResult.status === 12 && legWritesResult.stdout.includes('changed during the legs'),
+    `preflight whose seeded run's leg wrote into the project exited ${legWritesResult.status}; expected 12 after the legs\n${legWritesResult.output}`,
+  );
+  const legRun = runDirectoryOf(legWrites.folder);
+  check(
+    legRun !== null && !fs.existsSync(path.join(legRun, 'probes.json')),
+    'a run stopped after its legs kept the probe list it handed the CLI',
+  );
+  check(
+    legRun !== null && !fs.existsSync(path.join(legRun, 'preflight-verdict.json')),
+    'a run stopped after its legs holds a preflight verdict',
+  );
+  check(qualifiedProbes(legRun).length === 0, 'a run stopped after its legs wrote a qualified probe');
 
   const legs = makeProject('legs', {
     edit: ({ project, folder }) => {
@@ -1026,9 +1184,56 @@ function checkRepositoryShape() {
   const temp = tempDir('monorepo-temp');
   const nested = evaluate(['preflight', '--evaluation', path.join(project, EVALUATION)], { TMPDIR: temp, TMP: temp, TEMP: temp });
   check(
-    nested.status === 0,
+    nested.status === 0 && nested.stdout.includes('eval-quality preflight exited 0'),
     `preflight over a project in a repository with a link out elsewhere exited ${nested.status}; expected 0\n${nested.output}`,
   );
+  check(fs.readdirSync(temp).length === 0, 'the nested run left a workspace behind');
+
+  // A temp directory inside the repository, outside launch.root, is refused
+  // for a copy workspace too: a workspace there would read as a change to the
+  // adopter's tree.
+  const inside = path.join(outer, 'scratch');
+  fs.mkdirSync(inside);
+  editJson(path.join(project, EVALUATION, 'evaluation.json'), (value) => (value.workspace.kind = 'copy'));
+  const insideResult = evaluate(['preflight', '--evaluation', path.join(project, EVALUATION)], {
+    TMPDIR: inside,
+    TMP: inside,
+    TEMP: inside,
+  });
+  check(
+    insideResult.status === 12 && insideResult.stdout.includes('point TMPDIR outside'),
+    `preflight of a copy workspace with TMPDIR inside the repository exited ${insideResult.status}; expected 12 naming TMPDIR\n${insideResult.output}`,
+  );
+  check(fs.readdirSync(inside).length === 0, 'the refused run left a workspace inside the repository');
+
+  // A submodule under launch.root, which a worktree checks out empty, is refused.
+  const withSubmodule = makeProject('submodule');
+  const head = git(withSubmodule.project, ['rev-parse', 'HEAD']).trim();
+  git(withSubmodule.project, ['update-index', '--add', '--cacheinfo', `160000,${head},libs/shared`]);
+  git(withSubmodule.project, ['commit', '--quiet', '--message', 'a submodule']);
+  const submoduleResult = runPreflight(withSubmodule);
+  check(
+    submoduleResult.status === 12 && submoduleResult.stdout.includes('libs/shared'),
+    `preflight over a project holding a submodule exited ${submoduleResult.status}; expected 12 naming it\n${submoduleResult.output}`,
+  );
+  check(fs.readdirSync(withSubmodule.temp.directory).length === 0, 'the refused submodule run left a workspace behind');
+
+  // implementationDigest follows the implementation's bytes, and not a provisioned directory's.
+  const digestOf = (label, edit) => {
+    const fixture = makeProject(label, { edit });
+    const outcome = runPreflight(fixture);
+    const runDirectory = runDirectoryOf(fixture.folder);
+    check(outcome.status === 0 && runDirectory !== null, `preflight over the ${label} project exited ${outcome.status}\n${outcome.output}`);
+    return runDirectory === null ? null : evidenceOf(path.join(runDirectory, 'probes', 'P-002.probe.json')).implementationDigest;
+  };
+  const edited = digestOf('edited', ({ project: editedProject }) =>
+    fs.appendFileSync(path.join(editedProject, 'bin', 'verdict.js'), '// edited\n'),
+  );
+  check(edited !== null && edited !== gitTargetImplementationDigest, 'the implementation digest did not move with bin/verdict.js');
+  const vendored = digestOf('vendored', ({ project: vendoredProject }) =>
+    fs.writeFileSync(path.join(vendoredProject, 'vendor', 'library.txt'), 'provisioned, another version\n'),
+  );
+  check(vendored === gitTargetImplementationDigest, `the implementation digest moved with vendor/, a provisioned directory: ${vendored}`);
 
   // Untracked (gitignored, as node_modules is) and tracked, so each of the
   // workspace's two refusals is reached.

@@ -10,7 +10,7 @@
       "target": "bin/verdict.js",
       "subcommandPaths": [[]],
       "artifacts": {},
-      "environmentKeys": ["VERDICT_PID", "VERDICT_SECRET", "VERDICT_TOUCH"],
+      "environmentKeys": ["VERDICT_LINK", "VERDICT_PID", "VERDICT_SECRET", "VERDICT_TOUCH"],
       "maxElapsedMs": 30000,
       "infrastructureExitCodes": [3]
     }

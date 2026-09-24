@@ -21,9 +21,9 @@
  *   11  preflight only: an evaluation weakness, a seeded probe whose baseline does not pass or whose mutated
  *       arm does not fail
  *   12  infrastructure: the optional eval-quality peer is not installed; preflight: a workspace that cannot
- *       be made, a target that cannot launch or exits an infrastructure code, a restore that fails, a
- *       restored workspace that does not pass again, a leg that could not run, a change to the adopter's
- *       project during the run, or an engine stage that could not run
+ *       be made, a target that cannot launch, a qualification arm step that exits an infrastructure code,
+ *       a restore that fails, a restored workspace that does not pass again, a leg that could not run, a
+ *       change to the adopter's project during the run, or an engine stage that could not run
  *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight: or eval-quality's own 64)
  */
 

@@ -331,14 +331,44 @@ function contentOf(file) {
 }
 
 /**
+ * What in a repository's common git directory is git's own bookkeeping for a
+ * run, and so left out of `sharedStateDigest`: the object store (a worktree's
+ * checkout adds nothing a target could use to change the adopter's files, and
+ * it is the bulk of the directory), reflogs, the per-worktree records a
+ * worktree add and remove write, the index, a submodule's or LFS's own store,
+ * and lock files.
+ */
+const GIT_BOOKKEEPING = new Set(['objects', 'logs', 'worktrees', 'index', 'modules', 'lfs']);
+
+/**
+ * A digest over a repository's common git directory, bookkeeping left out:
+ * its configuration, hooks, `info/` (`exclude`, `attributes`), `description`,
+ * refs and anything else a target running git in a worktree could change on
+ * the adopter's behalf.
+ */
+function sharedStateDigest(gitDirectory) {
+  let entries;
+  try {
+    entries = fs.readdirSync(gitDirectory, { withFileTypes: true });
+  } catch (error) {
+    throw new WorkspaceRefusal(`could not read the git directory ${gitDirectory}: ${error.message}`);
+  }
+  const exclude = entries
+    .filter((entry) => GIT_BOOKKEEPING.has(entry.name) || entry.name.endsWith('.lock'))
+    .map((entry) => path.join(gitDirectory, entry.name));
+  return treeDigest(gitDirectory, { exclude });
+}
+
+/**
  * A reading of the adopter's project that compares equal to an earlier one
  * only when nothing a run could have written changed between them (AD-8).
  *
  * Inside a git repository: `git status` (tracked and untracked paths), a
  * digest over the content of every path it names (one already modified
- * included), every ref (branches, tags, the stash), the repository's
- * configuration and its hooks, since a detached worktree shares all of them
- * with the repository it came from. `--no-optional-locks` keeps
+ * included), every ref (branches, tags, the stash), and the repository's
+ * common git directory without its bookkeeping (`sharedStateDigest`:
+ * configuration, hooks, `info/`, `description`, refs), since a detached
+ * worktree shares all of it with the repository it came from. `--no-optional-locks` keeps
  * `git status` from rewriting the index. Gitignored paths are not read.
  * Outside a repository: the tree digest of `directory`, the paths in
  * `exclude` left out.
@@ -382,8 +412,7 @@ function adopterTreeState(directory, { exclude = [] } = {}) {
     status: status.stdout,
     changes: digest(parts),
     refs: refs.stdout,
-    config: contentOf(path.join(repository.gitDirectory, 'config')),
-    hooks: isDirectory(path.join(repository.gitDirectory, 'hooks')) ? treeDigest(path.join(repository.gitDirectory, 'hooks')) : null,
+    shared: sharedStateDigest(repository.gitDirectory),
   };
 }
 
@@ -422,10 +451,13 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     throw new WorkspaceRefusal(`the temp directory ${os.tmpdir()} cannot be used: ${error.message}; point TMPDIR at an existing directory`);
   }
   const repositoryTop = basis === null ? (repository?.top ?? null) : basis.repository;
-  const contains = worktree ? repositoryTop : root;
+  // Inside the repository, a workspace would show in its own git status and the
+  // run would read its own files as a change to the adopter's tree; inside
+  // launch.root, a copy would copy itself.
+  const contains = repositoryTop ?? root;
   if (isInside(contains, temp)) {
     throw new WorkspaceRefusal(
-      `the temp directory ${temp} is inside ${worktree ? 'the repository' : 'launch.root'} ${contains}, so the workspace would hold itself; point TMPDIR outside the evaluated project`,
+      `the temp directory ${temp} is inside ${repositoryTop === null ? 'launch.root' : 'the repository'} ${contains}, so the workspace would sit in the project it evaluates; point TMPDIR outside the evaluated project`,
     );
   }
   let directory;
@@ -474,6 +506,12 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
       workspace.metadata = worktreeMetadataOf(workspace);
       if (!added.ok) throw new WorkspaceRefusal(`git worktree add could not check out ${workspace.commit}: ${added.detail}`);
       workspace.root = path.join(workspace.top, path.relative(workspace.repository, root));
+      const submodules = gitlinksUnder(workspace, root);
+      if (submodules.length > 0) {
+        throw new WorkspaceRefusal(
+          `launch.root holds git submodule(s) ${submodules.join(', ')} at commit ${workspace.commit}, which a worktree checks out empty, so the run would evaluate a project missing their files; evaluate the submodule's own repository, or pass --from-working-tree to copy the checked-out tree`,
+        );
+      }
       if (!isDirectory(workspace.root)) {
         throw new WorkspaceRefusal(
           `launch.root ${posix(path.relative(workspace.repository, root)) || '.'} is not tracked at commit ${workspace.commit}, so the worktree does not hold it; commit it or pass --from-working-tree`,
@@ -537,6 +575,17 @@ function createWorkspace({ root, kind, provision = [], exclude = [], fromWorking
     if (error instanceof WorkspaceRefusal) throw error;
     throw new WorkspaceRefusal(`the ${label} workspace could not be made: ${error.message}`);
   }
+}
+
+/** The submodules (gitlinks, mode 160000) the evaluated commit holds under `launch.root`, as repository paths. */
+function gitlinksUnder(workspace, root) {
+  const scope = posix(path.relative(workspace.repository, root)) || '.';
+  const listed = runGit(['-C', workspace.repository, 'ls-tree', '-r', '-z', workspace.commit, '--', scope]);
+  if (!listed.ok) throw new WorkspaceRefusal(`could not list the tree of commit ${workspace.commit}: ${listed.detail}`);
+  return listed.stdout
+    .split('\u0000')
+    .filter((record) => record.startsWith('160000 '))
+    .map((record) => record.slice(record.indexOf('\t') + 1));
 }
 
 /**
@@ -690,7 +739,7 @@ const SYSTEM_CLOCK = {
  * @param {string} options.cacheDir
  * @param {(request: object) => object} [options.augment] the live request built from the planned one
  * @param {object} [options.recordFields] extra fields written into each cached observation after its key (an agent's name)
- * @param {boolean} [options.force] ignore the cache and run every leg live
+ * @param {boolean} [options.force] ignore what an earlier run cached and run each request live once
  * @param {Array<{spawns: number, hits: number, elapsedMs: number, legs: object[]}>} [options.counters]
  * @param {(event: object) => void} [options.log] `{ event: 'cached'|'running'|'wrote', ... }`
  * @param {(file: string) => Promise<{present: boolean, value?: unknown}>} [options.readJson]
@@ -711,11 +760,15 @@ function cachingPort({
   clock = SYSTEM_CLOCK,
 }) {
   fs.mkdirSync(cacheDir, { recursive: true });
+  // Under `force`, a request this port has already run is answered from what
+  // it wrote: two legs sending one request share one observation, and a
+  // second live run would overwrite the evidence the first leg was scored on.
+  const written = new Set();
   return {
     async probe(request, signal) {
       const key = requestKey(request);
       const file = path.join(cacheDir, `${key}.json`);
-      const cached = force ? { present: false } : await readJson(file);
+      const cached = force && !written.has(key) ? { present: false } : await readJson(file);
       if (cached.present) {
         for (const counter of counters) counter.hits += 1;
         log({ event: 'cached', legId: request.probeId, key });
@@ -753,6 +806,7 @@ function cachingPort({
         file,
         `${JSON.stringify({ key, ...recordFields, at: await clock.nowIso(), elapsedMs, request: persisted, observation }, null, 2)}\n`,
       );
+      written.add(key);
       log({ event: 'wrote', legId: request.probeId, key, file, elapsedMs, exitCode: observation.exitCode });
       return observation;
     },

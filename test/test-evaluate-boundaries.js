@@ -56,7 +56,8 @@
  * - `rollback-literal` (Story 1.7, AD-8): nothing under `cli/` writes
  *   `rollbackVerified: true` as a literal: an object property (a quoted or
  *   computed key included), an assignment (dot, bracket or a bare name), a
- *   binding a shorthand property could carry, or `"rollbackVerified": true` in
+ *   binding a shorthand property could carry, a destructuring default, or
+ *   `"rollbackVerified": true` in
  *   a JSON file, since the flag is the rollback cycle's own result; the
  *   twin-fixture pattern AD-8 rejects set it by hand.
  *
@@ -579,6 +580,13 @@ function fileViolations({ source, ast, isEngine, isSkillRunner, file, projectRoo
       isTrueLiteral(node.right)
     ) {
       report(node, 'rollback-literal', `assigns ${ROLLBACK_FLAG} = true; the flag is the rollback cycle's own result`);
+    }
+    if (
+      node.type === 'AssignmentPattern' &&
+      (isIdentifier(node.left, ROLLBACK_FLAG) || (parent?.type === 'Property' && propertyKey(parent) === ROLLBACK_FLAG)) &&
+      isTrueLiteral(node.right)
+    ) {
+      report(node, 'rollback-literal', `defaults ${ROLLBACK_FLAG} to true; the flag is the rollback cycle's own result`);
     }
     if (node.type === 'VariableDeclarator' && isIdentifier(node.id, ROLLBACK_FLAG) && isTrueLiteral(node.init)) {
       report(
@@ -1225,6 +1233,18 @@ const PLANTS = [
     rule: 'rollback-literal',
     file: 'lib/evaluate/qualified.js',
     source: 'function qualify() {\n  const rollbackVerified = true;\n  return { rollbackVerified };\n}\nmodule.exports = { qualify };\n',
+  },
+  {
+    name: 'rollbackVerified defaulted to true in a destructured parameter',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualified.js',
+    source: 'function qualify({ rollbackVerified = true }) {\n  return { rollbackVerified };\n}\nmodule.exports = { qualify };\n',
+  },
+  {
+    name: 'rollbackVerified defaulted to true under another name',
+    rule: 'rollback-literal',
+    file: 'lib/evaluate/qualified.js',
+    source: 'function qualify({ rollbackVerified: verified = true }) {\n  return verified;\n}\nmodule.exports = { qualify };\n',
   },
   {
     name: 'rollbackVerified reassigned true',

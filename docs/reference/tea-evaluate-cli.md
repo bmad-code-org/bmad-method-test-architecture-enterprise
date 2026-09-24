@@ -125,12 +125,13 @@ Address an exit code, stream or body only the defect produces.
 
 ## The workspace
 
-Every run happens in disposable workspaces, so no mutation and no leg's write lands in your tree.
+Every mutation and every arm and leg of a run happens in a disposable workspace, so the runtime itself writes nothing into your tree.
+A target that writes outside its workspace anyway (through an absolute path, or through the git state a worktree shares with your repository) is detected afterwards and the run exits 12, as the end of this section describes; it is not prevented.
 `evaluation.json`'s `workspace` chooses the first one, the pristine workspace:
 
 - `kind: git`, with `launch.root` inside a git repository that has a commit: a detached worktree at `HEAD`, made with `git worktree add --detach` and your repository's hooks disabled.
   The evaluated commit is recorded, and uncommitted changes are left out of the run, which says so on stderr.
-  `launch.root` must be tracked at that commit.
+  `launch.root` must be tracked at that commit, and must hold no git submodule, which a worktree checks out empty (exit 12; pass `--from-working-tree` to copy the checked-out tree instead).
 - `kind: copy`, or `kind: git` with `launch.root` outside any git repository: a temp copy of `launch.root`, without `.git`, identified by its tree digest; no commit is recorded, since no commit names those bytes.
 - `preflight --from-working-tree`: a temp copy of the working tree, uncommitted work included, whatever the kind.
   It is the one workspace recorded as `dirty: true`, and a dirty run cannot become a baseline.
@@ -139,21 +140,22 @@ Every other workspace of the run (one per seeded probe's qualification, one per 
 The evaluation folder is left out of every workspace, so a target cannot read the contract, the probes or which defect a mutation plants.
 Each `workspace.provision` directory (for example `node_modules`, which a worktree lacks) is copied into the workspace, as a copy-on-write clone where the file system offers one, and its write bits are removed, so a write under it fails unless the writer restores the bits first (root ignores them).
 A mutation cannot target a file inside it (`provisioned-target`), and a provisioned directory that is itself a symbolic link is refused with exit 12.
-Every symbolic link under `launch.root` in the workspace resolves inside the workspace: a link into the project is re-pointed at the same place in the workspace, and a link that leads out of the project is refused with exit 12, as is a FIFO, a socket or a device, or a temp directory (`TMPDIR`) inside the project.
+Every symbolic link under `launch.root` in the workspace resolves inside the workspace: a link into the project is re-pointed at the same place in the workspace, and a link that leads out of the project is refused with exit 12, as is a FIFO, a socket or a device, or a temp directory (`TMPDIR`) inside the project or the repository holding it.
 Each link is resolved as the system resolves it, so a `..` after a link climbs from the link's target.
 A workspace is removed when the command ends, a worktree's entry in your repository included, and also on `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT`, which stop the running leg and then end the command by the same signal.
 A `SIGKILL` runs no handler: a worktree it leaves behind is listed by `git worktree list` until `git worktree prune`.
 
-A worktree shares your repository's refs, configuration and objects, so a target running git in it can change them.
-`preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths), the content of every path it names, every ref and the repository's configuration; outside one, the tree digest of `launch.root` without the evaluation's `runs/`.
-A change exits 12 and no qualified probe is written, so a target that writes into your tree, commits, tags or reconfigures the repository fails the run.
+A worktree shares your repository's git directory (its refs, configuration, hooks, `info/` and objects), so a target running git in it can change them; the run detects such a change, it does not prevent one.
+`preflight` reads your project before the workspaces are made and again after the qualification and after the legs: in a git repository, `git status` (tracked and untracked paths), the content of every path it names, every ref, and the common git directory without its object store, reflogs, worktree records, index and submodule or LFS stores; outside one, the tree digest of `launch.root` without the evaluation's `runs/`.
+A change exits 12, no qualified probe is written and the probe list handed to the CLI is removed, so a target that writes into your tree, commits, tags or reconfigures the repository fails the run.
+The rollback cycle also refuses to write or read the `targetArtifact` through a directory an arm replaced with a symbolic link (exit 12).
 Gitignored paths are not read.
 
 `runs/<invocationId>/run.json` records what was evaluated: the TeA and eval-quality versions, the commit (`null` for a copy), `dirty`, the workspace's kind, commit, tree and tree digest, the path of every workspace that ran legs, and whether your project was unchanged.
 
 ## Controlled mutations
 
-A mutation is `mutations/M-NNN.mutation.json`: a `targetArtifact` relative to `launch.root` and a `replace-exact` operator whose `find` text must occur in that file exactly once, overlapping occurrences counted.
+A mutation is `mutations/M-NNN.mutation.json`: a `targetArtifact` relative to `launch.root` (not to the repository, when `launch.root` is a subdirectory of it) and a `replace-exact` operator whose `find` text must occur in that file exactly once, overlapping occurrences counted.
 A probe that seeds a defect on the `controlled-mutation` route names its mutation, and `preflight` qualifies it through six steps in a workspace of its own, before any preflight leg runs, so nothing its arms leave behind reaches another probe or a leg:
 
 1. The clean arm: every interaction plan step once, with its literal bindings, through the registry.
@@ -211,6 +213,8 @@ The steps run in order, each stopping the run with its own exit:
    Every observation is written to `observations/` as it arrives, with the request, the workspace and the working directory beside it; a request's environment is recorded as its keys only, and every injected value of eight characters or more is replaced by `[redacted]` in the observation.
    A leg the registry does not authorize is refused by the adapter before it starts: the fault is written to `faults/` and the command exits 10.
    A leg that cannot run at all (a budget exceeded, a process that fails to start) is written there too and exits 12, as does any other failure that stops the legs.
+   A leg that exits one of its entry's `infrastructureExitCodes` is an observation like any other: the CLI's verdict reads it (a control leg that exits non-zero fails `clean-control`, exit 3), which AD-10 classifies as infrastructure from the persisted verdict.
+   A qualification arm step that exits one stops the cycle with exit 12, since an arm has no verdict to classify it.
 7. `eval-quality preflight --contract contract.json --probes probes.json --observations observations.json --run-id <invocationId>` over the files in the run directory, `probes.json` holding the qualified probes.
    Its `preflight-verdict.json` is the verdict, and its exit code is the command's exit code, verbatim: 0 when the preflight passed, 3 when it failed.
 
@@ -263,11 +267,11 @@ Exit 2 is left out on purpose: a usage error is a defect in the evaluation's own
 
 ## Exit codes
 
-| Exit | Meaning                                                                                                                                                                                                                                                                                                                           |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | success; for `preflight`, the preflight passed                                                                                                                                                                                                                                                                                    |
-| 3-5  | `preflight` only: an eval-quality stage's own exit, passed through verbatim (3 is a failed preflight, 4 a contract defect, 5 a runtime fault)                                                                                                                                                                                     |
-| 10   | authoring defect: `check` found at least one finding, `digest` met an entry it cannot index, or `preflight` met a leg the registry does not authorize or a mutation that cannot be applied exactly once                                                                                                                           |
-| 11   | evaluation weakness: a `preflight` mutation whose clean arm does not pass or whose mutated arm does not fail                                                                                                                                                                                                                      |
-| 12   | infrastructure: eval-quality is not installed where the runtime can reach it, or a `preflight` workspace that cannot be made, a target that cannot launch or exits an infrastructure code, a restore that fails, a restored workspace that does not pass again, a leg that cannot run, or a change to your project during the run |
-| 64   | wiring defect: no `--evaluation` resolves, or the command line is malformed; for `preflight`, also an eval-quality stage's own 64, passed through                                                                                                                                                                                 |
+| Exit | Meaning                                                                                                                                                                                                                                                                                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | success; for `preflight`, the preflight passed                                                                                                                                                                                                                                                                                                                |
+| 3-5  | `preflight` only: an eval-quality stage's own exit, passed through verbatim (3 is a failed preflight, 4 a contract defect, 5 a runtime fault)                                                                                                                                                                                                                 |
+| 10   | authoring defect: `check` found at least one finding, `digest` met an entry it cannot index, or `preflight` met a leg the registry does not authorize or a mutation that cannot be applied exactly once                                                                                                                                                       |
+| 11   | evaluation weakness: a `preflight` mutation whose clean arm does not pass or whose mutated arm does not fail                                                                                                                                                                                                                                                  |
+| 12   | infrastructure: eval-quality is not installed where the runtime can reach it, or a `preflight` workspace that cannot be made, a target that cannot launch, a qualification arm step that exits an infrastructure code, a restore that fails, a restored workspace that does not pass again, a leg that cannot run, or a change to your project during the run |
+| 64   | wiring defect: no `--evaluation` resolves, or the command line is malformed; for `preflight`, also an eval-quality stage's own 64, passed through                                                                                                                                                                                                             |
