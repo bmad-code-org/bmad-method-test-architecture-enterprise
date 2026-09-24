@@ -202,9 +202,10 @@
           }
         },
         "maxElapsedMs": {
-          "description": "Wall-clock ceiling for one invocation, in milliseconds. A caller may lower it per run; the ceiling is the most any run gets.",
+          "description": "Wall-clock ceiling for one invocation, in milliseconds. A caller may lower it per run; the ceiling is the most any run gets. At most 2147483647, the longest delay one timer holds, which eval-quality's command target policy also refuses to exceed.",
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 2147483647
         },
         "maxOutputBytes": {
           "description": "Ceiling on each captured stream and each artifact read back, in bytes. Defaults to 8 MiB. A caller may lower it per run; the ceiling is the most any run gets.",

@@ -18,9 +18,12 @@
  * - The agent runs in its own process group under agent-supervisor.js. A
  *   timeout sends the group SIGTERM and the agent SIGKILL after a grace
  *   period; the group is also stopped when the runner or the supervisor dies,
- *   and killed when the agent exits, so no process the agent started outlives
- *   the turn. On Windows, which has no process groups, the timeout and the
- *   signals reach the agent alone.
+ *   and killed when the agent exits, so no process left in the group outlives
+ *   the turn. The agent's stdin, stdout and stderr are pipes the supervisor's
+ *   group leader owns and copies, so a process the agent leaves outside its
+ *   group (in a new session, say) cannot hold this runner's pipes open. On
+ *   Windows, which has no process groups, the timeout and the signals reach
+ *   the agent alone.
  * - options.spawnPrefix wraps the agent command for filesystem isolation
  *   (sandbox-exec/bwrap from isolate.js); with the chmod fallback it is empty.
  * - Each adapter's argv is responsible for scoping tool access and approval
@@ -154,10 +157,12 @@ function runAgent(
   // The agent runs in its own process group under the supervisor, which stops
   // the group on the wall clock, on a signal, when the runner or the
   // supervisor dies, and when the agent exits; the report on file descriptor 3
-  // says how the agent ended. spawnSync gets no timeout of its own: its timer
-  // counts time the runner spends suspended (Ctrl-Z), and on expiry it closes
-  // the pipes before reading what they hold, the agent's reply included. The
-  // group leader owns the wall clock, and the supervisor the backstop past it.
+  // says how the agent ended. spawnSync returns once every copy of these pipes
+  // is closed, and only the supervisor and its group leader hold them.
+  // spawnSync gets no timeout of its own: its timer counts time the runner
+  // spends suspended (Ctrl-Z), and on expiry it closes the pipes before reading
+  // what they hold, the agent's reply included. The group leader owns the wall
+  // clock, and the supervisor the backstop past it.
   const result = spawnSync(process.execPath, [SUPERVISOR, String(process.pid), String(timeout), command, ...args], {
     cwd,
     encoding: 'utf8',

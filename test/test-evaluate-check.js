@@ -817,6 +817,12 @@ const HARDENING_CASES = [
     plant: (folder) => editJson(folder, 'probes/P-002.probe.json', (value) => value.defects.push({ ...value.defects[0] })),
   },
   {
+    name: 'a maxElapsedMs past the 2147483647 ms one timer holds',
+    file: 'evaluation.json',
+    rule: 'schema',
+    plant: (folder) => editJson(folder, 'evaluation.json', (value) => (value.registry[0].maxElapsedMs = 2 ** 31)),
+  },
+  {
     name: 'a provisioned directory of "."',
     file: 'evaluation.json',
     rule: 'schema',

@@ -13,7 +13,7 @@ TeA also ships `tea-skill-runner`, the command an evaluation registers to run a 
 ## Prerequisites
 
 - Node.js 22.20 or later, with TeA installed (`npm install --save-dev bmad-method-test-architecture-enterprise`), which provides the `tea-evaluate` bin.
-- `eval-quality` 4.1.1 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
+- `eval-quality` 4.1.2 or later, installed beside TeA in the project that runs Evaluate (`npm install --save-dev eval-quality`).
   TeA declares it as an optional peer dependency, so a project that installs TeA only for its other workflows never receives it.
   Without it, `tea-evaluate` exits 12 and names the missing package.
 
@@ -95,7 +95,7 @@ TeA's own harness declares its commands in the same shape and goes through the s
 - `subcommandPaths`: the exact subcommand paths allowed; `[[]]` allows none.
 - `artifacts`: the default path of each contract artifact, relative to the run's working directory, under the same path rules as `target`.
 - `environmentKeys`: the keys a request may carry into the process; `PATH` is refused.
-- `maxElapsedMs`, and optional `maxOutputBytes` (8 MiB by default): ceilings a run may lower.
+- `maxElapsedMs` (at most 2147483647), and optional `maxOutputBytes` (8 MiB by default): ceilings a run may lower.
 - `infrastructureExitCodes`: the exit codes by which the target reports that it could not run.
   TeA's own per-workflow runners declare 1 (an uncaught exception) and 3 to 6; `tea-test-review`, which exits 1 on a failing verdict, declares 2 and 3; `tea-skill-runner` never exits 1 and declares 3 to 6.
 
@@ -194,14 +194,16 @@ The other options are those of TeA's own runners: `--agent-cmd`, `--agent-arg`, 
 A registry entry for the runner declares `infrastructureExitCodes` 3 to 6, and `check` holds it to that.
 Its target is the bin name `tea-skill-runner`, which `npm exec` resolves from the evaluation's installed TeA, or a path to `skill-runner.js`.
 The agent runs in its own process group.
-When the agent exits, every process left in that group receives `SIGKILL` at once, so output such a process would write later is lost.
+When the agent exits, every process left in that group receives `SIGKILL` at once.
 The group is also stopped when `--timeout-ms` runs out, when the runner's process group receives `SIGINT`, `SIGTERM`, `SIGHUP` or `SIGQUIT` (a terminal's Ctrl-C or `Ctrl-\` included), and when the runner or the supervisor process between it and the agent dies, by `SIGKILL` included.
 Stopping sends the group the signal received (`SIGTERM` for a timeout or a death), and the agent `SIGKILL` 2 s later if it is still running.
 A Ctrl-Z suspends the runner, and the agent runs on, bounded by `--timeout-ms` and the runner's end.
 Once resumed, the runner reports how the agent ended, however long it was suspended.
-Two processes supervise the agent: one in the runner's process group, and a group leader in the agent's.
-If the group leader has not ended 5 s after `--timeout-ms` runs out (it was stopped with `SIGSTOP`, say), the other kills it with its group, and the runner exits 4.
-A process that leaves the group, such as a daemon that starts its own session, is outside this control.
+Two processes supervise the agent: one in the runner's process group, and a group leader in a session of its own, which starts the agent's group.
+The agent's standard input, output and error are pipes the group leader owns, and the leader copies the runner's input to the agent and the agent's output to the runner.
+Once the agent exits, the leader copies what those pipes still hold and closes each one when it reaches its end, stays empty for 100 ms, or has been read for 2 s of the time the runner keeps up with it; output any process writes after that is lost.
+A process that leaves the group, such as a daemon that starts its own session, keeps running, and the runner does not wait for it.
+If the group leader has not ended 5 s after `--timeout-ms` runs out (it was stopped with `SIGSTOP`, say), the other kills it and the agent's group, and the runner exits 4.
 On Windows, which has no process groups, the timeout and the signals reach the agent alone, and nothing the agent started is stopped.
 Set every leg's `--timeout-ms` below the entry's `maxElapsedMs`, so the runner reports a timeout as exit 5.
 At the ceiling, the adapter kills the runner's process group, records the leg as a fault, and `preflight` exits 12.

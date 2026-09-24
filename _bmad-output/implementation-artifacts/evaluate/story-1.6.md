@@ -128,6 +128,7 @@ Review round (each fix undone once, the named case failing):
 - 2026-09-24 (final review round 1): epics.md Story 1.6, the copy criterion, amended: the provisioned directories are linked in writable, so the claim that a leg writes nothing into the adopter's tree was false for them; the criterion now says a write under the copied tree stays in the copy, symbolic links included, and provisioned directories stay writable until Story 1.7's read-only provisioning (coordinator decision F2).
 - 2026-09-24 (final review round 1): epics.md Story 1.6, the no-denial criterion, and test-design-epic-1.md's "No authorization denial" row amended: the denial scan names `observations/`, `faults/`, `observations.json` and `preflight-verdict.json`, the files the test reads, where both said "anywhere in the run" (W1).
 - 2026-09-24 (final review round 3): epics.md Story 1.4's packaging criterion and engine status note, ARCHITECTURE-SPINE.md's packaging decision, rule and version table, and test-design-epic-1.md's peer row amended: the `eval-quality` peer floor is `>=4.1.1`, the first release whose command-line adapter kills the target's process group at its ceiling, which `tea-evaluate preflight` and its documentation rely on (R3-4).
+- 2026-09-24 (final review round 4): epics.md Story 1.4's packaging criterion and engine status note, ARCHITECTURE-SPINE.md's packaging decision, rule and version table, and test-design-epic-1.md's peer row amended: the `eval-quality` peer floor is `>=4.1.2`, the first release whose adapter also kills the target's process group when the host dies, by `SIGKILL` included (eval-quality#161).
 
 ## Review Triage Log
 
@@ -280,10 +281,6 @@ Found on the way:
 - `resolveEvaluationFolder` resolved `--evaluation` lexically as well; it now joins the value as spelled and takes `realpathSync.native` of the folder, and `test-evaluate-check.js` resolves `link/../evaluation` to the folder beside the link's target.
 - `doc-claims` refused `SIGQUIT` in the reference until it joined the platform names in `eval-quality.config.json`'s foreign symbols.
 - `package-lock.json`'s root entry lacked the `tea-skill-runner` bin this story added; the 4.1.1 install wrote it.
-- eval-quality 4.1.1 spawns the target as the leader of a new session, so a `SIGKILL` to `tea-evaluate preflight`'s process group no longer reaches the runner: `grpsig.js SIGKILL` left the runner, its supervisor and the agent's child running until the leg's `--timeout-ms` (30 s in the probe), where 4.1.0 killed them with the group.
-  The runner is bounded by its own `--timeout-ms`, which `check` holds below `maxElapsedMs`.
-  The fix is the same lifeline in eval-quality's adapter (a pipe the target's group watches, closed when the caller dies), and belongs to eval-quality; it is raised with the coordinator.
-  `SIGQUIT` and `SIGINT` to the same group left nothing, since `preflight`'s handlers abort the leg and the adapter kills the runner's group.
 
 ### Final review round 2 revert checks
 
@@ -385,6 +382,84 @@ Each probe was rerun against a copy of the fix under the session scratchpad (`r3
 - `race.js`: 21 trials, 0 orphans; `ttyprobe.py` Ctrl-C and `Ctrl-\`: nothing left, the runner ends by `SIGINT` and `SIGQUIT`; `grpsig.js` `SIGQUIT` and `SIGINT`: no copy and no process left; `grpsig.js` `SIGKILL`: the eval-quality finding of round 2, unchanged; `seq.js`: no leftover listener.
 - `node test/test-evaluate-preflight.js` in a `node:24-slim` container: 212 checks pass, the suspended case included.
 
+## Final review round 4
+
+One reviewer reviewed head 080bc9d by execution, with probes under the session scratchpad's `r4/probe/`; this round's probes and logs are under `r4/me/`.
+The finding was verified against the code before acting, and every code fix below has a test that fails when the fix is undone.
+
+### Supervision change
+
+R4-1 reproduced at 080bc9d on both systems: an agent that leaves `setsid sleep 15` behind and prints `alpha` held the runner 15058 ms under a 2000 ms wall clock in a `node:24-slim` container, and the macOS repro held it for the 25 s the escaped process lived.
+The leader started the agent with its standard streams inherited, so every descendant held the write ends of the runner's own pipes, and `spawnSync` returns only once every copy is closed; a process in a new session survives the group kill and holds them.
+The same holds for the runner's input: an agent that reads none of a 3 MB prompt and leaves a new-session process holding its standard input kept the runner waiting 12 s, the holder's life, where the write of the prompt fails at once when nobody else holds the pipe.
+
+The leader now owns all three of the agent's streams:
+
+- The leader starts the agent with its standard input, output and error as pipes of its own, in a new session and process group of its own (`detached`), and writes `agent <pid>` on the lifeline so the supervisor knows the group.
+  It copies the runner's input to the agent and the agent's output and error to the runner's descriptors, pausing its reads while the runner lags, so an agent writing to a runner that stopped reading blocks as it did on the runner's own pipe.
+- The runner's descriptors are read and written through event-loop streams, so no write blocks the loop where the wall clock runs, and a descriptor that is not a pipe or socket (a test's `/dev/null`) gets a thread-pool stream.
+- When the agent exits, the leader kills the agent's group with `SIGKILL`, writes its report on the runner's descriptor and `reported` on the lifeline, kills the supervisor while it is still its parent, and only then copies what the agent's output pipes still hold.
+  It closes each pipe when it reaches its end, stays empty for 100 ms, or has been read for 2 s of the time the runner keeps up with it, and exits once everything read is written or the runner is gone.
+  Reporting before the copy keeps round 3's guarantee: a runner suspended past the supervisor's backstop cannot lose the report to that backstop firing on resume.
+- The supervisor kills the leader and the agent's group, which it names from the lifeline, when the leader passes the backstop or ends without a report; before, killing the leader's group took the agent with it.
+- The leader alone is no longer in the agent's group, so it no longer receives the signals it sends that group, and a stopping signal sent to the leader alone now stops the agent's group as a forwarded one does, where it was ignored.
+
+Alternatives considered:
+
+- `spawnSync`'s own timeout back, as at d18df6f: it bounds the wait, and round 3 removed it because its timer counts suspended time and closes the pipes before reading them, which lost the reply after a Ctrl-Z.
+  Rejected for that reason.
+- The agent kept in the leader's group, with the leader copying the output before the group kill: the leader dies with its own group's `SIGKILL`, so the copy has to finish first, and every process the agent left in the group keeps running for as long as the copy waits on a suspended runner.
+  Rejected because the group kill at the agent's exit is what stops those processes.
+- The agent's output sent to files the runner reads after `spawnSync`: `spawnSync` would no longer wait on them, but the agent's output would become a regular file, it would grow on disk past `maxBuffer`, and a runner killed before reading would leave the files behind.
+  Rejected for fidelity and cleanup.
+- Thread-pool file streams for the runner's descriptors, the first version of this change: on Linux the leader's standard output turned non-blocking under load (`/proc/self/fdinfo/1` showed `O_NONBLOCK` set moments after the leader started reading its input), Node's file stream retried `EAGAIN` five times and failed, and the leader closed the agent's pipe, so 2 of 24 parallel `fid.js` runs reported "exited with code 1" for the output-past-`maxBuffer` case.
+  Event-loop streams wait for the descriptor to become writable instead; 40 parallel runs after the change showed no difference from 4662ab3.
+- A fourth process in the agent's group watching the leader: it moves the gap of round 3's "Not done" one level down and does not close it.
+
+The cost of this layout: the leader's process group now holds only the leader.
+A `SIGKILL` to that group is the same as a `SIGKILL` to the leader, which the supervisor answers by killing the agent's group, but a `SIGKILL` to the leader's group and the supervisor together now leaves the agent's group running until it ends on its own, as round 3's "Not done" already recorded for `pkill -9 -f agent-supervisor`.
+The case that kills both now also kills the agent's group so the suite leaks nothing, and still asserts the runner's message.
+The supervisor kills the agent's group by the pid the leader sent, which the kernel keeps reserved while any member of that group lives, and the leader kills it right after reaping the agent; only a group left empty by then and a new group leader given the same pid in that window could be hit.
+
+### Findings
+
+| ID | Finding | Outcome |
+| --- | --- | --- |
+| R4-1 | `runAgent` waited for any process that left the agent's group holding its output or error, since those were the runner's own pipes; `spawnSync` had no timeout left to bound it | fixed by the design above; tests: an agent that answers and leaves a child in a new session holding its standard input, output and error returns exit 0 with the answer within 2 s of the agent's exit and the holder still alive; the same holder with an agent that sleeps 30 s under a 1000 ms wall clock returns exit 5 within 5 s of the start; the stub agent gains `STUB-ESCAPE <file>` for both |
+| R4-1b | found on the way: the same wait through standard input, for an agent that leaves unread input to a process in a new session | fixed by the leader copying the input; test: an agent that reads none of a 4 MB prompt and leaves such a holder lets the runner return within 5 s of its exit, with the holder alive |
+| R4-2 | found on the way: the leader's thread-pool writes failed with `EAGAIN` on Linux when the runner's descriptor turned non-blocking | fixed by event-loop streams for pipes and sockets; covered by the preflight suite and `fid.js` under 4-way parallel load in the container |
+| E2 | coordinator addition: eval-quality 4.1.2 starts each target through a watchdog holding a lifeline to the host, so a `SIGKILL` to the host, alone or with its group, kills the target's process group (eval-quality#161) | done: devDependency 4.1.2 and peer floor `>=4.1.2` (`package.json`, `package-lock.json`), `tools/guard-publish.js` (`ENGINE_FLOOR` and its header), `test/test-guard-publish.js` (a floor of 4.1.1 now refused, 4.1.2 ranges accepted), `test/test-release-metadata.js`, `engine.js`'s install hint, `tea-evaluate-cli.md`'s prerequisites, the roadmap's pin claim and its `EVAL_QUALITY_PIN_IS_4_1_2` source and test, the command-adapter page, CHANGELOG, and the plan (ARCHITECTURE-SPINE, epics Story 1.4's criterion and engine status note, the test-design peer row, Spec Change Log); the conformance suite is byte-identical between 4.1.1 and 4.1.2, so the adapter page's 16 outcomes stand |
+| E2b | found on the way: 4.1.2's `parseCommandTargetPolicy` refuses a `maxElapsedMs` above 2147483647, which TeA's registry schema admitted, so `check` passed an evaluation eval-quality's own parser refuses | fixed: `evaluation.schema.json` bounds `maxElapsedMs` at 2147483647, and the reference and CHANGELOG say so; test: a registry entry with `maxElapsedMs` 2^31 is a `schema` finding with exit 10 |
+
+The round 2 note that a `SIGKILL` to `tea-evaluate preflight`'s process group no longer reached the runner under 4.1.1 is removed: `grpsig.js SIGKILL` against 4.1.2, three runs on macOS and three in the container, left no runner, supervisor, leader, agent or agent's child, where 4.1.1 left them running until the leg's `--timeout-ms`.
+The copy under the temp directory stays behind after a `SIGKILL`, which runs no handler; `SIGINT` and `SIGQUIT` left no copy and no process on both systems.
+
+### Final review round 4 revert checks
+
+Each fix was undone once in the working tree, the named suite run, the failures observed, and the fix restored.
+
+- R4-1 and R4-1b, `cli/lib/agent-supervisor.js` back at 080bc9d with the new tests in place: `node test/test-evaluate-preflight.js` failed three checks, "a runner whose agent left a process in a new session holding its output was still waiting after 15 s; expected 0 and the agent's answer", "a runner whose timed-out agent left a process in a new session holding its output was still waiting after 15 s; expected 5 at the 1000 ms wall clock", and "a runner whose agent left its unread input to a process in a new session was still waiting after 15 s".
+- R4-1b alone, the agent's standard input inherited again with the output still copied: one failure, the unread-input case.
+- R4-2, thread-pool streams: no deterministic test fails, since the flip to non-blocking needs load; `fid.js` under 4-way parallel load in the container reproduced it in 2 of 24 runs before the change and 0 of 40 after, and the per-leader trace named `ERR_SYSTEM_ERROR` from Node's `EAGAIN` retry limit.
+- E2b, the schema's `maximum` removed: `node test/test-evaluate-check.js` failed "a maxElapsedMs past the 2147483647 ms one timer holds: check exited 0; expected 10".
+
+### Final review round 4 execution probes
+
+Each probe ran against the worktree, on macOS and in a `node:24-slim` container with `procps` and `python3` added, with 4662ab3 and 080bc9d exported beside it.
+
+- The finding's repro: the runner returns `alpha` with exit 0 after 1175 ms in the container (15058 ms at 080bc9d) and after about 1 s on macOS (25 s at 080bc9d).
+- The unread-input holder: `EPIPE` after 657 ms in the container and 698 ms on macOS, 12 s at 080bc9d on both.
+- `fid.js` (large, binary and invalid UTF-8 output, stdin, late child output, the stderr tail of exit 7, `SIGSEGV`, output past `maxBuffer`, a write to descriptor 3): identical to 4662ab3 on both systems.
+  Its stdin case decodes each chunk alone, so its reply depends on how the pipe splits the prompt and differed from 4662ab3 in the container under both layouts; with `setEncoding('utf8')` the reply is identical, 1000000 characters.
+- `fds.js` and `pyfds.py`: the agent holds descriptors 0 to 2 only, sockets as before.
+- `death.js`, every target (runner, supervisor, leader, agent, runner group, leader group) by `SIGKILL`, `SIGTERM`, `SIGINT`, `SIGHUP` and `SIGQUIT`: nothing left, on both systems, except `SIGINT` to the `sh` agent alone, which `sh` ignores, as at d18df6f; a catchable signal to the leader or its group now stops the agent with that signal, where the leader ignored it.
+- `race.js`: 21 trials, 0 orphans, on both systems.
+- `grpstop.js`: the answering agent exits 0 with its answer three runs of three, and the 30 s agent exits 5, on both systems.
+- `bigstop.js` (new: the runner's group stopped while the agent writes 10 MB under a 2000 ms wall clock): exit 5 at the wall clock on both systems, as at 080bc9d, so the leader's clock runs while the runner's pipe is full.
+- `stopsup.js` (the supervisor stopped): the answer after 1 s; `leadstop.js`: the leader stopped reports "gave no report" at the backstop, the agent stopped times out, and the leader and supervisor stopped together wait for good, as at 080bc9d.
+- `ttyprobe.py` Ctrl-C and `Ctrl-\`: nothing left, the runner ends by `SIGINT` and `SIGQUIT`; `tstp3.py` and `tstp4.py` (Ctrl-Z, `fg` after 9 s): the sleeping agent reports `timed out after 3000ms` and the answering one returns `agent-done`, on both systems.
+- `node test/test-evaluate-preflight.js` in the container: 219 checks pass.
+
 ## Verification
 
 **Commands:**
@@ -422,3 +497,13 @@ Final review round 3 (after the fixes and the peer floor raise):
 - `npm run docs:validate-links` -- exit 0
 - `npm run docs:build` -- exit 0
 - the Build Rules engine check -- exit 0
+
+Final review round 4 (after the fixes and the eval-quality 4.1.2 raise):
+
+- `npm test` -- exit 0 (run before three comment and wording edits; `format:check`, `lint`, `lint:md`, `test:doc-claims` and `test:evaluate-preflight` rerun after them, exit 0)
+- `npm run test:cli` -- exit 0
+- `npm run test:evaluate-preflight` -- three consecutive runs, exit 0 each, 219 checks
+- `npm run test:release-metadata` -- exit 0
+- `npm run docs:validate-links` -- exit 0
+- `npm run docs:build` -- exit 0
+- the Build Rules engine check -- exit 0; `package.json` and `package-lock.json` name `eval-quality` 4.1.2 from the registry, with no `file:` or `.tgz` spec

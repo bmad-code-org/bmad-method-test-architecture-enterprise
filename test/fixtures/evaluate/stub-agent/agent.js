@@ -22,6 +22,11 @@
  *   STUB-LEAVE <file>  the same, but answer and exit 0 without waiting for
  *                    the child (a case that asserts the child dies with the
  *                    agent's exit)
+ *   STUB-ESCAPE <file>  start a child in a new session that holds the
+ *                    agent's standard input, output and error for a minute,
+ *                    and write its pid to that absolute path, before any
+ *                    sleep (a case that asserts a process outside the agent's
+ *                    process group cannot keep the runner waiting)
  *   STUB-READ <path> also print the contents of that file, relative to the
  *                    working directory
  *   STUB-BIG <n>     print n bytes of filler after the reply
@@ -57,6 +62,12 @@ for (const [marker, waits] of [
   const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'ignore' });
   if (!waits) child.unref();
   fs.writeFileSync(file, String(child.pid));
+}
+const escaping = /STUB-ESCAPE (\S+)/.exec(request)?.[1];
+if (escaping !== undefined) {
+  const holder = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: 'inherit', detached: true });
+  holder.unref();
+  fs.writeFileSync(escaping, String(holder.pid));
 }
 const sleep = /STUB-SLEEP (\d+)/.exec(request);
 if (sleep !== null) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(sleep[1]));

@@ -130,7 +130,7 @@ flowchart LR
   The `cli` layer's `allow` list names every other external `cli/` uses and leaves `eval-quality` out, so `engine.js` is the one file that names `eval-quality` in an `import(` or `require(`, and `test:direction` refuses an engine import from any other `cli/` file.
   Every module the runtime needs ships in TeA's `dependencies` (`ajv` moves there).
   (Amended 2026-09-23 in Story 1.5: this decision first put `eval-quality` on the `cli` layer's list; the engine's own layer replaced that.)
-- **Packaging:** TeA's `package.json` declares `eval-quality` under `peerDependencies`, floored at `>=4.1.1`: 4.0.0 is the first published release carrying the target-policy export and trial-set scoring (#143) Evaluate needs, and 4.1.1 the first whose command-line adapter kills the target's process group at its ceiling (#160), which `tea-evaluate preflight` relies on, since an older engine admitted by the range could not run Evaluate as documented. (Amended 2026-09-23: the floor was `>=3.4.0` with a later raise in Story H.1, written before 4.0.0 shipped. Amended 2026-09-24, Story 1.6: raised from `>=4.0.0` to `>=4.1.1`.) `peerDependenciesMeta` marks it optional so projects that never run Evaluate do not receive it, and the bin is `tea-evaluate`; the release-metadata and guard-publish checks cover both. One engine version serves a run.
+- **Packaging:** TeA's `package.json` declares `eval-quality` under `peerDependencies`, floored at `>=4.1.2`: 4.0.0 is the first published release carrying the target-policy export and trial-set scoring (#143) Evaluate needs, 4.1.1 the first whose command-line adapter kills the target's process group at its ceiling (#160), and 4.1.2 the first that also kills it when the host dies, by `SIGKILL` included (#161), which `tea-evaluate preflight` relies on, since an older engine admitted by the range could not run Evaluate as documented. (Amended 2026-09-23: the floor was `>=3.4.0` with a later raise in Story H.1, written before 4.0.0 shipped. Amended 2026-09-24, Story 1.6: raised from `>=4.0.0` to `>=4.1.1`, then to `>=4.1.2`.) `peerDependenciesMeta` marks it optional so projects that never run Evaluate do not receive it, and the bin is `tea-evaluate`; the release-metadata and guard-publish checks cover both. One engine version serves a run.
 - **Inputs:** the runtime reads no `_bmad/` config. Every subcommand takes `--evaluation <path>` and exits 64 when none resolves.
 - **Schemas:** the runtime owns the JSON schemas of `evaluation.json` and `evaluation-ci-plan.json`. `npm test` validates the skill's templates and `bmad-testarch-ci`'s plan reader against them.
 - **Rejected:** generating harness source into each adopter repository, because fixes could never propagate. Skill-local scripts are also rejected: they install under `_bmad/`, so they are no stable CI entry point.
@@ -255,7 +255,7 @@ flowchart LR
 
 - **Binds:** all generated dependencies, TeA's `package.json`, `test/test-eval-quality-corpus.js`, `.npmrc`, `eval-quality.config.json`
 - **Prevents:** pins that age, or two eval-quality versions inside one run.
-- **Rule:** Evaluate adds `eval-quality` and TeA's package to adopters as devDependencies with the `latest` spec, in the evaluation folder's own `package.json` (AD-20). TeA declares `peerDependencies: {"eval-quality": ">=4.1.1"}`, and its exact devDependency pin and the exact-version assertion in `test/test-eval-quality-corpus.js` become float in the proof-target work. The `min-release-age` and `lockfile-age` exclusions stay, with their rationale rewritten, so engine releases arrive without the seven-day delay. Engine drift then surfaces through the `pr` baseline replay and the `evalQualityVersion` stamp that already exists.
+- **Rule:** Evaluate adds `eval-quality` and TeA's package to adopters as devDependencies with the `latest` spec, in the evaluation folder's own `package.json` (AD-20). TeA declares `peerDependencies: {"eval-quality": ">=4.1.2"}`, and its exact devDependency pin and the exact-version assertion in `test/test-eval-quality-corpus.js` become float in the proof-target work. The `min-release-age` and `lockfile-age` exclusions stay, with their rationale rewritten, so engine releases arrive without the seven-day delay. Engine drift then surfaces through the `pr` baseline replay and the `evalQualityVersion` stamp that already exists.
 
 ### AD-14: TeA's generators coexist
 
@@ -377,7 +377,7 @@ flowchart LR
 
 | Name | Version |
 | --- | --- |
-| eval-quality | `latest` spec (3.4.0 verified 2026-09-22; 4.0.0 published 2026-09-23 with the target-policy export and trial-set scoring; 4.1.1 kills the target's process group at the ceiling); TeA peer range `>=4.1.1` |
+| eval-quality | `latest` spec (3.4.0 verified 2026-09-22; 4.0.0 published 2026-09-23 with the target-policy export and trial-set scoring; 4.1.1 kills the target's process group at the ceiling; 4.1.2 also kills it when the host dies); TeA peer range `>=4.1.2` |
 | Node.js | >=22.20.0 (TeA and eval-quality engines) |
 
 ## Structural Seed

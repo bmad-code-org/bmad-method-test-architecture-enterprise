@@ -408,8 +408,9 @@ function childrenOf(pid) {
  * the group leader killed or stopped on its own, the runner suspended past
  * the wall clock, the runner gone before the supervisor looked, a child the
  * agent leaves behind when it exits (under the runner, and under the group
- * leader alone), each forwarded signal, and a wall clock past the 2^31-1 ms
- * one Node timer holds.
+ * leader alone), a process the agent leaves in a new session holding its
+ * pipes, each forwarded signal, and a wall clock past the 2^31-1 ms one Node
+ * timer holds.
  */
 async function checkSupervision() {
   if (process.platform === 'win32') return;
@@ -477,6 +478,8 @@ async function checkSupervision() {
   const bothChild = await pidFrom(bothPid);
   const [bothSupervisor] = childrenOf(both.child.pid);
   const [bothLeader] = childrenOf(bothSupervisor ?? 0);
+  // The agent leads a group of its own, which no process is left to stop once both are gone.
+  const [bothAgent] = childrenOf(bothLeader ?? 0);
   if (bothLeader !== undefined) process.kill(-bothLeader, 'SIGKILL');
   if (bothSupervisor !== undefined) process.kill(bothSupervisor, 'SIGKILL');
   const bothEnding = await both.closed;
@@ -485,6 +488,11 @@ async function checkSupervision() {
       bothEnding.stderr.includes('the agent supervisor was killed by signal SIGKILL without reporting'),
     `a runner whose supervisor and group leader were killed together exited ${bothEnding.code}; expected ${EXIT_CODES['environment-transport']} naming the supervisor's end\n${bothEnding.stderr}`,
   );
+  try {
+    if (bothAgent !== undefined) process.kill(-bothAgent, 'SIGKILL');
+  } catch {
+    // Already gone.
+  }
   reap(bothChild);
 
   // The supervisor stopped on its own: the leader reports its timeout to the runner and kills the stopped supervisor.
@@ -582,6 +590,78 @@ async function checkSupervision() {
     check(await processEnds(leftChild), `a child the agent left behind (pid ${leftChild}) outlived the agent's exit`);
     reap(leftChild);
   }
+
+  // The agent answers and exits, leaving a child in a new session that holds its standard input, output and error:
+  // the kill at the agent's exit cannot reach that child, and the runner still returns the answer at once.
+  const escapedPid = path.join(tempDir('escaped'), 'pid');
+  const escaped = startRunner(long, `Say alpha. STUB-ESCAPE ${escapedPid}`);
+  const escapedHolder = await pidFrom(escapedPid);
+  const escapedAt = Date.now();
+  const escapedEnding = await Promise.race([escaped.closed, delay(15_000).then(() => null)]);
+  check(
+    escapedEnding !== null && escapedEnding.code === 0 && escapedEnding.stdout.includes('skill: stub-skill'),
+    `a runner whose agent left a process in a new session holding its output ${escapedEnding === null ? 'was still waiting after 15 s' : `exited ${escapedEnding.code} with ${JSON.stringify(escapedEnding.stdout)}`}; expected 0 and the agent's answer\n${escapedEnding?.stderr ?? ''}`,
+  );
+  check(
+    escapedEnding === null || Date.now() - escapedAt < 2000,
+    `a runner whose agent left a process in a new session holding its output returned ${Date.now() - escapedAt} ms after the agent's exit; expected within 2 s`,
+  );
+  check(
+    escapedHolder !== null && !(await processEnds(escapedHolder, 0)),
+    'the process the agent left in a new session was gone when the runner returned, so the case proves nothing',
+  );
+  if (escapedEnding === null) escaped.child.kill('SIGKILL');
+  reap(escapedHolder);
+
+  // The same holder, with an agent that outlives the wall clock: the runner returns at the wall clock.
+  const escapedSlowPid = path.join(tempDir('escaped-slow'), 'pid');
+  const escapedSlowAt = Date.now();
+  const escapedSlow = startRunner(['--timeout-ms', '1000'], `Say alpha. STUB-ESCAPE ${escapedSlowPid} STUB-SLEEP 30000`);
+  const escapedSlowHolder = await pidFrom(escapedSlowPid);
+  const escapedSlowEnding = await Promise.race([escapedSlow.closed, delay(15_000).then(() => null)]);
+  check(
+    escapedSlowEnding !== null && escapedSlowEnding.code === EXIT_CODES['environment-timeout'] && Date.now() - escapedSlowAt < 5000,
+    `a runner whose timed-out agent left a process in a new session holding its output ${escapedSlowEnding === null ? 'was still waiting after 15 s' : `exited ${escapedSlowEnding.code} after ${Date.now() - escapedSlowAt} ms`}; expected ${EXIT_CODES['environment-timeout']} at the 1000 ms wall clock\n${escapedSlowEnding?.stderr ?? ''}`,
+  );
+  check(
+    escapedSlowHolder !== null && !(await processEnds(escapedSlowHolder, 0)),
+    'the process the timed-out agent left in a new session was gone when the runner returned, so the case proves nothing',
+  );
+  if (escapedSlowEnding === null) escapedSlow.child.kill('SIGKILL');
+  reap(escapedSlowHolder);
+
+  // An agent that reads none of a large prompt and leaves a process in a new session holding its standard
+  // input: the runner's write of the prompt fails once the processes it started are gone, and nothing keeps
+  // it waiting.
+  const unreadDirectory = tempDir('unread-input');
+  const unreadPid = path.join(unreadDirectory, 'pid');
+  const unreadAgent = path.join(unreadDirectory, 'agent.js');
+  fs.writeFileSync(
+    unreadAgent,
+    `const holder = require('node:child_process').spawn(process.execPath, ['-e', 'setTimeout(() => {}, 60000)'], { stdio: ['inherit', 'ignore', 'ignore'], detached: true }); holder.unref(); require('node:fs').writeFileSync(${JSON.stringify(unreadPid)}, String(holder.pid)); process.stdout.write('unread\\n');`,
+  );
+  const unreadRunner = spawn(
+    process.execPath,
+    [RUNNER, '--skill-root', STUB_SKILL, '--agent', 'custom', '--agent-cmd', process.execPath, '--agent-arg', unreadAgent, ...long],
+    { cwd: PROJECT_ROOT, env: BASE_ENV },
+  );
+  unreadRunner.stdout.resume();
+  unreadRunner.stderr.resume();
+  unreadRunner.stdin.end(`Say alpha. ${'x'.repeat(4_000_000)}`);
+  const unreadEnds = ended(unreadRunner);
+  const unreadHolder = await pidFrom(unreadPid);
+  const unreadAt = Date.now();
+  const unreadEnding = await Promise.race([unreadEnds, delay(15_000).then(() => null)]);
+  check(
+    unreadEnding !== null && Date.now() - unreadAt < 5000,
+    `a runner whose agent left its unread input to a process in a new session ${unreadEnding === null ? 'was still waiting after 15 s' : `returned after ${Date.now() - unreadAt} ms`}; expected within 5 s of the agent's exit`,
+  );
+  check(
+    unreadHolder !== null && !(await processEnds(unreadHolder, 0)),
+    'the process holding the unread input was gone when the runner returned, so the case proves nothing',
+  );
+  if (unreadEnding === null) unreadRunner.kill('SIGKILL');
+  reap(unreadHolder);
 
   // The group leader alone, with no supervisor above it: an agent that leaves a child behind and exits.
   const aloneFile = path.join(tempDir('leader-alone'), 'pid');

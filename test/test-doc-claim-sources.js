@@ -178,7 +178,7 @@ check('atLeast() compares a real version correctly and refuses a version it cann
   // file's declared dependency-direction root (test/), since package.json
   // sits outside it; reading it as data through fs keeps the check honest.
   const pin = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')).devDependencies['eval-quality'];
-  assert.strictEqual(source.EVAL_QUALITY_PIN_IS_4_1_1, pin === '4.1.1');
+  assert.strictEqual(source.EVAL_QUALITY_PIN_IS_4_1_2, pin === '4.1.2');
 });
 
 check('keyIsUnread reports a genuinely referenced key as read, not just an injected probe as unread', () => {

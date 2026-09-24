@@ -291,7 +291,8 @@ const AGENT_ADAPTERS = {
     // The custom runner contract is intentionally small: read the complete
     // prompt from stdin, operate in cwd, write any requested artifact named in
     // the prompt, print the final response to stdout, and exit nonzero on
-    // failure. Every process the runner started is killed when it exits
+    // failure. Every process left in the runner's process group is killed
+    // when it exits, and output written after that is dropped
     // (agent-supervisor.js), so it finishes its writes first. Every argv value is supplied explicitly with --agent-arg, so a
     // declared capability adds nothing here; see RUNNER_CAPABILITIES.
     buildArgv: (extra = []) => [...extra],
