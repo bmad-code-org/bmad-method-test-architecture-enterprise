@@ -45,8 +45,24 @@
       }
     },
     "launch": {
-      "description": "How the target is launched. The story that first launches a target defines its shape; until then it is an open object.",
-      "type": "object"
+      "description": "Where the target lives, which every launch resolves against.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root"],
+      "properties": {
+        "root": {
+          "description": "The evaluated project's root, relative to the evaluation folder: POSIX, \".\" and \"..\" segments allowed so it can climb out of the folder, never absolute, with no empty segment, no trailing slash, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character. Registry targets, the skill root and every mutation's targetArtifact resolve against it, and tea-evaluate preflight runs its legs in a disposable copy of it.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+        },
+        "skillRoot": {
+          "description": "The skill directory, holding SKILL.md, relative to root: the --skill-root tea-skill-runner receives. Required when targetKind is skill; tea-evaluate check refuses a mutation whose targetArtifact is not inside it. POSIX and relative, with no drive letter, no \".\" or \"..\" segment, no empty segment, no trailing slash, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?![A-Za-z]:)(?!/)(?![\\s\\S]*(?:^|/)\\.{1,2}(?:/|$))(?![\\s\\S]*//)(?![\\s\\S]*/$)[^\\\\\\u0000-\\u001f\\u007f-\\u009f\\u061c\\u200e\\u200f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]+$"
+        }
+      }
     },
     "workspace": {
       "description": "The disposable copy a run and a mutation happen in (AD-8).",
@@ -59,7 +75,7 @@
           "enum": ["git", "copy"]
         },
         "provision": {
-          "description": "Relative directories linked read-only into the copy (for example node_modules). A mutation may not target a file inside one. Each is POSIX and relative, with no drive letter, no \".\" or \"..\" segment, no empty segment, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character, so none can name the whole target; a trailing slash is allowed.",
+          "description": "Relative directories linked into the copy from the target (for example node_modules), so the copy shares them with the target: a write under one lands in the target until a later Evaluate release makes the links read-only. A mutation may not target a file inside one. Each is POSIX and relative, with no drive letter, no \".\" or \"..\" segment, no empty segment, and no control character (C0, DEL or C1), a line or paragraph separator, or a bidirectional formatting character, so none can name the whole target; a trailing slash is allowed.",
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -106,6 +122,17 @@
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "required": ["targetKind"],
+        "properties": { "targetKind": { "const": "skill" } }
+      },
+      "then": {
+        "properties": { "launch": { "required": ["root", "skillRoot"] } }
+      }
+    }
+  ],
   "$defs": {
     "RegistryEntry": {
       "description": "One command a run may spawn. interfaceId and executable key it the way eval-quality's command target policy keys an authorization; the pair is unique within the registry.",
@@ -175,9 +202,10 @@
           }
         },
         "maxElapsedMs": {
-          "description": "Wall-clock ceiling for one invocation, in milliseconds. A caller may lower it per run; the ceiling is the most any run gets.",
+          "description": "Wall-clock ceiling for one invocation, in milliseconds. A caller may lower it per run; the ceiling is the most any run gets. At most 2147483647, the longest delay one timer holds, which eval-quality's command target policy also refuses to exceed.",
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 2147483647
         },
         "maxOutputBytes": {
           "description": "Ceiling on each captured stream and each artifact read back, in bytes. Defaults to 8 MiB. A caller may lower it per run; the ceiling is the most any run gets.",

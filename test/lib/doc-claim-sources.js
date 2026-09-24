@@ -20,6 +20,7 @@ const { parseRegistryRows } = require('../../tools/validate-criteria-fragments.j
 const { EXIT, VERDICT_KEYS, SKIP_KEYS } = require('../../cli/test-review.js');
 const { RECOMMENDATION_ENUM } = require('../../cli/lib/parse-report.js');
 const { EXIT_CODES: EVALUATE_EXIT_CODES } = require('../../cli/evaluate.js');
+const { EXIT_CODES: RUNNER_EXIT_CODES } = require('../../cli/lib/runner-exit-codes.js');
 
 const PROJECT_ROOT = path.join(__dirname, '..', '..');
 
@@ -91,10 +92,15 @@ exports.SKIP_SCHEMA = schemaFromKeys(SKIP_KEYS);
 // ---------------------------------------------------------------------------
 
 /**
- * The exit codes `tea-test-review` and `tea-evaluate` document, as strings
- * (`readModuleStrings` reads an array of strings), each code once.
+ * The exit codes `tea-test-review`, `tea-evaluate` and the runners, whose table
+ * `tea-skill-runner` documents, spell, as strings (`readModuleStrings` reads an
+ * array of strings), each code once. `tea-evaluate preflight` also passes an
+ * eval-quality stage's exit through, and every one of those codes (3 to 5, and
+ * 64) is among them.
  */
-exports.EXIT_CODE_STRINGS = [...new Set([...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES)].map(String))];
+exports.EXIT_CODE_STRINGS = [
+  ...new Set([...Object.values(EXIT), ...Object.values(EVALUATE_EXIT_CODES), ...Object.values(RUNNER_EXIT_CODES)].map(String)),
+];
 
 // ---------------------------------------------------------------------------
 // dated
@@ -161,12 +167,12 @@ exports.EVAL_QUALITY_AT_LEAST_1_2_0 = atLeast(evalQualityVersion, '1.2.0');
 exports.EVAL_QUALITY_AT_LEAST_3_0_0 = atLeast(evalQualityVersion, '3.0.0');
 
 /**
- * docs/explanation/eval-quality-roadmap.md:168, "The pin is 4.1.0 now." Unlike
+ * docs/explanation/eval-quality-roadmap.md:168, "The pin is 4.1.2 now." Unlike
  * the `>=` checks above, this is an exact-point-in-time claim about the pin
  * itself, so it is written to go stale the moment the pin moves again; that is
  * the correct behavior for a sentence stating a specific current version.
  */
-exports.EVAL_QUALITY_PIN_IS_4_1_0 = evalQualityVersion === '4.1.0';
+exports.EVAL_QUALITY_PIN_IS_4_1_2 = evalQualityVersion === '4.1.2';
 
 /** README.md:397, "All 36 rows are currently mapped across 50 anchors." */
 const { MANIFEST: fragmentManifest } = require('../../tools/validate-criteria-fragments.js');

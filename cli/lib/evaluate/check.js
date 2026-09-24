@@ -25,6 +25,13 @@
  *   would read as a caught defect (AD-7).
  * - `unregistered-executable`: a `cli` defect signature names an executable no registry entry declares,
  *   so no infrastructure code could be checked against it and no run could authorize it.
+ * - `skill-root`: a mutation's `targetArtifact` is not inside `launch.skillRoot`, a contract leg or plan
+ *   step hands the skill runner a `skill-root` other than `launch.skillRoot`, or the skill root sits inside
+ *   a provisioned directory, so a mutation would change a file the runner never reads (AD-4).
+ * - `skill-runner`: a registry entry for `tea-skill-runner` does not declare the runner's infrastructure
+ *   exit codes, or a leg or plan step for it carries no literal `timeout-ms` below the entry's
+ *   `maxElapsedMs`: under the ceiling the runner reports its own timeout as exit 5, while at the
+ *   ceiling the adapter kills the runner's process group, records a fault, and `preflight` exits 12.
  *
  * Beside them, `contract.json` must exist (`missing-file`), every indexed
  * root and entry must be a real directory or regular file (`corpus-file`), as
@@ -47,6 +54,11 @@ const { loadEngine, engineSchemaPath } = require('./engine');
 const { MANIFEST_NAME } = require('./folder');
 const { addFormats } = require('./formats');
 const { repeatedPairs } = require('./registry');
+
+/** The skill runner's infrastructure exit codes (`cli/skill-runner.js`), which a registry entry for it must declare. */
+const SKILL_RUNNER_INFRASTRUCTURE_CODES = [3, 4, 5, 6];
+const SKILL_RUNNER_BIN = 'tea-skill-runner';
+const SKILL_RUNNER_SCRIPT = 'skill-runner.js';
 const { CorpusIndexError, INDEX_NAME, corpusIndexProblem } = require('./corpus-index');
 
 const Ajv = AjvModule.default ?? AjvModule;
@@ -297,7 +309,97 @@ function checkContract(report, folder, context) {
   return new Map(behaviors.filter((behavior) => typeof behavior?.id === 'string').map((behavior) => [behavior.id, behavior]));
 }
 
-function checkMutations(report, folder, context, provision) {
+/** Whether a registry entry launches the skill runner, by its bin name or its script. */
+function isSkillRunnerEntry(entry) {
+  const name = typeof entry?.target === 'string' ? entry.target.split('/').at(-1) : '';
+  return name === SKILL_RUNNER_BIN || name === SKILL_RUNNER_SCRIPT;
+}
+
+/**
+ * Every option set a contract hands one operation: each sensitivity-witness
+ * leg's options, and each plan step's option binding, as `{ where, option }`
+ * where a plan binding's values are its binding objects.
+ */
+function optionSetsByOperation(contract) {
+  const sets = [];
+  const interfaces = Array.isArray(contract?.permittedInterfaces) ? contract.permittedInterfaces : [];
+  for (const [interfaceIndex, iface] of interfaces.entries()) {
+    for (const [operationIndex, operation] of (Array.isArray(iface?.operations) ? iface.operations : []).entries()) {
+      const key = { interfaceId: iface?.logicalId, executable: operation?.invocation?.executable };
+      const legs = Array.isArray(operation?.sensitivityWitness?.legs) ? operation.sensitivityWitness.legs : [];
+      for (const [legIndex, leg] of legs.entries()) {
+        sets.push({
+          ...key,
+          where: `permittedInterfaces[${interfaceIndex}].operations[${operationIndex}].sensitivityWitness.legs[${legIndex}]`,
+          option: Object.fromEntries(Object.entries(leg?.inputs?.option ?? {}).map(([name, value]) => [name, { literal: value }])),
+        });
+      }
+      const steps = Array.isArray(contract.interactionPlan) ? contract.interactionPlan : [];
+      for (const [stepIndex, step] of steps.entries()) {
+        if (step?.operationId !== operation?.operationId) continue;
+        sets.push({ ...key, where: `interactionPlan[${stepIndex}]`, option: step?.inputBinding?.option ?? {} });
+      }
+    }
+  }
+  return sets;
+}
+
+/**
+ * The `skill-root` and `skill-runner` rules over the registry, the launch and
+ * the contract (AD-4): the runner must run the skill the launch names, declare
+ * its own infrastructure codes, and time its agent out before the adapter kills
+ * the runner's process group.
+ */
+function checkSkillRunner(report, evaluation, contract, provision) {
+  const skillRoot = typeof evaluation.launch?.skillRoot === 'string' ? evaluation.launch.skillRoot : undefined;
+  if (skillRoot !== undefined) {
+    for (const directory of provision) {
+      const provisioned = path.posix.normalize(directory).replace(/\/+$/, '');
+      if (skillRoot === provisioned || skillRoot.startsWith(`${provisioned}/`)) {
+        report.add(
+          MANIFEST_NAME,
+          'skill-root',
+          `launch.skillRoot ${JSON.stringify(skillRoot)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links to the target's own directory, so a mutation of the skill would be planted in the target itself`,
+        );
+      }
+    }
+  }
+  const entries = (Array.isArray(evaluation.registry) ? evaluation.registry : []).filter((entry) => isSkillRunnerEntry(entry));
+  for (const entry of entries) {
+    const codes = Array.isArray(entry.infrastructureExitCodes) ? entry.infrastructureExitCodes : [];
+    const missing = SKILL_RUNNER_INFRASTRUCTURE_CODES.filter((code) => !codes.includes(code));
+    if (missing.length > 0) {
+      report.add(
+        MANIFEST_NAME,
+        'skill-runner',
+        `the ${SKILL_RUNNER_BIN} entry ${JSON.stringify(entry.interfaceId)} does not declare infrastructure exit code(s) ${missing.join(', ')}, so a runner that could not run would read as target behavior`,
+      );
+    }
+  }
+  for (const set of optionSetsByOperation(contract)) {
+    const entry = entries.find((candidate) => candidate.interfaceId === set.interfaceId && candidate.executable === set.executable);
+    if (entry === undefined) continue;
+    const root = set.option['skill-root'];
+    if (skillRoot !== undefined && root?.literal !== skillRoot) {
+      report.add(
+        CONTRACT_NAME,
+        'skill-root',
+        `${set.where} hands ${SKILL_RUNNER_BIN} --skill-root ${JSON.stringify(root?.literal ?? root ?? null)}, which is not launch.skillRoot ${JSON.stringify(skillRoot)}`,
+      );
+    }
+    const timeout = set.option['timeout-ms']?.literal;
+    const milliseconds = typeof timeout === 'string' && /^[0-9]+$/.test(timeout) ? Number(timeout) : Number.NaN;
+    if (!(milliseconds > 0 && milliseconds < entry.maxElapsedMs)) {
+      report.add(
+        CONTRACT_NAME,
+        'skill-runner',
+        `${set.where} hands ${SKILL_RUNNER_BIN} --timeout-ms ${JSON.stringify(timeout ?? null)}; a literal below the entry's maxElapsedMs (${entry.maxElapsedMs}) makes the runner stop its agent before the adapter kills the runner`,
+      );
+    }
+  }
+}
+
+function checkMutations(report, folder, context, provision, skillRoot) {
   const known = new Set();
   for (const entry of listDirectory(folder, 'mutations') ?? []) {
     const relative = `mutations/${entry.name}`;
@@ -332,13 +434,20 @@ function checkMutations(report, folder, context, provision) {
     }
     if (typeof mutation?.targetArtifact === 'string') {
       const target = path.posix.normalize(mutation.targetArtifact);
+      if (skillRoot !== undefined && !target.startsWith(`${path.posix.normalize(skillRoot)}/`)) {
+        report.add(
+          relative,
+          'skill-root',
+          `targetArtifact ${JSON.stringify(mutation.targetArtifact)} is outside the skill root ${JSON.stringify(skillRoot)}, so the skill runner would never read the mutated file`,
+        );
+      }
       for (const directory of provision) {
         const provisioned = path.posix.normalize(directory).replace(/\/+$/, '');
         if (target === provisioned || target.startsWith(`${provisioned}/`)) {
           report.add(
             relative,
             'provisioned-target',
-            `targetArtifact ${JSON.stringify(mutation.targetArtifact)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links read-only`,
+            `targetArtifact ${JSON.stringify(mutation.targetArtifact)} is inside the provisioned directory ${JSON.stringify(directory)}, which the disposable copy links to the target's own directory, so the mutation would be planted in the target itself`,
           );
         }
       }
@@ -839,9 +948,13 @@ async function checkEvaluation(folder) {
     ? evaluation.workspace.provision.filter((entry) => typeof entry === 'string' && entry.length > 0)
     : [];
 
+  const skillRoot =
+    typeof evaluation.launch?.skillRoot === 'string' && evaluation.launch.skillRoot.length > 0 ? evaluation.launch.skillRoot : undefined;
+
   const behaviors = checkContract(report, folder, context);
   context.contract = contractFor(folder);
-  const mutations = checkMutations(report, folder, context, provision);
+  const mutations = checkMutations(report, folder, context, provision, skillRoot);
+  checkSkillRunner(report, evaluation, context.contract, provision);
   checkProbes(report, folder, context, behaviors, mutations, registry);
   checkQualificationEvidence(report, folder, context);
 

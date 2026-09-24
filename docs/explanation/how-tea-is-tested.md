@@ -148,8 +148,8 @@ TEA supplies the execution harnesses, domain-specific scorers, fixtures, oracles
 ## Evaluate, In Progress
 
 The **Evaluate skill** (`bmad-testarch-evaluate`, menu code `EV`) helps users build evaluations on top of `eval-quality`, and it is being built story by story.
-It is registered as TEA's tenth workflow, and its runtime, `tea-evaluate`, already validates and digests an evaluation folder ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
-Running an evaluation, scoring it, and wiring it into CI arrive in later stories.
+It is registered as TEA's tenth workflow, and its runtime, `tea-evaluate`, already validates, digests and preflights an evaluation folder ([tea-evaluate CLI](/docs/reference/tea-evaluate-cli.md)).
+Running an evaluation's arms, scoring it, and wiring it into CI arrive in later stories.
 Until Evaluate authors its own suite, TEA's evaluation suites serve as the reference implementation.
 
 ## Further Reading

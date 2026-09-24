@@ -5,15 +5,19 @@
  * Subcommands in this release:
  *   tea-evaluate check  --evaluation <path>   validate the folder; exit 10 on any authoring defect
  *   tea-evaluate digest --evaluation <path>   write corpus-index.json and print corpusDigest
+ *   tea-evaluate preflight --evaluation <path> drive the preflight legs and take the verdict from eval-quality
  *
  * `--evaluation` names the folder or its evaluation.json. Nothing else locates
  * an evaluation: no default path and no project configuration.
  *
  * Exit codes (AD-10):
  *   0   success
- *   10  authoring defect: every finding is printed, one per line (digest: an indexed entry it cannot digest)
- *   12  infrastructure: the optional eval-quality peer is not installed
- *   64  wiring defect: no --evaluation resolves, or the command line is malformed
+ *   3-5 preflight only: an eval-quality stage's own exit, passed through verbatim
+ *   10  authoring defect: every finding is printed, one per line (digest: an indexed entry it cannot digest;
+ *       preflight: a leg the registry does not authorize)
+ *   12  infrastructure: the optional eval-quality peer is not installed; preflight: a target that cannot
+ *       launch, a leg that could not run, or an engine stage that could not run
+ *   64  wiring defect: no --evaluation resolves, or the command line is malformed (preflight: or eval-quality's own 64)
  */
 
 'use strict';
@@ -24,6 +28,8 @@ const { resolveEvaluationFolder } = require('./lib/evaluate/folder');
 const { checkEvaluation } = require('./lib/evaluate/check');
 const { CorpusIndexError, writeCorpusIndex } = require('./lib/evaluate/corpus-index');
 const { EngineUnavailableError } = require('./lib/evaluate/engine');
+const { EngineStageError } = require('./lib/evaluate/engine-cli');
+const { runPreflightCommand } = require('./lib/evaluate/preflight');
 
 const EXIT_CODES = {
   ok: 0,
@@ -89,11 +95,34 @@ async function runDigest(options) {
   return EXIT_CODES.ok;
 }
 
+async function runPreflight(options) {
+  const folder = folderFrom(options);
+  let outcome;
+  try {
+    outcome = await runPreflightCommand(folder, {
+      log: (line) => process.stderr.write(`${NAME} preflight: ${escapeUnprintable(line)}\n`),
+    });
+  } catch (error) {
+    if (error instanceof EngineUnavailableError || error instanceof EngineStageError) throw error;
+    // Anything else that stops a preflight (an unwritable run directory, a
+    // target the copy cannot stage) is infrastructure, and exit 1 means
+    // nothing in AD-10's table for tea-evaluate.
+    process.stderr.write(`${NAME} preflight: ${escapeUnprintable(error?.stack ?? error)}\n`);
+    return EXIT_CODES.infrastructure;
+  }
+  for (const finding of outcome.findings) process.stdout.write(findingLine(finding.file, finding.rule, finding.message));
+  const where = outcome.runDirectory === null ? folder : outcome.runDirectory;
+  process.stdout.write(
+    `${NAME} preflight: ${escapeUnprintable(outcome.message.trimEnd())} (exit ${outcome.exitCode}, ${escapeUnprintable(where)})\n`,
+  );
+  return outcome.exitCode;
+}
+
 function buildProgram(run) {
   const program = new Command();
   program
     .name(NAME)
-    .description('Validate and digest an Evaluate evaluation folder.')
+    .description('Validate, digest and preflight an Evaluate evaluation folder.')
     .showHelpAfterError()
     .exitOverride()
     .configureOutput({ writeErr: (text) => process.stderr.write(text) });
@@ -107,6 +136,11 @@ function buildProgram(run) {
     .description('Write corpus-index.json over corpus/, probes/ and mutations/, and print corpusDigest.')
     .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
     .action((options) => run(runDigest, options));
+  program
+    .command('preflight')
+    .description('Drive the preflight legs against the target and take the verdict from eval-quality preflight.')
+    .option('--evaluation <path>', 'the evaluation folder, or its evaluation.json')
+    .action((options) => run(runPreflight, options));
   return program;
 }
 
@@ -138,14 +172,14 @@ async function main(argv) {
     return await pending;
   } catch (error) {
     if (error instanceof UsageError) {
-      process.stderr.write(`${NAME}: ${error.message}\nUsage: ${NAME} <check|digest> --evaluation <path>\n`);
+      process.stderr.write(`${NAME}: ${error.message}\nUsage: ${NAME} <check|digest|preflight> --evaluation <path>\n`);
       return EXIT_CODES.usage;
     }
     if (error instanceof CorpusIndexError) {
       process.stdout.write(findingLine(error.file, 'corpus-file', error.message));
       return EXIT_CODES.authoring;
     }
-    if (error instanceof EngineUnavailableError) {
+    if (error instanceof EngineUnavailableError || error instanceof EngineStageError) {
       process.stderr.write(`${NAME}: ${error.message}\n`);
       return EXIT_CODES.infrastructure;
     }
